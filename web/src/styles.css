@@ -278,6 +278,7 @@ button {
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
+  padding: 0;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   color: var(--subtext0);
@@ -1057,6 +1058,7 @@ button {
   height: 26px;
   flex: 0 0 auto;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   color: var(--overlay1);
@@ -1778,6 +1780,7 @@ button {
   width: 34px;
   height: 34px;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--mantle) 86%, black);
@@ -2165,6 +2168,7 @@ button {
   height: 24px;
   flex: 0 0 auto;
   place-items: center;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   color: var(--overlay1);
@@ -2182,11 +2186,6 @@ button {
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, transparent);
-}
-
-.sec-add-pin svg,
-.sec-add-active svg {
-  transform: translateX(-1.5px);
 }
 
 .tab-head {

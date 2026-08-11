@@ -7325,7 +7325,7 @@ function Switcher({
                 ) : null}
                 {showPinnedOnlyControl ? (
                   <button
-                    className="sec-add sec-add-pin"
+                    className="sec-add"
                     type="button"
                     aria-label={`Show ${pinnedOnlyLabel} only`}
                     title="Pinned only"
@@ -7338,7 +7338,7 @@ function Switcher({
                 ) : null}
                 {showActiveOnlyControl ? (
                   <button
-                    className="sec-add sec-add-active"
+                    className="sec-add"
                     type="button"
                     aria-label={`Show active ${sidebarView === "tabs" ? "agents" : "statuses"} only`}
                     title={sidebarView === "tabs" ? "Active agents only" : "Active statuses only"}

@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Fixed icons rendering slightly off-center in square icon buttons (sidebar section header
+  actions and the tab bar's new-tab button) by resetting the user-agent button padding, and
+  removed the per-icon transform that compensated for it.
+
 ### Removed
 
 ## [0.4.1] - 2026-08-05
