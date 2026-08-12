@@ -10,6 +10,12 @@
 
 ### Fixed
 
+- Fixed icons rendering slightly off-center in square icon buttons (sidebar section header
+  actions and the tab bar's new-tab button) by resetting the user-agent button padding, and
+  removed the per-icon transform that compensated for it.
+  [PR #55](https://github.com/kcosr/herdr-web/pull/55), contributed by
+  [Philippe SEGATORI (@tigitz)](https://github.com/tigitz).
+
 ### Removed
 
 ## [0.4.1] - 2026-08-05
