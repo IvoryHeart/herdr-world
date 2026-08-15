@@ -10,6 +10,11 @@
 
 ### Fixed
 
+- Mobile terminal copies now remove canvas row gaps that split HTTP(S) links, including indented
+  alphanumeric continuations when terminal edge metadata is unavailable, while preserving ordinary
+  line breaks.
+  [PR #61](https://github.com/kcosr/herdr-web/pull/61)
+
 ### Removed
 
 ## [0.4.2] - 2026-08-15
