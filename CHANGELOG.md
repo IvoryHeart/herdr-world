@@ -143,6 +143,10 @@
   the horizontal road separator.
 - Fixed development-mode Office renderer cleanup so an older asynchronous Pixi
   initialization cannot remove the active canvas created by a newer initialization.
+- Mobile terminal copies now remove canvas row gaps that split HTTP(S) links, including indented
+  alphanumeric continuations when terminal edge metadata is unavailable, while preserving ordinary
+  line breaks.
+  [PR #61](https://github.com/kcosr/herdr-web/pull/61)
 
 ### Removed
 
