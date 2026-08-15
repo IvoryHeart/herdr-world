@@ -4,6 +4,9 @@
 > It is experimental, Herdr compatibility code is vendored, and the runtime/API shape is expected to
 > change.
 
+> This is an intentionally minimal personal development tool. Focused contributions are welcome;
+> please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
 Browser UI for Herdr workspaces and agent panes.
 
 This repository is structured as a standalone app that can be distributed without asking users to
@@ -117,6 +120,32 @@ npm install
 npm install --prefix web
 ```
 
+## Development Server (HMR)
+
+Start the bridge and Vite together from the repository root:
+
+```bash
+npm run dev
+```
+
+Open `http://127.0.0.1:5173`. Vite serves the live frontend with hot module replacement and proxies
+`/api` and `/ws` to the managed bridge at `http://127.0.0.1:8787`. Stopping either process stops the
+other. The command builds the bridge when its binary is missing; after later Rust changes, stop the
+server, run `npm run bridge:build`, and restart it.
+
+The bridge targets the stable Herdr socket by default. Point it at another session socket or pass
+other bridge options as needed:
+
+```bash
+HERDR_SOCKET_PATH="$HOME/.config/herdr-dev/herdr.sock" npm run dev
+npm run dev -- --session SESSION_NAME
+```
+
+Development addresses use namespaced variables so unrelated `HOST` or `PORT` settings cannot expose
+the local bridge accidentally: `HERDR_WEB_BRIDGE_HOST`, `HERDR_WEB_BRIDGE_PORT`,
+`HERDR_WEB_DEV_HOST`, and `HERDR_WEB_DEV_PORT`. The defaults bind both servers to loopback. Advanced
+overrides are `HERDR_WEB_BRIDGE_BIN` and `HERDR_WEB_STATIC_DIR`.
+
 ## Development Build And Test
 
 ```bash
@@ -128,6 +157,8 @@ npm run build
 Useful narrower commands:
 
 ```bash
+npm run dev
+npm run test:dev
 npm run lint:web
 npm run test:web
 npm run build:web
