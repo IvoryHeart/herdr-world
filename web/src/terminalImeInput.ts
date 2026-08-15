@@ -9,13 +9,16 @@ export type TerminalImeState =
   | {
       phase: "idle";
       preedit: "";
-      pendingCommit: string | null;
+      pendingInput:
+        | { kind: "commit"; text: string }
+        | { kind: "cancellation"; remaining: string }
+        | null;
     }
   | {
       phase: "composing";
       baseline: string;
       preedit: string;
-      pendingCommit: null;
+      pendingInput: null;
     };
 
 export type TerminalImeEvent =
@@ -48,7 +51,7 @@ export type ImeTextareaAnchor = {
 };
 
 export function idleTerminalImeState(): TerminalImeState {
-  return { phase: "idle", preedit: "", pendingCommit: null };
+  return { phase: "idle", preedit: "", pendingInput: null };
 }
 
 /**
@@ -56,9 +59,11 @@ export function idleTerminalImeState(): TerminalImeState {
  *
  * Browsers disagree about whether their final input event occurs before or
  * after compositionend. A completed composition is emitted at compositionend;
- * pendingCommit suppresses a matching trailing input without swallowing the
- * next unrelated keystroke. Call settle in a microtask after compositionend so
- * that suppression cannot leak into a later user action.
+ * pendingInput suppresses a matching trailing commit or canceled-preedit
+ * replay without swallowing unrelated input. Call settle after the trailing
+ * composition edit window; canceled composition may need to remain armed until
+ * the next keydown because some browsers replay canceled preedit after a
+ * microtask.
  */
 export function reduceTerminalImeState(
   state: TerminalImeState,
@@ -70,7 +75,7 @@ export function reduceTerminalImeState(
         phase: "composing",
         baseline: event.textareaValue,
         preedit: event.data,
-        pendingCommit: null,
+        pendingInput: null,
       });
 
     case "compositionupdate":
@@ -84,14 +89,20 @@ export function reduceTerminalImeState(
         return transition(state, { suppressInput: true });
       }
       const output = normalizeTerminalText(event.data);
+      const canceledPreedit =
+        output === null
+          ? normalizeTerminalText(state.preedit) ??
+            normalizeTerminalText(textareaSuffix(state.baseline, event.textareaValue))
+          : null;
       return transition(
         {
           phase: "idle",
           preedit: "",
-          // An empty string is intentional: it lets a later insertText supply
-          // a commit when compositionend did not expose data, without treating
-          // the textarea's possibly canceled preedit as committed text.
-          pendingCommit: output ?? "",
+          pendingInput: output
+            ? { kind: "commit", text: output }
+            : canceledPreedit
+              ? { kind: "cancellation", remaining: canceledPreedit }
+              : null,
         },
         {
           output,
@@ -109,20 +120,35 @@ export function reduceTerminalImeState(
 
       if (event.isComposing || isImeCompositionInputType(event.inputType)) {
         return transition(
-          { ...state, pendingCommit: null },
+          { ...state, pendingInput: null },
           { suppressInput: true, clearTextarea: true },
         );
       }
 
-      if (state.pendingCommit !== null) {
+      if (state.pendingInput !== null) {
         const candidate = inputCandidate(event.data, event.textareaValue);
-        if (candidate === state.pendingCommit) {
+        if (state.pendingInput.kind === "commit" && candidate === state.pendingInput.text) {
           return transition(
-            { ...state, pendingCommit: null },
+            { ...state, pendingInput: null },
             { suppressInput: true, clearTextarea: true },
           );
         }
-        return transition({ ...state, pendingCommit: null });
+        if (
+          state.pendingInput.kind === "cancellation" &&
+          event.inputType === "insertText" &&
+          candidate !== "" &&
+          state.pendingInput.remaining.startsWith(candidate)
+        ) {
+          const remaining = state.pendingInput.remaining.slice(candidate.length);
+          return transition(
+            {
+              ...state,
+              pendingInput: remaining ? { kind: "cancellation", remaining } : null,
+            },
+            { suppressInput: true, clearTextarea: true },
+          );
+        }
+        return transition({ ...state, pendingInput: null });
       }
 
       return transition(state);
@@ -130,7 +156,7 @@ export function reduceTerminalImeState(
 
     case "settle":
       return state.phase === "idle"
-        ? transition({ ...state, pendingCommit: null })
+        ? transition({ ...state, pendingInput: null })
         : transition(state);
 
     case "reset":
@@ -152,10 +178,18 @@ export function shouldDeferBeforeInputToIme(
   if (state.phase === "composing" || event.isComposing || isImeCompositionInputType(event.inputType)) {
     return true;
   }
-  if (state.pendingCommit === null) {
+  if (state.pendingInput === null) {
     return false;
   }
-  return normalizeTerminalText(event.data) === state.pendingCommit;
+  const candidate = normalizeTerminalText(event.data);
+  if (state.pendingInput.kind === "commit") {
+    return candidate === state.pendingInput.text;
+  }
+  return (
+    event.inputType === "insertText" &&
+    candidate !== null &&
+    state.pendingInput.remaining.startsWith(candidate)
+  );
 }
 
 export function isImeComposingKeyEvent(
@@ -287,6 +321,10 @@ function inputPreedit(
     return event.textareaValue.slice(baseline.length);
   }
   return event.textareaValue;
+}
+
+function textareaSuffix(baseline: string, value: string) {
+  return value.startsWith(baseline) ? value.slice(baseline.length) : value;
 }
 
 function inputCandidate(data: string | null, textareaValue: string) {

@@ -107,23 +107,90 @@ describe("terminal IME event sequences", () => {
     expect(result.transitions[3]).toMatchObject({ clearTextarea: true, output: null });
   });
 
-  it("lets a trailing insertText provide a commit when compositionend data is unavailable", () => {
+  it("discards canceled Pinyin replay without swallowing the following character", () => {
     const result = reduceSequence([
       { type: "compositionstart", data: "", textareaValue: "" },
-      { type: "compositionupdate", data: "", textareaValue: "é" },
-      { type: "compositionend", data: "", textareaValue: "é" },
+      { type: "compositionupdate", data: "n", textareaValue: "n" },
+      { type: "compositionend", data: "", textareaValue: "n" },
       {
         type: "input",
-        data: "é",
+        data: "n",
         inputType: "insertText",
         isComposing: false,
-        textareaValue: "é",
+        textareaValue: "n",
+      },
+      { type: "settle" },
+      {
+        type: "input",
+        data: "C",
+        inputType: "insertText",
+        isComposing: false,
+        textareaValue: "C",
       },
     ]);
 
     expect(result.output).toEqual([]);
+    expect(
+      shouldDeferBeforeInputToIme(result.transitions[2].state, {
+        data: "n",
+        inputType: "insertText",
+        isComposing: false,
+      }),
+    ).toBe(true);
+    expect(result.transitions[3]).toMatchObject({ suppressInput: true, clearTextarea: true });
+    expect(result.transitions[5].suppressInput).toBe(false);
+    expect(textareaDelta("", "C")).toBe("C");
+  });
+
+  it("discards a canceled preedit replayed in multiple insertText fragments", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionupdate", data: "ni", textareaValue: "ni" },
+      { type: "compositionend", data: "", textareaValue: "ni" },
+      {
+        type: "input",
+        data: "n",
+        inputType: "insertText",
+        isComposing: false,
+        textareaValue: "n",
+      },
+      {
+        type: "input",
+        data: "i",
+        inputType: "insertText",
+        isComposing: false,
+        textareaValue: "i",
+      },
+    ]);
+
+    expect(result.transitions[3]).toMatchObject({ suppressInput: true, clearTextarea: true });
+    expect(result.transitions[4]).toMatchObject({ suppressInput: true, clearTextarea: true });
+    expect(result.state).toEqual(idleTerminalImeState());
+  });
+
+  it("does not swallow a keydown-less paste after canceled composition", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionupdate", data: "n", textareaValue: "n" },
+      { type: "compositionend", data: "", textareaValue: "n" },
+      {
+        type: "input",
+        data: "PASTE",
+        inputType: "insertFromPaste",
+        isComposing: false,
+        textareaValue: "PASTE",
+      },
+    ]);
+
+    expect(
+      shouldDeferBeforeInputToIme(result.transitions[2].state, {
+        data: "PASTE",
+        inputType: "insertFromPaste",
+        isComposing: false,
+      }),
+    ).toBe(false);
     expect(result.transitions[3].suppressInput).toBe(false);
-    expect(textareaDelta("", "é")).toBe("é");
+    expect(result.state).toEqual(idleTerminalImeState());
   });
 
   it("does not suppress a later ordinary key after the composition settles", () => {
@@ -189,7 +256,7 @@ describe("terminal IME event sequences", () => {
       phase: "composing",
       baseline: "",
       preedit: "に",
-      pendingCommit: null,
+      pendingInput: null,
     };
     expect(reduceTerminalImeState(composing, { type: "settle" }).state).toBe(composing);
   });
@@ -207,7 +274,7 @@ describe("terminal IME guards", () => {
       phase: "composing",
       baseline: "",
       preedit: "ni",
-      pendingCommit: null,
+      pendingInput: null,
     };
     expect(
       shouldDeferBeforeInputToIme(composing, {
@@ -217,7 +284,11 @@ describe("terminal IME guards", () => {
       }),
     ).toBe(true);
 
-    const pending: TerminalImeState = { phase: "idle", preedit: "", pendingCommit: "你好" };
+    const pending: TerminalImeState = {
+      phase: "idle",
+      preedit: "",
+      pendingInput: { kind: "commit", text: "你好" },
+    };
     expect(
       shouldDeferBeforeInputToIme(pending, {
         data: "你好",

@@ -1154,7 +1154,16 @@ export class GhosttyRenderer implements TerminalRenderer {
 
     const onKeydown = (event: KeyboardEvent) => {
       if (imeState.phase === "composing" || isImeComposingKeyEvent(event)) {
+        event.stopPropagation();
+        if (typeof event.stopImmediatePropagation === "function") {
+          event.stopImmediatePropagation();
+        }
         return;
+      }
+      if (imeState.pendingInput !== null) {
+        // A real keydown marks the boundary after any trailing composition
+        // edit, so cancellation suppression must not consume this new key.
+        imeState = reduceTerminalImeState(imeState, { type: "settle" }).state;
       }
       const customOutput = textareaKeyboardEventOutput(event);
       if (customOutput) {
@@ -1287,8 +1296,16 @@ export class GhosttyRenderer implements TerminalRenderer {
       }
 
       // A browser's trailing input event, when present, is dispatched in the
-      // same event task. Do not let its one-shot dedupe affect a later key.
+      // same event task. Do not let a successful commit's one-shot dedupe
+      // affect a later key. Cancellation remains armed until the next keydown
+      // because browsers may replay canceled preedit after a microtask.
       const endedState = imeState;
+      if (
+        endedState.phase === "idle" &&
+        endedState.pendingInput?.kind === "cancellation"
+      ) {
+        return;
+      }
       queueMicrotask(() => {
         if (imeState === endedState) {
           imeState = reduceTerminalImeState(imeState, { type: "settle" }).state;
