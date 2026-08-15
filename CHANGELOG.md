@@ -121,6 +121,9 @@
   view boundary. `/world` is addressable browser state inside that frame, while Spaces retains its
   delivered sidebar, terminal, split, Notes, and operational behavior.
   [PR #2](https://github.com/IvoryHeart/herdr-web/pull/2)
+- Mobile terminals now use a static visible cursor instead of a blinking cursor, reducing continuous
+  canvas redraw work on resource-constrained devices. Desktop cursors continue to blink.
+  [PR #60](https://github.com/kcosr/herdr-web/pull/60)
 
 ### Fixed
 
