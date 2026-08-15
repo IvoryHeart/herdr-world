@@ -8,8 +8,8 @@
 
 ### Changed
 
-- Mobile terminals now use a static visible cursor instead of a blinking cursor, reducing continuous
-  canvas redraw work on resource-constrained devices. Desktop cursors continue to blink.
+- Stop blinking the terminal cursor on touch devices so idle terminals do not keep redrawing.
+  Desktop cursors still blink.
   [PR #60](https://github.com/kcosr/herdr-web/pull/60)
 
 ### Fixed

@@ -4050,6 +4050,7 @@ export function App() {
             autoFocus={!isTouchInput}
             scrollSensitivity={isTouchInput ? 2 : 0.4}
             mobileControls={isTouchInput}
+            cursorBlink={!isTouchInput}
             terminalFontSizePx={terminalFontSizePx}
             mobileControlsScalePercent={mobileControlsScalePercent}
             mobileTapTarget={mobileTerminalTapTarget}
@@ -5803,6 +5804,7 @@ function SplitGrid({
               autoFocus={selected && !touchInput}
               scrollSensitivity={touchInput ? 2 : 0.4}
               mobileControls={selected && touchInput}
+              cursorBlink={!touchInput}
               terminalFontSizePx={terminalFontSizePx}
               mobileControlsScalePercent={mobileControlsScalePercent}
               mobileTapTarget={mobileTapTarget}
