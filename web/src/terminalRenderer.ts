@@ -70,14 +70,6 @@ type GhosttyModule = typeof import("ghostty-web");
 
 let ghosttyModule: Promise<GhosttyModule> | null = null;
 
-/** Returns whether the terminal cursor should blink for the active input capabilities. */
-export function terminalCursorBlinkEnabled(
-  mobileControls: boolean,
-  touchInputDetected: boolean,
-): boolean {
-  return !mobileControls && !touchInputDetected;
-}
-
 async function loadGhosttyModule() {
   if (!ghosttyModule) {
     ghosttyModule = import("ghostty-web")
@@ -176,7 +168,7 @@ export class GhosttyRenderer implements TerminalRenderer {
   #textInputTapGraceUntil = 0;
   #fontSizePx: number;
   #transparentBackground = false;
-  #cursorBlink = true;
+  #cursorBlink: boolean;
   #disposed = false;
 
   constructor(
