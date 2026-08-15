@@ -1,8 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
+## [0.4.2] - 2026-08-15
 
 ### Added
 
@@ -35,8 +33,6 @@
   removed the per-icon transform that compensated for it.
   [PR #55](https://github.com/kcosr/herdr-web/pull/55), contributed by
   [Philippe SEGATORI (@tigitz)](https://github.com/tigitz).
-
-### Removed
 
 ## [0.4.1] - 2026-08-05
 
