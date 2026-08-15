@@ -124,6 +124,9 @@
 - Mobile terminals now use a static visible cursor instead of a blinking cursor, reducing continuous
   canvas redraw work on resource-constrained devices. Desktop cursors continue to blink.
   [PR #60](https://github.com/kcosr/herdr-web/pull/60)
+- Terminal output now negotiates gzip compression between matching web apps and bridges, while
+  remaining compatible with older versions and keeping incompressible updates raw.
+  [PR #59](https://github.com/kcosr/herdr-web/pull/59)
 
 ### Fixed
 
