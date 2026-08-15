@@ -8,8 +8,7 @@
 
 ### Changed
 
-- Terminal output now negotiates gzip compression between matching web apps and bridges, while
-  remaining compatible with older versions and keeping incompressible updates raw.
+- Compress terminal output with gzip when the client and bridge both support it.
   [PR #59](https://github.com/kcosr/herdr-web/pull/59)
 
 ### Fixed
