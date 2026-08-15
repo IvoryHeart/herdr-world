@@ -14,7 +14,7 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{DefaultBodyLimit, Path as AxumPath, Query, State};
 use axum::http::header::{
     ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    ACCESS_CONTROL_MAX_AGE, ACCESS_CONTROL_REQUEST_HEADERS, HOST, ORIGIN, VARY,
+    ACCESS_CONTROL_MAX_AGE, ACCESS_CONTROL_REQUEST_HEADERS, CACHE_CONTROL, HOST, ORIGIN, VARY,
 };
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
@@ -1060,6 +1060,7 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         .route("/ws/terminal", get(terminal_ws_handler))
         .fallback_service(
             ServiceBuilder::new()
+                .layer(middleware::from_fn(add_static_cache_headers))
                 .layer(CompressionLayer::new())
                 .service(ServeDir::new(options.static_dir)),
         )
@@ -1095,6 +1096,28 @@ async fn add_security_headers(
         insert_cors_headers(headers, origin);
     }
     response
+}
+
+async fn add_static_cache_headers(request: AxumRequest, next: Next) -> Response {
+    let path = request.uri().path().to_string();
+    let mut response = next.run(request).await;
+    let status = response.status();
+    insert_static_cache_header(response.headers_mut(), &path, status);
+    response
+}
+
+fn insert_static_cache_header(headers: &mut HeaderMap, path: &str, status: StatusCode) {
+    if headers.contains_key(CACHE_CONTROL)
+        || (!status.is_success() && status != StatusCode::NOT_MODIFIED)
+    {
+        return;
+    }
+    let value = if path.starts_with("/assets/") {
+        HeaderValue::from_static("public, max-age=31536000, immutable")
+    } else {
+        HeaderValue::from_static("no-cache")
+    };
+    headers.insert(CACHE_CONTROL, value);
 }
 
 async fn preflight_handler(
@@ -4434,6 +4457,40 @@ fn startup_daemon_error(err: BridgeError) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn static_cache_headers_revalidate_entrypoints_and_public_files() {
+        for path in ["/", "/index.html", "/manifest.json", "/herdr-logo.svg"] {
+            let mut headers = HeaderMap::new();
+            insert_static_cache_header(&mut headers, path, StatusCode::OK);
+            assert_eq!(headers.get(CACHE_CONTROL).unwrap(), "no-cache", "{path}");
+        }
+    }
+
+    #[test]
+    fn static_cache_headers_make_successful_vite_assets_immutable() {
+        let mut headers = HeaderMap::new();
+        insert_static_cache_header(&mut headers, "/assets/index-AbCd1234.js", StatusCode::OK);
+        assert_eq!(
+            headers.get(CACHE_CONTROL).unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+    }
+
+    #[test]
+    fn static_cache_headers_do_not_cache_missing_assets() {
+        let mut headers = HeaderMap::new();
+        insert_static_cache_header(&mut headers, "/assets/missing.js", StatusCode::NOT_FOUND);
+        assert!(!headers.contains_key(CACHE_CONTROL));
+    }
+
+    #[test]
+    fn static_cache_headers_preserve_service_policy() {
+        let mut headers = HeaderMap::new();
+        headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+        insert_static_cache_header(&mut headers, "/index.html", StatusCode::OK);
+        assert_eq!(headers.get(CACHE_CONTROL).unwrap(), "no-store");
+    }
 
     #[test]
     fn coalescer_sends_first_output_immediately() {

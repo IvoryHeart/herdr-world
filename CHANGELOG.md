@@ -6,11 +6,16 @@
 
 ### Added
 
+- Added `npm run dev` to supervise the bridge and Vite HMR server together, wait for bridge
+  readiness, proxy API and WebSocket traffic, and stop both processes cleanly.
 - Declared the existing Herdr logo as the browser favicon.
   [PR #56](https://github.com/kcosr/herdr-web/pull/56), contributed by
   [Craig P. Motlin (@motlin)](https://github.com/motlin).
 
 ### Changed
+
+- Static bridge responses now explicitly revalidate HTML and public files while caching successful
+  content-hashed Vite assets as immutable. Error responses are never marked immutable.
 
 ### Fixed
 
