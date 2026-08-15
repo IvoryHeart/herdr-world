@@ -38,6 +38,7 @@ import {
   textareaDelta,
 } from "./terminalImeInput";
 import type { TerminalImeState } from "./terminalImeInput";
+import { installTerminalImeFocusRedirect } from "./terminalImeFocus";
 
 const TERMINAL_FONT_FAMILY =
   'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "DejaVu Sans Mono", monospace';
@@ -145,6 +146,7 @@ export class GhosttyRenderer implements TerminalRenderer {
   #scrollCallback: ((lines: number) => void) | null = null;
   #touchCleanup: (() => void) | null = null;
   #mobileInputCleanup: (() => void) | null = null;
+  #imeFocusCleanup: (() => void) | null = null;
   #tapFocusHandler: (() => TerminalTapFocusResult) | null = null;
   #mobileLongPressBehavior: MobileLongPressBehavior = "off";
   #mobileTouchSelectionHandler: ((event: MobileTerminalTouchEvent) => void) | null = null;
@@ -222,6 +224,7 @@ export class GhosttyRenderer implements TerminalRenderer {
     this.#fitAddon = fitAddon;
     this.#installScrollHandlers();
     this.#installMobileInputBridge();
+    this.#installImeFocusRedirect();
     return this.fit();
   }
 
@@ -326,6 +329,8 @@ export class GhosttyRenderer implements TerminalRenderer {
     this.#touchCleanup = null;
     this.#mobileInputCleanup?.();
     this.#mobileInputCleanup = null;
+    this.#imeFocusCleanup?.();
+    this.#imeFocusCleanup = null;
     this.#fitAddon?.dispose();
     this.#fitAddon = null;
     this.#terminal?.dispose();
@@ -1323,6 +1328,23 @@ export class GhosttyRenderer implements TerminalRenderer {
       textarea.removeEventListener("blur", onBlur);
       preeditOverlay.remove();
     };
+  }
+
+  #installImeFocusRedirect() {
+    const terminal = this.#requireTerminal();
+    const container = this.#container;
+    const textarea = terminal.textarea;
+    if (!container || !textarea) {
+      return;
+    }
+
+    this.#imeFocusCleanup?.();
+    this.#imeFocusCleanup = installTerminalImeFocusRedirect({
+      container,
+      textarea,
+      hasAlternateTapFocus: () => this.#tapFocusHandler !== null,
+      focusTextarea: () => this.focusTextInput(),
+    });
   }
 }
 
