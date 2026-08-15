@@ -1741,23 +1741,50 @@ button {
 
 .terminal-host .ghostty-hidden-input {
   position: fixed !important;
-  left: -10000px !important;
-  top: 0 !important;
-  width: 1px !important;
-  height: 1px !important;
+  left: var(--ghostty-ime-left, -10000px) !important;
+  top: var(--ghostty-ime-top, 0px) !important;
+  width: var(--ghostty-ime-width, 1px) !important;
+  height: var(--ghostty-ime-height, 1px) !important;
   opacity: 0 !important;
   color: transparent !important;
   background: transparent !important;
   caret-color: transparent !important;
   overflow: hidden !important;
   resize: none !important;
-}
-
-.terminal-host .ghostty-hidden-input.ghostty-keyboard-input {
-  left: 1px !important;
-  top: 1px !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
   pointer-events: none !important;
   z-index: 0 !important;
+}
+
+.terminal-host .ghostty-hidden-input.ghostty-keyboard-input,
+.terminal-host .ghostty-hidden-input.ghostty-ime-composing {
+  left: var(--ghostty-ime-left, 1px) !important;
+  top: var(--ghostty-ime-top, 1px) !important;
+  width: var(--ghostty-ime-width, 1px) !important;
+  height: var(--ghostty-ime-height, 16px) !important;
+  z-index: 5 !important;
+}
+
+.terminal-host .ghostty-ime-preedit {
+  position: fixed;
+  z-index: 6;
+  box-sizing: border-box;
+  padding: 0 2px;
+  margin: 0;
+  border: 0;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface0) 88%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--blue) 35%, transparent);
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: var(--blue);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  white-space: pre;
+  pointer-events: none;
 }
 
 .terminal-file-input {

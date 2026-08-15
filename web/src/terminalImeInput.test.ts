@@ -1,0 +1,235 @@
+import { describe, expect, it } from "vitest";
+import {
+  beforeInputOutput,
+  idleTerminalImeState,
+  imeTextareaAnchor,
+  isImeComposingKeyEvent,
+  keyboardEventOutput,
+  reduceTerminalImeState,
+  shouldDeferBeforeInputToIme,
+  textareaDelta,
+} from "./terminalImeInput";
+import type { TerminalImeEvent, TerminalImeState } from "./terminalImeInput";
+
+function reduceSequence(events: TerminalImeEvent[]) {
+  let state = idleTerminalImeState();
+  const output: string[] = [];
+  const transitions = events.map((event) => {
+    const transition = reduceTerminalImeState(state, event);
+    state = transition.state;
+    if (transition.output) {
+      output.push(transition.output);
+    }
+    return transition;
+  });
+  return { state, output, transitions };
+}
+
+describe("terminal IME event sequences", () => {
+  it("keeps preedit local and commits once when input precedes compositionend", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionupdate", data: "ni", textareaValue: "" },
+      {
+        type: "input",
+        data: "ni",
+        inputType: "insertCompositionText",
+        isComposing: true,
+        textareaValue: "ni",
+      },
+      { type: "compositionupdate", data: "你好", textareaValue: "ni" },
+      {
+        type: "input",
+        data: "你好",
+        inputType: "insertCompositionText",
+        isComposing: false,
+        textareaValue: "你好",
+      },
+      { type: "compositionend", data: "你好", textareaValue: "你好" },
+      { type: "settle" },
+    ]);
+
+    expect(result.output).toEqual(["你好"]);
+    expect(result.transitions[2].suppressInput).toBe(true);
+    expect(result.transitions[2].state.preedit).toBe("ni");
+    expect(result.state).toEqual(idleTerminalImeState());
+  });
+
+  it("suppresses a composition input dispatched after compositionend", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionupdate", data: "にほん", textareaValue: "" },
+      { type: "compositionend", data: "日本", textareaValue: "日本" },
+      {
+        type: "input",
+        data: "日本",
+        inputType: "insertCompositionText",
+        isComposing: false,
+        textareaValue: "日本",
+      },
+    ]);
+
+    expect(result.output).toEqual(["日本"]);
+    expect(result.transitions[3]).toMatchObject({
+      suppressInput: true,
+      clearTextarea: true,
+    });
+  });
+
+  it("suppresses a matching insertText dispatched after compositionend", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionend", data: "한글", textareaValue: "한글" },
+      {
+        type: "input",
+        data: "한글",
+        inputType: "insertText",
+        isComposing: false,
+        textareaValue: "한글",
+      },
+    ]);
+
+    expect(result.output).toEqual(["한글"]);
+    expect(result.transitions[2].suppressInput).toBe(true);
+  });
+
+  it("does not turn canceled preedit into terminal input", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionupdate", data: "nihao", textareaValue: "nihao" },
+      { type: "compositionupdate", data: "", textareaValue: "nihao" },
+      { type: "compositionend", data: "", textareaValue: "nihao" },
+      { type: "settle" },
+    ]);
+
+    expect(result.output).toEqual([]);
+    expect(result.transitions[2].state.preedit).toBe("");
+    expect(result.transitions[3]).toMatchObject({ clearTextarea: true, output: null });
+  });
+
+  it("lets a trailing insertText provide a commit when compositionend data is unavailable", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionupdate", data: "", textareaValue: "é" },
+      { type: "compositionend", data: "", textareaValue: "é" },
+      {
+        type: "input",
+        data: "é",
+        inputType: "insertText",
+        isComposing: false,
+        textareaValue: "é",
+      },
+    ]);
+
+    expect(result.output).toEqual([]);
+    expect(result.transitions[3].suppressInput).toBe(false);
+    expect(textareaDelta("", "é")).toBe("é");
+  });
+
+  it("does not suppress a later ordinary key after the composition settles", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "" },
+      { type: "compositionend", data: "a", textareaValue: "a" },
+      { type: "settle" },
+      {
+        type: "input",
+        data: "a",
+        inputType: "insertText",
+        isComposing: false,
+        textareaValue: "a",
+      },
+    ]);
+
+    expect(result.output).toEqual(["a"]);
+    expect(result.transitions[3].suppressInput).toBe(false);
+  });
+});
+
+describe("terminal IME guards", () => {
+  it("recognizes composing key events including legacy keyCode 229", () => {
+    expect(isImeComposingKeyEvent({ isComposing: true, keyCode: 65 })).toBe(true);
+    expect(isImeComposingKeyEvent({ isComposing: false, keyCode: 229 })).toBe(true);
+    expect(isImeComposingKeyEvent({ isComposing: false, keyCode: 65 })).toBe(false);
+  });
+
+  it("defers composition beforeinput and a matching trailing commit", () => {
+    const composing: TerminalImeState = {
+      phase: "composing",
+      baseline: "",
+      preedit: "ni",
+      pendingCommit: null,
+    };
+    expect(
+      shouldDeferBeforeInputToIme(composing, {
+        data: "ni",
+        inputType: "insertCompositionText",
+        isComposing: true,
+      }),
+    ).toBe(true);
+
+    const pending: TerminalImeState = { phase: "idle", preedit: "", pendingCommit: "你好" };
+    expect(
+      shouldDeferBeforeInputToIme(pending, {
+        data: "你好",
+        inputType: "insertText",
+        isComposing: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDeferBeforeInputToIme(pending, {
+        data: "a",
+        inputType: "insertText",
+        isComposing: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("maps ordinary beforeinput, keyboard, and textarea changes", () => {
+    expect(beforeInputOutput({ inputType: "insertText", data: "a" })).toBe("a");
+    expect(beforeInputOutput({ inputType: "insertLineBreak", data: null })).toBe("\r");
+    expect(beforeInputOutput({ inputType: "deleteContentBackward", data: null })).toBe("\x7F");
+    expect(beforeInputOutput({ inputType: "insertCompositionText", data: "ni" })).toBe(null);
+    expect(
+      keyboardEventOutput({ ctrlKey: false, altKey: false, metaKey: false, key: "Enter" }),
+    ).toBe("\r");
+    expect(textareaDelta("abc", "adc")).toBe("\x7F\x7Fdc");
+  });
+});
+
+describe("IME textarea anchor", () => {
+  it("positions the textarea at the terminal cursor", () => {
+    expect(
+      imeTextareaAnchor({
+        terminalLeft: 100,
+        terminalTop: 50,
+        terminalWidth: 180,
+        terminalHeight: 64,
+        browserWidth: 800,
+        browserHeight: 600,
+        cellWidth: 9,
+        cellHeight: 16,
+        cursorCol: 2,
+        cursorRow: 1,
+        fontSizePx: 14,
+      }),
+    ).toEqual({ left: 118, top: 66, width: 9, height: 16, fontSizePx: 14 });
+  });
+
+  it("clamps the textarea to both terminal cells and the browser viewport", () => {
+    expect(
+      imeTextareaAnchor({
+        terminalLeft: 790,
+        terminalTop: 595,
+        terminalWidth: 90,
+        terminalHeight: 32,
+        browserWidth: 800,
+        browserHeight: 600,
+        cellWidth: 9,
+        cellHeight: 16,
+        cursorCol: 99,
+        cursorRow: 99,
+        fontSizePx: 12,
+      }),
+    ).toMatchObject({ left: 790, top: 583 });
+  });
+});
