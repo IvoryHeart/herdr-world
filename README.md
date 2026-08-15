@@ -4,6 +4,9 @@
 > It is experimental, Herdr compatibility code is vendored, and the runtime/API shape is expected to
 > change.
 
+> This is an intentionally minimal personal development tool. Focused contributions are welcome;
+> please read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+
 Browser UI for Herdr workspaces and agent panes.
 
 This repository is structured as a standalone app that can be distributed without asking users to
