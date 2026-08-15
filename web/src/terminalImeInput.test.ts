@@ -143,6 +143,56 @@ describe("terminal IME event sequences", () => {
     expect(result.output).toEqual(["a"]);
     expect(result.transitions[3].suppressInput).toBe(false);
   });
+
+  it("derives local preedit from the textarea when InputEvent.data is null", () => {
+    const result = reduceSequence([
+      { type: "compositionstart", data: "", textareaValue: "prefix" },
+      {
+        type: "input",
+        data: null,
+        inputType: "insertCompositionText",
+        isComposing: true,
+        textareaValue: "prefixnihao",
+      },
+    ]);
+
+    expect(result.output).toEqual([]);
+    expect(result.transitions[1]).toMatchObject({ suppressInput: true, clearTextarea: false });
+    expect(result.state).toMatchObject({ phase: "composing", preedit: "nihao" });
+  });
+
+  it("discards an active composition on reset without changing an idle state", () => {
+    const composing = reduceTerminalImeState(idleTerminalImeState(), {
+      type: "compositionstart",
+      data: "ni",
+      textareaValue: "ni",
+    }).state;
+    const reset = reduceTerminalImeState(composing, { type: "reset" });
+    expect(reset).toEqual({
+      state: idleTerminalImeState(),
+      output: null,
+      suppressInput: true,
+      clearTextarea: true,
+    });
+
+    const idleReset = reduceTerminalImeState(idleTerminalImeState(), { type: "reset" });
+    expect(idleReset).toEqual({
+      state: idleTerminalImeState(),
+      output: null,
+      suppressInput: false,
+      clearTextarea: false,
+    });
+  });
+
+  it("does not settle an active composition", () => {
+    const composing: TerminalImeState = {
+      phase: "composing",
+      baseline: "",
+      preedit: "に",
+      pendingCommit: null,
+    };
+    expect(reduceTerminalImeState(composing, { type: "settle" }).state).toBe(composing);
+  });
 });
 
 describe("terminal IME guards", () => {
