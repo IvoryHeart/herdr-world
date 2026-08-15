@@ -25,6 +25,11 @@
 
 ### Fixed
 
+- Fixed CJK and other IME terminal input so preedit stays local, committed text is sent exactly
+  once, canceled composition is discarded, and the candidate window and visible preedit stay near
+  the terminal cursor. [PR #58](https://github.com/kcosr/herdr-web/pull/58), based on work proposed
+  by [Hopkins (@LosEcher)](https://github.com/LosEcher) in
+  [PR #51](https://github.com/kcosr/herdr-web/pull/51).
 - Fixed icons rendering slightly off-center in square icon buttons (sidebar section header
   actions and the tab bar's new-tab button) by resetting the user-agent button padding, and
   removed the per-icon transform that compensated for it.
