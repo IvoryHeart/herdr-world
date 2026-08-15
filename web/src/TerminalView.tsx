@@ -285,10 +285,7 @@ export function TerminalView({
         }
         return;
       }
-      const copiedText = normalizeMobileTerminalCopyText(
-        event.text,
-        event.lineBreaksAtTerminalRightEdge,
-      ).trim();
+      const copiedText = normalizeMobileTerminalCopyText(event.text).trim();
       setMobileSelectionAction(null);
       if (!copiedText) {
         rendererRef.current?.clearSelection();
