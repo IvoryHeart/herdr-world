@@ -116,6 +116,25 @@ describe("ActionMenu", () => {
     await press(firstItem, "Escape");
     expect(document.activeElement).toBe(trigger);
   });
+
+  it("opens a custom menu trigger consistently by click and keyboard", async () => {
+    const { container } = await render(<CustomMenuTriggerHarness />);
+    const trigger = requiredElement<HTMLElement>(container, "[data-custom-menu-trigger]");
+
+    await act(async () => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(
+      requiredElement<HTMLButtonElement>(container, '[role="menuitem"]'),
+    );
+
+    await press(document.activeElement as HTMLElement, "Escape");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    trigger.focus();
+    await press(trigger, "Enter");
+    expect(document.activeElement).toBe(
+      requiredElement<HTMLButtonElement>(container, '[role="menuitem"]'),
+    );
+  });
 });
 
 describe("RenameDialog", () => {
@@ -221,6 +240,35 @@ function PointerMenuHarness() {
       <button type="button" data-menu-trigger="true" {...press}>
         Open actions
       </button>
+      {position ? (
+        <ActionMenu
+          x={position.x}
+          y={position.y}
+          items={menuItems}
+          onPick={vi.fn()}
+          onClose={() => setPosition(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function CustomMenuTriggerHarness() {
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const open = (x: number, y: number) => setPosition({ x, y });
+  const press = useLongPress(open, open);
+  return (
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-haspopup="menu"
+        aria-expanded={position ? "true" : "false"}
+        data-custom-menu-trigger="true"
+        {...press}
+      >
+        Open actions
+      </div>
       {position ? (
         <ActionMenu
           x={position.x}

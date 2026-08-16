@@ -13,7 +13,10 @@ export type MenuItem = { key: string; label: string; danger?: boolean };
  * Long-press (touch / mouse-hold) and right-click both open a context menu;
  * a plain tap/click runs the row's normal select action.
  */
-export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () => void) {
+export function useLongPress(
+  onLong: (x: number, y: number) => void,
+  onTap?: (x: number, y: number) => void,
+) {
   const timer = useRef<number | undefined>(undefined);
   const longFired = useRef(false);
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -53,14 +56,18 @@ export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () 
     onPointerUp: () => clear(),
     onPointerCancel: () => clear(),
     onPointerLeave: () => clear(),
-    onClick: (event: React.MouseEvent) => {
+    onClick: (event: React.MouseEvent<HTMLElement>) => {
       if (longFired.current) {
         event.preventDefault();
         event.stopPropagation();
         longFired.current = false;
         return;
       }
-      onTap?.();
+      if (onTap) {
+        focusOverlayTrigger(event.currentTarget);
+        const rect = event.currentTarget.getBoundingClientRect();
+        onTap(rect.left, rect.bottom);
+      }
     },
     onContextMenu: (event: React.MouseEvent<HTMLElement>) => {
       event.preventDefault();
@@ -68,7 +75,10 @@ export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () 
       onLong(event.clientX, event.clientY);
     },
     onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
-      const directActivation = !onTap && (event.key === "Enter" || event.key === " ");
+      const directActivation =
+        Boolean(onTap) &&
+        event.currentTarget.tagName !== "BUTTON" &&
+        (event.key === "Enter" || event.key === " ");
       if (
         !directActivation &&
         event.key !== "ContextMenu" &&
@@ -79,7 +89,11 @@ export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () 
       event.preventDefault();
       focusOverlayTrigger(event.currentTarget);
       const rect = event.currentTarget.getBoundingClientRect();
-      onLong(rect.left, rect.bottom);
+      if (directActivation) {
+        onTap?.(rect.left, rect.bottom);
+      } else {
+        onLong(rect.left, rect.bottom);
+      }
     },
   };
 }

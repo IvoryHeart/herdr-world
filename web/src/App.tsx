@@ -2114,7 +2114,7 @@ export function App() {
       return firstNote ? { bridgeId: selectedRuntimeId, noteId: firstNote.note_id } : null;
     });
   }, [selectedPaneKey, selectedPaneNotes, selectedRuntimeId]);
-  const selectedPaneMenuPress = useLongPress((x, y) => {
+  const openSelectedPaneMenu = (x: number, y: number) => {
     if (selectedPane && selectedRuntime) {
       setMenu({
         kind: "pane",
@@ -2126,7 +2126,8 @@ export function App() {
         pinLabel: isAgentPane(selectedPane) ? "agent" : "pane",
       });
     }
-  });
+  };
+  const selectedPaneMenuPress = useLongPress(openSelectedPaneMenu, openSelectedPaneMenu);
 
   useEffect(() => {
     if (isCompactLayout) {
@@ -3932,6 +3933,13 @@ export function App() {
             role="button"
             tabIndex={0}
             aria-haspopup="menu"
+            aria-expanded={
+              menu?.kind === "pane" &&
+              menu.bridgeId === selectedRuntime?.id &&
+              menu.id === selectedPane?.pane_id
+                ? "true"
+                : "false"
+            }
             aria-label="Selected pane actions"
             {...selectedPaneMenuPress}
           >
