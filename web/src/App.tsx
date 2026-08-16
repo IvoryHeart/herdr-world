@@ -226,7 +226,6 @@ import {
   chooseSelectedPaneForActiveWorkspace,
   countAttention,
   displayTabLabel,
-  isAttention,
   isLoud,
   paneMeta,
   paneListSubtitle,
@@ -10399,10 +10398,6 @@ function sortAgentPanes(panes: PaneInfo[], sort: AgentSort, snapshot: Snapshot) 
 
   return [...panes].sort((a, b) => {
     if (sort === "attention") {
-      const attention = Number(isAttention(b.agent_status)) - Number(isAttention(a.agent_status));
-      if (attention !== 0) {
-        return attention;
-      }
       const status = AGENT_ATTENTION_ORDER[a.agent_status] - AGENT_ATTENTION_ORDER[b.agent_status];
       if (status !== 0) {
         return status;
@@ -10433,15 +10428,14 @@ function sortAgentPanes(panes: PaneInfo[], sort: AgentSort, snapshot: Snapshot) 
 export function sortScopedAgentPanes(entries: ScopedAgentPane[], sort: AgentSort) {
   return [...entries].sort((a, b) => {
     if (sort === "attention") {
-      const attention =
-        Number(isAttention(b.pane.agent_status)) - Number(isAttention(a.pane.agent_status));
-      if (attention !== 0) {
-        return attention;
-      }
       const status =
         AGENT_ATTENTION_ORDER[a.pane.agent_status] - AGENT_ATTENTION_ORDER[b.pane.agent_status];
       if (status !== 0) {
         return status;
+      }
+      const activity = compareLastStatusTransition(a, b);
+      if (activity !== 0) {
+        return activity;
       }
     } else if (sort === "status") {
       const status =

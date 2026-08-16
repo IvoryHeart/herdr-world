@@ -127,6 +127,9 @@
 - Terminal output now negotiates gzip compression between matching web apps and bridges, while
   remaining compatible with older versions and keeping incompressible updates raw.
   [PR #59](https://github.com/kcosr/herdr-web/pull/59)
+- Changed the Attention agent sort to break ties within an attention band by the most recent agent
+  status change, matching Herdr's Priority agent panel, and kept the existing bridge, Space, and tab
+  order as the fallback for agents with no recorded transition.
 
 ### Fixed
 
