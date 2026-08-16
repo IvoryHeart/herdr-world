@@ -134,6 +134,7 @@ import {
 import type { NavigationSyncMode } from "./navigationPrefs";
 import { ActionMenu, ConfirmDialog, RenameDialog, useLongPress } from "./overlays";
 import type { MenuItem } from "./overlays";
+import { focusableElements, trapFocusWithin, useFocusReturn } from "./overlayFocus";
 import { createSnapshotRefreshController } from "./refreshCoordinator";
 import { TerminalView } from "./TerminalView";
 import {
@@ -7576,6 +7577,7 @@ function OptionsMenuShell({
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  useFocusReturn();
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -7593,8 +7595,14 @@ function OptionsMenuShell({
       top = window.innerHeight - margin - rect.height;
     }
     setPos({ left, top: Math.max(margin, top) });
-    el.focus();
   }, [x, y]);
+
+  useLayoutEffect(() => {
+    if (!pos || !ref.current) {
+      return;
+    }
+    (focusableElements(ref.current)[0] ?? ref.current).focus();
+  }, [pos]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -7618,6 +7626,7 @@ function OptionsMenuShell({
       <button
         className="overlay-scrim overlay-scrim-clear"
         type="button"
+        tabIndex={-1}
         aria-label="Close list options"
         onClick={onClose}
       />
@@ -7627,6 +7636,7 @@ function OptionsMenuShell({
         role="dialog"
         aria-label={ariaLabel}
         tabIndex={-1}
+        onKeyDown={trapFocusWithin}
         style={{
           left: pos?.left ?? x,
           top: pos?.top ?? y,
@@ -7656,6 +7666,7 @@ export function QuickPaneNoteDialog({
   const dialogRef = useRef<HTMLFormElement | null>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const bodyInputRef = useRef<HTMLTextAreaElement | null>(null);
+  useFocusReturn();
 
   useEffect(() => {
     titleInputRef.current?.focus();
@@ -7691,39 +7702,12 @@ export function QuickPaneNoteDialog({
     }
     onSubmit(trimmedTitle, bodyExpanded ? body : "");
   };
-  const trapDialogFocus = (event: ReactKeyboardEvent<HTMLFormElement>) => {
-    if (event.key !== "Tab") {
-      return;
-    }
-    const dialog = dialogRef.current;
-    if (!dialog) {
-      return;
-    }
-    const focusable = Array.from(
-      dialog.querySelectorAll<HTMLElement>(
-        "button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])",
-      ),
-    );
-    if (focusable.length === 0) {
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey && active === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first.focus();
-    }
-  };
-
   return (
     <div className="overlay-root">
       <button
         className="overlay-scrim"
         type="button"
+        tabIndex={-1}
         aria-label="Cancel"
         disabled={busy}
         onClick={cancel}
@@ -7741,7 +7725,7 @@ export function QuickPaneNoteDialog({
             cancel();
             return;
           }
-          trapDialogFocus(event);
+          trapFocusWithin(event);
         }}
       >
         <div className="modal-title">Add note</div>
