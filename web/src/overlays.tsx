@@ -1,6 +1,11 @@
 import type * as React from "react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { focusNextTo, trapFocusWithin, useFocusReturn } from "./overlayFocus";
+import {
+  focusNextTo,
+  focusOverlayTrigger,
+  trapFocusWithin,
+  useFocusReturn,
+} from "./overlayFocus";
 
 export type MenuItem = { key: string; label: string; danger?: boolean };
 
@@ -21,7 +26,7 @@ export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () 
   };
 
   return {
-    onPointerDown: (event: React.PointerEvent) => {
+    onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
       if (event.button === 2) {
         return;
       }
@@ -29,8 +34,10 @@ export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () 
       start.current = { x: event.clientX, y: event.clientY };
       clear();
       const { clientX, clientY } = event;
+      const trigger = event.currentTarget;
       timer.current = window.setTimeout(() => {
         longFired.current = true;
+        focusOverlayTrigger(trigger);
         onLong(clientX, clientY);
       }, 480);
     },
@@ -55,9 +62,24 @@ export function useLongPress(onLong: (x: number, y: number) => void, onTap?: () 
       }
       onTap?.();
     },
-    onContextMenu: (event: React.MouseEvent) => {
+    onContextMenu: (event: React.MouseEvent<HTMLElement>) => {
       event.preventDefault();
+      focusOverlayTrigger(event.currentTarget);
       onLong(event.clientX, event.clientY);
+    },
+    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+      const directActivation = !onTap && (event.key === "Enter" || event.key === " ");
+      if (
+        !directActivation &&
+        event.key !== "ContextMenu" &&
+        !(event.shiftKey && event.key === "F10")
+      ) {
+        return;
+      }
+      event.preventDefault();
+      focusOverlayTrigger(event.currentTarget);
+      const rect = event.currentTarget.getBoundingClientRect();
+      onLong(rect.left, rect.bottom);
     },
   };
 }

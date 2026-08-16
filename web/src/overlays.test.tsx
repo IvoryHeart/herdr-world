@@ -4,7 +4,7 @@
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ActionMenu, ConfirmDialog, RenameDialog } from "./overlays";
+import { ActionMenu, ConfirmDialog, RenameDialog, useLongPress } from "./overlays";
 
 const roots: Root[] = [];
 
@@ -92,6 +92,29 @@ describe("ActionMenu", () => {
     expect(event.defaultPrevented).toBe(true);
     expect(onClose).toHaveBeenCalledOnce();
     expect(document.activeElement).toBe(opener);
+  });
+
+  it("records the real pointer trigger before opening the menu", async () => {
+    const unrelated = pageButton("unrelated");
+    unrelated.focus();
+    const { container } = await render(<PointerMenuHarness />);
+    const trigger = requiredElement<HTMLButtonElement>(container, "[data-menu-trigger]");
+
+    await act(async () => {
+      trigger.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          clientX: 20,
+          clientY: 30,
+        }),
+      );
+    });
+    const firstItem = requiredElement<HTMLButtonElement>(container, '[role="menuitem"]');
+    expect(document.activeElement).toBe(firstItem);
+
+    await press(firstItem, "Escape");
+    expect(document.activeElement).toBe(trigger);
   });
 });
 
@@ -187,6 +210,27 @@ function MenuHarness({ onClose }: { onClose: () => void }) {
         setOpen(false);
       }}
     />
+  );
+}
+
+function PointerMenuHarness() {
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const press = useLongPress((x, y) => setPosition({ x, y }));
+  return (
+    <>
+      <button type="button" data-menu-trigger="true" {...press}>
+        Open actions
+      </button>
+      {position ? (
+        <ActionMenu
+          x={position.x}
+          y={position.y}
+          items={menuItems}
+          onPick={vi.fn()}
+          onClose={() => setPosition(null)}
+        />
+      ) : null}
+    </>
   );
 }
 

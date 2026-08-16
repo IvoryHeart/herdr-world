@@ -107,6 +107,10 @@ export function focusNextTo(
   return document.activeElement === target;
 }
 
+export function focusOverlayTrigger(trigger: HTMLElement) {
+  trigger.focus({ preventScroll: true });
+}
+
 function isFocusable(element: HTMLElement) {
   if (element.tabIndex < 0 || element.closest("[hidden], [inert], [aria-hidden='true']")) {
     return false;
