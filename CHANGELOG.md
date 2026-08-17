@@ -6,6 +6,11 @@
 
 ### Added
 
+- Added an optional screen-reader text mirror for visible terminal contents, with bounded updates
+  and concealed-cell filtering. Based on the concept proposed by
+  [shuv (@shuv1337)](https://github.com/shuv1337) in
+  [PR #37](https://github.com/kcosr/herdr-web/pull/37).
+
 ### Changed
 
 ### Fixed

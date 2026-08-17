@@ -72,6 +72,8 @@ type Props = {
   onMultiHostSpaceSelection: (enabled: boolean) => void;
   terminalFontSizePx: number;
   onTerminalFontSizePx: (value: number) => void;
+  terminalScreenReaderText: boolean;
+  onTerminalScreenReaderText: (enabled: boolean) => void;
   terminalInputTransport: TerminalInputTransport;
   onTerminalInputTransport: (transport: TerminalInputTransport) => void;
   terminalInputBatchDelayMs: number;
@@ -126,6 +128,8 @@ export function BackendSettingsDialog({
   onMultiHostSpaceSelection,
   terminalFontSizePx,
   onTerminalFontSizePx,
+  terminalScreenReaderText,
+  onTerminalScreenReaderText,
   terminalInputTransport,
   onTerminalInputTransport,
   terminalInputBatchDelayMs,
@@ -692,6 +696,34 @@ export function BackendSettingsDialog({
                     defaultValue={DEFAULT_TERMINAL_FONT_SIZE_PX}
                     onChange={(value) => onTerminalFontSizePx(parseTerminalFontSizePx(value))}
                   />
+                </div>
+                <div className="settings-label">Accessibility</div>
+                <div className="settings-row">
+                  <span title="Expose the visible terminal contents as screen-reader text; may add processing during heavy output">
+                    Screen-reader text
+                  </span>
+                  <div
+                    className="segmented-control"
+                    role="group"
+                    aria-label="Terminal screen-reader text"
+                  >
+                    <button
+                      type="button"
+                      data-on={!terminalScreenReaderText}
+                      aria-pressed={!terminalScreenReaderText}
+                      onClick={() => onTerminalScreenReaderText(false)}
+                    >
+                      Off
+                    </button>
+                    <button
+                      type="button"
+                      data-on={terminalScreenReaderText}
+                      aria-pressed={terminalScreenReaderText}
+                      onClick={() => onTerminalScreenReaderText(true)}
+                    >
+                      On
+                    </button>
+                  </div>
                 </div>
                 <div className="settings-label">Terminal transport</div>
                 <div className="settings-row">

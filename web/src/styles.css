@@ -91,6 +91,10 @@
   border: 0;
 }
 
+.terminal-accessible-screen {
+  white-space: pre-wrap;
+}
+
 html,
 body,
 #root {

@@ -186,7 +186,8 @@ Settings are grouped by area:
 - Features: client feature toggles such as Notes.
 - Display: browser-wide navigation synchronization, agent features in Tabs, multi-host Space
   selection, top/bottom app padding, and mobile terminal controls size.
-- Terminal: browser-to-bridge terminal input transport and input batching delay.
+- Terminal: font size, optional screen-reader text, browser-to-bridge transport, and input/output
+  batching delays.
 - Mobile: touch-specific terminal behavior when running on a coarse pointer device.
 
 When viewing all of multiple hosts, use the Spaces list `…` menu to group spaces by host or keep a
@@ -200,6 +201,11 @@ Terminal input payloads can be sent as JSON or binary WebSocket frames. JSON rem
 binary is available for comparing terminal input performance. Terminal input batching is off by
 default. When enabled, short input chunks are coalesced for `32`, `64`, `128`, or `256` ms and are
 flushed early once the pending UTF-8 input reaches 32 bytes, so paste-like input bypasses the delay.
+
+Terminal screen-reader text is off by default. Enable it under Settings → Terminal to expose each
+visible terminal viewport as bounded plain text for assistive technology. The mirror follows output,
+scrolling, resizing, and alternate-screen changes, and replaces concealed terminal cells with
+spaces. Disable it when screen-reader access is not needed to avoid the additional snapshot work.
 
 ## Launcher Presets
 
