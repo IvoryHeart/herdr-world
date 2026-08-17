@@ -1,8 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
+## [0.4.3] - 2026-08-17
 
 ### Added
 
@@ -12,8 +10,6 @@
   [shuv (@shuv1337)](https://github.com/shuv1337) in
   [PR #37](https://github.com/kcosr/herdr-web/pull/37).
 
-### Changed
-
 ### Fixed
 
 - Improved keyboard focus behavior for dialogs and action menus: modal focus stays contained,
@@ -21,8 +17,6 @@
   overlay restores its opener. [PR #62](https://github.com/kcosr/herdr-web/pull/62), based on work
   proposed by [shuv (@shuv1337)](https://github.com/shuv1337) in
   [PR #37](https://github.com/kcosr/herdr-web/pull/37).
-
-### Removed
 
 ## [0.4.2] - 2026-08-15
 
