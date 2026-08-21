@@ -14,6 +14,9 @@
 
 ### Fixed
 
+- Join canvas-wrapped HTTP(S) URLs when copying from a mobile terminal.
+  [PR #61](https://github.com/kcosr/herdr-web/pull/61)
+
 ### Removed
 
 ## [0.4.3] - 2026-08-17
