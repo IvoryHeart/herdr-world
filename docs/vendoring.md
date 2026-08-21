@@ -32,8 +32,8 @@ The browser app is not vendored into Herdr. It lives at `web/`, and `herdr-web-b
 ## Current Reference
 
 - Upstream checkout: a clean Herdr source checkout outside this repository
-- Upstream release baseline: `v0.8.0`
-- Terminal wire baseline: protocol `19`
+- Upstream release baseline: `v0.8.2`
+- Terminal wire baseline: protocol `20`
 
 Use the upstream checkout as an external reference for audits and refreshes. It is not required to
 build `herdr-web`.
@@ -62,7 +62,7 @@ bridge narrows the drift check to only the terminal attach message regions.
 
 ## Refresh Process
 
-Use a clean Herdr checkout at the reviewed `v0.8.0` release tag as the source reference. Do not
+Use a clean Herdr checkout at the reviewed `v0.8.2` release tag as the source reference. Do not
 refresh from an experimental tree that may contain unrelated local drift. Copy the reviewed
 upstream source files into the minimal compatibility crate; do not make the bridge compile against
 the external checkout or recreate a full upstream vendor snapshot.
@@ -142,8 +142,8 @@ the refit button after changing browser sizes.
 
 ## Compatibility Policy
 
-The bridge pings Herdr's status API at startup and requires Herdr `v0.8.0` or newer with daemon
-protocol exactly `19`. Older daemons and any unreviewed newer protocol are rejected before serving
+The bridge pings Herdr's status API at startup and requires Herdr `v0.8.2` or newer with daemon
+protocol exactly `20`. Older daemons and any unreviewed newer protocol are rejected before serving
 the web app. The version floor covers the private JSON API shape, including the managed
 `agent.start` contract; the exact protocol check protects the copied bincode terminal wire format.
 This is not a complete stability guarantee because the bridge mirrors private APIs.
