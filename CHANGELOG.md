@@ -17,19 +17,23 @@
   `GraphicsTransmissionRetired`) decode but are ignored by the bridge, adding no new behavior.
   [PR #69](https://github.com/kcosr/herdr-web/pull/69)
 - Compress terminal output with gzip when the client and bridge both support it.
-  [PR #59](https://github.com/kcosr/herdr-web/pull/59)
+  [PR #59](https://github.com/kcosr/herdr-web/pull/59), contributed by
+  [Will Hampson (@Whamp)](https://github.com/Whamp).
 - Changed the Attention agent sort to break ties within an attention band by the most recent agent
   status change, matching Herdr's Priority agent panel, and kept the existing bridge, Space, and tab
   order as the fallback for agents with no recorded transition.
-  [PR #68](https://github.com/kcosr/herdr-web/pull/68)
+  [PR #68](https://github.com/kcosr/herdr-web/pull/68), contributed by
+  [Craig P. Motlin (@motlin)](https://github.com/motlin).
 - Stop blinking the terminal cursor on touch devices so idle terminals do not keep redrawing.
   Desktop cursors still blink.
-  [PR #60](https://github.com/kcosr/herdr-web/pull/60)
+  [PR #60](https://github.com/kcosr/herdr-web/pull/60), contributed by
+  [Will Hampson (@Whamp)](https://github.com/Whamp).
 
 ### Fixed
 
 - Join canvas-wrapped HTTP(S) URLs when copying from a mobile terminal.
-  [PR #61](https://github.com/kcosr/herdr-web/pull/61)
+  [PR #61](https://github.com/kcosr/herdr-web/pull/61), contributed by
+  [Will Hampson (@Whamp)](https://github.com/Whamp).
 
 ### Removed
 
