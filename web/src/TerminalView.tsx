@@ -39,6 +39,11 @@ import {
 } from "./terminalInputTransport";
 import type { TerminalInputTransport } from "./terminalInputTransport";
 import { DEFAULT_TERMINAL_OUTPUT_COALESCE_MS } from "./terminalOutputCoalescing";
+import {
+  createTerminalOutputFrameDecoder,
+  isTerminalOutputGzipAcknowledgement,
+  terminalOutputGzipSupported,
+} from "./terminalOutputEncoding";
 import { DEFAULT_TERMINAL_FONT_SIZE_PX } from "./terminalPrefs";
 import {
   TERMINAL_FOREGROUND_FAST_ATTEMPTS,
@@ -744,14 +749,31 @@ export function TerminalView({
         closeActiveSocket();
       }
       reconnectScheduledForSocket.clear();
+      const currentSocketGeneration = socketGeneration + 1;
+      socketGeneration = currentSocketGeneration;
       const nextSocket = new WebSocket(
-        terminalSocketUrl(wsUrl, terminalId, initialSize, terminalOutputCoalesceMs),
+        terminalSocketUrl(
+          wsUrl,
+          terminalId,
+          initialSize,
+          terminalOutputCoalesceMs,
+          terminalOutputGzipSupported(),
+        ),
+      );
+      let gzipOutputAcknowledged = false;
+      const outputDecoder = createTerminalOutputFrameDecoder(
+        (output) => writeTerminalData(currentSocketGeneration, output),
+        (error) => {
+          lastCloseReason = "terminal output decompression failed";
+          debugReconnect("output-decompression-failed", { error });
+          if (socket === nextSocket) {
+            nextSocket.close();
+          }
+        },
       );
       socket = nextSocket;
       socketRef.current = nextSocket;
       nextSocket.binaryType = "arraybuffer";
-      const currentSocketGeneration = socketGeneration + 1;
-      socketGeneration = currentSocketGeneration;
       socketStartedAt = performance.now();
       setConnectionState("connecting");
       debugReconnect("connect_start", { reason, socketGeneration, connectTimeoutMs });
@@ -790,6 +812,10 @@ export function TerminalView({
           return;
         }
         if (typeof event.data === "string") {
+          if (isTerminalOutputGzipAcknowledgement(event.data)) {
+            gzipOutputAcknowledged = true;
+            return;
+          }
           lastCloseReason = parseTerminalCloseReason(event.data) ?? lastCloseReason;
           return;
         }
@@ -797,17 +823,16 @@ export function TerminalView({
           // Terminal output only flows after a successful daemon attach, so
           // a transient attach-conflict streak is over.
           attachConflictRetries = 0;
-          writeTerminalData(currentSocketGeneration, new Uint8Array(event.data));
-          return;
-        }
-        if (event.data instanceof Blob) {
-          attachConflictRetries = 0;
-          void event.data.arrayBuffer().then((buffer) => {
-            writeTerminalData(currentSocketGeneration, new Uint8Array(buffer));
-          });
+          const output = new Uint8Array(event.data);
+          if (gzipOutputAcknowledged) {
+            void outputDecoder.enqueue(output);
+          } else {
+            writeTerminalData(currentSocketGeneration, output);
+          }
         }
       });
       nextSocket.addEventListener("close", () => {
+        outputDecoder.cancel();
         if (disposed || socket !== nextSocket || socketGeneration !== currentSocketGeneration) {
           return;
         }
@@ -1799,6 +1824,7 @@ function terminalSocketUrl(
   terminalId: string,
   size: TerminalSize,
   coalesceMs: number,
+  requestGzipOutput: boolean,
 ) {
   const params = new URLSearchParams({
     terminal_id: terminalId,
@@ -1807,6 +1833,9 @@ function terminalSocketUrl(
     takeover: "false",
     coalesce_ms: String(coalesceMs),
   });
+  if (requestGzipOutput) {
+    params.set("output_encoding", "gzip");
+  }
   return wsUrl("/ws/terminal", params);
 }
 
