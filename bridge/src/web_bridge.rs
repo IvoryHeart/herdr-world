@@ -63,8 +63,8 @@ const DEFAULT_PORT: u16 = 8787;
 const DEFAULT_COLS: u16 = 80;
 const DEFAULT_ROWS: u16 = 24;
 const DEFAULT_STATIC_DIR: &str = "web/dist";
-const MIN_HERDR_VERSION: (u64, u64, u64) = (0, 8, 0);
-const MIN_HERDR_VERSION_LABEL: &str = "0.8.0";
+const MIN_HERDR_VERSION: (u64, u64, u64) = (0, 8, 2);
+const MIN_HERDR_VERSION_LABEL: &str = "0.8.2";
 const MAX_UPLOAD_BYTES: usize = 25 * 1024 * 1024;
 const MAX_NOTES_REQUEST_BYTES: usize = 512 * 1024;
 const MAX_TERMINAL_INPUT_CHUNK_BYTES: usize = 768 * 1024;
@@ -4407,7 +4407,10 @@ fn open_terminal_attach(
                 | ServerMessage::KittyKeyboardReportAll { .. }
                 | ServerMessage::PrefixInputSource { .. }
                 | ServerMessage::Frame(_)
-                | ServerMessage::Graphics { .. } => {}
+                | ServerMessage::Graphics { .. }
+                | ServerMessage::TerminalBell { .. }
+                | ServerMessage::GraphicsFile { .. }
+                | ServerMessage::GraphicsTransmissionRetired { .. } => {}
             }
         }
         // By this point the Detach (if any) has been flushed and the socket
@@ -5377,7 +5380,7 @@ mod tests {
 
     fn test_session_snapshot() -> SessionSnapshot {
         SessionSnapshot {
-            version: "0.8.0".to_string(),
+            version: "0.8.2".to_string(),
             protocol: PROTOCOL_VERSION,
             focused_workspace_id: Some("workspace-1".to_string()),
             focused_tab_id: Some("tab-1".to_string()),
@@ -6035,7 +6038,7 @@ mod tests {
     #[test]
     fn daemon_status_accepts_minimum_version_and_exact_protocol() {
         assert_eq!(
-            validated_daemon_protocol(runtime_status("0.8.0", PROTOCOL_VERSION)).unwrap(),
+            validated_daemon_protocol(runtime_status("0.8.2", PROTOCOL_VERSION)).unwrap(),
             PROTOCOL_VERSION
         );
         assert_eq!(
@@ -6081,7 +6084,7 @@ mod tests {
 
     #[test]
     fn daemon_status_accepts_version_prefix_and_build_metadata() {
-        for version in ["v0.8.0", "0.8.0+linux-x86-64"] {
+        for version in ["v0.8.2", "0.8.2+linux-x86-64"] {
             assert_eq!(
                 validated_daemon_protocol(runtime_status(version, PROTOCOL_VERSION)).unwrap(),
                 PROTOCOL_VERSION
@@ -6090,12 +6093,17 @@ mod tests {
     }
 
     #[test]
-    fn daemon_status_rejects_version_before_0_8_0() {
-        let error = validated_daemon_protocol(runtime_status("0.7.5", PROTOCOL_VERSION))
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("too old"));
-        assert!(error.contains(MIN_HERDR_VERSION_LABEL));
+    fn daemon_status_rejects_version_before_0_8_2() {
+        for version in ["0.7.5", "0.8.0", "0.8.1"] {
+            let error = validated_daemon_protocol(runtime_status(version, PROTOCOL_VERSION))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("too old"), "{version:?}: {error}");
+            assert!(
+                error.contains(MIN_HERDR_VERSION_LABEL),
+                "{version:?}: {error}"
+            );
+        }
     }
 
     #[test]
@@ -6113,14 +6121,14 @@ mod tests {
 
     #[test]
     fn daemon_status_rejects_any_other_protocol() {
-        let older = validated_daemon_protocol(runtime_status("0.8.0", PROTOCOL_VERSION - 1))
+        let older = validated_daemon_protocol(runtime_status("0.8.2", PROTOCOL_VERSION - 1))
             .unwrap_err()
             .to_string();
         assert!(older.contains("incompatible"));
         assert!(older.contains(&PROTOCOL_VERSION.to_string()));
 
         assert!(
-            validated_daemon_protocol(runtime_status("0.8.0", PROTOCOL_VERSION + 1))
+            validated_daemon_protocol(runtime_status("0.8.2", PROTOCOL_VERSION + 1))
                 .unwrap_err()
                 .to_string()
                 .contains("incompatible")

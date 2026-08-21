@@ -10,7 +10,7 @@ They do not publish npm packages, and the package versions are not release versi
 - Rust stable.
 - JDK 21 and Android SDK when validating the Android shell.
 - GitHub CLI authenticated as a user that can create releases.
-- A local Herdr `v0.8.0` or newer session reporting terminal protocol `19` for browser and packaged
+- A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
   bridge smoke testing.
 
 ## Prepare
@@ -96,7 +96,7 @@ dist-packages/herdr-web-vX.Y.Z-android.apk
 
 ## Browser Smoke
 
-Start or attach a Herdr `v0.8.0` or newer session reporting terminal protocol `19`:
+Start or attach a Herdr `v0.8.2` or newer session reporting terminal protocol `20`:
 
 ```bash
 herdr
