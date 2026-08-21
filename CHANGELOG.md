@@ -6,6 +6,7 @@
 
 - The bridge now requires Herdr `v0.8.2` or newer reporting terminal protocol `20`. Herdr
   `v0.8.0` and `v0.8.1` daemons (protocol `19`) are rejected at startup.
+  [PR #69](https://github.com/kcosr/herdr-web/pull/69)
 
 ### Added
 
@@ -14,6 +15,7 @@
 - Refreshed the vendored Herdr compatibility sources to the `v0.8.2`/protocol `20` baseline.
   The new protocol `20` server message variants (`TerminalBell`, `GraphicsFile`,
   `GraphicsTransmissionRetired`) decode but are ignored by the bridge, adding no new behavior.
+  [PR #69](https://github.com/kcosr/herdr-web/pull/69)
 - Compress terminal output with gzip when the client and bridge both support it.
   [PR #59](https://github.com/kcosr/herdr-web/pull/59)
 - Changed the Attention agent sort to break ties within an attention band by the most recent agent
