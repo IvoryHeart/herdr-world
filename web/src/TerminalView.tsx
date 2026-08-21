@@ -67,6 +67,8 @@ type Props = {
   scrollSensitivity?: number;
   /** Supplemental browser-native input controls for narrow touch screens. */
   mobileControls?: boolean;
+  /** Whether the terminal cursor blinks. Off on touch devices. */
+  cursorBlink?: boolean;
   /** Terminal renderer font size in CSS pixels. */
   terminalFontSizePx?: number;
   /** Percentage scale applied to mobile terminal controls. */
@@ -146,6 +148,7 @@ export function TerminalView({
   autoFocus = true,
   scrollSensitivity = 1,
   mobileControls = false,
+  cursorBlink = true,
   terminalFontSizePx = DEFAULT_TERMINAL_FONT_SIZE_PX,
   mobileControlsScalePercent = 100,
   mobileTapTarget = "command-input",
@@ -204,6 +207,8 @@ export function TerminalView({
   scrollSensitivityRef.current = scrollSensitivity;
   const mobileControlsRef = useRef(mobileControls);
   mobileControlsRef.current = mobileControls;
+  const cursorBlinkRef = useRef(cursorBlink);
+  cursorBlinkRef.current = cursorBlink;
   const terminalFontSizePxRef = useRef(terminalFontSizePx);
   terminalFontSizePxRef.current = terminalFontSizePx;
   const mobileTapTargetRef = useRef(mobileTapTarget);
@@ -495,7 +500,10 @@ export function TerminalView({
     let resizeObserver: ResizeObserver | null = null;
     const generation = rendererGenerationRef.current + 1;
     rendererGenerationRef.current = generation;
-    const renderer: TerminalRenderer = new GhosttyRenderer(terminalFontSizePxRef.current);
+    const renderer: TerminalRenderer = new GhosttyRenderer(
+      terminalFontSizePxRef.current,
+      cursorBlinkRef.current,
+    );
     rendererRef.current = renderer;
     setConnectionState("connecting");
 
