@@ -53,6 +53,7 @@ import type {
   MobileTouchSelectionEndpointTimeoutMs,
 } from "./mobileTerminalPrefs";
 import type { NavigationSyncMode } from "./navigationPrefs";
+import { trapFocusWithin, useFocusReturn } from "./overlayFocus";
 import { TERMINAL_INPUT_BATCH_DELAY_OPTIONS_MS } from "./terminalInputTransport";
 import type { TerminalInputTransport } from "./terminalInputTransport";
 import { TERMINAL_OUTPUT_COALESCE_OPTIONS_MS } from "./terminalOutputCoalescing";
@@ -71,6 +72,8 @@ type Props = {
   onMultiHostSpaceSelection: (enabled: boolean) => void;
   terminalFontSizePx: number;
   onTerminalFontSizePx: (value: number) => void;
+  terminalScreenReaderText: boolean;
+  onTerminalScreenReaderText: (enabled: boolean) => void;
   terminalInputTransport: TerminalInputTransport;
   onTerminalInputTransport: (transport: TerminalInputTransport) => void;
   terminalInputBatchDelayMs: number;
@@ -125,6 +128,8 @@ export function BackendSettingsDialog({
   onMultiHostSpaceSelection,
   terminalFontSizePx,
   onTerminalFontSizePx,
+  terminalScreenReaderText,
+  onTerminalScreenReaderText,
   terminalInputTransport,
   onTerminalInputTransport,
   terminalInputBatchDelayMs,
@@ -155,6 +160,7 @@ export function BackendSettingsDialog({
   const bridge = useBridge();
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  useFocusReturn();
   const [form, setForm] = useState<FormState>(() => newBackendForm(bridge.store.backends));
   const [selectionMode, setSelectionMode] = useState<SelectionMode>(
     initialSelectionMode(bridge.lastSelectedBridgeId, bridge.sameOriginAvailable),
@@ -294,7 +300,13 @@ export function BackendSettingsDialog({
 
   return (
     <div className="overlay-root">
-      <button className="overlay-scrim" type="button" aria-label="Close settings" onClick={onClose} />
+      <button
+        className="overlay-scrim"
+        type="button"
+        tabIndex={-1}
+        aria-label="Close settings"
+        onClick={onClose}
+      />
       <form
         className="modal backend-modal"
         role="dialog"
@@ -305,7 +317,9 @@ export function BackendSettingsDialog({
           if (event.key === "Escape") {
             event.preventDefault();
             onClose();
+            return;
           }
+          trapFocusWithin(event);
         }}
         onSubmit={(event) => {
           event.preventDefault();
@@ -682,6 +696,34 @@ export function BackendSettingsDialog({
                     defaultValue={DEFAULT_TERMINAL_FONT_SIZE_PX}
                     onChange={(value) => onTerminalFontSizePx(parseTerminalFontSizePx(value))}
                   />
+                </div>
+                <div className="settings-label">Accessibility</div>
+                <div className="settings-row">
+                  <span title="Expose the visible terminal contents as screen-reader text; may add processing during heavy output">
+                    Screen-reader text
+                  </span>
+                  <div
+                    className="segmented-control"
+                    role="group"
+                    aria-label="Terminal screen-reader text"
+                  >
+                    <button
+                      type="button"
+                      data-on={!terminalScreenReaderText}
+                      aria-pressed={!terminalScreenReaderText}
+                      onClick={() => onTerminalScreenReaderText(false)}
+                    >
+                      Off
+                    </button>
+                    <button
+                      type="button"
+                      data-on={terminalScreenReaderText}
+                      aria-pressed={terminalScreenReaderText}
+                      onClick={() => onTerminalScreenReaderText(true)}
+                    >
+                      On
+                    </button>
+                  </div>
                 </div>
                 <div className="settings-label">Terminal transport</div>
                 <div className="settings-row">
