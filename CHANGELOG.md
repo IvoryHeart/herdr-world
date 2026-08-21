@@ -1,14 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2026-08-21
 
 ### Breaking Changes
 
 - The bridge now requires Herdr `v0.8.2` or newer reporting terminal protocol `20`. Herdr
   `v0.8.0` and `v0.8.1` daemons (protocol `19`) are rejected at startup.
   [PR #69](https://github.com/kcosr/herdr-web/pull/69)
-
-### Added
 
 ### Changed
 
@@ -34,8 +32,6 @@
 - Join canvas-wrapped HTTP(S) URLs when copying from a mobile terminal.
   [PR #61](https://github.com/kcosr/herdr-web/pull/61), contributed by
   [Will Hampson (@Whamp)](https://github.com/Whamp).
-
-### Removed
 
 ## [0.4.3] - 2026-08-17
 
