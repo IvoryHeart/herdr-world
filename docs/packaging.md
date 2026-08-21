@@ -89,7 +89,7 @@ Confirm the archive contains the expected root directory, `bin/herdr-web`,
 `bin/herdr-web-bridge`, bundled `share/herdr-web/web/` assets, and `README.md`.
 
 Before release, run the unpacked wrapper against a Herdr `v0.8.2` or newer daemon reporting protocol
-`19`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
+`20`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
 protocol. Complete the launcher checks in [docs/release.md](release.md) with the packaged bridge, not
 only a development build.
 

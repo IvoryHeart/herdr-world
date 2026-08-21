@@ -143,7 +143,7 @@ the refit button after changing browser sizes.
 ## Compatibility Policy
 
 The bridge pings Herdr's status API at startup and requires Herdr `v0.8.2` or newer with daemon
-protocol exactly `19`. Older daemons and any unreviewed newer protocol are rejected before serving
+protocol exactly `20`. Older daemons and any unreviewed newer protocol are rejected before serving
 the web app. The version floor covers the private JSON API shape, including the managed
 `agent.start` contract; the exact protocol check protects the copied bincode terminal wire format.
 This is not a complete stability guarantee because the bridge mirrors private APIs.
