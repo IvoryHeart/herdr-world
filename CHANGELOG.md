@@ -8,6 +8,10 @@
 
 ### Changed
 
+- Changed the Attention agent sort to break ties within an attention band by the most recent agent
+  status change, matching Herdr's Priority agent panel, and kept the existing bridge, Space, and tab
+  order as the fallback for agents with no recorded transition.
+
 ### Fixed
 
 ### Removed
