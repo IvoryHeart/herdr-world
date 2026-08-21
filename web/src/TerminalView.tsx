@@ -24,7 +24,11 @@ import {
   terminalConnectionOverlayDelayMs,
 } from "./terminalConnectionStatus";
 import type { TerminalConnectionState } from "./terminalConnectionStatus";
-import { findFirstUrlInSelection, openableHttpUrl } from "./terminalSelection";
+import {
+  findFirstUrlInSelection,
+  normalizeMobileTerminalCopyText,
+  openableHttpUrl,
+} from "./terminalSelection";
 import { GhosttyRenderer } from "./terminalRenderer";
 import type { MobileTerminalTouchEvent, TerminalRenderer, TerminalSize } from "./terminalRenderer";
 import {
@@ -89,6 +93,12 @@ type Props = {
   refitToken?: number;
   /** Incrementing token from the parent that requests focus on the preferred terminal input. */
   focusToken?: number;
+  /** Whether to maintain a hidden plain-text mirror of the visible terminal viewport. */
+  terminalScreenReaderText?: boolean;
+  /** Pane-specific accessible name for the terminal and its screen mirror. */
+  accessibilityLabel?: string;
+  /** Whether this is the currently selected terminal in a split. */
+  selected?: boolean;
 };
 
 type UploadCandidate = {
@@ -151,6 +161,9 @@ export function TerminalView({
   terminalOutputCoalesceMs = DEFAULT_TERMINAL_OUTPUT_COALESCE_MS,
   refitToken = 0,
   focusToken = 0,
+  terminalScreenReaderText = false,
+  accessibilityLabel = "Terminal",
+  selected = false,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
@@ -179,6 +192,7 @@ export function TerminalView({
   const [connectionState, setConnectionState] = useState<TerminalConnectionState>("idle");
   const [closeReason, setCloseReason] = useState<string | null>(null);
   const [rendererReady, setRendererReady] = useState<TerminalRendererReady | null>(null);
+  const [accessibleScreen, setAccessibleScreen] = useState("");
   const [hasAttachedForTerminal, setHasAttachedForTerminal] = useState(false);
   const [showConnectionOverlay, setShowConnectionOverlay] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
@@ -286,19 +300,19 @@ export function TerminalView({
         }
         return;
       }
-      const trimmed = event.text.trim();
+      const copiedText = normalizeMobileTerminalCopyText(event.text).trim();
       setMobileSelectionAction(null);
-      if (!trimmed) {
+      if (!copiedText) {
         rendererRef.current?.clearSelection();
         return;
       }
-      const url = findFirstUrlInSelection(trimmed);
+      const url = findFirstUrlInSelection(copiedText);
       if (url) {
-        setMobileSelectionAction({ text: trimmed, url });
+        setMobileSelectionAction({ text: copiedText, url });
         return;
       }
       rendererRef.current?.clearSelection();
-      void copyText(trimmed, "Copied selection");
+      void copyText(copiedText, "Copied selection");
     },
     [copyText],
   );
@@ -468,6 +482,7 @@ export function TerminalView({
     overlayTerminalIdRef.current = terminalId;
     rendererReadyRef.current = null;
     setRendererReady(null);
+    setAccessibleScreen("");
     setHasAttachedForTerminal(false);
     setShowConnectionOverlay(false);
     setCloseReason(null);
@@ -604,6 +619,27 @@ export function TerminalView({
     pane?.terminal_id,
     sendTerminalInputData,
   ]);
+
+  useEffect(() => {
+    setAccessibleScreen("");
+    const ready = rendererReady;
+    if (!terminalScreenReaderText || !ready) {
+      ready?.renderer.setAccessibleScreenListener(null);
+      return;
+    }
+
+    const { renderer, generation, terminalId } = ready;
+    renderer.setAccessibleScreenListener((text) => {
+      if (
+        rendererRef.current === renderer &&
+        rendererGenerationRef.current === generation &&
+        terminalIdRef.current === terminalId
+      ) {
+        setAccessibleScreen(text);
+      }
+    });
+    return () => renderer.setAccessibleScreenListener(null);
+  }, [rendererReady, terminalScreenReaderText]);
 
   useEffect(() => {
     const terminalId = pane?.terminal_id ?? null;
@@ -1276,7 +1312,8 @@ export function TerminalView({
     <section
       ref={stageRef}
       className="terminal-stage"
-      aria-label="Selected pane terminal"
+      aria-label={accessibilityLabel}
+      aria-current={selected ? "true" : undefined}
       onDragOverCapture={(event) => {
         if (event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
@@ -1286,6 +1323,17 @@ export function TerminalView({
       onPasteCapture={handlePaste}
     >
       <div ref={hostRef} className="terminal-host" />
+      {pane && terminalScreenReaderText ? (
+        <div
+          className="terminal-accessible-screen sr-only"
+          role="region"
+          tabIndex={-1}
+          aria-label={`${accessibilityLabel} screen contents`}
+          aria-live="off"
+        >
+          {accessibleScreen}
+        </div>
+      ) : null}
       <input
         ref={fileInputRef}
         className="terminal-file-input"

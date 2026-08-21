@@ -11,6 +11,10 @@ import { terminalLoupeCursorGeometry } from "./terminalLoupeCursorGeometry";
 import { terminalTapFocusAction } from "./terminalTapFocus";
 import type { TerminalTapFocusResult } from "./terminalTapFocus";
 import {
+  terminalAccessibleText,
+  TerminalAccessibleTextPublisher,
+} from "./terminalAccessibleText";
+import {
   beginTouchSelectionEndpointDrag,
   commitTouchSelectionStart,
   completeTouchSelection,
@@ -57,6 +61,7 @@ const TOUCH_LOUPE_TARGET_OFFSET_Y_PX = 48;
 const TOUCH_ENDPOINT_HIT_WIDTH_PX = 72;
 const TOUCH_ENDPOINT_HIT_HEIGHT_PX = 72;
 const TOUCH_ENDPOINT_RING_DIAMETER_PX = 42;
+const TERMINAL_ACCESSIBLE_SCREEN_DEBOUNCE_MS = 160;
 const TAP_URL_PATTERN = /\bhttps?:\/\/[^\s"'<>`]+/giu;
 
 type GhosttyModule = typeof import("ghostty-web");
@@ -105,8 +110,10 @@ type TerminalBufferLine = {
   getCell(x: number):
     | {
         getCodepoint(): number;
+        getChars(): string;
         getWidth(): number;
         getHyperlinkId(): number;
+        isInvisible(): number;
         // Raw ghostty cell data; grapheme_len > 0 marks a multi-codepoint cluster.
         cell?: { grapheme_len?: number };
       }
@@ -120,6 +127,7 @@ export type MobileTerminalTouchEvent =
 export type TerminalRenderer = {
   mount(container: HTMLElement): Promise<TerminalSize>;
   write(data: string | Uint8Array): void;
+  setAccessibleScreenListener(callback: ((text: string) => void) | null): void;
   onInput(callback: (data: string) => void): () => void;
   onScroll(callback: (lines: number) => void): () => void;
   setTapFocusHandler(callback: (() => TerminalTapFocusResult) | null): void;
@@ -147,6 +155,9 @@ export class GhosttyRenderer implements TerminalRenderer {
   #touchCleanup: (() => void) | null = null;
   #mobileInputCleanup: (() => void) | null = null;
   #imeFocusCleanup: (() => void) | null = null;
+  #accessibleScreenCallback: ((text: string) => void) | null = null;
+  #accessibleScreenCleanup: (() => void) | null = null;
+  #accessibleScreenPublisher: TerminalAccessibleTextPublisher | null = null;
   #tapFocusHandler: (() => TerminalTapFocusResult) | null = null;
   #mobileLongPressBehavior: MobileLongPressBehavior = "off";
   #mobileTouchSelectionHandler: ((event: MobileTerminalTouchEvent) => void) | null = null;
@@ -224,6 +235,7 @@ export class GhosttyRenderer implements TerminalRenderer {
     terminal.renderer?.getCanvas().style.setProperty("image-rendering", "auto");
     this.#terminal = terminal;
     this.#fitAddon = fitAddon;
+    this.#installAccessibleScreenPublisher();
     this.#installScrollHandlers();
     this.#installMobileInputBridge();
     this.#installImeFocusRedirect();
@@ -231,7 +243,27 @@ export class GhosttyRenderer implements TerminalRenderer {
   }
 
   write(data: string | Uint8Array) {
-    this.#terminal?.write(data);
+    const terminal = this.#terminal;
+    if (!terminal) {
+      return;
+    }
+    if (!this.#accessibleScreenPublisher) {
+      terminal.write(data);
+      return;
+    }
+    terminal.write(data, () => {
+      if (this.#isCurrentTerminal(terminal)) {
+        this.#accessibleScreenPublisher?.request();
+      }
+    });
+  }
+
+  setAccessibleScreenListener(callback: ((text: string) => void) | null) {
+    if (this.#accessibleScreenCallback === callback) {
+      return;
+    }
+    this.#accessibleScreenCallback = callback;
+    this.#installAccessibleScreenPublisher();
   }
 
   onInput(callback: (data: string) => void) {
@@ -269,6 +301,7 @@ export class GhosttyRenderer implements TerminalRenderer {
   fit() {
     const terminal = this.#requireTerminal();
     this.#fitAddon?.fit();
+    this.#accessibleScreenPublisher?.request();
     return {
       cols: terminal.cols,
       rows: terminal.rows,
@@ -333,6 +366,8 @@ export class GhosttyRenderer implements TerminalRenderer {
     this.#mobileInputCleanup = null;
     this.#imeFocusCleanup?.();
     this.#imeFocusCleanup = null;
+    this.#accessibleScreenCallback = null;
+    this.#disposeAccessibleScreenPublisher();
     this.#fitAddon?.dispose();
     this.#fitAddon = null;
     this.#terminal?.dispose();
@@ -349,6 +384,48 @@ export class GhosttyRenderer implements TerminalRenderer {
 
   #isCurrentTerminal(terminal: Terminal) {
     return this.#terminal === terminal;
+  }
+
+  #installAccessibleScreenPublisher() {
+    this.#disposeAccessibleScreenPublisher();
+    const terminal = this.#terminal;
+    const callback = this.#accessibleScreenCallback;
+    if (!terminal || !callback || this.#disposed) {
+      return;
+    }
+
+    const publisher = new TerminalAccessibleTextPublisher(
+      () => {
+        if (!this.#isCurrentTerminal(terminal)) {
+          return null;
+        }
+        try {
+          return terminalAccessibleScreenText(terminal);
+        } catch (error) {
+          if (!isGhosttyDisposedError(error)) {
+            console.warn("terminal accessible screen snapshot skipped", error);
+          }
+          return null;
+        }
+      },
+      callback,
+      TERMINAL_ACCESSIBLE_SCREEN_DEBOUNCE_MS,
+    );
+    const scrollDisposable = terminal.onScroll(() => publisher.request());
+    const bufferDisposable = terminal.buffer.onBufferChange(() => publisher.request());
+    this.#accessibleScreenPublisher = publisher;
+    this.#accessibleScreenCleanup = () => {
+      scrollDisposable.dispose();
+      bufferDisposable.dispose();
+    };
+    publisher.request(0);
+  }
+
+  #disposeAccessibleScreenPublisher() {
+    this.#accessibleScreenCleanup?.();
+    this.#accessibleScreenCleanup = null;
+    this.#accessibleScreenPublisher?.dispose();
+    this.#accessibleScreenPublisher = null;
   }
 
   #hasMouseTracking(terminal: Terminal) {
@@ -1524,6 +1601,35 @@ function terminalBufferRow(terminal: Terminal, viewportRow: number) {
   const scrollbackLength = terminal.getScrollbackLength();
   const viewportY = Math.max(0, Math.floor(terminal.getViewportY()));
   return scrollbackLength + viewportRow - viewportY;
+}
+
+function terminalAccessibleScreenText(terminal: Terminal) {
+  return terminalAccessibleText({
+    rows: terminal.rows,
+    cols: terminal.cols,
+    buffer: terminal.buffer,
+    getViewportY: () => terminal.getViewportY(),
+    readGrapheme: (bufferType, row, column) => {
+      const wasmTerm = terminal.wasmTerm;
+      if (!wasmTerm) {
+        return null;
+      }
+      if (bufferType === "alternate") {
+        return typeof wasmTerm.getGraphemeString === "function"
+          ? wasmTerm.getGraphemeString(row, column)
+          : null;
+      }
+      const scrollbackLength = terminal.getScrollbackLength();
+      if (row < scrollbackLength) {
+        return typeof wasmTerm.getScrollbackGraphemeString === "function"
+          ? wasmTerm.getScrollbackGraphemeString(row, column)
+          : null;
+      }
+      return typeof wasmTerm.getGraphemeString === "function"
+        ? wasmTerm.getGraphemeString(row - scrollbackLength, column)
+        : null;
+    },
+  });
 }
 
 function selectTerminalViewportRange(
