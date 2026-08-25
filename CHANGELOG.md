@@ -70,6 +70,7 @@
   adopting its missing mobile cursor, wrapped-URL copy, negotiated gzip output,
   and Attention-sort recency behavior while retaining World-specific behavior.
   Exact upstream revisions and dispositions are recorded in `UPSTREAM.md`.
+  [Herdr World PR #1](https://github.com/IvoryHeart/herdr-world/pull/1)
 - Replayed desktop IME composition cancellation/fallback handling and dialog/menu focus restoration
   across Spaces, Office, bridge settings, launchers, notes, and terminal overlays. Original upstream
   attribution is recorded in `UPSTREAM.md`.
