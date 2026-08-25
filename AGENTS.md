@@ -1,30 +1,24 @@
 # Repository delivery workflow
 
-For every non-trivial product, API, data-contract, deployment, or user-visible
-behaviour change, follow the immutable-spec workflow in
-[`docs/specs/README.md`](docs/specs/README.md).
+Specifications are decision aids, not a gate on ordinary engineering work.
+Use one only when the repository owner asks for one or when a genuinely new
+product/API contract needs an explicit decision. Upstream synchronization,
+bug fixes, dependency refreshes, refactors, tests, documentation, and release
+mechanics do not require new numbered specs.
 
-1. Read the relevant approved spec and any accepted extensions.
-2. Create a draft feature spec before implementation; do not change product code
-   until a reviewer accepts it.
-3. Treat an accepted numbered `*-spec.md` as immutable. Do not silently revise
-   it during implementation.
-4. After implementation is complete, create the paired numbered
-   `*-spec-summary.md` with delivered work, test evidence, constraints, and
-   every deviation.
-5. Put intended future or incompatible behaviour in a numbered extension
-   document, never by editing the parent spec.
+Keep one current spec per coherent outcome. Do not create a new spec for every
+implementation tranche, release candidate, review correction, or repository
+move. If direction changes, update or supersede the current document in the
+same PR; Git history is the audit trail. A short delivery note may record
+important validation, but a paired summary is not mandatory.
 
-Small mechanical refactors and documentation corrections that do not change
-behaviour may skip a feature spec. When unsure, create one.
-
-# Agent Onboarding (herdr-web)
+# Agent Onboarding (Herdr World)
 
 This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Start Here
 
-- Work from the `herdr-web/` repository root. The canonical local startup command is
+- Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See
   [`docs/development.md`](docs/development.md) for the Herdr, bridge, Vite, and optional OTEL
   startup layers.

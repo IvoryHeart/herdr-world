@@ -1,4 +1,4 @@
-# @herdr/web
+# @herdr-world/web
 
 React + Vite frontend for `herdr-web`.
 

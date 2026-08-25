@@ -2,8 +2,8 @@
 
 This evidence applies to the Herdr Web tree at implementation commit
 `34938f11a718bfab5fb0006e139eaba7273109a4`, descended from the immutable upstream baseline
-`67a4ace73fcd554af39586769dc86d4d9e82f09b`. The approved product contract is
-ai-observability Spec 010 at `ecde9e1`.
+`67a4ace73fcd554af39586769dc86d4d9e82f09b`. This is historical evidence for
+the original downstream federation work at `ecde9e1`.
 
 ## Automated gate
 
@@ -125,7 +125,8 @@ configurations, OpenSSH processes, bridges, and disposable Herdr sessions were r
 14. Accessibility: `accessibility.spec.ts` verifies serious/critical Axe findings are absent, visible
     keyboard focus, semantic labels, dialog focus restoration, reduced motion, and refit operation.
 15. Independence: source and dependency-graph audit pass without legacy imports, routes, stacks,
-    processes, caches, or test gates; ai-observability remained untouched during implementation.
+    processes, caches, or test gates; unrelated downstream integrations remained untouched during
+    implementation.
 16. Operations: `README.md`, `docs/architecture.md`, `docs/federation.md`, and `docs/release.md` cover
     one/two-host startup, compatibility, Origin/CSP, headerless non-browser requests, loopback proxy
     Host behavior, trusted exposure, transport ownership, and reload.

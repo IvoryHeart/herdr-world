@@ -188,6 +188,5 @@ behind a broader product-level resize change.
 
 Re-enable the test after a reproducible CI trace identifies and fixes the
 ResizeObserver, animation-frame, pointer/keyboard, viewport, or terminal-canvas
-timing issue involved. Track the investigation and exit criteria in
-[Issue #7](https://github.com/IvoryHeart/herdr-web/issues/7); this note keeps
-the containment visible next to the local test workflow.
+timing issue involved. This note keeps the containment visible next to the
+local test workflow.

@@ -226,7 +226,6 @@ import {
   chooseSelectedPaneForActiveWorkspace,
   countAttention,
   displayTabLabel,
-  isAttention,
   isLoud,
   paneMeta,
   paneListSubtitle,
@@ -5506,7 +5505,7 @@ export function App() {
             {isCompactLayout ? <ChevronLeft size={20} /> : <PanelLeft size={18} />}
           </button>
           <div className="stage-id" {...selectedPaneMenuPress}>
-            <span className="stage-title">{selectedPane ? paneTitle(selectedPane) : "herdr-web"}</span>
+            <span className="stage-title">{selectedPane ? paneTitle(selectedPane) : "Herdr World"}</span>
             <span className="stage-sub mono">
               {stageBreadcrumb(snapshot, selectedPane, loadState, selectedRuntime?.canConnect ?? false)}
             </span>
@@ -5644,6 +5643,7 @@ export function App() {
             autoFocus={!isTouchInput}
             scrollSensitivity={isTouchInput ? 2 : 0.4}
             mobileControls={isTouchInput}
+            cursorBlink={!isTouchInput}
             terminalFontSizePx={terminalFontSizePx}
             terminalScreenReaderText={terminalScreenReaderText}
             mobileControlsScalePercent={mobileControlsScalePercent}
@@ -7119,6 +7119,7 @@ function SplitGrid({
               autoFocus={selected && !touchInput}
               scrollSensitivity={touchInput ? 2 : 0.4}
               mobileControls={selected && touchInput}
+              cursorBlink={!touchInput}
               terminalFontSizePx={terminalFontSizePx}
               terminalScreenReaderText={terminalScreenReaderText}
               mobileControlsScalePercent={mobileControlsScalePercent}
@@ -10397,10 +10398,6 @@ function sortAgentPanes(panes: PaneInfo[], sort: AgentSort, snapshot: Snapshot) 
 
   return [...panes].sort((a, b) => {
     if (sort === "attention") {
-      const attention = Number(isAttention(b.agent_status)) - Number(isAttention(a.agent_status));
-      if (attention !== 0) {
-        return attention;
-      }
       const status = AGENT_ATTENTION_ORDER[a.agent_status] - AGENT_ATTENTION_ORDER[b.agent_status];
       if (status !== 0) {
         return status;
@@ -10431,15 +10428,14 @@ function sortAgentPanes(panes: PaneInfo[], sort: AgentSort, snapshot: Snapshot) 
 export function sortScopedAgentPanes(entries: ScopedAgentPane[], sort: AgentSort) {
   return [...entries].sort((a, b) => {
     if (sort === "attention") {
-      const attention =
-        Number(isAttention(b.pane.agent_status)) - Number(isAttention(a.pane.agent_status));
-      if (attention !== 0) {
-        return attention;
-      }
       const status =
         AGENT_ATTENTION_ORDER[a.pane.agent_status] - AGENT_ATTENTION_ORDER[b.pane.agent_status];
       if (status !== 0) {
         return status;
+      }
+      const activity = compareLastStatusTransition(a, b);
+      if (activity !== 0) {
+        return activity;
       }
     } else if (sort === "status") {
       const status =

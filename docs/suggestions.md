@@ -89,7 +89,7 @@ of hidden requirements.
 - **Reassessed:** 2026-08-20. The earlier generic `/api/extensions` proposal was
   withdrawn after the current upstream audit found overlapping authoritative
   plugin discovery and browser capability mechanisms.
-- **Related:** [`010-upstream-extension-alignment-spec.md`](specs/010-upstream-extension-alignment-spec.md)
+- **Related:** [`004-world-packaging-and-upstream-boundaries-spec.md`](specs/004-world-packaging-and-upstream-boundaries-spec.md)
 
 ### SUG-002 — OTEL-backed Office observability boards
 
@@ -552,7 +552,6 @@ of hidden requirements.
   inner canvas visibly lag the outer Office window. The renderer scene-build
   guard remains a separate follow-up if field use still exposes a delay.
 - **Related:** [`008-office-productivity-ux-spec.md`](specs/008-office-productivity-ux-spec.md)
-- **Related:** [Issue #7](https://github.com/IvoryHeart/herdr-web/issues/7)
 
 ## Parked or declined
 

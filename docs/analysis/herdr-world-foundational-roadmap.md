@@ -1,10 +1,16 @@
 # Herdr World foundational roadmap
 
-- **Status:** Planning baseline; implementation requires approved specs
+- **Status:** Superseded on 2026-08-25
 - **Revised:** 2026-08-20
 - **Downstream baseline:** `ad5fe9a`
 - **Upstream reassessment:**
   [`upstream-plugin-surface-reassessment-2026-08-20.md`](upstream-plugin-surface-reassessment-2026-08-20.md)
+
+> This is a historical planning record. Its multi-phase packaging and surface
+> extraction plan was replaced by the single
+> [Herdr World independence and upstream synchronization spec](../specs/004-world-packaging-and-upstream-boundaries-spec.md).
+> Herdr World now remains one monorepo and follows Herdr Web through ordinary
+> downstream Git synchronization.
 
 ## Decision
 
@@ -154,7 +160,7 @@ external provider.
 
 ### Governing draft
 
-[`010-upstream-extension-alignment-spec.md`](../specs/010-upstream-extension-alignment-spec.md)
+Superseded by the current [Spec 004](../specs/004-world-packaging-and-upstream-boundaries-spec.md).
 
 ### Work
 
@@ -184,7 +190,7 @@ external provider.
 
 ### Governing draft
 
-[`011-surface-composition-spec.md`](../specs/011-surface-composition-spec.md)
+Superseded by the current [Spec 004](../specs/004-world-packaging-and-upstream-boundaries-spec.md).
 
 ### Work
 

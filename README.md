@@ -1,28 +1,24 @@
-# herdr-web
+# Herdr World
 
-> This repository is not associated with, endorsed by, or maintained by the official Herdr project.
-> It is experimental, Herdr compatibility code is vendored, and the runtime/API shape is expected to
-> change.
+Herdr World is an independent downstream application built to work with
+[Herdr](https://github.com/herdrdev/herdr) and based in part on
+[Herdr Web](https://github.com/kcosr/herdr-web). It is not associated with,
+endorsed by, or maintained by either upstream project.
 
-## Spec-driven delivery
+It combines the familiar Spaces terminal UI with World visualizations such as
+the Pixel Office at `/world`, direct multi-bridge support, and downstream
+integrations such as Office observability.
 
-Non-trivial product, API, data-contract, deployment, or user-visible behaviour
-changes begin with a reviewable specification in
-[`docs/specs/`](docs/specs/README.md). Once approved, a numbered specification
-is an immutable contract; implementation evidence and drift belong in its
-post-delivery `*-spec-summary.md`, while later intended behaviour belongs in a
-numbered extension.
-
-Browser UI for Herdr workspaces and agent panes.
-
-This repository is structured as a standalone app that can be distributed without asking users to
+This repository is a standalone monorepo that can be distributed without asking users to
 modify their installed Herdr checkout. The bridge builds as `herdr-web-bridge`, a repo-owned
 executable that uses vendored Herdr compatibility code because the app needs private Herdr APIs for
 terminal attach, terminal resize/scroll/input, workspace snapshots, and event subscriptions.
 
 The goal is to provide a browser-native interface for monitoring and controlling Herdr agents from
 desktop and mobile clients. It keeps the terminal experience close to Herdr while adding web-focused
-navigation, multi-client viewing, mobile input controls, and synchronized pane selection.
+navigation, multi-client viewing, mobile input controls, synchronized pane selection, and alternative
+visualizations. The upstream relationship and synchronization record are documented in
+[`UPSTREAM.md`](UPSTREAM.md).
 
 ## Highlights
 
@@ -206,6 +202,8 @@ Terminal input payloads can be sent as JSON or binary WebSocket frames. JSON rem
 binary is available for comparing terminal input performance. Terminal input batching is off by
 default. When enabled, short input chunks are coalesced for `32`, `64`, `128`, or `256` ms and are
 flushed early once the pending UTF-8 input reaches 32 bytes, so paste-like input bypasses the delay.
+The web app and bridge compress terminal output with gzip when both support it. Older bridges and
+browsers keep uncompressed output.
 
 ## Launcher Presets
 

@@ -168,14 +168,17 @@ export class GhosttyRenderer implements TerminalRenderer {
   #textInputTapGraceUntil = 0;
   #fontSizePx: number;
   #transparentBackground = false;
+  #cursorBlink: boolean;
   #disposed = false;
 
   constructor(
     fontSizePx = DEFAULT_TERMINAL_FONT_SIZE_PX,
     transparentBackground = false,
+    cursorBlink = true,
   ) {
     this.#fontSizePx = fontSizePx;
     this.#transparentBackground = transparentBackground;
+    this.#cursorBlink = cursorBlink;
   }
 
   async mount(container: HTMLElement) {
@@ -190,7 +193,7 @@ export class GhosttyRenderer implements TerminalRenderer {
       : TERMINAL_BACKGROUND;
     const terminal = new Terminal({
       convertEol: false,
-      cursorBlink: true,
+      cursorBlink: this.#cursorBlink,
       fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: this.#fontSizePx,
       scrollback: 8000,

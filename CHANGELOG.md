@@ -10,7 +10,6 @@
   `npm run dev` workflow with child-process tests, and an opt-in bounded terminal screen-reader
   text mirror. The replay preserves downstream World and multi-bridge behavior; Web v0.4.2/v0.4.3
   development/IME/focus/accessibility details are covered by this work unit's focused commits.
-  [PR #16](https://github.com/IvoryHeart/herdr-web/pull/16).
 - Added `npm run dev` with a supervised loopback bridge/Vite workflow, bounded
   bridge readiness checks, clean child-process shutdown, and `test:dev`
   coverage for startup and signal/error paths. [Upstream PR #57](https://github.com/kcosr/herdr-web/pull/57),
@@ -19,7 +18,7 @@
 - Added Spec 015 work unit 1 compatibility for Herdr `v0.8.2` and exact terminal protocol `20`,
   including the refreshed bridge wire/API slice, frozen protocol fixtures, bounded admission
   diagnostics, safe direct-graphics exclusions, and terminal-bell handling. Web v0.4.2/v0.4.3
-  replay remains follow-up work. ([PR #15](https://github.com/IvoryHeart/herdr-web/pull/15))
+  replay followed as a separate focused change.
 - Declared the existing Herdr SVG logo as the browser favicon, synchronized
   from the audited Herdr Web upstream head `9897522`. Contributed by
   [Craig P. Motlin (@motlin)](https://github.com/motlin) in
@@ -27,9 +26,8 @@
 - Added a bounded Office productivity slice: browser-local restoration of Office window geometry,
   ordering, and scroll position; responsive room sizing; persistent selected-agent callouts for
   optional harness task summaries; and direct-federation Enable all / Disable all bridge controls.
-  [PR #9](https://github.com/IvoryHeart/herdr-web/pull/9)
 - Added animation-frame terminal refits during Office window resizing to remove the extra inner
-  canvas catch-up delay. [PR #9](https://github.com/IvoryHeart/herdr-web/pull/9)
+  canvas catch-up delay.
 - Added an isolated Office settings surface for an optional Prometheus URL,
   with bridge-owned live configuration, per-bridge browser persistence, and
   clear provider health feedback. The generic Herdr Web settings remain the
@@ -49,23 +47,27 @@
 - Added exact double-click shortcuts for current Pixel Office rooms and agents across the canvas
   and semantic roster. Direct double-click works without prior selection and reuses the guarded
   Spaces handoff while retaining single-click inspection and accessible inspector controls.
-  [PR #3](https://github.com/IvoryHeart/herdr-web/pull/3)
 - Added an integrated Herdr World primary view with a deterministic Pixel Office projection of
   shared federated snapshots, live host coverage and filters, a qualified roster and inspector,
   bounded overflow and stale-host handling, responsive and accessible fallbacks, and exact
   revalidated `Open in Spaces` handoff without reload or reconnection.
-  [PR #2](https://github.com/IvoryHeart/herdr-web/pull/2)
-- Added the Spec 010 federated-client foundation: explicit app-shell and internal-surface seams,
+- Added the federated client base: explicit app-shell and internal-surface seams,
   persistent host profiles, host-qualified runtime and terminal identities, direct multi-bridge
   browser federation, isolated compatibility/failure states, strict non-loopback admission policy,
   and browser/security/independence acceptance gates.
-  [PR #1](https://github.com/IvoryHeart/herdr-web/pull/1)
 
 ### Changed
 
+- Established `IvoryHeart/herdr-world` as the independent downstream monorepo,
+  renamed the app/package identity to Herdr World, and replaced the overlapping
+  Specs 004/010/011 with one practical independence and upstream-sync contract.
+- Reconciled the working protocol-20 World baseline with Herdr Web v0.5.0,
+  adopting its missing mobile cursor, wrapped-URL copy, negotiated gzip output,
+  and Attention-sort recency behavior while retaining World-specific behavior.
+  Git records the upstream merge; `UPSTREAM.md` keeps only the current sync point.
+  [Herdr World PR #1](https://github.com/IvoryHeart/herdr-world/pull/1)
 - Replayed desktop IME composition cancellation/fallback handling and dialog/menu focus restoration
-  across Spaces, Office, bridge settings, launchers, notes, and terminal overlays. Original upstream
-  attribution is recorded in `UPSTREAM.md`.
+  across Spaces, Office, bridge settings, launchers, notes, and terminal overlays.
 - Static bridge entrypoints and public files explicitly revalidate while
   successful content-hashed Vite assets use immutable caching; missing and
   error responses are not marked cacheable. [Upstream PR #57](https://github.com/kcosr/herdr-web/pull/57),
@@ -116,11 +118,18 @@
   conference tables; and `idle` and `done` agents move to the shared Agent Bar. The reception floor
   retains one uncrowned user/CEO, reserves unused width for future displays, and gives CEO,
   reception, occupied, and empty desks visible chairs.
-  [PR #3](https://github.com/IvoryHeart/herdr-web/pull/3)
 - Established one persistent Herdr client frame and federated runtime above the `Spaces | World`
   view boundary. `/world` is addressable browser state inside that frame, while Spaces retains its
   delivered sidebar, terminal, split, Notes, and operational behavior.
-  [PR #2](https://github.com/IvoryHeart/herdr-web/pull/2)
+- Mobile terminals now use a static visible cursor instead of a blinking cursor, reducing continuous
+  canvas redraw work on resource-constrained devices. Desktop cursors continue to blink.
+  [PR #60](https://github.com/kcosr/herdr-web/pull/60)
+- Terminal output now negotiates gzip compression between matching web apps and bridges, while
+  remaining compatible with older versions and keeping incompressible updates raw.
+  [PR #59](https://github.com/kcosr/herdr-web/pull/59)
+- Changed the Attention agent sort to break ties within an attention band by the most recent agent
+  status change, matching Herdr's Priority agent panel, and kept the existing bridge, Space, and tab
+  order as the fallback for agents with no recorded transition.
 
 ### Fixed
 
@@ -140,6 +149,10 @@
   the horizontal road separator.
 - Fixed development-mode Office renderer cleanup so an older asynchronous Pixi
   initialization cannot remove the active canvas created by a newer initialization.
+- Mobile terminal copies now remove canvas row gaps that split HTTP(S) links, including indented
+  alphanumeric continuations when terminal edge metadata is unavailable, while preserving ordinary
+  line breaks.
+  [PR #61](https://github.com/kcosr/herdr-web/pull/61)
 
 ### Removed
 

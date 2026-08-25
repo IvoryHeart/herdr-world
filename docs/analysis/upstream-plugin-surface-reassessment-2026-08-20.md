@@ -1,7 +1,7 @@
 # Upstream, plugin, surface, and open-source reassessment
 
 - **Date:** 2026-08-20
-- **Downstream baseline:** `IvoryHeart/herdr-web` `ad5fe9a`
+- **Downstream baseline:** `ad5fe9a`
 - **Herdr Web audited head:** `cff6335683acc20cbb76c24b67d03f9e75dd78e6`
 - **Herdr stable baseline:** v0.8.2 at
   `9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c`

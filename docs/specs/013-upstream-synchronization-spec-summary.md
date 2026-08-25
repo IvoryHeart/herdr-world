@@ -53,9 +53,6 @@
 
 ## Delivery record
 
-The bounded synchronization implementation is complete and validated in the
-shared worktree. The clean rebased implementation commit is
-[`6b7a0b1`](https://github.com/IvoryHeart/herdr-web/commit/6b7a0b1), followed by
-the delivery-record commit
-[`8509663`](https://github.com/IvoryHeart/herdr-web/commit/8509663), and both
-remain submitted in [PR #11](https://github.com/IvoryHeart/herdr-web/pull/11).
+The bounded synchronization implementation is complete and validated. The
+implementation commit is `6b7a0b1`, followed by delivery-record commit
+`8509663`.

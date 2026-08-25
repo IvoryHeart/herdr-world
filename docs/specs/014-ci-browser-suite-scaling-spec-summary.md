@@ -32,8 +32,7 @@
   concentration of `world.spec.ts`.
 - All four local shards passed cleanly: shards 1 and 2 each had 11 passed and
   1 expected skip; shards 3 and 4 each had 11 passed.
-- GitHub Actions run
-  [`31817383160`](https://github.com/IvoryHeart/herdr-web/actions/runs/31817383160)
+- GitHub Actions run `31817383160`
   passed all five jobs on implementation commit `d7b3eabc32ecf2521bbcf6db1825a6f34019b7ad`.
   The non-browser job took 2m35s; browser shards took 1m03s, 3m57s, 3m28s,
   and 2m47s. No shard required a retry or was classified as flaky.

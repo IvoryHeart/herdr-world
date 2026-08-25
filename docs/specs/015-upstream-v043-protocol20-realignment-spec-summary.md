@@ -12,8 +12,8 @@
 
 ### Work unit 1 — Herdr v0.8.2 and terminal protocol 20
 
-Delivered in downstream [PR #15](https://github.com/IvoryHeart/herdr-web/pull/15),
-merged as [`565537b3a7452fb2ea8b72f7bb046e6c09eb3afa`](https://github.com/IvoryHeart/herdr-web/commit/565537b3a7452fb2ea8b72f7bb046e6c09eb3afa).
+Delivered in downstream commit
+`565537b3a7452fb2ea8b72f7bb046e6c09eb3afa`.
 
 - Refreshed only the bridge-required `vendor/herdr-compat` source from the
   unmodified Herdr v0.8.2 source commit
@@ -43,8 +43,7 @@ limitation remains explicit rather than being hidden by a mock-only claim.
 
 ### Work unit 2 — focused Web v0.4.2/v0.4.3 behavior replay
 
-Delivered in downstream [PR #16](https://github.com/IvoryHeart/herdr-web/pull/16)
-as focused concern commits on top of PR #15. The audited upstream revisions
+Delivered as focused concern commits on top of the protocol-20 change. The audited upstream revisions
 were Herdr Web `main`
 `cff6335683acc20cbb76c24b67d03f9e75dd78e6`, release `v0.4.3^{commit}`
 `5ad48ed42507dd0b50c07183cabdec8b391c2512`, and upstream
@@ -89,8 +88,7 @@ the changed and unchanged attach-time focus states.
     ':(exclude)docs/specs/013-upstream-synchronization-spec-summary.md' || true
   ```
 
-- GitHub Actions run
-  [`32422208681`](https://github.com/IvoryHeart/herdr-web/actions/runs/32422208681)
+- GitHub Actions run `32422208681`
   passed all five CI jobs on final review-fix head
   `5f63030191524d8d8f24692b7789d1318bc45fd4`.
 
