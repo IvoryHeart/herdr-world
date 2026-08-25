@@ -6,6 +6,9 @@
 
 ### Added
 
+- Added a bundled JetBrainsMono Nerd Font Mono fallback for special terminal and LLM output glyphs
+  on devices without an accessible Nerd Font.
+
 ### Changed
 
 ### Fixed
