@@ -89,7 +89,7 @@ of hidden requirements.
 - **Reassessed:** 2026-08-20. The earlier generic `/api/extensions` proposal was
   withdrawn after the current upstream audit found overlapping authoritative
   plugin discovery and browser capability mechanisms.
-- **Related:** [`010-upstream-extension-alignment-spec.md`](specs/010-upstream-extension-alignment-spec.md)
+- **Related:** [`004-world-packaging-and-upstream-boundaries-spec.md`](specs/004-world-packaging-and-upstream-boundaries-spec.md)
 
 ### SUG-002 — OTEL-backed Office observability boards
 

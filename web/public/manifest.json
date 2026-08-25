@@ -1,7 +1,7 @@
 {
-  "name": "herdr-web",
-  "short_name": "herdr",
-  "description": "Terminal multiplexer web interface",
+  "name": "Herdr World",
+  "short_name": "World",
+  "description": "Herdr workspaces, terminals, and World visualizations",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",

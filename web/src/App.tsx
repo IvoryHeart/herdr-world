@@ -5505,7 +5505,7 @@ export function App() {
             {isCompactLayout ? <ChevronLeft size={20} /> : <PanelLeft size={18} />}
           </button>
           <div className="stage-id" {...selectedPaneMenuPress}>
-            <span className="stage-title">{selectedPane ? paneTitle(selectedPane) : "herdr-web"}</span>
+            <span className="stage-title">{selectedPane ? paneTitle(selectedPane) : "Herdr World"}</span>
             <span className="stage-sub mono">
               {stageBreadcrumb(snapshot, selectedPane, loadState, selectedRuntime?.canConnect ?? false)}
             </span>

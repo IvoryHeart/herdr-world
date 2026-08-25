@@ -63,6 +63,13 @@
 
 ### Changed
 
+- Established `IvoryHeart/herdr-world` as the independent downstream monorepo,
+  renamed the app/package identity to Herdr World, and replaced the overlapping
+  Specs 004/010/011 with one practical independence and upstream-sync contract.
+- Reconciled the working protocol-20 World baseline with Herdr Web v0.5.0,
+  adopting its missing mobile cursor, wrapped-URL copy, negotiated gzip output,
+  and Attention-sort recency behavior while retaining World-specific behavior.
+  Exact upstream revisions and dispositions are recorded in `UPSTREAM.md`.
 - Replayed desktop IME composition cancellation/fallback handling and dialog/menu focus restoration
   across Spaces, Office, bridge settings, launchers, notes, and terminal overlays. Original upstream
   attribution is recorded in `UPSTREAM.md`.

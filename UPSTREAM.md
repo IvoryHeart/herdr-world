@@ -1,16 +1,18 @@
 # Upstream provenance and local delta
 
-This repository is a GitHub fork of
-[`kcosr/herdr-web`](https://github.com/kcosr/herdr-web). The Herdr Web federated
-client foundation begins at the exact upstream commit below:
+Herdr World is an independent downstream product derived from
+[`kcosr/herdr-web`](https://github.com/kcosr/herdr-web). The shared Git history
+begins at the exact upstream commit below:
 
 ```text
 67a4ace73fcd554af39586769dc86d4d9e82f09b
 ```
 
 The MIT license and copyright notice are preserved in [`LICENSE`](LICENSE).
-Git ancestry is preserved, `origin` points at `IvoryHeart/herdr-web`, and a
-checkout used for delivery keeps `kcosr/herdr-web` as the `upstream` remote.
+Git ancestry is preserved, `origin` points at `IvoryHeart/herdr-world`, and
+`kcosr/herdr-web` is configured as the `upstream` remote. Herdr World does not
+require a sibling Herdr Web checkout or a separately released foundation
+package.
 Reviewers can verify the relationship without trusting this document:
 
 ```bash
@@ -18,6 +20,38 @@ git merge-base --is-ancestor 67a4ace73fcd554af39586769dc86d4d9e82f09b HEAD
 git remote -v
 git diff --stat 67a4ace73fcd554af39586769dc86d4d9e82f09b...HEAD
 ```
+
+## 2026-08-25 Herdr Web v0.5.0 reconciliation
+
+The new `IvoryHeart/herdr-world` repository was cut from the working downstream
+protocol-20 baseline `bbf0d8ef652e740824174091382667e2c2e0df60`. It was then
+reconciled with:
+
+- Herdr Web `v0.5.0`: `4718dade4b21d6b91119a3ee1cf4e88d5c36e344`
+- Herdr Web `main`: `e67537b6bdd99fe489584252ba2f84ea070a3193`
+- Herdr `v0.8.2`: `9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c`
+- Herdr `master` observed during the audit:
+  `d79fd746a96ddb5642939c9727baefce642d78e6`
+
+The reconciliation was concern-based because both histories independently
+changed the same generic Web files. It adopted the missing behavior and then
+recorded the fetched Herdr Web head as a merge parent, so later upstream syncs
+have a normal ancestry boundary rather than repeating this audit.
+
+| Concern | Upstream source | Result in Herdr World |
+| --- | --- | --- |
+| Mobile static cursor | `d881f267`, `9c058ee1` / PR #60 | Adopted while retaining the transparent Office terminal renderer. |
+| Wrapped mobile URL copy | `a4eb5285`, `e5a01194` / PR #61 | Adopted with the upstream renderer-independent normalization. |
+| Negotiated gzip terminal output | `952c7f65`, `c41a1c5c`, `8e338e7a` / PR #59 | Adopted in the existing protocol-20 bridge and client. |
+| Attention recency tiebreak | `9af4abdf` | Adopted while retaining qualified multi-host fallback ordering. |
+| Workspace reorder, supervised development, IME, focus restoration, screen-reader text, favicon, and icon centering | Herdr Web v0.4.1-v0.4.3 | Already present in the downstream baseline; not duplicated. |
+| Herdr v0.8.2 / terminal protocol 20 | `816f25a6`, `a1c4f5f9` | Already implemented and more completely verified by the downstream vendored compatibility slice. |
+| Release bookkeeping and upstream contribution policy | v0.4.1-v0.5.0 release commits | Not copied as product behavior; Herdr World owns its releases and contribution policy. |
+
+World-only Office rendering, observability, multi-host protections, assets, and
+product documentation were retained. Historical audits below remain dated
+records; their statements about what was current at the time are not the active
+compatibility baseline.
 
 ## 2026-08-14 synchronization audit
 
@@ -206,7 +240,7 @@ git rev-parse upstream/main:CONTRIBUTING.md
 | Concern | Upstream source and attribution | Classification | Downstream result |
 | --- | --- | --- | --- |
 | Supervised development, readiness, shutdown, signals, and static-asset cache policy | PR #57 merge `4c2ef62aca1bd7320d026791602a0b36cedd247e`; implementation `09d386ab303f1babd4a06974f9de2c8c5d3159fd`; original contribution by Hopkins (`@LosEcher`), PR #51 | adopted | Replayed with loopback-safe defaults, namespaced child environment, readiness/error handling, multi-process cleanup, and deterministic cache tests. |
-| Contribution guidance | PR #57 merge `4c2ef62aca1bd7320d026791602a0b36cedd247e`; `4bac49fb76a23edfb9c57fd6b1f7fabc75a25ade`; authored by Kevin (`kcosrdev@gmail.com`) | conflicted | Assessed but not copied into downstream governance. Spec 004 still has unresolved World ownership and contribution-lane decisions. |
+| Contribution guidance | PR #57 merge `4c2ef62aca1bd7320d026791602a0b36cedd247e`; `4bac49fb76a23edfb9c57fd6b1f7fabc75a25ade`; authored by Kevin (`kcosrdev@gmail.com`) | conflicted at the time | Assessed but not copied: Herdr World owns its contribution policy. The current Spec 004 records that downstream decision. |
 | Terminal IME composition, cancellation, fallback preedit, and desktop focus | PR #58 merge `e13c83d429d1f51199ca0eee1810485acf47ad60`; `3f39d3be243ff6313e404db19852dbac8b18b21e`, `db88e34567a2c68fe8814777ddaac6fb2ef60e2e`, `052c638982449deec7f6fc08b2110ccf3c2328aa`, `3c7d0b93a3cd50044dbb55a5c66f3f1f09fbdf5c`; original contribution by Hopkins (`@LosEcher`), PR #51 | adopted | Replayed through the existing renderer, including preedit overlay, cancellation suppression, fallback handling, desktop focus, and mobile-input preservation. |
 | Dialog/menu activation and focus restoration | PR #62 merge `346beeee614cb54da32f29e3a22c1e44d8133014`; `8af7cd62a56894dcaf89f58b1016a1654d158dda`, `276ca305bfab9c7a1e772d8110c26b060e308361`, `0870cd3efd518e822111b72d6ffa30e892567694`; original contribution by shuv (`@shuv1337`), PR #37 | adopted | Replayed with shared focus-return/trap helpers and downstream integration for Spaces, Office, notes, settings, launchers, and pane menus. |
 | Optional terminal screen-reader text and settings | PR #64 merge `eb47f62d9df04847345f90b70ddb54a926d95c5f`; implementation `31d4070a2740766a53a788395aaa6cd93ab5c865`; attribution follow-up `253930760b0133aa43f6bd4206d45fc3edcbdf80`; original contribution by shuv (`@shuv1337`), PR #37 | adopted | Added a default-off, bounded visible-viewport mirror with persisted settings and per-runtime/World labels; visible scrolled-back rows are intentionally mirrored, while unbounded terminal history is not exposed. |
