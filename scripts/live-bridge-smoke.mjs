@@ -122,6 +122,20 @@ function socketUrl(origin, terminalId, cols, rows) {
   return url;
 }
 
+function waitForTerminalSizeCommand(rows, cols, evidence) {
+  const rowParts = String(rows).split("");
+  const colParts = String(cols).split("");
+  const targetParts = [...rowParts, ...colParts]
+    .map((part) => `'${part}'`)
+    .join(" ");
+  return (
+    `target="$(printf '%s' ${targetParts})"; i=0; ` +
+    'while [ "$i" -lt 100 ]; do current="$(stty size | tr -d \'[:space:]\')"; ' +
+    '[ "$current" = "$target" ] && break; i=$((i+1)); sleep 0.05; done; ' +
+    `printf '\\033[32m${evidence}_UNICODE_λ\\033[0m\\n'; printf '%s\\n' "$current"\n`
+  );
+}
+
 async function attach(origin, terminalId, cols, rows) {
   const socket = new WebSocket(socketUrl(origin, terminalId, cols, rows));
   let output = "";
@@ -222,9 +236,7 @@ try {
   assert.ok(commandResult, "workspace.rename returned no result");
   await focusEvent;
   const markerA = `SPEC010_A_${Date.now()}`;
-  secondA.send(
-    `printf '\\033[32m${markerA}_UNICODE_λ\\033[0m\\n'; stty size\n`,
-  );
+  secondA.send(waitForTerminalSizeCommand(28, 91, markerA));
   await Promise.all([
     firstA.waitFor(`${markerA}_UNICODE_λ`),
     secondA.waitFor(`${markerA}_UNICODE_λ`),
@@ -233,9 +245,8 @@ try {
   ]);
 
   firstA.resize(101, 31);
-  await new Promise((resolve) => setTimeout(resolve, 200));
   const refitMarker = `${markerA}_REFIT`;
-  firstA.send(`printf '${refitMarker} '; stty size\n`);
+  firstA.send(waitForTerminalSizeCommand(31, 101, refitMarker));
   await Promise.all([
     firstA.waitFor(refitMarker),
     secondA.waitFor(refitMarker),
