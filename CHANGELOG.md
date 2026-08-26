@@ -10,6 +10,9 @@
 
 ### Fixed
 
+- Made the release helper mark SemVer prerelease tags such as `v0.1.0-rc.2` as GitHub
+  prereleases automatically while leaving stable versions unchanged.
+
 ### Removed
 
 ## [0.1.0-rc.2] - 2026-08-26

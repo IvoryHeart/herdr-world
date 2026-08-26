@@ -40,3 +40,11 @@ export function assertReleaseRemoteUrls(remoteUrls, direction) {
 export function withReleaseRepository(args) {
   return [...args, "--repo", RELEASE_REPOSITORY];
 }
+
+export function releaseCreateArgs(tag, notesFile) {
+  const args = ["release", "create", tag, "--verify-tag", "--notes-file", notesFile];
+  if (tag.includes("-")) {
+    args.push("--prerelease");
+  }
+  return withReleaseRepository(args);
+}
