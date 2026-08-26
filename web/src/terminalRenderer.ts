@@ -310,10 +310,12 @@ export class GhosttyRenderer implements TerminalRenderer {
 
   refreshMetrics() {
     const terminal = this.#requireTerminal();
-    terminal.options.fontFamily = TERMINAL_FONT_FAMILY;
-    terminal.options.fontSize = this.#fontSizePx;
-    terminal.renderer?.remeasureFont();
-    return this.fit();
+    return refreshTerminalFontRendering(
+      terminal,
+      TERMINAL_FONT_FAMILY,
+      this.#fontSizePx,
+      () => this.fit(),
+    );
   }
 
   setFontSize(fontSizePx: number) {
@@ -1442,6 +1444,22 @@ export class GhosttyRenderer implements TerminalRenderer {
       focusTextarea: () => this.focusTextInput(),
     });
   }
+}
+
+export function refreshTerminalFontRendering(
+  terminal: Terminal,
+  fontFamily: string,
+  fontSizePx: number,
+  fit: () => TerminalSize,
+) {
+  terminal.options.fontFamily = fontFamily;
+  terminal.options.fontSize = fontSizePx;
+  terminal.renderer?.remeasureFont();
+  const size = fit();
+  if (terminal.renderer && terminal.wasmTerm) {
+    terminal.renderer.render(terminal.wasmTerm, true, terminal.viewportY, terminal, 0);
+  }
+  return size;
 }
 
 function hideGhosttyTextarea(textarea: HTMLTextAreaElement) {
