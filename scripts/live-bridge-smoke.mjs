@@ -255,9 +255,12 @@ try {
 
   const keyMarker = `${markerA}_RAW_KEYS`;
   firstA.send(
-    `python3 -c 'import os,termios,tty;a=termios.tcgetattr(0);tty.setraw(0);d=os.read(0,7);termios.tcsetattr(0,termios.TCSADRAIN,a);print("${keyMarker}_"+d.hex())'\n`,
+    `python3 -c 'import os,termios,tty;a=termios.tcgetattr(0);tty.setraw(0);os.write(1,b"${keyMarker}_READY\\n");d=os.read(0,7);termios.tcsetattr(0,termios.TCSADRAIN,a);print("${keyMarker}_"+d.hex())'\n`,
   );
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await Promise.all([
+    firstA.waitFor(`${keyMarker}_READY`),
+    secondA.waitFor(`${keyMarker}_READY`),
+  ]);
   secondA.send("\u001b[A\u001bOP\u0001");
   const keyEvidence = `${keyMarker}_1b5b411b4f5001`;
   await Promise.all([firstA.waitFor(keyEvidence), secondA.waitFor(keyEvidence)]);
