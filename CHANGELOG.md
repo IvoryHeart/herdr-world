@@ -6,6 +6,9 @@
 
 ### Added
 
+- Added deterministic production npm/Cargo licence inventories, exact runtime
+  closure checks, and release/WebView assembly of the resulting notices.
+  [Herdr World PR #9](https://github.com/IvoryHeart/herdr-world/pull/9)
 - Added focused contribution guidance and a private vulnerability-reporting
   policy for the public Herdr World repository.
   [Herdr World PR #8](https://github.com/IvoryHeart/herdr-world/pull/8)

@@ -8,7 +8,9 @@
     "dev:local": "scripts/dev-local.sh",
     "dev:web": "npm run dev --prefix web",
     "dev:bridge": "scripts/run-bridge.sh",
-    "build:web": "npm run build --prefix web",
+    "build:web": "npm run build --prefix web && node scripts/stage-web-legal-assets.mjs",
+    "notices:generate": "node scripts/dependency-notices.mjs --generate",
+    "notices:check": "node scripts/dependency-notices.mjs --check",
     "test:dev": "node --test scripts/dev.test.mjs",
     "test:web": "npm run test --prefix web",
     "test:observability": "npm run test --prefix web -- observability.test.ts && cargo test --manifest-path bridge/Cargo.toml --bin herdr-web-bridge observability",
@@ -27,7 +29,7 @@
     "build": "npm run build:web && npm run bridge:build",
     "test": "npm run test:dev && npm run test:web && npm run bridge:test",
     "lint": "npm run lint:web && npm run bridge:fmt",
-    "check": "npm run vendor:check && npm run lint && npm run test && npm run build",
+    "check": "npm run vendor:check && npm run notices:check && npm run lint && npm run test && npm run build",
     "check:acceptance": "npm run check && npm run test:e2e && npm run test:security && npm run test:independence"
   },
   "devDependencies": {
@@ -35,6 +37,7 @@
     "@capacitor/android": "^8.4.0",
     "@capacitor/cli": "^8.4.0",
     "@playwright/test": "^1.55.0",
+    "generate-license-file": "4.2.3",
     "typescript": "^5.9.3",
     "ws": "^8.18.3"
   },

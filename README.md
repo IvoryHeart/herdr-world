@@ -34,6 +34,14 @@ visualizations. The upstream relationship and synchronization record are documen
 
 ## Screenshots
 
+### Pixel Office
+
+| Desktop | Mobile |
+|:--:|:--:|
+| <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing multiple hosts, workspaces, agents, and the Agent Bar" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
+
+### Spaces
+
 | Desktop | Android tablet |
 |:--:|:--:|
 | <img src="docs/images/desktop.png" alt="herdr-world desktop terminal workspace" width="640"> | <img src="docs/images/android-tablet.png" alt="herdr-world Android tablet terminal workspace" width="640"> |
@@ -482,7 +490,10 @@ adaptations, and the PixiJS MIT dependency are declared in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Exact Herdr source hashes
 are in [`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml),
 and the World asset hashes and modification record are in
-[`docs/world-assets.md`](docs/world-assets.md).
+[`docs/world-assets.md`](docs/world-assets.md). Complete generated production
+npm and desktop Cargo licence inventories are retained under
+[`third_party/dependencies`](third_party/dependencies/README.md) and shipped in
+binary bundles.
 
 ## Long-Term Direction
 

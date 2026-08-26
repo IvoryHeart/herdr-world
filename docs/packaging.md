@@ -34,6 +34,7 @@ herdr-world-vX.Y.Z-PLATFORM/
   bin/herdr-world-bridge
   share/herdr-world/web/
   third_party/licenses/
+  third_party/dependencies/
   docs/world-assets.md
   vendor/herdr-compat/VENDOR-MANIFEST.toml
   LICENSE
@@ -53,10 +54,12 @@ Install dependencies first:
 - npm
 - Rust stable
 - a platform C toolchain usable by Cargo
+- `cargo-about` 0.9.2
 
 ```bash
 npm ci
 npm ci --prefix web
+npm run notices:check
 ```
 
 Build the tarball:
@@ -94,7 +97,10 @@ cat dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz.sha256
 Confirm the archive contains the expected root directory, `bin/herdr-world`,
 `bin/herdr-world-bridge`, bundled `share/herdr-world/web/` assets, `LICENSE`,
 `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, the Apache/PixiJS license texts, the World asset
-record, the Herdr vendor manifest, and `README.md`.
+record, complete production npm/Cargo licence inventories, the Herdr vendor
+manifest, and `README.md`. The bundled web tree must also contain its
+`legal/manifest.json` and referenced legal files so the same notices enter the
+Android WebView assembly.
 
 Before release, run the unpacked wrapper against a Herdr `v0.8.2` or newer daemon reporting protocol
 `20`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
