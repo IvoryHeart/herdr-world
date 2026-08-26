@@ -12,6 +12,7 @@
 
 - Made the release helper mark SemVer prerelease tags such as `v0.1.0-rc.2` as GitHub
   prereleases automatically while leaving stable versions unchanged.
+  [Herdr World PR #15](https://github.com/IvoryHeart/herdr-world/pull/15)
 
 ### Removed
 
