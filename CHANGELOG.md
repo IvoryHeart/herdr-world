@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Made release aggregation accept the equivalent macOS Mach-O architecture descriptions emitted
+  by macOS and Linux `file`, while still requiring the expected executable format and CPU.
+  [Herdr World PR #17](https://github.com/IvoryHeart/herdr-world/pull/17)
+
 ### Removed
 
 ## [0.1.0-rc.3] - 2026-08-26
