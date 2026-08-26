@@ -93,9 +93,11 @@ attempt to weaken Gatekeeper or modify a user's security policy.
 
 For the desktop launcher, verify `bin/herdr-world --help` never starts onboarding, a
 non-interactive launch with no default Herdr socket fails with manual instructions, and an
-interactive missing-session launch asks independently before installation and startup. Do not
-exercise the live installer during release verification; the launcher tests replace its network and
-process boundaries with deterministic fakes.
+interactive missing-session launch asks independently before installation and startup. Also verify
+that an interactive incompatible default server asks independently before installation/update,
+server stop, and restart, while declining the stop leaves it running. Do not exercise the live
+installer during release verification; the launcher tests replace its network and process
+boundaries with deterministic fakes.
 
 To stage the current debug APK under the release asset name for private testing:
 

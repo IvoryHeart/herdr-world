@@ -44,6 +44,71 @@ herdr_world_find_binary() {
   return 1
 }
 
+herdr_world_find_installer_binary() {
+  if [[ -n "${HERDR_INSTALL_DIR:-}" && -x "$HERDR_INSTALL_DIR/herdr" ]]; then
+    printf '%s/herdr\n' "$HERDR_INSTALL_DIR"
+    return 0
+  fi
+
+  if [[ -n "${HOME:-}" && -x "$HOME/.local/bin/herdr" ]]; then
+    printf '%s/.local/bin/herdr\n' "$HOME"
+    return 0
+  fi
+
+  herdr_world_find_binary
+}
+
+herdr_world_version_is_supported() {
+  local version="$1"
+  local major
+  local minor
+  local patch
+
+  version="${version#v}"
+  if [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)([-+].*)?$ ]]; then
+    return 1
+  fi
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+  patch="${BASH_REMATCH[3]}"
+
+  (( major > 0 || minor > 8 || (minor == 8 && patch >= 2) ))
+}
+
+herdr_world_binary_is_supported() {
+  local herdr_bin="$1"
+  local version_output=""
+  local version=""
+
+  version_output="$("$herdr_bin" -V 2>/dev/null)" || return 1
+  version="${version_output##* }"
+  herdr_world_version_is_supported "$version"
+}
+
+herdr_world_server_is_supported() {
+  local herdr_bin="$1"
+  local status_output=""
+  local server_fields=""
+  local server_version=""
+  local server_protocol=""
+  local server_compatible=""
+
+  status_output="$("$herdr_bin" status 2>/dev/null)" || return 1
+  server_fields="$(printf '%s\n' "$status_output" | awk '
+    $0 == "server:" { in_server = 1; next }
+    in_server && $0 !~ /^  / { in_server = 0 }
+    in_server && $1 == "version:" { version = $2 }
+    in_server && $1 == "protocol:" { protocol = $2 }
+    in_server && $1 == "compatible:" { compatible = $2 }
+    END { printf "%s\t%s\t%s\n", version, protocol, compatible }
+  ')"
+  IFS=$'\t' read -r server_version server_protocol server_compatible <<<"$server_fields"
+
+  herdr_world_version_is_supported "$server_version" \
+    && [[ "$server_protocol" == "$HERDR_TERMINAL_PROTOCOL" ]] \
+    && [[ "$server_compatible" == "yes" ]]
+}
+
 herdr_world_is_interactive() {
   [[ -t 0 && -t 2 ]]
 }
@@ -98,6 +163,54 @@ herdr_world_install() {
   fi
 
   rm -rf -- "$installer_dir"
+}
+
+herdr_world_ensure_supported_binary() {
+  local herdr_bin=""
+
+  if herdr_bin="$(herdr_world_find_binary)" && herdr_world_binary_is_supported "$herdr_bin"; then
+    printf '%s\n' "$herdr_bin"
+    return 0
+  fi
+
+  if [[ -n "$herdr_bin" ]]; then
+    cat >&2 <<EOF
+The installed Herdr executable is older than ${HERDR_MINIMUM_VERSION}:
+  $herdr_bin
+
+Herdr World can download ${HERDR_INSTALLER_URL} over HTTPS and run it locally
+to install the latest stable Herdr.
+EOF
+  else
+    cat >&2 <<EOF
+Herdr is not installed or is not available on PATH.
+
+Herdr World can download ${HERDR_INSTALLER_URL} over HTTPS and run it locally.
+The official installer installs the latest stable Herdr (normally under ~/.local/bin)
+and verifies the downloaded Herdr binary checksum. It does not install Herdr World.
+EOF
+  fi
+
+  if ! herdr_world_confirm "Download and run the official Herdr installer now?"; then
+    herdr_world_manual_instructions
+    return 1
+  fi
+  if ! herdr_world_install; then
+    herdr_world_manual_instructions
+    return 1
+  fi
+  if ! herdr_bin="$(herdr_world_find_installer_binary)"; then
+    echo "Herdr was installed, but its executable could not be found." >&2
+    herdr_world_manual_instructions
+    return 1
+  fi
+  if ! herdr_world_binary_is_supported "$herdr_bin"; then
+    echo "The installed Herdr executable is still older than ${HERDR_MINIMUM_VERSION}." >&2
+    herdr_world_manual_instructions
+    return 1
+  fi
+
+  printf '%s\n' "$herdr_bin"
 }
 
 herdr_world_choose_workspace() {
@@ -156,6 +269,23 @@ herdr_world_wait_for_socket() {
   return 1
 }
 
+herdr_world_wait_for_socket_to_stop() {
+  local socket_path="$1"
+  local attempt
+  for attempt in {1..50}; do
+    if ! herdr_world_socket_ready "$socket_path"; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  return 1
+}
+
+herdr_world_stop_herdr() {
+  local herdr_bin="$1"
+  "$herdr_bin" server stop
+}
+
 herdr_world_exec_bridge() {
   exec "$BRIDGE_BIN" --static-dir "$STATIC_DIR" "$@"
 }
@@ -167,6 +297,7 @@ herdr_world_main() {
   local default_socket=""
   local herdr_bin=""
   local workspace=""
+  local socket_is_ready=false
 
   for arg in "$@"; do
     if [[ "$arg" == "--no-herdr-setup" ]]; then
@@ -205,38 +336,61 @@ herdr_world_main() {
     herdr_world_manual_instructions
     return 1
   fi
-  if herdr_world_socket_ready "$default_socket"; then
-    herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
-    return
-  fi
 
   case "${HERDR_WORLD_SETUP:-auto}" in
     never | off | 0) setup_enabled=false ;;
   esac
+
+  if herdr_world_socket_ready "$default_socket"; then
+    socket_is_ready=true
+    if herdr_bin="$(herdr_world_find_binary)" \
+      && herdr_world_binary_is_supported "$herdr_bin" \
+      && herdr_world_server_is_supported "$herdr_bin"; then
+      herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+      return
+    fi
+
+    # Preserve non-interactive and explicitly disabled behavior. The bridge
+    # remains the authority for the detailed compatibility error in this path.
+    if [[ "$setup_enabled" != true ]] || ! herdr_world_is_interactive; then
+      herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+      return
+    fi
+  fi
+
   if [[ "$setup_enabled" != true ]] || ! herdr_world_is_interactive; then
     echo "No running default Herdr session was found at $default_socket." >&2
     herdr_world_manual_instructions
     return 1
   fi
 
-  if ! herdr_bin="$(herdr_world_find_binary)"; then
-    cat >&2 <<EOF
-Herdr is not installed or is not available on PATH.
+  if ! herdr_bin="$(herdr_world_ensure_supported_binary)"; then
+    return 1
+  fi
 
-Herdr World can download ${HERDR_INSTALLER_URL} over HTTPS and run it locally.
-The official installer installs the latest stable Herdr (normally under ~/.local/bin)
-and verifies the downloaded Herdr binary checksum. It does not install Herdr World.
+  if [[ "$socket_is_ready" == true ]]; then
+    if herdr_world_server_is_supported "$herdr_bin"; then
+      herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+      return
+    fi
+
+    cat >&2 <<EOF
+The running default Herdr server is incompatible with Herdr World.
+
+It must be stopped before the current Herdr can start. Stopping it exits the
+terminal panes and processes owned by that server.
 EOF
-    if ! herdr_world_confirm "Download and run the official Herdr installer now?"; then
+    if ! herdr_world_confirm "Stop the incompatible Herdr server now?"; then
       herdr_world_manual_instructions
       return 1
     fi
-    if ! herdr_world_install; then
+    if ! herdr_world_stop_herdr "$herdr_bin"; then
+      echo "The incompatible Herdr server could not be stopped." >&2
       herdr_world_manual_instructions
       return 1
     fi
-    if ! herdr_bin="$(herdr_world_find_binary)"; then
-      echo "Herdr was installed, but its executable could not be found." >&2
+    if ! herdr_world_wait_for_socket_to_stop "$default_socket"; then
+      echo "The incompatible Herdr server did not release $default_socket." >&2
       herdr_world_manual_instructions
       return 1
     fi
