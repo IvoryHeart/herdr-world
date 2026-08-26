@@ -1,0 +1,62 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/pages.yml"
+      - "site/**"
+      - "docs/images/pixel-office-desktop.png"
+      - "docs/images/pixel-office-mobile.png"
+      - "docs/images/social-preview.png"
+      - "web/public/herdr-logo.svg"
+      - "scripts/build-pages.mjs"
+      - "scripts/pages.test.mjs"
+      - "package.json"
+  pull_request:
+    paths:
+      - ".github/workflows/pages.yml"
+      - "site/**"
+      - "docs/images/pixel-office-desktop.png"
+      - "docs/images/pixel-office-mobile.png"
+      - "docs/images/social-preview.png"
+      - "web/public/herdr-logo.svg"
+      - "scripts/build-pages.mjs"
+      - "scripts/pages.test.mjs"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: npm run test:pages
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

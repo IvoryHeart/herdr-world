@@ -30,6 +30,9 @@ visualizations. The upstream relationship and synchronization record are documen
 > is available for Linux x86-64. Herdr World currently requires Herdr `v0.8.2` or newer reporting
 > terminal protocol `20`.
 
+Visit the [Herdr World project site](https://ivoryheart.github.io/herdr-world/) for a visual
+overview, or jump directly to the release above for the checksum-verified archive.
+
 ## Highlights
 
 - Shared browser terminal viewing with synchronized pane selection across desktop and mobile.
@@ -66,6 +69,7 @@ visualizations. The upstream relationship and synchronization record are documen
 
 ```text
 web/                 React + Vite browser app
+site/                Dependency-free GitHub Pages project site
 android/             Capacitor Android shell for the bundled web app
 bridge/              Slim Rust HTTP/WebSocket bridge executable
 vendor/herdr-compat/ minimal Herdr protocol/API compatibility crate
@@ -208,6 +212,7 @@ npm run test:dev
 npm run lint:web
 npm run test:web
 npm run build:web
+npm run build:pages
 npm run bridge:fmt
 npm run bridge:test
 npm run bridge:build

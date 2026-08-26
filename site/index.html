@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Herdr World is a visual, multi-host control surface for Herdr agents, combining terminal-first Spaces with a live Pixel Office." />
+    <meta name="theme-color" content="#0c0d1b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Herdr World — Your agents. One office." />
+    <meta property="og:description" content="A visual, multi-host control surface for Herdr agents. Public Linux preview available now." />
+    <meta property="og:image" content="https://ivoryheart.github.io/herdr-world/assets/social-preview.png" />
+    <meta property="og:url" content="https://ivoryheart.github.io/herdr-world/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Herdr World — Your agents. One office." />
+    <meta name="twitter:description" content="Terminal-first Spaces and a live Pixel Office for Herdr agents." />
+    <meta name="twitter:image" content="https://ivoryheart.github.io/herdr-world/assets/social-preview.png" />
+    <link rel="canonical" href="https://ivoryheart.github.io/herdr-world/" />
+    <link rel="icon" href="./assets/herdr-logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Herdr World — Your agents. One office.</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="ambient-grid" aria-hidden="true"></div>
+    <div class="cursor-glow" aria-hidden="true"></div>
+
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="Herdr World home">
+        <span class="wordmark-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span>HERDR / WORLD</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#office">Office</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/IvoryHeart/herdr-world/discussions">Discuss</a>
+        <a class="nav-source" href="https://github.com/IvoryHeart/herdr-world">Source ↗</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="signal"><span></span> Public preview / Linux x86-64</p>
+          <h1 id="hero-title">Your agents.<br /><em>One office.</em></h1>
+          <p class="hero-intro">Herdr World turns live Herdr sessions into one visual workspace: terminal-first Spaces, a multi-host Pixel Office, and the controls to move between them without losing context.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1">Download the RC <span aria-hidden="true">↓</span></a>
+            <a class="button button-secondary" href="#install">View install</a>
+          </div>
+          <dl class="hero-facts">
+            <div><dt>Herdr</dt><dd>v0.8.2+</dd></div>
+            <div><dt>Protocol</dt><dd>20</dd></div>
+            <div><dt>License</dt><dd>MIT</dd></div>
+          </dl>
+        </div>
+
+        <div class="hero-stage" aria-label="Herdr World Pixel Office preview">
+          <div class="stage-label stage-label-top">LIVE / QUALIFIED STATE</div>
+          <div class="stage-frame">
+            <img src="./assets/pixel-office-desktop.png" alt="Herdr World Pixel Office showing multiple Herdr hosts, workspaces and agents" width="1440" height="900" />
+          </div>
+          <div class="stage-label stage-label-bottom">SPACES ↔ WORLD</div>
+          <div class="pixel-cluster cluster-one" aria-hidden="true"></div>
+          <div class="pixel-cluster cluster-two" aria-hidden="true"></div>
+        </div>
+
+        <div class="scroll-cue" aria-hidden="true"><span>SCROLL TO ENTER</span><i></i></div>
+      </section>
+
+      <section class="manifesto" id="office" aria-labelledby="manifesto-title">
+        <div class="section-index" aria-hidden="true">01 / THE FLOOR</div>
+        <div class="manifesto-heading">
+          <p class="eyebrow">A different view of active work</p>
+          <h2 id="manifesto-title">Not another dashboard.<br />A place where work <em>lives.</em></h2>
+        </div>
+        <p class="manifesto-copy">Tabs become desks. Workspaces become rooms. Active agents stay at work; blocked agents meet at reception; idle agents drift to the bar. Underneath, every identity remains qualified to its exact host and generation.</p>
+
+        <div class="feature-grid">
+          <article class="feature feature-spaces">
+            <span class="feature-number">01</span>
+            <div class="feature-icon" aria-hidden="true">⌘</div>
+            <h3>Spaces</h3>
+            <p>The direct terminal surface: tabs, panes, splits, notes, launchers and shared viewing.</p>
+            <span class="feature-rule"></span>
+          </article>
+          <article class="feature feature-world">
+            <span class="feature-number">02</span>
+            <div class="feature-icon office-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <h3>Pixel Office</h3>
+            <p>A live spatial projection of the same state—built for awareness, handoff and focus.</p>
+            <span class="feature-rule"></span>
+          </article>
+          <article class="feature feature-hosts">
+            <span class="feature-number">03</span>
+            <div class="feature-icon host-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+            <h3>Many hosts</h3>
+            <p>Connect directly to multiple bridges while preserving collision-safe runtime identity.</p>
+            <span class="feature-rule"></span>
+          </article>
+        </div>
+      </section>
+
+      <section class="office-strip" aria-label="Pixel Office mobile preview">
+        <div class="office-strip-copy">
+          <p class="eyebrow">Desktop to pocket</p>
+          <h2>The office reflows.<br />The state does not.</h2>
+          <p>Herdr World keeps its visual and terminal surfaces usable at 375 pixels without creating a separate mobile control plane.</p>
+        </div>
+        <div class="phone-frame">
+          <div class="phone-speaker" aria-hidden="true"></div>
+          <img src="./assets/pixel-office-mobile.png" alt="Herdr World Pixel Office at a 375-pixel mobile viewport" width="375" height="812" />
+        </div>
+        <div class="office-map" aria-hidden="true">
+          <div class="map-room room-a"><span>CEO</span></div>
+          <div class="map-room room-b"><span>AGENT BAR</span></div>
+          <div class="map-room room-c"><span>ROOM 01</span><i></i><i></i><i></i></div>
+          <div class="map-room room-d"><span>ROOM 02</span><i></i></div>
+          <div class="map-road"></div>
+        </div>
+      </section>
+
+      <section class="install" id="install" aria-labelledby="install-title">
+        <div class="section-index" aria-hidden="true">02 / ENTER</div>
+        <div class="install-heading">
+          <p class="eyebrow">Linux x86-64 public preview</p>
+          <h2 id="install-title">From archive<br />to office.</h2>
+          <p>Herdr stays independent. Start Herdr, download this seven-megabyte bundle, verify it, and run the included bridge and web app.</p>
+          <a href="https://github.com/IvoryHeart/herdr-world#requirements">Read requirements ↗</a>
+        </div>
+
+        <div class="terminal-card">
+          <div class="terminal-bar">
+            <span class="terminal-title">HERDR WORLD / INSTALL</span>
+            <button class="copy-button" type="button" data-copy-install><span data-copy-label>Copy</span><span aria-hidden="true">⧉</span></button>
+          </div>
+          <pre tabindex="0" aria-label="Herdr World installation commands"><code data-install-command><span class="prompt">$</span> <span class="command">herdr</span>
+
+<span class="comment"># In another terminal</span>
+<span class="prompt">$</span> VERSION=v0.1.0-rc.1
+<span class="prompt">$</span> curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz"
+<span class="prompt">$</span> curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
+<span class="prompt">$</span> sha256sum --check "herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
+<span class="prompt">$</span> tar -xzf "herdr-world-${VERSION}-linux-x86_64.tar.gz"
+<span class="prompt">$</span> cd "herdr-world-${VERSION}-linux-x86_64"
+<span class="prompt">$</span> bin/herdr-world
+
+<span class="success">→ open http://127.0.0.1:8787</span></code></pre>
+        </div>
+      </section>
+
+      <section class="principles" aria-labelledby="principles-title">
+        <div class="section-index" aria-hidden="true">03 / BOUNDARIES</div>
+        <h2 id="principles-title">Built downstream.<br /><em>Standing on its own.</em></h2>
+        <div class="principle-list">
+          <article><span>01</span><h3>Local first</h3><p>The bridge binds to loopback by default. Network exposure is explicit and intended for trusted networks.</p></article>
+          <article><span>02</span><h3>Upstream clear</h3><p>Herdr and Herdr Web remain independent upstream projects with retained attribution and auditable provenance.</p></article>
+          <article><span>03</span><h3>Open by default</h3><p>MIT-licensed project code, complete bundled notices, public checksums and reproducible release mechanics.</p></article>
+        </div>
+      </section>
+
+      <section class="final-cta" aria-labelledby="cta-title">
+        <div class="cta-pixels" aria-hidden="true"></div>
+        <p class="eyebrow">The office is open</p>
+        <h2 id="cta-title">Bring your agents<br /><em>into the room.</em></h2>
+        <div class="hero-actions">
+          <a class="button button-primary" href="https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1">Download v0.1.0-rc.1</a>
+          <a class="button button-secondary" href="https://github.com/IvoryHeart/herdr-world/discussions">Join the discussion</a>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wordmark footer-wordmark">
+        <span class="wordmark-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span>HERDR / WORLD</span>
+      </div>
+      <p>Independent downstream software for <a href="https://github.com/herdrdev/herdr">Herdr</a>, based in part on <a href="https://github.com/kcosr/herdr-web">Herdr Web</a>.</p>
+      <div class="footer-links">
+        <a href="https://github.com/IvoryHeart/herdr-world/blob/main/LICENSE">MIT</a>
+        <a href="https://github.com/IvoryHeart/herdr-world/blob/main/UPSTREAM.md">Upstreams</a>
+        <a href="https://github.com/IvoryHeart/herdr-world/blob/main/SECURITY.md">Security</a>
+      </div>
+    </footer>
+
+    <script src="./site.js" defer></script>
+  </body>
+</html>
