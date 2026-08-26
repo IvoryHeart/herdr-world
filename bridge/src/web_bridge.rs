@@ -57,11 +57,7 @@ use crate::notes::{
     AttachNoteRequest, CreateNoteRequest, NoteResponse, NotesError, NotesListQuery,
     NotesListResponse, NotesManager, RevisionRequest, UpdateNoteRequest,
 };
-use crate::observability::{
-    ObservabilityConfiguration, ObservabilityContractVersion, ObservabilityDescriptor,
-    ObservabilityHealth, ObservabilityState, ObservabilityTransportMessage,
-};
-use crate::observability_prometheus::{PrometheusConfig, PrometheusObservabilityProvider};
+use crate::observability::{ObservabilityContractVersion, ObservabilityHealth, ObservabilityState};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 8787;
@@ -137,7 +133,7 @@ struct BridgeState {
 }
 
 #[derive(Debug, Clone)]
-struct RequestPolicy {
+pub(crate) struct RequestPolicy {
     bind_host: String,
     bind_port: u16,
     allowed_hosts: Vec<String>,
@@ -212,11 +208,6 @@ struct ObservabilityCapability {
     health: ObservabilityHealth,
 }
 
-#[derive(Debug, Deserialize)]
-struct ObservabilityConfigurationRequest {
-    prometheus_url: Option<String>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 enum ActivityMessage {
@@ -243,11 +234,6 @@ struct TerminalQuery {
     output_encoding: Option<TerminalOutputWireEncoding>,
     #[serde(default)]
     takeover: bool,
-}
-
-#[derive(Debug, Deserialize)]
-struct ObservabilityEventsQuery {
-    after_sequence: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -783,7 +769,7 @@ impl TerminalWriter {
 }
 
 #[derive(Debug)]
-enum BridgeError {
+pub(crate) enum BridgeError {
     Api(ApiClientError),
     Io(io::Error),
     BadRequest(String),
@@ -1079,33 +1065,6 @@ Use --launcher-presets PATH or HERDR_WEB_LAUNCHER_PRESETS to load custom launch 
 Uploads default to HERDR_WEB_UPLOAD_DIR, XDG_DATA_HOME/herdr-web/uploads, or ~/.local/share/herdr-web/uploads."
 }
 
-fn observability_state_from_environment() -> ObservabilityState {
-    match PrometheusConfig::from_env() {
-        Ok(Some(config)) => {
-            let endpoint = config.endpoint_string();
-            info!(
-                provider = "prometheus.otel",
-                window_seconds = config.window_seconds,
-                refresh_seconds = config.refresh_seconds,
-                "Prometheus observability provider enabled"
-            );
-            ObservabilityState::with_provider_and_configuration(
-                PrometheusObservabilityProvider::start(config),
-                ObservabilityConfiguration {
-                    provider_id: "prometheus.otel".to_string(),
-                    configured: true,
-                    endpoint: Some(endpoint),
-                },
-            )
-        }
-        Ok(None) => ObservabilityState::unavailable(),
-        Err(error) => {
-            warn!(error = %error, "Prometheus observability provider configuration rejected");
-            ObservabilityState::unavailable()
-        }
-    }
-}
-
 async fn run_server(options: BridgeOptions) -> io::Result<()> {
     if !is_loopback_bind_host(&options.host) {
         warn!(
@@ -1153,7 +1112,7 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         agent_pins,
         launcher_presets,
         notes,
-        observability: observability_state_from_environment(),
+        observability: crate::observability_http::state_from_environment(),
         ui_event_tx: tokio::sync::broadcast::channel(256).0,
         activity_tx: tokio::sync::broadcast::channel(512).0,
         upload_dir: options.upload_dir.clone(),
@@ -1220,21 +1179,10 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
             "/api/launcher-presets/launch",
             post(launcher_preset_launch_handler).options(preflight_handler),
         );
-    let observability_routes = Router::new()
-        .route(
-            "/api/extensions/observability",
-            get(observability_descriptor_handler).options(preflight_handler),
-        )
-        .route(
-            "/api/extensions/observability/snapshot",
-            get(observability_snapshot_handler).options(preflight_handler),
-        )
-        .route(
-            "/api/extensions/observability/config",
-            get(observability_configuration_handler)
-                .put(update_observability_configuration_handler)
-                .options(preflight_handler),
-        );
+    let observability_routes = crate::observability_http::routes(
+        state.request_policy.clone(),
+        state.observability.clone(),
+    );
     let static_routes = static_routes(options.static_dir.clone());
     let app = Router::new()
         .merge(agent_activity_routes)
@@ -1265,10 +1213,6 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         .route("/ws/events", get(events_ws_handler))
         .route("/ws/activity", get(activity_ws_handler))
         .route("/ws/ui-events", get(ui_events_ws_handler))
-        .route(
-            "/ws/extensions/observability",
-            get(observability_ws_handler),
-        )
         .route("/ws/terminal", get(terminal_ws_handler))
         .merge(static_routes)
         .layer(middleware::from_fn_with_state(
@@ -1347,8 +1291,15 @@ async fn preflight_handler(
     State(state): State<BridgeState>,
     headers: HeaderMap,
 ) -> Result<Response, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
-    let Some(origin) = cors_origin_header(&headers, &state.request_policy) else {
+    preflight_response(&headers, &state.request_policy)
+}
+
+pub(crate) fn preflight_response(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+) -> Result<Response, BridgeError> {
+    ensure_allowed_request(headers, policy)?;
+    let Some(origin) = cors_origin_header(headers, policy) else {
         return Err(BridgeError::Forbidden(
             "cross-origin requests are not allowed".to_string(),
         ));
@@ -1560,7 +1511,10 @@ const CAPABILITY_FEATURES: &[&str] = &[
     "observability_extension",
 ];
 
-fn ensure_allowed_request(headers: &HeaderMap, policy: &RequestPolicy) -> Result<(), BridgeError> {
+pub(crate) fn ensure_allowed_request(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+) -> Result<(), BridgeError> {
     if request_allowed(headers, policy) {
         return Ok(());
     }
@@ -3173,81 +3127,6 @@ async fn capabilities_handler(
     }))
 }
 
-async fn observability_descriptor_handler(
-    State(state): State<BridgeState>,
-    headers: HeaderMap,
-) -> Result<Json<ObservabilityDescriptor>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
-    let descriptor = state
-        .observability
-        .descriptor()
-        .map_err(|err| BridgeError::Protocol(err.to_string()))?;
-    Ok(Json(descriptor))
-}
-
-async fn observability_snapshot_handler(
-    State(state): State<BridgeState>,
-    headers: HeaderMap,
-) -> Result<Json<crate::observability::ObservabilityExtensionResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
-    let snapshot = state
-        .observability
-        .snapshot()
-        .map_err(|err| BridgeError::Protocol(err.to_string()))?;
-    Ok(Json(snapshot))
-}
-
-async fn observability_configuration_handler(
-    State(state): State<BridgeState>,
-    headers: HeaderMap,
-) -> Result<Json<ObservabilityConfiguration>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
-    Ok(Json(state.observability.configuration()))
-}
-
-async fn update_observability_configuration_handler(
-    State(state): State<BridgeState>,
-    headers: HeaderMap,
-    Json(body): Json<ObservabilityConfigurationRequest>,
-) -> Result<Json<ObservabilityConfiguration>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
-    let raw_endpoint = body
-        .prometheus_url
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty());
-    let (provider, configuration): (
-        Arc<dyn crate::observability::ObservabilityProvider>,
-        ObservabilityConfiguration,
-    ) = match raw_endpoint {
-        Some(raw_endpoint) => {
-            let config = PrometheusConfig::from_settings_endpoint(raw_endpoint)
-                .map_err(BridgeError::BadRequest)?;
-            let endpoint = config.endpoint_string();
-            (
-                PrometheusObservabilityProvider::start_ready(config).await,
-                ObservabilityConfiguration {
-                    provider_id: "prometheus.otel".to_string(),
-                    configured: true,
-                    endpoint: Some(endpoint),
-                },
-            )
-        }
-        None => (
-            Arc::new(crate::observability::UnavailableObservabilityProvider),
-            ObservabilityConfiguration {
-                provider_id: "none".to_string(),
-                configured: false,
-                endpoint: None,
-            },
-        ),
-    };
-    state
-        .observability
-        .replace_provider(provider, configuration.clone());
-    Ok(Json(configuration))
-}
-
 async fn agent_activity_list_handler(
     State(state): State<BridgeState>,
     headers: HeaderMap,
@@ -3571,19 +3450,6 @@ async fn ui_events_ws_handler(
         .into_response()
 }
 
-async fn observability_ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<BridgeState>,
-    Query(query): Query<ObservabilityEventsQuery>,
-    headers: HeaderMap,
-) -> Response {
-    if let Err(err) = ensure_allowed_request(&headers, &state.request_policy) {
-        return err.into_response();
-    }
-    ws.on_upgrade(move |socket| handle_observability_socket(socket, state, query.after_sequence))
-        .into_response()
-}
-
 async fn handle_events_socket(socket: WebSocket, state: BridgeState) {
     let api = state.api.clone();
     let mut ui_event_rx = state.ui_event_tx.subscribe();
@@ -3703,72 +3569,6 @@ async fn handle_ui_events_socket(socket: WebSocket, state: BridgeState) {
             else => break,
         }
     }
-}
-
-async fn handle_observability_socket(
-    socket: WebSocket,
-    state: BridgeState,
-    after_sequence: Option<u64>,
-) {
-    let mut observability_rx = state.observability.subscribe();
-    let (mut ws_sender, mut ws_receiver) = socket.split();
-    if after_sequence.is_some()
-        && send_observability_message(
-            &mut ws_sender,
-            &ObservabilityTransportMessage::ResyncRequired {
-                reason: "event replay is not retained by this provider".to_string(),
-                after_sequence,
-            },
-        )
-        .await
-        .is_err()
-    {
-        return;
-    }
-    loop {
-        tokio::select! {
-            event = observability_rx.recv() => {
-                match event {
-                    Ok(event) => {
-                        if send_observability_message(&mut ws_sender, &event).await.is_err() {
-                            break;
-                        }
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                        let _ = send_observability_message(
-                            &mut ws_sender,
-                            &ObservabilityTransportMessage::ResyncRequired {
-                                reason: "observability receiver lagged".to_string(),
-                                after_sequence: None,
-                            },
-                        ).await;
-                        break;
-                    }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                }
-            }
-            Some(message) = ws_receiver.next() => {
-                match message {
-                    Ok(Message::Close(_)) | Err(_) => break,
-                    Ok(Message::Text(_))
-                    | Ok(Message::Binary(_))
-                    | Ok(Message::Ping(_))
-                    | Ok(Message::Pong(_)) => {}
-                }
-            }
-            else => break,
-        }
-    }
-}
-
-async fn send_observability_message(
-    ws_sender: &mut futures_util::stream::SplitSink<WebSocket, Message>,
-    message: &ObservabilityTransportMessage,
-) -> Result<(), axum::Error> {
-    let text = serde_json::to_string(message).unwrap_or_else(|_| {
-        r#"{"type":"resync_required","reason":"observability serialization failed","after_sequence":null}"#.to_string()
-    });
-    ws_sender.send(Message::Text(text.into())).await
 }
 
 async fn handle_terminal_socket(socket: WebSocket, state: BridgeState, query: TerminalQuery) {
