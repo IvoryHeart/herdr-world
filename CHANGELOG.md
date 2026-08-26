@@ -10,6 +10,7 @@
 
 - Added a direct, checksum-verified Linux release quick start, an explicit public-platform matrix,
   and launch-ready Pixel Office social artwork for the Herdr World public preview.
+  [Herdr World PR #11](https://github.com/IvoryHeart/herdr-world/pull/11)
 
 ### Fixed
 
