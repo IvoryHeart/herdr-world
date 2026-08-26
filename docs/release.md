@@ -41,6 +41,8 @@ Desktop artifacts are built from the final tag by `.github/workflows/release.yml
 locally built substitute. Pull requests that affect the desktop assembly run the same Linux,
 Apple-Silicon, and Intel matrix without publishing. Each job checks the native CPU format and bundle
 contents, then exercises the packaged bridge against two checksum-pinned stock Herdr v0.8.2 daemons.
+One required notice gate validates the complete cross-platform dependency closure before any native
+job starts, avoiding three redundant builds of the notice generator.
 
 Linux desktop tarball:
 

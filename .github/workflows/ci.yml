@@ -80,7 +80,7 @@ jobs:
           --fail-on-flaky-tests
       - name: Upload Playwright diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-diagnostics-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: .scratch/playwright

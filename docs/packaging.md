@@ -102,6 +102,11 @@ tar -tzf dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz
 cat dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz.sha256
 ```
 
+CI verifies the complete cross-platform dependency notice closure once before starting the native
+matrix, then passes the internal `--notices-verified` assembly flag to avoid rebuilding the same
+notice tool on every operating system. Local packaging omits that flag and therefore performs its
+own notice check.
+
 Confirm the archive contains the expected root directory, `bin/herdr-world`,
 `bin/herdr-world-bridge`, bundled `share/herdr-world/web/` assets, `LICENSE`,
 `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, the Apache/PixiJS license texts, the World asset

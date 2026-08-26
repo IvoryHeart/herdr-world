@@ -3,14 +3,20 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "usage: scripts/package-tarball.sh VERSION [PLATFORM]" >&2
+if [[ $# -lt 1 || $# -gt 3 ]]; then
+  echo "usage: scripts/package-tarball.sh VERSION [PLATFORM] [--notices-verified]" >&2
   echo "example: scripts/package-tarball.sh v0.1.0 linux-x86_64" >&2
   exit 2
 fi
 
 VERSION="$1"
 PLATFORM="${2:-}"
+NOTICE_MODE="${3:-}"
+
+if [[ -n "$NOTICE_MODE" && "$NOTICE_MODE" != "--notices-verified" ]]; then
+  echo "unknown packaging option: $NOTICE_MODE" >&2
+  exit 2
+fi
 
 if [[ ! "$VERSION" =~ ^v?[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
   echo "invalid VERSION: use only letters, numbers, dots, underscores, plus signs, and hyphens" >&2
@@ -45,7 +51,9 @@ if [[ "$CARGO_BUILD_DIR" != /* ]]; then
   CARGO_BUILD_DIR="$ROOT/$CARGO_BUILD_DIR"
 fi
 
-npm --prefix "$ROOT" run notices:check
+if [[ "$NOTICE_MODE" != "--notices-verified" ]]; then
+  npm --prefix "$ROOT" run notices:check
+fi
 npm --prefix "$ROOT" run build:web
 cargo build \
   --release \
