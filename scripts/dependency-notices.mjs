@@ -146,6 +146,8 @@ function cargoRuntimeComponents() {
   for (const target of CARGO_TARGETS) {
     const tree = output("cargo", [
       "tree",
+      "--color",
+      "never",
       "--locked",
       "--manifest-path",
       join(ROOT, "bridge", "Cargo.toml"),
