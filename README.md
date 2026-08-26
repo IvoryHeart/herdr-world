@@ -34,6 +34,14 @@ visualizations. The upstream relationship and synchronization record are documen
 
 ## Screenshots
 
+### Pixel Office
+
+| Desktop | Mobile |
+|:--:|:--:|
+| <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing multiple hosts, workspaces, agents, and the Agent Bar" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
+
+### Spaces
+
 | Desktop | Android tablet |
 |:--:|:--:|
 | <img src="docs/images/desktop.png" alt="herdr-world desktop terminal workspace" width="640"> | <img src="docs/images/android-tablet.png" alt="herdr-world Android tablet terminal workspace" width="640"> |
