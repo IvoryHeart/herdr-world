@@ -11,6 +11,8 @@ They do not publish npm packages, and the package versions are not release versi
 - `cargo-about` 0.9.2 (`cargo install cargo-about --version 0.9.2 --locked --features cli`).
 - JDK 21 and Android SDK when validating the Android shell.
 - GitHub CLI authenticated as a user that can create releases.
+- `origin` fetch and push URLs both resolve to `IvoryHeart/herdr-world`. The release helper rejects
+  upstream, fork, local-path, and unsupported remote URLs before making any release mutation.
 - A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
   bridge smoke testing.
 
@@ -157,6 +159,7 @@ node scripts/release.mjs v0.1.0
 The script:
 
 - requires a clean `main` branch
+- verifies both `origin` URLs and GitHub CLI access against `IvoryHeart/herdr-world`
 - promotes `CHANGELOG.md` from `Unreleased` to the release version/date
 - removes empty unused subsections from the released version notes
 - runs `npm run check`
@@ -164,6 +167,7 @@ The script:
 - tags `vX.Y.Z`
 - pushes `main` and the tag atomically
 - creates a GitHub release with notes extracted from `CHANGELOG.md`
+- passes `--repo IvoryHeart/herdr-world` and `--verify-tag` explicitly when creating the release
 - opens the next `## [Unreleased]` changelog section and pushes it
 
 The release script does not upload binary artifacts. Upload separately packaged tarballs and APKs
@@ -187,7 +191,8 @@ Upload the Linux tarball from the Linux build host:
 ```bash
 gh release upload vX.Y.Z \
   dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256 \
+  --repo IvoryHeart/herdr-world
 ```
 
 Upload the macOS ARM tarball from the Apple Silicon Mac build host, or copy it to the release
@@ -196,7 +201,8 @@ operator machine first:
 ```bash
 gh release upload vX.Y.Z \
   dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256 \
+  --repo IvoryHeart/herdr-world
 ```
 
 Upload the macOS Intel tarball from the Intel Mac build host, or copy it to the release operator
@@ -205,13 +211,15 @@ machine first:
 ```bash
 gh release upload vX.Y.Z \
   dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256 \
+  --repo IvoryHeart/herdr-world
 ```
 
 Upload the Android debug APK after it has the final debug asset name:
 
 ```bash
-gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk
+gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk \
+  --repo IvoryHeart/herdr-world
 ```
 
 If every artifact has been copied to one machine, the same paths can be uploaded in one

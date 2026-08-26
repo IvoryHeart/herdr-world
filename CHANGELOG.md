@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Made release creation fail closed unless both `origin` URLs and the explicit GitHub CLI target
+  resolve to `IvoryHeart/herdr-world`, preventing a checkout's default upstream from receiving a
+  Herdr World release. [Herdr World PR #10](https://github.com/IvoryHeart/herdr-world/pull/10)
+
 ### Removed
 
 ## [0.1.0-rc.1] - 2026-08-26

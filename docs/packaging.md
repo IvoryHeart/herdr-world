@@ -210,7 +210,8 @@ Upload the Linux tarball from the Linux build host:
 ```bash
 gh release upload vX.Y.Z \
   dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256 \
+  --repo IvoryHeart/herdr-world
 ```
 
 Upload the macOS ARM tarball from the Apple Silicon Mac build host, or copy it to the release
@@ -219,7 +220,8 @@ operator machine first:
 ```bash
 gh release upload vX.Y.Z \
   dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256 \
+  --repo IvoryHeart/herdr-world
 ```
 
 Upload the macOS Intel tarball from the Intel Mac build host, or copy it to the release operator
@@ -228,13 +230,15 @@ machine first:
 ```bash
 gh release upload vX.Y.Z \
   dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256 \
+  --repo IvoryHeart/herdr-world
 ```
 
 Upload the Android debug APK after it has the final debug asset name:
 
 ```bash
-gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk
+gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk \
+  --repo IvoryHeart/herdr-world
 ```
 
 If every artifact has been copied to one machine, the same paths can be uploaded in one
