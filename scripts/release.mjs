@@ -7,6 +7,7 @@ import {
   RELEASE_REMOTE,
   RELEASE_REPOSITORY,
   assertReleaseRemoteUrls,
+  releaseCreateArgs,
   withReleaseRepository,
 } from "./release-target.mjs";
 
@@ -196,14 +197,7 @@ try {
 
   run(
     "gh",
-    withReleaseRepository([
-      "release",
-      "create",
-      tag,
-      "--verify-tag",
-      "--notes-file",
-      notesFile,
-    ]),
+    releaseCreateArgs(tag, notesFile),
   );
 
   openNextUnreleased(released);
