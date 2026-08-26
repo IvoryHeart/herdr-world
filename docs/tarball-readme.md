@@ -2,7 +2,8 @@
 
 This bundle contains the `herdr-world` browser UI assets and the `herdr-world-bridge` executable.
 The bundle's root `LICENSE`, `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, and files under
-`third_party/licenses/` describe the retained upstream and asset terms.
+`third_party/licenses/` and `third_party/dependencies/` describe the retained
+upstream, asset, npm, and Cargo terms.
 
 It does not include Herdr itself. Start or attach a Herdr `v0.8.2` or newer session that reports
 terminal protocol `20` separately before running this bundle.

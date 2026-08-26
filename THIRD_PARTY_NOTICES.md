@@ -45,6 +45,8 @@ and alongside the shipped World assets.
 
 JavaScript and Rust dependency versions are pinned by `package-lock.json`,
 `web/package-lock.json`, `bridge/Cargo.lock`, and
-`vendor/herdr-compat/Cargo.lock`. Their upstream license files remain in the
-installed package/crate sources; binary release preparation must verify that
-all notices required by the selected artifact are included before publication.
+`vendor/herdr-compat/Cargo.lock`. The complete production npm and planned
+desktop Cargo closures, their selected licences, copyright notices, and full
+licence texts are checked in under
+[`third_party/dependencies`](third_party/dependencies). Release assembly fails
+when those generated inventories drift from the resolved dependency graphs.

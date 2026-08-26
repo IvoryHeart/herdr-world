@@ -45,6 +45,7 @@ if [[ "$CARGO_BUILD_DIR" != /* ]]; then
   CARGO_BUILD_DIR="$ROOT/$CARGO_BUILD_DIR"
 fi
 
+npm --prefix "$ROOT" run notices:check
 npm --prefix "$ROOT" run build:web
 cargo build \
   --release \
@@ -66,8 +67,7 @@ cp "$ROOT/docs/tarball-readme.md" "$STAGE/README.md"
 cp "$ROOT/LICENSE" "$STAGE/LICENSE"
 cp "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGE/THIRD_PARTY_NOTICES.md"
 cp "$ROOT/UPSTREAM.md" "$STAGE/UPSTREAM.md"
-cp "$ROOT/third_party/licenses/Apache-2.0.txt" "$STAGE/third_party/licenses/Apache-2.0.txt"
-cp "$ROOT/third_party/licenses/PixiJS-MIT.txt" "$STAGE/third_party/licenses/PixiJS-MIT.txt"
+cp -R "$ROOT/third_party/." "$STAGE/third_party/"
 cp "$ROOT/docs/world-assets.md" "$STAGE/docs/world-assets.md"
 cp "$ROOT/vendor/herdr-compat/VENDOR-MANIFEST.toml" "$STAGE/vendor/herdr-compat/VENDOR-MANIFEST.toml"
 

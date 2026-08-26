@@ -8,6 +8,7 @@ They do not publish npm packages, and the package versions are not release versi
 - Clean `main` branch.
 - Node.js 22 or newer.
 - Rust stable.
+- `cargo-about` 0.9.2 (`cargo install cargo-about --version 0.9.2 --locked --features cli`).
 - JDK 21 and Android SDK when validating the Android shell.
 - GitHub CLI authenticated as a user that can create releases.
 - A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
@@ -79,9 +80,10 @@ The desktop tarballs are written to `dist-packages/`. The debug APK is written t
 Before uploading or distributing any tarball or APK, inspect the artifact and confirm it matches the
 documented release layout, platform, version, and source commit/tag. For desktop tarballs, list the
 archive contents and verify the wrapper, bridge binary, bundled `web/dist`, README, root license,
-third-party notices, upstream record, Apache/PixiJS license texts, World asset record, and Herdr
-vendor manifest are present.
-For APKs, inspect the package listing or metadata with available local tools.
+third-party notices, upstream record, Apache/PixiJS license texts, generated production npm/Cargo
+licence inventories, World asset record, and Herdr vendor manifest are present.
+For APKs, inspect the package listing or metadata and verify the bundled
+`public/legal/manifest.json` and every file it names.
 
 To stage the current debug APK under the release asset name for private testing:
 

@@ -12,6 +12,8 @@ already be running on another machine or on the same network.
 - Android project: `android/`
 - Android application id: `dev.herdr.world`
 - Bundled web assets source: `web/dist`
+- Bundled legal notices: `web/dist/legal`, copied into the APK's
+  `public/legal` assets by Capacitor sync
 - Runtime profile storage: Capacitor Preferences on Android, browser `localStorage` elsewhere
 
 The generated native project is committed, but generated sync/build outputs remain ignored:
@@ -25,6 +27,8 @@ The generated native project is committed, but generated sync/build outputs rema
 - `android/build`
 
 Run `npm run android:sync` before opening or building Android from a fresh checkout.
+That command stages the root licence, upstream/asset notices, and complete
+production npm licence inventory before Capacitor copies the web build.
 
 ## Android Runtime Behavior
 
@@ -123,10 +127,10 @@ sdk.dir=/absolute/path/to/android-sdk
 Known verified versions:
 
 - OpenJDK 21
-- Android SDK command-line tools 20.0
+- Android SDK command-line tools 22.0
 - Android SDK Platform 36
 - Android SDK Build Tools 36.0.0
-- Android SDK Platform Tools 37.0.0
+- Android SDK Platform Tools 37.0.1
 
 ## Build Commands
 

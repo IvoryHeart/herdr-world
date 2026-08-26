@@ -52,6 +52,9 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Run `npm run build:web` for the frontend production build.
 - Run `npm run bridge:test` for bridge unit tests when a Rust toolchain (cargo) is available.
 - Run `npm run check` before committing or releasing.
+- Install pinned `cargo-about` 0.9.2 and run `npm run notices:generate` whenever
+  a production dependency graph changes. `npm run notices:check` is part of the
+  normal repository check and must remain byte-clean.
 - If cargo/Rust is missing, call out that bridge build/test verification could not run.
 
 ## Build And Packaging
@@ -68,8 +71,9 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Build final release artifacts from the final release commit/tag after `scripts/release.mjs`
   stamps the changelog and creates the release. Inspect tarball/APK contents before upload.
 - Desktop tarballs include `herdr-world-bridge`, bundled `web/dist` assets, the `herdr-world`
-  wrapper, license/notices, and docs. They do not include Herdr itself. The development Cargo target
-  remains `herdr-web-bridge` for upstream alignment.
+  wrapper, complete generated dependency licences, source/asset notices, and
+  docs. They do not include Herdr itself. The development Cargo target remains
+  `herdr-web-bridge` for upstream alignment.
 
 ## Changelog
 

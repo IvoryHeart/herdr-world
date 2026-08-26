@@ -482,7 +482,10 @@ adaptations, and the PixiJS MIT dependency are declared in
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Exact Herdr source hashes
 are in [`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml),
 and the World asset hashes and modification record are in
-[`docs/world-assets.md`](docs/world-assets.md).
+[`docs/world-assets.md`](docs/world-assets.md). Complete generated production
+npm and desktop Cargo licence inventories are retained under
+[`third_party/dependencies`](third_party/dependencies/README.md) and shipped in
+binary bundles.
 
 ## Long-Term Direction
 
