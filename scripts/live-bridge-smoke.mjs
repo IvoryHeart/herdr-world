@@ -122,6 +122,20 @@ function socketUrl(origin, terminalId, cols, rows) {
   return url;
 }
 
+function waitForTerminalSizeCommand(rows, cols, evidence) {
+  const rowParts = String(rows).split("");
+  const colParts = String(cols).split("");
+  const targetParts = [...rowParts, ...colParts]
+    .map((part) => `'${part}'`)
+    .join(" ");
+  return (
+    `target="$(printf '%s' ${targetParts})"; i=0; ` +
+    'while [ "$i" -lt 100 ]; do current="$(stty size | tr -d \'[:space:]\')"; ' +
+    '[ "$current" = "$target" ] && break; i=$((i+1)); sleep 0.05; done; ' +
+    `printf '\\033[32m${evidence}_UNICODE_λ\\033[0m\\n'; printf '%s\\n' "$current"\n`
+  );
+}
+
 async function attach(origin, terminalId, cols, rows) {
   const socket = new WebSocket(socketUrl(origin, terminalId, cols, rows));
   let output = "";
@@ -222,23 +236,22 @@ try {
   assert.ok(commandResult, "workspace.rename returned no result");
   await focusEvent;
   const markerA = `SPEC010_A_${Date.now()}`;
-  secondA.send(
-    `printf '\\033[32m${markerA}_UNICODE_λ\\033[0m\\n'; stty size\n`,
-  );
+  secondA.send(waitForTerminalSizeCommand(28, 91, markerA));
   await Promise.all([
     firstA.waitFor(`${markerA}_UNICODE_λ`),
     secondA.waitFor(`${markerA}_UNICODE_λ`),
-    firstA.waitFor(`${markerA}_UNICODE_λ2891`),
-    secondA.waitFor(`${markerA}_UNICODE_λ2891`),
+    firstA.waitFor("2891"),
+    secondA.waitFor("2891"),
   ]);
 
   firstA.resize(101, 31);
-  await new Promise((resolve) => setTimeout(resolve, 200));
   const refitMarker = `${markerA}_REFIT`;
-  firstA.send(`printf '${refitMarker} '; stty size\n`);
+  firstA.send(waitForTerminalSizeCommand(31, 101, refitMarker));
   await Promise.all([
-    firstA.waitFor(`${refitMarker}31101`),
-    secondA.waitFor(`${refitMarker}31101`),
+    firstA.waitFor(refitMarker),
+    secondA.waitFor(refitMarker),
+    firstA.waitFor("31101"),
+    secondA.waitFor("31101"),
   ]);
 
   const interruptMarker = `${markerA}_INTERRUPTED`;
@@ -253,9 +266,12 @@ try {
 
   const keyMarker = `${markerA}_RAW_KEYS`;
   firstA.send(
-    `python3 -c 'import os,termios,tty;a=termios.tcgetattr(0);tty.setraw(0);d=os.read(0,7);termios.tcsetattr(0,termios.TCSADRAIN,a);print("${keyMarker}_"+d.hex())'\n`,
+    `python3 -c 'import os,termios,tty;a=termios.tcgetattr(0);tty.setraw(0);m="${keyMarker}"+"_READY";os.write(1,(m+"\\n").encode());d=os.read(0,7);termios.tcsetattr(0,termios.TCSADRAIN,a);print("${keyMarker}_"+d.hex())'\n`,
   );
-  await new Promise((resolve) => setTimeout(resolve, 200));
+  await Promise.all([
+    firstA.waitFor(`${keyMarker}_READY`),
+    secondA.waitFor(`${keyMarker}_READY`),
+  ]);
   secondA.send("\u001b[A\u001bOP\u0001");
   const keyEvidence = `${keyMarker}_1b5b411b4f5001`;
   await Promise.all([firstA.waitFor(keyEvidence), secondA.waitFor(keyEvidence)]);

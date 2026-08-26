@@ -8,6 +8,10 @@ upstream, asset, npm, and Cargo terms.
 It does not include Herdr itself. Herdr World requires Herdr `v0.8.2` or newer with terminal
 protocol `20`.
 
+The macOS archives are not yet Developer ID signed or notarized. After verifying the archive
+checksum and source, macOS may require the first launch to be confirmed in System Settings →
+Privacy & Security. Signing and notarization will be added when project credentials are available.
+
 ## Run
 
 From the unpacked bundle directory:

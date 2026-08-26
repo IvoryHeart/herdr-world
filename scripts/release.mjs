@@ -10,6 +10,7 @@ import {
   releaseCreateArgs,
   withReleaseRepository,
 } from "./release-target.mjs";
+import { RELEASE_REFERENCE_PATHS, stampCurrentRelease } from "./release-version.mjs";
 
 const RELEASE_BRANCH = "main";
 const RELEASE_ARG = process.argv[2];
@@ -187,10 +188,14 @@ try {
 
   run("npm", ["run", "check"]);
 
+  stampCurrentRelease(tag);
   const released = stampChangelog(changelog);
   writeFileSync(notesFile, extractReleaseNotes(released));
 
-  run("git", ["add", "CHANGELOG.md"]);
+  run("npm", ["run", "test:release"]);
+  run("npm", ["run", "test:pages"]);
+
+  run("git", ["add", "CHANGELOG.md", ...RELEASE_REFERENCE_PATHS]);
   run("git", ["commit", "-m", `Release ${tag}`]);
   run("git", ["tag", tag]);
   run("git", ["push", "--atomic", RELEASE_REMOTE, RELEASE_BRANCH, tag]);

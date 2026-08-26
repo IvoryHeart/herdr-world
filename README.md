@@ -27,8 +27,8 @@ visualizations. The upstream relationship and synchronization record are documen
 [`UPSTREAM.md`](UPSTREAM.md).
 
 > **Public preview:** [`v0.1.0-rc.2`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.2)
-> is available for Linux x86-64. Herdr World currently requires Herdr `v0.8.2` or newer reporting
-> terminal protocol `20`.
+> provides native archives for Linux x86-64 and macOS on Apple Silicon and Intel. Herdr World
+> currently requires Herdr `v0.8.2` or newer reporting terminal protocol `20`.
 
 Visit the [Herdr World project site](https://ivoryheart.github.io/herdr-world/) for a visual
 overview, or jump directly to the release above for the checksum-verified archive.
@@ -95,7 +95,7 @@ The top-level scripts hide that detail.
 For release tarball users:
 
 - A running Herdr `v0.8.2` or newer daemon/session that reports terminal protocol `20`
-- A Linux x86-64 host for the current public release candidate
+- A Linux x86-64, macOS Apple Silicon, or macOS Intel host
 
 For source development:
 
@@ -111,20 +111,26 @@ Android development also needs a JDK and Android SDK. See [docs/android.md](docs
 | Platform | Status |
 | --- | --- |
 | Linux x86-64 | Available in [`v0.1.0-rc.2`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.2) |
-| macOS ARM64 / x86-64 | Packaging is supported; public binaries are not published yet |
+| macOS ARM64 / x86-64 | Available unsigned in [`v0.1.0-rc.2`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.2) |
 | Android | Source and debug build workflow are available; no signed public APK yet |
 
 ## Quick Start From Release
 
-Download and verify the current Linux release candidate:
+Choose `linux-x86_64`, `macos-arm64` (Apple Silicon), or `macos-x86_64` (Intel), then download and
+verify the current release candidate:
 
 ```bash
 VERSION=v0.1.0-rc.2
-curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz"
-curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
-sha256sum --check "herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
-tar -xzf "herdr-world-${VERSION}-linux-x86_64.tar.gz"
-cd "herdr-world-${VERSION}-linux-x86_64"
+PLATFORM=linux-x86_64
+curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz"
+curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
+if command -v sha256sum >/dev/null; then
+  sha256sum --check "herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
+else
+  shasum -a 256 --check "herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
+fi
+tar -xzf "herdr-world-${VERSION}-${PLATFORM}.tar.gz"
+cd "herdr-world-${VERSION}-${PLATFORM}"
 bin/herdr-world
 ```
 
@@ -135,6 +141,10 @@ http://127.0.0.1:8787
 ```
 
 The desktop tarball includes the web assets and `herdr-world-bridge`; it does not include Herdr.
+The macOS binaries are not yet Developer ID signed or notarized. macOS may therefore require you to
+confirm the first launch in System Settings → Privacy & Security after you have verified the
+downloaded checksum and source. Signing and notarization will be added when project credentials are
+available.
 If the default Herdr session is not running, an interactive `bin/herdr-world` launch explains the
 requirement and asks separately before downloading the [official Herdr
 installer](https://herdr.dev/docs/install/) or starting Herdr. Before starting Herdr, it asks for
