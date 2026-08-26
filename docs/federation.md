@@ -1,6 +1,6 @@
-# Operating federated Herdr Web
+# Operating federated Herdr World
 
-Herdr Web uses one host-local bridge per Herdr runtime and direct browser federation. It has no
+Herdr World uses one host-local bridge per Herdr runtime and direct browser federation. It has no
 central gateway, fleet controller, SSH manager, authentication layer, or RBAC. Every browser that a
 bridge admits has terminal-equivalent access to that Herdr runtime.
 
@@ -69,7 +69,7 @@ configuration.
 
 ## Operator-managed SSH forwarding
 
-Keep both bridges on loopback and create two tunnels using normal OpenSSH configuration. Herdr Web
+Keep both bridges on loopback and create two tunnels using normal OpenSSH configuration. Herdr World
 never reads, generates, stores, rotates, or invokes SSH keys:
 
 ```bash

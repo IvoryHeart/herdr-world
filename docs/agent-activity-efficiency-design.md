@@ -1,13 +1,13 @@
 # Agent Activity Efficiency Design
 
-`herdr-web` keeps full snapshots as the coherent model for workspace, tab, pane, layout, and
+`herdr-world` keeps full snapshots as the coherent model for workspace, tab, pane, layout, and
 selection state. Agent activity is different: status and presentation fields can change frequently,
 and those changes are small. The implemented design streams those frequent activity changes as
 bridge-owned deltas while retaining full snapshots for initial load, structural state, and recovery.
 
 This implementation was influenced by efficiency concepts from the `roy-levi-amazon` fork:
 https://github.com/roy-levi-amazon/herdr-web. The implemented design keeps the final subscription
-ownership in the Herdr Web bridge and preserves full snapshots as the recovery path.
+ownership in the Herdr World bridge and preserves full snapshots as the recovery path.
 
 ## Goals
 
@@ -43,7 +43,7 @@ flowchart LR
     StructuralEvents["events.subscribe<br/>workspace/tab/pane/worktree events"]
   end
 
-  subgraph Bridge["herdr-web bridge"]
+  subgraph Bridge["herdr-world bridge"]
     StructuralWatcher["Structural watcher"]
     ActivityWatcher["Activity watcher"]
     ActivityBus["Broadcast channel<br/>ActivityMessage"]

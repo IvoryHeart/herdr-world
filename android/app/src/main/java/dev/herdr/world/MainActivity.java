@@ -1,4 +1,4 @@
-package dev.herdr.web;
+package dev.herdr.world;
 
 import android.graphics.Color;
 import android.os.Build;

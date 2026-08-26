@@ -1,6 +1,6 @@
 # Release Process
 
-`herdr-web` is a private, vendored web app release. Releases create Git tags and GitHub releases.
+`herdr-world` is a public downstream application. Releases create Git tags and GitHub releases.
 They do not publish npm packages, and the package versions are not release versions.
 
 ## Prerequisites
@@ -78,20 +78,22 @@ The desktop tarballs are written to `dist-packages/`. The debug APK is written t
 
 Before uploading or distributing any tarball or APK, inspect the artifact and confirm it matches the
 documented release layout, platform, version, and source commit/tag. For desktop tarballs, list the
-archive contents and verify the wrapper, bridge binary, bundled `web/dist`, and README are present.
+archive contents and verify the wrapper, bridge binary, bundled `web/dist`, README, root license,
+third-party notices, upstream record, Apache/PixiJS license texts, World asset record, and Herdr
+vendor manifest are present.
 For APKs, inspect the package listing or metadata with available local tools.
 
 To stage the current debug APK under the release asset name for private testing:
 
 ```bash
 mkdir -p dist-packages
-cp android/app/build/outputs/apk/debug/app-debug.apk dist-packages/herdr-web-vX.Y.Z-android-debug.apk
+cp android/app/build/outputs/apk/debug/app-debug.apk dist-packages/herdr-world-vX.Y.Z-android-debug.apk
 ```
 
 For a public release, build a signed release APK instead and use the non-debug release asset name:
 
 ```text
-dist-packages/herdr-web-vX.Y.Z-android.apk
+dist-packages/herdr-world-vX.Y.Z-android.apk
 ```
 
 ## Browser And Federation Smoke
@@ -182,8 +184,8 @@ Upload the Linux tarball from the Linux build host:
 
 ```bash
 gh release upload vX.Y.Z \
-  dist-packages/herdr-web-vX.Y.Z-linux-x86_64.tar.gz \
-  dist-packages/herdr-web-vX.Y.Z-linux-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz \
+  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256
 ```
 
 Upload the macOS ARM tarball from the Apple Silicon Mac build host, or copy it to the release
@@ -191,8 +193,8 @@ operator machine first:
 
 ```bash
 gh release upload vX.Y.Z \
-  dist-packages/herdr-web-vX.Y.Z-macos-arm64.tar.gz \
-  dist-packages/herdr-web-vX.Y.Z-macos-arm64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz \
+  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256
 ```
 
 Upload the macOS Intel tarball from the Intel Mac build host, or copy it to the release operator
@@ -200,14 +202,14 @@ machine first:
 
 ```bash
 gh release upload vX.Y.Z \
-  dist-packages/herdr-web-vX.Y.Z-macos-x86_64.tar.gz \
-  dist-packages/herdr-web-vX.Y.Z-macos-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz \
+  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256
 ```
 
 Upload the Android debug APK after it has the final debug asset name:
 
 ```bash
-gh release upload vX.Y.Z dist-packages/herdr-web-vX.Y.Z-android-debug.apk
+gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk
 ```
 
 If every artifact has been copied to one machine, the same paths can be uploaded in one

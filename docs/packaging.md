@@ -1,6 +1,6 @@
 # Packaging
 
-`herdr-web` ships as separate desktop bridge/web tarballs and an Android APK.
+`herdr-world` ships as separate desktop bridge/web tarballs and an Android APK.
 
 The desktop tarball does not include Herdr itself. Users still need a running Herdr `v0.8.2` or
 newer session or daemon that reports terminal protocol `20`; the bundled bridge connects to the
@@ -11,13 +11,13 @@ normal Herdr socket.
 Recommended GitHub release assets:
 
 ```text
-herdr-web-vX.Y.Z-linux-x86_64.tar.gz
-herdr-web-vX.Y.Z-linux-x86_64.tar.gz.sha256
-herdr-web-vX.Y.Z-macos-arm64.tar.gz
-herdr-web-vX.Y.Z-macos-arm64.tar.gz.sha256
-herdr-web-vX.Y.Z-macos-x86_64.tar.gz
-herdr-web-vX.Y.Z-macos-x86_64.tar.gz.sha256
-herdr-web-vX.Y.Z-android-debug.apk
+herdr-world-vX.Y.Z-linux-x86_64.tar.gz
+herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256
+herdr-world-vX.Y.Z-macos-arm64.tar.gz
+herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256
+herdr-world-vX.Y.Z-macos-x86_64.tar.gz
+herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256
+herdr-world-vX.Y.Z-android-debug.apk
 ```
 
 Build or provide Linux artifacts from a Linux environment, macOS ARM artifacts from an Apple Silicon
@@ -29,14 +29,20 @@ the source of truth.
 ## Desktop Tarball Shape
 
 ```text
-herdr-web-vX.Y.Z-PLATFORM/
-  bin/herdr-web
-  bin/herdr-web-bridge
-  share/herdr-web/web/
+herdr-world-vX.Y.Z-PLATFORM/
+  bin/herdr-world
+  bin/herdr-world-bridge
+  share/herdr-world/web/
+  third_party/licenses/
+  docs/world-assets.md
+  vendor/herdr-compat/VENDOR-MANIFEST.toml
+  LICENSE
+  THIRD_PARTY_NOTICES.md
+  UPSTREAM.md
   README.md
 ```
 
-`bin/herdr-web` is a small wrapper that runs `herdr-web-bridge` with `--static-dir` pointed at the
+`bin/herdr-world` is a small wrapper that runs `herdr-world-bridge` with `--static-dir` pointed at the
 bundled web assets.
 
 ## Build A Desktop Tarball
@@ -74,19 +80,21 @@ scripts/package-tarball.sh vX.Y.Z macos-x86_64
 The output is written under `dist-packages/`:
 
 ```text
-dist-packages/herdr-web-vX.Y.Z-PLATFORM.tar.gz
-dist-packages/herdr-web-vX.Y.Z-PLATFORM.tar.gz.sha256
+dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz
+dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz.sha256
 ```
 
 Before uploading or distributing a desktop tarball, inspect it:
 
 ```bash
-tar -tzf dist-packages/herdr-web-vX.Y.Z-PLATFORM.tar.gz
-cat dist-packages/herdr-web-vX.Y.Z-PLATFORM.tar.gz.sha256
+tar -tzf dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz
+cat dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz.sha256
 ```
 
-Confirm the archive contains the expected root directory, `bin/herdr-web`,
-`bin/herdr-web-bridge`, bundled `share/herdr-web/web/` assets, and `README.md`.
+Confirm the archive contains the expected root directory, `bin/herdr-world`,
+`bin/herdr-world-bridge`, bundled `share/herdr-world/web/` assets, `LICENSE`,
+`THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, the Apache/PixiJS license texts, the World asset
+record, the Herdr vendor manifest, and `README.md`.
 
 Before release, run the unpacked wrapper against a Herdr `v0.8.2` or newer daemon reporting protocol
 `20`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
@@ -121,13 +129,13 @@ To stage the current debug APK under the release asset name for private testing:
 
 ```bash
 mkdir -p dist-packages
-cp android/app/build/outputs/apk/debug/app-debug.apk dist-packages/herdr-web-vX.Y.Z-android-debug.apk
+cp android/app/build/outputs/apk/debug/app-debug.apk dist-packages/herdr-world-vX.Y.Z-android-debug.apk
 ```
 
 For a public release, build a signed release APK instead and use the non-debug release asset name:
 
 ```text
-dist-packages/herdr-web-vX.Y.Z-android.apk
+dist-packages/herdr-world-vX.Y.Z-android.apk
 ```
 
 ## User Quick Start From Tarball
@@ -141,9 +149,9 @@ herdr
 Unpack and run:
 
 ```bash
-tar -xzf herdr-web-vX.Y.Z-linux-x86_64.tar.gz
-cd herdr-web-vX.Y.Z-linux-x86_64
-bin/herdr-web
+tar -xzf herdr-world-vX.Y.Z-linux-x86_64.tar.gz
+cd herdr-world-vX.Y.Z-linux-x86_64
+bin/herdr-world
 ```
 
 Open:
@@ -155,13 +163,13 @@ http://127.0.0.1:8787
 For LAN or Android testing:
 
 ```bash
-bin/herdr-web --host 0.0.0.0 --port 4000 --allow-origin http://localhost
+bin/herdr-world --host 0.0.0.0 --port 4000 --allow-origin http://localhost
 ```
 
 If using a DNS hostname from Android, also allow it:
 
 ```bash
-bin/herdr-web --host 0.0.0.0 --port 4000 \
+bin/herdr-world --host 0.0.0.0 --port 4000 \
   --allow-origin http://localhost \
   --allow-host herdr-host.local
 ```
@@ -173,13 +181,13 @@ called. If a page opened from `http://host-a:8787` should connect to `http://hos
 A with:
 
 ```bash
-bin/herdr-web --host 0.0.0.0 --allow-host host-a --allow-connect-origin http://host-b:8787
+bin/herdr-world --host 0.0.0.0 --allow-host host-a --allow-connect-origin http://host-b:8787
 ```
 
 Run host B with:
 
 ```bash
-bin/herdr-web --host 0.0.0.0 --allow-host host-b --allow-origin http://host-a:8787
+bin/herdr-world --host 0.0.0.0 --allow-host host-b --allow-origin http://host-a:8787
 ```
 
 `--allow-origin` accepts inbound browser calls to a bridge. `--allow-connect-origin` expands the
@@ -195,8 +203,8 @@ Upload the Linux tarball from the Linux build host:
 
 ```bash
 gh release upload vX.Y.Z \
-  dist-packages/herdr-web-vX.Y.Z-linux-x86_64.tar.gz \
-  dist-packages/herdr-web-vX.Y.Z-linux-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz \
+  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256
 ```
 
 Upload the macOS ARM tarball from the Apple Silicon Mac build host, or copy it to the release
@@ -204,8 +212,8 @@ operator machine first:
 
 ```bash
 gh release upload vX.Y.Z \
-  dist-packages/herdr-web-vX.Y.Z-macos-arm64.tar.gz \
-  dist-packages/herdr-web-vX.Y.Z-macos-arm64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz \
+  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256
 ```
 
 Upload the macOS Intel tarball from the Intel Mac build host, or copy it to the release operator
@@ -213,14 +221,14 @@ machine first:
 
 ```bash
 gh release upload vX.Y.Z \
-  dist-packages/herdr-web-vX.Y.Z-macos-x86_64.tar.gz \
-  dist-packages/herdr-web-vX.Y.Z-macos-x86_64.tar.gz.sha256
+  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz \
+  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256
 ```
 
 Upload the Android debug APK after it has the final debug asset name:
 
 ```bash
-gh release upload vX.Y.Z dist-packages/herdr-web-vX.Y.Z-android-debug.apk
+gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk
 ```
 
 If every artifact has been copied to one machine, the same paths can be uploaded in one

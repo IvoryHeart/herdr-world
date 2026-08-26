@@ -1,16 +1,16 @@
 # Pixel Office asset provenance
 
-The Herdr Web Pixel Office port uses character assets traceable to the
+The Herdr World Pixel Office port uses character assets traceable to the
 Claw-Empire repository at revision
 `66a24ea7df2435ef897c48c147deb7ec572c01c2`, under `public/sprites/`. The
 tracked PNGs are byte-identical to those source files. That source carries the
 Apache License 2.0 and the copyright notice `Copyright 2026 GreenSheep01201
-(seowongil@gmail.com)`. Herdr Web has no build or runtime dependency on the
+(seowongil@gmail.com)`. Herdr World has no build or runtime dependency on the
 reference workspace. The copied character sprites now live under
 `web/public/world/characters/`.
 
 The reference workspace is historical provenance only; contributors do not
-need to clone or start another repository to build, test, or run Herdr Web.
+need to clone or start another repository to build, test, or run Herdr World.
 The release notice bundle MUST include the Apache-2.0 license and this
 attribution. The adapted TypeScript geometry/drawing files are modified files
 and MUST carry a prominent modification notice as required by Apache-2.0

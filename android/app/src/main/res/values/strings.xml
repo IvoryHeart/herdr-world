@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Herdr Web</string>
-    <string name="title_activity_main">Herdr Web</string>
-    <string name="package_name">dev.herdr.web</string>
-    <string name="custom_url_scheme">dev.herdr.web</string>
+    <string name="app_name">Herdr World</string>
+    <string name="title_activity_main">Herdr World</string>
+    <string name="package_name">dev.herdr.world</string>
+    <string name="custom_url_scheme">dev.herdr.world</string>
 </resources>

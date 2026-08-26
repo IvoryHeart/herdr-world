@@ -1,14 +1,14 @@
 # Local development
 
-Work from the `herdr-web` repository root:
+Work from the `herdr-world` repository root:
 
 ```bash
-cd /home/ny/Forge/ai-palace/herdr-web
+cd /home/ny/Forge/ai-palace/herdr-world
 ```
 
 ## Quick start
 
-Herdr Web is a client of a running Herdr server. Start or attach to the normal
+Herdr World is a client of a running Herdr server. Start or attach to the normal
 Herdr session first:
 
 ```bash
@@ -82,7 +82,7 @@ discarded before terminal input is sent.
 | Layer | Required | Purpose | Default endpoint |
 | --- | --- | --- | --- |
 | Herdr server/session | Yes | Owns workspaces, tabs, panes, agents, and terminals | `~/.config/herdr/herdr.sock` |
-| `herdr-web-bridge` | Yes | Converts browser HTTP/WebSocket traffic to Herdr protocol traffic | `http://127.0.0.1:8787` |
+| `herdr-world-bridge` | Yes | Converts browser HTTP/WebSocket traffic to Herdr protocol traffic | `http://127.0.0.1:8787` |
 | Vite frontend | Only for HMR | Serves current React/TypeScript source during development | `http://127.0.0.1:5173` or next free port |
 | OTEL/Prometheus stack | Optional | Supplies the Office `Economy` metrics board | Prometheus `http://127.0.0.1:9101` |
 
@@ -95,10 +95,10 @@ the Herdr state and Office rooms remain usable.
 Use two terminals when debugging a layer independently:
 
 ```bash
-# Terminal 1: from herdr-web/
+# Terminal 1: from herdr-world/
 scripts/run-bridge.sh
 
-# Terminal 2: from herdr-web/
+# Terminal 2: from herdr-world/
 npm run dev:web
 ```
 
@@ -125,15 +125,15 @@ HERDR_SOCKET_PATH=/absolute/path/to/herdr.sock scripts/run-bridge.sh
 
 The Office `Economy` board can read from any operator-managed Prometheus-
 compatible HTTP API. The telemetry service is optional and is not required for
-Herdr Web sessions, the live Office roster, or room interactions. Herdr Web
+Herdr World sessions, the live Office roster, or room interactions. Herdr World
 does not assume ownership of the collector, storage, dashboards, or their
 deployment lifecycle.
 
-When a Prometheus-compatible service is available, restart the Herdr Web
+When a Prometheus-compatible service is available, restart the Herdr World
 bridge with its API URL:
 
 ```bash
-cd /home/ny/Forge/ai-palace/herdr-web
+cd /home/ny/Forge/ai-palace/herdr-world
 # Stop an existing bridge on 8787 first if dev:local reports that it is healthy.
 HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9101 npm run dev:local
 ```
@@ -143,9 +143,9 @@ new bridge environment variables to a process that is already running.
 
 The URL above is only an example. Use the endpoint exposed by the telemetry
 deployment in your environment; OTLP receiver, log-storage, and dashboard
-endpoints are outside the Herdr Web startup contract.
+endpoints are outside the Herdr World startup contract.
 
-To configure the Office provider without restarting the bridge, open Herdr Web
+To configure the Office provider without restarting the bridge, open Herdr World
 Settings, choose `Office`, and save the Prometheus URL. An invalid URL is
 reported through the Office provider health state; correcting it applies the
 configuration again and returns the provider to its available state. The

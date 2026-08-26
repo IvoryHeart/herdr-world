@@ -893,7 +893,7 @@ pub(crate) fn run_command(args: &[String]) -> io::Result<i32> {
         Err(message) => {
             eprintln!("{message}");
             eprintln!(
-                "usage: herdr-web-bridge [--session NAME] [--host HOST] [--port PORT] [--static-dir DIR] [--launcher-presets PATH] [--bridge-label LABEL] [--allow-origin ORIGIN] [--allow-host HOST] [--allow-connect-origin ORIGIN]"
+                "usage: herdr-world-bridge [--session NAME] [--host HOST] [--port PORT] [--static-dir DIR] [--launcher-presets PATH] [--bridge-label LABEL] [--allow-origin ORIGIN] [--allow-host HOST] [--allow-connect-origin ORIGIN]"
             );
             return Ok(2);
         }
@@ -1006,7 +1006,7 @@ fn parse_options(args: &[String]) -> Result<Option<BridgeOptions>, String> {
                 configured_label = Some(normalize_configured_label(value)?);
                 index += 2;
             }
-            arg => return Err(format!("unknown herdr-web option: {arg}")),
+            arg => return Err(format!("unknown herdr-world option: {arg}")),
         }
     }
 
@@ -1048,11 +1048,11 @@ fn print_help() {
 }
 
 fn help_text() -> &'static str {
-    "herdr-web-bridge\n\
+    "herdr-world-bridge\n\
 \n\
-Usage: herdr-web-bridge [--session NAME] [--host HOST] [--port PORT] [--static-dir DIR] [--upload-dir DIR] [--launcher-presets PATH] [--bridge-label LABEL] [--allow-origin ORIGIN] [--allow-host HOST] [--allow-connect-origin ORIGIN]\n\
+Usage: herdr-world-bridge [--session NAME] [--host HOST] [--port PORT] [--static-dir DIR] [--upload-dir DIR] [--launcher-presets PATH] [--bridge-label LABEL] [--allow-origin ORIGIN] [--allow-host HOST] [--allow-connect-origin ORIGIN]\n\
 \n\
-Runs the local HTTP/WebSocket bridge for herdr-web.\n\
+Runs the local HTTP/WebSocket bridge for Herdr World.\n\
 Defaults to the active Herdr daemon sockets and 127.0.0.1:8787.\n\
 Use --session NAME to target a named Herdr session and ignore HERDR_SOCKET_PATH.\n\
 Non-loopback --host values require explicit --allow-host and --allow-origin values.\n\
@@ -1100,7 +1100,7 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
     info!(
         version = daemon_version,
         protocol = daemon_protocol,
-        "herdr-web bridge connected to compatible Herdr daemon"
+        "Herdr World bridge connected to compatible Herdr daemon"
     );
     let state = BridgeState {
         api,
@@ -1223,7 +1223,7 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         .with_state(state);
     let bind = format!("{}:{}", options.host, options.port);
     let listener = tokio::net::TcpListener::bind(&bind).await?;
-    info!(url = %format!("http://{bind}"), "herdr-web-bridge listening");
+    info!(url = %format!("http://{bind}"), "Herdr World bridge listening");
     axum::serve(listener, app).await
 }
 
@@ -1735,7 +1735,7 @@ fn validate_web_command(method: &Method) -> Result<(), BridgeError> {
         Method::WorkspaceCreate(params) => {
             if params.cwd.is_some() || !params.env.is_empty() || !params.focus {
                 return Err(BridgeError::BadRequest(
-                    "workspace.create is limited to focused default workspaces through herdr-web"
+                    "workspace.create is limited to focused default workspaces through Herdr World"
                         .to_string(),
                 ));
             }
@@ -1791,7 +1791,7 @@ fn validate_web_command(method: &Method) -> Result<(), BridgeError> {
                 || !params.focus
             {
                 return Err(BridgeError::BadRequest(
-                    "tab.create is limited to focused tabs in an existing workspace through herdr-web"
+                    "tab.create is limited to focused tabs in an existing workspace through Herdr World"
                         .to_string(),
                 ));
             }
@@ -1835,7 +1835,7 @@ fn validate_web_command(method: &Method) -> Result<(), BridgeError> {
                 || !params.env.is_empty()
             {
                 return Err(BridgeError::BadRequest(
-                    "pane.split supports only target pane, direction, and focus through herdr-web"
+                    "pane.split supports only target pane, direction, and focus through Herdr World"
                         .to_string(),
                 ));
             }
@@ -1857,7 +1857,7 @@ fn validate_web_command(method: &Method) -> Result<(), BridgeError> {
             }
             if !params.focus {
                 return Err(BridgeError::BadRequest(
-                    "pane.move must focus the moved pane through herdr-web".to_string(),
+                    "pane.move must focus the moved pane through Herdr World".to_string(),
                 ));
             }
             match &params.destination {
@@ -1870,7 +1870,8 @@ fn validate_web_command(method: &Method) -> Result<(), BridgeError> {
                         .is_none_or(|workspace_id| workspace_id.trim().is_empty())
                     {
                         return Err(BridgeError::BadRequest(
-                            "pane.move new_tab requires workspace_id through herdr-web".to_string(),
+                            "pane.move new_tab requires workspace_id through Herdr World"
+                                .to_string(),
                         ));
                     }
                     validate_optional_label(label, "pane.move new_tab label")?;
@@ -1881,7 +1882,7 @@ fn validate_web_command(method: &Method) -> Result<(), BridgeError> {
                 }
                 PaneMoveDestination::Tab { .. } => {
                     return Err(BridgeError::BadRequest(
-                        "pane.move to existing tabs is not exposed through herdr-web".to_string(),
+                        "pane.move to existing tabs is not exposed through Herdr World".to_string(),
                     ));
                 }
             }
@@ -2923,7 +2924,7 @@ async fn upload_handler(
         bytes = body.len(),
         mime = ?mime,
         overwrite = query.overwrite,
-        "herdr-web-bridge upload request"
+        "Herdr World bridge upload request"
     );
     let name = match query.name.as_deref().and_then(sanitize_upload_file_name) {
         Some(name) => name,
@@ -2940,7 +2941,7 @@ async fn upload_handler(
         if !query.overwrite {
             info!(
                 name = %name,
-                "herdr-web-bridge upload conflict"
+                "Herdr World bridge upload conflict"
             );
             return Err(UploadError::Conflict {
                 name,
@@ -3000,7 +3001,7 @@ async fn upload_handler(
             mime,
         },
     };
-    info!(bytes = body.len(), "herdr-web-bridge upload saved");
+    info!(bytes = body.len(), "Herdr World bridge upload saved");
     Ok(Json(response))
 }
 
@@ -4092,13 +4093,13 @@ fn spawn_agent_activity_watcher(state: BridgeState) {
         .name("herdr-web-activity-structural".to_string())
         .spawn(move || agent_activity_structural_watcher_loop(structural_state, resubscribe_tx))
     {
-        warn!(error = %err, "failed to start herdr-web activity structural watcher");
+        warn!(error = %err, "failed to start Herdr World activity structural watcher");
     }
     if let Err(err) = thread::Builder::new()
         .name("herdr-web-activity".to_string())
         .spawn(move || agent_activity_watcher_loop(state, resubscribe_rx))
     {
-        warn!(error = %err, "failed to start herdr-web activity watcher");
+        warn!(error = %err, "failed to start Herdr World activity watcher");
     }
 }
 
@@ -4110,7 +4111,7 @@ fn agent_activity_structural_watcher_loop(state: BridgeState, resubscribe_tx: mp
                 backoff = ACTIVITY_WATCHER_INITIAL_BACKOFF;
             }
             Err(err) => {
-                warn!(error = %err, "herdr-web activity structural watcher will retry");
+                warn!(error = %err, "Herdr World activity structural watcher will retry");
                 thread::sleep(backoff);
                 backoff = (backoff * 2).min(ACTIVITY_WATCHER_MAX_BACKOFF);
             }
@@ -4127,7 +4128,7 @@ fn agent_activity_watcher_loop(state: BridgeState, resubscribe_rx: mpsc::Receive
                 thread::sleep(ACTIVITY_RESUBSCRIBE_DEBOUNCE);
             }
             Err(err) => {
-                warn!(error = %err, "herdr-web activity watcher will retry");
+                warn!(error = %err, "Herdr World activity watcher will retry");
                 thread::sleep(backoff);
                 backoff = (backoff * 2).min(ACTIVITY_WATCHER_MAX_BACKOFF);
             }
@@ -4656,7 +4657,7 @@ fn validated_daemon_protocol(status: herdr_compat::api::RuntimeStatus) -> Result
     })?;
     if version_triplet < MIN_HERDR_VERSION {
         return Err(BridgeError::Protocol(format!(
-            "Herdr daemon version is too old for herdr-web; need Herdr {MIN_HERDR_VERSION_LABEL} or newer with protocol {PROTOCOL_VERSION}"
+            "Herdr daemon version is too old for Herdr World; need Herdr {MIN_HERDR_VERSION_LABEL} or newer with protocol {PROTOCOL_VERSION}"
         )));
     }
 
@@ -4669,7 +4670,7 @@ fn validated_daemon_protocol(status: herdr_compat::api::RuntimeStatus) -> Result
         Ok(protocol)
     } else {
         Err(BridgeError::Protocol(format!(
-            "Herdr daemon protocol {protocol} is incompatible with herdr-web; need Herdr {MIN_HERDR_VERSION_LABEL} or newer with protocol {PROTOCOL_VERSION}"
+            "Herdr daemon protocol {protocol} is incompatible with Herdr World; need Herdr {MIN_HERDR_VERSION_LABEL} or newer with protocol {PROTOCOL_VERSION}"
         )))
     }
 }
@@ -4718,7 +4719,7 @@ fn startup_daemon_error(err: BridgeError) -> io::Error {
     io::Error::new(
         ErrorKind::ConnectionRefused,
         format!(
-            "unable to start herdr-web bridge: {err}. Start or update Herdr, then restart herdr-web-bridge."
+            "unable to start Herdr World bridge: {err}. Start or update Herdr, then restart herdr-world-bridge."
         ),
     )
 }
@@ -7021,18 +7022,18 @@ mod tests {
 
         assert_eq!(io_err.kind(), ErrorKind::ConnectionRefused);
         let message = io_err.to_string();
-        assert!(message.contains("unable to start herdr-web bridge"));
+        assert!(message.contains("unable to start Herdr World bridge"));
         assert!(message.contains("unexpected api result"));
         assert!(message.contains("Start or update Herdr"));
-        assert!(message.contains("restart herdr-web-bridge"));
+        assert!(message.contains("restart herdr-world-bridge"));
     }
 
     #[test]
     fn help_text_is_bridge_specific() {
         let help = help_text();
 
-        assert!(help.contains("herdr-web-bridge"));
-        assert!(help.contains("Usage: herdr-web-bridge"));
+        assert!(help.contains("herdr-world-bridge"));
+        assert!(help.contains("Usage: herdr-world-bridge"));
         assert!(help.contains("--session NAME"));
         assert!(help.contains("terminal-equivalent access"));
         assert!(help.contains("not authentication"));

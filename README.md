@@ -10,9 +10,11 @@ the Pixel Office at `/world`, direct multi-bridge support, and downstream
 integrations such as Office observability.
 
 This repository is a standalone monorepo that can be distributed without asking users to
-modify their installed Herdr checkout. The bridge builds as `herdr-web-bridge`, a repo-owned
-executable that uses vendored Herdr compatibility code because the app needs private Herdr APIs for
-terminal attach, terminal resize/scroll/input, workspace snapshots, and event subscriptions.
+modify their installed Herdr checkout. Release bundles ship the repo-owned bridge as
+`herdr-world-bridge`; its development-only Cargo target remains `herdr-web-bridge` so generic bridge
+changes stay easy to compare with Herdr Web. It uses vendored Herdr compatibility code because the
+app needs private Herdr APIs for terminal attach, terminal resize/scroll/input, workspace snapshots,
+and event subscriptions.
 
 The goal is to provide a browser-native interface for monitoring and controlling Herdr agents from
 desktop and mobile clients. It keeps the terminal experience close to Herdr while adding web-focused
@@ -34,15 +36,15 @@ visualizations. The upstream relationship and synchronization record are documen
 
 | Desktop | Android tablet |
 |:--:|:--:|
-| <img src="docs/images/desktop.png" alt="herdr-web desktop terminal workspace" width="640"> | <img src="docs/images/android-tablet.png" alt="herdr-web Android tablet terminal workspace" width="640"> |
+| <img src="docs/images/desktop.png" alt="herdr-world desktop terminal workspace" width="640"> | <img src="docs/images/android-tablet.png" alt="herdr-world Android tablet terminal workspace" width="640"> |
 
 | Android phone switcher | Android phone terminal |
 |:--:|:--:|
-| <img src="docs/images/android-phone-switcher.png" alt="herdr-web Android phone switcher" width="260"> | <img src="docs/images/android-phone-terminal.png" alt="herdr-web Android phone terminal" width="260"> |
+| <img src="docs/images/android-phone-switcher.png" alt="herdr-world Android phone switcher" width="260"> | <img src="docs/images/android-phone-terminal.png" alt="herdr-world Android phone terminal" width="260"> |
 
 | Android bridge configuration |
 |:--:|
-| <img src="docs/images/android-phone-bridge-settings.png" alt="herdr-web Android bridge settings and color picker" width="260"> |
+| <img src="docs/images/android-phone-bridge-settings.png" alt="herdr-world Android bridge settings and color picker" width="260"> |
 
 ## Layout
 
@@ -91,9 +93,9 @@ Download the matching desktop tarball from the GitHub release, unpack it, and ru
 wrapper:
 
 ```bash
-tar -xzf herdr-web-vX.Y.Z-linux-x86_64.tar.gz
-cd herdr-web-vX.Y.Z-linux-x86_64
-bin/herdr-web
+tar -xzf herdr-world-vX.Y.Z-linux-x86_64.tar.gz
+cd herdr-world-vX.Y.Z-linux-x86_64
+bin/herdr-world
 ```
 
 Open:
@@ -102,7 +104,7 @@ Open:
 http://127.0.0.1:8787
 ```
 
-The desktop tarball includes the web assets and `herdr-web-bridge`; it does not include Herdr.
+The desktop tarball includes the web assets and `herdr-world-bridge`; it does not include Herdr.
 Start or attach Herdr `v0.8.2` or newer with terminal protocol `20` separately before running the
 bridge.
 
@@ -110,7 +112,7 @@ For Android, install the APK from the same release and add the bridge URL in the
 Settings. LAN bridges must admit the bridge hostname and Android's app origin explicitly:
 
 ```bash
-bin/herdr-web --host 0.0.0.0 --port 4000 \
+bin/herdr-world --host 0.0.0.0 --port 4000 \
   --allow-host herdr-host.example \
   --allow-origin http://localhost
 ```
@@ -217,7 +219,9 @@ The bridge can load local launcher presets from:
 ${XDG_CONFIG_HOME:-~/.config}/herdr-web/launcher-presets.json
 ```
 
-Override the path with `--launcher-presets PATH` or `HERDR_WEB_LAUNCHER_PRESETS=PATH`.
+Override the path with `--launcher-presets PATH` or `HERDR_WEB_LAUNCHER_PRESETS=PATH`. The legacy
+configuration name and location are retained so existing Herdr Web/World installations do not lose
+their launcher list during the product rename.
 
 Optional `builtins` is an allowlist that chooses which built-ins appear and in what order. Omit it to
 show every built-in. Use `[]` to hide all built-ins and keep only custom presets. Entries may be short
@@ -325,10 +329,11 @@ HOST=0.0.0.0 PORT=4000 scripts/run-bridge.sh \
 ```
 
 Uploads are saved under `HERDR_WEB_UPLOAD_DIR`, `XDG_DATA_HOME/herdr-web/uploads`, or
-`~/.local/share/herdr-web/uploads` by default. Override the bridge upload directory with:
+`~/.local/share/herdr-web/uploads` by default. These legacy storage names remain compatible with
+existing installations. Override the bridge upload directory with:
 
 ```bash
-UPLOAD_DIR=/tmp/herdr-web-uploads scripts/run-bridge.sh
+UPLOAD_DIR=/tmp/herdr-world-uploads scripts/run-bridge.sh
 ```
 
 The bridge rejects cross-origin browser requests unless the request origin is explicitly allowed.
@@ -443,7 +448,7 @@ needs private APIs that are not available from released Herdr:
 - terminal ANSI render encoding
 - scroll and resize protocol frames
 
-The shipped bridge is `herdr-web-bridge`, a slim executable owned by this repo. It depends on the
+The shipped bridge is `herdr-world-bridge`, a slim executable owned by this repo. It depends on the
 local `vendor/herdr-compat` crate for copied Herdr protocol/schema/client/socket helpers and keeps
 bridge HTTP/WebSocket behavior in `bridge/src/web_bridge.rs`. A separate upstream Herdr checkout can
 be used for refreshes and drift audits, but a full `vendor/herdr` snapshot is not part of this repo.
@@ -457,6 +462,19 @@ See [docs/packaging.md](docs/packaging.md) for desktop tarball and APK artifact 
 
 See [docs/release.md](docs/release.md) for release validation, browser smoke testing, tagging,
 GitHub release creation, and manual artifact upload.
+
+## License And Attribution
+
+Herdr World's MIT license retains the Herdr Web copyright notice and adds the
+downstream `IvoryHeart contributors` notice; publishing under the IvoryHeart
+project identity does not require exposing a maintainer's legal name.
+
+Apache-2.0 Herdr compatibility source, Claw-Empire character assets and Office
+adaptations, and the PixiJS MIT dependency are declared in
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Exact Herdr source hashes
+are in [`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml),
+and the World asset hashes and modification record are in
+[`docs/world-assets.md`](docs/world-assets.md).
 
 ## Long-Term Direction
 
@@ -475,9 +493,9 @@ surface.
 
 ## Acknowledgements
 
-`herdr-web` builds on several projects and tools:
+`herdr-world` builds on several projects and tools:
 
-- [Herdr](https://github.com/ogulcancelik/herdr), the terminal workspace manager this app extends.
+- [Herdr](https://github.com/herdrdev/herdr), the terminal workspace manager this app extends.
 - [Ghostty Web](https://www.npmjs.com/package/ghostty-web), used by the browser terminal renderer.
 - [Ghostty](https://github.com/ghostty-org/ghostty), including Ghostty VT / `libghostty-vt`,
   vendored through Herdr and used for terminal emulation in Herdr core.

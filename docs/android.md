@@ -1,6 +1,6 @@
 # Android App
 
-`herdr-web` includes a Capacitor Android shell that bundles the React/Vite app from
+`herdr-world` includes a Capacitor Android shell that bundles the React/Vite app from
 `web/dist` and connects only API/WebSocket traffic to a configured Herdr bridge.
 
 The Android app does not run Herdr and does not fetch the web UI from a bridge. A bridge must
@@ -10,7 +10,7 @@ already be running on another machine or on the same network.
 
 - Capacitor config: `capacitor.config.ts`
 - Android project: `android/`
-- Android application id: `dev.herdr.web`
+- Android application id: `dev.herdr.world`
 - Bundled web assets source: `web/dist`
 - Runtime profile storage: Capacitor Preferences on Android, browser `localStorage` elsewhere
 

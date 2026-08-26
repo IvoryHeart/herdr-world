@@ -1,6 +1,6 @@
 # Federated client architecture
 
-Herdr is the sole runtime authority. Herdr Web does not maintain a competing topology, terminal
+Herdr is the sole runtime authority. Herdr World does not maintain a competing topology, terminal
 multiplexer, fleet database, or central gateway. The browser caches admitted snapshots for display,
 routes each action back to the owning host, and treats a failed cache as stale and non-controllable.
 
@@ -21,7 +21,8 @@ browser. A bridge never discovers, proxies, routes to, or controls another bridg
 - `AppShell` composes the host registry, core navigation, and static surface outlet.
 - `SurfaceRegistry` describes statically bundled internal surfaces by stable ID, route, semantic
   icon, host scope, required capabilities, and lazy component loader. This is an internal seam, not
-  a public or dynamic plugin SDK. Only the core `spaces` surface ships in this increment.
+  a public or dynamic plugin SDK. The core `spaces` and downstream `world` surfaces ship in the
+  same application.
 - `HostRegistryProvider` owns the bridge-profile manager. Profiles have opaque stable IDs, labels,
   base URLs, enablement, and display order; credentials and SSH keys are not profile fields.
 - `QualifiedTarget` identifies a Herdr workspace, tab, pane, terminal, or agent as the tuple of host
