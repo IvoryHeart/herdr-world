@@ -1,8 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
+## [0.1.0-rc.1] - 2026-08-26
 
 ### Added
 
@@ -166,8 +164,6 @@
   alphanumeric continuations when terminal edge metadata is unavailable, while preserving ordinary
   line breaks.
   [PR #61](https://github.com/kcosr/herdr-web/pull/61)
-
-### Removed
 
 ## [0.4.1] - 2026-08-05
 
