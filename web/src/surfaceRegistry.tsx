@@ -1,6 +1,8 @@
 import { lazy } from "react";
 import type { ComponentType, LazyExoticComponent } from "react";
 
+import { worldSurfaceDefinition } from "./world/worldSurfaceDefinition";
+
 export type SurfaceHostScope = "single-host" | "multi-host";
 
 export type SurfaceSlot = "sidebar" | "stage";
@@ -98,13 +100,5 @@ export const coreSurfaceRegistry = new SurfaceRegistry([
     requiredCapabilities: ["snapshot", "terminal_attach"],
     load: () => import("./SpacesSurface"),
   },
-  {
-    id: "world",
-    label: "Office",
-    route: "/world",
-    semanticIcon: "pixel-office",
-    hostScope: "multi-host",
-    requiredCapabilities: ["snapshot"],
-    load: () => import("./world/WorldSurface"),
-  },
+  worldSurfaceDefinition,
 ]);
