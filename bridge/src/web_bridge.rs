@@ -4719,7 +4719,7 @@ fn startup_daemon_error(err: BridgeError) -> io::Error {
     io::Error::new(
         ErrorKind::ConnectionRefused,
         format!(
-            "unable to start Herdr World bridge: {err}. Start or update Herdr, then restart herdr-world-bridge."
+            "unable to start Herdr World bridge: {err}. Install, update, or start Herdr v0.8.2 or newer, then retry. Packaged users can run bin/herdr-world for consent-based setup; custom sessions must use --session NAME or HERDR_SOCKET_PATH."
         ),
     )
 }
@@ -7024,8 +7024,9 @@ mod tests {
         let message = io_err.to_string();
         assert!(message.contains("unable to start Herdr World bridge"));
         assert!(message.contains("unexpected api result"));
-        assert!(message.contains("Start or update Herdr"));
-        assert!(message.contains("restart herdr-world-bridge"));
+        assert!(message.contains("Install, update, or start Herdr v0.8.2 or newer"));
+        assert!(message.contains("consent-based setup"));
+        assert!(message.contains("--session NAME or HERDR_SOCKET_PATH"));
     }
 
     #[test]

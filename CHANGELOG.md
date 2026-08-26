@@ -8,6 +8,9 @@
 
 ### Changed
 
+- Made the desktop launcher detect a missing default Herdr session and offer an explicit,
+  consent-based path to install Herdr from its official installer and start it in a user-selected
+  workspace. Non-interactive, custom-session, and custom-socket launches remain fail-safe.
 - Added a direct, checksum-verified Linux release quick start, an explicit public-platform matrix,
   a minimalist Pixel Office-themed GitHub Pages site, and launch-ready social artwork for the
   Herdr World public preview.

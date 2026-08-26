@@ -1,0 +1,176 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const launcher = resolve(root, "scripts/herdr-world-launcher.sh");
+
+function runLauncher(body, input = "") {
+  const result = spawnSync(
+    "bash",
+    [
+      "-c",
+      `source "$HERDR_WORLD_LAUNCHER_TEST_PATH"\n${body}`,
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        HERDR_WORLD_LAUNCHER_TEST_PATH: launcher,
+        HERDR_CLIENT_SOCKET_PATH: "",
+        HERDR_SESSION: "",
+        HERDR_SOCKET_PATH: "",
+        HERDR_WORLD_SETUP: "auto",
+      },
+      input,
+    },
+  );
+  return {
+    status: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  };
+}
+
+test("an available default session starts the packaged bridge directly", () => {
+  const result = runLauncher(`
+herdr_world_default_socket() { printf '/tmp/herdr.sock\\n'; }
+herdr_world_socket_ready() { return 0; }
+herdr_world_exec_bridge() { printf 'bridge'; printf ' <%s>' "$@"; printf '\\n'; }
+herdr_world_main --port 8791
+`);
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "bridge <--port> <8791>\n");
+  assert.equal(result.stderr, "");
+});
+
+test("help and explicit connection targets never trigger guided setup", () => {
+  for (const args of ["--help", "--session work --port 8791"]) {
+    const result = runLauncher(`
+herdr_world_default_socket() { echo 'unexpected socket lookup' >&2; return 1; }
+herdr_world_exec_bridge() { printf 'bridge'; printf ' <%s>' "$@"; printf '\\n'; }
+herdr_world_main ${args}
+`);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /^bridge /);
+    assert.doesNotMatch(result.stderr, /unexpected socket lookup/);
+  }
+
+  const customSocket = runLauncher(`
+export HERDR_SOCKET_PATH=/tmp/custom-herdr.sock
+herdr_world_default_socket() { echo 'unexpected socket lookup' >&2; return 1; }
+herdr_world_exec_bridge() { printf 'bridge'; printf ' <%s>' "$@"; printf '\\n'; }
+herdr_world_main --port 8792
+`);
+  assert.equal(customSocket.status, 0);
+  assert.equal(customSocket.stdout, "bridge <--port> <8792>\n");
+  assert.doesNotMatch(customSocket.stderr, /unexpected socket lookup/);
+
+  const namedSession = runLauncher(`
+export HERDR_SESSION=work
+herdr_world_default_socket() { echo 'unexpected socket lookup' >&2; return 1; }
+herdr_world_exec_bridge() { printf 'bridge'; printf ' <%s>' "$@"; printf '\\n'; }
+herdr_world_main --port 8794
+`);
+  assert.equal(namedSession.status, 0);
+  assert.equal(namedSession.stdout, "bridge <--port> <8794>\n");
+  assert.doesNotMatch(namedSession.stderr, /unexpected socket lookup/);
+});
+
+test("a non-interactive launch fails safely with actionable instructions", () => {
+  const result = runLauncher(`
+herdr_world_default_socket() { printf '/tmp/missing-herdr.sock\\n'; }
+herdr_world_socket_ready() { return 1; }
+herdr_world_is_interactive() { return 1; }
+herdr_world_exec_bridge() { echo 'unexpected bridge start'; }
+herdr_world_main
+`);
+
+  assert.equal(result.status, 1);
+  assert.equal(result.stdout, "");
+  assert.match(result.stderr, /No running default Herdr session/);
+  assert.match(result.stderr, /https:\/\/herdr\.dev\/docs\/install\//);
+  assert.match(result.stderr, /cd \/path\/to\/your\/project/);
+  assert.doesNotMatch(result.stderr, /unexpected bridge start/);
+});
+
+test("installation and startup each require affirmative consent", () => {
+  const declinedInstall = runLauncher(
+    `
+herdr_world_default_socket() { printf '/tmp/missing-herdr.sock\\n'; }
+herdr_world_socket_ready() { return 1; }
+herdr_world_is_interactive() { return 0; }
+herdr_world_find_binary() { return 1; }
+herdr_world_install() { echo 'unexpected install' >&2; }
+herdr_world_main
+`,
+    "n\n",
+  );
+  assert.equal(declinedInstall.status, 1);
+  assert.match(declinedInstall.stderr, /Download and run the official Herdr installer now\?/);
+  assert.doesNotMatch(declinedInstall.stderr, /unexpected install/);
+
+  const declinedStart = runLauncher(
+    `
+herdr_world_default_socket() { printf '/tmp/missing-herdr.sock\\n'; }
+herdr_world_socket_ready() { return 1; }
+herdr_world_is_interactive() { return 0; }
+herdr_world_find_binary() { printf '/fake/herdr\\n'; }
+herdr_world_run_herdr() { echo 'unexpected Herdr start' >&2; }
+herdr_world_main
+`,
+    "n\n",
+  );
+  assert.equal(declinedStart.status, 1);
+  assert.match(declinedStart.stderr, /Start Herdr now\?/);
+  assert.doesNotMatch(declinedStart.stderr, /unexpected Herdr start/);
+});
+
+test("consented installation and startup continue to the bridge", () => {
+  const result = runLauncher(
+    `
+installed=0
+socket_ready=0
+herdr_world_default_socket() { printf '/tmp/herdr.sock\\n'; }
+herdr_world_socket_ready() { [[ "$socket_ready" == 1 ]]; }
+herdr_world_is_interactive() { return 0; }
+herdr_world_find_binary() {
+  [[ "$installed" == 1 ]] || return 1
+  printf '/fake/herdr\\n'
+}
+herdr_world_install() { installed=1; echo 'installed' >&2; }
+herdr_world_choose_workspace() { printf '/tmp/project\\n'; }
+herdr_world_run_herdr() {
+  printf 'started <%s> in <%s>\\n' "$1" "$2" >&2
+  socket_ready=1
+}
+herdr_world_exec_bridge() { printf 'bridge'; printf ' <%s>' "$@"; printf '\\n'; }
+herdr_world_main --port 8793
+`,
+    "y\ny\n",
+  );
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "bridge <--port> <8793>\n");
+  assert.match(result.stderr, /installed/);
+  assert.match(result.stderr, /started <\/fake\/herdr> in <\/tmp\/project>/);
+  assert.match(result.stderr, /Herdr is running; starting Herdr World/);
+});
+
+test("the launcher refuses to default Herdr's workspace to its own bundle", () => {
+  const result = runLauncher(
+    `
+BUNDLE_ROOT="$PWD"
+herdr_world_choose_workspace
+`,
+    "/tmp\n",
+  );
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "/tmp\n");
+  assert.match(result.stderr, /bundle should not become your Herdr workspace/);
+});

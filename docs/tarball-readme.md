@@ -5,8 +5,8 @@ The bundle's root `LICENSE`, `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, and files 
 `third_party/licenses/` and `third_party/dependencies/` describe the retained
 upstream, asset, npm, and Cargo terms.
 
-It does not include Herdr itself. Start or attach a Herdr `v0.8.2` or newer session that reports
-terminal protocol `20` separately before running this bundle.
+It does not include Herdr itself. Herdr World requires Herdr `v0.8.2` or newer with terminal
+protocol `20`.
 
 ## Run
 
@@ -15,6 +15,17 @@ From the unpacked bundle directory:
 ```bash
 bin/herdr-world
 ```
+
+If the default Herdr session is not running, an interactive launch offers to download and run the
+[official Herdr installer](https://herdr.dev/docs/install/), then separately offers to start Herdr
+in a directory you select. Nothing is installed or started without an affirmative answer. Starting
+Herdr opens its terminal UI; detach with <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Q</kbd> so this
+launcher can continue.
+
+Guided setup is disabled for non-interactive launches, explicit `--session`/`HERDR_SESSION` targets,
+and socket overrides. Use `--no-herdr-setup` or `HERDR_WORLD_SETUP=never` to disable it for a
+default interactive launch as well. In all of those cases, install/start Herdr separately and rerun
+the bundle.
 
 Open:
 

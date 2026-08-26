@@ -2,9 +2,9 @@
 
 `herdr-world` ships as separate desktop bridge/web tarballs and an Android APK.
 
-The desktop tarball does not include Herdr itself. Users still need a running Herdr `v0.8.2` or
-newer session or daemon that reports terminal protocol `20`; the bundled bridge connects to the
-normal Herdr socket.
+The desktop tarball does not include Herdr itself. Users still need Herdr `v0.8.2` or newer with
+terminal protocol `20`; the packaged launcher can guide an interactive user through consent-based
+installation and startup of the default local session.
 
 ## Release Artifacts
 
@@ -43,8 +43,11 @@ herdr-world-vX.Y.Z-PLATFORM/
   README.md
 ```
 
-`bin/herdr-world` is a small wrapper that runs `herdr-world-bridge` with `--static-dir` pointed at the
-bundled web assets.
+`bin/herdr-world` points `herdr-world-bridge` at the bundled web assets. When the default Herdr
+socket is absent, it can run Herdr's official installer and start Herdr only after separate explicit
+consent. It asks for a Herdr workspace directory rather than using the unpacked bundle by accident.
+It fails with manual instructions instead of prompting in automation, and it leaves explicit
+session and socket targets under operator control.
 
 ## Build A Desktop Tarball
 
@@ -146,18 +149,19 @@ dist-packages/herdr-world-vX.Y.Z-android.apk
 
 ## User Quick Start From Tarball
 
-Start or attach Herdr `v0.8.2` or newer with terminal protocol `20` first:
-
-```bash
-herdr
-```
-
-Unpack and run:
+Unpack and run. If necessary, the interactive launcher offers consent-based Herdr installation and
+startup:
 
 ```bash
 tar -xzf herdr-world-vX.Y.Z-linux-x86_64.tar.gz
 cd herdr-world-vX.Y.Z-linux-x86_64
 bin/herdr-world
+```
+
+To manage Herdr yourself or run from automation, start Herdr first and disable launcher prompts:
+
+```bash
+HERDR_WORLD_SETUP=never bin/herdr-world
 ```
 
 Open:

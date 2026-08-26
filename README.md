@@ -116,13 +116,7 @@ Android development also needs a JDK and Android SDK. See [docs/android.md](docs
 
 ## Quick Start From Release
 
-Start or attach Herdr first:
-
-```bash
-herdr
-```
-
-In another terminal, download and verify the current Linux release candidate:
+Download and verify the current Linux release candidate:
 
 ```bash
 VERSION=v0.1.0-rc.1
@@ -141,8 +135,17 @@ http://127.0.0.1:8787
 ```
 
 The desktop tarball includes the web assets and `herdr-world-bridge`; it does not include Herdr.
-Start or attach Herdr `v0.8.2` or newer with terminal protocol `20` separately before running the
-bridge.
+If the default Herdr session is not running, an interactive `bin/herdr-world` launch explains the
+requirement and asks separately before downloading the [official Herdr
+installer](https://herdr.dev/docs/install/) or starting Herdr. Before starting Herdr, it asks for
+the directory containing the work you want Herdr to manage. Declining either action leaves the
+system unchanged and prints manual instructions.
+
+The launcher never performs guided setup in a non-interactive environment or when `--session`,
+`HERDR_SESSION`, or a socket override selects an operator-managed target. Pass
+`--no-herdr-setup` or set `HERDR_WORLD_SETUP=never` to disable prompts explicitly. You can always
+start Herdr yourself from a project directory, detach with <kbd>Ctrl</kbd>+<kbd>B</kbd> then
+<kbd>Q</kbd>, and rerun Herdr World.
 
 Use another unused port when needed:
 
