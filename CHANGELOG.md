@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Kept the official Herdr installer's stdout diagnostics out of the launcher's resolved executable
+  path, allowing guided macOS installation to stop an incompatible daemon and continue startup.
+  [Herdr World PR #21](https://github.com/IvoryHeart/herdr-world/pull/21)
+
 ### Removed
 
 ## [0.1.0-rc.1] - 2026-08-26

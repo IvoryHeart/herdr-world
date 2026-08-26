@@ -195,7 +195,10 @@ EOF
     herdr_world_manual_instructions
     return 1
   fi
-  if ! herdr_world_install; then
+  # This function's stdout is its resolved-binary return value. The official
+  # installer is intentionally chatty on stdout, so display that output on the
+  # launcher diagnostic stream instead of capturing it as part of the path.
+  if ! herdr_world_install >&2; then
     herdr_world_manual_instructions
     return 1
   fi

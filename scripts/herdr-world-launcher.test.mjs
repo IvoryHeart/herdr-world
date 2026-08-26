@@ -178,7 +178,7 @@ herdr_world_find_binary() { return 1; }
 herdr_world_find_installer_binary() { printf '/fake/herdr\\n'; }
 herdr_world_binary_is_supported() { return 0; }
 herdr_world_server_is_supported() { return 1; }
-herdr_world_install() { echo 'installed current Herdr' >&2; }
+herdr_world_install() { echo 'chatty official installer output'; }
 herdr_world_stop_herdr() {
   printf 'stopped <%s>\\n' "$1" >&2
   socket_ready=0
@@ -197,9 +197,11 @@ herdr_world_main --port 8795
   assert.equal(result.status, 0);
   assert.equal(result.stdout, "bridge <--port> <8795>\n");
   assert.match(result.stderr, /Download and run the official Herdr installer now\?/);
+  assert.match(result.stderr, /chatty official installer output/);
   assert.match(result.stderr, /Stop the incompatible Herdr server now\?/);
   assert.match(result.stderr, /Stopping it exits the/);
   assert.match(result.stderr, /stopped <\/fake\/herdr>/);
+  assert.doesNotMatch(result.stderr, /stopped <chatty official installer output/);
   assert.match(result.stderr, /Start Herdr now\?/);
   assert.match(result.stderr, /started <\/fake\/herdr> in <\/tmp\/project>/);
 });
