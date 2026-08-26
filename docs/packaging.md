@@ -49,10 +49,12 @@ herdr-world-vX.Y.Z-PLATFORM/
 ```
 
 `bin/herdr-world` points `herdr-world-bridge` at the bundled web assets. When the default Herdr
-socket is absent, it can run Herdr's official installer and start Herdr only after separate explicit
-consent. It asks for a Herdr workspace directory rather than using the unpacked bundle by accident.
-It fails with manual instructions instead of prompting in automation, and it leaves explicit
-session and socket targets under operator control.
+session is missing or incompatible, it can run Herdr's official installer, stop an incompatible
+detached server, and start the current Herdr only after separate explicit consent for each action.
+The stop prompt warns that the server's panes and processes will exit. The launcher asks for a Herdr
+workspace directory rather than using the unpacked bundle by accident. It fails with manual
+instructions instead of prompting in automation, and it leaves explicit session and socket targets
+under operator control.
 
 ## Build A Desktop Tarball
 

@@ -20,11 +20,12 @@ From the unpacked bundle directory:
 bin/herdr-world
 ```
 
-If the default Herdr session is not running, an interactive launch offers to download and run the
-[official Herdr installer](https://herdr.dev/docs/install/), then separately offers to start Herdr
-in a directory you select. Nothing is installed or started without an affirmative answer. Starting
-Herdr opens its terminal UI; detach with <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Q</kbd> so this
-launcher can continue.
+If the default Herdr session is missing or incompatible, an interactive launch offers to download
+and run the [official Herdr installer](https://herdr.dev/docs/install/), separately asks before
+stopping an incompatible detached server, then offers to start Herdr in a directory you select.
+Stopping a server exits its panes and processes. Nothing is installed, stopped, or started without
+an affirmative answer. Starting Herdr opens its terminal UI; detach with
+<kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Q</kbd> so this launcher can continue.
 
 Guided setup is disabled for non-interactive launches, explicit `--session`/`HERDR_SESSION` targets,
 and socket overrides. Use `--no-herdr-setup` or `HERDR_WORLD_SETUP=never` to disable it for a

@@ -2,18 +2,6 @@
 
 ## [Unreleased]
 
-### Breaking Changes
-
-### Added
-
-### Changed
-
-### Fixed
-
-### Removed
-
-## [0.1.0-rc.1] - 2026-08-26
-
 ### Added
 
 - Added automated, native Linux x86-64 and unsigned macOS ARM64/x86-64 release builds with archive,
@@ -170,6 +158,10 @@
 
 ### Fixed
 
+- Fixed guided desktop setup bypassing an incompatible detached Herdr server merely because its
+  socket still existed. Interactive launches now offer to install/update Herdr, explicitly warn and
+  ask before stopping the old server, then start the compatible server in the selected workspace.
+  [Herdr World PR #19](https://github.com/IvoryHeart/herdr-world/pull/19)
 - Fixed the packaged launcher failing with `bridge_args[@]: unbound variable` when invoked without
   bridge arguments under the Bash 3.2 version shipped by macOS, and added a native packaged-launcher
   regression check. [Herdr World PR #18](https://github.com/IvoryHeart/herdr-world/pull/18)

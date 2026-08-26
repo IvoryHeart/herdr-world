@@ -145,11 +145,12 @@ The macOS binaries are not yet Developer ID signed or notarized. macOS may there
 confirm the first launch in System Settings → Privacy & Security after you have verified the
 downloaded checksum and source. Signing and notarization will be added when project credentials are
 available.
-If the default Herdr session is not running, an interactive `bin/herdr-world` launch explains the
-requirement and asks separately before downloading the [official Herdr
-installer](https://herdr.dev/docs/install/) or starting Herdr. Before starting Herdr, it asks for
-the directory containing the work you want Herdr to manage. Declining either action leaves the
-system unchanged and prints manual instructions.
+If the default Herdr session is missing or incompatible, an interactive `bin/herdr-world` launch
+explains the requirement and asks separately before downloading the [official Herdr
+installer](https://herdr.dev/docs/install/), stopping an incompatible detached server, or starting
+Herdr. Stopping a server exits the terminal panes and processes it owns. Before starting Herdr, the
+launcher asks for the directory containing the work you want Herdr to manage. Declining any action
+leaves that action undone and prints manual instructions.
 
 The launcher never performs guided setup in a non-interactive environment or when `--session`,
 `HERDR_SESSION`, or a socket override selects an operator-managed target. Pass
