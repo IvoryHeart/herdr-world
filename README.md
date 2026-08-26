@@ -26,7 +26,7 @@ navigation, multi-client viewing, mobile input controls, synchronized pane selec
 visualizations. The upstream relationship and synchronization record are documented in
 [`UPSTREAM.md`](UPSTREAM.md).
 
-> **Public preview:** [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1)
+> **Public preview:** [`v0.1.0-rc.2`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.2)
 > is available for Linux x86-64. Herdr World currently requires Herdr `v0.8.2` or newer reporting
 > terminal protocol `20`.
 
@@ -110,22 +110,16 @@ Android development also needs a JDK and Android SDK. See [docs/android.md](docs
 
 | Platform | Status |
 | --- | --- |
-| Linux x86-64 | Available in [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1) |
+| Linux x86-64 | Available in [`v0.1.0-rc.2`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.2) |
 | macOS ARM64 / x86-64 | Packaging is supported; public binaries are not published yet |
 | Android | Source and debug build workflow are available; no signed public APK yet |
 
 ## Quick Start From Release
 
-Start or attach Herdr first:
+Download and verify the current Linux release candidate:
 
 ```bash
-herdr
-```
-
-In another terminal, download and verify the current Linux release candidate:
-
-```bash
-VERSION=v0.1.0-rc.1
+VERSION=v0.1.0-rc.2
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz"
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
 sha256sum --check "herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
@@ -141,8 +135,17 @@ http://127.0.0.1:8787
 ```
 
 The desktop tarball includes the web assets and `herdr-world-bridge`; it does not include Herdr.
-Start or attach Herdr `v0.8.2` or newer with terminal protocol `20` separately before running the
-bridge.
+If the default Herdr session is not running, an interactive `bin/herdr-world` launch explains the
+requirement and asks separately before downloading the [official Herdr
+installer](https://herdr.dev/docs/install/) or starting Herdr. Before starting Herdr, it asks for
+the directory containing the work you want Herdr to manage. Declining either action leaves the
+system unchanged and prints manual instructions.
+
+The launcher never performs guided setup in a non-interactive environment or when `--session`,
+`HERDR_SESSION`, or a socket override selects an operator-managed target. Pass
+`--no-herdr-setup` or set `HERDR_WORLD_SETUP=never` to disable prompts explicitly. You can always
+start Herdr yourself from a project directory, detach with <kbd>Ctrl</kbd>+<kbd>B</kbd> then
+<kbd>Q</kbd>, and rerun Herdr World.
 
 Use another unused port when needed:
 

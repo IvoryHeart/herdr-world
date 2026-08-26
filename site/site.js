@@ -1,7 +1,4 @@
-const installCommand = `herdr
-
-# In another terminal
-VERSION=v0.1.0-rc.1
+const installCommand = `VERSION=v0.1.0-rc.2
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-linux-x86_64.tar.gz"
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-linux-x86_64.tar.gz.sha256"
 sha256sum --check "herdr-world-\${VERSION}-linux-x86_64.tar.gz.sha256"

@@ -36,7 +36,7 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   const html = readFileSync(join(output, "index.html"), "utf8");
   assert.match(html, /<main id="main">/);
   assert.match(html, /class="skip-link"/);
-  assert.match(html, /v0\.1\.0-rc\.1/);
+  assert.match(html, /v0\.1\.0-rc\.2/);
   assert.match(html, /control surface for your agents/i);
   assert.doesNotMatch(html, /control surface for Herdr agents/i);
   assert.match(html, /Protocol[\s\S]{0,80}<dd>20<\/dd>/i);

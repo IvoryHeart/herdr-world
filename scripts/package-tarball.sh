@@ -70,16 +70,7 @@ cp "$ROOT/UPSTREAM.md" "$STAGE/UPSTREAM.md"
 cp -R "$ROOT/third_party/." "$STAGE/third_party/"
 cp "$ROOT/docs/world-assets.md" "$STAGE/docs/world-assets.md"
 cp "$ROOT/vendor/herdr-compat/VENDOR-MANIFEST.toml" "$STAGE/vendor/herdr-compat/VENDOR-MANIFEST.toml"
-
-cat > "$STAGE/bin/herdr-world" <<'WRAPPER'
-#!/usr/bin/env bash
-set -euo pipefail
-
-BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$BIN_DIR/.." && pwd)"
-
-exec "$BIN_DIR/herdr-world-bridge" --static-dir "$ROOT/share/herdr-world/web" "$@"
-WRAPPER
+cp "$ROOT/scripts/herdr-world-launcher.sh" "$STAGE/bin/herdr-world"
 chmod +x "$STAGE/bin/herdr-world" "$STAGE/bin/herdr-world-bridge"
 
 (
