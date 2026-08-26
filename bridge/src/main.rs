@@ -3,6 +3,7 @@ mod agent_pins;
 mod launcher_presets;
 mod notes;
 mod observability;
+mod observability_http;
 mod observability_prometheus;
 mod session;
 mod store_util;
