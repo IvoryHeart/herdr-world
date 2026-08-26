@@ -1,4 +1,4 @@
-package dev.herdr.web;
+package dev.herdr.world;
 
 import static org.junit.Assert.assertEquals;
 
@@ -15,6 +15,6 @@ public class ExampleInstrumentedTest {
     public void useAppContext() {
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        assertEquals("dev.herdr.web", appContext.getPackageName());
+        assertEquals("dev.herdr.world", appContext.getPackageName());
     }
 }

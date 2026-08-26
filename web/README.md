@@ -1,6 +1,6 @@
 # @herdr-world/web
 
-React + Vite frontend for `herdr-web`.
+React + Vite frontend for `herdr-world`.
 
 Run from this directory:
 
@@ -12,7 +12,7 @@ npm run test
 npm run build
 ```
 
-For the supervised complete local Herdr Web run, use the repository root:
+For the supervised complete local Herdr World run, use the repository root:
 
 ```bash
 cd ..
@@ -23,8 +23,9 @@ Open the printed Vite URL for frontend HMR. It proxies API/WebSocket traffic to
 the managed loopback bridge. `npm run dev:local` remains available when an
 existing bridge should be reused.
 
-The production build is written to `web/dist/` and served by `herdr-web-bridge` through
-`scripts/run-bridge.sh`.
+The production build is written to `web/dist/` and served through `scripts/run-bridge.sh`. The
+upstream-aligned development Cargo target is `herdr-web-bridge`; release bundles install that
+executable as `herdr-world-bridge`.
 
 To manage the two processes separately instead:
 

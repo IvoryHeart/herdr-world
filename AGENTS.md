@@ -67,8 +67,9 @@ This is a lightweight internal onboarding note for agents working in this repo.
   the source of truth for tarball layout.
 - Build final release artifacts from the final release commit/tag after `scripts/release.mjs`
   stamps the changelog and creates the release. Inspect tarball/APK contents before upload.
-- Desktop tarballs include only `herdr-web-bridge`, bundled `web/dist` assets, a wrapper script, and
-  docs. They do not include Herdr itself.
+- Desktop tarballs include `herdr-world-bridge`, bundled `web/dist` assets, the `herdr-world`
+  wrapper, license/notices, and docs. They do not include Herdr itself. The development Cargo target
+  remains `herdr-web-bridge` for upstream alignment.
 
 ## Changelog
 

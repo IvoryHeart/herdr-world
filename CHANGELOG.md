@@ -58,6 +58,13 @@
 
 ### Changed
 
+- Completed the Herdr World product identity across the visible shell, Android
+  application ID (`dev.herdr.world`), and desktop `herdr-world-*` release
+  artifacts. Release tarballs now carry the project license, explicit
+  third-party notices, retained license texts, upstream record, and source/asset
+  provenance. Internal Cargo target and browser-state names remain unchanged for
+  upstream comparison and existing-user compatibility.
+  [Herdr World PR #7](https://github.com/IvoryHeart/herdr-world/pull/7)
 - Established `IvoryHeart/herdr-world` as the independent downstream monorepo,
   renamed the app/package identity to Herdr World, and replaced the overlapping
   Specs 004/010/011 with one practical independence and upstream-sync contract.

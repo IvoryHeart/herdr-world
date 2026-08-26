@@ -24,7 +24,7 @@ GET /api/extensions/observability/snapshot
 WS  /ws/extensions/observability
 ```
 
-The default provider is explicitly `unavailable`, so normal Herdr Web
+The default provider is explicitly `unavailable`, so normal Herdr World
 snapshot, terminal, Spaces, and Office behaviour does not depend on an
 observability backend. A provider failure becomes `degraded` with an empty
 bounded snapshot rather than a page-level failure. Event gaps produce a
@@ -42,7 +42,7 @@ HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9101 \
 ```
 
 The Office-only Settings surface can also configure this endpoint while the
-bridge is running. Open Herdr Web Settings, choose `Office`, and save the
+bridge is running. Open Herdr World Settings, choose `Office`, and save the
 optional Prometheus URL. The browser sends the value only to the selected
 bridge's configuration route; it never queries Prometheus directly. The
 setting is stored in browser local storage per bridge profile under the
@@ -148,8 +148,6 @@ operator-managed SSH, VPN, TLS, firewall, or authenticated reverse proxy.
 
 ## Naming note
 
-The broader product direction is a `World` family with projections such as
-`Office`, `Graph`, and `City`. This repository still uses its current
-`herdr-web` package/repository identity until a separate naming and packaging
-change is approved; Spec 002 deliberately keeps the contract independent of
-that branding decision.
+The product is Herdr World, with projections such as `Office`, `Graph`, and
+`City`. Spec 002's observability contract remains independent of product
+branding so a compatible provider can be implemented elsewhere.

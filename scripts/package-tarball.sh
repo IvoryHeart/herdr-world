@@ -12,6 +12,11 @@ fi
 VERSION="$1"
 PLATFORM="${2:-}"
 
+if [[ ! "$VERSION" =~ ^v?[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+  echo "invalid VERSION: use only letters, numbers, dots, underscores, plus signs, and hyphens" >&2
+  exit 2
+fi
+
 if [[ -z "$PLATFORM" ]]; then
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   arch="$(uname -m)"
@@ -26,31 +31,56 @@ if [[ -z "$PLATFORM" ]]; then
   esac
 fi
 
+if [[ ! "$PLATFORM" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]]; then
+  echo "invalid PLATFORM: use only letters, numbers, dots, underscores, plus signs, and hyphens" >&2
+  exit 2
+fi
+
 PKG_ROOT="$ROOT/dist-packages"
-NAME="herdr-web-${VERSION}-${PLATFORM}"
+NAME="herdr-world-${VERSION}-${PLATFORM}"
 STAGE="$PKG_ROOT/$NAME"
 ARCHIVE="$PKG_ROOT/$NAME.tar.gz"
+CARGO_BUILD_DIR="${CARGO_TARGET_DIR:-$ROOT/bridge/target}"
+if [[ "$CARGO_BUILD_DIR" != /* ]]; then
+  CARGO_BUILD_DIR="$ROOT/$CARGO_BUILD_DIR"
+fi
 
 npm --prefix "$ROOT" run build:web
-cargo build --release --manifest-path "$ROOT/bridge/Cargo.toml" --bin herdr-web-bridge
+cargo build \
+  --release \
+  --target-dir "$CARGO_BUILD_DIR" \
+  --manifest-path "$ROOT/bridge/Cargo.toml" \
+  --bin herdr-web-bridge
 
 rm -rf "$STAGE" "$ARCHIVE"
-mkdir -p "$STAGE/bin" "$STAGE/share/herdr-web/web"
+mkdir -p \
+  "$STAGE/bin" \
+  "$STAGE/share/herdr-world/web" \
+  "$STAGE/third_party/licenses" \
+  "$STAGE/docs" \
+  "$STAGE/vendor/herdr-compat"
 
-cp "$ROOT/bridge/target/release/herdr-web-bridge" "$STAGE/bin/herdr-web-bridge"
-cp -R "$ROOT/web/dist/." "$STAGE/share/herdr-web/web/"
+cp "$CARGO_BUILD_DIR/release/herdr-web-bridge" "$STAGE/bin/herdr-world-bridge"
+cp -R "$ROOT/web/dist/." "$STAGE/share/herdr-world/web/"
 cp "$ROOT/docs/tarball-readme.md" "$STAGE/README.md"
+cp "$ROOT/LICENSE" "$STAGE/LICENSE"
+cp "$ROOT/THIRD_PARTY_NOTICES.md" "$STAGE/THIRD_PARTY_NOTICES.md"
+cp "$ROOT/UPSTREAM.md" "$STAGE/UPSTREAM.md"
+cp "$ROOT/third_party/licenses/Apache-2.0.txt" "$STAGE/third_party/licenses/Apache-2.0.txt"
+cp "$ROOT/third_party/licenses/PixiJS-MIT.txt" "$STAGE/third_party/licenses/PixiJS-MIT.txt"
+cp "$ROOT/docs/world-assets.md" "$STAGE/docs/world-assets.md"
+cp "$ROOT/vendor/herdr-compat/VENDOR-MANIFEST.toml" "$STAGE/vendor/herdr-compat/VENDOR-MANIFEST.toml"
 
-cat > "$STAGE/bin/herdr-web" <<'WRAPPER'
+cat > "$STAGE/bin/herdr-world" <<'WRAPPER'
 #!/usr/bin/env bash
 set -euo pipefail
 
 BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$BIN_DIR/.." && pwd)"
 
-exec "$BIN_DIR/herdr-web-bridge" --static-dir "$ROOT/share/herdr-web/web" "$@"
+exec "$BIN_DIR/herdr-world-bridge" --static-dir "$ROOT/share/herdr-world/web" "$@"
 WRAPPER
-chmod +x "$STAGE/bin/herdr-web" "$STAGE/bin/herdr-web-bridge"
+chmod +x "$STAGE/bin/herdr-world" "$STAGE/bin/herdr-world-bridge"
 
 (
   cd "$PKG_ROOT"

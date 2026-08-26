@@ -1,4 +1,4 @@
-package dev.herdr.web;
+package dev.herdr.world;
 
 import static org.junit.Assert.assertEquals;
 

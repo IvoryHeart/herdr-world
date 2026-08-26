@@ -7880,7 +7880,7 @@ function Switcher({
             <img className="brand-logo" src="/herdr-logo.svg" alt="" aria-hidden="true" />
             <span className="brand-title">
               <span className="brand-dot dot" data-status={roll} />
-              herdr-web
+              herdr-world
             </span>
           </span>
           {headerSummary ? (

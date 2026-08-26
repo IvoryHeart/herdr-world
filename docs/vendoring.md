@@ -1,12 +1,13 @@
 # Vendoring Herdr Compatibility
 
-`herdr-web` vendors a small Herdr compatibility crate because the bridge depends on private API and
+`herdr-world` vendors a small Herdr compatibility crate because the bridge depends on private API and
 wire protocol details that are not exposed as a stable Herdr library or daemon API.
 
 ## What Is Vendored
 
 `vendor/herdr-compat/` is the only vendored Herdr source in this repository. It is a minimal local
-Rust crate containing copied or lightly pruned compatibility code needed by `herdr-web-bridge`:
+Rust crate containing copied or lightly pruned compatibility code needed by the packaged
+`herdr-world-bridge`:
 
 - JSON API client, status, request, response, and event schema types.
 - Terminal attach wire protocol messages, framing, protocol constants, and frame data types.
@@ -17,7 +18,8 @@ Rust crate containing copied or lightly pruned compatibility code needed by `her
 
 `bridge/` remains the repo-owned executable:
 
-- `bridge/src/main.rs` exposes the `herdr-web-bridge` command.
+- `bridge/src/main.rs` exposes the upstream-aligned Cargo target `herdr-web-bridge`; release
+  assembly installs the same executable as `herdr-world-bridge`.
 - `bridge/src/session.rs` owns active Herdr session, config directory, and socket path selection.
 - `bridge/src/web_bridge.rs` owns the HTTP/WebSocket bridge implementation and browser command
   allow-list.
@@ -26,8 +28,8 @@ Rust crate containing copied or lightly pruned compatibility code needed by `her
 The full upstream Herdr source tree is intentionally not vendored. Do not recreate `vendor/herdr/`
 or path-import files from an upstream checkout at build time.
 
-The browser app is not vendored into Herdr. It lives at `web/`, and `herdr-web-bridge` serves
-`web/dist` through `--static-dir`.
+The browser app is not vendored into Herdr. It lives at `web/`, and the bridge serves `web/dist`
+through `--static-dir`.
 
 ## Current Reference
 
@@ -42,7 +44,7 @@ Herdr `v0.8.2` release commit and protocol `20`. The bridge keeps only the narro
 surface it needs; the full Herdr source tree remains an external audit reference.
 
 Use the upstream checkout as an external reference for audits and refreshes. It is not required to
-build `herdr-web`.
+build `herdr-world`.
 
 ## Why This Shape
 
@@ -62,7 +64,7 @@ intentional and reviewed.
 
 The compatibility crate currently keeps `ratatui` and `crossterm` because upstream
 `protocol::wire` includes semantic frame and input conversion types next to the terminal attach
-messages used by the bridge. `herdr-web-bridge` requests terminal ANSI rendering, but keeping the
+messages used by the bridge. `herdr-world-bridge` requests terminal ANSI rendering, but keeping the
 wire module broad makes protocol drift reviewable against upstream. Revisit this tradeoff if the
 bridge narrows the drift check to only the terminal attach message regions.
 
@@ -75,7 +77,7 @@ the external checkout or recreate a full upstream vendor snapshot.
 
 ```bash
 HERDR_SRC=/path/to/herdr
-HERDR_WEB=/path/to/herdr-web
+HERDR_WORLD=/path/to/herdr-world
 ```
 
 1. Verify the source checkout is clean and pinned to the reviewed release:

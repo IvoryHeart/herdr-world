@@ -33,4 +33,4 @@ if rg -n --glob '*.{ts,tsx,js,mjs,rs}' \
   exit 1
 fi
 
-echo "Herdr Web security audit passed"
+echo "Herdr World security audit passed"

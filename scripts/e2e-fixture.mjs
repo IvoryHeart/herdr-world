@@ -38,7 +38,7 @@ for (const fixture of fixtures) {
   servers.push(await startFixture(fixture));
 }
 
-process.stdout.write("Herdr Web browser fixtures listening on 4173-4176\n");
+process.stdout.write("Herdr World browser fixtures listening on 4173-4176\n");
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
