@@ -125,6 +125,24 @@ host_arch="$(uname -m)"
 case "$PLATFORM:$host_os:$host_arch" in
   linux-x86_64:Linux:x86_64 | macos-arm64:Darwin:arm64 | macos-x86_64:Darwin:x86_64)
     "$BUNDLE/bin/herdr-world" --help >/dev/null
+    launcher_home="$VERIFY_ROOT/launcher-home"
+    launcher_output="$VERIFY_ROOT/launcher-no-session.log"
+    mkdir -p "$launcher_home/config"
+    if HOME="$launcher_home" \
+      XDG_CONFIG_HOME="$launcher_home/config" \
+      HERDR_SOCKET_PATH= \
+      HERDR_CLIENT_SOCKET_PATH= \
+      HERDR_SESSION= \
+      HERDR_WORLD_SETUP=never \
+      /bin/bash "$BUNDLE/bin/herdr-world" >"$launcher_output" 2>&1; then
+      echo "launcher unexpectedly succeeded without a Herdr session" >&2
+      exit 1
+    fi
+    if ! grep -Fq "No running default Herdr session was found" "$launcher_output"; then
+      cat "$launcher_output" >&2
+      echo "launcher did not report the expected missing-session guidance" >&2
+      exit 1
+    fi
     ;;
 esac
 printf 'Verified %s (%s)\n' "$ARCHIVE" "$binary_description"

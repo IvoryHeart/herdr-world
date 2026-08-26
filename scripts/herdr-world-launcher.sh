@@ -176,10 +176,10 @@ herdr_world_main() {
     fi
   done
 
-  for arg in "${bridge_args[@]}"; do
+  for arg in "${bridge_args[@]+"${bridge_args[@]}"}"; do
     case "$arg" in
       -h | --help)
-        herdr_world_exec_bridge "${bridge_args[@]}"
+        herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
         return
         ;;
     esac
@@ -187,16 +187,16 @@ herdr_world_main() {
 
   # Explicit sessions and socket paths are operator-managed. The launcher must
   # not create or start a different default session in response to their state.
-  for arg in "${bridge_args[@]}"; do
+  for arg in "${bridge_args[@]+"${bridge_args[@]}"}"; do
     case "$arg" in
       --session | --session=*)
-        herdr_world_exec_bridge "${bridge_args[@]}"
+        herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
         return
         ;;
     esac
   done
   if [[ -n "${HERDR_SOCKET_PATH:-}" || -n "${HERDR_CLIENT_SOCKET_PATH:-}" || -n "${HERDR_SESSION:-}" ]]; then
-    herdr_world_exec_bridge "${bridge_args[@]}"
+    herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
     return
   fi
 
@@ -206,7 +206,7 @@ herdr_world_main() {
     return 1
   fi
   if herdr_world_socket_ready "$default_socket"; then
-    herdr_world_exec_bridge "${bridge_args[@]}"
+    herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
     return
   fi
 
@@ -267,7 +267,7 @@ EOF
   fi
 
   echo "Herdr is running; starting Herdr World at http://127.0.0.1:8787." >&2
-  herdr_world_exec_bridge "${bridge_args[@]}"
+  herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

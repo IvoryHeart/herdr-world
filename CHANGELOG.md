@@ -2,63 +2,11 @@
 
 ## [Unreleased]
 
-### Breaking Changes
-
-### Added
-
-### Changed
-
-### Fixed
-
-- Made release aggregation accept the equivalent macOS Mach-O architecture descriptions emitted
-  by macOS and Linux `file`, while still requiring the expected executable format and CPU.
-  [Herdr World PR #17](https://github.com/IvoryHeart/herdr-world/pull/17)
-
-### Removed
-
-## [0.1.0-rc.3] - 2026-08-26
-
 ### Added
 
 - Added automated, native Linux x86-64 and unsigned macOS ARM64/x86-64 release builds with archive,
   checksum, architecture, legal-content, launcher, and two-daemon stock Herdr v0.8.2 validation.
   [Herdr World PR #16](https://github.com/IvoryHeart/herdr-world/pull/16)
-
-### Changed
-
-- Made the single release command update public README/Pages version references before tagging, so
-  desktop assets and the project site publish from the same release operation.
-  [Herdr World PR #16](https://github.com/IvoryHeart/herdr-world/pull/16)
-
-### Fixed
-
-- Made the release helper mark SemVer prerelease tags such as `v0.1.0-rc.2` as GitHub
-  prereleases automatically while leaving stable versions unchanged.
-  [Herdr World PR #15](https://github.com/IvoryHeart/herdr-world/pull/15)
-
-## [0.1.0-rc.2] - 2026-08-26
-
-### Changed
-
-- Made the desktop launcher detect a missing default Herdr session and offer an explicit,
-  consent-based path to install Herdr from its official installer and start it in a user-selected
-  workspace. Non-interactive, custom-session, and custom-socket launches remain fail-safe.
-  [Herdr World PR #14](https://github.com/IvoryHeart/herdr-world/pull/14)
-- Added a direct, checksum-verified Linux release quick start, an explicit public-platform matrix,
-  a minimalist Pixel Office-themed GitHub Pages site, and launch-ready social artwork for the
-  Herdr World public preview.
-  [Herdr World PR #11](https://github.com/IvoryHeart/herdr-world/pull/11)
-
-### Fixed
-
-- Made release creation fail closed unless both `origin` URLs and the explicit GitHub CLI target
-  resolve to `IvoryHeart/herdr-world`, preventing a checkout's default upstream from receiving a
-  Herdr World release. [Herdr World PR #10](https://github.com/IvoryHeart/herdr-world/pull/10)
-
-## [0.1.0-rc.1] - 2026-08-26
-
-### Added
-
 - Added deterministic production npm/Cargo licence inventories, exact runtime
   closure checks, and release/WebView assembly of the resulting notices.
   [Herdr World PR #9](https://github.com/IvoryHeart/herdr-world/pull/9)
@@ -117,6 +65,17 @@
 
 ### Changed
 
+- Made the desktop launcher detect a missing default Herdr session and offer an explicit,
+  consent-based path to install Herdr from its official installer and start it in a user-selected
+  workspace. Non-interactive, custom-session, and custom-socket launches remain fail-safe.
+  [Herdr World PR #14](https://github.com/IvoryHeart/herdr-world/pull/14)
+- Added a direct, checksum-verified desktop release quick start, an explicit public-platform matrix,
+  a minimalist Pixel Office-themed GitHub Pages site, and launch-ready social artwork for the
+  Herdr World public preview.
+  [Herdr World PR #11](https://github.com/IvoryHeart/herdr-world/pull/11)
+- Made the single release command update public README/Pages version references before tagging, so
+  desktop assets and the project site publish from the same release operation.
+  [Herdr World PR #16](https://github.com/IvoryHeart/herdr-world/pull/16)
 - Completed the Herdr World product identity across the visible shell, Android
   application ID (`dev.herdr.world`), and desktop `herdr-world-*` release
   artifacts. Release tarballs now carry the project license, explicit
@@ -199,6 +158,18 @@
 
 ### Fixed
 
+- Fixed the packaged launcher failing with `bridge_args[@]: unbound variable` when invoked without
+  bridge arguments under the Bash 3.2 version shipped by macOS, and added a native packaged-launcher
+  regression check. [Herdr World PR #18](https://github.com/IvoryHeart/herdr-world/pull/18)
+- Made release aggregation accept the equivalent macOS Mach-O architecture descriptions emitted
+  by macOS and Linux `file`, while still requiring the expected executable format and CPU.
+  [Herdr World PR #17](https://github.com/IvoryHeart/herdr-world/pull/17)
+- Made the release helper mark SemVer prerelease tags as GitHub prereleases automatically while
+  leaving stable versions unchanged.
+  [Herdr World PR #15](https://github.com/IvoryHeart/herdr-world/pull/15)
+- Made release creation fail closed unless both `origin` URLs and the explicit GitHub CLI target
+  resolve to `IvoryHeart/herdr-world`, preventing a checkout's default upstream from receiving a
+  Herdr World release. [Herdr World PR #10](https://github.com/IvoryHeart/herdr-world/pull/10)
 - Fixed icons rendering slightly off-center in square icon buttons by resetting
   browser-default button padding and removing the compensating filter-icon transform.
   Contributed by [Philippe SEGATORI (@tigitz)](https://github.com/tigitz) in
