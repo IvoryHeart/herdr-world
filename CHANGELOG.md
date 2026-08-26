@@ -8,11 +8,13 @@
 
 - Added automated, native Linux x86-64 and unsigned macOS ARM64/x86-64 release builds with archive,
   checksum, architecture, legal-content, launcher, and two-daemon stock Herdr v0.8.2 validation.
+  [Herdr World PR #16](https://github.com/IvoryHeart/herdr-world/pull/16)
 
 ### Changed
 
 - Made the single release command update public README/Pages version references before tagging, so
   desktop assets and the project site publish from the same release operation.
+  [Herdr World PR #16](https://github.com/IvoryHeart/herdr-world/pull/16)
 
 ### Fixed
 
