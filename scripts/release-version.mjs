@@ -36,14 +36,21 @@ export function assertCurrentReleaseReferences(root = process.cwd()) {
   return current;
 }
 
-export function stampCurrentRelease(newTag, root = process.cwd()) {
+export function stampCurrentRelease(
+  newTag,
+  root = process.cwd(),
+  { allowSameTag = false } = {},
+) {
   if (!VERSION_PATTERN.test(newTag)) {
     throw new Error(`invalid release tag: ${newTag}`);
   }
 
   const current = assertCurrentReleaseReferences(root);
   if (current === newTag) {
-    throw new Error(`release references already point to ${newTag}`);
+    if (!allowSameTag) {
+      throw new Error(`release references already point to ${newTag}`);
+    }
+    return [];
   }
 
   const updates = RELEASE_REFERENCE_PATHS.slice(0, -1).map((relativePath) => {

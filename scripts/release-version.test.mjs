@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 
 import {
+  RELEASE_REFERENCE_PATHS,
   assertCurrentReleaseReferences,
   readCurrentReleaseTag,
   stampCurrentRelease,
@@ -51,6 +52,38 @@ test("fails closed when a required public surface has drifted", () => {
       /site\/site\.js does not reference the current release v1\.2\.3/,
     );
     assert.equal(readFileSync(join(root, "README.md"), "utf8"), "v1.2.3\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("allows an explicit same-tag prerelease reissue without rewriting public files", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-world-release-version-"));
+  try {
+    mkdirSync(join(root, "site"));
+    writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
+    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "site", "index.html"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "site", "site.js"), "v1.2.3-rc.1\n");
+
+    assert.throws(
+      () => stampCurrentRelease("v1.2.3-rc.1", root),
+      /release references already point to v1\.2\.3-rc\.1/,
+    );
+
+    const before = RELEASE_REFERENCE_PATHS.map((relativePath) =>
+      readFileSync(join(root, relativePath), "utf8"),
+    );
+    assert.deepEqual(
+      stampCurrentRelease("v1.2.3-rc.1", root, { allowSameTag: true }),
+      [],
+    );
+    assert.deepEqual(
+      RELEASE_REFERENCE_PATHS.map((relativePath) =>
+        readFileSync(join(root, relativePath), "utf8"),
+      ),
+      before,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

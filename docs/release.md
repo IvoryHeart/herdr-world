@@ -35,6 +35,12 @@ npm run check
 
 Do not cut a release without bridge test/build coverage.
 
+If an unannounced prerelease must be replaced under the same tag, first delete its GitHub release
+and local/remote tag, then run `node scripts/release.mjs vX.Y.Z-rc.N --reissue-prerelease`. This
+explicit recovery mode is limited to prereleases whose public version references already match;
+the normal clean-tree, canonical-remote, absent-tag, absent-release, test, commit, and publication
+checks still apply. Never use it to replace a stable release or immutable release assets.
+
 ## Package Artifacts
 
 Desktop artifacts are built from the final tag by `.github/workflows/release.yml`; do not upload a
