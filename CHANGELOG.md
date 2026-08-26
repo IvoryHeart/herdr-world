@@ -8,6 +8,9 @@
 
 ### Changed
 
+- Added a direct, checksum-verified Linux release quick start, an explicit public-platform matrix,
+  and launch-ready Pixel Office social artwork for the Herdr World public preview.
+
 ### Fixed
 
 - Made release creation fail closed unless both `origin` URLs and the explicit GitHub CLI target
