@@ -8,6 +8,11 @@
 
 ### Changed
 
+- Added a direct, checksum-verified Linux release quick start, an explicit public-platform matrix,
+  a minimalist Pixel Office-themed GitHub Pages site, and launch-ready social artwork for the
+  Herdr World public preview.
+  [Herdr World PR #11](https://github.com/IvoryHeart/herdr-world/pull/11)
+
 ### Fixed
 
 - Made release creation fail closed unless both `origin` URLs and the explicit GitHub CLI target

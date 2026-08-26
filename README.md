@@ -1,5 +1,9 @@
 # Herdr World
 
+[![Release](https://img.shields.io/github/v/release/IvoryHeart/herdr-world?include_prereleases&label=release)](https://github.com/IvoryHeart/herdr-world/releases)
+[![CI](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Herdr World is an independent downstream application built to work with
 [Herdr](https://github.com/herdrdev/herdr) and based in part on
 [Herdr Web](https://github.com/kcosr/herdr-web). It is not associated with,
@@ -21,6 +25,13 @@ desktop and mobile clients. It keeps the terminal experience close to Herdr whil
 navigation, multi-client viewing, mobile input controls, synchronized pane selection, and alternative
 visualizations. The upstream relationship and synchronization record are documented in
 [`UPSTREAM.md`](UPSTREAM.md).
+
+> **Public preview:** [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1)
+> is available for Linux x86-64. Herdr World currently requires Herdr `v0.8.2` or newer reporting
+> terminal protocol `20`.
+
+Visit the [Herdr World project site](https://ivoryheart.github.io/herdr-world/) for a visual
+overview, or jump directly to the release above for the checksum-verified archive.
 
 ## Highlights
 
@@ -58,6 +69,7 @@ visualizations. The upstream relationship and synchronization record are documen
 
 ```text
 web/                 React + Vite browser app
+site/                Dependency-free GitHub Pages project site
 android/             Capacitor Android shell for the bundled web app
 bridge/              Slim Rust HTTP/WebSocket bridge executable
 vendor/herdr-compat/ minimal Herdr protocol/API compatibility crate
@@ -83,8 +95,7 @@ The top-level scripts hide that detail.
 For release tarball users:
 
 - A running Herdr `v0.8.2` or newer daemon/session that reports terminal protocol `20`
-- A supported host for the downloaded bridge tarball. Current planned desktop release artifacts are
-  Linux x86_64, macOS ARM64, and macOS x86_64.
+- A Linux x86-64 host for the current public release candidate
 
 For source development:
 
@@ -95,14 +106,31 @@ For source development:
 
 Android development also needs a JDK and Android SDK. See [docs/android.md](docs/android.md).
 
+### Public artifact status
+
+| Platform | Status |
+| --- | --- |
+| Linux x86-64 | Available in [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1) |
+| macOS ARM64 / x86-64 | Packaging is supported; public binaries are not published yet |
+| Android | Source and debug build workflow are available; no signed public APK yet |
+
 ## Quick Start From Release
 
-Download the matching desktop tarball from the GitHub release, unpack it, and run the bundled
-wrapper:
+Start or attach Herdr first:
 
 ```bash
-tar -xzf herdr-world-vX.Y.Z-linux-x86_64.tar.gz
-cd herdr-world-vX.Y.Z-linux-x86_64
+herdr
+```
+
+In another terminal, download and verify the current Linux release candidate:
+
+```bash
+VERSION=v0.1.0-rc.1
+curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz"
+curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
+sha256sum --check "herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
+tar -xzf "herdr-world-${VERSION}-linux-x86_64.tar.gz"
+cd "herdr-world-${VERSION}-linux-x86_64"
 bin/herdr-world
 ```
 
@@ -116,8 +144,20 @@ The desktop tarball includes the web assets and `herdr-world-bridge`; it does no
 Start or attach Herdr `v0.8.2` or newer with terminal protocol `20` separately before running the
 bridge.
 
-For Android, install the APK from the same release and add the bridge URL in the Bridge area of
-Settings. LAN bridges must admit the bridge hostname and Android's app origin explicitly:
+Use another unused port when needed:
+
+```bash
+bin/herdr-world --port 8791
+```
+
+If Herdr uses a non-default socket, provide it explicitly:
+
+```bash
+HERDR_SOCKET_PATH=/path/to/herdr.sock bin/herdr-world --port 8791
+```
+
+Android currently uses a locally built debug APK; no signed APK is included in the public RC.
+LAN bridges must admit the bridge hostname and Android's app origin explicitly:
 
 ```bash
 bin/herdr-world --host 0.0.0.0 --port 4000 \
@@ -172,6 +212,7 @@ npm run test:dev
 npm run lint:web
 npm run test:web
 npm run build:web
+npm run build:pages
 npm run bridge:fmt
 npm run bridge:test
 npm run bridge:build

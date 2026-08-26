@@ -7,6 +7,7 @@
 /bridge/target/
 /vendor/herdr-compat/target/
 /dist-packages/
+/_site/
 .specs/
 .scratch/
 .worktrees/
