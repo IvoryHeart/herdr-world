@@ -37,12 +37,10 @@ Do not cut a release without bridge test/build coverage.
 
 ## Package Artifacts
 
-Build or provide platform artifacts immediately after cutting the GitHub release, using the final
-release commit or tag created by the release script. If you made any pre-release artifacts before
-the release script stamped `CHANGELOG.md`, rebuild them from the released `main`/tag with the final
-`vX.Y.Z` value before upload. Use the documented packaging commands and any supplemental local build
-instructions for the release operator's environment. Do not commit generated tarballs, APKs, or
-build-service outputs.
+Desktop artifacts are built from the final tag by `.github/workflows/release.yml`; do not upload a
+locally built substitute. Pull requests that affect the desktop assembly run the same Linux,
+Apple-Silicon, and Intel matrix without publishing. Each job checks the native CPU format and bundle
+contents, then exercises the packaged bridge against two checksum-pinned stock Herdr v0.8.2 daemons.
 
 Linux desktop tarball:
 
@@ -76,7 +74,7 @@ npm ci --prefix web
 npm run android:build:debug
 ```
 
-The desktop tarballs are written to `dist-packages/`. The debug APK is written to
+Local desktop tarballs are written to `dist-packages/`. The debug APK is written to
 `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 Before uploading or distributing any tarball or APK, inspect the artifact and confirm it matches the
@@ -86,6 +84,10 @@ third-party notices, upstream record, Apache/PixiJS license texts, generated pro
 licence inventories, World asset record, and Herdr vendor manifest are present.
 For APKs, inspect the package listing or metadata and verify the bundled
 `public/legal/manifest.json` and every file it names.
+
+The macOS archives are intentionally unsigned and unnotarized until Developer ID credentials are
+available. Release notes and user documentation must retain that limitation. The workflow does not
+attempt to weaken Gatekeeper or modify a user's security policy.
 
 For the desktop launcher, verify `bin/herdr-world --help` never starts onboarding, a
 non-interactive launch with no default Herdr socket fails with manual instructions, and an
@@ -166,9 +168,11 @@ The script:
 
 - requires a clean `main` branch
 - verifies both `origin` URLs and GitHub CLI access against `IvoryHeart/herdr-world`
+- runs `npm run check`
+- updates `release.json` and every current release reference in the README and Pages source
 - promotes `CHANGELOG.md` from `Unreleased` to the release version/date
 - removes empty unused subsections from the released version notes
-- runs `npm run check`
+- rechecks the stamped release and Pages metadata
 - commits `Release vX.Y.Z`
 - tags `vX.Y.Z`
 - pushes `main` and the tag atomically
@@ -176,8 +180,10 @@ The script:
 - passes `--repo IvoryHeart/herdr-world` and `--verify-tag` explicitly when creating the release
 - opens the next `## [Unreleased]` changelog section and pushes it
 
-The release script does not upload binary artifacts. Upload separately packaged tarballs and APKs
-manually after the release exists.
+The tag starts the desktop release workflow. It builds and verifies Linux x86-64, macOS ARM64, and
+macOS x86-64 archives, uploads their checksum files, and fails rather than replacing an asset that
+already exists. The release commit's site changes also trigger the Pages deployment. No separate
+desktop upload or documentation-edit step is required.
 
 ## Android Validation
 
@@ -186,53 +192,16 @@ Before distributing Android builds, follow [docs/android.md](android.md): run
 bridge started using `--allow-origin http://localhost`. Revisit the Android backup policy before
 adding any pairing token or other secret storage.
 
-## Upload Artifacts
+## Automated Publication
 
-Upload release artifacts manually with GitHub CLI after `node scripts/release.mjs vX.Y.Z` creates
-the release. Upload only artifacts built from the final release commit or tag, and inspect each
-artifact before upload.
-
-Upload the Linux tarball from the Linux build host:
-
-```bash
-gh release upload vX.Y.Z \
-  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256 \
-  --repo IvoryHeart/herdr-world
-```
-
-Upload the macOS ARM tarball from the Apple Silicon Mac build host, or copy it to the release
-operator machine first:
-
-```bash
-gh release upload vX.Y.Z \
-  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256 \
-  --repo IvoryHeart/herdr-world
-```
-
-Upload the macOS Intel tarball from the Intel Mac build host, or copy it to the release operator
-machine first:
-
-```bash
-gh release upload vX.Y.Z \
-  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256 \
-  --repo IvoryHeart/herdr-world
-```
-
-Upload the Android debug APK after it has the final debug asset name:
-
-```bash
-gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk \
-  --repo IvoryHeart/herdr-world
-```
-
-If every artifact has been copied to one machine, the same paths can be uploaded in one
-`gh release upload` invocation.
+After the tag is pushed, monitor both `Desktop release` and `Deploy GitHub Pages`. The desktop
+workflow attaches exactly three native archives and three checksum files. It does not publish npm,
+an Android debug APK, or any unsigned artifact represented as production-signed software.
 
 ## After
 
 - Confirm the GitHub release exists and points at the expected tag.
 - Confirm release assets and checksum files are attached.
+- Confirm both macOS archives are still described as unsigned until signing is implemented.
+- Confirm the project site links to the new release after the Pages deployment.
 - Confirm `CHANGELOG.md` on `main` has a fresh empty `## [Unreleased]` section.

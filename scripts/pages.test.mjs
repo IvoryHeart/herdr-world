@@ -5,8 +5,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
+import { readCurrentReleaseTag } from "./release-version.mjs";
+
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "_site");
+const currentRelease = readCurrentReleaseTag(root);
 
 function buildPages() {
   execFileSync(process.execPath, [join(root, "scripts", "build-pages.mjs")], {
@@ -36,7 +39,9 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   const html = readFileSync(join(output, "index.html"), "utf8");
   assert.match(html, /<main id="main">/);
   assert.match(html, /class="skip-link"/);
-  assert.match(html, /v0\.1\.0-rc\.2/);
+  assert.ok(html.includes(currentRelease));
+  assert.match(html, /Public preview \/ Linux \+ macOS/);
+  assert.match(html, /macOS previews are currently unsigned/i);
   assert.match(html, /control surface for your agents/i);
   assert.doesNotMatch(html, /control surface for Herdr agents/i);
   assert.match(html, /Protocol[\s\S]{0,80}<dd>20<\/dd>/i);

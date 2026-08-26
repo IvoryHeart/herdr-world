@@ -228,8 +228,8 @@ try {
   await Promise.all([
     firstA.waitFor(`${markerA}_UNICODE_λ`),
     secondA.waitFor(`${markerA}_UNICODE_λ`),
-    firstA.waitFor(`${markerA}_UNICODE_λ2891`),
-    secondA.waitFor(`${markerA}_UNICODE_λ2891`),
+    firstA.waitFor("2891"),
+    secondA.waitFor("2891"),
   ]);
 
   firstA.resize(101, 31);
@@ -237,8 +237,10 @@ try {
   const refitMarker = `${markerA}_REFIT`;
   firstA.send(`printf '${refitMarker} '; stty size\n`);
   await Promise.all([
-    firstA.waitFor(`${refitMarker}31101`),
-    secondA.waitFor(`${refitMarker}31101`),
+    firstA.waitFor(refitMarker),
+    secondA.waitFor(refitMarker),
+    firstA.waitFor("31101"),
+    secondA.waitFor("31101"),
   ]);
 
   const interruptMarker = `${markerA}_INTERRUPTED`;

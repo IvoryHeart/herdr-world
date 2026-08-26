@@ -12,6 +12,7 @@ on:
       - "web/public/herdr-logo.svg"
       - "scripts/build-pages.mjs"
       - "scripts/pages.test.mjs"
+      - "release.json"
       - "package.json"
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - "web/public/herdr-logo.svg"
       - "scripts/build-pages.mjs"
       - "scripts/pages.test.mjs"
+      - "release.json"
       - "package.json"
   workflow_dispatch:
 

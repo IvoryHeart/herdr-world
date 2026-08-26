@@ -20,11 +20,16 @@ herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256
 herdr-world-vX.Y.Z-android-debug.apk
 ```
 
-Build or provide Linux artifacts from a Linux environment, macOS ARM artifacts from an Apple Silicon
-Mac environment, and macOS x86_64 artifacts from an Intel Mac environment. Build the APK from a
-machine with the documented Android SDK setup. Local release operators may use supplemental
-build-service instructions for those environments, but the artifact names and layouts below remain
-the source of truth.
+The desktop release workflow builds Linux artifacts on Linux, macOS ARM artifacts on Apple Silicon,
+and macOS x86_64 artifacts on Intel. Each native archive is inspected and exercised against two
+stock Herdr v0.8.2 daemons before upload. Build the APK separately on a machine with the documented
+Android SDK setup; Android is not part of the automated public release until a signed release APK
+exists.
+
+The macOS archives are currently unsigned and not notarized. They are public preview artifacts, and
+macOS may require users to confirm the first launch in System Settings → Privacy & Security after
+verifying the checksum. Do not describe them as signed or notarized until Developer ID credentials
+and the corresponding CI steps are in place.
 
 ## Desktop Tarball Shape
 
@@ -90,7 +95,7 @@ dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz
 dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz.sha256
 ```
 
-Before uploading or distributing a desktop tarball, inspect it:
+The automated workflow performs the same inspection used locally:
 
 ```bash
 tar -tzf dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz
@@ -204,46 +209,13 @@ bin/herdr-world --host 0.0.0.0 --allow-host host-b --allow-origin http://host-a:
 served page's Content Security Policy so that page can connect to another bridge over HTTP and
 WebSocket.
 
-## Manual Release Upload
+## Automated Desktop Publication
 
-The release script creates the GitHub release from changelog notes. Separately packaged tarballs and
-APKs are uploaded manually after the release exists.
+`node scripts/release.mjs vX.Y.Z` updates the public version references, pushes the release tag,
+creates the GitHub release, and triggers `.github/workflows/release.yml`. The workflow builds,
+inspects, live-tests, and uploads all six Linux/macOS archive and checksum assets. Existing assets
+are never replaced. The release command also updates the website source, so the same release push
+deploys current links through the Pages workflow.
 
-Upload the Linux tarball from the Linux build host:
-
-```bash
-gh release upload vX.Y.Z \
-  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-linux-x86_64.tar.gz.sha256 \
-  --repo IvoryHeart/herdr-world
-```
-
-Upload the macOS ARM tarball from the Apple Silicon Mac build host, or copy it to the release
-operator machine first:
-
-```bash
-gh release upload vX.Y.Z \
-  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-arm64.tar.gz.sha256 \
-  --repo IvoryHeart/herdr-world
-```
-
-Upload the macOS Intel tarball from the Intel Mac build host, or copy it to the release operator
-machine first:
-
-```bash
-gh release upload vX.Y.Z \
-  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz \
-  dist-packages/herdr-world-vX.Y.Z-macos-x86_64.tar.gz.sha256 \
-  --repo IvoryHeart/herdr-world
-```
-
-Upload the Android debug APK after it has the final debug asset name:
-
-```bash
-gh release upload vX.Y.Z dist-packages/herdr-world-vX.Y.Z-android-debug.apk \
-  --repo IvoryHeart/herdr-world
-```
-
-If every artifact has been copied to one machine, the same paths can be uploaded in one
-`gh release upload` invocation.
+Android remains a deliberate separate step until a signed public APK exists. Do not attach a debug
+APK to a public release as though it were a production artifact.

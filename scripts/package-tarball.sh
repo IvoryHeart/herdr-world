@@ -53,7 +53,7 @@ cargo build \
   --manifest-path "$ROOT/bridge/Cargo.toml" \
   --bin herdr-web-bridge
 
-rm -rf "$STAGE" "$ARCHIVE"
+rm -rf "$STAGE" "$ARCHIVE" "$ARCHIVE.sha256"
 mkdir -p \
   "$STAGE/bin" \
   "$STAGE/share/herdr-world/web" \
@@ -81,7 +81,8 @@ chmod +x "$STAGE/bin/herdr-world" "$STAGE/bin/herdr-world-bridge"
   elif command -v shasum >/dev/null; then
     shasum -a 256 "$(basename "$ARCHIVE")" > "$ARCHIVE.sha256"
   else
-    echo "warning: no sha256 tool found; checksum not written" >&2
+    echo "no SHA-256 tool found; refusing to produce an unverifiable archive" >&2
+    exit 1
   fi
 )
 
