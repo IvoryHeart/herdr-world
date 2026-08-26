@@ -12,6 +12,7 @@
     "notices:generate": "node scripts/dependency-notices.mjs --generate",
     "notices:check": "node scripts/dependency-notices.mjs --check",
     "test:dev": "node --test scripts/dev.test.mjs",
+    "test:release": "node --test scripts/release-target.test.mjs",
     "test:web": "npm run test --prefix web",
     "test:observability": "npm run test --prefix web -- observability.test.ts && cargo test --manifest-path bridge/Cargo.toml --bin herdr-web-bridge observability",
     "test:e2e": "npm run build:web && playwright test",
@@ -27,7 +28,7 @@
     "android:open": "cap open android",
     "package:tarball": "scripts/package-tarball.sh",
     "build": "npm run build:web && npm run bridge:build",
-    "test": "npm run test:dev && npm run test:web && npm run bridge:test",
+    "test": "npm run test:dev && npm run test:release && npm run test:web && npm run bridge:test",
     "lint": "npm run lint:web && npm run bridge:fmt",
     "check": "npm run vendor:check && npm run notices:check && npm run lint && npm run test && npm run build",
     "check:acceptance": "npm run check && npm run test:e2e && npm run test:security && npm run test:independence"

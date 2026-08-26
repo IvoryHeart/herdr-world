@@ -3,6 +3,13 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import {
+  RELEASE_REMOTE,
+  RELEASE_REPOSITORY,
+  assertReleaseRemoteUrls,
+  withReleaseRepository,
+} from "./release-target.mjs";
+
 const RELEASE_BRANCH = "main";
 const RELEASE_ARG = process.argv[2];
 const VERSION_ARG = /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
@@ -54,18 +61,56 @@ function validatePreflight() {
     fail(`release must run from ${RELEASE_BRANCH}; current branch is ${branch || "(detached)"}`);
   }
 
-  run("git", ["fetch", "origin", RELEASE_BRANCH, "--tags"]);
+  try {
+    const fetchUrls = output("git", ["remote", "get-url", "--all", RELEASE_REMOTE])
+      .split("\n")
+      .filter(Boolean);
+    const pushUrls = output("git", ["remote", "get-url", "--push", "--all", RELEASE_REMOTE])
+      .split("\n")
+      .filter(Boolean);
+    assertReleaseRemoteUrls(fetchUrls, "fetch");
+    assertReleaseRemoteUrls(pushUrls, "push");
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+  }
+
+  let accessibleRepository;
+  try {
+    accessibleRepository = output("gh", [
+      "repo",
+      "view",
+      RELEASE_REPOSITORY,
+      "--json",
+      "nameWithOwner",
+      "--jq",
+      ".nameWithOwner",
+    ]);
+  } catch {
+    fail(`GitHub CLI cannot access ${RELEASE_REPOSITORY}`);
+  }
+  if (accessibleRepository.toLowerCase() !== RELEASE_REPOSITORY.toLowerCase()) {
+    fail(`GitHub CLI resolved the release repository as ${accessibleRepository}`);
+  }
+
+  run("git", ["fetch", RELEASE_REMOTE, RELEASE_BRANCH, "--tags"]);
   const local = output("git", ["rev-parse", RELEASE_BRANCH]);
-  const remote = output("git", ["rev-parse", `origin/${RELEASE_BRANCH}`]);
+  const remote = output("git", ["rev-parse", `${RELEASE_REMOTE}/${RELEASE_BRANCH}`]);
   if (local !== remote) {
-    fail(`${RELEASE_BRANCH} must match origin/${RELEASE_BRANCH}; run git pull --ff-only first`);
+    fail(
+      `${RELEASE_BRANCH} must match ${RELEASE_REMOTE}/${RELEASE_BRANCH}; run git pull --ff-only first`,
+    );
   }
 
   if (commandSucceeds("git", ["rev-parse", "--verify", "--quiet", tag])) {
     fail(`tag already exists locally: ${tag}`);
   }
-  if (commandSucceeds("git", ["ls-remote", "--exit-code", "--tags", "origin", tag])) {
-    fail(`tag already exists on origin: ${tag}`);
+  if (
+    commandSucceeds("git", ["ls-remote", "--exit-code", "--tags", RELEASE_REMOTE, tag])
+  ) {
+    fail(`tag already exists on ${RELEASE_REMOTE}: ${tag}`);
+  }
+  if (commandSucceeds("gh", withReleaseRepository(["release", "view", tag]))) {
+    fail(`GitHub release already exists in ${RELEASE_REPOSITORY}: ${tag}`);
   }
 }
 
@@ -147,14 +192,24 @@ try {
   run("git", ["add", "CHANGELOG.md"]);
   run("git", ["commit", "-m", `Release ${tag}`]);
   run("git", ["tag", tag]);
-  run("git", ["push", "--atomic", "origin", RELEASE_BRANCH, tag]);
+  run("git", ["push", "--atomic", RELEASE_REMOTE, RELEASE_BRANCH, tag]);
 
-  run("gh", ["release", "create", tag, "--notes-file", notesFile]);
+  run(
+    "gh",
+    withReleaseRepository([
+      "release",
+      "create",
+      tag,
+      "--verify-tag",
+      "--notes-file",
+      notesFile,
+    ]),
+  );
 
   openNextUnreleased(released);
   run("git", ["add", "CHANGELOG.md"]);
   run("git", ["commit", "-m", "Prepare for next release"]);
-  run("git", ["push", "origin", RELEASE_BRANCH]);
+  run("git", ["push", RELEASE_REMOTE, RELEASE_BRANCH]);
 } finally {
   rmSync(notesFile, { force: true });
 }
