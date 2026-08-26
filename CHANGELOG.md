@@ -161,6 +161,7 @@
 - Added a guarded same-tag prerelease reissue mode for correcting an unannounced candidate without
   inventing another release-candidate number. It retains all normal remote, tag, release, and test
   safety checks and cannot replace a stable release.
+  [Herdr World PR #20](https://github.com/IvoryHeart/herdr-world/pull/20)
 - Fixed guided desktop setup bypassing an incompatible detached Herdr server merely because its
   socket still existed. Interactive launches now offer to install/update Herdr, explicitly warn and
   ask before stopping the old server, then start the compatible server in the selected workspace.
