@@ -255,7 +255,7 @@ try {
 
   const keyMarker = `${markerA}_RAW_KEYS`;
   firstA.send(
-    `python3 -c 'import os,termios,tty;a=termios.tcgetattr(0);tty.setraw(0);os.write(1,b"${keyMarker}_READY\\n");d=os.read(0,7);termios.tcsetattr(0,termios.TCSADRAIN,a);print("${keyMarker}_"+d.hex())'\n`,
+    `python3 -c 'import os,termios,tty;a=termios.tcgetattr(0);tty.setraw(0);m="${keyMarker}"+"_READY";os.write(1,(m+"\\n").encode());d=os.read(0,7);termios.tcsetattr(0,termios.TCSADRAIN,a);print("${keyMarker}_"+d.hex())'\n`,
   );
   await Promise.all([
     firstA.waitFor(`${keyMarker}_READY`),
