@@ -10,15 +10,22 @@ import {
   releaseCreateArgs,
   withReleaseRepository,
 } from "./release-target.mjs";
-import { RELEASE_REFERENCE_PATHS, stampCurrentRelease } from "./release-version.mjs";
+import {
+  RELEASE_REFERENCE_PATHS,
+  readCurrentReleaseTag,
+  stampCurrentRelease,
+} from "./release-version.mjs";
 
 const RELEASE_BRANCH = "main";
 const RELEASE_ARG = process.argv[2];
+const REISSUE_PRERELEASE = process.argv[3] === "--reissue-prerelease";
 const VERSION_ARG = /^v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)$/;
 
 const match = RELEASE_ARG?.match(VERSION_ARG);
-if (!match) {
-  console.error("Usage: node scripts/release.mjs <vX.Y.Z|X.Y.Z>");
+if (!match || process.argv.length > (REISSUE_PRERELEASE ? 4 : 3)) {
+  console.error(
+    "Usage: node scripts/release.mjs <vX.Y.Z|X.Y.Z> [--reissue-prerelease]",
+  );
   process.exit(1);
 }
 
@@ -184,11 +191,19 @@ function escapeRegex(value) {
 
 try {
   validatePreflight();
+  if (REISSUE_PRERELEASE) {
+    if (!tag.includes("-")) {
+      fail("--reissue-prerelease is only valid for a SemVer prerelease tag");
+    }
+    if (readCurrentReleaseTag() !== tag) {
+      fail("--reissue-prerelease requires public release references to match the requested tag");
+    }
+  }
   const changelog = readChangelogForRelease();
 
   run("npm", ["run", "check"]);
 
-  stampCurrentRelease(tag);
+  stampCurrentRelease(tag, process.cwd(), { allowSameTag: REISSUE_PRERELEASE });
   const released = stampChangelog(changelog);
   writeFileSync(notesFile, extractReleaseNotes(released));
 
