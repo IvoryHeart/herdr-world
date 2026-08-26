@@ -167,7 +167,6 @@ import {
   parseTerminalScreenReaderText,
 } from "./terminalAccessibleText";
 import { terminalSessionDescriptor } from "./terminalSessions";
-import type { TerminalSessionDescriptor } from "./terminalSessions";
 import { coreSurfaceRegistry } from "./surfaceRegistry";
 import { SurfaceSlotBoundary } from "./SurfaceSlotBoundary";
 import type { WorldSurfaceContext } from "./world/WorldSurface";
@@ -179,7 +178,11 @@ import {
 import type { OfficeHandoffRequest } from "./world/herdrOfficeHandoff";
 import { projectHerdrOffice } from "./world/herdrOfficeProjection";
 import type { OfficeAgent } from "./world/herdrOfficeProjection";
-import { WorldConversationBubble } from "./world/WorldConversationBubble";
+import {
+  useWorldConversationController,
+  worldConversationAdmissionPending,
+} from "./world/WorldConversationController";
+import type { WorldConversationTargetInput } from "./world/WorldConversationController";
 import {
   useWorldSettingsController,
   WorldSettingsOverlay,
@@ -189,7 +192,6 @@ import {
   readWorldCompletionSeenKeys,
   writeWorldCompletionSeenKeys,
 } from "./world/completionSeenState";
-import type { WorldConversationBubblePanel } from "./world/WorldSurface";
 import { herdrOfficeSourcesFromRuntime } from "./world/worldRuntime";
 import {
   DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
@@ -252,15 +254,6 @@ type AgentSort = "attention" | "status" | "workspace" | "lastStatusChange";
 type AgentGroup = "none" | "host" | "workspace" | "hostWorkspace";
 type SpaceGroup = "none" | "host";
 type MenuKind = "space" | "tab" | "pane";
-type WorldConversationTarget = {
-  windowId: string;
-  kind: "agent" | "desk";
-  targetKey: string;
-  agentKey: string | null;
-  bridgeId: BridgeId;
-  paneId: string;
-  generationKey: string;
-};
 type PendingWorldPaneSelection = {
   bridgeId: BridgeId;
   paneId: string;
@@ -272,114 +265,6 @@ type PendingWorldSeatLaunch = {
   baselineTabIds: ReadonlySet<string>;
   baselinePaneIds: ReadonlySet<string>;
 };
-type WorldConversationView = {
-  windowId: string;
-  agent: OfficeAgent | null;
-  targetLabel: string;
-  hostLabel: string;
-  pane: PaneInfo;
-  runtime: BridgeRuntime;
-  session: TerminalSessionDescriptor;
-  targetKey: string;
-};
-
-const MAX_WORLD_CONVERSATIONS = 5;
-const WORLD_CONVERSATIONS_STORAGE_KEY = "herdrWeb.worldConversations.v1";
-
-function worldConversationWindowId(bridgeId: BridgeId, paneId: string) {
-  return `${bridgeId}:${paneId}`;
-}
-
-function readWorldConversationTargets(): WorldConversationTarget[] {
-  try {
-    const raw = globalThis.sessionStorage?.getItem(WORLD_CONVERSATIONS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-    const targets = parsed.flatMap((value: unknown) => {
-      if (!value || typeof value !== "object" || Array.isArray(value)) {
-        return [];
-      }
-      const record = value as Record<string, unknown>;
-      if (
-        (record.kind !== "agent" && record.kind !== "desk") ||
-        typeof record.targetKey !== "string" ||
-        typeof record.bridgeId !== "string" ||
-        typeof record.paneId !== "string" ||
-        typeof record.generationKey !== "string" ||
-        (record.agentKey !== null && typeof record.agentKey !== "string")
-      ) {
-        return [];
-      }
-      return [{
-        windowId: worldConversationWindowId(record.bridgeId, record.paneId),
-        kind: record.kind,
-        targetKey: record.targetKey,
-        agentKey: record.agentKey as string | null,
-        bridgeId: record.bridgeId,
-        paneId: record.paneId,
-        generationKey: record.generationKey,
-      } satisfies WorldConversationTarget];
-    });
-    return targets.slice(0, MAX_WORLD_CONVERSATIONS);
-  } catch {
-    return [];
-  }
-}
-
-function writeWorldConversationTargets(targets: readonly WorldConversationTarget[]) {
-  try {
-    globalThis.sessionStorage?.setItem(
-      WORLD_CONVERSATIONS_STORAGE_KEY,
-      JSON.stringify(targets.map((target) => ({
-        kind: target.kind,
-        targetKey: target.targetKey,
-        agentKey: target.agentKey,
-        bridgeId: target.bridgeId,
-        paneId: target.paneId,
-        generationKey: target.generationKey,
-      }))),
-    );
-  } catch {
-    // Session storage can be unavailable in private or locked-down contexts.
-  }
-}
-
-function worldConversationAdmissionPending(
-  runtime: BridgeRuntime | null,
-  state: BridgeConnectionState | null | undefined,
-  generationKey: string,
-) {
-  return Boolean(
-    runtime &&
-      runtime.generationKey === generationKey &&
-      (runtime.capabilityState === "idle" ||
-        runtime.capabilityState === "probing" ||
-        !state ||
-        state.connectionKey !== generationKey ||
-        state.loadState === "loading" ||
-        (state.snapshot === null && state.loadState !== "error")),
-  );
-}
-
-function worldConversationObservationPending(
-  runtime: BridgeRuntime | null,
-  state: BridgeConnectionState | null | undefined,
-) {
-  return Boolean(
-    !runtime ||
-      !state ||
-      runtime.capabilityState === "idle" ||
-      runtime.capabilityState === "probing" ||
-      state.connectionKey !== runtime.generationKey ||
-      state.loadState !== "ready" ||
-      state.snapshot === null,
-  );
-}
 
 export function findNewWorldSeatPane(
   snapshot: Snapshot | null,
@@ -1229,17 +1114,10 @@ export function App() {
   const [worldCompletionSeenKeys, setWorldCompletionSeenKeys] = useState<Set<string>>(
     () => readWorldCompletionSeenKeys(),
   );
-  const [worldConversationTargets, setWorldConversationTargets] = useState<WorldConversationTarget[]>(
-    () => readWorldConversationTargets(),
-  );
   const pendingWorldPaneSelectionRef = useRef<PendingWorldPaneSelection | null>(null);
   const pendingWorldSeatLaunchRef = useRef<PendingWorldSeatLaunch | null>(null);
-  const worldConversationCacheRef = useRef<Map<string, WorldConversationView>>(new Map());
   const worldCanvasSelectionTimerRef = useRef<number | null>(null);
   const worldSelectionSeedPendingRef = useRef(false);
-  useEffect(() => {
-    writeWorldConversationTargets(worldConversationTargets);
-  }, [worldConversationTargets]);
   useEffect(() => () => {
     if (worldCanvasSelectionTimerRef.current !== null) {
       window.clearTimeout(worldCanvasSelectionTimerRef.current);
@@ -1634,62 +1512,29 @@ export function App() {
       worldCanvasSelectionTimerRef.current = null;
     }
   };
-  const selectWorldAgent = (agent: WorldConversationTarget | null) => {
+  const selectWorldAgent = (agent: WorldConversationTargetInput) => {
     cancelWorldCanvasSelection();
     pendingWorldPaneSelectionRef.current = null;
     officeDebug("selection:target-set", {
-      target: agent
-        ? {
-            kind: agent.kind,
-            targetKey: agent.targetKey,
-            agentKey: agent.agentKey,
-            bridgeId: agent.bridgeId,
-            paneId: agent.paneId,
-            generationKey: agent.generationKey,
-          }
-        : null,
+      target: {
+        kind: agent.kind,
+        targetKey: agent.targetKey,
+        agentKey: agent.agentKey,
+        bridgeId: agent.bridgeId,
+        paneId: agent.paneId,
+        generationKey: agent.generationKey,
+      },
     });
-    if (!agent) {
-      setWorldConversationTargets([]);
-      worldConversationCacheRef.current.clear();
-      return;
-    }
-    const windowId = worldConversationWindowId(agent.bridgeId, agent.paneId);
-    const target = { ...agent, windowId };
-    const existing = worldConversationTargets.some(({ windowId: id }) => id === windowId);
-    if (!existing && !isCompactLayout && worldConversationTargets.length >= MAX_WORLD_CONVERSATIONS) {
-      setWorldHandoffStatus("Five Office terminals are open. Close one before opening another.");
-      return;
-    }
-    setSelectedBridgeId(agent.bridgeId);
-    setWorldSelectedKey(agent.agentKey ?? agent.targetKey);
-    setWorldHandoffStatus(null);
-    setWorldConversationTargets((current) => {
-      const index = current.findIndex(({ windowId: id }) => id === windowId);
-      if (index < 0) {
-        return isCompactLayout ? [target] : [...current, target];
-      }
-      return current.map((currentTarget, currentIndex) =>
-        currentIndex === index ? target : currentTarget,
-      );
-    });
+    worldConversationController.open(agent);
   };
   const closeWorldConversation = (windowId: string) => {
-    worldConversationCacheRef.current.delete(windowId);
-    setWorldConversationTargets((current) => current.filter(({ windowId: id }) => id !== windowId));
+    worldConversationController.close(windowId);
   };
   const clearWorldConversations = () => {
-    setWorldConversationTargets([]);
-    worldConversationCacheRef.current.clear();
+    worldConversationController.clear();
   };
   const focusWorldConversation = (windowId: string) => {
-    const target = worldConversationTargets.find(({ windowId: id }) => id === windowId);
-    if (!target) {
-      return;
-    }
-    setWorldSelectedKey(target.agentKey ?? target.targetKey);
-    setSelectedBridgeId(target.bridgeId);
-    setWorldHandoffStatus(null);
+    worldConversationController.focus(windowId);
   };
   const selectWorldProjectedAgent = (agent: {
     key: string;
@@ -1744,7 +1589,6 @@ export function App() {
       markWorldCompletionSeen(agent.key);
     }
     selectWorldAgent({
-      windowId: worldConversationWindowId(agent.hostKey, pane.pane_id),
       kind: "agent",
       targetKey: agent.key,
       agentKey: agent.key,
@@ -1816,7 +1660,6 @@ export function App() {
       markWorldCompletionSeen(occupant.key);
     }
     selectWorldAgent({
-      windowId: worldConversationWindowId(desk.hostKey, pane.pane_id),
       kind: "desk",
       targetKey: desk.key,
       agentKey: occupant?.key ?? null,
@@ -2154,6 +1997,30 @@ export function App() {
     () => buildAgentActivityTransitionMap(bridgeViews, agentActivityStates),
     [agentActivityStates, bridgeViews],
   );
+  const worldConversationController = useWorldConversationController({
+    active: activeSurface.id === "world",
+    compact: isCompactLayout,
+    projection: worldProjection,
+    getRuntime: bridge.getRuntime,
+    connectionStates,
+    onSelectBridge: setSelectedBridgeId,
+    onSelectKey: setWorldSelectedKey,
+    onStatus: setWorldHandoffStatus,
+    onOpenInSpaces: openWorldConversationInSpaces,
+    agentActivityTransitions,
+    terminalScreenReaderText,
+    touchInput: isTouchInput,
+    terminalFontSizePx,
+    mobileControlsScalePercent,
+    mobileTapTarget: mobileTerminalTapTarget,
+    mobileLongPressBehavior,
+    mobileTouchSelectionEndpointTimeoutMs,
+    mobileCommandExpandingInput,
+    mobileCommandEnterNewline,
+    terminalInputTransport,
+    terminalInputBatchDelayMs,
+    terminalOutputCoalesceMs,
+  });
   const effectiveAgentPinnedOnly =
     visibleHostBridgeViews(bridgeViews, selectedBridgeId, hostScope).some((view) =>
       supportsAgentPins(view.runtime.capabilities),
@@ -4756,209 +4623,7 @@ export function App() {
     activeSurface.requiredCapabilities,
   );
   const renderTerminal = !isCompactLayout || showDetail;
-  const worldConversations = useMemo(() => {
-    if (activeSurface.id !== "world") {
-      return [] as WorldConversationView[];
-    }
-    return worldConversationTargets.flatMap((worldConversationTarget) => {
-      const agentEntry = worldConversationTarget.agentKey
-        ? worldProjection.roster.find(
-            ({ agent }) => agent.key === worldConversationTarget.agentKey,
-          ) ?? null
-        : null;
-      const deskEntry = worldConversationTarget.kind === "desk"
-        ? worldProjection.deskRoster.find(
-            ({ desk }) => desk.key === worldConversationTarget.targetKey,
-          ) ?? null
-        : null;
-      const runtime = bridge.getRuntime(worldConversationTarget.bridgeId);
-      const state = runtime &&
-          connectionStates[runtime.id]?.connectionKey === runtime.generationKey
-        ? connectionStates[runtime.id]
-        : null;
-      const pane = state?.snapshot?.panes.find(
-        ({ pane_id }) => pane_id === worldConversationTarget.paneId,
-      ) ?? null;
-      const agent = agentEntry?.agent ?? null;
-      const runtimeMatchesTarget = Boolean(
-        runtime && runtime.generationKey === worldConversationTarget.generationKey,
-      );
-      const observationPending = worldConversationObservationPending(runtime, state);
-      const paneStillObserved = Boolean(
-        state?.snapshot?.panes.some(({ pane_id }) => pane_id === worldConversationTarget.paneId),
-      );
-      if (
-        runtimeMatchesTarget &&
-        runtime &&
-        state &&
-        pane &&
-        runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"])
-      ) {
-        const session = terminalSessionDescriptor(runtime, pane, state, ["snapshot"]);
-        if (session?.attachEnabled) {
-          const next: WorldConversationView = {
-            windowId: worldConversationTarget.windowId,
-            agent,
-            targetLabel:
-              agent?.displayLabel ??
-              pane.display_agent ??
-              pane.label ??
-              pane.title ??
-              pane.terminal_title ??
-              "Shell",
-            hostLabel: agentEntry?.hostLabel ?? deskEntry?.hostLabel ?? "Host",
-            pane,
-            runtime,
-            session,
-            targetKey: worldConversationTarget.targetKey,
-          };
-          // Keep the last admitted terminal view across a transient observation
-          // refresh. The terminal identity is the selected pane, not the
-          // agent's animated destination or the desk's current occupant.
-          worldConversationCacheRef.current.set(worldConversationTarget.windowId, next);
-          return [next];
-        }
-      }
-
-      const cached = worldConversationCacheRef.current.get(worldConversationTarget.windowId);
-      if (
-        runtimeMatchesTarget &&
-        cached?.targetKey === worldConversationTarget.targetKey &&
-        (observationPending || paneStillObserved)
-      ) {
-        return [{
-          ...cached,
-          agent: agent ?? cached.agent,
-          targetLabel: agent?.displayLabel ?? cached.targetLabel,
-          hostLabel: agentEntry?.hostLabel ?? deskEntry?.hostLabel ?? cached.hostLabel,
-        }];
-      }
-      return [];
-    });
-  }, [
-    activeSurface.id,
-    bridge,
-    connectionStates,
-    worldConversationTargets,
-    worldProjection,
-  ]);
-  useEffect(() => {
-    officeDebug("conversation:views", {
-      visible: worldConversations.length,
-      targets: worldConversationTargets.length,
-      windows: worldConversations.map(({ windowId, targetKey, session }) => ({
-        windowId,
-        targetKey,
-        sessionKey: session.sessionKey,
-      })),
-      activeSurface: activeSurface.id,
-    });
-  }, [activeSurface.id, worldConversationTargets.length, worldConversations]);
-  useEffect(() => {
-    if (activeSurface.id !== "world") {
-      return;
-    }
-    const targetsToClose = new Set<string>();
-    const targetsToRebind = new Map<string, string>();
-    for (const target of worldConversationTargets) {
-      const runtime = bridge.getRuntime(target.bridgeId);
-      const state = runtime ? connectionStates[runtime.id] : null;
-      if (worldConversationObservationPending(runtime, state)) {
-        continue;
-      }
-      const paneStillObserved = Boolean(
-        state?.snapshot?.panes.some(({ pane_id }) => pane_id === target.paneId),
-      );
-      if (paneStillObserved && runtime && runtime.generationKey !== target.generationKey) {
-        targetsToRebind.set(target.windowId, runtime.generationKey);
-        continue;
-      }
-      if (paneStillObserved) {
-        continue;
-      }
-      targetsToClose.add(target.windowId);
-      officeDebug("conversation:cleanup-check", {
-        windowId: target.windowId,
-        targetKey: target.targetKey,
-        activeSurface: activeSurface.id,
-        reason: "pane-absent-from-admitted-snapshot",
-      });
-    }
-    if (targetsToClose.size === 0 && targetsToRebind.size === 0) {
-      return;
-    }
-    for (const windowId of targetsToClose) {
-      worldConversationCacheRef.current.delete(windowId);
-    }
-    for (const windowId of targetsToRebind.keys()) {
-      worldConversationCacheRef.current.delete(windowId);
-    }
-    setWorldConversationTargets((current) =>
-      current.flatMap((target) => {
-        if (targetsToClose.has(target.windowId)) {
-          return [];
-        }
-        const generationKey = targetsToRebind.get(target.windowId);
-        return generationKey ? [{ ...target, generationKey }] : [target];
-      }),
-    );
-  }, [activeSurface.id, bridge, connectionStates, worldConversationTargets]);
-  const worldConversationPanels = useMemo<WorldConversationBubblePanel[]>(
-    () => worldConversations.map((worldConversation) => ({
-      id: worldConversation.windowId,
-      targetKey: worldConversation.targetKey,
-      selectedKey: worldConversation.agent?.key ?? null,
-      content: (
-        <WorldConversationBubble
-          key={`${worldConversation.windowId}:${worldConversation.session.sessionKey}`}
-          agent={worldConversation.agent}
-          targetLabel={worldConversation.targetLabel}
-          hostLabel={worldConversation.hostLabel}
-          pane={worldConversation.pane}
-          runtime={worldConversation.runtime}
-          session={worldConversation.session}
-          onClose={() => closeWorldConversation(worldConversation.windowId)}
-          onOpenInSpaces={() =>
-            openWorldConversationInSpaces(
-              worldConversation.windowId,
-              worldConversation.runtime.id,
-              worldConversation.pane,
-            )
-          }
-          agentActivityTransitions={agentActivityTransitions}
-          terminalScreenReaderText={terminalScreenReaderText}
-          touchInput={isTouchInput}
-          terminalFontSizePx={terminalFontSizePx}
-          mobileControlsScalePercent={mobileControlsScalePercent}
-          mobileTapTarget={mobileTerminalTapTarget}
-          mobileLongPressBehavior={mobileLongPressBehavior}
-          mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
-          mobileCommandExpandingInput={mobileCommandExpandingInput}
-          mobileCommandEnterNewline={mobileCommandEnterNewline}
-          terminalInputTransport={terminalInputTransport}
-          terminalInputBatchDelayMs={terminalInputBatchDelayMs}
-          terminalOutputCoalesceMs={terminalOutputCoalesceMs}
-        />
-      ),
-    })),
-    [
-      closeWorldConversation,
-      isTouchInput,
-      mobileCommandEnterNewline,
-      mobileCommandExpandingInput,
-      mobileControlsScalePercent,
-      mobileLongPressBehavior,
-      mobileTerminalTapTarget,
-      mobileTouchSelectionEndpointTimeoutMs,
-      openWorldConversationInSpaces,
-      terminalInputBatchDelayMs,
-      terminalInputTransport,
-      terminalOutputCoalesceMs,
-      terminalFontSizePx,
-      terminalScreenReaderText,
-      worldConversations,
-    ],
-  );
+  const worldConversationPanels = worldConversationController.panels;
   const WorldSurface =
     activeSurface.id === "world" ? coreSurfaceRegistry.component("world") : null;
   const worldRoomActions = createWorldRoomActions({
