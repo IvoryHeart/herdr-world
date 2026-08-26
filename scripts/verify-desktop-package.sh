@@ -84,13 +84,17 @@ case "$PLATFORM" in
     }
     ;;
   macos-arm64)
-    [[ "$binary_description" == *"Mach-O 64-bit executable arm64"* ]] || {
+    [[ "$binary_description" == *"Mach-O 64-bit"* \
+      && "$binary_description" == *"arm64"* \
+      && "$binary_description" == *"executable"* ]] || {
       echo "unexpected macOS ARM64 bridge architecture: $binary_description" >&2
       exit 1
     }
     ;;
   macos-x86_64)
-    [[ "$binary_description" == *"Mach-O 64-bit executable x86_64"* ]] || {
+    [[ "$binary_description" == *"Mach-O 64-bit"* \
+      && "$binary_description" == *"x86_64"* \
+      && "$binary_description" == *"executable"* ]] || {
       echo "unexpected macOS x86-64 bridge architecture: $binary_description" >&2
       exit 1
     }
