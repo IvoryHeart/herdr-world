@@ -87,7 +87,8 @@ Local desktop tarballs are written to `dist-packages/`. The debug APK is written
 
 Before uploading or distributing any tarball or APK, inspect the artifact and confirm it matches the
 documented release layout, platform, version, and source commit/tag. For desktop tarballs, list the
-archive contents and verify the wrapper, bridge binary, bundled `web/dist`, README, root license,
+archive contents and verify the root installer, named installer, version marker, wrapper, bridge
+binary, bundled `web/dist`, README, root license,
 third-party notices, upstream record, Apache/PixiJS license texts, generated production npm/Cargo
 licence inventories, World asset record, and Herdr vendor manifest are present.
 For APKs, inspect the package listing or metadata and verify the bundled
@@ -97,11 +98,15 @@ The macOS archives are intentionally unsigned and unnotarized until Developer ID
 available. Release notes and user documentation must retain that limitation. The workflow does not
 attempt to weaken Gatekeeper or modify a user's security policy.
 
-For the desktop launcher, verify `bin/herdr-world --help` never starts onboarding, a
+For the desktop installer, verify `./install --install-only` creates versioned user-local files and
+working `herdr-world`/`herdr-world-installer` command links without starting Herdr. Verify the
+normal `./install` path hands off to the installed launcher. For the desktop launcher, verify
+`bin/herdr-world --help` never starts onboarding, a
 non-interactive launch with no default Herdr socket fails with manual instructions, and an
 interactive missing-session launch asks independently before installation and startup. Also verify
 that an interactive incompatible default server asks independently before installation/update,
-server stop, and restart, while declining the stop leaves it running. Do not exercise the live
+server stop, and restart, while declining the stop leaves it running. A stale socket with no
+reachable daemon must proceed to startup without a stop prompt. Do not exercise the live
 installer during release verification; the launcher tests replace its network and process
 boundaries with deterministic fakes.
 

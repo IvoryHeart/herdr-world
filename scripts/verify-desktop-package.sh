@@ -51,7 +51,10 @@ tar -xzf "$ARCHIVE" -C "$VERIFY_ROOT"
 BUNDLE="$VERIFY_ROOT/$NAME"
 
 required=(
+  "install"
+  "VERSION"
   "bin/herdr-world"
+  "bin/herdr-world-installer"
   "bin/herdr-world-bridge"
   "share/herdr-world/web/index.html"
   "share/herdr-world/web/legal/manifest.json"
@@ -72,7 +75,13 @@ for relative_path in "${required[@]}"; do
     exit 1
   }
 done
+[[ "$(tr -d '\r\n' < "$BUNDLE/VERSION")" == "$VERSION" ]] || {
+  echo "desktop archive VERSION does not match $VERSION" >&2
+  exit 1
+}
+[[ -x "$BUNDLE/install" ]] || { echo "root installer is not executable" >&2; exit 1; }
 [[ -x "$BUNDLE/bin/herdr-world" ]] || { echo "launcher is not executable" >&2; exit 1; }
+[[ -x "$BUNDLE/bin/herdr-world-installer" ]] || { echo "named installer is not executable" >&2; exit 1; }
 [[ -x "$BUNDLE/bin/herdr-world-bridge" ]] || { echo "bridge is not executable" >&2; exit 1; }
 
 binary_description="$(file "$BUNDLE/bin/herdr-world-bridge")"
@@ -125,6 +134,23 @@ host_arch="$(uname -m)"
 case "$PLATFORM:$host_os:$host_arch" in
   linux-x86_64:Linux:x86_64 | macos-arm64:Darwin:arm64 | macos-x86_64:Darwin:x86_64)
     "$BUNDLE/bin/herdr-world" --help >/dev/null
+    installer_home="$VERIFY_ROOT/installer-home"
+    installer_bin="$installer_home/.local/bin"
+    installer_data="$installer_home/.local/share"
+    HOME="$installer_home" \
+      XDG_DATA_HOME="$installer_data" \
+      HERDR_WORLD_BIN_DIR="$installer_bin" \
+      PATH="$installer_bin:$PATH" \
+      /bin/bash "$BUNDLE/install" --install-only >/dev/null
+    [[ -L "$installer_bin/herdr-world" ]] || {
+      echo "bundle installer did not expose herdr-world" >&2
+      exit 1
+    }
+    [[ -L "$installer_bin/herdr-world-installer" ]] || {
+      echo "bundle installer did not expose herdr-world-installer" >&2
+      exit 1
+    }
+    "$installer_bin/herdr-world" --help >/dev/null
     launcher_home="$VERIFY_ROOT/launcher-home"
     launcher_output="$VERIFY_ROOT/launcher-no-session.log"
     mkdir -p "$launcher_home/config"

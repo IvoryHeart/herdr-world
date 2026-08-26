@@ -131,7 +131,7 @@ else
 fi
 tar -xzf "herdr-world-${VERSION}-${PLATFORM}.tar.gz"
 cd "herdr-world-${VERSION}-${PLATFORM}"
-bin/herdr-world
+./install
 ```
 
 Open:
@@ -140,17 +140,23 @@ Open:
 http://127.0.0.1:8787
 ```
 
-The desktop tarball includes the web assets and `herdr-world-bridge`; it does not include Herdr.
+`./install` installs the complete versioned World bundle under `~/.local/share/herdr-world`, exposes
+`herdr-world` and `herdr-world-installer` under `~/.local/bin`, and continues into the consent-based
+Herdr dependency setup. The desktop tarball includes the web assets and `herdr-world-bridge`; it
+does not embed Herdr.
 The macOS binaries are not yet Developer ID signed or notarized. macOS may therefore require you to
 confirm the first launch in System Settings → Privacy & Security after you have verified the
 downloaded checksum and source. Signing and notarization will be added when project credentials are
 available.
-If the default Herdr session is missing or incompatible, an interactive `bin/herdr-world` launch
+If the default Herdr session is missing or incompatible, the installed `herdr-world` command
 explains the requirement and asks separately before downloading the [official Herdr
 installer](https://herdr.dev/docs/install/), stopping an incompatible detached server, or starting
 Herdr. Stopping a server exits the terminal panes and processes it owns. Before starting Herdr, the
 launcher asks for the directory containing the work you want Herdr to manage. Declining any action
 leaves that action undone and prints manual instructions.
+
+Use `./install --install-only` when installation and startup should be separate. The bundle remains
+portable: `bin/herdr-world` still runs directly without copying anything into the user directories.
 
 The launcher never performs guided setup in a non-interactive environment or when `--session`,
 `HERDR_SESSION`, or a socket override selects an operator-managed target. Pass
@@ -161,13 +167,13 @@ start Herdr yourself from a project directory, detach with <kbd>Ctrl</kbd>+<kbd>
 Use another unused port when needed:
 
 ```bash
-bin/herdr-world --port 8791
+herdr-world --port 8791
 ```
 
 If Herdr uses a non-default socket, provide it explicitly:
 
 ```bash
-HERDR_SOCKET_PATH=/path/to/herdr.sock bin/herdr-world --port 8791
+HERDR_SOCKET_PATH=/path/to/herdr.sock herdr-world --port 8791
 ```
 
 Android currently uses a locally built debug APK; no signed APK is included in the public RC.

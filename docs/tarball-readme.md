@@ -12,20 +12,29 @@ The macOS archives are not yet Developer ID signed or notarized. After verifying
 checksum and source, macOS may require the first launch to be confirmed in System Settings →
 Privacy & Security. Signing and notarization will be added when project credentials are available.
 
-## Run
+## Install And Run
 
 From the unpacked bundle directory:
 
 ```bash
-bin/herdr-world
+./install
 ```
+
+This installs the complete versioned bundle under `~/.local/share/herdr-world`, exposes
+`herdr-world` and `herdr-world-installer` under `~/.local/bin`, and then continues into the
+consent-based Herdr setup and World startup. Use `./install --install-only` to stop after installing
+World. To keep the archive fully portable and install nothing, run `bin/herdr-world` directly.
 
 If the default Herdr session is missing or incompatible, an interactive launch offers to download
 and run the [official Herdr installer](https://herdr.dev/docs/install/), separately asks before
 stopping an incompatible detached server, then offers to start Herdr in a directory you select.
-Stopping a server exits its panes and processes. Nothing is installed, stopped, or started without
-an affirmative answer. Starting Herdr opens its terminal UI; detach with
+Stopping a server exits its panes and processes. Herdr is not installed, stopped, or started
+without an affirmative answer. Starting Herdr opens its terminal UI; detach with
 <kbd>Ctrl</kbd>+<kbd>B</kbd> then <kbd>Q</kbd> so this launcher can continue.
+
+A stale socket with no reachable server is treated as stopped and does not trigger the destructive
+stop prompt. Once the bridge starts, it remains in the foreground and prints the local World URL;
+press Ctrl+C to stop it.
 
 Guided setup is disabled for non-interactive launches, explicit `--session`/`HERDR_SESSION` targets,
 and socket overrides. Use `--no-herdr-setup` or `HERDR_WORLD_SETUP=never` to disable it for a
