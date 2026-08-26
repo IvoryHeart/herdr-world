@@ -180,25 +180,16 @@ import type { OfficeHandoffRequest } from "./world/herdrOfficeHandoff";
 import { projectHerdrOffice } from "./world/herdrOfficeProjection";
 import type { OfficeAgent } from "./world/herdrOfficeProjection";
 import { WorldConversationBubble } from "./world/WorldConversationBubble";
-import { WorldSettingsDialog } from "./world/WorldSettingsDialog";
 import {
-  hasStoredWorldSettings,
-  readWorldLongRoomTitleMode,
-  readWorldSettings,
-  readWorldRoomAlignment,
-  updateWorldObservabilityConfiguration,
-} from "./world/worldSettings";
+  useWorldSettingsController,
+  WorldSettingsOverlay,
+} from "./world/WorldSettingsController";
 import {
   readWorldCompletionSeenKeys,
   writeWorldCompletionSeenKeys,
 } from "./world/completionSeenState";
 import type { WorldConversationBubblePanel } from "./world/WorldSurface";
 import { herdrOfficeSourcesFromRuntime } from "./world/worldRuntime";
-import {
-  EMPTY_OFFICE_OBSERVABILITY,
-  fetchOfficeObservability,
-} from "./world/officeObservability";
-import type { OfficeObservability } from "./world/officeObservability";
 import {
   DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
   DEFAULT_TERMINAL_INPUT_TRANSPORT,
@@ -1237,13 +1228,6 @@ export function App() {
   const [worldCompletionSeenKeys, setWorldCompletionSeenKeys] = useState<Set<string>>(
     () => readWorldCompletionSeenKeys(),
   );
-  const [worldObservability, setWorldObservability] = useState<OfficeObservability>(
-    EMPTY_OFFICE_OBSERVABILITY,
-  );
-  const [worldRoomAlignment, setWorldRoomAlignment] = useState(() => readWorldRoomAlignment());
-  const [worldLongRoomTitleMode, setWorldLongRoomTitleMode] = useState(
-    () => readWorldLongRoomTitleMode(),
-  );
   const [worldConversationTargets, setWorldConversationTargets] = useState<WorldConversationTarget[]>(
     () => readWorldConversationTargets(),
   );
@@ -1294,11 +1278,7 @@ export function App() {
   const [noteDeleteTarget, setNoteDeleteTarget] = useState<ScopedNoteEntry | null>(null);
   const [deletingNote, setDeletingNote] = useState(false);
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
-  const [worldSettingsOpen, setWorldSettingsOpen] = useState(false);
-  const [worldObservabilityRevision, setWorldObservabilityRevision] = useState(0);
   const backendSettingsReturnFocusRef = useRef<HTMLElement | null>(null);
-  const worldSettingsAppliedRef = useRef(new Map<string, string>());
-  const worldSettingsSyncRef = useRef(new Map<string, Promise<void>>());
   const openBackendSettings = useCallback(() => {
     backendSettingsReturnFocusRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -1314,63 +1294,15 @@ export function App() {
       }
     });
   }, []);
-  const openWorldSettings = useCallback(() => {
+  const prepareWorldSettingsOpen = useCallback(() => {
     setBackendSettingsOpen(false);
-    setWorldSettingsOpen(true);
   }, []);
-  const closeWorldSettings = useCallback(() => {
-    setWorldSettingsOpen(false);
-  }, []);
-  const markWorldSettingsSaved = useCallback(() => {
-    setWorldObservabilityRevision((revision) => revision + 1);
-    setWorldRoomAlignment(readWorldRoomAlignment());
-    setWorldLongRoomTitleMode(readWorldLongRoomTitleMode());
-  }, []);
-  const synchronizeStoredWorldSettings = useCallback(async (
-    runtimes: readonly BridgeRuntime[],
-  ) => {
-    const pending: Promise<void>[] = [];
-    for (const runtime of runtimes) {
-      const inFlight = worldSettingsSyncRef.current.get(runtime.id);
-      if (inFlight) {
-        pending.push(inFlight);
-        continue;
-      }
-      if (
-        runtime.capabilityState !== "ready" ||
-        !runtime.canConnect ||
-        !hasStoredWorldSettings(runtime.id)
-      ) {
-        continue;
-      }
-      const settings = readWorldSettings(runtime.id);
-      if (!settings) {
-        continue;
-      }
-      const value = settings.prometheusUrl ?? "";
-      const marker = `${runtime.generationKey}:${value}`;
-      if (worldSettingsAppliedRef.current.get(runtime.id) === marker) {
-        continue;
-      }
-      worldSettingsAppliedRef.current.set(runtime.id, marker);
-      const sync: Promise<void> = updateWorldObservabilityConfiguration(runtime, settings.prometheusUrl)
-        .then(() => undefined)
-        .catch(() => {
-          worldSettingsAppliedRef.current.delete(runtime.id);
-        });
-      worldSettingsSyncRef.current.set(runtime.id, sync);
-      void sync.finally(() => {
-        if (worldSettingsSyncRef.current.get(runtime.id) === sync) {
-          worldSettingsSyncRef.current.delete(runtime.id);
-        }
-      });
-      pending.push(sync);
-    }
-    await Promise.all(pending);
-  }, []);
-  useEffect(() => {
-    void synchronizeStoredWorldSettings(bridge.enabledRuntimes);
-  }, [bridge.enabledRuntimes, synchronizeStoredWorldSettings]);
+  const worldSettingsController = useWorldSettingsController({
+    active: activeSurface.id === "world",
+    runtimes: bridge.enabledRuntimes,
+    onBeforeOpen: prepareWorldSettingsOpen,
+  });
+  const { isOpen: worldSettingsOpen, close: closeWorldSettings } = worldSettingsController;
   const [terminalFontSizePx, setTerminalFontSizePx] = useState(
     initialPrefs.terminalFontSizePx,
   );
@@ -1681,36 +1613,6 @@ export function App() {
       : worldSources,
     [hostScope, selectedBridgeId, worldSources],
   );
-  useEffect(() => {
-    if (activeSurface.id !== "world") {
-      return;
-    }
-    let disposed = false;
-    const refresh = async () => {
-      await synchronizeStoredWorldSettings(bridge.enabledRuntimes);
-      if (disposed) {
-        return;
-      }
-      const next = await fetchOfficeObservability(bridge.enabledRuntimes).catch(() => ({
-        ...EMPTY_OFFICE_OBSERVABILITY,
-        health: "degraded" as const,
-      }));
-      if (!disposed) {
-        setWorldObservability(next);
-      }
-    };
-    void refresh();
-    const interval = window.setInterval(refresh, 30_000);
-    return () => {
-      disposed = true;
-      window.clearInterval(interval);
-    };
-  }, [
-    activeSurface.id,
-    bridge.enabledRuntimes,
-    synchronizeStoredWorldSettings,
-    worldObservabilityRevision,
-  ]);
   const worldProjection = useMemo(
     () => projectHerdrOffice(worldSourcesInScope, Date.now()),
     [worldSourcesInScope],
@@ -5193,7 +5095,7 @@ export function App() {
   };
   const worldSurfaceContext: WorldSurfaceContext = {
     projection: worldProjection,
-    observability: worldObservability,
+    observability: worldSettingsController.observability,
     selectedKey: worldSelectedKey,
     completionSeenKeys: worldCompletionSeenKeys,
     onSelect: selectWorldKey,
@@ -5206,8 +5108,8 @@ export function App() {
     onCloseConversation: closeWorldConversation,
     onFocusConversation: focusWorldConversation,
     agentActivityTransitions,
-    roomAlignment: worldRoomAlignment,
-    longRoomTitleMode: worldLongRoomTitleMode,
+    roomAlignment: worldSettingsController.roomAlignment,
+    longRoomTitleMode: worldSettingsController.longRoomTitleMode,
     canCreateSeat: canCreateWorldSeat,
     onNewSeat: openNewWorldSeat,
     canCreateRoom: canCreateWorldRoom,
@@ -5883,7 +5785,7 @@ export function App() {
       {backendSettingsOpen ? (
         <BackendSettingsDialog
           showMobileTerminalSettings={isTouchInput}
-          onOpenWorldSettings={openWorldSettings}
+          onOpenWorldSettings={worldSettingsController.open}
           notesEnabled={notesEnabled}
           onNotesEnabled={setNotesEnabled}
           navigationSyncMode={navigationSyncMode}
@@ -5929,9 +5831,7 @@ export function App() {
         />
       ) : null}
 
-      {worldSettingsOpen ? (
-        <WorldSettingsDialog onClose={closeWorldSettings} onSaved={markWorldSettingsSaved} />
-      ) : null}
+      <WorldSettingsOverlay controller={worldSettingsController} />
 
       {error ? (
         <div className="toast" role="alert">
