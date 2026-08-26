@@ -6,6 +6,9 @@
 
 ### Added
 
+- Added focused contribution guidance and a private vulnerability-reporting
+  policy for the public Herdr World repository.
+  [Herdr World PR #8](https://github.com/IvoryHeart/herdr-world/pull/8)
 - Added Spec 015 work unit 2's focused Herdr Web v0.4.2/v0.4.3 replay: a supervised loopback
   `npm run dev` workflow with child-process tests, and an opt-in bounded terminal screen-reader
   text mirror. The replay preserves downstream World and multi-bridge behavior; Web v0.4.2/v0.4.3

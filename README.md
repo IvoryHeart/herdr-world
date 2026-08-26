@@ -463,6 +463,14 @@ See [docs/packaging.md](docs/packaging.md) for desktop tarball and APK artifact 
 See [docs/release.md](docs/release.md) for release validation, browser smoke testing, tagging,
 GitHub release creation, and manual artifact upload.
 
+## Contributing And Support
+
+Focused contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Use [GitHub Issues](https://github.com/IvoryHeart/herdr-world/issues) for bugs
+and scoped feature proposals. Security issues should follow
+[`SECURITY.md`](SECURITY.md) and must not be disclosed publicly before a fix is
+available. Community support is best-effort and has no SLA.
+
 ## License And Attribution
 
 Herdr World's MIT license retains the Herdr Web copyright notice and adds the
