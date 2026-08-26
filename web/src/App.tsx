@@ -184,6 +184,7 @@ import {
   useWorldSettingsController,
   WorldSettingsOverlay,
 } from "./world/WorldSettingsController";
+import { createWorldRoomActions } from "./world/worldRoomActions";
 import {
   readWorldCompletionSeenKeys,
   writeWorldCompletionSeenKeys,
@@ -4960,139 +4961,37 @@ export function App() {
   );
   const WorldSurface =
     activeSurface.id === "world" ? coreSurfaceRegistry.component("world") : null;
-  const canCreateWorldSeat = (roomKey: string) => {
-    const room = worldProjection.rooms.find(({ key }) => key === roomKey);
-    if (!room) {
-      return false;
-    }
-    const runtime = bridge.getRuntime(room.hostKey);
-    const state = runtime ? connectionStates[runtime.id] : null;
-    return Boolean(
-      runtimeFeatureReady(
-        runtime,
-        state,
-        "launcher_presets",
-        activeSurface.requiredCapabilities,
-      ) &&
-      supportsLauncherPresets(runtime?.capabilities) &&
-      runtimeCommandReady(
-        runtime,
-        state,
-        "tab.create",
-        activeSurface.requiredCapabilities,
-      ),
-    );
-  };
-  const openNewWorldSeat = (roomKey?: string) => {
-    const room = roomKey
-      ? worldProjection.rooms.find(({ key }) => key === roomKey)
-      : null;
-    const bridgeId = room?.hostKey ?? selectedRuntime?.id;
-    const workspaceId = room?.workspaceRef.nativeTargetId ?? activeSpace?.workspace_id ?? null;
-    if (!bridgeId) {
-      setWorldHandoffStatus("Select a connected workspace before starting a seat.");
-      return;
-    }
-    const runtime = bridge.getRuntime(bridgeId);
-    if (!runtime) {
-      setWorldHandoffStatus("Select a connected workspace before starting a seat.");
-      return;
-    }
-    if (!workspaceId) {
-      setWorldHandoffStatus("No active workspace is available on this host.");
-      return;
-    }
-    if (roomKey ? !canCreateWorldSeat(roomKey) : !createTabSupported) {
-      setWorldHandoffStatus("New seats are unavailable on this host.");
-      return;
-    }
-    setSelectedBridgeId(bridgeId);
-    setActiveWorkspaceRefState({ bridgeId, workspaceId });
-    setActiveWorkspacesByBridgeId((current) =>
-      current[bridgeId] === workspaceId ? current : { ...current, [bridgeId]: workspaceId },
-    );
-    setLaunchTarget({
-      mode: "tab",
-      workspaceId,
-      bridgeId,
-    });
-  };
-  const worldRoomForKey = (roomKey?: string) =>
-    roomKey ? worldProjection.rooms.find(({ key }) => key === roomKey) ?? null : null;
-  const worldRoomRuntime = (roomKey?: string) => {
-    const room = worldRoomForKey(roomKey);
-    return bridge.getRuntime(room?.hostKey ?? selectedRuntime?.id ?? "") ?? null;
-  };
-  const canCreateWorldRoom = (roomKey?: string) => {
-    const runtime = worldRoomRuntime(roomKey);
-    const state = runtime ? connectionStates[runtime.id] : null;
-    return Boolean(
-      runtimeCommandReady(
-        runtime,
-        state,
-        "workspace.create",
-        activeSurface.requiredCapabilities,
-      ),
-    );
-  };
-  const openNewWorldRoom = (roomKey?: string) => {
-    const runtime = worldRoomRuntime(roomKey);
-    if (!runtime || !canCreateWorldRoom(roomKey)) {
-      setWorldHandoffStatus("Room creation is unavailable on this host.");
-      return;
-    }
-    setSelectedBridgeId(runtime.id);
-    setDialog({
-      mode: "create",
-      kind: "space",
-      bridgeId: runtime.id,
-      id: "new",
-      label: "",
-      noun: "room",
-    });
-  };
-  const canManageWorldRoom = (roomKey: string, command: "workspace.rename" | "workspace.close") => {
-    const runtime = worldRoomRuntime(roomKey);
-    const state = runtime ? connectionStates[runtime.id] : null;
-    return Boolean(
-      runtimeCommandReady(
-        runtime,
-        state,
-        command,
-        activeSurface.requiredCapabilities,
-      ),
-    );
-  };
-  const openWorldRoomRename = (roomKey: string) => {
-    const room = worldRoomForKey(roomKey);
-    if (!room || !canManageWorldRoom(roomKey, "workspace.rename")) {
-      setWorldHandoffStatus("Room renaming is unavailable on this host.");
-      return;
-    }
-    setDialog({
-      mode: "rename",
-      kind: "space",
-      bridgeId: room.hostKey,
-      id: room.workspaceRef.nativeTargetId,
-      label: room.displayLabel,
-      noun: "room",
-    });
-  };
-  const openWorldRoomClose = (roomKey: string) => {
-    const room = worldRoomForKey(roomKey);
-    if (!room || !canManageWorldRoom(roomKey, "workspace.close")) {
-      setWorldHandoffStatus("Room closing is unavailable on this host.");
-      return;
-    }
-    setDialog({
-      mode: "close",
-      kind: "space",
-      bridgeId: room.hostKey,
-      id: room.workspaceRef.nativeTargetId,
-      label: room.displayLabel,
-      noun: "room",
-    });
-  };
+  const worldRoomActions = createWorldRoomActions({
+    projection: worldProjection,
+    getRuntime: bridge.getRuntime,
+    connectionStates,
+    selectedRuntimeId: selectedRuntime?.id ?? null,
+    selectedWorkspaceId: activeSpace?.workspace_id ?? null,
+    createTabSupported,
+    requiredCapabilities: activeSurface.requiredCapabilities,
+    onStatus: setWorldHandoffStatus,
+    onSelectBridge: setSelectedBridgeId,
+    onSelectWorkspace: (bridgeId, workspaceId) => {
+      setSelectedBridgeId(bridgeId);
+      setActiveWorkspaceRefState({ bridgeId, workspaceId });
+      setActiveWorkspacesByBridgeId((current) =>
+        current[bridgeId] === workspaceId ? current : { ...current, [bridgeId]: workspaceId },
+      );
+    },
+    onOpenSeatLauncher: ({ bridgeId, workspaceId }) => {
+      setLaunchTarget({ mode: "tab", workspaceId, bridgeId });
+    },
+    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, label }) => {
+      setDialog({
+        mode,
+        kind: "space",
+        bridgeId,
+        id: workspaceId,
+        label,
+        noun: "room",
+      });
+    },
+  });
   const worldSurfaceContext: WorldSurfaceContext = {
     projection: worldProjection,
     observability: worldSettingsController.observability,
@@ -5110,14 +5009,14 @@ export function App() {
     agentActivityTransitions,
     roomAlignment: worldSettingsController.roomAlignment,
     longRoomTitleMode: worldSettingsController.longRoomTitleMode,
-    canCreateSeat: canCreateWorldSeat,
-    onNewSeat: openNewWorldSeat,
-    canCreateRoom: canCreateWorldRoom,
-    onCreateRoom: openNewWorldRoom,
-    canRenameRoom: (roomKey) => canManageWorldRoom(roomKey, "workspace.rename"),
-    onRenameRoom: openWorldRoomRename,
-    canCloseRoom: (roomKey) => canManageWorldRoom(roomKey, "workspace.close"),
-    onCloseRoom: openWorldRoomClose,
+    canCreateSeat: worldRoomActions.canCreateSeat,
+    onNewSeat: worldRoomActions.openNewSeat,
+    canCreateRoom: worldRoomActions.canCreateRoom,
+    onCreateRoom: worldRoomActions.openNewRoom,
+    canRenameRoom: worldRoomActions.canRenameRoom,
+    onRenameRoom: worldRoomActions.openRoomRename,
+    canCloseRoom: worldRoomActions.canCloseRoom,
+    onCloseRoom: worldRoomActions.openRoomClose,
   };
   const worldStage = WorldSurface ? (
     <SurfaceSlotBoundary label="Pixel Office" resetKey={activeSurface.id}>
