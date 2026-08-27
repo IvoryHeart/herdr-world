@@ -566,10 +566,6 @@ test("deduplicates terminal windows and stops at the five-window Office cap", as
 test("moves and resizes the Office conversation bubble without losing its live anchors", async ({
   page,
 }) => {
-  test.skip(
-    process.env.CI === "true",
-    "Temporarily muted in CI: intermittent Office resize instability has no identified root cause; this test continues to run locally. See docs/development.md.",
-  );
   test.setTimeout(45_000);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/world");

@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Bounded terminal resize traffic during rapid pane and Office conversation resizing, preventing
+  resize/output feedback from stalling the page while retaining the latest terminal dimensions.
+  [Herdr World PR #23](https://github.com/IvoryHeart/herdr-world/pull/23)
+
 ### Removed
 
 ## [0.1.0-rc.1] - 2026-08-26

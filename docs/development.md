@@ -170,23 +170,9 @@ curl -fsS http://127.0.0.1:8787/api/snapshot
   the browser console; the Office E2E coverage asserts that the renderer
   produces a live canvas.
 
-## Temporary CI warning
+## Resize behavior
 
-The Office conversation resize test in
-`tests/e2e/world.spec.ts` is temporarily skipped when the `CI` environment
-variable is `true`. It still runs in local E2E runs. This is an explicit
-containment measure for intermittent CI instability; the root cause has not
-been identified and the skip must not be treated as a permanent pass.
-
-Local manual verification currently shows the related product behavior is
-usable: the conversation window follows the resize immediately, then the
-inner Ghostty canvas refits after a short catch-up interval and may blink once.
-This smoothing work is tracked separately as
-[SUG-028](suggestions.md#sug-028--smooth-office-terminal-refit-during-resize).
-It should be addressed together with the CI investigation rather than hidden
-behind a broader product-level resize change.
-
-Re-enable the test after a reproducible CI trace identifies and fixes the
-ResizeObserver, animation-frame, pointer/keyboard, viewport, or terminal-canvas
-timing issue involved. This note keeps the containment visible next to the
-local test workflow.
+Terminal rendering still refits on the next animation frame while a pane or
+Office conversation is resized. Browser-to-bridge terminal resize messages
+are coalesced to the latest cell dimensions and capped at one message per
+50 ms, preventing rapid layout/output feedback from stalling the page.

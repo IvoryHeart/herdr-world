@@ -35,6 +35,7 @@ import {
 } from "./terminalSelection";
 import { GhosttyRenderer } from "./terminalRenderer";
 import type { MobileTerminalTouchEvent, TerminalRenderer, TerminalSize } from "./terminalRenderer";
+import { createTerminalResizeScheduler } from "./terminalResizeTransport";
 import {
   appendTerminalInputBatch,
   drainTerminalInputBatch,
@@ -759,6 +760,13 @@ export function TerminalView({
     let reconnectStopped = false;
     const reconnectScheduledForSocket = new Set<number>();
     const pendingForegroundReasons = new Set<ReconnectReason>();
+    const resizeScheduler = createTerminalResizeScheduler((size) => {
+      if (!resizeEnabledRef.current || socket?.readyState !== WebSocket.OPEN) {
+        return false;
+      }
+      socket.send(JSON.stringify({ type: "resize", cols: size.cols, rows: size.rows }));
+      return true;
+    });
 
     const debugReconnect = (event: string, details: Record<string, unknown> = {}) => {
       if (DEBUG_TERMINAL_RECONNECT) {
@@ -788,9 +796,10 @@ export function TerminalView({
     };
 
     const sendResize = (size: TerminalSize) => {
-      if (resizeEnabledRef.current && socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: "resize", cols: size.cols, rows: size.rows }));
+      if (!resizeEnabledRef.current || socket?.readyState !== WebSocket.OPEN) {
+        return;
       }
+      resizeScheduler.submit(size);
     };
     sendResizeRef.current = sendResize;
 
@@ -800,6 +809,7 @@ export function TerminalView({
       if (socketRef.current === current) {
         socketRef.current = null;
       }
+      resizeScheduler.reset();
       current?.close();
     };
 
@@ -938,6 +948,7 @@ export function TerminalView({
           socketRef.current = null;
         }
         socket = null;
+        resizeScheduler.reset();
         if (lastCloseReason) {
           console.warn("terminal websocket closed", lastCloseReason);
         }
@@ -1157,6 +1168,7 @@ export function TerminalView({
       clearReconnectTimer();
       clearConnectTimer();
       clearForegroundCoalesceTimer();
+      resizeScheduler.reset();
       closeActiveSocket();
       sendResizeRef.current = () => {};
     };
