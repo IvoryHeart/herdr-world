@@ -111,7 +111,7 @@ Android development also needs a JDK and Android SDK. See [docs/android.md](docs
 | Platform | Status |
 | --- | --- |
 | Linux x86-64 | Available in [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1) |
-| macOS ARM64 / x86-64 | Available unsigned in [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1) |
+| macOS ARM64 / x86-64 | Available in [`v0.1.0-rc.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.1) |
 | Android | Source and debug build workflow are available; no signed public APK yet |
 
 ## Quick Start From Release
@@ -144,10 +144,11 @@ http://127.0.0.1:8787
 `herdr-world` and `herdr-world-installer` under `~/.local/bin`, and continues into the consent-based
 Herdr dependency setup. The desktop tarball includes the web assets and `herdr-world-bridge`; it
 does not embed Herdr.
-The macOS binaries are not yet Developer ID signed or notarized. macOS may therefore require you to
-confirm the first launch in System Settings → Privacy & Security after you have verified the
-downloaded checksum and source. Signing and notarization will be added when project credentials are
-available.
+The release workflow now refuses to publish new macOS archives unless the bridge has a timestamped
+Developer ID Application signature and Apple accepts its notarization submission. Pull-request and
+manual CI artifacts use test-only ad-hoc signatures and are not release artifacts. Archives
+published before this gate are not silently replaced; check the corresponding release notes and
+checksum when testing an older download.
 If the default Herdr session is missing or incompatible, the installed `herdr-world` command
 explains the requirement and asks separately before downloading the [official Herdr
 installer](https://herdr.dev/docs/install/), stopping an incompatible detached server, or starting
