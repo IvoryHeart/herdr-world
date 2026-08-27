@@ -547,10 +547,11 @@ of hidden requirements.
   resize instability.
 - **Owner:** Open
 - **Added:** 2026-08-11
-- **Current slice:** The embedded terminal's ResizeObserver path now refits on
-  the next animation frame, removing the extra trailing debounce that made the
-  inner canvas visibly lag the outer Office window. The renderer scene-build
-  guard remains a separate follow-up if field use still exposes a delay.
+- **Current slice:** The embedded terminal's ResizeObserver path still refits on
+  the next animation frame, while browser-to-bridge resize messages coalesce to
+  the latest cell dimensions and are capped at one message per 50 ms. This keeps
+  the inner canvas aligned with the outer Office window without allowing resize
+  traffic and terminal output to stall the page.
 - **Related:** [`008-office-productivity-ux-spec.md`](specs/008-office-productivity-ux-spec.md)
 
 ## Parked or declined
