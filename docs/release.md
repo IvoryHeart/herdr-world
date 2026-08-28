@@ -1,7 +1,9 @@
 # Release Process
 
-`herdr-world` is a public downstream application. Releases create Git tags and GitHub releases.
-They do not publish npm packages, and the package versions are not release versions.
+`herdr-world` is a public downstream application. One tagged release workflow assembles the
+GitHub, npm, and Homebrew distributions from the same verified native artifacts. Root and web
+development manifests remain private at version `0.0.0`; public package versions are derived from
+the release tag.
 
 ## Prerequisites
 
@@ -11,6 +13,11 @@ They do not publish npm packages, and the package versions are not release versi
 - `cargo-about` 0.9.2 (`cargo install cargo-about --version 0.9.2 --locked --features cli`).
 - JDK 21 and Android SDK when validating the Android shell.
 - GitHub CLI authenticated as a user that can create releases.
+- Active repository rulesets protecting `main` and `v*` release tags.
+- The public `IvoryHeart/homebrew-tap` repository and an Actions secret named
+  `HOMEBREW_TAP_TOKEN`, restricted to that repository's Formula contents.
+- After the one-time npm bootstrap: the exact `.github/workflows/release.yml` workflow configured
+  as the npm trusted publisher for `@ivoryheart/herdr-world`.
 - `origin` fetch and push URLs both resolve to `IvoryHeart/herdr-world`. The release helper rejects
   upstream, fork, local-path, and unsupported remote URLs before making any release mutation.
 - A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
@@ -35,11 +42,8 @@ npm run check
 
 Do not cut a release without bridge test/build coverage.
 
-If an unannounced prerelease must be replaced under the same tag, first delete its GitHub release
-and local/remote tag, then run `node scripts/release.mjs vX.Y.Z-rc.N --reissue-prerelease`. This
-explicit recovery mode is limited to prereleases whose public version references already match;
-the normal clean-tree, canonical-remote, absent-tag, absent-release, test, commit, and publication
-checks still apply. Never use it to replace a stable release or immutable release assets.
+Corrections use a new release-candidate number. For example, a correction after
+`v1.2.3-rc.2` is `v1.2.3-rc.3`; the existing tag and public package content are never replaced.
 
 ## Package Artifacts
 
@@ -191,14 +195,12 @@ The script:
 - commits `Release vX.Y.Z`
 - tags `vX.Y.Z`
 - pushes `main` and the tag atomically
-- creates a GitHub release with notes extracted from `CHANGELOG.md`
-- passes `--repo IvoryHeart/herdr-world` and `--verify-tag` explicitly when creating the release
 - opens the next `## [Unreleased]` changelog section and pushes it
 
-The tag starts the desktop release workflow. It builds and verifies Linux x86-64, macOS ARM64, and
-macOS x86-64 archives, uploads their checksum files, and fails rather than replacing an asset that
-already exists. The release commit's site changes also trigger the Pages deployment. No separate
-desktop upload or documentation-edit step is required.
+The tag starts the release distribution workflow. It builds and verifies Linux x86-64, macOS ARM64,
+and macOS x86-64 archives, assembles a draft GitHub release, and publishes the enabled npm and
+Homebrew channels from the exact tested outputs. The release commit's site changes also trigger the
+Pages deployment. No separate desktop upload or documentation-edit step is required.
 
 ## Android Validation
 
@@ -207,11 +209,34 @@ Before distributing Android builds, follow [docs/android.md](android.md): run
 bridge started using `--allow-origin http://localhost`. Revisit the Android backup policy before
 adding any pairing token or other secret storage.
 
-## Automated Publication
+## One-time npm bootstrap and external setup
 
-After the tag is pushed, monitor both `Desktop release` and `Deploy GitHub Pages`. The desktop
-workflow attaches exactly three native archives and three checksum files. It does not publish npm,
-an Android debug APK, or any unsigned artifact represented as production-signed software.
+The first npm publication must be a release candidate. The protected workflow generates and
+install-tests the exact package tarball, then reports it as an action-required artifact because npm
+trusted publishing cannot be configured until the package exists.
+
+1. Download `npm-package-${RUN_ID}` from the tagged workflow.
+2. Verify its SHA-256 and npm integrity against `npm-package-metadata.json`.
+3. Publish that exact `.tgz` unchanged with interactive 2FA and the `next` dist-tag:
+
+```bash
+npm publish herdr-world-vX.Y.Z-rc.N.tgz --access public --tag next
+```
+
+4. In npm package settings, configure GitHub Actions trusted publishing for user `IvoryHeart`,
+   repository `herdr-world`, workflow `.github/workflows/release.yml`, allowing `npm publish`.
+5. Verify the registry version and integrity, then enable two-factor authentication for writes and
+   disallow traditional publishing tokens. Later tagged releases publish through OIDC and require
+   no `NPM_TOKEN`.
+
+Create the tap-scoped fine-grained GitHub token manually and save it as the repository Actions secret
+`HOMEBREW_TAP_TOKEN`. It needs only Contents read/write access to `IvoryHeart/homebrew-tap`; it must
+not be written to a Formula, artifact, cache, or log. The workflow validates and exercises the
+Formula on all three supported native runners before committing directly to the tap's default branch.
+
+After the tag is pushed, monitor `Release distribution` and `Deploy GitHub Pages`. The release
+workflow reports GitHub, npm, and Homebrew results separately. It does not publish Android debug
+builds or unsigned artifacts as production-signed software.
 
 ## After
 

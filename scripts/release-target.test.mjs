@@ -5,7 +5,6 @@ import {
   RELEASE_REPOSITORY,
   assertReleaseRemoteUrls,
   githubRepositoryFromRemoteUrl,
-  releaseCreateArgs,
   withReleaseRepository,
 } from "./release-target.mjs";
 
@@ -63,33 +62,6 @@ test("adds an explicit repository to GitHub CLI release commands", () => {
     "release",
     "view",
     "v1.2.3",
-    "--repo",
-    "IvoryHeart/herdr-world",
-  ]);
-});
-
-test("marks release-candidate GitHub releases as prereleases", () => {
-  assert.deepEqual(releaseCreateArgs("v0.1.0-rc.3", "notes.md"), [
-    "release",
-    "create",
-    "v0.1.0-rc.3",
-    "--verify-tag",
-    "--notes-file",
-    "notes.md",
-    "--prerelease",
-    "--repo",
-    "IvoryHeart/herdr-world",
-  ]);
-});
-
-test("leaves stable GitHub releases stable", () => {
-  assert.deepEqual(releaseCreateArgs("v0.1.0", "notes.md"), [
-    "release",
-    "create",
-    "v0.1.0",
-    "--verify-tag",
-    "--notes-file",
-    "notes.md",
     "--repo",
     "IvoryHeart/herdr-world",
   ]);

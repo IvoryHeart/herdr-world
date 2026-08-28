@@ -21,8 +21,8 @@ herdr_world_resolve_script() {
 LAUNCHER_PATH="$(herdr_world_resolve_script "${BASH_SOURCE[0]}")"
 BIN_DIR="$(cd "$(dirname "$LAUNCHER_PATH")" && pwd)"
 BUNDLE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
-BRIDGE_BIN="$BIN_DIR/herdr-world-bridge"
-STATIC_DIR="$BUNDLE_ROOT/share/herdr-world/web"
+BRIDGE_BIN="${HERDR_WORLD_BRIDGE_BIN:-$BIN_DIR/herdr-world-bridge}"
+STATIC_DIR="${HERDR_WORLD_STATIC_DIR:-$BUNDLE_ROOT/share/herdr-world/web}"
 
 HERDR_INSTALLER_URL="https://herdr.dev/install.sh"
 HERDR_INSTALL_DOCS_URL="https://herdr.dev/docs/install/"
@@ -169,6 +169,23 @@ Then start it from the directory containing the work you want Herdr to manage:
 
 Detach from Herdr with Ctrl+B, then Q, and run herdr-world again
 (or bin/herdr-world from a portable bundle).
+EOF
+}
+
+herdr_world_help() {
+  cat <<'EOF'
+Usage: herdr-world [OPTIONS]
+
+Starts the Herdr World browser bridge for the selected Herdr session.
+
+Options are forwarded to the bridge:
+  --host HOST                 Bind address (loopback by default)
+  --port PORT                 HTTP port (8787 by default)
+  --session NAME              Select a named Herdr session
+  --no-herdr-setup            Disable interactive Herdr setup
+  -h, --help                  Show this help without starting Herdr or a bridge
+
+The bridge requires Herdr 0.8.2 or newer with terminal protocol 20.
 EOF
 }
 
@@ -367,7 +384,7 @@ herdr_world_main() {
   for arg in "${bridge_args[@]+"${bridge_args[@]}"}"; do
     case "$arg" in
       -h | --help)
-        herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+        herdr_world_help
         return
         ;;
     esac

@@ -13,7 +13,7 @@
     "notices:generate": "node scripts/dependency-notices.mjs --generate",
     "notices:check": "node scripts/dependency-notices.mjs --check",
     "test:dev": "node --test scripts/dev.test.mjs",
-    "test:release": "node --test scripts/release-target.test.mjs scripts/release-version.test.mjs scripts/herdr-world-installer.test.mjs scripts/herdr-world-launcher.test.mjs",
+    "test:release": "node --test scripts/release-target.test.mjs scripts/release-version.test.mjs scripts/release-publication.test.mjs scripts/npm-launcher.test.mjs scripts/homebrew-formula.test.mjs scripts/herdr-world-installer.test.mjs scripts/herdr-world-launcher.test.mjs",
     "test:pages": "node --test scripts/pages.test.mjs",
     "test:web": "npm run test --prefix web",
     "test:observability": "npm run test --prefix web -- observability.test.ts && cargo test --manifest-path bridge/Cargo.toml --bin herdr-web-bridge observability",

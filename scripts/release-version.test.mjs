@@ -7,9 +7,46 @@ import test from "node:test";
 import {
   RELEASE_REFERENCE_PATHS,
   assertCurrentReleaseReferences,
+  compareReleaseTags,
+  normalizeReleaseTag,
+  parseReleaseTag,
+  releaseVersion,
   readCurrentReleaseTag,
   stampCurrentRelease,
 } from "./release-version.mjs";
+
+test("accepts only stable releases and numbered release candidates", () => {
+  assert.equal(normalizeReleaseTag("1.2.3"), "v1.2.3");
+  assert.equal(normalizeReleaseTag("v1.2.3-rc.4"), "v1.2.3-rc.4");
+  assert.equal(releaseVersion("v1.2.3-rc.4"), "1.2.3-rc.4");
+  assert.deepEqual(parseReleaseTag("v0.0.0"), {
+    major: 0,
+    minor: 0,
+    patch: 0,
+    rc: null,
+    tag: "v0.0.0",
+  });
+
+  for (const value of [
+    "v01.2.3",
+    "v1.02.3",
+    "v1.2.03",
+    "v1.2.3-rc.0",
+    "v1.2.3-beta.1",
+    "v1.2.3+build.1",
+    "v1.2.3-rc.1+build.1",
+    "v1.2.3-rc",
+  ]) {
+    assert.throws(() => normalizeReleaseTag(value), /invalid release tag/);
+  }
+});
+
+test("compares stable and release-candidate precedence", () => {
+  assert.equal(compareReleaseTags("v1.2.3-rc.1", "v1.2.3-rc.2"), -1);
+  assert.equal(compareReleaseTags("v1.2.3-rc.9", "v1.2.3"), -1);
+  assert.equal(compareReleaseTags("v1.2.4", "v1.2.3"), 1);
+  assert.equal(compareReleaseTags("v1.2.3", "1.2.3"), 0);
+});
 
 test("repository release references agree with release.json", () => {
   const root = resolve(import.meta.dirname, "..");
@@ -57,7 +94,7 @@ test("fails closed when a required public surface has drifted", () => {
   }
 });
 
-test("allows an explicit same-tag prerelease reissue without rewriting public files", () => {
+test("rejects reusing a release tag even when public references already match", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-world-release-version-"));
   try {
     mkdirSync(join(root, "site"));
@@ -71,18 +108,9 @@ test("allows an explicit same-tag prerelease reissue without rewriting public fi
       /release references already point to v1\.2\.3-rc\.1/,
     );
 
-    const before = RELEASE_REFERENCE_PATHS.map((relativePath) =>
-      readFileSync(join(root, relativePath), "utf8"),
-    );
-    assert.deepEqual(
-      stampCurrentRelease("v1.2.3-rc.1", root, { allowSameTag: true }),
-      [],
-    );
-    assert.deepEqual(
-      RELEASE_REFERENCE_PATHS.map((relativePath) =>
-        readFileSync(join(root, relativePath), "utf8"),
-      ),
-      before,
+    assert.throws(
+      () => stampCurrentRelease("v1.2.3-rc.1", root),
+      /release references already point to v1\.2\.3-rc\.1/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -1,10 +1,21 @@
 # Packaging
 
-`herdr-world` ships as separate desktop bridge/web tarballs and an Android APK.
+`herdr-world` ships as desktop bridge/web tarballs, one universal npm package, Homebrew Formulae,
+and an Android APK.
 
 The desktop tarball does not include Herdr itself. Users still need Herdr `v0.8.2` or newer with
 terminal protocol `20`; the packaged launcher can guide an interactive user through consent-based
 installation and startup of the default local session.
+
+The npm package is generated from the exact three verified desktop archives. It includes the web
+assets once and stores the Linux x64, macOS ARM64, and macOS x64 bridges at fixed paths; its launcher
+selects the supported bridge and rejects unsupported libc or architectures before native execution.
+Installation performs no build, download, Herdr setup, workspace mutation, or process start.
+
+Homebrew uses the prebuilt `herdr-world` Formula for stable releases and `herdr-world-rc` for release
+candidates in `IvoryHeart/homebrew-tap`. Each Formula installs the complete bundle privately and
+exposes only the `herdr-world` launcher. The two Formulae conflict so they cannot both provide the
+same command.
 
 ## Release Artifacts
 
@@ -231,11 +242,13 @@ WebSocket.
 
 ## Automated Desktop Publication
 
-`node scripts/release.mjs vX.Y.Z` updates the public version references, pushes the release tag,
-creates the GitHub release, and triggers `.github/workflows/release.yml`. The workflow builds,
-inspects, live-tests, and uploads all six Linux/macOS archive and checksum assets. Existing assets
-are never replaced. The release command also updates the website source, so the same release push
-deploys current links through the Pages workflow.
+`node scripts/release.mjs vX.Y.Z` updates the public version references, pushes the stamped release
+tag, and triggers `.github/workflows/release.yml`. The workflow builds, inspects, live-tests, and
+retains all six Linux/macOS archive and checksum assets, assembles the GitHub release draft, and
+publishes npm and the matching Homebrew channel from the exact tested outputs. Existing public
+content is never replaced. The release command also updates the website source, so the same release
+push deploys current links through the Pages workflow. See [docs/release.md](release.md) for the
+one-time npm bootstrap and required tap secret.
 
 Android remains a deliberate separate step until a signed public APK exists. Do not attach a debug
 APK to a public release as though it were a production artifact.

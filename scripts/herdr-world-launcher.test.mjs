@@ -52,7 +52,17 @@ herdr_world_main --port 8791
 });
 
 test("help and explicit connection targets never trigger guided setup", () => {
-  for (const args of ["--help", "--session work --port 8791"]) {
+  const help = runLauncher(`
+herdr_world_default_socket() { echo 'unexpected socket lookup' >&2; return 1; }
+herdr_world_exec_bridge() { echo 'unexpected bridge start' >&2; }
+herdr_world_main --help
+  `);
+  assert.equal(help.status, 0);
+  assert.match(help.stdout, /Usage: herdr-world/);
+  assert.doesNotMatch(help.stdout, /unexpected bridge start/);
+  assert.doesNotMatch(help.stderr, /unexpected socket lookup|unexpected bridge start/);
+
+  for (const args of ["--session work --port 8791"]) {
     const result = runLauncher(`
 herdr_world_default_socket() { echo 'unexpected socket lookup' >&2; return 1; }
 herdr_world_exec_bridge() { printf 'bridge'; printf ' <%s>' "$@"; printf '\\n'; }
