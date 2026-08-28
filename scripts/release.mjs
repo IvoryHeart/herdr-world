@@ -68,6 +68,26 @@ function queryNpmOrFail(args, description) {
   }
 }
 
+function readGhApiOrMissing(args, description) {
+  try {
+    return JSON.parse(output("gh", args));
+  } catch (error) {
+    const stdout = String(error.stdout ?? "").trim();
+    const stderr = String(error.stderr ?? "").trim();
+    let response;
+    try {
+      response = JSON.parse(stdout);
+    } catch {
+      response = null;
+    }
+    if (response?.status === 404 || response?.status === "404" || /HTTP 404\b/.test(stderr)) {
+      return null;
+    }
+    const detail = stderr || stdout || error.message;
+    fail(`could not ${description}: ${detail}`);
+  }
+}
+
 function fail(message) {
   console.error(`Error: ${message}`);
   process.exit(1);
@@ -149,8 +169,11 @@ function checkExternalVersionAvailability() {
   const formula = tag.includes("-rc.") ? "herdr-world-rc.rb" : "herdr-world.rb";
   const formulaPath = `Formula/${formula}`;
   const endpoint = `repos/${HOMEBREW_TAP_REPOSITORY}/contents/${formulaPath}`;
-  if (commandSucceeds("gh", ["api", endpoint])) {
-    const response = JSON.parse(output("gh", ["api", endpoint]));
+  const response = readGhApiOrMissing(
+    ["api", endpoint],
+    `check Homebrew Formula ${formulaPath}`,
+  );
+  if (response) {
     const contents = Buffer.from(response.content, "base64").toString("utf8");
     const formulaVersion = contents.match(/^\s*version\s+"([^"]+)"/m)?.[1];
     if (!formulaVersion) {

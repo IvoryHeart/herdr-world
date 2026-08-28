@@ -544,6 +544,8 @@ jobs:
     name: Publish npm channel
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: [provenance, github_release, npm_package, npm_install_test]
+    outputs:
+      publication_result: ${{ steps.complete.outputs.result || steps.state.outputs.result }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -620,7 +622,7 @@ jobs:
               echo "After registry verification, configure this workflow as the npm trusted publisher before the next release."
               echo "Artifact: https://github.com/${RELEASE_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             } >> "$GITHUB_STEP_SUMMARY"
-            echo "result=bootstrap-required" >> "$GITHUB_OUTPUT"
+            echo "result=action-required" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           digest_matches=false
@@ -642,7 +644,7 @@ jobs:
           action="$(node -e 'console.log(JSON.parse(process.argv[1]).action)' "$decision")"
           [[ "$action" != "fail" ]] || { node -e 'console.error(JSON.parse(process.argv[1]).reason)' "$decision"; exit 1; }
       - name: Publish or repair npm channel
-        if: steps.state.outputs.result != 'bootstrap-required'
+        if: steps.state.outputs.result != 'action-required'
         env:
           VERSION: ${{ github.ref_name }}
         shell: bash
@@ -671,6 +673,10 @@ jobs:
           [[ "$registry_integrity" == "$metadata_integrity" ]]
           [[ "$registry_pointer" == "${VERSION#v}" ]]
           echo "npm: $result — https://www.npmjs.com/package/${NPM_PACKAGE_NAME}/v/${VERSION#v}" >> "$GITHUB_STEP_SUMMARY"
+      - name: Mark npm publication complete
+        id: complete
+        if: steps.state.outputs.result != 'action-required'
+        run: echo "result=complete" >> "$GITHUB_OUTPUT"
 
   homebrew_publish:
     name: Publish Homebrew channel
@@ -716,7 +722,7 @@ jobs:
             echo "| Channel | Result |"
             echo "| --- | --- |"
             echo "| GitHub | ${{ needs.github_release.result }} |"
-            echo "| npm (${NPM_PACKAGE_NAME}) | ${{ needs.npm_publish.result }} (bootstrap may be action-required; see job summary) |"
+            echo "| npm (${NPM_PACKAGE_NAME}) | ${{ needs.npm_publish.outputs.publication_result || needs.npm_publish.result }} |"
             echo "| Homebrew (${HOMEBREW_TAP_REPOSITORY}) | ${{ needs.homebrew_publish.result }} |"
             echo "| Herdr plugin | not enabled; Spec 016 remains a separate release tranche |"
             echo
