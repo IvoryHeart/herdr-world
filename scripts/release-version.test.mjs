@@ -8,6 +8,7 @@ import {
   RELEASE_REFERENCE_PATHS,
   assertCurrentReleaseReferences,
   compareReleaseTags,
+  escapeRegex,
   normalizeReleaseTag,
   parseReleaseTag,
   releaseVersion,
@@ -46,6 +47,12 @@ test("compares stable and release-candidate precedence", () => {
   assert.equal(compareReleaseTags("v1.2.3-rc.9", "v1.2.3"), -1);
   assert.equal(compareReleaseTags("v1.2.4", "v1.2.3"), 1);
   assert.equal(compareReleaseTags("v1.2.3", "1.2.3"), 0);
+});
+
+test("escapes release versions for literal changelog matching", () => {
+  const heading = new RegExp(`^## \\[${escapeRegex("1.2.3")}\\] - `, "m");
+  assert.match("## [1.2.3] - Release\n", heading);
+  assert.doesNotMatch("## [1x2x3] - Release\n", heading);
 });
 
 test("repository release references agree with release.json", () => {

@@ -91,8 +91,11 @@ export function runPackageLauncher(args = process.argv.slice(2), {
     stdio: "inherit",
   });
 
+  const signalHandlers = new Map();
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
-    process.on(signal, () => child.kill(signal));
+    const handler = () => child.kill(signal);
+    signalHandlers.set(signal, handler);
+    process.on(signal, handler);
   }
   child.once("error", (error) => {
     console.error(`could not start Herdr World: ${error.message}`);
@@ -100,6 +103,9 @@ export function runPackageLauncher(args = process.argv.slice(2), {
   });
   child.once("exit", (code, signal) => {
     if (signal) {
+      for (const [forwardedSignal, handler] of signalHandlers) {
+        process.removeListener(forwardedSignal, handler);
+      }
       process.kill(process.pid, signal);
     } else {
       process.exitCode = code ?? 1;

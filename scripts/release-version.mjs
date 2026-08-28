@@ -37,6 +37,10 @@ export function normalizeReleaseTag(value) {
   return parseReleaseTag(value).tag;
 }
 
+export function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function releaseVersion(value) {
   return parseReleaseTag(value).tag.slice(1);
 }

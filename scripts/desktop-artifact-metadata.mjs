@@ -1,14 +1,52 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import {
+  closeSync,
+  createReadStream,
+  mkdtempSync,
+  openSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 function digest(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
-export function recordDesktopArtifact({ root = process.cwd(), tag, platform, outputPath, sourceCommit = process.env.GITHUB_SHA ?? "unknown" }) {
+
+function digestFile(path) {
+  return new Promise((resolveDigest, reject) => {
+    const hash = createHash("sha256");
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolveDigest(hash.digest("hex")));
+  });
+}
+
+async function digestArchiveMember(archive, member) {
+  const extractionRoot = mkdtempSync(join(tmpdir(), "herdr-world-metadata-"));
+  const extractedPath = join(extractionRoot, "member");
+  let outputFd;
+  try {
+    outputFd = openSync(extractedPath, "w");
+    execFileSync("tar", ["-xOf", archive, member], {
+      stdio: ["ignore", outputFd, "pipe"],
+    });
+    closeSync(outputFd);
+    outputFd = undefined;
+    return await digestFile(extractedPath);
+  } finally {
+    if (outputFd !== undefined) closeSync(outputFd);
+    rmSync(extractionRoot, { recursive: true, force: true });
+  }
+}
+
+export async function recordDesktopArtifact({ root = process.cwd(), tag, platform, outputPath, sourceCommit = process.env.GITHUB_SHA ?? "unknown" }) {
   const name = `herdr-world-${tag}-${platform}`;
   const archive = join(root, "dist-packages", `${name}.tar.gz`);
   const checksumFile = `${archive}.sha256`;
@@ -17,9 +55,9 @@ export function recordDesktopArtifact({ root = process.cwd(), tag, platform, out
   if (archiveDigest !== expectedArchiveDigest) {
     throw new Error(`archive checksum does not match its checksum file: ${archive}`);
   }
-  const bridge = execFileSync(
-    "tar",
-    ["-xOf", archive, `${name}/bin/herdr-world-bridge`],
+  const bridgeDigest = await digestArchiveMember(
+    archive,
+    `${name}/bin/herdr-world-bridge`,
   );
   const metadata = {
     schema_version: 1,
@@ -28,7 +66,7 @@ export function recordDesktopArtifact({ root = process.cwd(), tag, platform, out
     platform,
     archive: `${name}.tar.gz`,
     archive_sha256: archiveDigest,
-    bridge_sha256: digest(bridge),
+    bridge_sha256: bridgeDigest,
   };
   writeFileSync(outputPath, `${JSON.stringify(metadata, null, 2)}\n`);
   return metadata;
@@ -41,7 +79,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exit(2);
   }
   try {
-    console.log(JSON.stringify(recordDesktopArtifact({ tag, platform, outputPath })));
+    console.log(JSON.stringify(await recordDesktopArtifact({ tag, platform, outputPath })));
   } catch (error) {
     console.error(error.message);
     process.exit(1);

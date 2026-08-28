@@ -357,13 +357,18 @@ jobs:
             scripts/verify-desktop-package.sh "$VERSION" "$platform"
           done
           node scripts/homebrew-checksums.mjs "$VERSION" homebrew-checksums.json
-          node scripts/homebrew-formula.mjs "$VERSION" homebrew-checksums.json formula.rb
-          ruby -c formula.rb
+          formula_name="$(node --input-type=module - "$VERSION" <<'NODE'
+          import { homebrewFormulaName } from './scripts/homebrew-formula.mjs';
+          console.log(homebrewFormulaName(process.argv[2]));
+          NODE
+          )"
+          node scripts/homebrew-formula.mjs "$VERSION" homebrew-checksums.json "${formula_name}.rb"
+          ruby -c "${formula_name}.rb"
       - uses: actions/upload-artifact@v7
         with:
           name: homebrew-formula-${{ github.run_id }}
           path: |
-            formula.rb
+            herdr-world*.rb
             homebrew-checksums.json
           if-no-files-found: error
           retention-days: 14
@@ -485,20 +490,29 @@ jobs:
           github-token: ${{ github.token }}
       - name: Validate Formula syntax on validation runs
         if: github.event_name != 'push'
-        run: ruby -c formula/formula.rb
+        run: |
+          formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
+          [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
+          ruby -c "$formula_file"
       - name: Install, exercise, reinstall, and uninstall Formula
         if: github.event_name == 'push'
         shell: bash
         run: |
+          formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
+          [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
+          if [[ "$(uname -s)" == "Linux" && -x "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
           command -v brew >/dev/null || {
             echo "Homebrew is required on the ${{ matrix.platform }} runner for Formula lifecycle validation" >&2
             exit 1
           }
-          brew audit --strict --online formula/formula.rb
-          brew install --formula formula/formula.rb
-          brew test "$(basename formula/formula.rb .rb)"
-          brew reinstall --formula "$(basename formula/formula.rb .rb)"
-          brew uninstall --force "$(basename formula/formula.rb .rb)"
+          formula_name="$(basename "$formula_file" .rb)"
+          brew audit --strict --online "$formula_file"
+          brew install --formula "$formula_file"
+          brew test "$formula_name"
+          brew reinstall --formula "$formula_name"
+          brew uninstall --force "$formula_name"
 
   npm_publish:
     name: Publish npm channel
@@ -630,7 +644,10 @@ jobs:
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ github.ref_name }}
-        run: scripts/update-homebrew-tap.sh "$VERSION" formula/formula.rb
+        run: |
+          formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
+          [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
+          scripts/update-homebrew-tap.sh "$VERSION" "$formula_file"
       - name: Report Homebrew channel
         env:
           VERSION: ${{ github.ref_name }}

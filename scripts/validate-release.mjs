@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import {
   assertCurrentReleaseReferences,
+  escapeRegex,
   normalizeReleaseTag,
   releaseVersion,
 } from "./release-version.mjs";
@@ -66,7 +67,7 @@ try {
 }
 
 const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
-const changelogHeading = new RegExp(`^## \\[${releaseVersion(tag).replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}\\] - `, "m");
+const changelogHeading = new RegExp(`^## \\[${escapeRegex(releaseVersion(tag))}\\] - `, "m");
 if (!changelogHeading.test(changelog)) {
   fail(`CHANGELOG.md has no released section for ${tag}`);
 }

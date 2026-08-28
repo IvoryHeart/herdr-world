@@ -14,6 +14,7 @@ import {
 } from "./release-target.mjs";
 import {
   compareReleaseTags,
+  escapeRegex,
   normalizeReleaseTag,
   releaseReferencePaths,
   stampCurrentRelease,
@@ -63,6 +64,34 @@ function fail(message) {
   process.exit(1);
 }
 
+function readNpmChannelVersion(channel) {
+  let raw;
+  try {
+    raw = output("npm", [
+      "view",
+      NPM_PACKAGE_NAME,
+      `dist-tags.${channel}`,
+      "--json",
+    ]);
+  } catch (error) {
+    fail(`could not read npm ${channel} for ${NPM_PACKAGE_NAME}: ${error.message}`);
+  }
+  if (!raw || raw === "null" || raw === "undefined") return null;
+
+  let value;
+  try {
+    value = JSON.parse(raw);
+  } catch (error) {
+    fail(`npm ${channel} returned invalid version data: ${error.message}`);
+  }
+  if (value === null || value === "") return null;
+  try {
+    return normalizeReleaseTag(value);
+  } catch (error) {
+    fail(`npm ${channel} returned an invalid release version: ${error.message}`);
+  }
+}
+
 function checkExternalVersionAvailability() {
   if (
     commandSucceeds("npm", [
@@ -85,6 +114,18 @@ function checkExternalVersionAvailability() {
     fail(
       `the first npm publication must be an RC; publish a unique release candidate before ${tag}`,
     );
+  }
+  if (npmPackageExists) {
+    const channel = tag.includes("-rc.") ? "next" : "latest";
+    const currentChannelVersion = readNpmChannelVersion(channel);
+    if (
+      currentChannelVersion &&
+      compareReleaseTags(tag, currentChannelVersion) <= 0
+    ) {
+      fail(
+        `npm ${channel} already reaches ${currentChannelVersion}; candidate ${tag} must be a higher release`,
+      );
+    }
   }
 
   if (
@@ -237,10 +278,6 @@ function openNextUnreleased(changelog) {
     fail("could not open next Unreleased changelog section");
   }
   writeFileSync("CHANGELOG.md", next);
-}
-
-function escapeRegex(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 validatePreflight();

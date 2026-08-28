@@ -3,10 +3,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { normalizeReleaseTag, releaseVersion } from "./release-version.mjs";
+import { escapeRegex, normalizeReleaseTag, releaseVersion } from "./release-version.mjs";
 
 export function extractReleaseNotes(changelog, tag) {
-  const version = releaseVersion(normalizeReleaseTag(tag)).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const version = escapeRegex(releaseVersion(normalizeReleaseTag(tag)));
   const match = changelog.match(
     new RegExp(`^## \\[${version}\\] - [^\\n]+\\n([\\s\\S]*?)(?=\\n## \\[|$)`, "m"),
   );
