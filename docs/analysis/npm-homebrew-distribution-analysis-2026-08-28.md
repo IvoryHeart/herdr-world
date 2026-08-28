@@ -15,7 +15,7 @@ binary-first Homebrew Cask:
 
 1. `@ivoryheart/herdr-world` contains the Node entrypoint, the shared
    launcher/web/documentation/legal payload, and all three native bridges.
-2. `IvoryHeart/homebrew-tap` contains one manually prepared, reviewed Cask
+2. `IvoryHeart/homebrew-tap` contains one CI-prepared, maintainer-reviewed Cask
    that selects an existing immutable GitHub release archive.
 
 The existing verified desktop archives remain the only native source. Package
@@ -151,14 +151,31 @@ exactly at, and above the floor.
 
 ### npm publication
 
-The first release path should be manual and deliberately boring:
+The normal release path should run in CI only for an intentional final version
+tag or published release, never for an ordinary branch or pull request. The
+job should consume the final verified release outputs, generate the universal
+package, run `npm pack`, inspect and hash the exact `.tgz`, install-test that
+same file on all three supported targets, and publish that exact file:
 
-1. build a clean package directory from the final verified release outputs;
-2. run `npm pack`;
-3. inspect the exact `.tgz` file list and manifest;
-4. install-test that exact `.tgz` on all three supported targets;
-5. record its SHA-256; and
-6. publish the same `.tgz` with standard npm authentication.
+```bash
+npm publish <tested-package.tgz> --tag <next-or-latest>
+```
+
+The first publication still needs a bootstrap credential because npm trusted
+publishing cannot be configured until the package exists. It should run in the
+same GitHub-hosted CI job with a temporary or granular npm publish token stored
+as a GitHub Actions secret, and it should publish the first real prerelease
+with explicit public access:
+
+```bash
+npm publish <tested-package.tgz> --access public --tag next
+```
+
+Where supported by the selected npm CLI, the bootstrap job should enable npm
+provenance. After the package exists, configure trusted publishing for the
+exact `IvoryHeart/herdr-world` repository and exact workflow filename
+`release.yml`, allow direct `npm publish`, and remove/revoke the bootstrap
+token.
 
 Prerelease application versions should use the `next` dist-tag. Stable
 versions should use `latest`. The `@ivoryheart` scope must be owned before
@@ -168,11 +185,14 @@ placeholder.
 
 npm name/version contents are immutable. If the wrong bytes are published, that
 version cannot be repaired in place; a later application version is required.
-No custom publication state model or staged-publishing workflow is needed for
-the initial package.
+Before retrying a failed publication, CI should check npm; if the version is
+already live, it should not attempt to replace it. No custom publication state
+model, staged-publishing workflow, or separate publishing service is needed.
 
-OIDC and CI publication automation can be evaluated later as ordinary release
-hardening after the manual path has worked.
+Subsequent publication should use npm trusted publishing from a GitHub-hosted
+runner with Node 22.14.0 or newer, npm 11.5.1 or newer, `id-token: write`, and
+`contents: read`. npm automatically generates provenance for trusted GitHub
+publishing, and no long-lived npm publishing token is needed.
 
 ## Homebrew distribution
 
@@ -216,11 +236,19 @@ channel.
 
 ### Tap update and signing readiness
 
-After the complete GitHub release asset set is available, a maintainer should
-prepare a reviewed tap pull request that changes the Cask version, three
-versioned archive URLs, three checksums, and any necessary Cask metadata. The
-maintainer should run Cask audit/style and install checks on every available
-supported target. The tap should be identified as third-party.
+For an eligible stable release, after the complete GitHub release asset set
+and signing readiness gate are satisfied, CI should read the final version,
+three archive URLs, and three checksums; generate the small Cask metadata
+change; open a pull request in `IvoryHeart/homebrew-tap`; and run Cask
+audit/style and available installation checks. A maintainer reviews and merges
+that pull request. CI must not merge it or upload a separate Homebrew binary.
+
+Opening the pull request needs only a fine-grained credential restricted to the
+`IvoryHeart/homebrew-tap` repository with the contents and pull-request
+permissions required to create the branch and pull request. It should be held
+as a GitHub Actions secret and must not grant access to other repositories or
+merge the tap change. No bot service, GitHub App deployment, state database, or
+broader cross-repository credential is required.
 
 MacOS signing, notarization, and applicable Gatekeeper checks are a separate
 stable-release readiness policy. Local Cask implementation and validation may
@@ -236,10 +264,11 @@ The release sequence should be:
 2. run existing archive verification and the stock-Herdr live smoke;
 3. generate the universal npm directory from those verified outputs;
 4. pack, inspect, install-test, and hash the exact npm `.tgz`;
-5. manually publish the exact npm archive under `next` or `latest`;
-6. prepare the reviewed tap change from the immutable release URLs and
-   checksums after signing readiness; and
-7. run Cask audit/style and installation checks.
+5. publish the exact npm archive from tag/release CI under `next` or `latest`;
+6. for an eligible stable release, have CI prepare the reviewed tap change
+   from the immutable release URLs and checksums after signing readiness; and
+7. run Cask audit/style and installation checks, leaving tap merge to a
+   maintainer.
 
 The desktop archives and Android package remain unchanged. A failed validation
 stops publication. A publication retry must first check the external registry;
@@ -263,6 +292,8 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 | Legal file is omitted | Preserve and validate the complete package legal closure |
 | Cask direct binary path does not survive Caskroom relinking | Test lifecycle; defer a wrapper until direct failure is demonstrated |
 | Third-party tap code is trusted too broadly | Use a fully qualified command and review the tap change |
+| CI publishes a wrong or unintended npm version | Gate publication on an intentional final tag/release, publish the inspected `.tgz`, and check npm before retry |
+| CI can modify the tap too broadly | Store a fine-grained tap-only contents/pull-request credential and leave merge to a maintainer |
 | Plugin and standalone distribution ownership becomes coupled | Keep the one-sentence Spec 016 boundary |
 
 ## Focused validation matrix
@@ -279,8 +310,11 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
   glibc below 2.34 errors;
 - run `herdr-world --help` without Herdr, a workspace, or a bridge;
 - run the existing live smoke against stock Herdr;
-- verify arguments, stdio, signals, and child exit status; and
-- manually publish the exact tested and hashed tarball under the intended tag.
+- verify arguments, stdio, signals, and child exit status;
+- publish the exact tested and hashed tarball from CI under the intended tag;
+- verify the bootstrap public-access token path and its removal/revocation;
+- verify later trusted publishing with GitHub OIDC, `id-token: write`,
+  `contents: read`, and automatic provenance.
 
 ### Homebrew
 
@@ -306,12 +340,13 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 2. Copy all bridges from the corresponding verified archives into fixed
    target-specific paths.
 3. Use Node 22.14.0 or newer and a fixed Linux glibc 2.34 preflight.
-4. Publish the exact manually tested npm `.tgz`; use `next` for prereleases
-   and `latest` for stable releases.
+4. Publish the exact tested npm `.tgz` from CI; use `next` for prereleases and
+   `latest` for stable releases. Bootstrap uses a temporary/granular token,
+   then later releases use trusted publishing with GitHub OIDC.
 5. Use a direct-archive stable Cask in the public third-party tap
-   `IvoryHeart/homebrew-tap`, with a manual reviewed tap change.
-6. Keep OIDC/CI npm automation, platform npm splits, Cask wrappers, formulas,
-   extra targets, and plugin package-manager reuse deferred.
+   `IvoryHeart/homebrew-tap`, with a CI-prepared, maintainer-reviewed tap change.
+6. Keep staged publishing, platform npm splits, Cask wrappers, formulas, extra
+   targets, and plugin package-manager reuse deferred.
 
 ## Sources
 
@@ -335,6 +370,13 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 - [npm scoped public packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
 - [npm distribution tags](https://docs.npmjs.com/cli/v11/commands/npm-dist-tag/)
 - [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/)
+- [npm provenance](https://docs.npmjs.com/generating-provenance-statements/)
+
+### GitHub Actions
+
+- [OpenID Connect reference](https://docs.github.com/en/actions/reference/security/oidc)
+- [Workflow syntax and tag filters](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
+- [Fine-grained token permissions](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
 
 ### Homebrew
 
