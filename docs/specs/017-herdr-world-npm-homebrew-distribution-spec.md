@@ -43,7 +43,7 @@ This specification includes:
   platform selection behavior;
 - the Linux glibc compatibility contract;
 - npm prerelease/stable channels, first-publication bootstrap, subsequent
-  staged publishing, and partial-publication recovery;
+  trusted publishing, and partial-publication recovery;
 - the binary-first Homebrew Cask shape, tap update contract, Caskroom path
   handling, and stable/signing gate;
 - the relationship between these standalone distributions and the source-build
@@ -119,7 +119,7 @@ versions SHALL not be changed merely to publish a distribution.
 
 The npm launcher runtime is Node.js. The initial supported Node floor is
 `22.14.0`; the main package SHALL declare `engines.node: ">=22.14.0"`. The
-release and trusted/staged publishing jobs SHALL use Node `22.14.0` or newer.
+release and trusted-publishing jobs SHALL use Node `22.14.0` or newer.
 
 The current `v0.1.0-rc.1` Linux bridge requires symbols through
 `GLIBC_2.34`. Unless a separate, approved effort deliberately lowers the
@@ -216,10 +216,10 @@ The main package SHALL:
 - use repository metadata resolving exactly to
   `https://github.com/IvoryHeart/herdr-world`.
 
-The generated package metadata SHALL be staged separately from the private
-root and web development manifests. It SHALL not publish the repository root,
-source-only dependencies, Rust targets, Android outputs, tests, CI files, or
-an arbitrary `node_modules` tree.
+The generated package manifests and package files SHALL be maintained
+separately from the private root and web development manifests. They SHALL not
+publish the repository root, source-only dependencies, Rust targets, Android
+outputs, tests, CI files, or an arbitrary `node_modules` tree.
 
 The main and platform package manifests SHALL not use `preinstall` or
 `postinstall` to download release assets or otherwise create a second native
@@ -239,7 +239,6 @@ platform package tarball.
 Each platform package SHALL contain only:
 
 - the matching bridge binary extracted from its verified desktop archive;
-- generated package metadata required for launcher preflight; and
 - the complete legal material applicable to that bridge payload, including the
   project license, native dependency inventory, notices, and referenced license
   files.
@@ -266,15 +265,15 @@ selectors as follows:
 The platform packages MUST NOT declare a `bin` mapping and MUST NOT expose
 `herdr-world-bridge` as a global command. The bridge SHALL be stored at the
 exact implementation path `native/herdr-world-bridge`, and the main launcher
-SHALL resolve that path through package metadata, not by a current-working-
-directory guess.
+SHALL resolve that path through normal Node package resolution, not by a
+current-working-directory guess.
 
 #### Scenario: A platform tarball is inspected
 
 - **GIVEN** the Linux platform package is unpacked
 - **WHEN** its file list and metadata are checked
-- **THEN** it contains its x86-64 bridge, generated package metadata, and
-  complete applicable legal closure, declares `os: ["linux"]`, `cpu: ["x64"]`,
+- **THEN** it contains its x86-64 bridge and complete applicable legal closure,
+  declares `os: ["linux"]`, `cpu: ["x64"]`,
   `libc: ["glibc"]`, has no `bin` mapping, and contains no web runtime or
   launcher payload beyond legal-only files
 
@@ -318,6 +317,11 @@ dependency omitted with `--omit=optional`, or a package whose installation was
 skipped or failed SHALL produce an actionable error naming the selected
 package, detected target, and a corrective installation command.
 
+The launcher SHALL read the selected platform package's normal `package.json`
+through that same Node package resolution and SHALL reject a version different
+from the main package before executing the fixed `native/herdr-world-bridge`
+path.
+
 #### Scenario: Optional dependencies are omitted
 
 - **GIVEN** the main package is installed with `npm install --omit=optional`
@@ -333,25 +337,21 @@ The shared launcher SHALL support these exact environment variables:
 | --- | --- |
 | `HERDR_WORLD_BRIDGE_BIN` | Absolute path to the bridge executable |
 | `HERDR_WORLD_STATIC_DIR` | Absolute path to the static web directory |
-| `HERDR_WORLD_REQUIRED_GLIBC` | Optional package-manager ABI value in `major.minor` form on Linux |
 
-The npm launcher SHALL set all three values that apply before invoking the
-shared launcher. The Homebrew wrapper SHALL set the two absolute paths and the
-declared Linux ABI value when running on Linux. Existing desktop tarball calls
-with these variables unset SHALL retain the current relative-bundle behavior.
+The npm launcher and Homebrew wrapper SHALL set both values before invoking the
+shared launcher. Existing desktop tarball calls with these variables unset
+SHALL retain the current relative-bundle behavior.
 
 If either path variable is set, both path variables MUST be set. Each path
 MUST be absolute, MUST exist at invocation time, and MUST have the expected
 type: the bridge MUST be a regular executable file and the static path MUST be
-a directory containing the packaged web entrypoint. A supplied required-glibc
-value MUST be syntactically valid and match the generated Linux package
-metadata or the Cask's recorded release value. Missing, invalid, relative,
+a directory containing the packaged web entrypoint. Missing, invalid, relative,
 nonexistent, or type-incompatible paths
 SHALL fail closed before any bridge or Herdr process is started. The launcher
 MUST NOT resolve an invalid path relative to the current working directory.
 
 The override contract is intentionally narrow: it supplies only the bridge,
-static directory, and ABI preflight inputs. It SHALL not replace Herdr socket,
+static directory, and no other runtime inputs. It SHALL not replace Herdr socket,
 workspace, host, origin, or security-policy settings.
 
 #### Scenario: A Cask symlink is invoked after an upgrade
@@ -403,8 +403,8 @@ into an opaque native-loader error.
 For the Linux x86-64 bridge, release validation SHALL extract the maximum
 required GLIBC symbol version from the exact binary copied from the verified
 archive. The check SHALL fail if the maximum required version exceeds the
-declared baseline `2.34`, and SHALL write the verified requirement into the
-Linux platform package metadata.
+declared baseline `2.34`. The extracted value, declared baseline, binary
+digest, and target archive digest SHALL be retained as release evidence.
 
 The check SHALL fail closed if the ELF version information cannot be read. It
 SHALL not infer compatibility only from the build host's glibc version. The
@@ -423,8 +423,8 @@ binary digest, and target archive digest.
 
 Before executing the Linux bridge, the npm launcher SHALL detect the host's
 actual glibc version and compare it with the required version from the
-generated Linux platform package metadata. It SHALL report both the required
-and detected versions before execution when the preflight is evaluated.
+fixed initial baseline `2.34`. It SHALL report both the required and detected
+versions before execution when the preflight is evaluated.
 
 The preflight SHALL distinguish:
 
@@ -432,6 +432,10 @@ The preflight SHALL distinguish:
 - glibc at `2.34`, which is supported;
 - glibc above `2.34`, which is supported subject to the other checks; and
 - musl or an unidentifiable libc, which is unsupported for this package.
+
+The initial launcher implementation SHALL own the single required glibc
+baseline constant `2.34`; it SHALL not require a package-manager environment
+override or custom native-package metadata to obtain that value.
 
 The Homebrew Linux wrapper SHALL provide the same preflight result before
 executing the Cask bridge. No path or libc error SHALL fall through to an
@@ -451,15 +455,15 @@ publication channel for a release set:
 - stable versions SHALL use the `latest` dist-tag; and
 - a prerelease SHALL never move or overwrite `latest`.
 
-The publication command or staged approval SHALL pass the intended tag
-explicitly. A package set with mixed versions or mixed intended channels SHALL
-be rejected before publication.
+The publication command SHALL pass the intended tag explicitly. A package set
+with mixed versions or mixed intended channels SHALL be rejected before
+publication.
 
 ### Requirement: First-publication bootstrap
 
-The release process SHALL recognize that trusted publishing and staged
-publishing require a package that already exists. They cannot be configured as
-the mechanism for creating all four package names for the first time.
+The release process SHALL recognize that trusted publishing requires a package
+that already exists. It cannot be configured as the mechanism for creating all
+four package names for the first time.
 
 The first publication SHALL be the first real prerelease, not a placeholder.
 It SHALL use an operator-authenticated npm workflow with 2FA. Before the first
@@ -477,8 +481,7 @@ long-lived token stored in the repository or workflow.
 
 Immediately after all four packages exist, trusted publishing SHALL be
 configured separately for every package. Each configuration SHALL identify the
-exact `IvoryHeart/herdr-world` repository and exact release workflow. The
-configuration SHALL grant stage-only permission where npm supports it.
+exact `IvoryHeart/herdr-world` repository and exact release workflow.
 
 #### Scenario: Bootstrap is attempted before scope ownership
 
@@ -487,90 +490,66 @@ configuration SHALL grant stage-only permission where npm supports it.
 - **THEN** publication stops as an external prerequisite failure and no
   placeholder package is published
 
-### Requirement: Subsequent trusted staged publishing
+### Requirement: Subsequent direct trusted publishing
 
-After bootstrap, the release workflow SHALL use GitHub-hosted OIDC trusted
-publishing for every package. It SHALL:
+After bootstrap, the release workflow SHALL use direct GitHub-hosted OIDC
+trusted publishing for every package. It SHALL:
 
 - run with `id-token: write`;
-- use Node `22.14.0` or newer and npm `11.15.0` or newer;
-- use the exact configured repository and workflow for each package;
-- grant only stage publishing permission where supported;
-- invoke `npm stage publish` for all four packages;
-- download and inspect the actual staged tarball for every package before
-  approval;
-- require human 2FA approval of all three platform stages before approving the
-  launcher stage; and
+- use Node `22.14.0` or newer and npm `11.5.1` or newer;
+- use the exact configured `IvoryHeart/herdr-world` repository and release
+  workflow for each package;
+- require one protected GitHub environment approval for the publish job;
+- publish all four packages with `npm publish --tag <channel>`;
+- publish the three platform packages before the launcher package; and
 - use no long-lived npm publishing token.
 
-The stage tag and package/version identity SHALL be recorded with every
-downloaded staged tarball. Approval SHALL be refused if the downloaded bytes,
-metadata, file list, or hash differ from the pre-stage inspected tarball.
+The workflow SHALL validate that all four tarballs have the same version and
+intended channel before the environment approval. The protected environment
+approval SHALL gate the package-publish job as a whole; it SHALL not require a
+separate approval for each package. Staged publishing is optional deferred
+hardening and is not required by this specification.
 
-The workflow SHALL not assume that a stage is available for a package that has
-never been published. A missing-package response SHALL select the bootstrap
-path and stop the staged path safely.
+#### Scenario: Trusted publisher configuration is wrong
 
-#### Scenario: A staged tarball differs from the inspected tarball
+- **GIVEN** a package's trusted publisher configuration names a different
+  repository or workflow
+- **WHEN** the publish job requests OIDC authentication
+- **THEN** publication fails before package bytes are published and the release
+  identifies the exact package configuration that must be corrected
 
-- **GIVEN** a package has been staged through trusted publishing
-- **WHEN** the downloaded staged tarball does not match the pre-recorded hash
-- **THEN** approval is refused, the release is marked failed, and no retry
-  SHALL replace or mutate either tarball silently
+### Requirement: npm publication recovery
 
-### Requirement: npm partial-publication recovery
-
-npm publication of four packages SHALL be modeled as a non-atomic state
-machine. npm's registry and staged-publishing records SHALL remain the
-authoritative publication state. The release process SHALL emit an
-operator-visible status projection for each attempt, such as a CI summary or
-release artifact, containing the application version, channel, package states,
-tarball hashes, stage identifiers where applicable, and the next safe action.
-This projection SHALL not become a second publication database and SHALL not
-record credentials.
-
-The status projection SHALL report these observable states:
-
-| State | Meaning | Safe next action |
-| --- | --- | --- |
-| `prepared` | All four tarballs inspected, tested, and hash-recorded | Start bootstrap or stage platform packages |
-| `platform-pending` | Platform stages are being inspected or await human 2FA approval | Inspect/approve platform stages only |
-| `platform-published` | All three exact platform versions exist and match hashes | Stage/approve the launcher |
-| `launcher-pending` | The launcher stage is being inspected or awaits approval | Inspect/approve the launcher stage |
-| `partial` | A publication result is unknown or only part of the intended set is live | Query npm and resume only missing packages with identical tarballs |
-| `complete` | All four live versions exist with matching hashes and tag | Prepare the eligible tap PR |
-| `burned` | A wrong byte set was published for this version | Advance the complete set to a new application version |
-
-A validation or external-prerequisite failure before publication SHALL be
-reported as `blocked` with its reason and safe remediation; it is not a new
-npm registry state.
+npm publication of four packages SHALL be treated as non-atomic. The npm
+registry SHALL remain the authoritative publication state. Before publication,
+the release process SHALL inspect, install-test, and hash all four exact
+tarballs. A CI summary or release artifact SHALL make any partial publication
+visible and actionable by listing each package's observed result, version,
+channel, hash, and next safe action. It SHALL not create a custom publication
+database, state taxonomy, or credential record.
 
 Before the launcher package is published, all three platform package names
 SHALL exist at the exact application version with the inspected bytes. The
 launcher SHALL never be published first.
 
-A transient failure before a package version is published MAY retry the
-identical inspected tarball. If a package is already live with correct bytes,
-the process SHALL resume the missing package and SHALL not republish or mutate
-the existing package. If incorrect bytes are published for any package, that
-application version is burned permanently and the complete four-package set
-MUST advance to a new application version. The process SHALL never create
-divergent package versions to repair one member of the set.
+A transient failure before a package version is published MAY retry only after
+querying npm and confirming that the exact version is absent. The retry SHALL
+use the identical inspected tarball. If a package is already live with correct
+bytes, the process SHALL resume only the missing package and SHALL not
+republish or mutate the existing package. If incorrect bytes are published for
+any package, that application version is burned permanently and the complete
+four-package set MUST advance to a new application version. The process SHALL
+never create divergent package versions to repair one member of the set.
 
-An incorrect staged package that has not been approved MAY be rejected; any
-replacement stage SHALL be newly generated, re-inspected, and explicitly
-associated with the same version without silently overwriting the rejected
-stage. Once incorrect bytes are live, the `burned` rule applies.
-
-#### Scenario: A platform publication times out
+#### Scenario: A package publication times out
 
 - **GIVEN** the platform tarball was inspected and its publication result is
   unknown
 - **WHEN** the registry cannot immediately confirm whether the exact version is
   live
-- **THEN** the release enters `partial` or an equivalent unknown substate,
-  queries the registry before retrying, and either resumes the missing package
-  with the identical hash or stops for operator reconciliation
+- **THEN** the CI/release summary records the package result as unknown, the
+  registry is queried before retrying, and the process either publishes the
+  missing package with the identical tarball or stops for operator reconciliation
 
 #### Scenario: One package has wrong live bytes
 
@@ -655,11 +634,7 @@ The pull request SHALL run Homebrew Cask audit/style and installation checks
 for macOS ARM64, macOS x86-64, and Linux x86-64 where those Homebrew targets
 are available. A human review SHALL be required before merge.
 
-Bot or GitHub App automation is deferred for the initial release. If it is
-introduced later, it SHALL use narrowly scoped credentials limited to the
-required tap pull-request operation. The source repository SHALL not hold an
-unrestricted credential capable of rewriting the tap. A pull request SHALL not
-be prepared from a partial GitHub release asset set.
+A pull request SHALL not be prepared from a partial GitHub release asset set.
 
 #### Scenario: The release has one missing archive
 
@@ -733,11 +708,11 @@ third_party/**
 vendor/herdr-compat/VENDOR-MANIFEST.toml
 ```
 
-Each platform `package.json` SHALL include a generated `herdrWorld` metadata
-object containing the fixed bridge path `native/herdr-world-bridge` and, for
-Linux, the required glibc version `2.34`. The Linux value SHALL be generated
-from and checked against the verified bridge; it is not user input. Bridge
-hashes remain release evidence rather than runtime configuration.
+The fixed bridge path SHALL be derived from this package layout by the launcher.
+The Linux baseline SHALL be owned by the launcher implementation as the single
+constant `2.34`; it SHALL not be duplicated in public package metadata. Bridge
+hashes and extracted GLIBC requirements remain release evidence rather than
+runtime configuration.
 
 ### 6.2 Package version and dependency contract
 
@@ -766,7 +741,7 @@ next action. At minimum, diagnostics SHALL distinguish:
 - glibc below `2.34`, including required and detected versions;
 - missing or omitted optional platform package;
 - failed optional-package installation;
-- main/platform package or generated platform metadata mismatch;
+- main/platform package version mismatch;
 - invalid, missing, relative, nonexistent, or wrong-type path override; and
 - bridge execution or child-process failure.
 
@@ -790,19 +765,16 @@ without validation.
 
 ### 7.2 Publication credentials and immutability
 
-npm package name/version contents are immutable after publication. All tarballs
-MUST be inspected, install-tested, and hash-recorded before bootstrap or
-staging. Subsequent publication SHALL use short-lived GitHub OIDC trusted
-publishing and no long-lived npm token.
+npm package name/version contents are immutable after publication. All four
+tarballs MUST be inspected, install-tested, and hash-recorded before bootstrap
+or publication. Subsequent publication SHALL use direct short-lived GitHub OIDC
+trusted publishing, one protected GitHub environment approval for the publish
+job, and no long-lived npm token. Bootstrap remains the operator-authenticated
+2FA exception.
 
-Stage-only permission SHALL be preferred for trusted publishers. Human 2FA
-approval is the boundary that makes a staged package live, with platform
-packages approved before the launcher package.
-
-If Homebrew tap automation is introduced, it SHALL use least-privilege
-credentials and pull requests with review. The initial maintainer-prepared tap
-PR SHALL be based on the same verified release data. A tap update SHALL be
-impossible to prepare from an incomplete or unverified release asset set.
+The maintainer-prepared tap PR SHALL be based on the same verified release
+data. A tap update SHALL be impossible to prepare from an incomplete or
+unverified release asset set.
 
 ### 7.3 Supply-chain evidence
 
@@ -813,8 +785,7 @@ Release evidence SHALL retain, at minimum:
 - each bridge SHA-256 and native-format result;
 - the extracted maximum Linux GLIBC symbol and declared baseline;
 - each npm tarball SHA-256 and `npm pack --dry-run` file list;
-- staged tarball hashes and stage identifiers, when applicable;
-- publication status for each package; and
+- publication result and hash for each package; and
 - the three Homebrew archive SHA-256 values used by the reviewed Cask PR.
 
 ## 8. Release mechanics
@@ -833,8 +804,8 @@ these steps in order:
 6. Generate all four npm package tarballs from the verified assets, using the
    designated common-payload archive.
 7. Inspect and install-test all npm tarballs, and record their hashes.
-8. Bootstrap-publish or stage/approve the npm package set according to whether
-   the package names already exist.
+8. Bootstrap-publish or directly trusted-publish the npm package set according
+   to whether the package names already exist.
 9. Prepare a reviewed Homebrew tap PR from the verified release data when the
    stable and signing gates are satisfied.
 10. Install-test the resulting Cask from the tap on every supported target.
@@ -852,8 +823,6 @@ Each external boundary SHALL expose a durable observable result:
 | --- | --- | --- |
 | GitHub assets | All three archives and checksums resolve and match recorded hashes | Re-query/re-upload only the missing asset; never replace an immutable asset |
 | npm bootstrap | Each live package version resolves and matches the inspected tarball | Query first; publish only a missing package with the identical tarball |
-| npm stage | Stage identifier and downloaded bytes match the inspected tarball | Resume or reject the exact stage; never silently overwrite it |
-| npm approval | Registry shows the exact approved package/version/hash | Approve an outstanding exact stage or stop for reconciliation |
 | Tap PR | PR contains only reviewed version/URL/checksum changes and passes checks | Regenerate a new PR from the same immutable release data |
 | Cask install | Brew fetch/checksum/install/uninstall checks pass | Fix or close the PR; never point stable Cask at mutable data |
 
@@ -876,7 +845,7 @@ following scenarios.
 - unsupported OS, CPU, Linux ARM64, musl, and unknown libc;
 - glibc below 2.34, exactly 2.34, and above 2.34;
 - maximum GLIBC symbol extraction and release failure above the baseline;
-- missing or mismatched native package/generated platform metadata;
+- missing or mismatched native package version;
 - invalid, relative, missing, nonexistent, and wrong-type path overrides;
 - argument, standard-input/output/error, signal, and exit-status forwarding;
 - `herdr-world --help` with no Herdr and no native package;
@@ -886,8 +855,9 @@ following scenarios.
 - legal closure in the main and every platform tarball;
 - `next` for prereleases and `latest` for stable versions;
 - first-publication bootstrap, including operator 2FA and platform-first order;
-- trusted staged publishing with npm 11.15.0+ and Node 22.14.0+;
-- downloaded staged tarball inspection and platform-before-launcher approval;
+- direct GitHub OIDC trusted publishing with npm 11.5.1+ and Node 22.14.0+,
+  exact per-package publisher configuration, and one protected environment
+  approval for the publish job;
 - timeout, retry, partial publication, burned version, and no-mutation recovery.
 
 ### 9.2 Homebrew matrix
@@ -934,13 +904,14 @@ Rollout SHALL occur in these gates:
    2FA, platform packages first and launcher last.
 4. Configure and verify trusted publishing independently for all four existing
    packages.
-5. Use staged publishing for later prereleases, with downloaded-stage
-   inspection and human platform-before-launcher approval.
+5. Use direct GitHub OIDC trusted publishing for later releases, with one
+   protected environment approval for the package-publish job and no long-lived
+   npm token.
 6. Publish the ordinary stable Cask only after macOS signing/notarization and
    Gatekeeper checks pass; merge only a reviewed tap PR prepared from verified
    release data.
-7. Monitor the package/release status record for partial publication and
-   reconcile before any retry.
+7. Make each package result and hash visible in the release summary, and
+   reconcile against npm before any retry.
 
 Documentation SHALL show the stable npm and Homebrew commands only for stable
 releases, and SHALL clearly label `@next`/`next` installation as prerelease.
@@ -953,6 +924,7 @@ The following are intentionally deferred and require a later specification or
 extension before becoming supported behavior:
 
 - a separately named prerelease Homebrew Cask channel;
+- npm staged publishing as optional future hardening;
 - a Homebrew source-building formula or binary formula;
 - Linux ARM64, musl, Windows, or additional macOS targets;
 - a lower Linux glibc baseline;

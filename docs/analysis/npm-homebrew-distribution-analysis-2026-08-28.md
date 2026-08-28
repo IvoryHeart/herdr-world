@@ -121,8 +121,8 @@ The user-facing package should contain:
   documentation.
 
 Each platform package should contain only the matching
-`herdr-world-bridge` payload, its generated package metadata, and its complete
-applicable legal closure. It should declare npm's platform selectors:
+`herdr-world-bridge` payload and its complete applicable legal closure. It
+should declare npm's platform selectors:
 
 - `os` (`linux` or `darwin`);
 - `cpu` (`x64` or `arm64`); and
@@ -210,8 +210,8 @@ explicit `files` list should still be the primary boundary.
 
 Publishing needs to account for npm's immutability rule: a given package name
 and version cannot be reused after publication, even if the package is later
-removed. The workflow should therefore stage, pack, inspect, install-test, and
-hash-record all packages before the first publication call.
+removed. The workflow should therefore assemble, pack, inspect, install-test,
+and hash-record all packages before the first publication call.
 
 The release policy should be:
 
@@ -225,33 +225,34 @@ ordinary install resolves the `latest` tag. This makes the current release
 candidate safe to publish for testers without making it the default stable
 install.
 
-The first publication cannot use staged publishing or trusted publishing as a
-bootstrap mechanism: both require the package to already exist. The first real
-prerelease must therefore use an operator-authenticated npm workflow with 2FA,
-publishing the three platform packages before the launcher. Immediately after
-bootstrap, configure GitHub-hosted OIDC trusted publishing separately for all
-four packages, using the exact repository and workflow and stage-only
-permission where supported.
+The first publication cannot use trusted publishing as a bootstrap mechanism
+because each package must already exist. The first real prerelease must
+therefore use an operator-authenticated npm workflow with 2FA, publishing the
+three platform packages before the launcher. Immediately after bootstrap,
+configure GitHub-hosted OIDC trusted publishing separately for all four
+packages, using the exact repository and workflow.
 
-Subsequent releases should use npm staged publishing from the GitHub-hosted
-workflow. The staged-publishing CLI requires npm 11.15.0 or newer and Node
-22.14.0 or newer, and the package must already exist. The workflow needs
-`id-token: write`, should run `npm stage publish` for all four packages, and
-must download and inspect the actual staged tarballs before human 2FA approval.
-The three platform stages must be approved before the launcher stage. No
-long-lived publish token should be used.
+Subsequent releases should use direct trusted publishing from the GitHub-hosted
+workflow. The workflow needs `id-token: write`, Node 22.14.0 or newer, npm
+11.5.1 or newer, one protected GitHub environment approval for the publish job,
+and no long-lived publish token. It should publish the three platform packages
+before the launcher with the intended dist-tag. Staged publishing is optional
+future hardening, not part of the initial release path.
 
 The workflow must publish the platform packages before the top-level package,
 because the latter refers to exact platform package versions. It should not
 publish anything until the existing native archive verification and the npm
 package content checks pass.
 
-Because four npm publications are not atomic, release status must record each
-package's stage, publication result, hash, and next safe action. A transient
-failure before publication may retry the identical inspected tarball. A live
-package with incorrect bytes burns that application version; the complete set
-must advance together, with no divergent repair versions and no replacement
-of existing contents.
+Because four npm publications are not atomic, a CI summary or release artifact
+should report the four observed package results, versions, channels, hashes,
+and next safe actions. The npm registry remains authoritative; no custom state
+taxonomy or publication database is needed. Before publication, inspect,
+install-test, and hash all four exact tarballs. Before every retry, query npm;
+retry only a package that is confirmed missing, using its identical inspected
+tarball. A live package with incorrect bytes burns that application version;
+the complete set must advance together, with no divergent repair versions and
+no replacement or mutation of existing contents.
 
 ### npm alternatives considered
 
@@ -447,23 +448,23 @@ upload workflow completes. Publication sequencing should therefore be explicit:
 4. Upload and verify the complete GitHub release asset set.
 5. Build and inspect npm package tarballs from those verified assets.
 6. Install-test and hash-record the npm tarballs.
-7. Bootstrap-publish, or stage and approve, the npm package set under the
-   selected dist-tag.
+7. Bootstrap-publish, or directly trusted-publish, the npm package set under
+   the selected dist-tag.
 8. Prepare the reviewed Homebrew tap change after its stable/signing gates,
    then fetch/install-test the Cask.
 
 The Homebrew tap update needs its own authorization and failure behavior. The
 initial release should use a maintainer-prepared pull request from the verified
 release data, with Cask audit/style and install checks and human review. A
-source repository release should not silently rewrite an external tap. Bot or
-GitHub App automation is deferred; if introduced later, it should use narrowly
-scoped credentials limited to the required tap pull-request operation.
+source repository release should not silently rewrite an external tap. The tap
+change should remain a maintainer-prepared, reviewed pull request from the
+verified release data.
 
 All public package versions should derive from the same release tag after
 removing only the leading `v`. The root development package versions should
 remain independent and private. The plugin manifest in Spec 016 already
-introduces a second public versioned surface, so the release validation should
-eventually check the plugin manifest, npm staging metadata, GitHub tag, and
+introduces a second public versioned surface, so release validation should
+eventually check the plugin manifest, npm package metadata, GitHub tag, and
 Homebrew Cask version together without publishing a package as a side effect
 of a local development build.
 
@@ -596,8 +597,10 @@ The follow-up specification resolves the research questions as follows:
    would need a separate name and documented channel.
 7. Preserve Spec 016's source-build-only plugin and defer package-manager
    discovery or external binary reuse.
-8. Use a reviewed tap pull request prepared from verified release data; defer
-   bot or GitHub App automation until it is justified by repeated releases.
+8. Use a maintainer-prepared reviewed tap pull request from verified release
+   data.
+9. Keep npm staged publishing as optional future hardening; it only applies to
+   package names that already exist and is not part of the initial release path.
 
 ## Recommended implementation order
 
