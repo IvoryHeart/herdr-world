@@ -121,7 +121,7 @@ The user-facing package should contain:
   documentation.
 
 Each platform package should contain only the matching
-`herdr-world-bridge` payload, its bridge runtime metadata, and its complete
+`herdr-world-bridge` payload, its generated package metadata, and its complete
 applicable legal closure. It should declare npm's platform selectors:
 
 - `os` (`linux` or `darwin`);

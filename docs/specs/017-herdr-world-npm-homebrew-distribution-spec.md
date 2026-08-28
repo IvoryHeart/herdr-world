@@ -8,11 +8,6 @@
 - **Approved by:** —
 - **Approved at:** —
 
-> This document may be edited only while its status is `Draft` or `In review`.
-> After approval it is immutable. After implementation completes, record
-> delivery and drift in `017-herdr-world-npm-homebrew-distribution-spec-summary.md`;
-> put later intended changes in a numbered extension.
-
 This is a standalone distribution contract related to, but independent from,
 [Spec 016](016-herdr-world-plugin-release-spec.md). Its primary research input
 is the [npm and Homebrew distribution analysis](../analysis/npm-homebrew-distribution-analysis-2026-08-28.md).
@@ -162,7 +157,7 @@ verified archive.
 Before generating npm packages, release validation SHALL compare the common
 payload in all three verified archives. The comparison SHALL normalize away
 only the archive's platform-specific root directory and exclude only the
-platform-specific bridge binary and its platform-specific runtime metadata.
+platform-specific bridge binary.
 
 The common payload is the byte content and relative path set for:
 
@@ -242,10 +237,19 @@ platform package tarball.
 Each platform package SHALL contain only:
 
 - the matching bridge binary extracted from its verified desktop archive;
-- bridge runtime metadata required for launcher preflight; and
+- generated package metadata required for launcher preflight; and
 - the complete legal material applicable to that bridge payload, including the
   project license, native dependency inventory, notices, and referenced license
   files.
+
+The existing desktop legal closure SHALL be copied without path or content
+rewriting into every npm package that carries `THIRD_PARTY_NOTICES.md`. This
+closure includes `LICENSE`, `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`,
+`docs/world-assets.md`, `vendor/herdr-compat/VENDOR-MANIFEST.toml`, the
+complete `third_party/**` trees, and the bundled web legal files. In a platform
+package, web legal files are legal-only material; the web runtime tree is not
+included. Package generation SHALL not introduce a package-specific notice
+splitting system.
 
 Each platform package SHALL have an explicit `files` allowlist and SHALL have
 the same application version as the main package. It SHALL declare exact
@@ -267,10 +271,10 @@ directory guess.
 
 - **GIVEN** the Linux platform package is unpacked
 - **WHEN** its file list and metadata are checked
-- **THEN** it contains its x86-64 bridge, runtime metadata, and complete
-  applicable legal closure, declares `os: ["linux"]`, `cpu: ["x64"]`,
-  `libc: ["glibc"]`, has no `bin` mapping, and contains no web or launcher
-  payload
+- **THEN** it contains its x86-64 bridge, generated package metadata, and
+  complete applicable legal closure, declares `os: ["linux"]`, `cpu: ["x64"]`,
+  `libc: ["glibc"]`, has no `bin` mapping, and contains no web runtime or
+  launcher payload beyond legal-only files
 
 ### Requirement: Explicit npm file boundaries
 
@@ -338,8 +342,9 @@ If either path variable is set, both path variables MUST be set. Each path
 MUST be absolute, MUST exist at invocation time, and MUST have the expected
 type: the bridge MUST be a regular executable file and the static path MUST be
 a directory containing the packaged web entrypoint. A supplied required-glibc
-value MUST be syntactically valid and match the package's verified runtime
-metadata. Missing, invalid, relative, nonexistent, or type-incompatible paths
+value MUST be syntactically valid and match the generated Linux package
+metadata or the Cask's recorded release value. Missing, invalid, relative,
+nonexistent, or type-incompatible paths
 SHALL fail closed before any bridge or Herdr process is started. The launcher
 MUST NOT resolve an invalid path relative to the current working directory.
 
@@ -397,7 +402,7 @@ For the Linux x86-64 bridge, release validation SHALL extract the maximum
 required GLIBC symbol version from the exact binary copied from the verified
 archive. The check SHALL fail if the maximum required version exceeds the
 declared baseline `2.34`, and SHALL write the verified requirement into the
-platform package runtime metadata.
+Linux platform package metadata.
 
 The check SHALL fail closed if the ELF version information cannot be read. It
 SHALL not infer compatibility only from the build host's glibc version. The
@@ -416,8 +421,8 @@ binary digest, and target archive digest.
 
 Before executing the Linux bridge, the npm launcher SHALL detect the host's
 actual glibc version and compare it with the required version from the
-verified platform metadata. It SHALL report both the required and detected
-versions before execution when the preflight is evaluated.
+generated Linux platform package metadata. It SHALL report both the required
+and detected versions before execution when the preflight is evaluated.
 
 The preflight SHALL distinguish:
 
@@ -514,23 +519,29 @@ path and stop the staged path safely.
 ### Requirement: npm partial-publication recovery
 
 npm publication of four packages SHALL be modeled as a non-atomic state
-machine. The release system SHALL persist an operator-visible status record
-containing the application version, channel, package states, tarball hashes,
-stage identifiers where applicable, and the next safe action. It SHALL not
-record credentials in that status.
+machine. npm's registry and staged-publishing records SHALL remain the
+authoritative publication state. The release process SHALL emit an
+operator-visible status projection for each attempt, such as a CI summary or
+release artifact, containing the application version, channel, package states,
+tarball hashes, stage identifiers where applicable, and the next safe action.
+This projection SHALL not become a second publication database and SHALL not
+record credentials.
 
-The states SHALL include:
+The status projection SHALL report these observable states:
 
 | State | Meaning | Safe next action |
 | --- | --- | --- |
 | `prepared` | All four tarballs inspected, tested, and hash-recorded | Start bootstrap or stage platform packages |
-| `staged` | A stage exists and its downloaded bytes passed inspection | Approve or reject that exact stage |
-| `platform-approval-pending` | Platform stages are ready for human 2FA approval | Approve platform packages only |
+| `platform-pending` | Platform stages are being inspected or await human 2FA approval | Inspect/approve platform stages only |
 | `platform-published` | All three exact platform versions exist and match hashes | Stage/approve the launcher |
-| `partial` | Some live package versions exist and others do not | Resume only missing packages with identical inspected tarballs |
+| `launcher-pending` | The launcher stage is being inspected or awaits approval | Inspect/approve the launcher stage |
+| `partial` | A publication result is unknown or only part of the intended set is live | Query npm and resume only missing packages with identical tarballs |
 | `complete` | All four live versions exist with matching hashes and tag | Generate the eligible tap PR |
 | `burned` | A wrong byte set was published for this version | Advance the complete set to a new application version |
-| `blocked` | An external prerequisite or validation gate is unmet | Resolve the named blocker; do not publish |
+
+A validation or external-prerequisite failure before publication SHALL be
+reported as `blocked` with its reason and safe remediation; it is not a new
+npm registry state.
 
 Before the launcher package is published, all three platform package names
 SHALL exist at the exact application version with the inspected bytes. The
@@ -696,6 +707,7 @@ LICENSE
 THIRD_PARTY_NOTICES.md
 UPSTREAM.md
 third_party/**
+vendor/herdr-compat/VENDOR-MANIFEST.toml
 ```
 
 The exact allowlist MAY be narrower, but it SHALL contain the complete runtime
@@ -708,17 +720,20 @@ Each platform package SHALL have this package-owned layout:
 package.json
 README.md
 native/herdr-world-bridge
-native/runtime.json
 LICENSE
 THIRD_PARTY_NOTICES.md
 UPSTREAM.md
+docs/world-assets.md
+share/herdr-world/web/legal/**
 third_party/**
+vendor/herdr-compat/VENDOR-MANIFEST.toml
 ```
 
-`native/runtime.json` SHALL identify at least the application version, target,
-bridge relative path, bridge SHA-256, and (for Linux) required glibc version.
-The value SHALL be generated from and checked against the verified archive; it
-is not user input.
+Each platform `package.json` SHALL include a generated `herdrWorld` metadata
+object containing the fixed bridge path `native/herdr-world-bridge` and, for
+Linux, the required glibc version `2.34`. The Linux value SHALL be generated
+from and checked against the verified bridge; it is not user input. Bridge
+hashes remain release evidence rather than runtime configuration.
 
 ### 6.2 Package version and dependency contract
 
@@ -731,9 +746,9 @@ main.optionalDependencies[platform] = A
 ```
 
 The dependency ranges SHALL be exact strings, not caret, tilde, wildcard, or
-latest ranges. A launcher version mismatch between its own package, the
-selected platform package, and `native/runtime.json` SHALL be an actionable
-nonzero failure before bridge execution.
+latest ranges. A launcher version mismatch between its own package and the
+selected platform package SHALL be an actionable nonzero failure before bridge
+execution.
 
 ### 6.3 Launcher diagnostics
 
@@ -747,7 +762,7 @@ next action. At minimum, diagnostics SHALL distinguish:
 - glibc below `2.34`, including required and detected versions;
 - missing or omitted optional platform package;
 - failed optional-package installation;
-- main/platform/runtime metadata version mismatch;
+- main/platform package or generated platform metadata mismatch;
 - invalid, missing, relative, nonexistent, or wrong-type path override; and
 - bridge execution or child-process failure.
 
@@ -856,7 +871,7 @@ following scenarios.
 - unsupported OS, CPU, Linux ARM64, musl, and unknown libc;
 - glibc below 2.34, exactly 2.34, and above 2.34;
 - maximum GLIBC symbol extraction and release failure above the baseline;
-- missing or mismatched native package/runtime metadata;
+- missing or mismatched native package/generated platform metadata;
 - invalid, relative, missing, nonexistent, and wrong-type path overrides;
 - argument, standard-input/output/error, signal, and exit-status forwarding;
 - `herdr-world --help` with no Herdr and no native package;
@@ -893,8 +908,10 @@ following scenarios.
 
 The release acceptance run SHALL confirm that:
 
-- existing desktop tarball names, contents, checksums, launcher defaults, and
-  stock-Herdr smoke remain unchanged;
+- existing desktop tarball names, layout, default launcher behavior, and
+  stock-Herdr smoke remain compatible, with the current verifier continuing to
+  pass when package-manager overrides are unset; future release checksums may
+  of course differ when release bytes change;
 - Android packaging and client behavior remain unchanged; and
 - Spec 016 plugin installation, source-build behavior, and plugin-managed
   lifecycle remain unchanged and do not discover package-manager installs.
