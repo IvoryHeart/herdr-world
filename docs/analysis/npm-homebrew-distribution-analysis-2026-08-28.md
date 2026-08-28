@@ -48,10 +48,12 @@ For every intentional final tag:
 1. build all native archives;
 2. verify contents, legal closure, formats, checksums, and live smoke;
 3. expose the verified outputs to the release adapters;
-4. generate, inspect, install-test, hash, and publish the exact npm package;
-5. for a stable release, generate, validate, and write the Cask update to the
-   third-party tap; and
-6. run any future adapters against the same version and outputs.
+4. generate, inspect, install-test, and hash the exact npm package;
+5. for a prerelease, publish npm under its prerelease channel without updating
+   the stable Cask; for a stable release, generate and complete Cask validation,
+   then publish npm under the stable channel and write the validated Cask update
+   to the third-party tap; and
+6. run any future adapters against the same version and release record.
 
 Prereleases use the npm prerelease channel and leave the stable Cask unchanged.
 Stable releases use the stable npm channel and update the ordinary Cask.
@@ -85,9 +87,11 @@ shows the universal package is impractical.
 
 The Cask is stable-only and references the immutable GitHub release archives and
 checksums for the existing supported desktop targets. CI generates, validates,
-and writes the small Cask metadata update to `IvoryHeart/homebrew-tap` after the
-release gates pass. There is no separate binary upload, installer daemon,
-workspace mutation, or moving `latest` URL.
+and, after stable npm publication, writes the small validated Cask metadata
+update to `IvoryHeart/homebrew-tap`. There is no separate binary upload,
+installer daemon, workspace mutation, or moving `latest` URL.
+On retry, CI compares the complete generated Cask with the tap and no-ops when
+they already match.
 
 The tap is third-party and must not be described as reviewed or endorsed by
 Homebrew. A source formula, binary formula, or separately named prerelease Cask
@@ -112,7 +116,7 @@ ownership.
 | --- | --- |
 | A channel builds different native bytes | Require every adapter to consume verified release outputs |
 | A release version drifts between channels | Derive every channel version from the final tag |
-| A failed retry overwrites immutable content | Check the channel before retry; no-op when exact, use a new version when different |
+| A failed retry overwrites immutable content | Check the channel before retry; no-op when exact, compare the complete generated Cask, and use a new version when different |
 | A future channel expands release complexity | Require a small adapter with the same release inputs |
 | Package installation changes runtime state | Test no downloader, daemon, workspace mutation, or Herdr startup |
 

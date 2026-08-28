@@ -61,9 +61,12 @@ pipeline SHALL:
 2. verify archive contents, legal closure, native formats, checksums, and the
    existing live smoke;
 3. make the verified outputs available to the channel adapters;
-4. publish the npm package and, for an eligible stable release, update the
-   Homebrew Cask from those same outputs; and
-5. invoke any additional enabled distribution adapters using the same release
+4. generate, inspect, install-test, and hash the npm package;
+5. for a prerelease, publish npm under its prerelease channel without updating
+   the stable Cask; for an eligible stable release, generate and complete Cask
+   validation, then publish npm under the stable channel and write the already
+   validated Cask update to the tap; and
+6. invoke any additional enabled distribution adapters using the same release
    version and verified release record, subject to that channel's owning
    contract.
 
@@ -114,9 +117,13 @@ brew install --cask IvoryHeart/tap/herdr-world
 
 For an eligible stable release, CI SHALL generate and validate the Cask update
 from the release version, immutable archive URLs, and checksums, then write that
-update to the tap as part of the same release. There SHALL be no separate
-Homebrew binary upload. The Cask SHALL expose only `herdr-world` and SHALL not
-start a process or mutate a workspace during installation.
+update to the tap as part of the same release, after the stable npm publication.
+There SHALL be no separate Homebrew binary upload. The Cask SHALL expose only
+`herdr-world` and SHALL not start a process or mutate a workspace during
+installation.
+
+If the stable update is retried, CI SHALL regenerate the intended complete Cask
+and SHALL no-op when it already matches the tap.
 
 The ordinary Cask SHALL remain stable-only. A prerelease Cask, if ever needed,
 requires a separately named channel. Source-building and binary formulas are
