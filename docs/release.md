@@ -11,6 +11,12 @@ They do not publish npm packages, and the package versions are not release versi
 - `cargo-about` 0.9.2 (`cargo install cargo-about --version 0.9.2 --locked --features cli`).
 - JDK 21 and Android SDK when validating the Android shell.
 - GitHub CLI authenticated as a user that can create releases.
+- The following `IvoryHeart/herdr-world` GitHub Actions repository secrets for macOS releases:
+  `APPLE_DEVELOPER_ID_CERTIFICATE_BASE64`, `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD`,
+  `APPLE_NOTARY_KEY_ID`, `APPLE_NOTARY_ISSUER_ID`, and
+  `APPLE_NOTARY_PRIVATE_KEY_BASE64`. The certificate must be a password-protected `.p12` export of
+  one Developer ID Application certificate and its private key. The notarization key must be an App
+  Store Connect team API key; an individual API key cannot authenticate `notarytool`.
 - `origin` fetch and push URLs both resolve to `IvoryHeart/herdr-world`. The release helper rejects
   upstream, fork, local-path, and unsupported remote URLs before making any release mutation.
 - A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
@@ -94,9 +100,13 @@ licence inventories, World asset record, and Herdr vendor manifest are present.
 For APKs, inspect the package listing or metadata and verify the bundled
 `public/legal/manifest.json` and every file it names.
 
-The macOS archives are intentionally unsigned and unnotarized until Developer ID credentials are
-available. Release notes and user documentation must retain that limitation. The workflow does not
-attempt to weaken Gatekeeper or modify a user's security policy.
+Release-tag macOS jobs import the certificate into an ephemeral keychain, sign only the packaged
+Mach-O bridge using hardened runtime and a secure timestamp, run package/live verification, and
+submit a ZIP representation of the same signed payload to Apple's notary service. The published
+tarball contains those exact accepted bridge bytes; because a tarball cannot carry a stapled ticket,
+Gatekeeper retrieves the ticket online. Missing, malformed, or placeholder credentials fail the tag
+job before artifact upload. Pull requests and manual workflow runs exercise package signing with an
+ad-hoc identity and never read the release secrets.
 
 For the desktop installer, verify `./install --install-only` creates versioned user-local files and
 working `herdr-world`/`herdr-world-installer` command links without starting Herdr. Verify the
@@ -196,9 +206,9 @@ The script:
 - opens the next `## [Unreleased]` changelog section and pushes it
 
 The tag starts the desktop release workflow. It builds and verifies Linux x86-64, macOS ARM64, and
-macOS x86-64 archives, uploads their checksum files, and fails rather than replacing an asset that
-already exists. The release commit's site changes also trigger the Pages deployment. No separate
-desktop upload or documentation-edit step is required.
+macOS x86-64 archives; signs and notarizes both macOS payloads; uploads their checksum files; and
+fails rather than replacing an asset that already exists. The release commit's site changes also
+trigger the Pages deployment. No separate desktop upload or documentation-edit step is required.
 
 ## Android Validation
 
@@ -211,12 +221,14 @@ adding any pairing token or other secret storage.
 
 After the tag is pushed, monitor both `Desktop release` and `Deploy GitHub Pages`. The desktop
 workflow attaches exactly three native archives and three checksum files. It does not publish npm,
-an Android debug APK, or any unsigned artifact represented as production-signed software.
+an Android debug APK, or an ad-hoc-signed macOS CI package.
 
 ## After
 
 - Confirm the GitHub release exists and points at the expected tag.
 - Confirm release assets and checksum files are attached.
-- Confirm both macOS archives are still described as unsigned until signing is implemented.
+- Download both macOS archives and run `codesign --verify --strict --verbose=2` plus
+  `codesign --display --verbose=4` against each unpacked `bin/herdr-world-bridge`; confirm the
+  Developer ID Application authority, hardened-runtime flag, and secure timestamp.
 - Confirm the project site links to the new release after the Pages deployment.
 - Confirm `CHANGELOG.md` on `main` has a fresh empty `## [Unreleased]` section.

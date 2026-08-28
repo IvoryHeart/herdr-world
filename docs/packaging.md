@@ -26,10 +26,12 @@ stock Herdr v0.8.2 daemons before upload. Build the APK separately on a machine 
 Android SDK setup; Android is not part of the automated public release until a signed release APK
 exists.
 
-The macOS archives are currently unsigned and not notarized. They are public preview artifacts, and
-macOS may require users to confirm the first launch in System Settings → Privacy & Security after
-verifying the checksum. Do not describe them as signed or notarized until Developer ID credentials
-and the corresponding CI steps are in place.
+Release-tag macOS archives are fail-closed: CI imports an ephemeral Developer ID Application
+certificate, signs `herdr-world-bridge` with hardened runtime and a secure timestamp, exercises the
+signed package, and requires Apple notarization acceptance before uploading it. Pull-request and
+manual CI packages use test-only ad-hoc signatures, never access the release credentials, and are
+not published. The distributed tarball cannot carry a stapled ticket; Gatekeeper can retrieve the
+notarization ticket for the signed bridge online.
 
 ## Desktop Tarball Shape
 
@@ -112,6 +114,18 @@ The automated workflow performs the same inspection used locally:
 tar -tzf dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz
 cat dist-packages/herdr-world-vX.Y.Z-PLATFORM.tar.gz.sha256
 ```
+
+On macOS, a local package must be signed and repacked before signature-aware verification. Use an
+ad-hoc identity for local testing only:
+
+```bash
+MACOS_SIGNING_IDENTITY=- \
+  scripts/sign-macos-package.sh vX.Y.Z macos-arm64
+scripts/verify-desktop-package.sh vX.Y.Z macos-arm64
+```
+
+Official release signing and notarization occur only in the tag workflow; do not use an ad-hoc
+package as a release asset.
 
 CI verifies the complete cross-platform dependency notice closure once before starting the native
 matrix, then passes the internal `--notices-verified` assembly flag to avoid rebuilding the same
@@ -233,9 +247,11 @@ WebSocket.
 
 `node scripts/release.mjs vX.Y.Z` updates the public version references, pushes the release tag,
 creates the GitHub release, and triggers `.github/workflows/release.yml`. The workflow builds,
-inspects, live-tests, and uploads all six Linux/macOS archive and checksum assets. Existing assets
-are never replaced. The release command also updates the website source, so the same release push
-deploys current links through the Pages workflow.
+signs and notarizes both macOS payloads, inspects and live-tests all three native packages, and
+uploads all six Linux/macOS archive and checksum assets. Missing or invalid Apple credentials stop
+the macOS jobs before artifact upload. Existing assets are never replaced. The release command also
+updates the website source, so the same release push deploys current links through the Pages
+workflow.
 
 Android remains a deliberate separate step until a signed public APK exists. Do not attach a debug
 APK to a public release as though it were a production artifact.

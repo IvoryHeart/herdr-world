@@ -9,6 +9,9 @@ on:
       - ".github/workflows/release.yml"
       - "scripts/package-tarball.sh"
       - "scripts/verify-desktop-package.sh"
+      - "scripts/import-macos-signing-certificate.sh"
+      - "scripts/sign-macos-package.sh"
+      - "scripts/notarize-macos-package.sh"
       - "scripts/live-stock-v082.sh"
       - "scripts/live-bridge-smoke.mjs"
       - "scripts/herdr-world-launcher.sh"
@@ -111,12 +114,33 @@ jobs:
         run: |
           npm ci
           npm ci --prefix web
-      - name: Build and inspect native archive
+      - name: Build native archive
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/herdr-world-cargo
         run: |
           scripts/package-tarball.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}" --notices-verified
-          scripts/verify-desktop-package.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}"
+      - name: Import Developer ID certificate
+        id: signing
+        if: startsWith(matrix.platform, 'macos-') && github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+        run: scripts/import-macos-signing-certificate.sh
+      - name: Apply test-only ad hoc signature
+        if: startsWith(matrix.platform, 'macos-') && (github.event_name != 'push' || github.ref_type != 'tag')
+        env:
+          MACOS_SIGNING_IDENTITY: "-"
+        run: scripts/sign-macos-package.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}"
+      - name: Apply release Developer ID signature
+        if: startsWith(matrix.platform, 'macos-') && github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          HERDR_WORLD_REQUIRE_DEVELOPER_ID: "1"
+          MACOS_SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+        run: scripts/sign-macos-package.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}"
+      - name: Inspect native archive
+        env:
+          HERDR_WORLD_REQUIRE_DEVELOPER_ID: ${{ github.event_name == 'push' && github.ref_type == 'tag' && '1' || '0' }}
+        run: scripts/verify-desktop-package.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}"
       - name: Download verified stock Herdr v0.8.2
         env:
           HERDR_ASSET: ${{ matrix.herdr_asset }}
@@ -139,6 +163,18 @@ jobs:
           HERDR_WEB_BRIDGE_BIN: ${{ github.workspace }}/dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}/bin/herdr-world-bridge
           HERDR_WEB_STATIC_DIR: ${{ github.workspace }}/dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}/share/herdr-world/web
         run: scripts/live-stock-v082.sh
+      - name: Notarize macOS release payload
+        if: startsWith(matrix.platform, 'macos-') && github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+        run: scripts/notarize-macos-package.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}"
+      - name: Remove ephemeral signing keychain
+        if: always() && startsWith(matrix.platform, 'macos-') && steps.signing.outputs.keychain_path != ''
+        env:
+          SIGNING_KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
+        run: /usr/bin/security delete-keychain "$SIGNING_KEYCHAIN_PATH"
       - name: Upload verified desktop archive
         uses: actions/upload-artifact@v7
         with:

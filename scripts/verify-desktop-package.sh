@@ -85,6 +85,8 @@ done
 [[ -x "$BUNDLE/bin/herdr-world-bridge" ]] || { echo "bridge is not executable" >&2; exit 1; }
 
 binary_description="$(file "$BUNDLE/bin/herdr-world-bridge")"
+host_os="$(uname -s)"
+host_arch="$(uname -m)"
 case "$PLATFORM" in
   linux-x86_64)
     [[ "$binary_description" == *"ELF 64-bit"* && "$binary_description" == *"x86-64"* ]] || {
@@ -114,6 +116,25 @@ case "$PLATFORM" in
     ;;
 esac
 
+if [[ "$PLATFORM" == macos-* && "$host_os" == "Darwin" ]]; then
+  signature_details="$(/usr/bin/codesign --display --verbose=4 "$BUNDLE/bin/herdr-world-bridge" 2>&1)"
+  /usr/bin/codesign --verify --strict --verbose=2 "$BUNDLE/bin/herdr-world-bridge"
+  if [[ "$signature_details" != *"flags="*"runtime"* ]]; then
+    echo "macOS bridge signature is missing hardened runtime" >&2
+    printf '%s\n' "$signature_details" >&2
+    exit 1
+  fi
+  if [[ "${HERDR_WORLD_REQUIRE_DEVELOPER_ID:-0}" == "1" ]]; then
+    if [[ "$signature_details" == *"Signature=adhoc"* \
+      || "$signature_details" != *"Authority=Developer ID Application:"* \
+      || "$signature_details" != *"Timestamp="* ]]; then
+      echo "macOS release bridge is not timestamped with a Developer ID Application certificate" >&2
+      printf '%s\n' "$signature_details" >&2
+      exit 1
+    fi
+  fi
+fi
+
 node - "$BUNDLE/share/herdr-world/web/legal" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
@@ -129,8 +150,6 @@ for (const entry of manifest.files) {
 }
 NODE
 
-host_os="$(uname -s)"
-host_arch="$(uname -m)"
 case "$PLATFORM:$host_os:$host_arch" in
   linux-x86_64:Linux:x86_64 | macos-arm64:Darwin:arm64 | macos-x86_64:Darwin:x86_64)
     "$BUNDLE/bin/herdr-world" --help >/dev/null
