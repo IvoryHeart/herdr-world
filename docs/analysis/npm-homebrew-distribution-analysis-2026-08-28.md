@@ -15,8 +15,8 @@ binary-first Homebrew Cask:
 
 1. `@ivoryheart/herdr-world` contains the Node entrypoint, the shared
    launcher/web/documentation/legal payload, and all three native bridges.
-2. `IvoryHeart/homebrew-tap` contains one CI-prepared, maintainer-reviewed Cask
-   that selects an existing immutable GitHub release archive.
+2. `IvoryHeart/homebrew-tap` contains one CI-written Cask update that selects
+   an existing immutable GitHub release archive.
 
 The existing verified desktop archives remain the only native source. Package
 generation should re-layout those outputs, not compile a second bridge or
@@ -237,19 +237,23 @@ channel.
 
 For an eligible stable release, after the complete GitHub release asset set
 and signing readiness gate are satisfied, CI should read the final version,
-three archive URLs, and three checksums; generate the small Cask metadata
-change; open a pull request in `IvoryHeart/homebrew-tap`; and run Cask
-audit/style and available installation checks. A maintainer reviews and merges
-that pull request. CI must not merge it or upload a separate Homebrew binary.
+three archive URLs, and three checksums; generate and validate the small Cask
+metadata change; and directly commit that change to
+`IvoryHeart/homebrew-tap` as part of the same release. The commit should update
+only the Cask version, URLs, and checksums. There is no separate Homebrew
+binary upload. A prerelease publishes npm under `next` and does not update the
+stable Cask.
 
-Opening the pull request needs only a fine-grained credential restricted to the
-`IvoryHeart/homebrew-tap` repository with the contents and pull-request
-permissions required to create the branch and pull request. It should be held
-as a GitHub Actions secret and must not grant access to other repositories. The
-workflow should only create the branch and pull request and must never invoke
-merge; a maintainer reviews and merges the tap change. No bot service, GitHub
-App deployment, state database, or broader cross-repository credential is
-required.
+The cross-repository credential should be a fine-grained credential restricted
+to the `IvoryHeart/homebrew-tap` repository with only the `Contents: write`
+repository permission. It should be held as a GitHub Actions secret and must
+not grant access to other repositories; no pull-request permission is needed.
+No bot service, GitHub App deployment, state database, or broader
+cross-repository credential is required.
+
+If the stable tap update is retried, CI should compare the tap's current Cask
+version and three SHA-256 values with the intended release and no-op when they
+are already current.
 
 MacOS signing, notarization, and applicable Gatekeeper checks are a separate
 stable-release readiness policy. Local Cask implementation and validation may
@@ -265,15 +269,16 @@ The release sequence should be:
 2. run existing archive verification and the stock-Herdr live smoke;
 3. generate the universal npm directory from those verified outputs;
 4. pack, inspect, install-test, and hash the exact npm `.tgz`;
-5. publish the exact npm archive from tag/release CI under `next` or `latest`;
-6. for an eligible stable release, have CI prepare the reviewed tap change
-   from the immutable release URLs and checksums after signing readiness; and
-7. run Cask audit/style and installation checks, leaving tap merge to a
-   maintainer.
+5. for a prerelease, publish the exact npm archive from tag/release CI under
+   `next` and do not update the stable Cask; or
+6. for an eligible stable release, after the complete assets and signing
+   readiness gate, publish npm under `latest`, validate the generated Cask
+   change, and directly commit it to the tap.
 
 The desktop archives and Android package remain unchanged. A failed validation
 stops publication. A publication retry must first check the external registry;
-published npm bytes must never be silently replaced.
+published npm bytes must never be silently replaced. A tap retry must compare
+the current Cask version and checksums and no-op when already current.
 
 ## Relationship to Spec 016
 
@@ -292,9 +297,9 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 | Package files drift from verified archives | Generate only from final archives and inspect the exact `.tgz` |
 | Legal file is omitted | Preserve and validate the complete package legal closure |
 | Cask direct binary path does not survive Caskroom relinking | Test lifecycle; defer a wrapper until direct failure is demonstrated |
-| Third-party tap code is trusted too broadly | Use a fully qualified command and review the tap change |
+| Third-party tap code is trusted too broadly | Use a fully qualified command and restrict CI writes to the intended Cask change |
 | CI publishes a wrong or unintended npm version | Gate publication on an intentional final tag/release, publish the inspected `.tgz`, and check npm before retry |
-| CI can modify the tap too broadly | Store a fine-grained tap-only contents/pull-request credential and leave merge to a maintainer |
+| CI can modify the tap too broadly | Store a fine-grained tap-only credential with only `Contents: write`; write only the intended Cask change and no-op when current |
 | Plugin and standalone distribution ownership becomes coupled | Keep the one-sentence Spec 016 boundary |
 
 ## Focused validation matrix
@@ -327,6 +332,8 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 - verify only `herdr-world` is exposed and no installation step starts a
   process or mutates a workspace; and
 - block stable publication until the separate signing/readiness policy passes.
+- validate and directly commit only the generated stable Cask update to the tap;
+- verify prereleases leave the stable Cask unchanged.
 
 ### Unchanged behavior
 
@@ -346,7 +353,8 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
    `latest` for stable releases. Bootstrap uses a temporary/granular token,
    then later releases use trusted publishing with GitHub OIDC.
 5. Use a direct-archive stable Cask in the public third-party tap
-   `IvoryHeart/homebrew-tap`, with a CI-prepared, maintainer-reviewed tap change.
+   `IvoryHeart/homebrew-tap`, with a CI-validated, directly committed Cask
+   change only for eligible stable releases.
 6. Keep staged publishing, platform npm splits, Cask wrappers, formulas, extra
    targets, and plugin package-manager reuse deferred.
 

@@ -268,27 +268,28 @@ not determine the package architecture.
 ### 4.6 Homebrew tap update
 
 For an eligible stable release, after the complete GitHub release asset set is
-available and the signing gate passes, CI SHALL prepare and open a pull request
-in `IvoryHeart/homebrew-tap`. The pull request SHALL update only the Cask
-version, the three archive URLs, their three SHA-256 values, and reviewed Cask
-metadata if required.
+available and the signing gate passes, CI SHALL generate, validate, and
+directly commit the Cask update to `IvoryHeart/homebrew-tap` as part of the
+same release. The commit SHALL update only the Cask version, the three archive
+URLs, and their three SHA-256 values.
 
 There SHALL be no separate Homebrew binary upload. CI SHALL read the final
 version, archive URLs, and checksums from the complete immutable GitHub release
 asset set when generating the Cask change.
 
 CI SHALL run Cask audit/style and available installation checks on each
-supported target. Human review SHALL be required before merge, and CI SHALL
-not merge the pull request. The tap SHALL be described as third-party and
-SHALL not be presented as reviewed, endorsed, or official Homebrew software.
+supported target before writing the change. The tap SHALL be described as
+third-party and SHALL not be presented as reviewed, endorsed, or official
+Homebrew software.
 
-The cross-repository credential used to open the pull request SHALL be a
-fine-grained credential restricted to `IvoryHeart/homebrew-tap` with only the
-repository contents and pull-request permissions needed to create the branch
-and pull request. It SHALL be stored as a GitHub Actions secret and SHALL not
-grant access to other repositories. The workflow SHALL only create the branch
-and pull request; it SHALL never invoke a merge. A maintainer SHALL review and
-merge the tap pull request.
+The cross-repository credential SHALL be a fine-grained credential restricted
+to `IvoryHeart/homebrew-tap` with only the `Contents: write` repository
+permission. It SHALL be stored as a GitHub Actions secret and SHALL not grant
+access to other repositories. No pull-request permission SHALL be required.
+
+If the stable tap update is retried, CI SHALL compare the tap's current Cask
+version and three SHA-256 values with the intended release and SHALL no-op when
+they are already current.
 
 ### 4.7 npm publication
 
@@ -338,10 +339,11 @@ under `next` for prereleases or `latest` for stable releases. A protected
 environment approval is not required by this specification. Staged publishing
 is not part of the release flow.
 
-Prerelease application versions SHALL use the `next` dist-tag. Stable
-versions SHALL use `latest`. A prerelease SHALL not move `latest`. OIDC and
-CI publication are the normal post-bootstrap path; staged publishing remains
-deferred.
+Prerelease application versions SHALL use the `next` dist-tag and SHALL not
+update the stable Cask. Stable versions SHALL use `latest` and SHALL update the
+Cask only through the gated CI release path. A prerelease SHALL not move
+`latest`. OIDC and CI publication are the normal post-bootstrap path; staged
+publishing remains deferred.
 
 npm package versions are immutable. If incorrect bytes are published, that
 version SHALL not be reused; a later release SHALL use a new application
@@ -364,17 +366,18 @@ For a release intended for either package-manager distribution:
    existing stock-Herdr live smoke for all three targets.
 3. Generate the single universal npm package from those verified outputs.
 4. Pack, inspect, install-test, and hash the exact npm `.tgz`.
-5. Publish the exact `.tgz` from the tag/release CI job under `next` or
-   `latest`, as appropriate.
+5. For a prerelease, publish the exact `.tgz` from the tag/release CI job under
+   `next` and do not update the stable Cask.
 6. For an eligible stable release, after the complete immutable release assets
-   and signing gate are available, have CI prepare and open the Homebrew tap
-   pull request.
-7. Run Cask audit/style and install-test checks; leave tap review and merge to
-   a maintainer.
+   and signing gate are available, publish the exact `.tgz` under `latest`,
+   generate and validate the Cask update, and directly commit that update to
+   `IvoryHeart/homebrew-tap` in the same CI release.
 
 A failed validation SHALL stop the sequence before publication. A failed or
 uncertain npm publication SHALL be checked against the npm registry before a
 retry; if the version is already live, it SHALL not be republished or mutated.
+A tap update retry SHALL compare the current Cask version and three checksums
+before writing and SHALL no-op when they already match the intended release.
 
 ## 6. Security properties
 
@@ -385,8 +388,7 @@ retry; if the version is already live, it SHALL not be republished or mutated.
 - The npm package SHALL contain no publish credential, install-time network
   downloader, or executable exposed other than `herdr-world`.
 - The third-party tap contains executable package definitions and SHALL be
-  installed only with a fully qualified tap/item command after appropriate
-  review.
+  installed only with a fully qualified tap/item command.
 - Release archives, the npm `.tgz`, and Cask checksums SHALL be retained as
   immutable release evidence.
 
@@ -416,6 +418,8 @@ Implementation SHALL provide the following focused evidence:
 - Cask audit/style checks pass;
 - Cask installation, upgrade, reinstall, direct launcher invocation, and
   uninstall pass on every available supported target;
+- stable CI validates and directly commits only the generated Cask update after
+  the signing/readiness gate, while prereleases do not update the stable Cask;
 - Cask installation starts no process and changes no Herdr workspace;
 - Cask URLs are immutable and checksums match;
 - stable Cask publication is blocked until signing/notarization/Gatekeeper
@@ -432,8 +436,9 @@ desktop or Android outputs.
 Publish the first npm package from CI under `next` only after the exact tarball
 has been installed and tested on the support matrix. Configure trusted
 publishing and revoke the bootstrap token after that first publication. Publish
-the stable Cask only after its separate signing/readiness gate passes; CI opens
-the tap PR but a maintainer reviews and merges it.
+the stable Cask only after its separate signing/readiness gate passes; CI
+validates and directly commits the generated Cask update to the tap as part of
+the stable release.
 
 The following remain deferred until evidence justifies them:
 
