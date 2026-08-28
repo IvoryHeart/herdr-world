@@ -1,3 +1,11 @@
+Use the agent's capacity to deliver complete, coherent outcomes without reducing scope or splitting
+work merely because it would be costly for a human. Be exhaustive in reasoning and validation, but
+economical in design: prefer the smallest clear solution that fully meets current requirements and
+fits the existing architecture. Add complexity only when required by the requested outcome, an
+existing contract, an external constraint, or concrete evidence. Simple means elegant and
+complete—not basic, fragmented, or speculative. Reviews should raise material problems, not turn
+optional hardening into requirements.
+
 # Repository delivery workflow
 
 Specifications are decision aids, not a gate on ordinary engineering work.
