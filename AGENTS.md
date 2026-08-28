@@ -1,3 +1,10 @@
+Use the agent's full capacity to deliver complete, coherent outcomes. Exercise judgment: choose the
+smallest design that fully satisfies the actual requirements and known constraints. Do not reduce
+scope because work would be expensive for a human, and do not add abstractions, process, future
+proofing, or review requirements without a concrete need. Validate in proportion to risk, and keep
+required correctness distinct from optional hardening. Simple means elegant and complete, not
+minimal effort.
+
 # Repository delivery workflow
 
 Specifications are decision aids, not a gate on ordinary engineering work.
