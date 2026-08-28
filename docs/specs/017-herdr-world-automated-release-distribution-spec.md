@@ -28,6 +28,7 @@ node scripts/release.mjs vX.Y.Z-rc.N
 | Concern | Decision |
 | --- | --- |
 | Release identities | Stable `vX.Y.Z`; prerelease `vX.Y.Z-rc.N` only |
+| Release authorization | Protected release tags pointing at a stamped commit on protected `main` |
 | Orchestration | One tag-triggered GitHub Actions workflow |
 | Native build | Existing Linux x86-64, macOS ARM64, and macOS x86-64 matrix |
 | GitHub | Draft-first release assembly; repository immutability deferred initially |
@@ -84,11 +85,51 @@ without importing unrelated tags into the Herdr World release namespace.
 Release candidates SHALL increment `N` for corrections. A correction after
 `v1.2.3-rc.2` is `v1.2.3-rc.3`, never a replacement `rc.2`.
 
+### Channel monotonicity
+
+A unique version SHALL NOT move a distribution channel backwards. The release
+preflight and each publisher immediately before mutation SHALL read the current
+target channel version and compare it with the candidate using SemVer precedence:
+
+- stable releases compare with npm `latest` and the stable Homebrew Formula;
+- RC releases compare with npm `next` and the RC Homebrew Formula; and
+- a candidate SHALL be strictly greater than every existing target-channel
+  version it would change.
+
+Stable and RC channels are ordered independently; a stable patch may therefore
+advance `latest` while a later-version RC remains on `next`. An absent channel
+has no ordering constraint. An equal version is permitted only for the matching
+content retry described below and SHALL NOT replace content. A lower version,
+including a previously unused version, SHALL fail before any channel mutation.
+
 ## One release workflow
 
-A valid release-tag push SHALL be the only event that can publish. Pull-request
-and manual workflow runs MAY build and validate synthetic versions, but SHALL NOT
-create tags, releases, registry versions, plugin publications, or tap commits.
+Except for the one-time npm bootstrap defined below, a valid release-tag push
+SHALL be the only event that can publish. Pull-request and manual workflow runs
+MAY build and validate synthetic versions, but SHALL NOT create tags, releases,
+registry versions, plugin publications, or tap commits.
+
+### Release authorization and provenance
+
+The repository SHALL protect `main` and release tags matching `v*` with GitHub
+rulesets. Release-tag creation SHALL be restricted to authorized release
+maintainers, and release tags SHALL not be movable or deletable through the
+normal release path.
+
+Before any publication job receives npm OIDC permission or the Homebrew tap
+secret, a credential-free validation job SHALL fetch the canonical
+`origin/main` and prove all of the following:
+
+- the ref matches one of the two allowed release-tag forms;
+- the tag resolves to `GITHUB_SHA` and that commit is an ancestor of the fetched
+  protected `origin/main`;
+- the commit is the correctly stamped `Release <tag>` commit; and
+- its changelog, `release.json`, manifests, and other public version references
+  agree with the tag.
+
+Publication jobs SHALL depend on that validation result and SHALL be the only
+jobs granted their channel credential. The local release helper performs the
+same checks for early feedback but is not the authorization boundary.
 
 The release workflow SHALL:
 
@@ -104,7 +145,9 @@ The release workflow SHALL:
    summary.
 
 An enabled channel SHALL fail with a specific setup instruction when its external
-prerequisite is absent. It SHALL NOT be silently skipped.
+prerequisite is absent. It SHALL NOT be silently skipped. The explicitly
+authorized first-package npm bootstrap is the sole exception and SHALL be
+reported as an incomplete, action-required npm publication until verified.
 
 ### Native artifact boundary
 
@@ -168,10 +211,28 @@ Release candidates SHALL publish with `next`. Stable releases SHALL publish with
 
 ### npm bootstrap and authentication
 
-The owner SHALL manually publish the first real package version with 2FA because
-npm requires the package to exist before trusted publishing can be configured.
-The bootstrap SHALL publish the same generated and tested tarball used by the
-release process, not a placeholder package.
+Because npm requires the package to exist before trusted publishing can be
+configured, exactly one publication event MAY occur outside the tag-triggered
+publisher. This exception is allowed only while
+`@ivoryheart/herdr-world` does not exist and SHALL proceed as follows:
+
+1. A valid RC tag triggers the normal protected release workflow.
+2. The workflow generates, inspects, and install-tests the npm tarball, then
+   retains that exact `.tgz` as an artifact and records its artifact name,
+   source tag and commit, file list, SHA-256, and npm integrity in the workflow
+   record.
+3. The owner downloads that artifact, verifies its SHA-256 against the workflow
+   record, and publishes that file unchanged with interactive 2FA, public
+   access, and the `next` dist-tag. The owner SHALL NOT rebuild, repack, or
+   substitute a placeholder package.
+4. The registry result is fetched and verified against the recorded version and
+   integrity before the npm channel is reported complete.
+5. The exact release workflow is registered as the npm trusted publisher before
+   another version is released.
+
+The bootstrap SHALL be recorded in the tagged workflow summary. It does not
+authorize manual publication of any later version, any different tarball, or a
+stable package as the first package.
 
 After bootstrap, the exact release workflow SHALL be registered as the npm
 trusted publisher. Publication SHALL use a GitHub-hosted runner with
@@ -234,12 +295,16 @@ another channel's artifacts.
 ## Retry and failure contract
 
 Independent registries cannot publish atomically. Each publisher SHALL inspect
-external state before mutation:
+external state and recheck target-channel monotonicity immediately before
+mutation:
 
 - absent version: publish it;
 - matching version and digest or generated content: report complete and succeed;
 - same version with different content: fail without replacement and require a
   new release version.
+
+A matching-version retry MAY complete a missing pointer update only when the
+candidate still advances or equals that pointer; it SHALL never regress it.
 
 A workflow rerun after partial failure SHALL resume incomplete channels and skip
 verified successful channels. It SHALL not rebuild solely to retry publication.
@@ -249,6 +314,8 @@ enabled channels.
 ## Security
 
 - Publication jobs SHALL use least-privilege job-level GitHub permissions.
+- Protected `main` and release-tag rulesets plus the credential-free provenance
+  gate SHALL be the release authorization boundary.
 - Pull-request and fork workflows SHALL receive neither publication credentials
   nor a publishing OIDC permission.
 - npm SHALL use OIDC after bootstrap, not a stored npm publishing token.
@@ -268,11 +335,17 @@ Implementation is complete when automated evidence shows:
 
 - only the two specified version forms are accepted and reused versions fail
   before mutation;
+- a lower unique version fails before changing npm or Homebrew, while a verified
+  same-version retry remains idempotent;
+- an unprotected tag or a tag whose commit is not correctly stamped and
+  reachable from protected `origin/main` cannot reach publication credentials;
 - pull-request and manual runs exercise packaging without publication;
 - the native matrix builds and live-smokes each archive once;
 - GitHub releases are draft-first and contain the complete asset set;
 - the exact tested npm tarball is published through OIDC with the correct
   `next` or `latest` tag;
+- the one-time npm bootstrap publishes the workflow artifact unchanged, records
+  its digest and integrity, and cannot authorize a later manual publication;
 - npm selects the right bridge on every supported target and rejects unsupported
   targets before execution;
 - the correct Homebrew Formula alone advances for an RC or stable release;
@@ -290,12 +363,15 @@ Initial rollout SHALL:
 
 1. Implement strict version validation and remove reissue support.
 2. Add npm and Formula generation, dry-run validation, and retry tests.
-3. Create `IvoryHeart/homebrew-tap` and configure its restricted token.
-4. Generate, inspect, test, and manually publish the first real npm RC with 2FA.
-5. Configure npm trusted publishing and remove token-based npm publication.
-6. Run a non-publishing dry run, then publish the next unique RC through the
+3. Protect `main` and `v*` tags, then add the credential-free provenance gate.
+4. Create `IvoryHeart/homebrew-tap` and configure its restricted token.
+5. Tag the first real npm RC; generate, inspect, and test its tarball in the
+   protected workflow; then manually publish that exact artifact with 2FA.
+6. Verify the bootstrap registry content, configure npm trusted publishing, and
+   ensure no npm publishing token is stored.
+7. Run a non-publishing dry run, then publish the next unique RC through the
    complete pipeline.
-7. Update operator and installation documentation.
+8. Update operator and installation documentation.
 
 Deferred decisions are:
 
