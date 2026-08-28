@@ -30,7 +30,7 @@ node scripts/release.mjs vX.Y.Z-rc.N
 | Release identities | Stable `vX.Y.Z`; prerelease `vX.Y.Z-rc.N` only |
 | Release authorization | Protected release tags pointing at a stamped commit on protected `main` |
 | Orchestration | One tag-triggered GitHub Actions workflow |
-| Cross-tag concurrency | One shared publication mutex; release runs never cancel one another |
+| Cross-tag concurrency | One shared `queue: max`; running releases are never canceled |
 | Native build | Existing Linux x86-64, macOS ARM64, and macOS x86-64 matrix |
 | GitHub | Draft-first release assembly; repository immutability deferred initially |
 | npm | One universal public package, `@ivoryheart/herdr-world` |
@@ -137,10 +137,10 @@ same checks for early feedback but is not the authorization boundary.
 
 All tag-triggered release workflows SHALL share one constant GitHub Actions
 concurrency group that is independent of tag, ref, version, run, and channel.
-`cancel-in-progress` SHALL be false for that group. The initial implementation
-SHALL hold this mutex for the complete tag-triggered workflow, from validation
-through final publication verification. Pull-request and manual validation runs
-SHALL use separate concurrency groups and cannot publish.
+The group SHALL use `queue: max` and `cancel-in-progress: false`. The initial
+implementation SHALL serialize the complete tag-triggered workflow, from
+validation through final publication verification. Pull-request and manual
+validation runs SHALL use separate concurrency groups and cannot publish.
 
 Holding one mutex across the whole release prevents npm, Homebrew, GitHub, the
 Herdr plugin, and future channels from interleaving mutations from different
@@ -149,18 +149,6 @@ publisher SHALL refetch external state and repeat its version, digest or
 generated-content, and target-channel monotonicity checks. A preflight result
 recorded before the mutex was acquired is never sufficient to authorize a
 mutation.
-
-GitHub Actions concurrency is a mutex, not a FIFO or durable release queue. The
-workflow SHALL NOT depend on tag arrival order. If a newer release runs first,
-an older release that later acquires the mutex SHALL detect the advanced channel
-and fail as stale without mutation. A canceled or superseded pending run remains
-incomplete and SHALL be safely rerunnable; it SHALL NOT be reported as published.
-
-To avoid losing a normal release when GitHub replaces an older pending run, the
-release helper SHALL refuse to create or push another release tag while a
-different tag-triggered release run is queued or in progress. This operator-side
-guard preserves the normal one-at-a-time path; the shared mutex and in-lock
-checks remain the correctness boundary for direct or racing tag pushes.
 
 The release workflow SHALL:
 
@@ -340,16 +328,15 @@ candidate still advances or equals that pointer; it SHALL never regress it.
 A workflow rerun after partial failure SHALL resume incomplete channels and skip
 verified successful channels. It SHALL not rebuild solely to retry publication.
 The summary SHALL distinguish published, already complete, failed, and not yet
-enabled channels. A run canceled before publication remains incomplete and its
-rerun SHALL acquire the same mutex before reconciling external state.
+enabled channels.
 
 ## Security
 
 - Publication jobs SHALL use least-privilege job-level GitHub permissions.
 - Protected `main` and release-tag rulesets plus the credential-free provenance
   gate SHALL be the release authorization boundary.
-- One constant, non-canceling cross-tag concurrency group plus in-lock external
-  state checks SHALL prevent publication races between release tags.
+- One shared queued release group plus in-lock external state checks SHALL
+  prevent publication races between release tags.
 - Pull-request and fork workflows SHALL receive neither publication credentials
   nor a publishing OIDC permission.
 - npm SHALL use OIDC after bootstrap, not a stored npm publishing token.
@@ -371,11 +358,8 @@ Implementation is complete when automated evidence shows:
   before mutation;
 - a lower unique version fails before changing npm or Homebrew, while a verified
   same-version retry remains idempotent;
-- simultaneous older and newer tag workflows cannot interleave public mutations;
-  whichever acquires the mutex second rechecks state, and an older stale release
-  fails without regression;
-- a canceled or superseded pending release remains visibly incomplete and can be
-  rerun safely under the same mutex;
+- simultaneous tag workflows cannot interleave public mutations and each repeats
+  its monotonicity checks while holding the shared release mutex;
 - an unprotected tag or a tag whose commit is not correctly stamped and
   reachable from protected `origin/main` cannot reach publication credentials;
 - pull-request and manual runs exercise packaging without publication;
@@ -403,16 +387,15 @@ Initial rollout SHALL:
 1. Implement strict version validation and remove reissue support.
 2. Add npm and Formula generation, dry-run validation, and retry tests.
 3. Protect `main` and `v*` tags, add the credential-free provenance gate, and
-   replace ref-keyed release concurrency with the shared publication mutex.
-4. Add the release-helper guard against another queued or running release tag.
-5. Create `IvoryHeart/homebrew-tap` and configure its restricted token.
-6. Tag the first real npm RC; generate, inspect, and test its tarball in the
+   replace ref-keyed release concurrency with the shared queued release group.
+4. Create `IvoryHeart/homebrew-tap` and configure its restricted token.
+5. Tag the first real npm RC; generate, inspect, and test its tarball in the
    protected workflow; then manually publish that exact artifact with 2FA.
-7. Verify the bootstrap registry content, configure npm trusted publishing, and
+6. Verify the bootstrap registry content, configure npm trusted publishing, and
    ensure no npm publishing token is stored.
-8. Run a non-publishing dry run, then publish the next unique RC through the
+7. Run a non-publishing dry run, then publish the next unique RC through the
    complete pipeline.
-9. Update operator and installation documentation.
+8. Update operator and installation documentation.
 
 Deferred decisions are:
 
