@@ -449,16 +449,15 @@ upload workflow completes. Publication sequencing should therefore be explicit:
 6. Install-test and hash-record the npm tarballs.
 7. Bootstrap-publish, or stage and approve, the npm package set under the
    selected dist-tag.
-8. Update or dispatch the Homebrew tap change after its stable/signing gates,
+8. Prepare the reviewed Homebrew tap change after its stable/signing gates,
    then fetch/install-test the Cask.
 
-The Homebrew tap update needs its own authorization and failure behavior. A
-source repository release should not silently rewrite an external tap unless
-the owner explicitly chooses a narrowly scoped bot or GitHub App flow. A safer
-first approach is a generated pull request or a controlled release workflow in
-the tap that updates the version, three checksums, and release URL only after
-the complete source release is available. The PR must pass Cask audit/style
-and install checks and require review.
+The Homebrew tap update needs its own authorization and failure behavior. The
+initial release should use a maintainer-prepared pull request from the verified
+release data, with Cask audit/style and install checks and human review. A
+source repository release should not silently rewrite an external tap. Bot or
+GitHub App automation is deferred; if introduced later, it should use narrowly
+scoped credentials limited to the required tap pull-request operation.
 
 All public package versions should derive from the same release tag after
 removing only the leading `v`. The root development package versions should
@@ -597,8 +596,8 @@ The follow-up specification resolves the research questions as follows:
    would need a separate name and documented channel.
 7. Preserve Spec 016's source-build-only plugin and defer package-manager
    discovery or external binary reuse.
-8. Use a generated, reviewed tap pull request with narrowly scoped bot or
-   GitHub App credentials.
+8. Use a reviewed tap pull request prepared from verified release data; defer
+   bot or GitHub App automation until it is justified by repeated releases.
 
 ## Recommended implementation order
 

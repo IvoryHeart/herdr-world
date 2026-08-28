@@ -538,7 +538,7 @@ The status projection SHALL report these observable states:
 | `platform-published` | All three exact platform versions exist and match hashes | Stage/approve the launcher |
 | `launcher-pending` | The launcher stage is being inspected or awaits approval | Inspect/approve the launcher stage |
 | `partial` | A publication result is unknown or only part of the intended set is live | Query npm and resume only missing packages with identical tarballs |
-| `complete` | All four live versions exist with matching hashes and tag | Generate the eligible tap PR |
+| `complete` | All four live versions exist with matching hashes and tag | Prepare the eligible tap PR |
 | `burned` | A wrong byte set was published for this version | Advance the complete set to a new application version |
 
 A validation or external-prerequisite failure before publication SHALL be
@@ -642,29 +642,31 @@ signed and notarized and pass the applicable Gatekeeper checks. Cask
 implementation and local validation MAY use release-candidate fixtures before
 that gate, but such fixtures SHALL not be presented as a stable publication.
 
-### Requirement: Generated tap pull request
+### Requirement: Reviewed tap pull request
 
 After the complete GitHub release asset set is available and the stable
-signing gate passes, the tap update mechanism SHALL generate a pull request in
-`IvoryHeart/homebrew-tap`. The change SHALL update only the release version,
-three target URLs, and three corresponding SHA-256 values, plus any reviewed
-metadata required by the Cask.
+signing gate passes, a maintainer SHALL prepare a pull request in
+`IvoryHeart/homebrew-tap` from the verified release data. The initial process
+MAY be manual. The change SHALL update only the release version, three target
+URLs, and three corresponding SHA-256 values, plus any reviewed metadata
+required by the Cask.
 
-The generated pull request SHALL run Homebrew Cask audit/style and installation
-checks for macOS ARM64, macOS x86-64, and Linux x86-64 where those Homebrew
-targets are available. A human review SHALL be required before merge.
+The pull request SHALL run Homebrew Cask audit/style and installation checks
+for macOS ARM64, macOS x86-64, and Linux x86-64 where those Homebrew targets
+are available. A human review SHALL be required before merge.
 
-Automation SHALL use narrowly scoped bot or GitHub App credentials limited to
-the required tap pull-request operation. The source repository SHALL not hold
-an unrestricted credential capable of rewriting the tap. The PR SHALL not be
-generated from a partial GitHub release asset set.
+Bot or GitHub App automation is deferred for the initial release. If it is
+introduced later, it SHALL use narrowly scoped credentials limited to the
+required tap pull-request operation. The source repository SHALL not hold an
+unrestricted credential capable of rewriting the tap. A pull request SHALL not
+be prepared from a partial GitHub release asset set.
 
 #### Scenario: The release has one missing archive
 
 - **GIVEN** the release tag exists but one of the three archives or checksums is
   missing or unverifiable
-- **WHEN** tap update automation is requested
-- **THEN** no tap PR is generated and the release status names the missing asset
+- **WHEN** a tap PR is requested
+- **THEN** no tap PR is prepared and the release status names the missing asset
 
 ### Requirement: Plugin independence
 
@@ -797,9 +799,10 @@ Stage-only permission SHALL be preferred for trusted publishers. Human 2FA
 approval is the boundary that makes a staged package live, with platform
 packages approved before the launcher package.
 
-Homebrew tap automation SHALL use least-privilege credentials and pull requests
-with review. A tap update SHALL be impossible to trigger from an incomplete or
-unverified release asset set.
+If Homebrew tap automation is introduced, it SHALL use least-privilege
+credentials and pull requests with review. The initial maintainer-prepared tap
+PR SHALL be based on the same verified release data. A tap update SHALL be
+impossible to prepare from an incomplete or unverified release asset set.
 
 ### 7.3 Supply-chain evidence
 
@@ -832,8 +835,8 @@ these steps in order:
 7. Inspect and install-test all npm tarballs, and record their hashes.
 8. Bootstrap-publish or stage/approve the npm package set according to whether
    the package names already exist.
-9. Generate a reviewed Homebrew tap PR when the stable and signing gates are
-   satisfied.
+9. Prepare a reviewed Homebrew tap PR from the verified release data when the
+   stable and signing gates are satisfied.
 10. Install-test the resulting Cask from the tap on every supported target.
 
 No later step SHALL make an earlier validation step implicit. In particular,
@@ -934,7 +937,8 @@ Rollout SHALL occur in these gates:
 5. Use staged publishing for later prereleases, with downloaded-stage
    inspection and human platform-before-launcher approval.
 6. Publish the ordinary stable Cask only after macOS signing/notarization and
-   Gatekeeper checks pass; merge only a reviewed generated tap PR.
+   Gatekeeper checks pass; merge only a reviewed tap PR prepared from verified
+   release data.
 7. Monitor the package/release status record for partial publication and
    reconcile before any retry.
 
