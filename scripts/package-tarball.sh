@@ -79,7 +79,14 @@ cp -R "$ROOT/third_party/." "$STAGE/third_party/"
 cp "$ROOT/docs/world-assets.md" "$STAGE/docs/world-assets.md"
 cp "$ROOT/vendor/herdr-compat/VENDOR-MANIFEST.toml" "$STAGE/vendor/herdr-compat/VENDOR-MANIFEST.toml"
 cp "$ROOT/scripts/herdr-world-launcher.sh" "$STAGE/bin/herdr-world"
-chmod +x "$STAGE/bin/herdr-world" "$STAGE/bin/herdr-world-bridge"
+cp "$ROOT/scripts/herdr-world-installer.sh" "$STAGE/bin/herdr-world-installer"
+cp "$ROOT/scripts/herdr-world-installer.sh" "$STAGE/install"
+printf '%s\n' "$VERSION" > "$STAGE/VERSION"
+chmod +x \
+  "$STAGE/install" \
+  "$STAGE/bin/herdr-world" \
+  "$STAGE/bin/herdr-world-installer" \
+  "$STAGE/bin/herdr-world-bridge"
 
 (
   cd "$PKG_ROOT"

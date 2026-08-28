@@ -6,6 +6,11 @@
 
 ### Added
 
+- Added a desktop `install` / `herdr-world-installer` entrypoint that installs the complete
+  versioned World bundle for the current user, exposes the `herdr-world` command, and then hands off
+  to the consent-based Herdr dependency setup.
+  [Herdr World PR #22](https://github.com/IvoryHeart/herdr-world/pull/22)
+
 ### Changed
 
 ### Fixed
@@ -13,6 +18,10 @@
 - Bounded terminal resize traffic during rapid pane and Office conversation resizing, preventing
   resize/output feedback from stalling the page while retaining the latest terminal dimensions.
   [Herdr World PR #23](https://github.com/IvoryHeart/herdr-world/pull/23)
+- Treat stale default Herdr sockets as stopped instead of asking to stop a nonexistent daemon, wait
+  for an actually compatible server after startup, and print the World URL before the foreground
+  bridge begins serving.
+  [Herdr World PR #22](https://github.com/IvoryHeart/herdr-world/pull/22)
 
 ### Removed
 

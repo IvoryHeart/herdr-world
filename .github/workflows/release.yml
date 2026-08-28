@@ -12,6 +12,8 @@ on:
       - "scripts/live-stock-v082.sh"
       - "scripts/live-bridge-smoke.mjs"
       - "scripts/herdr-world-launcher.sh"
+      - "scripts/herdr-world-installer.sh"
+      - "scripts/herdr-world-installer.test.mjs"
       - "scripts/dependency-notices.mjs"
       - "scripts/stage-web-legal-assets.mjs"
       - "bridge/**"

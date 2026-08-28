@@ -35,7 +35,10 @@ and the corresponding CI steps are in place.
 
 ```text
 herdr-world-vX.Y.Z-PLATFORM/
+  install
+  VERSION
   bin/herdr-world
+  bin/herdr-world-installer
   bin/herdr-world-bridge
   share/herdr-world/web/
   third_party/licenses/
@@ -48,7 +51,13 @@ herdr-world-vX.Y.Z-PLATFORM/
   README.md
 ```
 
-`bin/herdr-world` points `herdr-world-bridge` at the bundled web assets. When the default Herdr
+`install` (also available as `bin/herdr-world-installer`) installs the versioned bundle under the
+user's local data directory and exposes `herdr-world` and `herdr-world-installer` under
+`~/.local/bin`. It then hands off to the installed application, whose Herdr dependency actions
+remain separately consented. `--install-only` performs only the local World installation.
+
+`bin/herdr-world` is the portable application launcher and points `herdr-world-bridge` at the
+bundled web assets. When the default Herdr
 session is missing or incompatible, it can run Herdr's official installer, stop an incompatible
 detached server, and start the current Herdr only after separate explicit consent for each action.
 The stop prompt warns that the server's panes and processes will exit. The launcher asks for a Herdr
@@ -109,8 +118,9 @@ matrix, then passes the internal `--notices-verified` assembly flag to avoid reb
 notice tool on every operating system. Local packaging omits that flag and therefore performs its
 own notice check.
 
-Confirm the archive contains the expected root directory, `bin/herdr-world`,
-`bin/herdr-world-bridge`, bundled `share/herdr-world/web/` assets, `LICENSE`,
+Confirm the archive contains the expected root directory, `install`, `VERSION`,
+`bin/herdr-world`, `bin/herdr-world-installer`, `bin/herdr-world-bridge`, bundled
+`share/herdr-world/web/` assets, `LICENSE`,
 `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, the Apache/PixiJS license texts, the World asset
 record, complete production npm/Cargo licence inventories, the Herdr vendor
 manifest, and `README.md`. The bundled web tree must also contain its
@@ -161,19 +171,22 @@ dist-packages/herdr-world-vX.Y.Z-android.apk
 
 ## User Quick Start From Tarball
 
-Unpack and run. If necessary, the interactive launcher offers consent-based Herdr installation and
-startup:
+Unpack and install. The installer exposes the application command for the current user and then
+continues through consent-based Herdr installation and startup when necessary:
 
 ```bash
 tar -xzf herdr-world-vX.Y.Z-linux-x86_64.tar.gz
 cd herdr-world-vX.Y.Z-linux-x86_64
-bin/herdr-world
+./install
 ```
+
+For a portable run without installing World, use `bin/herdr-world`. To install the World commands
+without starting anything, use `./install --install-only`.
 
 To manage Herdr yourself or run from automation, start Herdr first and disable launcher prompts:
 
 ```bash
-HERDR_WORLD_SETUP=never bin/herdr-world
+HERDR_WORLD_SETUP=never herdr-world
 ```
 
 Open:

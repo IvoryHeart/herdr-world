@@ -1,7 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BIN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+herdr_world_resolve_script() {
+  local source="$1"
+  local link_dir=""
+  local link_target=""
+
+  while [[ -L "$source" ]]; do
+    link_dir="$(cd -P "$(dirname "$source")" && pwd)"
+    link_target="$(readlink "$source")"
+    case "$link_target" in
+      /*) source="$link_target" ;;
+      *) source="$link_dir/$link_target" ;;
+    esac
+  done
+
+  printf '%s\n' "$source"
+}
+
+LAUNCHER_PATH="$(herdr_world_resolve_script "${BASH_SOURCE[0]}")"
+BIN_DIR="$(cd "$(dirname "$LAUNCHER_PATH")" && pwd)"
 BUNDLE_ROOT="$(cd "$BIN_DIR/.." && pwd)"
 BRIDGE_BIN="$BIN_DIR/herdr-world-bridge"
 STATIC_DIR="$BUNDLE_ROOT/share/herdr-world/web"
@@ -109,6 +127,20 @@ herdr_world_server_is_supported() {
     && [[ "$server_compatible" == "yes" ]]
 }
 
+herdr_world_server_is_reachable() {
+  local herdr_bin="$1"
+  local status_output=""
+  local server_state=""
+
+  status_output="$("$herdr_bin" status 2>/dev/null)" || return 1
+  server_state="$(printf '%s\n' "$status_output" | awk '
+    $0 == "server:" { in_server = 1; next }
+    in_server && $0 !~ /^  / { in_server = 0 }
+    in_server && $1 == "status:" { print $2; exit }
+  ')"
+  [[ "$server_state" == "running" ]]
+}
+
 herdr_world_is_interactive() {
   [[ -t 0 && -t 2 ]]
 }
@@ -135,7 +167,8 @@ Then start it from the directory containing the work you want Herdr to manage:
   cd /path/to/your/project
   herdr
 
-Detach from Herdr with Ctrl+B, then Q, and run bin/herdr-world again.
+Detach from Herdr with Ctrl+B, then Q, and run herdr-world again
+(or bin/herdr-world from a portable bundle).
 EOF
 }
 
@@ -187,7 +220,8 @@ Herdr is not installed or is not available on PATH.
 
 Herdr World can download ${HERDR_INSTALLER_URL} over HTTPS and run it locally.
 The official installer installs the latest stable Herdr (normally under ~/.local/bin)
-and verifies the downloaded Herdr binary checksum. It does not install Herdr World.
+and verifies the downloaded Herdr binary checksum. Herdr and Herdr World remain
+separate commands and installations.
 EOF
   fi
 
@@ -260,11 +294,11 @@ herdr_world_run_herdr() {
   )
 }
 
-herdr_world_wait_for_socket() {
-  local socket_path="$1"
+herdr_world_wait_for_server() {
+  local herdr_bin="$1"
   local attempt
   for attempt in {1..50}; do
-    if herdr_world_socket_ready "$socket_path"; then
+    if herdr_world_server_is_supported "$herdr_bin"; then
       return 0
     fi
     sleep 0.1
@@ -272,11 +306,11 @@ herdr_world_wait_for_socket() {
   return 1
 }
 
-herdr_world_wait_for_socket_to_stop() {
-  local socket_path="$1"
+herdr_world_wait_for_server_to_stop() {
+  local herdr_bin="$1"
   local attempt
   for attempt in {1..50}; do
-    if ! herdr_world_socket_ready "$socket_path"; then
+    if ! herdr_world_server_is_reachable "$herdr_bin"; then
       return 0
     fi
     sleep 0.1
@@ -291,6 +325,26 @@ herdr_world_stop_herdr() {
 
 herdr_world_exec_bridge() {
   exec "$BRIDGE_BIN" --static-dir "$STATIC_DIR" "$@"
+}
+
+herdr_world_start_bridge() {
+  local -a args=("$@")
+  local port="8787"
+  local index
+
+  for ((index = 0; index < ${#args[@]}; index += 1)); do
+    case "${args[$index]}" in
+      --port)
+        if ((index + 1 < ${#args[@]})); then
+          port="${args[$((index + 1))]}"
+        fi
+        ;;
+      --port=*) port="${args[$index]#--port=}" ;;
+    esac
+  done
+
+  echo "Herdr is running; starting Herdr World at http://127.0.0.1:$port (press Ctrl+C to stop)." >&2
+  herdr_world_exec_bridge "${args[@]+"${args[@]}"}"
 }
 
 herdr_world_main() {
@@ -349,8 +403,14 @@ herdr_world_main() {
     if herdr_bin="$(herdr_world_find_binary)" \
       && herdr_world_binary_is_supported "$herdr_bin" \
       && herdr_world_server_is_supported "$herdr_bin"; then
-      herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+      herdr_world_start_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
       return
+    fi
+
+    if [[ -n "$herdr_bin" ]] \
+      && herdr_world_binary_is_supported "$herdr_bin" \
+      && ! herdr_world_server_is_reachable "$herdr_bin"; then
+      socket_is_ready=false
     fi
 
     # Preserve non-interactive and explicitly disabled behavior. The bridge
@@ -373,10 +433,20 @@ herdr_world_main() {
 
   if [[ "$socket_is_ready" == true ]]; then
     if herdr_world_server_is_supported "$herdr_bin"; then
-      herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+      herdr_world_start_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
       return
     fi
 
+    if ! herdr_world_server_is_reachable "$herdr_bin"; then
+      socket_is_ready=false
+      cat >&2 <<EOF
+A stale Herdr socket was found at $default_socket, but no server is running.
+Continuing with normal Herdr startup.
+EOF
+    fi
+  fi
+
+  if [[ "$socket_is_ready" == true ]]; then
     cat >&2 <<EOF
 The running default Herdr server is incompatible with Herdr World.
 
@@ -392,8 +462,8 @@ EOF
       herdr_world_manual_instructions
       return 1
     fi
-    if ! herdr_world_wait_for_socket_to_stop "$default_socket"; then
-      echo "The incompatible Herdr server did not release $default_socket." >&2
+    if ! herdr_world_wait_for_server_to_stop "$herdr_bin"; then
+      echo "The incompatible Herdr server did not stop." >&2
       herdr_world_manual_instructions
       return 1
     fi
@@ -417,14 +487,13 @@ EOF
     echo "Herdr exited with an error; Herdr World was not started." >&2
     return 1
   fi
-  if ! herdr_world_wait_for_socket "$default_socket"; then
-    echo "Herdr returned, but no running session appeared at $default_socket." >&2
+  if ! herdr_world_wait_for_server "$herdr_bin"; then
+    echo "Herdr returned, but no compatible running session appeared at $default_socket." >&2
     herdr_world_manual_instructions
     return 1
   fi
 
-  echo "Herdr is running; starting Herdr World at http://127.0.0.1:8787." >&2
-  herdr_world_exec_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
+  herdr_world_start_bridge "${bridge_args[@]+"${bridge_args[@]}"}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
