@@ -243,8 +243,9 @@ contract, downloader, daemon, or service-supervisor behavior. Cask validation
 MUST prove that the direct `binary` mapping resolves the archive launcher and
 continues to work after install, upgrade, reinstall, and removal of an older
 version. If direct mapping demonstrably fails because of Caskroom path
-resolution, implementation SHALL stop and request a later narrowly scoped
-specification; it SHALL not silently add a workaround to this contract.
+resolution, implementation SHALL use the smallest validated path adaptation
+and update this specification only if the public contract changes. It SHALL
+not silently add a workaround to this contract.
 
 Cask installation SHALL preserve the archive's bridge, web assets,
 documentation, and legal material. It SHALL not start Herdr or the bridge,
@@ -375,7 +376,7 @@ Publish the first npm package manually under `next` only after the exact
 tarball has been installed and tested on the support matrix. Publish the stable
 Cask only after its separate signing/readiness gate passes.
 
-The following require a later specification or evidence-based extension:
+The following remain deferred until evidence justifies them:
 
 - splitting npm native payloads into platform packages;
 - OIDC, CI, or staged npm publication;

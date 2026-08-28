@@ -204,8 +204,9 @@ The first implementation should not add a Cask wrapper, path environment
 contract, downloader, daemon, or service supervisor. The direct `binary`
 mapping must be tested after install, upgrade, reinstall, and removal of an
 older version. If direct mapping demonstrably fails because of Caskroom path
-resolution, that is evidence for a later narrowly scoped specification; it is
-not a reason to add an unreviewed wrapper now.
+resolution, use the smallest validated path adaptation and update the
+specification only if the public contract changes. It is not a reason to add
+an unreviewed wrapper now.
 
 Installation should only unpack and link files. It must not start Herdr or the
 bridge, create or modify a workspace, or weaken the existing bridge security
