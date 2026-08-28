@@ -57,9 +57,9 @@ export function renderHomebrewFormula({ tag, checksums }) {
   conflicts_with "${otherFormula}", because: "both Formulae provide the herdr-world command"
 
   def install
-    bundle = Dir["herdr-world-v#{version}-*"]
-    odie "Herdr World archive root is missing" if bundle.empty?
-    libexec.install Dir["#{bundle.first}/*"]
+    libexec.install "VERSION", "bin", "share", "docs", "vendor",
+      "third_party", "LICENSE", "THIRD_PARTY_NOTICES.md", "UPSTREAM.md",
+      "README.md", "install"
     bin.install_symlink libexec/"bin/herdr-world"
   end
 

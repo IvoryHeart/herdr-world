@@ -20,6 +20,7 @@ test("generates the stable Formula from exact release archives", () => {
   assert.match(formula, /herdr-world-v1\.2\.3-linux-x86_64\.tar\.gz/);
   assert.match(formula, /sha256 "111111/);
   assert.match(formula, /conflicts_with "herdr-world-rc"/);
+  assert.match(formula, /libexec\.install "VERSION", "bin", "share"/);
   assert.doesNotMatch(formula, /herdr-world-installer/);
 });
 test("generates the RC Formula without advancing stable", () => {

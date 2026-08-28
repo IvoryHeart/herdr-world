@@ -13,6 +13,7 @@ on:
       - "scripts/npm-launcher.mjs"
       - "scripts/npm-package-inspect.mjs"
       - "scripts/npm-package.mjs"
+      - "scripts/npm-registry-query.mjs"
       - "scripts/package-tarball.sh"
       - "scripts/release-notes.mjs"
       - "scripts/release-publication.mjs"
@@ -283,7 +284,7 @@ jobs:
   npm_install_test:
     name: npm install test (${{ matrix.platform }})
     needs: npm_package
-    if: needs.npm_package.result == 'success'
+    if: always() && needs.npm_package.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     strategy:
@@ -342,7 +343,17 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+      - name: Restore exact Homebrew Formula from an earlier attempt
+        id: restore
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: formula-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v8
+        if: steps.restore.outcome == 'failure'
         with:
           pattern: desktop-*-${{ github.run_id }}
           path: dist-packages
@@ -350,26 +361,41 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
       - name: Verify native checksums and generate Formula
+        if: steps.restore.outcome == 'failure'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
+          mkdir -p formula-output
           for platform in linux-x86_64 macos-arm64 macos-x86_64; do
             scripts/verify-desktop-package.sh "$VERSION" "$platform"
           done
-          node scripts/homebrew-checksums.mjs "$VERSION" homebrew-checksums.json
+          node scripts/homebrew-checksums.mjs "$VERSION" formula-output/homebrew-checksums.json
           formula_name="$(node --input-type=module - "$VERSION" <<'NODE'
           import { homebrewFormulaName } from './scripts/homebrew-formula.mjs';
           console.log(homebrewFormulaName(process.argv[2]));
           NODE
           )"
-          node scripts/homebrew-formula.mjs "$VERSION" homebrew-checksums.json "${formula_name}.rb"
-          ruby -c "${formula_name}.rb"
+          node scripts/homebrew-formula.mjs "$VERSION" formula-output/homebrew-checksums.json "formula-output/${formula_name}.rb"
+      - name: Verify restored or newly generated Formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          formula_name="$(node --input-type=module - "$VERSION" <<'NODE'
+          import { homebrewFormulaName } from './scripts/homebrew-formula.mjs';
+          console.log(homebrewFormulaName(process.argv[2]));
+          NODE
+          )"
+          formula_file="formula-output/${formula_name}.rb"
+          [[ -f "$formula_file" ]] || { echo "expected Homebrew Formula is missing: $formula_file" >&2; exit 1; }
+          [[ -f formula-output/homebrew-checksums.json ]] || { echo "Homebrew checksum record is missing" >&2; exit 1; }
+          ruby -c "$formula_file"
       - uses: actions/upload-artifact@v7
+        if: steps.restore.outcome == 'failure'
         with:
           name: homebrew-formula-${{ github.run_id }}
           path: |
-            herdr-world*.rb
-            homebrew-checksums.json
+            formula-output/herdr-world*.rb
+            formula-output/homebrew-checksums.json
           if-no-files-found: error
           retention-days: 14
 
@@ -553,15 +579,35 @@ jobs:
           [[ "$VERSION" == *-rc.* ]] && channel="next"
           metadata="npm-output/npm-package-metadata.json"
           integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' "$metadata")"
-          package_exists=false
-          npm view "$package" name --json >/dev/null 2>&1 && package_exists=true
-          exact_exists=false
+          npm_state() {
+            node scripts/npm-registry-query.mjs state "$@"
+          }
+          npm_present() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          console.log(state.present);
+          NODE
+          }
+          npm_value() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          if (!state.present || !state.raw || state.raw === "null" || state.raw === "undefined") process.exit(0);
+          const value = JSON.parse(state.raw);
+          if (value !== null && value !== undefined) process.stdout.write(String(value));
+          NODE
+          }
+          package_state="$(npm_state view "$package" name --json)"
+          package_exists="$(npm_present "$package_state")"
+          exact_state="$(npm_state view "$package@$version" version --json)"
+          exact_exists="$(npm_present "$exact_state")"
           exact_integrity=""
-          if npm view "$package@$version" version --json >/dev/null 2>&1; then
-            exact_exists=true
-            exact_integrity="$(npm view "$package@$version" dist.integrity --json 2>/dev/null | tr -d '"')"
+          if [[ "$exact_exists" == true ]]; then
+            exact_integrity="$(npm_value "$(npm_state view "$package@$version" dist.integrity --json)")"
           fi
-          pointer="$(npm view "$package" "dist-tags.$channel" --json 2>/dev/null | tr -d '"' || true)"
+          pointer=""
+          if [[ "$package_exists" == true ]]; then
+            pointer="$(npm_value "$(npm_state view "$package" "dist-tags.$channel" --json)")"
+          fi
           if [[ "$package_exists" == false ]]; then
             if [[ "$VERSION" != *-rc.* ]]; then
               echo "The npm package does not exist; only an RC may perform the one-time bootstrap." >&2

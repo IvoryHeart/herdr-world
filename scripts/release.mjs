@@ -2,6 +2,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
+import { queryNpm } from "./npm-registry-query.mjs";
 import {
   HOMEBREW_TAP_REPOSITORY,
   NPM_PACKAGE_NAME,
@@ -59,28 +60,34 @@ function commandSucceeds(command, args) {
   }
 }
 
+function queryNpmOrFail(args, description) {
+  try {
+    return queryNpm(args);
+  } catch (error) {
+    fail(`could not ${description}: ${error.message}`);
+  }
+}
+
 function fail(message) {
   console.error(`Error: ${message}`);
   process.exit(1);
 }
 
 function readNpmChannelVersion(channel) {
-  let raw;
-  try {
-    raw = output("npm", [
-      "view",
-      NPM_PACKAGE_NAME,
-      `dist-tags.${channel}`,
-      "--json",
-    ]);
-  } catch (error) {
-    fail(`could not read npm ${channel} for ${NPM_PACKAGE_NAME}: ${error.message}`);
-  }
-  if (!raw || raw === "null" || raw === "undefined") return null;
+  const result = queryNpmOrFail(
+    ["view", NPM_PACKAGE_NAME, `dist-tags.${channel}`, "--json"],
+    `read npm ${channel} for ${NPM_PACKAGE_NAME}`,
+  );
+  if (
+    !result.present ||
+    !result.raw ||
+    result.raw === "null" ||
+    result.raw === "undefined"
+  ) return null;
 
   let value;
   try {
-    value = JSON.parse(raw);
+    value = JSON.parse(result.raw);
   } catch (error) {
     fail(`npm ${channel} returned invalid version data: ${error.message}`);
   }
@@ -93,23 +100,18 @@ function readNpmChannelVersion(channel) {
 }
 
 function checkExternalVersionAvailability() {
-  if (
-    commandSucceeds("npm", [
-      "view",
-      `${NPM_PACKAGE_NAME}@${version}`,
-      "version",
-      "--json",
-    ])
-  ) {
+  const exactVersion = queryNpmOrFail(
+    ["view", `${NPM_PACKAGE_NAME}@${version}`, "version", "--json"],
+    `check npm version ${NPM_PACKAGE_NAME}@${version}`,
+  );
+  if (exactVersion.present) {
     fail(`npm version already exists: ${NPM_PACKAGE_NAME}@${version}`);
   }
 
-  const npmPackageExists = commandSucceeds("npm", [
-    "view",
-    NPM_PACKAGE_NAME,
-    "name",
-    "--json",
-  ]);
+  const npmPackageExists = queryNpmOrFail(
+    ["view", NPM_PACKAGE_NAME, "name", "--json"],
+    `check whether npm package ${NPM_PACKAGE_NAME} exists`,
+  ).present;
   if (!npmPackageExists && !tag.includes("-rc.")) {
     fail(
       `the first npm publication must be an RC; publish a unique release candidate before ${tag}`,
