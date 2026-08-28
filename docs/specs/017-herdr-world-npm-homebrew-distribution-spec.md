@@ -285,8 +285,10 @@ SHALL not be presented as reviewed, endorsed, or official Homebrew software.
 The cross-repository credential used to open the pull request SHALL be a
 fine-grained credential restricted to `IvoryHeart/homebrew-tap` with only the
 repository contents and pull-request permissions needed to create the branch
-and pull request. It SHALL be stored as a GitHub Actions secret, SHALL not
-permit tap merging, and SHALL not grant access to other repositories.
+and pull request. It SHALL be stored as a GitHub Actions secret and SHALL not
+grant access to other repositories. The workflow SHALL only create the branch
+and pull request; it SHALL never invoke a merge. A maintainer SHALL review and
+merge the tap pull request.
 
 ### 4.7 npm publication
 
@@ -309,17 +311,18 @@ The publish job SHALL have `contents: read`. Its release condition SHALL be
 bound to an intentional final tag or release event, and SHALL exclude ordinary
 branch and pull-request events.
 
-The first publication SHALL run in this CI job using a temporary or granular
-npm publish token stored as a GitHub Actions secret. It SHALL be the first real
-prerelease and SHALL use explicit public access:
+The first publication SHALL run in this CI job on a GitHub-hosted runner using
+a temporary or granular npm publish token stored as a GitHub Actions secret.
+The bootstrap job SHALL grant `contents: read` and `id-token: write`, and SHALL
+use the supported Node 22.14.0+ and npm 11.5.1+ toolchain. It SHALL be the
+first real prerelease and SHALL enable npm provenance with explicit public
+access:
 
 ```bash
-npm publish <tested-package.tgz> --access public --tag next
+npm publish <tested-package.tgz> --provenance --access public --tag next
 ```
 
-Where the selected npm CLI supports provenance, the bootstrap publication
-SHALL enable npm provenance from the GitHub-hosted workflow. The token SHALL
-be removed from GitHub and revoked after bootstrap.
+The token SHALL be removed from GitHub and revoked after bootstrap.
 
 After the package exists, npm trusted publishing SHALL be configured for the
 exact repository `IvoryHeart/herdr-world` and the exact release workflow
@@ -404,8 +407,9 @@ Implementation SHALL provide the following focused evidence:
 - the exact CI-published `.tgz` is the one install-tested and hashed;
 - npm publication runs only for an intentional final tag or release, never an
   ordinary branch or pull request;
-- bootstrap uses a temporary/granular secret token with public access, then
-  removes and revokes that token;
+- bootstrap uses a temporary/granular secret token with `--provenance`,
+  `--access public`, `contents: read`, and `id-token: write`, then removes and
+  revokes that token;
 - later publication uses GitHub OIDC with `id-token: write`, `contents: read`,
   exact trusted-publisher configuration, and automatic provenance;
 - `next` and `latest` are used only for their intended release classes;

@@ -164,18 +164,17 @@ npm publish <tested-package.tgz> --tag <next-or-latest>
 The first publication still needs a bootstrap credential because npm trusted
 publishing cannot be configured until the package exists. It should run in the
 same GitHub-hosted CI job with a temporary or granular npm publish token stored
-as a GitHub Actions secret, and it should publish the first real prerelease
-with explicit public access:
+as a GitHub Actions secret. The bootstrap job should grant `contents: read` and
+`id-token: write`, use Node 22.14.0+ and npm 11.5.1+, and publish the first real
+prerelease with npm provenance and explicit public access:
 
 ```bash
-npm publish <tested-package.tgz> --access public --tag next
+npm publish <tested-package.tgz> --provenance --access public --tag next
 ```
 
-Where supported by the selected npm CLI, the bootstrap job should enable npm
-provenance. After the package exists, configure trusted publishing for the
-exact `IvoryHeart/herdr-world` repository and exact workflow filename
-`release.yml`, allow direct `npm publish`, and remove/revoke the bootstrap
-token.
+After the package exists, configure trusted publishing for the exact
+`IvoryHeart/herdr-world` repository and exact workflow filename `release.yml`,
+allow direct `npm publish`, and remove/revoke the bootstrap token.
 
 Prerelease application versions should use the `next` dist-tag. Stable
 versions should use `latest`. The `@ivoryheart` scope must be owned before
@@ -246,9 +245,11 @@ that pull request. CI must not merge it or upload a separate Homebrew binary.
 Opening the pull request needs only a fine-grained credential restricted to the
 `IvoryHeart/homebrew-tap` repository with the contents and pull-request
 permissions required to create the branch and pull request. It should be held
-as a GitHub Actions secret and must not grant access to other repositories or
-merge the tap change. No bot service, GitHub App deployment, state database, or
-broader cross-repository credential is required.
+as a GitHub Actions secret and must not grant access to other repositories. The
+workflow should only create the branch and pull request and must never invoke
+merge; a maintainer reviews and merges the tap change. No bot service, GitHub
+App deployment, state database, or broader cross-repository credential is
+required.
 
 MacOS signing, notarization, and applicable Gatekeeper checks are a separate
 stable-release readiness policy. Local Cask implementation and validation may
@@ -312,7 +313,8 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 - run the existing live smoke against stock Herdr;
 - verify arguments, stdio, signals, and child exit status;
 - publish the exact tested and hashed tarball from CI under the intended tag;
-- verify the bootstrap public-access token path and its removal/revocation;
+- verify the bootstrap public-access token path with `--provenance`,
+  `contents: read`, and `id-token: write`, then verify its removal/revocation;
 - verify later trusted publishing with GitHub OIDC, `id-token: write`,
   `contents: read`, and automatic provenance.
 
