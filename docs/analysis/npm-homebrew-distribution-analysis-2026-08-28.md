@@ -431,11 +431,11 @@ verification. The existing release matrix should remain the source of native
 truth. The npm packager can extract the verified archive into its staging
 layout; the Cask should reference the immutable archive directly.
 
-Before npm generation, release validation must compare the relative path set
-and bytes of the shared launcher, web assets, documentation, and legal payload
-across all three archives. Platform-specific bridge files and their runtime
-metadata are excluded from this common-payload identity check. Only after that
-check succeeds may the designated verified Linux x86-64 archive supply the
+Before npm generation, release validation must compare a canonical sorted
+relative-path/SHA-256 manifest for the shared launcher, web assets,
+documentation, and legal payload across all three archives. Platform-specific
+bridge files are excluded from this common-payload identity check. Only after
+that check succeeds may the designated verified Linux x86-64 archive supply the
 common npm payload.
 
 The current release process creates the GitHub release before the archive

@@ -167,10 +167,12 @@ The common payload is the byte content and relative path set for:
 - `README.md`, `LICENSE`, `THIRD_PARTY_NOTICES.md`, and `UPSTREAM.md`;
 - the complete applicable `docs/`, `third_party/`, and legal/inventory trees.
 
-The validator SHALL compare every common relative path and its bytes (using a
-cryptographic digest plus byte comparison), and SHALL fail on a missing,
-additional, or different common file. One designated verified archive,
-`linux-x86_64`, SHALL supply the common npm payload after this check succeeds.
+The validator SHALL produce a canonical sorted manifest mapping every common
+relative path to its SHA-256 digest, compare those manifests, and SHALL fail on
+a missing, additional, or different common file or digest. This manifest is the
+release proof that the common payload is byte-identical. One designated
+verified archive, `linux-x86_64`, SHALL supply the common npm payload after this
+check succeeds.
 The designation is a source-selection convenience; it does not relax the
 identity check.
 
