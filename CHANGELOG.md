@@ -9,7 +9,7 @@
 - Added fail-closed Developer ID signing and Apple notarization for release-tag macOS packages;
   pull-request packages exercise the same hardened-runtime assembly with test-only ad-hoc
   signatures and never access the release credentials.
-  [Herdr World PR #22](https://github.com/IvoryHeart/herdr-world/pull/22)
+  [Herdr World PR #24](https://github.com/IvoryHeart/herdr-world/pull/24)
 - Added a desktop `install` / `herdr-world-installer` entrypoint that installs the complete
   versioned World bundle for the current user, exposes the `herdr-world` command, and then hands off
   to the consent-based Herdr dependency setup.
