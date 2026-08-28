@@ -3,360 +3,126 @@
 - **Date:** 2026-08-28
 - **Status:** Research complete; implementation not started
 - **Repository:** `IvoryHeart/herdr-world`
-- **Current application release:** `v0.1.0-rc.1`
-- **Current desktop artifacts:** Linux x86-64, macOS ARM64, and macOS x86-64
 - **Related specification:** [Spec 017](../specs/017-herdr-world-npm-homebrew-distribution-spec.md)
 - **Related research:** [Herdr plugin release analysis](herdr-plugin-release-analysis-2026-08-26.md)
 
-## Executive conclusion
+## Conclusion
 
-The smallest useful distribution is one public universal npm package and one
-binary-first Homebrew Cask:
+The right release model is one release pipeline with small channel adapters. A
+final tag produces and validates the native archives once, then supplies the
+same release version and verified release record to npm, Homebrew, and future
+distribution channels. Package-manager channels reuse the native outputs; the
+Herdr plugin remains governed by Spec 016 and its source-build contract.
 
-1. `@ivoryheart/herdr-world` contains the Node entrypoint, the shared
-   launcher/web/documentation/legal payload, and all three native bridges.
-2. `IvoryHeart/homebrew-tap` contains one CI-written Cask update that selects
-   an existing immutable GitHub release archive.
+The current `v0.1.0-rc.1` release is useful as an installation test fixture. It
+must not become a special case or a version assumption in future release work.
 
-The existing verified desktop archives remain the only native source. Package
-generation should re-layout those outputs, not compile a second bridge or
-download release assets during installation. A universal npm package avoids a
-four-package publication graph and is adequate while the current release
-artifacts remain small. A later platform split should require measured evidence.
+The initial package-manager channels are:
 
-This distribution remains independent from the Herdr plugin. It should not
-make plugin installation depend on npm or Homebrew, and it should not transfer
-plugin-managed lifecycle ownership to a package manager.
+1. one universal public npm package, `@ivoryheart/herdr-world`, containing the
+   shared payload and all three desktop bridges; and
+2. one stable-only direct-archive Cask in the public third-party tap
+   `IvoryHeart/homebrew-tap`.
 
-## Repository and release baseline
+## Findings
 
-The repository is not currently a public npm application package:
+The repository already produces desktop archives with the native bridge, web
+assets, launcher, documentation, and legal material. Those verified archives
+should remain the only native source. Rebuilding a bridge for npm or Homebrew
+would create drift and another release path.
 
-- the root `package.json` is private and has version `0.0.0`;
-- `web/package.json` is a private frontend development manifest;
-- root dependencies include development and Android tooling; and
-- application versions are tracked in `release.json`, documentation, and tags.
+The universal npm package is the smallest initial topology. It avoids a
+platform-package graph while retaining one command and one version. The Cask
+can use the existing immutable archives directly; it does not need a second
+Homebrew binary or a source build.
 
-The existing `scripts/package-tarball.sh` produces platform archives with this
-shape:
+The exact supported targets and runtime checks belong in the existing packaging
+and release documentation. They should be tested by the release pipeline, but
+they should not turn this distribution contract into a copy of every launcher,
+libc, or workflow detail.
 
-```text
-herdr-world-vX.Y.Z-PLATFORM/
-  bin/herdr-world
-  bin/herdr-world-bridge
-  share/herdr-world/web/
-  third_party/
-  docs/
-  LICENSE
-  THIRD_PARTY_NOTICES.md
-  UPSTREAM.md
-  README.md
-```
+## Recommended release flow
 
-The archives are already the right source boundary. They contain the bridge,
-web application, launcher, documentation, and legal assets, and the existing
-verifier checks checksums, archive safety, native format, required files, legal
-manifest closure, launcher help, and a no-session failure path.
+For every intentional final tag:
 
-The current archive sizes are approximately 6.2–6.6 MiB. A universal npm
-package will be larger because it carries three bridges, but it avoids
-duplicated package metadata, publication sequencing, optional dependency
-selection, and platform-package failure modes. Measure the packed size during
-implementation. Split the native payload only if that measurement or an npm
-limit makes the universal package impractical.
+1. build all native archives;
+2. verify contents, legal closure, formats, checksums, and live smoke;
+3. expose the verified outputs to the release adapters;
+4. generate, inspect, install-test, hash, and publish the exact npm package;
+5. for a stable release, generate, validate, and write the Cask update to the
+   third-party tap; and
+6. run any future adapters against the same version and outputs.
 
-The support matrix is:
+Prereleases use the npm prerelease channel and leave the stable Cask unchanged.
+Stable releases use the stable npm channel and update the ordinary Cask.
+Branches and pull requests never publish.
 
-| Target | Existing archive | npm bridge path | Cask archive |
-| --- | --- | --- | --- |
-| Linux x86-64, glibc 2.34+ | `linux-x86_64` | `native/linux-x64/herdr-world-bridge` | Linux archive |
-| macOS ARM64 | `macos-arm64` | `native/darwin-arm64/herdr-world-bridge` | ARM64 archive |
-| macOS x86-64 | `macos-x86_64` | `native/darwin-x64/herdr-world-bridge` | Intel archive |
+The release tag is the version source. No future release should require editing
+the same fixed version in multiple manifests or repeating a special bootstrap
+procedure. Publication credentials and npm scope/tap ownership are setup
+prerequisites; they should not create per-release manual work.
 
-Linux ARM64, musl Linux, Windows, and Android remain outside this distribution
-scope.
+Retries are deliberately simple. An adapter may check whether the exact version
+and contents are already present and no-op. Published bytes are immutable; a
+wrong publication uses a new release version. No publication database, staged
+workflow, or recovery service is needed for the initial design.
 
-The current `v0.1.0-rc.1` Linux bridge requires symbols through
-`GLIBC_2.34`. The initial Linux runtime contract is therefore glibc 2.34 or
-newer unless a separate build effort establishes a lower baseline. npm's
-`libc` metadata cannot express a version, and the universal package has no
-useful platform selector, so the launcher must perform the runtime check.
+## Channel contracts
 
-## npm distribution
+### npm
 
-### Universal package
+The package contains the shared launcher behavior, web assets, documentation,
+legal assets, and all three native bridges. It exposes only `herdr-world`,
+selects the bridge for the supported host, and never downloads or builds a
+bridge during installation.
 
-The proposed package is:
+The package is packed and tested before publication, and the published tarball
+is the tested tarball. The public package version comes from the final release
+tag. Platform-specific npm packages remain deferred until measured evidence
+shows the universal package is impractical.
 
-```text
-@ivoryheart/herdr-world
-```
+### Homebrew
 
-It should be a normal public scoped package with one `herdr-world` command.
-Its manifest should derive the version from `release.json` by removing only
-the leading `v`, declare Node `>=22.14.0`, use the exact repository URL
-`https://github.com/IvoryHeart/herdr-world`, set public scoped-package
-publication access, and use an explicit `files` allowlist.
+The Cask is stable-only and references the immutable GitHub release archives and
+checksums for the existing supported desktop targets. CI generates, validates,
+and writes the small Cask metadata update to `IvoryHeart/homebrew-tap` after the
+release gates pass. There is no separate binary upload, installer daemon,
+workspace mutation, or moving `latest` URL.
 
-The package should contain:
+The tap is third-party and must not be described as reviewed or endorsed by
+Homebrew. A source formula, binary formula, or separately named prerelease Cask
+is deferred.
 
-- the Node entrypoint;
-- the existing shared launcher behavior;
-- `share/herdr-world/web/**`;
-- documentation and the complete legal closure;
-- `native/linux-x64/herdr-world-bridge`;
-- `native/darwin-arm64/herdr-world-bridge`; and
-- `native/darwin-x64/herdr-world-bridge`.
+### Future channels and plugin boundary
 
-It should not contain the root or web development manifests, source-only
-dependencies, tests, CI files, Android output, or an arbitrary
-`node_modules` tree. It should not use `preinstall` or `postinstall` to
-download an archive or run Herdr.
+A future distribution channel should consume the same release version and
+verified release record through one adapter, reusing the artifact set where its
+own contract permits. It should add its credentials, metadata, validation, and
+publication step without changing native archive production or existing
+channels.
 
-Each bridge is copied from the matching verified desktop archive. The package
-should preserve the existing notices, license files, upstream record, bundled
-web legal files, `docs/world-assets.md`, `third_party/**`, and
-`vendor/herdr-compat/VENDOR-MANIFEST.toml`. The legal manifest must be closed
-within the package.
-
-### Entrypoint behavior
-
-The Node entrypoint should use `process.platform`, `process.arch`, and Linux
-libc detection to select exactly one of the three fixed paths. It should
-resolve paths from its installed package location, never from the current
-working directory, a guessed npm prefix, `PATH`, or a public environment
-override.
-
-It should invoke the shared launcher behavior with the selected bridge and
-static web directory as package-internal paths. This keeps the public contract
-small while retaining the existing runtime behavior. It must preserve
-arguments, standard streams, relevant signals, and child exit status.
-
-Unsupported OS/CPU/libc combinations and missing or damaged bridge files
-should fail before execution with an actionable message. `herdr-world --help`
-should print usage and exit successfully without requiring Herdr, a workspace,
-or a bridge process.
-
-### Linux compatibility
-
-Release validation should extract the maximum GLIBC symbol version from the
-exact Linux bridge copied from the verified archive and fail if it exceeds
-2.34. The extracted value and bridge digest should be retained as release
-evidence.
-
-At runtime, the launcher should report required 2.34 and detected glibc when
-the host is below the floor. It should identify musl and unknown libc clearly,
-and reject Linux ARM64 before native execution. Tests should cover below,
-exactly at, and above the floor.
-
-### npm publication
-
-The normal release path should run in CI only for an intentional final version
-tag or published release, never for an ordinary branch or pull request. The
-job should consume the final verified release outputs, generate the universal
-package, run `npm pack`, inspect and hash the exact `.tgz`, install-test that
-same file on all three supported targets, and publish that exact file:
-
-```bash
-npm publish <tested-package.tgz> --tag <next-or-latest>
-```
-
-The first publication still needs a bootstrap credential because npm trusted
-publishing cannot be configured until the package exists. It should run in the
-same GitHub-hosted CI job with a temporary or granular npm publish token stored
-as a GitHub Actions secret. The bootstrap job should grant `contents: read` and
-`id-token: write`, use Node 22.14.0+ and npm 11.5.1+, and publish the first real
-prerelease with npm provenance and explicit public access:
-
-```bash
-npm publish <tested-package.tgz> --provenance --access public --tag next
-```
-
-After the package exists, configure trusted publishing for the exact
-`IvoryHeart/herdr-world` repository and exact workflow filename `release.yml`,
-allow direct `npm publish`, and remove/revoke the bootstrap token.
-
-Prerelease application versions should use the `next` dist-tag. Stable
-versions should use `latest`. The `@ivoryheart` scope must be owned before
-publication, and npm has no ordinary placeholder reservation process, so the
-first publication should be the first real package release rather than a
-placeholder.
-
-npm name/version contents are immutable. If the wrong bytes are published, that
-version cannot be repaired in place; a later application version is required.
-Before retrying a failed publication, CI should check npm; if the version is
-already live, it should not attempt to replace it. No custom publication state
-model, staged-publishing workflow, or separate publishing service is needed.
-
-Subsequent publication should use npm trusted publishing from a GitHub-hosted
-runner with Node 22.14.0 or newer, npm 11.5.1 or newer, `id-token: write`, and
-`contents: read`. npm automatically generates provenance for trusted GitHub
-publishing, and no long-lived npm publishing token is needed.
-
-## Homebrew distribution
-
-### Cask choice
-
-A Cask is the appropriate initial Homebrew type because the project already
-publishes platform-specific binary archives. A source-building formula would
-create a second build system and is not justified by the current goal. A binary
-formula is also deferred.
-
-The public command should be:
-
-```bash
-brew install --cask IvoryHeart/tap/herdr-world
-```
-
-This is a third-party tap command, not a Homebrew endorsement or official
-Homebrew package.
-
-### Direct Cask shape
-
-The Cask should use the existing immutable GitHub release archives, select the
-URL and SHA-256 by target, and support only macOS ARM64, macOS x86-64, and
-Linux x86-64. It should expose the archive's existing `bin/herdr-world`
-through the normal Cask `binary` mechanism. The bridge must not become a
-second command.
-
-The first implementation should not add a Cask wrapper, path environment
-contract, downloader, daemon, or service supervisor. The direct `binary`
-mapping must be tested after install, upgrade, reinstall, and removal of an
-older version. If direct mapping demonstrably fails because of Caskroom path
-resolution, use the smallest validated path adaptation and update the
-specification only if the public contract changes. It is not a reason to add
-an unreviewed wrapper now.
-
-Installation should only unpack and link files. It must not start Herdr or the
-bridge, create or modify a workspace, or weaken the existing bridge security
-defaults. The stable Cask should never use a moving `latest` URL. A
-prerelease Cask, if ever needed, should have a separate name and documented
-channel.
-
-### Tap update and signing readiness
-
-For an eligible stable release, after the complete GitHub release asset set
-and signing readiness gate are satisfied, CI should read the final version,
-three archive URLs, and three checksums; generate and validate the small Cask
-metadata change; and directly commit that change to
-`IvoryHeart/homebrew-tap` as part of the same release. The commit should update
-only the Cask version, URLs, and checksums. There is no separate Homebrew
-binary upload. A prerelease publishes npm under `next` and does not update the
-stable Cask.
-
-The cross-repository credential should be a fine-grained credential restricted
-to the `IvoryHeart/homebrew-tap` repository with only the `Contents: write`
-repository permission. It should be held as a GitHub Actions secret and must
-not grant access to other repositories; no pull-request permission is needed.
-No bot service, GitHub App deployment, state database, or broader
-cross-repository credential is required.
-
-If the stable tap update is retried, CI should compare the tap's current Cask
-version and three SHA-256 values with the intended release and no-op when they
-are already current.
-
-MacOS signing, notarization, and applicable Gatekeeper checks are a separate
-stable-release readiness policy. Local Cask implementation and validation may
-use release-candidate fixtures; the ordinary stable Cask should not be
-published until that policy gate passes. The gate does not determine whether
-the distribution uses a Cask or a universal npm package.
-
-## Release architecture
-
-The release sequence should be:
-
-1. build all three native archives from the final tag;
-2. run existing archive verification and the stock-Herdr live smoke;
-3. generate the universal npm directory from those verified outputs;
-4. pack, inspect, install-test, and hash the exact npm `.tgz`;
-5. for a prerelease, publish the exact npm archive from tag/release CI under
-   `next` and do not update the stable Cask; or
-6. for an eligible stable release, after the complete assets and signing
-   readiness gate, publish npm under `latest`, validate the generated Cask
-   change, and directly commit it to the tap.
-
-The desktop archives and Android package remain unchanged. A failed validation
-stops publication. A publication retry must first check the external registry;
-published npm bytes must never be silently replaced. A tap retry must compare
-the current Cask version and checksums and no-op when already current.
-
-## Relationship to Spec 016
-
-Spec 016 remains source-build-only and owns the plugin's bridge and lifecycle.
-Installing npm or Homebrew must not change plugin ownership or lifecycle.
-Any future plugin use of an external package-manager installation needs a
-separate explicit contract for paths, versions, asset pairing, and ownership.
+Spec 016 remains source-build-only and owns plugin lifecycle. The plugin does
+not discover npm or Homebrew installations implicitly. Any external-installation
+mode needs an explicit plugin contract covering paths, versions, pairing, and
+ownership.
 
 ## Risks and mitigations
 
 | Risk | Mitigation |
 | --- | --- |
-| Universal npm package grows as more targets are added | Measure packed size; split only with evidence |
-| npm package is installed on unsupported host | Runtime OS/CPU/libc selection and actionable rejection |
-| Linux binary needs newer glibc | Release symbol extraction and runtime 2.34 preflight |
-| Package files drift from verified archives | Generate only from final archives and inspect the exact `.tgz` |
-| Legal file is omitted | Preserve and validate the complete package legal closure |
-| Cask direct binary path does not survive Caskroom relinking | Test lifecycle; defer a wrapper until direct failure is demonstrated |
-| Third-party tap code is trusted too broadly | Use a fully qualified command and restrict CI writes to the intended Cask change |
-| CI publishes a wrong or unintended npm version | Gate publication on an intentional final tag/release, publish the inspected `.tgz`, and check npm before retry |
-| CI can modify the tap too broadly | Store a fine-grained tap-only credential with only `Contents: write`; write only the intended Cask change and no-op when current |
-| Plugin and standalone distribution ownership becomes coupled | Keep the one-sentence Spec 016 boundary |
+| A channel builds different native bytes | Require every adapter to consume verified release outputs |
+| A release version drifts between channels | Derive every channel version from the final tag |
+| A failed retry overwrites immutable content | Check the channel before retry; no-op when exact, use a new version when different |
+| A future channel expands release complexity | Require a small adapter with the same release inputs |
+| Package installation changes runtime state | Test no downloader, daemon, workspace mutation, or Herdr startup |
 
-## Focused validation matrix
+## Deferred decisions
 
-### npm
-
-- assert the exact allowlisted package files, including all three fixed bridge
-  paths and legal closure;
-- assert public metadata, exact repository, version derivation, Node floor, and
-  only the `herdr-world` command;
-- run `npm pack`, inspect the exact tarball, install it on all three targets,
-  and verify the matching bridge is selected;
-- verify unsupported OS, CPU, musl, unknown libc, missing bridge, and Linux
-  glibc below 2.34 errors;
-- run `herdr-world --help` without Herdr, a workspace, or a bridge;
-- run the existing live smoke against stock Herdr;
-- verify arguments, stdio, signals, and child exit status;
-- publish the exact tested and hashed tarball from CI under the intended tag;
-- verify the bootstrap public-access token path with `--provenance`,
-  `contents: read`, and `id-token: write`, then verify its removal/revocation;
-- verify later trusted publishing with GitHub OIDC, `id-token: write`,
-  `contents: read`, and automatic provenance.
-
-### Homebrew
-
-- audit/style the Cask;
-- verify immutable versioned URLs and checksums for all three targets;
-- install, upgrade, reinstall, directly invoke, and uninstall the Cask on each
-  available supported target;
-- verify only `herdr-world` is exposed and no installation step starts a
-  process or mutates a workspace; and
-- block stable publication until the separate signing/readiness policy passes.
-- validate and directly commit only the generated stable Cask update to the tap;
-- verify prereleases leave the stable Cask unchanged.
-
-### Unchanged behavior
-
-- existing desktop archive verification and launcher behavior remain intact;
-- Android packaging and client behavior remain intact; and
-- Spec 016 plugin installation, ownership, source-build behavior, and lifecycle
-  remain intact.
-
-## Decisions for Spec 017
-
-1. Use one public universal npm package:
-   `@ivoryheart/herdr-world`.
-2. Copy all bridges from the corresponding verified archives into fixed
-   target-specific paths.
-3. Use Node 22.14.0 or newer and a fixed Linux glibc 2.34 preflight.
-4. Publish the exact tested npm `.tgz` from CI; use `next` for prereleases and
-   `latest` for stable releases. Bootstrap uses a temporary/granular token,
-   then later releases use trusted publishing with GitHub OIDC.
-5. Use a direct-archive stable Cask in the public third-party tap
-   `IvoryHeart/homebrew-tap`, with a CI-validated, directly committed Cask
-   change only for eligible stable releases.
-6. Keep staged publishing, platform npm splits, Cask wrappers, formulas, extra
-   targets, and plugin package-manager reuse deferred.
+- platform-specific npm packages;
+- staged publication and publication state tracking;
+- source-building Homebrew formulas;
+- unsupported targets such as Linux ARM64, musl Linux, and Windows; and
+- plugin reuse of external package-manager installations.
 
 ## Sources
 
@@ -364,33 +130,14 @@ separate explicit contract for paths, versions, asset pairing, and ownership.
 
 - [README](../../README.md)
 - [Web README](../../web/README.md)
-- [Packaging documentation](../packaging.md)
-- [Release documentation](../release.md)
+- [Packaging](../packaging.md)
+- [Release](../release.md)
 - [Spec 016](../specs/016-herdr-world-plugin-release-spec.md)
-- [Plugin release analysis](herdr-plugin-release-analysis-2026-08-26.md)
-- [Tarball packaging script](../../scripts/package-tarball.sh)
-- [Shared launcher](../../scripts/herdr-world-launcher.sh)
-- [Desktop package verifier](../../scripts/verify-desktop-package.sh)
-- [Release workflow](../../.github/workflows/release.yml)
 
-### npm
+### npm and Homebrew
 
-- [npm package.json fields](https://docs.npmjs.com/cli/v11/configuring-npm/package-json)
+- [npm package.json](https://docs.npmjs.com/cli/v11/configuring-npm/package-json)
 - [npm publish](https://docs.npmjs.com/cli/v11/commands/npm-publish/)
-- [npm scoped public packages](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
-- [npm distribution tags](https://docs.npmjs.com/cli/v11/commands/npm-dist-tag/)
 - [npm trusted publishers](https://docs.npmjs.com/trusted-publishers/)
-- [npm provenance](https://docs.npmjs.com/generating-provenance-statements/)
-
-### GitHub Actions
-
-- [OpenID Connect reference](https://docs.github.com/en/actions/reference/security/oidc)
-- [Workflow syntax and tag filters](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)
-- [Fine-grained token permissions](https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens)
-
-### Homebrew
-
 - [Homebrew Cask Cookbook](https://docs.brew.sh/Cask-Cookbook)
 - [Homebrew taps](https://docs.brew.sh/Taps)
-- [Homebrew acceptable Casks](https://docs.brew.sh/Acceptable-Casks)
-- [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust)
