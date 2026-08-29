@@ -10,9 +10,13 @@
 
 ### Fixed
 
-- Made the Herdr plugin release smoke deterministic across asynchronous startup-hook execution.
-
 ### Removed
+
+## [0.1.0-rc.11] - 2026-08-29
+
+### Fixed
+
+- Made the Herdr plugin release smoke deterministic across asynchronous startup-hook execution.
 
 ## [0.1.0-rc.10] - 2026-08-29
 
