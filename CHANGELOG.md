@@ -1,8 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
+## [0.1.0-rc.2] - 2026-08-29
 
 ### Added
 
@@ -14,8 +12,6 @@
   to the consent-based Herdr dependency setup.
   [Herdr World PR #22](https://github.com/IvoryHeart/herdr-world/pull/22)
 
-### Changed
-
 ### Fixed
 
 - Bounded terminal resize traffic during rapid pane and Office conversation resizing, preventing
@@ -25,8 +21,6 @@
   for an actually compatible server after startup, and print the World URL before the foreground
   bridge begins serving.
   [Herdr World PR #22](https://github.com/IvoryHeart/herdr-world/pull/22)
-
-### Removed
 
 ## [0.1.0-rc.1] - 2026-08-26
 
