@@ -776,7 +776,7 @@ jobs:
       publication_result: ${{ steps.publish.outputs.result || steps.state.outputs.result }}
       publication_url: ${{ steps.publish.outputs.url || steps.state.outputs.url }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
@@ -898,9 +898,30 @@ jobs:
               ;;
             *) echo "unknown npm publication action: $action" >&2; exit 1 ;;
           esac
-          registry_integrity="$(npm view "$NPM_PACKAGE_NAME@${VERSION#v}" dist.integrity --json | tr -d '"')"
-          registry_pointer="$(npm view "$NPM_PACKAGE_NAME" "dist-tags.$channel" --json | tr -d '"')"
           metadata_integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' npm-output/npm-package-metadata.json)"
+          npm_value() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          if (!state.present || !state.raw || state.raw === "null" || state.raw === "undefined") process.exit(0);
+          const value = JSON.parse(state.raw);
+          if (value !== null && value !== undefined) process.stdout.write(String(value));
+          NODE
+          }
+          availability_attempts=1
+          [[ "$action" == "publish" ]] && availability_attempts=80
+          registry_integrity=""
+          registry_pointer=""
+          for ((attempt = 1; attempt <= availability_attempts; attempt++)); do
+            registry_integrity="$(npm_value "$(node scripts/npm-registry-query.mjs state view "$NPM_PACKAGE_NAME@${VERSION#v}" dist.integrity --json)")"
+            registry_pointer="$(npm_value "$(node scripts/npm-registry-query.mjs state view "$NPM_PACKAGE_NAME" "dist-tags.$channel" --json)")"
+            [[ -n "$registry_integrity" && -n "$registry_pointer" ]] && break
+            if (( attempt == availability_attempts )); then
+              echo "npm did not make $NPM_PACKAGE_NAME@${VERSION#v} available within the validation window" >&2
+              exit 1
+            fi
+            echo "npm publish-time scan is still pending; retrying public verification in 15 seconds"
+            sleep 15
+          done
           [[ "$registry_integrity" == "$metadata_integrity" ]]
           [[ "$registry_pointer" == "${VERSION#v}" ]]
           url="https://www.npmjs.com/package/${NPM_PACKAGE_NAME}/v/${VERSION#v}"

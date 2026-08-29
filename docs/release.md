@@ -229,6 +229,12 @@ npm publish herdr-world-vX.Y.Z-rc.N.tgz --access public --tag next
    disallow traditional publishing tokens. Later tagged releases publish through OIDC and require
    no `NPM_TOKEN`.
 
+npm scans newly published packages before making them publicly installable. Initial verification
+may return not found for several minutes even after `npm publish` succeeds; do not republish the
+immutable version. The protected workflow waits up to 20 minutes for public availability before
+verifying the exact integrity and channel pointer, and an idempotent rerun can finish validation if
+the scan takes longer.
+
 Create the tap-scoped fine-grained GitHub token manually and save it as the repository Actions secret
 `HOMEBREW_TAP_TOKEN`. It needs only Contents read/write access to `IvoryHeart/homebrew-tap`; it must
 not be written to a Formula, artifact, cache, or log. The workflow validates and exercises the
