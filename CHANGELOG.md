@@ -10,9 +10,13 @@
 
 ### Fixed
 
-- Fixed the Herdr plugin doctor check to compare the active Node.js executable with the service record.
-
 ### Removed
+
+## [0.1.0-rc.12] - 2026-08-29
+
+### Fixed
+
+- Fixed the Herdr plugin doctor check to compare the active Node.js executable with the service record.
 
 ## [0.1.0-rc.11] - 2026-08-29
 
