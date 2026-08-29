@@ -14,6 +14,7 @@
 
 - Updated the project site with tabbed npm, Homebrew, and Herdr plugin installation paths plus a
   concise CLI quick reference.
+  [Herdr World PR #42](https://github.com/IvoryHeart/herdr-world/pull/42)
 
 ### Fixed
 
