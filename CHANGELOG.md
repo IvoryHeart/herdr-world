@@ -1,12 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
-
-### Added
-
-### Changed
+## [0.1.0-rc.4] - 2026-08-29
 
 ### Fixed
 
@@ -14,8 +8,6 @@
   before its declared sibling channel exists in a new tap, with manual runs installing the exact
   native artifacts locally instead of expecting a synthetic GitHub Release URL to exist.
   [Herdr World PR #32](https://github.com/IvoryHeart/herdr-world/pull/32)
-
-### Removed
 
 ## [0.1.0-rc.3] - 2026-08-29
 
