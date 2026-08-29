@@ -21,6 +21,8 @@
 - Split the installation card into npm, Homebrew, Herdr plugin, and CLI archive tabs, with
   method-specific advanced instructions and preview/stable channel guidance.
   [Herdr World PR #44](https://github.com/IvoryHeart/herdr-world/pull/44)
+- Renamed the user-facing archive tab to `CLI` while keeping archive details in the CLI panel.
+  [Herdr World PR #45](https://github.com/IvoryHeart/herdr-world/pull/45)
 
 ### Fixed
 
