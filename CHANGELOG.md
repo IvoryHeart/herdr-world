@@ -11,7 +11,8 @@
 ### Fixed
 
 - Allowed the first Homebrew release channel to complete Formula audit and lifecycle validation
-  before its declared sibling channel exists in a new tap.
+  before its declared sibling channel exists in a new tap, with manual runs installing the exact
+  native artifacts locally instead of expecting a synthetic GitHub Release URL to exist.
   [Herdr World PR #32](https://github.com/IvoryHeart/herdr-world/pull/32)
 
 ### Removed
