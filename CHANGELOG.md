@@ -17,6 +17,7 @@
   [Herdr World PR #42](https://github.com/IvoryHeart/herdr-world/pull/42)
 - Kept the primary install tabs to the two commands users need and moved archive and lifecycle
   commands into a collapsed advanced CLI section.
+  [Herdr World PR #43](https://github.com/IvoryHeart/herdr-world/pull/43)
 
 ### Fixed
 
