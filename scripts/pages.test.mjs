@@ -53,6 +53,7 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   assert.match(html, /data-install-tab="brew"/);
   assert.match(html, /data-install-tab="herdr"/);
   assert.match(html, /data-install-tab="cli"/);
+  assert.match(html, /data-install-tab="cli">CLI<\/button>/);
   assert.match(html, /npm install --global @ivoryheart\/herdr-world@next/);
   assert.ok(html.includes(`@ivoryheart/herdr-world@${currentRelease.slice(1)}`));
   assert.match(html, /brew install IvoryHeart\/tap\/herdr-world-rc/);
