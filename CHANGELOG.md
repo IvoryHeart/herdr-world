@@ -6,6 +6,8 @@
 
 ### Added
 
+- Added one protected release workflow that assembles exact native artifacts for GitHub, npm, and
+  Homebrew distribution, with platform-aware npm bridge selection and stable/RC Homebrew channels.
 - Added a desktop `install` / `herdr-world-installer` entrypoint that installs the complete
   versioned World bundle for the current user, exposes the `herdr-world` command, and then hands off
   to the consent-based Herdr dependency setup.

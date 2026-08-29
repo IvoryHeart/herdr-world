@@ -91,6 +91,23 @@ case "$PLATFORM" in
       echo "unexpected Linux bridge architecture: $binary_description" >&2
       exit 1
     }
+    command -v objdump >/dev/null 2>&1 || {
+      echo "objdump is required to verify the Linux glibc floor" >&2
+      exit 1
+    }
+    required_glibc="$(objdump -T "$BUNDLE/bin/herdr-world-bridge" \
+      | sed -nE 's/.*GLIBC_([0-9]+\.[0-9]+).*/\1/p' \
+      | sort -V \
+      | tail -n 1)"
+    [[ -n "$required_glibc" ]] || {
+      echo "could not determine the Linux bridge glibc requirements" >&2
+      exit 1
+    }
+    highest_glibc="$(printf '%s\n' "2.34" "$required_glibc" | sort -V | tail -n 1)"
+    [[ "$highest_glibc" == "2.34" ]] || {
+      echo "Linux bridge requires glibc $required_glibc; the supported floor is 2.34" >&2
+      exit 1
+    }
     ;;
   macos-arm64)
     [[ "$binary_description" == *"Mach-O 64-bit"* \

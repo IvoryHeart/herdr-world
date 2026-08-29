@@ -527,10 +527,10 @@ that exact protocol rather than attempting to decode older or newer private wire
 
 See [docs/vendoring.md](docs/vendoring.md) for the refresh process.
 
-See [docs/packaging.md](docs/packaging.md) for desktop tarball and APK artifact packaging.
+See [docs/packaging.md](docs/packaging.md) for desktop tarball, npm, Homebrew, and APK artifact packaging.
 
 See [docs/release.md](docs/release.md) for release validation, browser smoke testing, tagging,
-GitHub release creation, and manual artifact upload.
+single-workflow distribution, and the one-time npm bootstrap.
 
 ## Contributing And Support
 

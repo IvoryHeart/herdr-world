@@ -93,10 +93,8 @@ test("the bundle installer creates versioned commands and the installed launcher
       env,
     });
     assert.equal(launch.status, 0, launch.stderr);
-    assert.equal(
-      launch.stdout,
-      `<--static-dir>\n<${join(installTarget, "share/herdr-world/web")}>\n<--help>\n`,
-    );
+    assert.match(launch.stdout, /Usage: herdr-world/);
+    assert.doesNotMatch(launch.stdout, /static-dir/);
 
     writeFileSync(join(bundle, "share/herdr-world/web/index.html"), "updated\n");
     const reinstall = spawnSync("/bin/bash", [join(bundle, "install"), "--install-only"], {
@@ -135,12 +133,7 @@ test("the installer can hand off directly to the installed application command",
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stderr, /Continuing with Herdr dependency setup/);
-    assert.equal(
-      result.stdout.endsWith(
-        `<--static-dir>\n<${join(installTarget, "share/herdr-world/web")}>\n<--help>\n`,
-      ),
-      true,
-    );
+    assert.match(result.stdout, /Usage: herdr-world/);
   } finally {
     rmSync(testRoot, { recursive: true, force: true });
   }

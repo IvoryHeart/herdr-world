@@ -1,12 +1,12 @@
 # Herdr World automated release distribution
 
 - **Spec ID:** `017-herdr-world-automated-release-distribution`
-- **Status:** In review
+- **Status:** Approved
 - **Created:** 2026-08-28
 - **Owner:** IvoryHeart / Herdr World
 - **Reviewers:** IvoryHeart
-- **Approved by:** —
-- **Approved at:** —
+- **Approved by:** IvoryHeart
+- **Approved at:** 2026-08-28
 - **Supersedes:** all earlier drafts of Spec 017
 
 ## Purpose

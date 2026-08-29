@@ -1,13 +1,25 @@
-name: Desktop release
+name: Release distribution
 
 on:
   push:
     tags:
-      - "v[0-9]*"
+      - "v*"
   pull_request:
     paths:
       - ".github/workflows/release.yml"
+      - "scripts/desktop-artifact-metadata.mjs"
+      - "scripts/homebrew-checksums.mjs"
+      - "scripts/homebrew-formula.mjs"
+      - "scripts/npm-launcher.mjs"
+      - "scripts/npm-package-inspect.mjs"
+      - "scripts/npm-package.mjs"
+      - "scripts/npm-registry-query.mjs"
       - "scripts/package-tarball.sh"
+      - "scripts/release-notes.mjs"
+      - "scripts/release-publication.mjs"
+      - "scripts/release-version.mjs"
+      - "scripts/update-homebrew-tap.sh"
+      - "scripts/validate-release.mjs"
       - "scripts/verify-desktop-package.sh"
       - "scripts/live-stock-v082.sh"
       - "scripts/live-bridge-smoke.mjs"
@@ -20,8 +32,7 @@ on:
       - "vendor/**"
       - "web/**"
       - "third_party/**"
-      - "docs/tarball-readme.md"
-      - "docs/world-assets.md"
+      - "docs/**"
       - "package.json"
       - "package-lock.json"
       - "LICENSE"
@@ -32,11 +43,40 @@ on:
 permissions:
   contents: read
 
+# Release tags share one FIFO queue. Validation runs use a separate group so
+# pull requests and manual checks never block or publish a real release.
 concurrency:
-  group: desktop-release-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.event_name == 'push' && 'herdr-world-release-queue' || format('herdr-world-validation-{0}', github.run_id) }}
+  queue: max
+  cancel-in-progress: false
+
+env:
+  RELEASE_REPOSITORY: IvoryHeart/herdr-world
+  NPM_PACKAGE_NAME: '@ivoryheart/herdr-world'
+  HOMEBREW_TAP_REPOSITORY: IvoryHeart/homebrew-tap
 
 jobs:
+  provenance:
+    name: Validate protected release provenance
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Fetch canonical protected main
+        shell: bash
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Validate tag, stamped commit, and public references
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: node scripts/validate-release.mjs "$GITHUB_REF_NAME"
+
   notices:
     name: Release notice gate
     runs-on: ubuntu-24.04
@@ -61,9 +101,12 @@ jobs:
       - name: Verify complete desktop dependency notices
         run: npm run notices:check
 
-  package:
+  native:
     name: ${{ matrix.platform }} package and live smoke
-    needs: notices
+    needs: [provenance, notices]
+    if: >-
+      always() && needs.notices.result == 'success' &&
+      (github.event_name != 'push' || needs.provenance.result == 'success')
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     strategy:
@@ -91,13 +134,15 @@ jobs:
         shell: bash
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            [[ "$GITHUB_REF_TYPE" == "tag" ]]
-            [[ "$(git tag --points-at HEAD --list "$GITHUB_REF_NAME")" == "$GITHUB_REF_NAME" ]]
             version="$GITHUB_REF_NAME"
           else
-            version="v0.0.0-ci.${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}"
+            version="v0.0.0-rc.${GITHUB_RUN_ID}"
           fi
-          [[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          version="$(node --input-type=module - "$version" <<'NODE'
+          import { normalizeReleaseTag } from './scripts/release-version.mjs';
+          console.log(normalizeReleaseTag(process.argv[2]));
+          NODE
+          )"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v7
         with:
@@ -107,16 +152,32 @@ jobs:
             package-lock.json
             web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
+      - name: Restore verified native artifact from an earlier attempt
+        id: restore
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-${{ matrix.platform }}-${{ github.run_id }}
+          path: dist-packages
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Install dependencies for a new native build
+        if: steps.restore.outcome == 'failure'
         run: |
           npm ci
           npm ci --prefix web
-      - name: Build and inspect native archive
+      - name: Build native archive
+        if: steps.restore.outcome == 'failure'
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/herdr-world-cargo
+        run: scripts/package-tarball.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}" --notices-verified
+      - name: Verify native archive and record its digests
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          scripts/package-tarball.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}" --notices-verified
-          scripts/verify-desktop-package.sh "${{ steps.version.outputs.version }}" "${{ matrix.platform }}"
+          scripts/verify-desktop-package.sh "$VERSION" "${{ matrix.platform }}"
+          node scripts/desktop-artifact-metadata.mjs "$VERSION" "${{ matrix.platform }}" \
+            "dist-packages/herdr-world-${VERSION}-${{ matrix.platform }}.metadata.json"
       - name: Download verified stock Herdr v0.8.2
         env:
           HERDR_ASSET: ${{ matrix.herdr_asset }}
@@ -139,68 +200,723 @@ jobs:
           HERDR_WEB_BRIDGE_BIN: ${{ github.workspace }}/dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}/bin/herdr-world-bridge
           HERDR_WEB_STATIC_DIR: ${{ github.workspace }}/dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}/share/herdr-world/web
         run: scripts/live-stock-v082.sh
-      - name: Upload verified desktop archive
+      - name: Retain the verified native artifact
+        if: steps.restore.outcome == 'failure'
         uses: actions/upload-artifact@v7
         with:
-          name: desktop-${{ matrix.platform }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: desktop-${{ matrix.platform }}-${{ github.run_id }}
           path: |
             dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz
             dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+            dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}.metadata.json
           if-no-files-found: error
           retention-days: 14
 
-  publish:
-    name: Publish desktop assets
+  npm_package:
+    name: Assemble exact npm package
+    needs: [provenance, native]
+    if: >-
+      always() && needs.native.result == 'success' &&
+      (github.event_name != 'push' || needs.provenance.result == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve package version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then version="$GITHUB_REF_NAME"; else version="v0.0.0-rc.${GITHUB_RUN_ID}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Restore exact npm package from an earlier attempt
+        id: restore
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Download verified native archives
+        if: steps.restore.outcome == 'failure'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*-${{ github.run_id }}
+          path: dist-packages
+          merge-multiple: true
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Stage and pack npm package
+        if: steps.restore.outcome == 'failure'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          stage="${RUNNER_TEMP}/herdr-world-npm-stage"
+          mkdir -p npm-output
+          node scripts/npm-package.mjs "$VERSION" "$GITHUB_WORKSPACE/dist-packages" "$stage"
+          npm pack "$stage" --pack-destination npm-output >/dev/null
+          packed="$(find npm-output -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          [[ -n "$packed" ]]
+          mv "$packed" "npm-output/herdr-world-${VERSION}.tgz"
+          node scripts/npm-package-inspect.mjs \
+            "npm-output/herdr-world-${VERSION}.tgz" "$VERSION" \
+            "npm-output/npm-package-metadata.json"
+      - name: Verify restored or newly packed npm package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          node scripts/npm-package-inspect.mjs \
+            "npm-output/herdr-world-${VERSION}.tgz" "$VERSION" \
+            "${RUNNER_TEMP}/npm-package-verification.json"
+      - name: Retain exact npm package and publication record
+        if: steps.restore.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          if-no-files-found: error
+          retention-days: 14
+
+  npm_install_test:
+    name: npm install test (${{ matrix.platform }})
+    needs: npm_package
+    if: always() && needs.npm_package.result == 'success'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-24.04
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: macos-x64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve package version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then version="$GITHUB_REF_NAME"; else version="v0.0.0-rc.${GITHUB_RUN_ID}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Install the exact package tarball without scripts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          install_root="${RUNNER_TEMP}/herdr-world-npm-install"
+          npm install --ignore-scripts --prefix "$install_root" \
+            "$GITHUB_WORKSPACE/npm-output/herdr-world-${VERSION}.tgz"
+          "$install_root/node_modules/.bin/herdr-world" --help
+
+  formula:
+    name: Generate Homebrew Formula
+    needs: [provenance, native]
+    if: >-
+      always() && needs.native.result == 'success' &&
+      (github.event_name != 'push' || needs.provenance.result == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Resolve formula version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then version="$GITHUB_REF_NAME"; else version="v0.0.0-rc.${GITHUB_RUN_ID}"; fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Restore exact Homebrew Formula from an earlier attempt
+        id: restore
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: formula-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v8
+        if: steps.restore.outcome == 'failure'
+        with:
+          pattern: desktop-*-${{ github.run_id }}
+          path: dist-packages
+          merge-multiple: true
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify native checksums and generate Formula
+        if: steps.restore.outcome == 'failure'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p formula-output
+          for platform in linux-x86_64 macos-arm64 macos-x86_64; do
+            scripts/verify-desktop-package.sh "$VERSION" "$platform"
+          done
+          node scripts/homebrew-checksums.mjs "$VERSION" formula-output/homebrew-checksums.json
+          formula_name="$(node --input-type=module - "$VERSION" <<'NODE'
+          import { homebrewFormulaName } from './scripts/homebrew-formula.mjs';
+          console.log(homebrewFormulaName(process.argv[2]));
+          NODE
+          )"
+          node scripts/homebrew-formula.mjs "$VERSION" formula-output/homebrew-checksums.json "formula-output/${formula_name}.rb"
+      - name: Verify restored or newly generated Formula
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          formula_name="$(node --input-type=module - "$VERSION" <<'NODE'
+          import { homebrewFormulaName } from './scripts/homebrew-formula.mjs';
+          console.log(homebrewFormulaName(process.argv[2]));
+          NODE
+          )"
+          formula_file="formula-output/${formula_name}.rb"
+          [[ -f "$formula_file" ]] || { echo "expected Homebrew Formula is missing: $formula_file" >&2; exit 1; }
+          [[ -f formula-output/homebrew-checksums.json ]] || { echo "Homebrew checksum record is missing" >&2; exit 1; }
+          ruby -c "$formula_file"
+      - uses: actions/upload-artifact@v7
+        if: steps.restore.outcome == 'failure'
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: |
+            formula-output/herdr-world*.rb
+            formula-output/homebrew-checksums.json
+          if-no-files-found: error
+          retention-days: 14
+
+  external_state:
+    name: Validate external release state
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: package
+    needs: [provenance, native, npm_package, formula]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v8
         with:
-          pattern: desktop-*-${{ github.run_id }}-${{ github.run_attempt }}
-          path: release-assets
-          merge-multiple: true
-      - name: Verify the complete release set
-        env:
-          VERSION: ${{ github.ref_name }}
-        run: |
-          for platform in linux-x86_64 macos-arm64 macos-x86_64; do
-            mkdir -p "dist-packages"
-            mv "release-assets/herdr-world-${VERSION}-${platform}.tar.gz" "dist-packages/"
-            mv "release-assets/herdr-world-${VERSION}-${platform}.tar.gz.sha256" "dist-packages/"
-            scripts/verify-desktop-package.sh "$VERSION" "$platform"
-          done
-          [[ "$(find release-assets -type f | wc -l)" -eq 0 ]]
-      - name: Wait for the GitHub release and upload immutable assets
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: formula-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify npm and Homebrew availability before publication
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         shell: bash
         run: |
-          for attempt in $(seq 1 30); do
-            if gh release view "$VERSION" --repo IvoryHeart/herdr-world >/dev/null 2>&1; then
-              break
-            fi
-            if [[ "$attempt" -eq 30 ]]; then
-              echo "GitHub release $VERSION was not created within the upload window" >&2
+          set -euo pipefail
+          package="$NPM_PACKAGE_NAME"
+          version="${VERSION#v}"
+          channel="latest"
+          [[ "$VERSION" == *-rc.* ]] && channel="next"
+          npm_state() {
+            node scripts/npm-registry-query.mjs state "$@"
+          }
+          npm_present() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          console.log(state.present);
+          NODE
+          }
+          npm_value() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          if (!state.present || !state.raw || state.raw === "null" || state.raw === "undefined") process.exit(0);
+          const value = JSON.parse(state.raw);
+          if (value !== null && value !== undefined) process.stdout.write(String(value));
+          NODE
+          }
+          package_state="$(npm_state view "$package" name --json)"
+          package_exists="$(npm_present "$package_state")"
+          exact_state="$(npm_state view "$package@$version" version --json)"
+          exact_exists="$(npm_present "$exact_state")"
+          metadata_integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' npm-output/npm-package-metadata.json)"
+          exact_matches=false
+          if [[ "$exact_exists" == true ]]; then
+            exact_integrity="$(npm_value "$(npm_state view "$package@$version" dist.integrity --json)")"
+            [[ "$exact_integrity" == "$metadata_integrity" ]] || {
+              echo "npm version already exists with different content: $package@$version" >&2
               exit 1
-            fi
-            sleep 5
-          done
-          if [[ "$(gh release view "$VERSION" --repo IvoryHeart/herdr-world --json tagName --jq .tagName)" != "$VERSION" ]]; then
-            echo "GitHub release does not point at $VERSION" >&2
-            exit 1
+            }
+            exact_matches=true
           fi
-          for asset in dist-packages/*; do
-            name="$(basename "$asset")"
-            if gh release view "$VERSION" --repo IvoryHeart/herdr-world \
-              --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
-              echo "refusing to replace existing release asset: $name" >&2
+          if [[ "$package_exists" == false ]]; then
+            [[ "$VERSION" == *-rc.* ]] || {
+              echo "the first npm publication must be an RC; publish a unique release candidate before $VERSION" >&2
+              exit 1
+            }
+          else
+            pointer="$(npm_value "$(npm_state view "$package" "dist-tags.$channel" --json)")"
+            if [[ -n "$pointer" ]]; then
+              comparison="$(node --input-type=module - "$VERSION" "v$pointer" <<'NODE'
+          import { compareReleaseTags } from './scripts/release-version.mjs';
+          const [candidate, pointer] = process.argv.slice(2);
+          console.log(compareReleaseTags(candidate, pointer));
+          NODE
+              )"
+              if [[ "$comparison" != "0" || "$exact_matches" != true ]]; then
+              node --input-type=module - "$VERSION" "v$pointer" <<'NODE'
+          import { compareReleaseTags } from './scripts/release-version.mjs';
+          const [candidate, pointer] = process.argv.slice(2);
+          if (compareReleaseTags(candidate, pointer) <= 0) {
+            console.error(`npm channel already reaches ${pointer}; candidate ${candidate} must be higher`);
+            process.exit(1);
+          }
+          NODE
+              fi
+            fi
+          fi
+
+          gh repo view "$HOMEBREW_TAP_REPOSITORY" --json nameWithOwner --jq .nameWithOwner >/dev/null
+          formula="herdr-world.rb"
+          [[ "$VERSION" == *-rc.* ]] && formula="herdr-world-rc.rb"
+          formula_file="formula-output/$formula"
+          [[ -f "$formula_file" ]] || { echo "generated Homebrew Formula is missing: $formula_file" >&2; exit 1; }
+          endpoint="repos/$HOMEBREW_TAP_REPOSITORY/contents/Formula/$formula"
+          formula_error="${RUNNER_TEMP}/homebrew-formula-api-error"
+          formula_json=""
+          if formula_json="$(gh api "$endpoint" 2>"$formula_error")"; then
+            formula_version="$(node --input-type=module - "$formula_json" <<'NODE'
+          const response = JSON.parse(process.argv[2]);
+          const contents = Buffer.from(response.content, 'base64').toString('utf8');
+          const version = contents.match(/^\s*version\s+"([^"]+)"/m)?.[1];
+          if (!version) process.exit(1);
+          console.log(version);
+          NODE
+            )"
+            comparison="$(node --input-type=module - "$VERSION" "v$formula_version" <<'NODE'
+          import { compareReleaseTags } from './scripts/release-version.mjs';
+          const [candidate, current] = process.argv.slice(2);
+          console.log(compareReleaseTags(candidate, current));
+          NODE
+            )"
+            if [[ "$comparison" == "-1" ]]; then
+              echo "Homebrew Formula already reaches v$formula_version; candidate $VERSION must be higher" >&2
               exit 1
             fi
+            if [[ "$comparison" == "0" ]]; then
+              existing_formula="${RUNNER_TEMP}/existing-formula.rb"
+              node --input-type=module - "$formula_json" > "$existing_formula" <<'NODE'
+          const response = JSON.parse(process.argv[2]);
+          process.stdout.write(Buffer.from(response.content, 'base64'));
+          NODE
+              cmp -s "$formula_file" "$existing_formula" || {
+                echo "Homebrew Formula already exists with different content: $formula" >&2
+                exit 1
+              }
+            fi
+          else
+            formula_error_text="$(<"$formula_error")"
+            formula_status="$(node --input-type=module - "$formula_json" <<'NODE'
+          try {
+            const status = JSON.parse(process.argv[2]).status;
+            if (status !== undefined) console.log(status);
+          } catch {}
+          NODE
+            )"
+            if [[ "$formula_status" != "404" && "$formula_error_text" != *"HTTP 404"* ]]; then
+              echo "could not check Homebrew Formula $formula: ${formula_error_text:-$formula_json}" >&2
+              exit 1
+            fi
+          fi
+
+  github_release:
+    name: Assemble and publish GitHub release
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [provenance, native, external_state]
+    outputs:
+      publication_result: ${{ steps.publish.outputs.result }}
+      publication_url: ${{ steps.publish.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: desktop-*-${{ github.run_id }}
+          path: dist-packages
+          merge-multiple: true
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify the complete native release set
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          for platform in linux-x86_64 macos-arm64 macos-x86_64; do
+            scripts/verify-desktop-package.sh "$VERSION" "$platform"
           done
-          gh release upload "$VERSION" dist-packages/* --repo IvoryHeart/herdr-world
+          node scripts/release-notes.mjs "$VERSION" CHANGELOG.md "${RUNNER_TEMP}/release-notes.md"
+      - name: Create or validate the draft release
+        id: release_state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if ! gh release view "$VERSION" --repo "$RELEASE_REPOSITORY" >/dev/null 2>&1; then
+            args=(release create "$VERSION" --repo "$RELEASE_REPOSITORY" --verify-tag --draft \
+              --title "Herdr World $VERSION" --notes-file "${RUNNER_TEMP}/release-notes.md")
+            if [[ "$VERSION" == *-rc.* ]]; then args+=(--prerelease); fi
+            gh "${args[@]}"
+          fi
+          release_json="$(gh release view "$VERSION" --repo "$RELEASE_REPOSITORY" --json tagName,name,body,isDraft,isPrerelease)"
+          node --input-type=module - "$release_json" "$VERSION" "${RUNNER_TEMP}/release-notes.md" <<'NODE' >> "$GITHUB_OUTPUT"
+          import { readFileSync } from 'node:fs';
+          const [raw, version, notesPath] = process.argv.slice(2);
+          const release = JSON.parse(raw);
+          const expectedBody = readFileSync(notesPath, 'utf8').trim();
+          const expected = {
+            tagName: version,
+            name: `Herdr World ${version}`,
+            body: expectedBody,
+            isPrerelease: version.includes('-rc.'),
+          };
+          for (const [field, value] of Object.entries(expected)) {
+            const actual = field === 'body' ? release[field].trim() : release[field];
+            if (actual !== value) {
+              console.error(`existing GitHub release ${field} does not match the tagged release`);
+              process.exit(1);
+            }
+          }
+          if (typeof release.isDraft !== 'boolean') {
+            console.error('existing GitHub release has an invalid draft state');
+            process.exit(1);
+          }
+          console.log(`is_draft=${release.isDraft}`);
+          NODE
+      - name: Upload absent assets and verify existing assets byte-for-byte
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          expected=(
+            "herdr-world-${VERSION}-linux-x86_64.tar.gz"
+            "herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
+            "herdr-world-${VERSION}-macos-arm64.tar.gz"
+            "herdr-world-${VERSION}-macos-arm64.tar.gz.sha256"
+            "herdr-world-${VERSION}-macos-x86_64.tar.gz"
+            "herdr-world-${VERSION}-macos-x86_64.tar.gz.sha256"
+          )
+          existing_dir="${RUNNER_TEMP}/release-existing"
+          mkdir -p "$existing_dir"
+          for name in "${expected[@]}"; do
+            local_file="dist-packages/$name"
+            if gh release view "$VERSION" --repo "$RELEASE_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              gh release download "$VERSION" --repo "$RELEASE_REPOSITORY" --pattern "$name" --dir "$existing_dir" --clobber
+              cmp -s "$local_file" "$existing_dir/$name" || {
+                echo "existing GitHub asset differs from the verified artifact: $name" >&2
+                exit 1
+              }
+            else
+              gh release upload "$VERSION" "$local_file" --repo "$RELEASE_REPOSITORY"
+            fi
+          done
+          actual="$(gh release view "$VERSION" --repo "$RELEASE_REPOSITORY" --json assets --jq '.assets[].name' | sort)"
+          expected_text="$(printf '%s\n' "${expected[@]}" | sort)"
+          [[ "$actual" == "$expected_text" ]] || {
+            echo "GitHub release asset set is not exact" >&2
+            diff -u <(printf '%s\n' "$expected_text") <(printf '%s\n' "$actual") >&2 || true
+            exit 1
+          }
+      - name: Publish the complete GitHub release
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          url="https://github.com/${RELEASE_REPOSITORY}/releases/tag/${VERSION}"
+          result="already complete"
+          if [[ "${{ steps.release_state.outputs.is_draft }}" == true ]]; then
+            args=(release edit "$VERSION" --repo "$RELEASE_REPOSITORY" --draft=false)
+            if [[ "$VERSION" == *-rc.* ]]; then args+=(--prerelease); else args+=(--prerelease=false); fi
+            gh "${args[@]}"
+            result="published"
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "GitHub: $result — $url" >> "$GITHUB_STEP_SUMMARY"
+
+  homebrew_test:
+    name: Homebrew Formula test (${{ matrix.platform }})
+    needs: [formula, github_release]
+    if: >-
+      always() && needs.formula.result == 'success' &&
+      (github.event_name != 'push' || needs.github_release.result == 'success')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: macos-x86_64
+            runner: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: formula
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate Formula syntax on validation runs
+        if: github.event_name != 'push'
+        run: |
+          formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
+          [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
+          ruby -c "$formula_file"
+      - name: Install, exercise, reinstall, and uninstall Formula
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
+          [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
+          if [[ "$(uname -s)" == "Linux" && -x "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          command -v brew >/dev/null || {
+            echo "Homebrew is required on the ${{ matrix.platform }} runner for Formula lifecycle validation" >&2
+            exit 1
+          }
+          formula_name="$(basename "$formula_file" .rb)"
+          brew audit --strict --online "$formula_file"
+          brew install --formula "$formula_file"
+          brew test "$formula_name"
+          brew reinstall --formula "$formula_name"
+          brew uninstall --force "$formula_name"
+
+  npm_publish:
+    name: Publish npm channel
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [provenance, github_release, npm_package, npm_install_test]
+    outputs:
+      publication_result: ${{ steps.publish.outputs.result || steps.state.outputs.result }}
+      publication_url: ${{ steps.publish.outputs.url || steps.state.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Use the required npm CLI
+        run: |
+          npm install --global npm@11.5.1
+          test "$(node --version | sed 's/^v//' | cut -d. -f1)" -ge 22
+          test "$(npm --version | cut -d. -f1)" -ge 11
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Recheck npm state inside the release mutex
+        id: state
+        env:
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          package="$NPM_PACKAGE_NAME"
+          version="${VERSION#v}"
+          channel="latest"
+          [[ "$VERSION" == *-rc.* ]] && channel="next"
+          metadata="npm-output/npm-package-metadata.json"
+          integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' "$metadata")"
+          npm_state() {
+            node scripts/npm-registry-query.mjs state "$@"
+          }
+          npm_present() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          console.log(state.present);
+          NODE
+          }
+          npm_value() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          if (!state.present || !state.raw || state.raw === "null" || state.raw === "undefined") process.exit(0);
+          const value = JSON.parse(state.raw);
+          if (value !== null && value !== undefined) process.stdout.write(String(value));
+          NODE
+          }
+          package_state="$(npm_state view "$package" name --json)"
+          package_exists="$(npm_present "$package_state")"
+          exact_state="$(npm_state view "$package@$version" version --json)"
+          exact_exists="$(npm_present "$exact_state")"
+          exact_integrity=""
+          if [[ "$exact_exists" == true ]]; then
+            exact_integrity="$(npm_value "$(npm_state view "$package@$version" dist.integrity --json)")"
+          fi
+          pointer=""
+          if [[ "$package_exists" == true ]]; then
+            pointer="$(npm_value "$(npm_state view "$package" "dist-tags.$channel" --json)")"
+          fi
+          if [[ "$package_exists" == false ]]; then
+            if [[ "$VERSION" != *-rc.* ]]; then
+              echo "The npm package does not exist; only an RC may perform the one-time bootstrap." >&2
+              exit 1
+            fi
+            {
+              echo "### npm"
+              echo "Action required — the first package publication is not automated."
+              echo "Download artifact npm-package-${GITHUB_RUN_ID}, verify SHA-256 and integrity from npm-package-metadata.json, then publish the exact .tgz unchanged with interactive 2FA using the next dist-tag."
+              echo "After registry verification, configure this workflow as the npm trusted publisher before the next release."
+              echo "Artifact: https://github.com/${RELEASE_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "result=action-required" >> "$GITHUB_OUTPUT"
+            echo "url=https://github.com/${RELEASE_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          digest_matches=false
+          [[ "$exact_integrity" == "$integrity" ]] && digest_matches=true
+          decision="$(node --input-type=module - "$VERSION" "$pointer" "$exact_exists" "$digest_matches" <<'NODE'
+          import { assessPublication } from './scripts/release-publication.mjs';
+          const [candidate, pointer, exactExists, digestMatches] = process.argv.slice(2);
+          const result = assessPublication({
+            candidate,
+            currentVersion: pointer ? `v${pointer}` : null,
+            pointerVersion: pointer ? `v${pointer}` : null,
+            exactVersionExists: exactExists === 'true',
+            exactDigestMatches: digestMatches === 'true',
+          });
+          console.log(JSON.stringify(result));
+          NODE
+          )"
+          echo "decision=$decision" >> "$GITHUB_OUTPUT"
+          action="$(node -e 'console.log(JSON.parse(process.argv[1]).action)' "$decision")"
+          [[ "$action" != "fail" ]] || { node -e 'console.error(JSON.parse(process.argv[1]).reason)' "$decision"; exit 1; }
+      - name: Publish or repair npm channel
+        id: publish
+        if: steps.state.outputs.result != 'action-required'
+        env:
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          decision='${{ steps.state.outputs.decision }}'
+          action="$(node -e 'console.log(JSON.parse(process.argv[1]).action)' "$decision")"
+          channel="latest"
+          [[ "$VERSION" == *-rc.* ]] && channel="next"
+          case "$action" in
+            complete)
+              result="already complete"
+              ;;
+            publish)
+              npm publish "npm-output/herdr-world-${VERSION}.tgz" --access public --tag "$channel" --provenance
+              result="published"
+              ;;
+            update-pointer)
+              npm dist-tag add "$NPM_PACKAGE_NAME@${VERSION#v}" "$channel"
+              result="pointer repaired"
+              ;;
+            *) echo "unknown npm publication action: $action" >&2; exit 1 ;;
+          esac
+          registry_integrity="$(npm view "$NPM_PACKAGE_NAME@${VERSION#v}" dist.integrity --json | tr -d '"')"
+          registry_pointer="$(npm view "$NPM_PACKAGE_NAME" "dist-tags.$channel" --json | tr -d '"')"
+          metadata_integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' npm-output/npm-package-metadata.json)"
+          [[ "$registry_integrity" == "$metadata_integrity" ]]
+          [[ "$registry_pointer" == "${VERSION#v}" ]]
+          url="https://www.npmjs.com/package/${NPM_PACKAGE_NAME}/v/${VERSION#v}"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "npm: $result — $url" >> "$GITHUB_STEP_SUMMARY"
+
+  homebrew_publish:
+    name: Publish Homebrew channel
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [provenance, github_release, formula, homebrew_test]
+    outputs:
+      publication_result: ${{ steps.publish.outputs.result }}
+      publication_url: ${{ steps.publish.outputs.url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: formula
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Commit the validated Formula directly to the tap
+        id: publish
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
+          [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
+          publication="$(scripts/update-homebrew-tap.sh "$VERSION" "$formula_file")"
+          printf '%s\n' "$publication"
+          result="published"
+          [[ "$publication" == *"already complete"* ]] && result="already complete"
+          formula_name="$(basename "$formula_file" .rb)"
+          url="https://github.com/${HOMEBREW_TAP_REPOSITORY}/blob/main/Formula/${formula_name}.rb"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Homebrew: $result — $url" >> "$GITHUB_STEP_SUMMARY"
+
+  publication_summary:
+    name: Release publication summary
+    if: always() && github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [github_release, npm_publish, homebrew_publish]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Summarize every channel
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          {
+            echo "## Herdr World $VERSION distribution"
+            echo
+            echo "| Channel | Version | Result | URL |"
+            echo "| --- | --- | --- | --- |"
+            echo "| GitHub | ${VERSION#v} | ${{ needs.github_release.outputs.publication_result || needs.github_release.result }} | ${{ needs.github_release.outputs.publication_url || '—' }} |"
+            echo "| npm (${NPM_PACKAGE_NAME}) | ${VERSION#v} | ${{ needs.npm_publish.outputs.publication_result || needs.npm_publish.result }} | ${{ needs.npm_publish.outputs.publication_url || '—' }} |"
+            echo "| Homebrew (${HOMEBREW_TAP_REPOSITORY}) | ${VERSION#v} | ${{ needs.homebrew_publish.outputs.publication_result || needs.homebrew_publish.result }} | ${{ needs.homebrew_publish.outputs.publication_url || '—' }} |"
+            echo "| Herdr plugin | — | not enabled; Spec 016 remains a separate release tranche | — |"
+            echo
+            echo "Source commit: $GITHUB_SHA"
+          } >> "$GITHUB_STEP_SUMMARY"
