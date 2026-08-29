@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import WebSocket from "ws";
+import { createTerminalScreen } from "./terminal-screen.mjs";
 
 const bridgeA = process.env.HERDR_WEB_LIVE_BRIDGE_A;
 const bridgeB = process.env.HERDR_WEB_LIVE_BRIDGE_B;
@@ -132,25 +133,37 @@ function waitForTerminalSizeCommand(rows, cols, evidence) {
     `target="$(printf '%s' ${targetParts})"; i=0; ` +
     'while [ "$i" -lt 100 ]; do current="$(stty size | tr -d \'[:space:]\')"; ' +
     '[ "$current" = "$target" ] && break; i=$((i+1)); sleep 0.05; done; ' +
-    `printf '\\033[32m${evidence}_UNICODE_λ\\033[0m\\n'; printf '%s\\n' "$current"\n`
+    `printf '\\033[32m${evidence}_UNICODE_λ\\033[0m\\n'; ` +
+    `printf '${evidence}_SIZE_%s\\n' "$current"\n`
   );
 }
 
+let attachSequence = 0;
+const terminalConnections = new Map();
+
+function connectionKey(origin, terminalId) {
+  return `${origin}\u0000${terminalId}`;
+}
+
+function resizeTerminalScreens(key, cols, rows) {
+  for (const connection of terminalConnections.get(key) ?? []) {
+    connection.screen.resize(cols, rows);
+  }
+}
+
 async function attach(origin, terminalId, cols, rows) {
+  const screen = await createTerminalScreen(cols, rows);
   const socket = new WebSocket(socketUrl(origin, terminalId, cols, rows));
-  let output = "";
+  const key = connectionKey(origin, terminalId);
   const waiters = new Set();
-  const terminalText = () =>
-    output
-      .replace(/\u001b\][^\u0007]*(?:\u0007|\u001b\\)/gu, "")
-      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/gu, "")
-      .replace(/\u001b[()][0-2A-Z]/gu, "");
+  let closed = false;
+  const terminalText = () => screen.text();
   socket.on("message", (data, isBinary) => {
-    if (!isBinary) {
+    if (closed || !isBinary) {
       return;
     }
     const bytes = Buffer.from(data);
-    output += bytes.toString("utf8");
+    screen.write(bytes);
     const textOutput = terminalText();
     for (const waiter of waiters) {
       if (textOutput.includes(waiter.marker)) {
@@ -160,16 +173,48 @@ async function attach(origin, terminalId, cols, rows) {
       }
     }
   });
-  await new Promise((resolve, reject) => {
-    socket.once("open", resolve);
-    socket.once("error", reject);
-  });
-  return {
+  try {
+    await new Promise((resolve, reject) => {
+      const finish = (callback, value) => {
+        clearTimeout(timer);
+        socket.off("open", onOpen);
+        socket.off("error", onError);
+        socket.off("close", onClose);
+        callback(value);
+      };
+      const onOpen = () => finish(resolve);
+      const onError = (error) => finish(reject, error);
+      const onClose = () =>
+        finish(
+          reject,
+          new Error(`terminal socket closed before opening for ${origin}`),
+        );
+      const timer = setTimeout(
+        () =>
+          finish(
+            reject,
+            new Error(`terminal socket did not open for ${origin}`),
+          ),
+        10_000,
+      );
+      socket.once("open", onOpen);
+      socket.once("error", onError);
+      socket.once("close", onClose);
+    });
+  } catch (error) {
+    screen.close();
+    socket.on("error", () => {});
+    socket.terminate();
+    throw error;
+  }
+  const connection = {
     socket,
+    screen,
     send(data) {
       socket.send(JSON.stringify({ type: "input", data }));
     },
     resize(colsValue, rowsValue) {
+      resizeTerminalScreens(key, colsValue, rowsValue);
       socket.send(
         JSON.stringify({ type: "resize", cols: colsValue, rows: rowsValue }),
       );
@@ -200,9 +245,23 @@ async function attach(origin, terminalId, cols, rows) {
       });
     },
     close() {
+      if (closed) {
+        return;
+      }
+      closed = true;
+      terminalConnections.get(key)?.delete(connection);
+      screen.close();
       socket.close();
     },
   };
+  const connections = terminalConnections.get(key) ?? new Set();
+  connections.add(connection);
+  terminalConnections.set(key, connections);
+  resizeTerminalScreens(key, cols, rows);
+  const readyMarker = `SPEC010_ATTACH_${++attachSequence}`;
+  connection.send(waitForTerminalSizeCommand(rows, cols, readyMarker));
+  await connection.waitFor(`${readyMarker}_SIZE_${rows}${cols}`);
+  return connection;
 }
 
 const stateA = await bridgeState(bridgeA);
@@ -238,20 +297,16 @@ try {
   const markerA = `SPEC010_A_${Date.now()}`;
   secondA.send(waitForTerminalSizeCommand(28, 91, markerA));
   await Promise.all([
-    firstA.waitFor(`${markerA}_UNICODE_λ`),
-    secondA.waitFor(`${markerA}_UNICODE_λ`),
-    firstA.waitFor("2891"),
-    secondA.waitFor("2891"),
+    firstA.waitFor(`${markerA}_SIZE_2891`),
+    secondA.waitFor(`${markerA}_SIZE_2891`),
   ]);
 
   firstA.resize(101, 31);
   const refitMarker = `${markerA}_REFIT`;
   firstA.send(waitForTerminalSizeCommand(31, 101, refitMarker));
   await Promise.all([
-    firstA.waitFor(refitMarker),
-    secondA.waitFor(refitMarker),
-    firstA.waitFor("31101"),
-    secondA.waitFor("31101"),
+    firstA.waitFor(`${refitMarker}_SIZE_31101`),
+    secondA.waitFor(`${refitMarker}_SIZE_31101`),
   ]);
 
   const interruptMarker = `${markerA}_INTERRUPTED`;

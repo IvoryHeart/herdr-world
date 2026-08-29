@@ -84,13 +84,20 @@ HERDR_SOCKET_PATH="$LIVE_ROOT/herdr-b.sock" \
   "$ROOT/scripts/run-bridge.sh" --bridge-label live-b >"$LIVE_ROOT/bridge-b.log" 2>&1 &
 pid_bridge_b=$!
 
+bridges_ready=false
 for _ in $(seq 1 100); do
   if curl -fsS "http://127.0.0.1:$BRIDGE_A_PORT/api/capabilities" >/dev/null 2>&1 \
     && curl -fsS "http://127.0.0.1:$BRIDGE_B_PORT/api/capabilities" >/dev/null 2>&1; then
+    bridges_ready=true
     break
   fi
   sleep 0.2
 done
+if [[ "$bridges_ready" != true ]]; then
+  echo "Herdr World bridges did not become ready" >&2
+  cat "$LIVE_ROOT/bridge-a.log" "$LIVE_ROOT/bridge-b.log" >&2
+  exit 1
+fi
 
 HERDR_WEB_LIVE_BRIDGE_A="http://127.0.0.1:$BRIDGE_A_PORT" \
   HERDR_WEB_LIVE_BRIDGE_B="http://127.0.0.1:$BRIDGE_B_PORT" \
