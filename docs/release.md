@@ -65,7 +65,6 @@ including its release unit tests. Each native job checks the CPU format and bund
 exercises the packaged bridge against two checksum-pinned stock Herdr v0.8.2 daemons. One required
 notice gate validates the complete cross-platform dependency closure before any native job starts,
 avoiding three redundant builds of the notice generator.
-
 ## Herdr Plugin Release
 
 The plugin is released with the application tag but does not publish a second application artifact.

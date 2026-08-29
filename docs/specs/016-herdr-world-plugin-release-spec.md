@@ -30,8 +30,10 @@ tarball, and Android distributions remain supported products.
 
 The companion research and ecosystem record is
 [Herdr plugin release analysis](../analysis/herdr-plugin-release-analysis-2026-08-26.md).
-That analysis predates this approved npm-payload decision; its source-build-first
-packaging recommendation is superseded by this specification.
+That analysis predates the approved and implemented
+[automated release distribution contract](017-herdr-world-automated-release-distribution-spec.md);
+its source-build-first packaging recommendation is superseded by this
+specification's npm-payload decision.
 The integration relies on the [Herdr plugin manifest and runtime contract](https://herdr.dev/docs/plugins/),
 the [Herdr socket/CLI API](https://herdr.dev/docs/socket-api/), and the
 [automatic marketplace listing rules](https://herdr.dev/docs/marketplace/).
@@ -129,26 +131,29 @@ workflow generates and publishes the separate public
 stamping remains an explicit release concern and SHALL agree with that
 generated package rather than either private development manifest.
 
-Release `v0.1.0-rc.5` established the distribution baseline: the exact npm
-package is public, the Homebrew RC Formula is published and validated, and the
-GitHub release contains all three desktop archives and checksums. RC5 is
-implementation and validation evidence, not a permanently fixed plugin
-version.
+Release `v0.1.0-rc.5` established the distribution baseline: the
+[exact npm package](https://www.npmjs.com/package/@ivoryheart/herdr-world/v/0.1.0-rc.5)
+is public with `next` pointing to `0.1.0-rc.5`, the
+[Homebrew RC Formula](https://github.com/IvoryHeart/homebrew-tap/blob/main/Formula/herdr-world-rc.rb)
+is published and validated, and the
+[GitHub release](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.5)
+contains all three desktop archives and checksums. RC5 is implementation and
+validation evidence, not a permanently fixed plugin version.
 
 Herdr installs marketplace plugins from GitHub and runs their `[[build]]`
 commands; it does not install Herdr plugins directly from npm. The root
 manifest and controller therefore remain in this repository while the
 version-matched npm package supplies the prebuilt application payload. The
-package contains the verified web assets, legal payload, and bridges for Linux
-x86-64, macOS ARM64, and macOS x86-64. Plugin installation requires Node.js
-`22.14.0` or newer and npm. Node.js remains a runtime dependency of the
+package already contains the verified web assets, legal payload, and bridges
+for Linux x86-64, macOS ARM64, and macOS x86-64. Plugin installation requires
+Node.js `22.14.0` or newer and npm. Node.js remains a runtime dependency of the
 packaged launcher and must stay available to plugin actions and the user
 supervisor after installation. The plugin SHALL NOT require Rust, Cargo, a
 native compiler, or the web development dependency tree.
 
 Herdr's manifest platform field distinguishes operating systems but not CPU or
-Linux libc. The controller SHALL enforce the narrower published payload
-matrix.
+Linux libc. The controller SHALL enforce the narrower published payload matrix
+before creating a service.
 
 ## 5. Requirements
 
@@ -230,7 +235,8 @@ The resulting package root and executable SHALL be deterministic:
 Generated package files SHALL remain inside `.herdr-world-plugin/` and SHALL
 not be committed. npm's integrity verification against the package metadata
 served by the pinned npmjs registry, together with the release workflow's
-recorded package integrity, remain authoritative for the payload.
+recorded package integrity, remain authoritative for the payload. Integrity
+metadata supplied by any other configured registry is not sufficient.
 
 #### Scenario: A GitHub installation acquires the package successfully
 
@@ -283,8 +289,8 @@ private payload before creating supervisor state.
 
 Before starting or restarting a service, the controller SHALL resolve an
 absolute Node.js executable, verify that it is version `22.14.0` or newer, and
-place that exact executable in the supervisor command rather than depending
-on `#!/usr/bin/env node` or the supervisor's `PATH`. `doctor` SHALL perform the
+place that exact executable in the supervisor command rather than depending on
+`#!/usr/bin/env node` or the supervisor's `PATH`. `doctor` SHALL perform the
 same check without starting anything and report whether the recorded Node path
 still exists and meets the version floor. `start`, `restart`, and `doctor`
 SHALL fail closed with an actionable diagnostic when Node is absent, too old,
@@ -382,8 +388,8 @@ configuration, credentials, or durable runtime records under
 - **GIVEN** a configured plugin whose GitHub installation is reinstalled
 - **WHEN** Herdr replaces the managed plugin checkout
 - **THEN** the controller retains the user's config/state, detects any service
-  whose executable path changed, and provides a safe restart or migration
-  result rather than silently running deleted code.
+  whose package version or executable path changed, and provides a safe restart
+  or migration result rather than silently running deleted code.
 
 ### Requirement: Preserve bridge security posture
 
@@ -419,7 +425,8 @@ release reference. Before a release commit is created, static validation SHALL
 prove that:
 
 - the manifest version equals the application release version without `v`;
-- the version is exactly `X.Y.Z` or `X.Y.Z-rc.N`;
+- the version is exactly `X.Y.Z` or `X.Y.Z-rc.N`, matching the release identity
+  forms defined by Spec 017;
 - `min_herdr_version` and the advertised platform list are intentional;
 - all declared controller entrypoints exist and are executable;
 - the build controller derives the exact npm package version from the manifest
@@ -576,8 +583,8 @@ or live process without a valid capability response is not readiness.
 - Plugin installation and build commands execute arbitrary repository code as
   the installing user and acquire a prebuilt native npm payload. README and
   install documentation SHALL direct users to inspect the manifest,
-  controller, exact npm version, and release provenance before confirming
-  installation.
+  controller, exact npm version, and corresponding release provenance before
+  confirming installation.
 - The marketplace topic and listing are discovery metadata, not a security
   review or endorsement.
 - npm installation SHALL disable lifecycle scripts and remain inside the
@@ -612,8 +619,8 @@ evidence:
   supported OS/architecture/libc matrix, disabled lifecycle scripts, private
   prefix, missing registry version, mismatched package metadata, incomplete
   payload, command-line pinning of the default registry and `@ivoryheart`
-  scope to npmjs despite conflicting configuration, and refusal to use
-  dist-tags or global installations;
+  scope to npmjs despite conflicting user/project/global configuration, and
+  refusal to use dist-tags or global installations;
 - controller tests cover argument validation, config/state paths, atomic
   records, package-version ownership, port allocation, idempotent start, stale
   ownership, readiness failure, absolute Node resolution, missing/old/removed
@@ -691,9 +698,9 @@ implementation PR SHALL record its selected value in the delivery summary:
 
 The following are intentionally not deferred: the thin-facade architecture,
 root-repository manifest, plugin ID, exact npm-payload strategy, private
-plugin-local installation, loopback default, Herdr protocol-20 gate,
-external config/state ownership, and the Linux x86-64/glibc 2.34+, macOS
-ARM64, and macOS x86-64 initial target matrix.
+plugin-local installation, loopback default, Herdr protocol-20 gate, external
+config/state ownership, and the Linux x86-64/glibc 2.34+, macOS ARM64, and
+macOS x86-64 initial target matrix.
 
 ## Related repository documentation
 
