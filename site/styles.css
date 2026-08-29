@@ -329,8 +329,14 @@ h1 em, h2 em {
 .install-panel pre, .cli-note pre { max-width: 100%; margin: 0; padding: 0; overflow: auto; color: #cfcede; font: 500 12px/1.85 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .install-panel-note { margin: 18px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
 .install-panel-note code { color: var(--lavender-bright); font-family: inherit; }
-.cli-note { margin: 28px; padding-top: 24px; border-top: 1px solid #35344f; }
+.cli-note { margin: 28px; border-top: 1px solid #35344f; }
+.cli-note summary { padding: 24px 0; color: var(--amber); cursor: pointer; font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.11em; text-transform: uppercase; }
+.cli-note summary::-webkit-details-marker { display: none; }
+.cli-note summary::after { float: right; color: var(--lavender); content: "+"; font-size: 16px; line-height: 0.75; }
+.cli-note[open] summary::after { content: "−"; }
+.cli-note-content { padding-bottom: 24px; }
 .cli-note .install-panel-label { margin-bottom: 17px; }
+.cli-runtime-label { margin-top: 28px; padding-top: 24px; border-top: 1px solid #35344f; }
 .cli-note .install-panel-note { margin-bottom: 0; }
 .archive-note { margin: 0; padding: 22px 28px 26px; color: #8b8a9f; border-top: 1px solid #35344f; font: 500 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .archive-note a { color: var(--lavender); }
