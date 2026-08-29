@@ -16,6 +16,7 @@ import {
   choosePort,
   compareVersions,
   minimumVersionSatisfied,
+  nodeMatchesRecord,
   npmInstallArgs,
   parsePluginManifest,
   processMatchesRecord,
@@ -71,6 +72,13 @@ test("release versions use strict stable or numbered RC syntax", () => {
   assert.equal(minimumVersionSatisfied("22.13.9", MIN_NODE_VERSION), false);
   assert.equal(minimumVersionSatisfied("22.14.0-beta.1", MIN_NODE_VERSION), false);
   assert.throws(() => checkNode(process.execPath, { runner: () => "v22.13.9" }), /22.14.0 or newer/);
+});
+
+test("doctor compares the recorded service Node path with Node metadata", () => {
+  const record = { node_path: process.execPath };
+  assert.equal(nodeMatchesRecord(record, { path: process.execPath, version: "22.14.0" }), true);
+  assert.equal(nodeMatchesRecord(record, `${process.execPath}`), false);
+  assert.equal(nodeMatchesRecord(record, { path: "/missing/node", version: "22.14.0" }), false);
 });
 
 test("target selection enforces the published platform and libc matrix", () => {

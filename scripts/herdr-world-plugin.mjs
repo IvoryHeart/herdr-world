@@ -266,6 +266,10 @@ export function checkNode(nodePath, { runner = commandOutput } = {}) {
   return { path: path.resolve(nodePath), version: match[1] };
 }
 
+export function nodeMatchesRecord(record, node) {
+  return Boolean(record?.node_path && node?.path && record.node_path === node.path);
+}
+
 export function selectTarget({ platform = process.platform, arch = process.arch, glibcVersion } = {}) {
   const key = `${platform}-${arch}`;
   const target = SUPPORTED_TARGETS[key];
@@ -1454,8 +1458,9 @@ async function doctorAction({ root = ROOT, env = process.env, platform = process
   let config;
   if (directories) config = doctorCheck(checks, "configuration", () => loadConfig(directories.configDir));
   let node;
-  node = doctorCheck(checks, "Node.js version and absolute path", () => {
+  doctorCheck(checks, "Node.js version and absolute path", () => {
     const resolved = checkNode(resolveNode({ env }));
+    node = resolved;
     return `${resolved.version} at ${resolved.path}`;
   });
   doctorCheck(checks, "npm availability", () => {
@@ -1503,7 +1508,7 @@ async function doctorAction({ root = ROOT, env = process.env, platform = process
         const recorded = checkNode(record.node_path);
         return `${recorded.version} at ${recorded.path}`;
       });
-      if (node && record.node_path !== node.path) checks.push({ label: "current Node matches service", ok: false, detail: `record uses ${record.node_path}; current Node resolves to ${node.path}` });
+      if (node && !nodeMatchesRecord(record, node)) checks.push({ label: "current Node matches service", ok: false, detail: `record uses ${record.node_path}; current Node resolves to ${node.path}` });
       else if (node) checks.push({ label: "current Node matches service", ok: true, detail: node.path });
     }
   } else if (config) {
