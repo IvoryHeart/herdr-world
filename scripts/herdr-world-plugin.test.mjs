@@ -35,6 +35,7 @@ import {
 } from "./herdr-world-plugin.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const MANIFEST_VERSION = parsePluginManifest(readFileSync(path.join(ROOT, "herdr-plugin.toml"), "utf8")).version;
 
 function temporaryDirectory(prefix = "herdr-world-plugin-test-") {
   return mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -48,7 +49,7 @@ function executableScript(pathname, body) {
 test("the checked-in manifest declares the exact plugin contract", () => {
   const manifest = parsePluginManifest(readFileSync(path.join(ROOT, "herdr-plugin.toml"), "utf8"));
   assert.doesNotThrow(() => assertPluginManifest(manifest));
-  assert.equal(manifest.version, "0.1.0-rc.5");
+  assert.equal(manifest.version, MANIFEST_VERSION);
   assert.deepEqual(ACTIONS, ["build", "start", "stop", "restart", "status", "open", "doctor"]);
 });
 
@@ -126,6 +127,7 @@ test("build installs and verifies the exact payload using a private prefix", () 
   writeFileSync(path.join(root, "herdr-plugin.toml"), readFileSync(path.join(ROOT, "herdr-plugin.toml")));
   const log = path.join(root, "npm-args.json");
   const fakeNpm = path.join(bin, "npm");
+  const manifestVersion = JSON.stringify(MANIFEST_VERSION);
   executableScript(fakeNpm, `#!${process.execPath}
 const fs = require("node:fs");
 const path = require("node:path");
@@ -137,7 +139,7 @@ const packageRoot = path.join(prefix, "node_modules/@ivoryheart/herdr-world");
 fs.mkdirSync(path.join(packageRoot, "lib/bridges/linux-x64"), { recursive: true });
 fs.mkdirSync(path.join(packageRoot, "share/herdr-world/web/legal"), { recursive: true });
 fs.mkdirSync(path.join(prefix, "node_modules/.bin"), { recursive: true });
-fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: "@ivoryheart/herdr-world", version: "0.1.0-rc.5" }));
+fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: "@ivoryheart/herdr-world", version: ${manifestVersion} }));
   for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md", "UPSTREAM.md", "lib/herdr-world-launcher.sh", "share/herdr-world/web/index.html"]) fs.writeFileSync(path.join(packageRoot, file), "ok");
   fs.writeFileSync(path.join(packageRoot, "share/herdr-world/web/legal/manifest.json"), JSON.stringify({ schema_version: 1, files: [] }));
   for (const file of [path.join(packageRoot, "lib/bridges/linux-x64/herdr-world-bridge"), path.join(prefix, "node_modules/.bin/herdr-world"), path.join(packageRoot, "lib/herdr-world-launcher.sh")]) { fs.writeFileSync(file, "#!/bin/sh\\n"); fs.chmodSync(file, 0o755); }
@@ -153,7 +155,7 @@ fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: 
       glibcVersion: "2.39",
     });
     const args = JSON.parse(readFileSync(log, "utf8"));
-    assert.equal(args.at(-1), `${PACKAGE_NAME}@0.1.0-rc.5`);
+    assert.equal(args.at(-1), `${PACKAGE_NAME}@${MANIFEST_VERSION}`);
     assert.equal(args[args.indexOf("--ignore-scripts")], "--ignore-scripts");
     assert.equal(args[args.indexOf("--registry=https://registry.npmjs.org/")], "--registry=https://registry.npmjs.org/");
     assert.equal(args[args.indexOf("--@ivoryheart:registry=https://registry.npmjs.org/")], "--@ivoryheart:registry=https://registry.npmjs.org/");
