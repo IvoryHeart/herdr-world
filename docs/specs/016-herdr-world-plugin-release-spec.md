@@ -146,7 +146,9 @@ manifest and controller therefore remain in this repository while the
 version-matched npm package supplies the prebuilt application payload. The
 package already contains the verified web assets, legal payload, and bridges
 for Linux x86-64, macOS ARM64, and macOS x86-64. Plugin installation requires
-Node.js `22.14.0` or newer and npm, but it SHALL NOT require Rust, Cargo, a
+Node.js `22.14.0` or newer and npm. Node.js remains a runtime dependency of the
+packaged launcher and must stay available to plugin actions and the user
+supervisor after installation. The plugin SHALL NOT require Rust, Cargo, a
 native compiler, or the web development dependency tree.
 
 Herdr's manifest platform field distinguishes operating systems but not CPU or
@@ -199,7 +201,9 @@ prefix `.herdr-world-plugin/` under the managed plugin checkout. It SHALL use
 the equivalent of:
 
 ```text
-npm install --prefix .herdr-world-plugin --ignore-scripts --no-save \
+npm install --registry=https://registry.npmjs.org/ \
+  --@ivoryheart:registry=https://registry.npmjs.org/ \
+  --prefix .herdr-world-plugin --ignore-scripts --no-save \
   --package-lock=false --no-audit --no-fund --omit=dev \
   @ivoryheart/herdr-world@<manifest-version>
 ```
@@ -208,6 +212,11 @@ The build SHALL use an exact version, never an npm dist-tag, `npx`, a global
 installation, or a package selected from the ambient `PATH`. It SHALL disable
 package lifecycle scripts and SHALL NOT run a web build, Cargo, a native
 compiler, an installer embedded in another distribution, or Herdr onboarding.
+It SHALL pin both the default registry and the `@ivoryheart` scope to
+`https://registry.npmjs.org/` at npm's command-line configuration precedence
+so user, project, global, environment, or scope registry configuration cannot
+redirect the native payload request or any dependency request to another
+registry.
 
 Before installation the build SHALL fail closed unless Node.js `22.14.0` or
 newer and npm are available and the current OS, architecture, and Linux libc
@@ -224,8 +233,10 @@ The resulting package root and executable SHALL be deterministic:
 - executable: `.herdr-world-plugin/node_modules/.bin/herdr-world`.
 
 Generated package files SHALL remain inside `.herdr-world-plugin/` and SHALL
-not be committed. npm's registry integrity verification and the release
-workflow's recorded package integrity remain authoritative for the payload.
+not be committed. npm's integrity verification against the package metadata
+served by the pinned npmjs registry, together with the release workflow's
+recorded package integrity, remain authoritative for the payload. Integrity
+metadata supplied by any other configured registry is not sufficient.
 
 #### Scenario: A GitHub installation acquires the package successfully
 
@@ -275,6 +286,15 @@ remains responsible for selecting its verified native bridge and bundled web
 assets. The controller SHALL pass the selected Herdr target and all bridge
 security options explicitly and SHALL reject a missing or version-mismatched
 private payload before creating supervisor state.
+
+Before starting or restarting a service, the controller SHALL resolve an
+absolute Node.js executable, verify that it is version `22.14.0` or newer, and
+place that exact executable in the supervisor command rather than depending on
+`#!/usr/bin/env node` or the supervisor's `PATH`. `doctor` SHALL perform the
+same check without starting anything and report whether the recorded Node path
+still exists and meets the version floor. `start`, `restart`, and `doctor`
+SHALL fail closed with an actionable diagnostic when Node is absent, too old,
+or unavailable to the selected supervisor environment.
 
 The controller SHALL be idempotent. If a healthy matching service already
 exists, `start` SHALL report it and return success without spawning another
@@ -431,9 +451,10 @@ herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
 It SHALL explain that plugin installation requires Node.js `22.14.0` or newer
-and npm to acquire the exact prebuilt payload, does not require Rust or Cargo,
-and ignores global npm and Homebrew installations. It SHALL also explain that
-local linking does not run build commands and reinstalling is Herdr v1's
+and npm to acquire the exact prebuilt payload, that Node must remain installed
+for the supervised package launcher, that Rust and Cargo are not required, and
+that global npm and Homebrew installations are ignored. It SHALL also explain
+that local linking does not run build commands and reinstalling is Herdr v1's
 refresh mechanism for a GitHub-managed plugin. The repository SHALL add the
 GitHub topic `herdr-plugin` only when the tagged install flow succeeds against
 the published matching npm package and is ready for public discovery.
@@ -532,6 +553,7 @@ file under `HERDR_PLUGIN_STATE_DIR`. The schema SHALL include at least:
   "package_version": "0.1.0-rc.5",
   "payload_root": "/managed/checkout/.herdr-world-plugin/node_modules/@ivoryheart/herdr-world",
   "payload_entrypoint": "/managed/checkout/.herdr-world-plugin/node_modules/.bin/herdr-world",
+  "node_path": "/absolute/path/to/node",
   "supervisor": "systemd-user|launchd|fallback",
   "service_name": "opaque-owned-service-name",
   "pid": 12345,
@@ -565,8 +587,11 @@ or live process without a valid capability response is not readiness.
 - The marketplace topic and listing are discovery metadata, not a security
   review or endorsement.
 - npm installation SHALL disable lifecycle scripts and remain inside the
-  managed checkout. Runtime actions SHALL neither resolve nor mutate a global
-  package or Homebrew installation.
+  managed checkout. The build SHALL pin the default registry and the
+  `@ivoryheart` scope to the public npmjs registry and SHALL not trust registry
+  integrity metadata from an operator-configured alternate registry. Runtime
+  actions SHALL neither resolve nor mutate a global package or Homebrew
+  installation.
 - No secret may be placed in the manifest, plugin checkout, service command
   line, or ordinary action output.
 - Config/state directories SHALL be user-scoped and excluded from repository
@@ -592,10 +617,14 @@ evidence:
 - payload installation tests cover the exact package selector, Node.js floor,
   supported OS/architecture/libc matrix, disabled lifecycle scripts, private
   prefix, missing registry version, mismatched package metadata, incomplete
-  payload, and refusal to use dist-tags or global installations;
+  payload, command-line pinning of the default registry and `@ivoryheart`
+  scope to npmjs despite conflicting user/project/global configuration, and
+  refusal to use dist-tags or global installations;
 - controller tests cover argument validation, config/state paths, atomic
   records, package-version ownership, port allocation, idempotent start, stale
-  ownership, readiness failure, redaction, and security defaults;
+  ownership, readiness failure, absolute Node resolution, missing/old/removed
+  Node behavior, supervisor environment isolation, redaction, and security
+  defaults;
 - Linux supervisor behavior is tested with deterministic fakes for
   `systemd --user`, and macOS behavior with deterministic fakes for `launchd`;
 - fallback supervision is tested for bounded shutdown and stale-process
@@ -626,8 +655,10 @@ implementation SHALL demonstrate:
 10. uninstall/refresh behavior with service cleanup and retained config/state;
 11. a different globally installed npm or Homebrew version remaining unused
     and unchanged; and
-12. unsupported architecture, musl or unknown libc, missing Node/npm, missing
-    package version, and package/manifest mismatch failures without a service.
+12. unsupported architecture, musl or unknown libc, missing Node/npm during
+    installation, missing or old Node during runtime, missing package version,
+    alternate scoped-registry configuration, and package/manifest mismatch
+    failures without a service.
 
 The existing `npm run check:acceptance` and packaged desktop smoke suite remain
 required. The existing npm install tests and Homebrew Formula validation SHALL
