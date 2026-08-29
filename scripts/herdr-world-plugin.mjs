@@ -958,10 +958,11 @@ function runChecked(command, args, options = {}) {
     timeout: options.timeout ?? RUNTIME_TIMEOUT_MS,
     stdio: options.stdio ?? ["ignore", "pipe", "pipe"],
   });
-  if (result.error) throw new PluginError(`${path.basename(command)} failed: ${result.error.message}`);
+  const invocation = `${path.basename(command)} ${args.join(" ")}`;
+  if (result.error) throw new PluginError(`${invocation} failed: ${result.error.message}`);
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || `exit status ${result.status}`).trim();
-    throw new PluginError(`${path.basename(command)} ${args.join(" ")} failed: ${detail}`);
+    throw new PluginError(`${invocation} failed: ${detail}`);
   }
   return String(result.stdout ?? "").trim();
 }
@@ -990,6 +991,24 @@ function launchdAvailable(env) {
   const result = commandResult(command, ["print", `gui/${uid}`], { env, timeout: RUNTIME_TIMEOUT_MS });
   if (result.status !== 0) return null;
   return command;
+}
+
+function launchdDomain() {
+  const uid = typeof process.getuid === "function" ? process.getuid() : null;
+  if (uid === null) throw new PluginError("launchd user id is unavailable");
+  return `gui/${uid}`;
+}
+
+function launchdServiceTarget(record) {
+  return `${launchdDomain()}/${record.service_name}`;
+}
+
+function launchdServicePresent(record, command) {
+  const args = ["print", launchdServiceTarget(record)];
+  const result = commandResult(command, args, { timeout: RUNTIME_TIMEOUT_MS });
+  const invocation = `${path.basename(command)} ${args.join(" ")}`;
+  if (result.error) throw new PluginError(`${invocation} failed: ${result.error.message}`);
+  return result.status === 0;
 }
 
 export function selectSupervisor(platform, env) {
@@ -1064,9 +1083,8 @@ function startUnderSupervisor(record, environment, stateDir, supervisor) {
   const plistPath = pathForSupervisor(stateDir, record, "plist");
   const logPath = pathForSupervisor(stateDir, record, "log");
   launchdPlist(record, environment, plistPath, logPath);
-  const domain = `gui/${process.getuid()}`;
+  const domain = launchdDomain();
   runChecked(supervisor.command, ["bootstrap", domain, plistPath]);
-  runChecked(supervisor.command, ["kickstart", "-k", `${domain}/${record.service_name}`]);
   return launchdPid(record, supervisor.command);
 }
 
@@ -1085,7 +1103,7 @@ function systemdPid(record, command) {
 
 function launchdPid(record, command) {
   try {
-    const output = runChecked(command, ["print", `gui/${process.getuid()}/${record.service_name}`]);
+    const output = runChecked(command, ["print", launchdServiceTarget(record)]);
     return parsePid(output.match(/\bpid\s*=\s*(\d+)/)?.[1] ?? 0);
   } catch {
     return 0;
@@ -1148,7 +1166,7 @@ function supervisorStatus(record, supervisor, platform = process.platform) {
     }
   }
   try {
-    const output = runChecked(supervisor.command, ["print", `gui/${process.getuid()}/${record.service_name}`]);
+    const output = runChecked(supervisor.command, ["print", launchdServiceTarget(record)]);
     const pid = parsePid(output.match(/\bpid\s*=\s*(\d+)/)?.[1] ?? 0);
     const active = Boolean(pid) || /state\s*=\s*(running|spawned)/.test(output);
     const commandLine = pid ? processCommandLine(pid, platform) : "";
@@ -1200,11 +1218,38 @@ function stopProcessGroup(pid) {
 async function waitForStopped(record, supervisor, platform = process.platform) {
   const deadline = Date.now() + STOP_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    if (record.supervisor === "launchd") {
+      try {
+        if (!launchdServicePresent(record, supervisor.command)) return;
+      } catch {
+        // Keep polling; a supervisor query failure cannot prove that the
+        // service has been unloaded.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      continue;
+    }
     const state = supervisorStatus(record, supervisor, platform);
     if (!state.active) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new PluginError(`service ${record.service_name} did not stop within ${STOP_TIMEOUT_MS}ms`);
+}
+
+async function unloadLaunchd(record, command) {
+  let bootoutError;
+  try {
+    runChecked(command, ["bootout", launchdServiceTarget(record)]);
+  } catch (error) {
+    bootoutError = error;
+  }
+  try {
+    await waitForStopped(record, { kind: "launchd", command }, "darwin");
+  } catch (error) {
+    if (bootoutError) {
+      throw new PluginError(`${bootoutError.message}; launchd cleanup could not be verified: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 async function stopRecord(record, env, platform = process.platform) {
@@ -1215,9 +1260,9 @@ async function stopRecord(record, env, platform = process.platform) {
   } else if (record.supervisor === "systemd-user") {
     runChecked(supervisor.command, ["--user", "stop", record.service_name]);
   } else {
-    runChecked(supervisor.command, ["bootout", `gui/${process.getuid()}/${record.service_name}`]);
+    await unloadLaunchd(record, supervisor.command);
   }
-  await waitForStopped(record, supervisor, platform);
+  if (record.supervisor !== "launchd") await waitForStopped(record, supervisor, platform);
   if (record.supervisor === "systemd-user") {
     try {
       runChecked(supervisor.command, ["--user", "disable", record.service_name]);
@@ -1311,7 +1356,14 @@ async function startPrepared(plan, { lockHeld = false } = {}) {
       env,
     });
     let started = false;
+    let launchdCleanupAllowed = false;
     try {
+      if (record.supervisor === "launchd") {
+        if (launchdServicePresent(record, supervisor.command)) {
+          throw new PluginError(`launchd service ${record.service_name} is already loaded; stop it before retrying`);
+        }
+        launchdCleanupAllowed = true;
+      }
       record.pid = startUnderSupervisor(record, environment, context.stateDir, supervisor);
       record.updated_at = new Date().toISOString();
       writeRecord(recordPath, record);
@@ -1324,12 +1376,30 @@ async function startPrepared(plan, { lockHeld = false } = {}) {
       printService(record, capabilities);
       return record;
     } catch (error) {
-      if (started) {
+      let cleanupError = null;
+      if (record.supervisor === "launchd" && launchdCleanupAllowed) {
+        // bootstrap can load the service before launchctl reports a timeout or
+        // another failure. Remove the exact service label even when no record
+        // was written, otherwise the failed startup can retain the port.
+        try { await unloadLaunchd(record, supervisor.command); } catch (cleanupFailure) { cleanupError = cleanupFailure; }
+      } else if (started) {
         try { await stopRecord(record, env, platform); } catch {}
       } else if (record.supervisor === "systemd-user") {
         try {
           runChecked(supervisor.command, ["--user", "disable", record.service_name]);
         } catch {}
+      }
+      if (cleanupError) {
+        let recordRetained = false;
+        try {
+          writeRecord(recordPath, record);
+          recordRetained = true;
+        } catch {}
+        const recovery = recordRetained
+          ? `The service record was retained at ${recordPath}; use the plugin stop action to retry cleanup.`
+          : "The service record could not be retained; inspect launchd before retrying to avoid an orphaned bridge.";
+        const original = error instanceof Error ? error.message : String(error);
+        throw new PluginError(`${original}; ${cleanupError.message}. ${recovery}`);
       }
       removeRecord(recordPath);
       if (error instanceof PluginError) throw error;
