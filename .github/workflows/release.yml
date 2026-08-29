@@ -399,10 +399,160 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  external_state:
+    name: Validate external release state
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: [provenance, native, npm_package, formula]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: homebrew-formula-${{ github.run_id }}
+          path: formula-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Verify npm and Homebrew availability before publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$NPM_PACKAGE_NAME"
+          version="${VERSION#v}"
+          channel="latest"
+          [[ "$VERSION" == *-rc.* ]] && channel="next"
+          npm_state() {
+            node scripts/npm-registry-query.mjs state "$@"
+          }
+          npm_present() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          console.log(state.present);
+          NODE
+          }
+          npm_value() {
+            node --input-type=module - "$1" <<'NODE'
+          const state = JSON.parse(process.argv[2]);
+          if (!state.present || !state.raw || state.raw === "null" || state.raw === "undefined") process.exit(0);
+          const value = JSON.parse(state.raw);
+          if (value !== null && value !== undefined) process.stdout.write(String(value));
+          NODE
+          }
+          package_state="$(npm_state view "$package" name --json)"
+          package_exists="$(npm_present "$package_state")"
+          exact_state="$(npm_state view "$package@$version" version --json)"
+          exact_exists="$(npm_present "$exact_state")"
+          metadata_integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' npm-output/npm-package-metadata.json)"
+          exact_matches=false
+          if [[ "$exact_exists" == true ]]; then
+            exact_integrity="$(npm_value "$(npm_state view "$package@$version" dist.integrity --json)")"
+            [[ "$exact_integrity" == "$metadata_integrity" ]] || {
+              echo "npm version already exists with different content: $package@$version" >&2
+              exit 1
+            }
+            exact_matches=true
+          fi
+          if [[ "$package_exists" == false ]]; then
+            [[ "$VERSION" == *-rc.* ]] || {
+              echo "the first npm publication must be an RC; publish a unique release candidate before $VERSION" >&2
+              exit 1
+            }
+          else
+            pointer="$(npm_value "$(npm_state view "$package" "dist-tags.$channel" --json)")"
+            if [[ -n "$pointer" ]]; then
+              comparison="$(node --input-type=module - "$VERSION" "v$pointer" <<'NODE'
+          import { compareReleaseTags } from './scripts/release-version.mjs';
+          const [candidate, pointer] = process.argv.slice(2);
+          console.log(compareReleaseTags(candidate, pointer));
+          NODE
+              )"
+              if [[ "$comparison" != "0" || "$exact_matches" != true ]]; then
+              node --input-type=module - "$VERSION" "v$pointer" <<'NODE'
+          import { compareReleaseTags } from './scripts/release-version.mjs';
+          const [candidate, pointer] = process.argv.slice(2);
+          if (compareReleaseTags(candidate, pointer) <= 0) {
+            console.error(`npm channel already reaches ${pointer}; candidate ${candidate} must be higher`);
+            process.exit(1);
+          }
+          NODE
+              fi
+            fi
+          fi
+
+          gh repo view "$HOMEBREW_TAP_REPOSITORY" --json nameWithOwner --jq .nameWithOwner >/dev/null
+          formula="herdr-world.rb"
+          [[ "$VERSION" == *-rc.* ]] && formula="herdr-world-rc.rb"
+          formula_file="formula-output/$formula"
+          [[ -f "$formula_file" ]] || { echo "generated Homebrew Formula is missing: $formula_file" >&2; exit 1; }
+          endpoint="repos/$HOMEBREW_TAP_REPOSITORY/contents/Formula/$formula"
+          formula_error="${RUNNER_TEMP}/homebrew-formula-api-error"
+          formula_json=""
+          if formula_json="$(gh api "$endpoint" 2>"$formula_error")"; then
+            formula_version="$(node --input-type=module - "$formula_json" <<'NODE'
+          const response = JSON.parse(process.argv[2]);
+          const contents = Buffer.from(response.content, 'base64').toString('utf8');
+          const version = contents.match(/^\s*version\s+"([^"]+)"/m)?.[1];
+          if (!version) process.exit(1);
+          console.log(version);
+          NODE
+            )"
+            comparison="$(node --input-type=module - "$VERSION" "v$formula_version" <<'NODE'
+          import { compareReleaseTags } from './scripts/release-version.mjs';
+          const [candidate, current] = process.argv.slice(2);
+          console.log(compareReleaseTags(candidate, current));
+          NODE
+            )"
+            if [[ "$comparison" == "-1" ]]; then
+              echo "Homebrew Formula already reaches v$formula_version; candidate $VERSION must be higher" >&2
+              exit 1
+            fi
+            if [[ "$comparison" == "0" ]]; then
+              existing_formula="${RUNNER_TEMP}/existing-formula.rb"
+              node --input-type=module - "$formula_json" > "$existing_formula" <<'NODE'
+          const response = JSON.parse(process.argv[2]);
+          process.stdout.write(Buffer.from(response.content, 'base64'));
+          NODE
+              cmp -s "$formula_file" "$existing_formula" || {
+                echo "Homebrew Formula already exists with different content: $formula" >&2
+                exit 1
+              }
+            fi
+          else
+            formula_error_text="$(<"$formula_error")"
+            formula_status="$(node --input-type=module - "$formula_json" <<'NODE'
+          try {
+            const status = JSON.parse(process.argv[2]).status;
+            if (status !== undefined) console.log(status);
+          } catch {}
+          NODE
+            )"
+            if [[ "$formula_status" != "404" && "$formula_error_text" != *"HTTP 404"* ]]; then
+              echo "could not check Homebrew Formula $formula: ${formula_error_text:-$formula_json}" >&2
+              exit 1
+            fi
+          fi
+
   github_release:
     name: Assemble and publish GitHub release
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [provenance, native]
+    needs: [provenance, native, external_state]
+    outputs:
+      publication_result: ${{ steps.publish.outputs.result }}
+      publication_url: ${{ steps.publish.outputs.url }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -430,6 +580,7 @@ jobs:
           done
           node scripts/release-notes.mjs "$VERSION" CHANGELOG.md "${RUNNER_TEMP}/release-notes.md"
       - name: Create or validate the draft release
+        id: release_state
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
@@ -441,7 +592,31 @@ jobs:
             if [[ "$VERSION" == *-rc.* ]]; then args+=(--prerelease); fi
             gh "${args[@]}"
           fi
-          [[ "$(gh release view "$VERSION" --repo "$RELEASE_REPOSITORY" --json tagName --jq .tagName)" == "$VERSION" ]]
+          release_json="$(gh release view "$VERSION" --repo "$RELEASE_REPOSITORY" --json tagName,name,body,isDraft,isPrerelease)"
+          node --input-type=module - "$release_json" "$VERSION" "${RUNNER_TEMP}/release-notes.md" <<'NODE' >> "$GITHUB_OUTPUT"
+          import { readFileSync } from 'node:fs';
+          const [raw, version, notesPath] = process.argv.slice(2);
+          const release = JSON.parse(raw);
+          const expectedBody = readFileSync(notesPath, 'utf8').trim();
+          const expected = {
+            tagName: version,
+            name: `Herdr World ${version}`,
+            body: expectedBody,
+            isPrerelease: version.includes('-rc.'),
+          };
+          for (const [field, value] of Object.entries(expected)) {
+            const actual = field === 'body' ? release[field].trim() : release[field];
+            if (actual !== value) {
+              console.error(`existing GitHub release ${field} does not match the tagged release`);
+              process.exit(1);
+            }
+          }
+          if (typeof release.isDraft !== 'boolean') {
+            console.error('existing GitHub release has an invalid draft state');
+            process.exit(1);
+          }
+          console.log(`is_draft=${release.isDraft}`);
+          NODE
       - name: Upload absent assets and verify existing assets byte-for-byte
         env:
           GH_TOKEN: ${{ github.token }}
@@ -478,15 +653,23 @@ jobs:
             exit 1
           }
       - name: Publish the complete GitHub release
+        id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ github.ref_name }}
         shell: bash
         run: |
-          args=(release edit "$VERSION" --repo "$RELEASE_REPOSITORY" --draft=false)
-          if [[ "$VERSION" == *-rc.* ]]; then args+=(--prerelease); fi
-          gh "${args[@]}"
-          echo "GitHub: published — https://github.com/${RELEASE_REPOSITORY}/releases/tag/${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          url="https://github.com/${RELEASE_REPOSITORY}/releases/tag/${VERSION}"
+          result="already complete"
+          if [[ "${{ steps.release_state.outputs.is_draft }}" == true ]]; then
+            args=(release edit "$VERSION" --repo "$RELEASE_REPOSITORY" --draft=false)
+            if [[ "$VERSION" == *-rc.* ]]; then args+=(--prerelease); else args+=(--prerelease=false); fi
+            gh "${args[@]}"
+            result="published"
+          fi
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "GitHub: $result — $url" >> "$GITHUB_STEP_SUMMARY"
 
   homebrew_test:
     name: Homebrew Formula test (${{ matrix.platform }})
@@ -545,7 +728,8 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: [provenance, github_release, npm_package, npm_install_test]
     outputs:
-      publication_result: ${{ steps.complete.outputs.result || steps.state.outputs.result }}
+      publication_result: ${{ steps.publish.outputs.result || steps.state.outputs.result }}
+      publication_url: ${{ steps.publish.outputs.url || steps.state.outputs.url }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -623,6 +807,7 @@ jobs:
               echo "Artifact: https://github.com/${RELEASE_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             } >> "$GITHUB_STEP_SUMMARY"
             echo "result=action-required" >> "$GITHUB_OUTPUT"
+            echo "url=https://github.com/${RELEASE_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           digest_matches=false
@@ -644,6 +829,7 @@ jobs:
           action="$(node -e 'console.log(JSON.parse(process.argv[1]).action)' "$decision")"
           [[ "$action" != "fail" ]] || { node -e 'console.error(JSON.parse(process.argv[1]).reason)' "$decision"; exit 1; }
       - name: Publish or repair npm channel
+        id: publish
         if: steps.state.outputs.result != 'action-required'
         env:
           VERSION: ${{ github.ref_name }}
@@ -672,16 +858,18 @@ jobs:
           metadata_integrity="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).integrity)' npm-output/npm-package-metadata.json)"
           [[ "$registry_integrity" == "$metadata_integrity" ]]
           [[ "$registry_pointer" == "${VERSION#v}" ]]
-          echo "npm: $result — https://www.npmjs.com/package/${NPM_PACKAGE_NAME}/v/${VERSION#v}" >> "$GITHUB_STEP_SUMMARY"
-      - name: Mark npm publication complete
-        id: complete
-        if: steps.state.outputs.result != 'action-required'
-        run: echo "result=complete" >> "$GITHUB_OUTPUT"
+          url="https://www.npmjs.com/package/${NPM_PACKAGE_NAME}/v/${VERSION#v}"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "npm: $result — $url" >> "$GITHUB_STEP_SUMMARY"
 
   homebrew_publish:
     name: Publish Homebrew channel
     if: github.event_name == 'push' && github.ref_type == 'tag'
     needs: [provenance, github_release, formula, homebrew_test]
+    outputs:
+      publication_result: ${{ steps.publish.outputs.result }}
+      publication_url: ${{ steps.publish.outputs.url }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -693,18 +881,22 @@ jobs:
           run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
       - name: Commit the validated Formula directly to the tap
+        id: publish
         env:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ github.ref_name }}
         run: |
           formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
           [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
-          scripts/update-homebrew-tap.sh "$VERSION" "$formula_file"
-      - name: Report Homebrew channel
-        env:
-          VERSION: ${{ github.ref_name }}
-        run: |
-          echo "Homebrew: published or already complete — https://github.com/${HOMEBREW_TAP_REPOSITORY}" >> "$GITHUB_STEP_SUMMARY"
+          publication="$(scripts/update-homebrew-tap.sh "$VERSION" "$formula_file")"
+          printf '%s\n' "$publication"
+          result="published"
+          [[ "$publication" == *"already complete"* ]] && result="already complete"
+          formula_name="$(basename "$formula_file" .rb)"
+          url="https://github.com/${HOMEBREW_TAP_REPOSITORY}/blob/main/Formula/${formula_name}.rb"
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Homebrew: $result — $url" >> "$GITHUB_STEP_SUMMARY"
 
   publication_summary:
     name: Release publication summary
@@ -719,12 +911,12 @@ jobs:
           {
             echo "## Herdr World $VERSION distribution"
             echo
-            echo "| Channel | Result |"
-            echo "| --- | --- |"
-            echo "| GitHub | ${{ needs.github_release.result }} |"
-            echo "| npm (${NPM_PACKAGE_NAME}) | ${{ needs.npm_publish.outputs.publication_result || needs.npm_publish.result }} |"
-            echo "| Homebrew (${HOMEBREW_TAP_REPOSITORY}) | ${{ needs.homebrew_publish.result }} |"
-            echo "| Herdr plugin | not enabled; Spec 016 remains a separate release tranche |"
+            echo "| Channel | Version | Result | URL |"
+            echo "| --- | --- | --- | --- |"
+            echo "| GitHub | ${VERSION#v} | ${{ needs.github_release.outputs.publication_result || needs.github_release.result }} | ${{ needs.github_release.outputs.publication_url || '—' }} |"
+            echo "| npm (${NPM_PACKAGE_NAME}) | ${VERSION#v} | ${{ needs.npm_publish.outputs.publication_result || needs.npm_publish.result }} | ${{ needs.npm_publish.outputs.publication_url || '—' }} |"
+            echo "| Homebrew (${HOMEBREW_TAP_REPOSITORY}) | ${VERSION#v} | ${{ needs.homebrew_publish.outputs.publication_result || needs.homebrew_publish.result }} | ${{ needs.homebrew_publish.outputs.publication_url || '—' }} |"
+            echo "| Herdr plugin | — | not enabled; Spec 016 remains a separate release tranche | — |"
             echo
             echo "Source commit: $GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"
