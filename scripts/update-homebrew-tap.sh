@@ -47,9 +47,14 @@ git pull --ff-only origin "$default_branch" >/dev/null
 mkdir -p Formula
 target="Formula/$formula_name.rb"
 if [[ -f "$target" ]]; then
-  existing_version="$(sed -nE 's/^  version "([^"]+)"/\1/p' "$target" | head -n 1)"
-  [[ -n "$existing_version" ]] || { echo "$target has no parseable version" >&2; exit 1; }
-  node --input-type=module - "$TAG" "v$existing_version" "$ROOT/scripts/release-version.mjs" <<'NODE'
+  existing_tag="$(node --input-type=module - "$target" "$ROOT/scripts/homebrew-formula.mjs" <<'NODE'
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+const { homebrewFormulaReleaseTag } = await import(pathToFileURL(process.argv[3]).href);
+console.log(homebrewFormulaReleaseTag(readFileSync(process.argv[2], "utf8")));
+NODE
+  )"
+  node --input-type=module - "$TAG" "$existing_tag" "$ROOT/scripts/release-version.mjs" <<'NODE'
 import { pathToFileURL } from "node:url";
 const { compareReleaseTags, normalizeReleaseTag } = await import(pathToFileURL(process.argv[4]).href);
 const candidate = normalizeReleaseTag(process.argv[2]);
@@ -64,8 +69,8 @@ NODE
     echo "Homebrew Formula $formula_name@$TAG is already complete"
     exit 0
   fi
-  if [[ "$existing_version" == "${TAG#v}" ]]; then
-    echo "Homebrew Formula $target has different content for ${TAG#v}; refusing replacement" >&2
+  if [[ "$existing_tag" == "$TAG" ]]; then
+    echo "Homebrew Formula $target has different content for $TAG; refusing replacement" >&2
     exit 1
   fi
 fi

@@ -3,10 +3,31 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { normalizeReleaseTag, releaseVersion } from "./release-version.mjs";
+import { normalizeReleaseTag } from "./release-version.mjs";
+
+const RELEASE_ARCHIVE_TAG_PATTERN =
+  /https:\/\/github\.com\/IvoryHeart\/herdr-world\/releases\/download\/(v[^/"\s]+)\//g;
 
 export function homebrewFormulaName(tag) {
   return normalizeReleaseTag(tag).includes("-rc.") ? "herdr-world-rc" : "herdr-world";
+}
+
+export function homebrewFormulaReleaseTag(formula) {
+  if (typeof formula !== "string") {
+    throw new Error("Homebrew Formula contents must be a string");
+  }
+  const tags = new Set(
+    [...formula.matchAll(RELEASE_ARCHIVE_TAG_PATTERN)].map((match) =>
+      normalizeReleaseTag(match[1]),
+    ),
+  );
+  if (tags.size === 0) {
+    throw new Error("Homebrew Formula has no parseable Herdr World release URL");
+  }
+  if (tags.size !== 1) {
+    throw new Error("Homebrew Formula release URLs do not use one version");
+  }
+  return [...tags][0];
 }
 
 function archiveUrl(tag, platform) {
@@ -16,7 +37,6 @@ function archiveUrl(tag, platform) {
 
 export function renderHomebrewFormula({ tag, checksums }) {
   const normalizedTag = normalizeReleaseTag(tag);
-  const version = releaseVersion(normalizedTag);
   const formulaName = homebrewFormulaName(normalizedTag);
   const className = formulaName
     .split("-")
@@ -34,7 +54,6 @@ export function renderHomebrewFormula({ tag, checksums }) {
   return `class ${className} < Formula
   desc "Browser and mobile client for monitoring and controlling Herdr agents"
   homepage "https://ivoryheart.github.io/herdr-world/"
-  version "${version}"
 
   on_macos do
     on_arm do
