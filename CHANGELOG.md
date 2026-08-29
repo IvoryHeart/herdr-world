@@ -11,6 +11,7 @@
 ### Fixed
 
 - Updated Homebrew release validation for current name-based audit and trusted-tap requirements.
+  [Herdr World PR #31](https://github.com/IvoryHeart/herdr-world/pull/31)
 
 ### Removed
 
