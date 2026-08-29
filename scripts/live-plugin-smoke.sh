@@ -14,6 +14,7 @@ PLUGIN_ID="ivoryheart.herdr-world"
 
 SMOKE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/herdr-world-plugin-smoke.XXXXXX")"
 CONFIG_HOME="$SMOKE_ROOT/config"
+DATA_HOME="$SMOKE_ROOT/data"
 STATE_HOME="$SMOKE_ROOT/state"
 SOCKET_A="$SMOKE_ROOT/herdr-a.sock"
 LOG_A="$SMOKE_ROOT/herdr-a.log"
@@ -35,16 +36,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$CONFIG_HOME" "$STATE_HOME"
+mkdir -p "$CONFIG_HOME" "$DATA_HOME" "$STATE_HOME"
 
 start_default_herdr() {
-  HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+  HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
     "$HERDR_BIN" server >"$LOG_A" 2>&1 &
   PID_A=$!
 }
 
 start_named_herdr() {
-  XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+  XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
     "$HERDR_BIN" --session secondary server >"$LOG_B" 2>&1 &
   PID_B=$!
 }
@@ -60,9 +61,9 @@ wait_for_herdr() {
   local ready=false
   for _ in $(seq 1 100); do
     if [[ ${#extra_env[@]} -gt 0 ]]; then
-      status="$(env "${extra_env[@]}" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" "${command[@]}" 2>/dev/null || true)"
+      status="$(env "${extra_env[@]}" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" "${command[@]}" 2>/dev/null || true)"
     else
-      status="$(XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" "${command[@]}" 2>/dev/null || true)"
+      status="$(XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" "${command[@]}" 2>/dev/null || true)"
     fi
     if node --input-type=module - "$status" <<'NODE'
 try {
@@ -95,10 +96,10 @@ invoke_secondary() {
 invoke_action() {
   local session="$1" action="$2" output log_id logs state
   if [[ "$session" == secondary ]]; then
-    output="$(XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+    output="$(XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
       "$HERDR_BIN" --session secondary plugin action invoke "$action" --plugin "$PLUGIN_ID")"
   else
-    output="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+    output="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
       "$HERDR_BIN" plugin action invoke "$action" --plugin "$PLUGIN_ID")"
   fi
   log_id="$(node --input-type=module - "$output" <<'NODE'
@@ -109,10 +110,10 @@ NODE
   [[ -n "$log_id" ]] || { echo "Herdr did not return a plugin action log id for $action" >&2; return 1; }
   for _ in $(seq 1 100); do
     if [[ "$session" == secondary ]]; then
-      logs="$(XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+      logs="$(XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
         "$HERDR_BIN" --session secondary plugin log list --plugin "$PLUGIN_ID" --limit 100 2>/dev/null || true)"
     else
-      logs="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+      logs="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
         "$HERDR_BIN" plugin log list --plugin "$PLUGIN_ID" --limit 100 2>/dev/null || true)"
     fi
     state="$(node --input-type=module - "$logs" "$log_id" <<'NODE'
@@ -162,34 +163,31 @@ process.stdin.on("end", () => {
   exit 1
 }
 
-echo "Starting stock Herdr release smoke daemons"
-start_default_herdr
-wait_for_herdr default
-
-echo "Installing $PLUGIN_ID from GitHub at $VERSION"
-HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+# Herdr runs startup hooks asynchronously after the ready message. Install while
+# it is stopped so the install test cannot race that one-shot startup dispatch.
+echo "Installing $PLUGIN_ID from GitHub at $VERSION while Herdr is stopped"
+HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin install IvoryHeart/herdr-world --ref "$VERSION" --yes
-PLUGIN_CONFIG_DIR="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+PLUGIN_CONFIG_DIR="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin config-dir "$PLUGIN_ID")"
 [[ -d "$PLUGIN_CONFIG_DIR" ]] || { echo "plugin config directory was not retained" >&2; exit 1; }
 
-actions="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+echo "Verifying installation does not start the bridge"
+if curl --fail --silent --show-error --max-time 1 http://127.0.0.1:8787/api/capabilities >/dev/null 2>&1; then
+  echo "plugin installation unexpectedly started the bridge" >&2
+  exit 1
+fi
+
+echo "Starting stock Herdr release smoke daemon and restoring the plugin service"
+start_default_herdr
+wait_for_herdr default
+
+actions="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin action list --plugin "$PLUGIN_ID")"
 for action in start stop restart status open doctor; do
   [[ "$actions" == *"$action"* ]] || { echo "plugin action is missing: $action" >&2; exit 1; }
 done
 
-echo "Verifying installation does not start the bridge and Herdr startup restores it"
-if curl --fail --silent --show-error --max-time 1 http://127.0.0.1:8787/api/capabilities >/dev/null 2>&1; then
-  echo "plugin installation unexpectedly started the bridge" >&2
-  exit 1
-fi
-invoke_default stop >/dev/null
-kill "$PID_A" 2>/dev/null || true
-wait "$PID_A" 2>/dev/null || true
-PID_A=0
-start_default_herdr
-wait_for_herdr default
 wait_for_bridge http://127.0.0.1:8787
 
 echo "Starting and reusing the default plugin service"
