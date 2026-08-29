@@ -3,17 +3,18 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { escapeRegex, normalizeReleaseTag, releaseVersion } from "./release-version.mjs";
+import { normalizeReleaseTag, releaseVersion } from "./release-version.mjs";
 
 export function extractReleaseNotes(changelog, tag) {
-  const version = escapeRegex(releaseVersion(normalizeReleaseTag(tag)));
-  const match = changelog.match(
-    new RegExp(`^## \\[${version}\\] - [^\\n]+\\n([\\s\\S]*?)(?=\\n## \\[|$)`, "m"),
+  const version = releaseVersion(normalizeReleaseTag(tag));
+  const sections = changelog.matchAll(
+    /(?:^|\n)## \[([^\]]+)\] - [^\n]+\n([\s\S]*?)(?=\n## \[|$)/g,
   );
-  if (!match || !match[1].trim()) {
+  const match = [...sections].find(([, candidate]) => candidate === version);
+  if (!match || !match[2].trim()) {
     throw new Error(`CHANGELOG.md has no release notes for ${tag}`);
   }
-  return match[1].trim();
+  return match[2].trim();
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

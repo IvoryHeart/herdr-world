@@ -16,6 +16,7 @@ on:
       - "scripts/npm-registry-query.mjs"
       - "scripts/package-tarball.sh"
       - "scripts/release-notes.mjs"
+      - "scripts/release-notes.test.mjs"
       - "scripts/release-publication.mjs"
       - "scripts/release-version.mjs"
       - "scripts/update-homebrew-tap.sh"
