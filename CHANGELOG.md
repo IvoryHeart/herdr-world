@@ -17,6 +17,7 @@
 ### Fixed
 
 - Synchronized the Herdr plugin release smoke with asynchronous startup-hook completion on macOS.
+  [Herdr World PR #55](https://github.com/IvoryHeart/herdr-world/pull/55)
 
 ## [0.1.0-rc.12] - 2026-08-29
 
