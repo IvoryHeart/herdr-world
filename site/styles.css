@@ -304,11 +304,13 @@ h1 em, h2 em {
 
 .install { display: grid; grid-template-columns: minmax(280px, 0.56fr) minmax(560px, 1fr); gap: clamp(50px, 8vw, 130px); }
 .install-heading p { max-width: 460px; color: var(--muted); font-size: 16px; line-height: 1.72; }
+.install-heading code { color: var(--lavender-bright); font: inherit; }
 .install-heading > a { display: inline-block; margin-top: 20px; color: var(--lavender); font: 600 11px/1 ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
 .plugin-note { margin-top: 76px; padding-top: 28px; border-top: 1px solid var(--line); }
 .plugin-note .eyebrow { margin-bottom: 20px; }
 .plugin-note h3 { margin-bottom: 20px; color: var(--paper); font-size: clamp(28px, 3vw, 44px); line-height: 0.98; letter-spacing: -0.045em; }
 .plugin-note p { font-size: 14px; }
+.plugin-note strong { color: var(--paper); }
 .plugin-note pre { max-width: 100%; margin: 24px 0 0; padding: 16px; overflow: auto; color: #cfcede; background: #0c0d17; border: 1px solid #35344f; font: 500 11px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .plugin-note code { color: var(--lavender-bright); font-family: inherit; }
 .terminal-card { min-width: 0; align-self: center; overflow: hidden; border: 1px solid #4e4d70; background: #0c0d17; box-shadow: 14px 14px 0 rgb(184 181 255 / 7%); }
@@ -316,7 +318,23 @@ h1 em, h2 em {
 .terminal-title, .copy-button { font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.11em; }
 .copy-button { display: inline-flex; gap: 8px; padding: 8px 10px; color: var(--muted); border: 1px solid #454464; background: transparent; cursor: pointer; }
 .copy-button:hover, .copy-button:focus-visible { color: var(--paper); border-color: var(--lavender); }
-.terminal-card pre { max-width: 100%; margin: 0; padding: 28px; overflow: auto; color: #cfcede; font: 500 12px/1.85 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.install-tabs { display: flex; overflow-x: auto; border-bottom: 1px solid #35344f; background: #111221; }
+.install-tab { flex: 1 0 auto; min-height: 48px; padding: 0 18px; color: var(--muted); border: 0; border-right: 1px solid #292940; background: transparent; cursor: pointer; font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.install-tab:last-child { border-right: 0; }
+.install-tab:hover, .install-tab:focus-visible { color: var(--paper); background: rgb(184 181 255 / 7%); }
+.install-tab[aria-selected="true"] { color: var(--ink); background: var(--lavender); }
+.install-panel { padding: 25px 28px 0; }
+.install-panel[hidden] { display: none; }
+.install-panel-label { margin: 0 0 17px; color: var(--amber); font: 600 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.11em; text-transform: uppercase; }
+.install-panel pre, .cli-note pre { max-width: 100%; margin: 0; padding: 0; overflow: auto; color: #cfcede; font: 500 12px/1.85 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.install-panel-note { margin: 18px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.install-panel-note code { color: var(--lavender-bright); font-family: inherit; }
+.cli-note { margin: 28px; padding-top: 24px; border-top: 1px solid #35344f; }
+.cli-note .install-panel-label { margin-bottom: 17px; }
+.cli-note .install-panel-note { margin-bottom: 0; }
+.archive-note { margin: 0; padding: 22px 28px 26px; color: #8b8a9f; border-top: 1px solid #35344f; font: 500 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.archive-note a { color: var(--lavender); }
+.archive-note a:hover, .archive-note a:focus-visible { color: var(--paper); }
 .prompt { color: var(--pink); }
 .command { color: var(--lavender-bright); }
 .comment { color: #8b8a9f; }
@@ -376,7 +394,10 @@ footer p { max-width: 550px; margin: 0; }
   .office-strip { grid-template-columns: 1fr; padding: 90px 24px; }
   .phone-frame { width: min(270px, 88%); margin-top: 20px; }
   .install h2, .manifesto h2, .principles h2, .office-strip h2 { font-size: clamp(42px, 13vw, 68px); }
-  .terminal-card pre { padding: 22px 18px; font-size: 11px; }
+  .install-panel { padding-inline: 18px; }
+  .install-panel pre, .cli-note pre { font-size: 11px; }
+  .cli-note { margin-inline: 18px; }
+  .archive-note { padding-inline: 18px; }
   .principle-list article { min-height: 250px; }
   .principle-list article > span { margin-bottom: 54px; }
   .final-cta { min-height: 620px; padding-inline: 10px; }
