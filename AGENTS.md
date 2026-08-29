@@ -7,6 +7,8 @@ minimal effort.
 
 # Repository delivery workflow
 
+- Never commit or push directly to `main`. Make all repository changes, including release preparation and fixes, on a branch and deliver them through a pull request. Do not run automation that pushes `main` directly; stop and use a PR-based workflow or ask for direction if the automation cannot do that.
+
 Specifications are decision aids, not a gate on ordinary engineering work.
 Use one only when the repository owner asks for one or when a genuinely new
 product/API contract needs an explicit decision. Upstream synchronization,
