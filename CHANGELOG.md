@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Let Homebrew derive the package version from immutable release URLs, avoiding a redundant
+  explicit version rejected by current Formula audit while preserving release-state safeguards.
+  [Herdr World PR #33](https://github.com/IvoryHeart/herdr-world/pull/33)
+
 ### Removed
 
 ## [0.1.0-rc.4] - 2026-08-29

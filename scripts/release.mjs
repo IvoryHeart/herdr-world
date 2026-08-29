@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
 import { queryNpm } from "./npm-registry-query.mjs";
+import { homebrewFormulaReleaseTag } from "./homebrew-formula.mjs";
 import {
   HOMEBREW_TAP_REPOSITORY,
   NPM_PACKAGE_NAME,
@@ -175,11 +176,12 @@ function checkExternalVersionAvailability() {
   );
   if (response) {
     const contents = Buffer.from(response.content, "base64").toString("utf8");
-    const formulaVersion = contents.match(/^\s*version\s+"([^"]+)"/m)?.[1];
-    if (!formulaVersion) {
-      fail(`Homebrew Formula ${formulaPath} has no parseable version`);
+    let currentTag;
+    try {
+      currentTag = homebrewFormulaReleaseTag(contents);
+    } catch (error) {
+      fail(`Homebrew Formula ${formulaPath} has no parseable version: ${error.message}`);
     }
-    const currentTag = normalizeReleaseTag(`v${formulaVersion}`);
     if (compareReleaseTags(tag, currentTag) <= 0) {
       fail(`Homebrew Formula ${formulaPath} already reaches ${currentTag}`);
     }
