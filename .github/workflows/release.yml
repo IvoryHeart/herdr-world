@@ -847,7 +847,9 @@ jobs:
               result="already complete"
               ;;
             publish)
-              npm publish "npm-output/herdr-world-${VERSION}.tgz" --access public --tag "$channel" --provenance
+              package_path="${GITHUB_WORKSPACE}/npm-output/herdr-world-${VERSION}.tgz"
+              [[ -f "$package_path" ]] || { echo "npm package artifact is missing: $package_path" >&2; exit 1; }
+              npm publish "$package_path" --access public --tag "$channel" --provenance
               result="published"
               ;;
             update-pointer)

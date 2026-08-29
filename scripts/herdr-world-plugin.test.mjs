@@ -304,6 +304,7 @@ test("release workflow gates the three-platform plugin smoke on npm publication"
   assert.equal((workflow.match(/platform: linux-x86_64/g) ?? []).length >= 2, true);
   assert.match(workflow.slice(pluginJob), /platform: macos-arm64/);
   assert.match(workflow.slice(pluginJob), /platform: macos-x86_64/);
+  assert.match(workflow, /package_path="\$\{GITHUB_WORKSPACE\}\/npm-output\/herdr-world-\$\{VERSION\}\.tgz"/);
 });
 
 test("documents and tests the explicit stop-before-uninstall contract", () => {
