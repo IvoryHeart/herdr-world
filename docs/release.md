@@ -83,13 +83,16 @@ herdr plugin install IvoryHeart/herdr-world
 herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
-Plugin installation requires Node.js `22.14.0` or newer and npm. Rust and Cargo are not required;
+Installation registers and builds the plugin but does not invoke its runtime actions. The plugin's
+Herdr startup hook starts the bridge on the next server restore; use
+`herdr plugin action invoke open --plugin ivoryheart.herdr-world` to start and open it immediately
+for an already-running server. Plugin installation requires Node.js `22.14.0` or newer and npm. Rust and Cargo are not required;
 the build installs the exact prebuilt npm payload with lifecycle scripts disabled. Global npm and
 Homebrew installations are ignored. Local `herdr plugin link` skips the build command, so run the
 exact payload install command printed by `bash scripts/herdr-world-plugin.sh build` before invoking
-actions. Reinstalling the GitHub plugin is the refresh mechanism; config and state remain in
-Herdr's per-user plugin directories. Add the `herdr-plugin` GitHub topic only after the tagged
-install and three-platform smoke pass.
+actions. Herdr records startup-hook failures without stopping its server. Reinstalling the GitHub
+plugin is the refresh mechanism; config and state remain in Herdr's per-user plugin directories.
+Add the `herdr-plugin` GitHub topic only after the tagged install and three-platform smoke pass.
 
 Linux desktop tarball:
 

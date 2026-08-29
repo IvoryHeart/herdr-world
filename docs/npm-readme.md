@@ -35,5 +35,8 @@ herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 It installs the exact matching npm payload privately inside Herdr's managed plugin checkout and
 supervises its bridge for the invoking Herdr session. The plugin requires Node.js 22.14.0 or newer
 and npm at installation and runtime; it does not use this package's global installation or a
-Homebrew installation. See the repository [plugin documentation](https://github.com/IvoryHeart/herdr-world#herdr-plugin) for
-configuration, lifecycle actions, security, and the standalone distribution relationship.
+Homebrew installation. Installation does not start the bridge immediately. Herdr's startup hook
+starts it on the next server restore; invoke the plugin's `open` or `start` action for an already
+running server. See the repository [plugin documentation](https://github.com/IvoryHeart/herdr-world#herdr-plugin)
+for configuration, lifecycle actions, startup and failure behavior, security, and the standalone
+distribution relationship.

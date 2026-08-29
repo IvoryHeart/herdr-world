@@ -6,6 +6,9 @@
 
 ### Added
 
+- Added a Herdr-native startup hook that starts the plugin bridge on the next Herdr server restore,
+  with documented install, crash-restart, and port-conflict behavior.
+
 ### Changed
 
 ### Fixed

@@ -305,6 +305,12 @@ h1 em, h2 em {
 .install { display: grid; grid-template-columns: minmax(280px, 0.56fr) minmax(560px, 1fr); gap: clamp(50px, 8vw, 130px); }
 .install-heading p { max-width: 460px; color: var(--muted); font-size: 16px; line-height: 1.72; }
 .install-heading > a { display: inline-block; margin-top: 20px; color: var(--lavender); font: 600 11px/1 ui-monospace, monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.plugin-note { margin-top: 76px; padding-top: 28px; border-top: 1px solid var(--line); }
+.plugin-note .eyebrow { margin-bottom: 20px; }
+.plugin-note h3 { margin-bottom: 20px; color: var(--paper); font-size: clamp(28px, 3vw, 44px); line-height: 0.98; letter-spacing: -0.045em; }
+.plugin-note p { font-size: 14px; }
+.plugin-note pre { max-width: 100%; margin: 24px 0 0; padding: 16px; overflow: auto; color: #cfcede; background: #0c0d17; border: 1px solid #35344f; font: 500 11px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.plugin-note code { color: var(--lavender-bright); font-family: inherit; }
 .terminal-card { min-width: 0; align-self: center; overflow: hidden; border: 1px solid #4e4d70; background: #0c0d17; box-shadow: 14px 14px 0 rgb(184 181 255 / 7%); }
 .terminal-bar { display: flex; height: 50px; padding: 0 16px 0 20px; align-items: center; justify-content: space-between; border-bottom: 1px solid #35344f; background: #151626; }
 .terminal-title, .copy-button { font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0.11em; }

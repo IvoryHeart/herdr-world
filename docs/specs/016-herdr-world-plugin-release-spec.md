@@ -50,6 +50,8 @@ This feature includes:
 - a plugin controller at `scripts/herdr-world-plugin.sh`;
 - install-time acquisition of the exact release-matched
   `@ivoryheart/herdr-world` npm payload into a private plugin-local prefix;
+- a Herdr `[[startup]]` hook that requests the idempotent bridge start on the
+  next server restore, without making the hook itself a daemon supervisor;
 - lifecycle and diagnostic actions for starting, stopping, restarting,
   inspecting, opening, and diagnosing the bridge;
 - service state and editable configuration stored outside the managed plugin
@@ -71,9 +73,9 @@ This feature includes:
   UI or a Herdr `[[panes]]` entrypoint.
 - Adding a WebView, browser surface registry, or native non-terminal plugin UI
   to Herdr.
-- Making Herdr responsible for supervising a long-running bridge through a
-  `[[startup]]` hook. Startup hooks are one-shot initialization commands, not
-  daemon supervisors.
+- Making Herdr's one-shot `[[startup]]` hook supervise a long-running bridge.
+  The hook only requests the plugin controller's start path; the controller's
+  native user supervisor owns the bridge process after that.
 - Replacing the browser's existing multi-bridge federation or creating a
   second host/session registry in the plugin.
 - Turning Android into a Herdr plugin host. Android remains a companion client
@@ -117,10 +119,12 @@ injects `HERDR_BIN_PATH`, `HERDR_SOCKET_PATH`, plugin config/state directories,
 and invocation context into runtime commands. Plugin-managed source checkouts
 are replaceable and must not contain durable user data.
 
-The first manifest is intentionally an action facade. The existing browser
+The manifest is an action facade with a startup trigger. The existing browser
 application cannot be represented by a terminal pane, and a terminal pane's
 lifecycle is unsuitable for a bridge that should survive Herdr client detach,
-browser reload, or Herdr server handoff.
+browser reload, or Herdr server handoff. Herdr's one-shot startup hook only
+initiates the controller; systemd `--user`, launchd, or the documented fallback
+owns the resulting bridge process.
 
 ### Release and repository constraints
 
@@ -170,12 +174,14 @@ initial contract:
 | `min_herdr_version` | `0.8.2` |
 | `platforms` | `["linux", "macos"]` |
 | `[[build]]` | invokes `bash scripts/herdr-world-plugin.sh build` |
+| `[[startup]]` | invokes `bash scripts/herdr-world-plugin.sh startup` |
 | action commands | invoke the same controller with the action name |
 
 The manifest SHALL declare the `start`, `stop`, `restart`, `status`, `open`,
-and `doctor` actions with `contexts = ["workspace"]`. The manifest SHALL NOT
-declare a primary `[[panes]]`, `[[startup]]`, or `[[events]]` entry in the
-initial release.
+and `doctor` actions with `contexts = ["workspace"]`. The manifest SHALL
+declare exactly one startup hook using the controller's private `startup`
+entrypoint. The manifest SHALL NOT declare a primary `[[panes]]` or `[[events]]`
+entry in the initial release.
 
 #### Scenario: Herdr parses the manifest
 
@@ -345,6 +351,20 @@ SHALL identify the failed check and a bounded next action. `stop`, `restart`,
 and uninstall guidance SHALL state that stopping the bridge disconnects
 browser clients but does not stop the Herdr server or its panes.
 
+### Requirement: Start through Herdr's startup hook
+
+The manifest SHALL declare one `[[startup]]` hook that invokes the controller's
+startup entrypoint. The entrypoint SHALL use the same idempotent, target-scoped
+start path as the explicit `start` action and SHALL exit after handing the
+bridge to the selected user supervisor. It SHALL not make Herdr responsible for
+monitoring or restarting the bridge.
+
+Plugin installation SHALL continue to register and build the plugin without
+invoking runtime actions. The startup hook SHALL run on the next Herdr server
+restore, not immediately as a side effect of installation, and SHALL never
+install or start Herdr itself. A startup failure SHALL leave Herdr running and
+be discoverable through Herdr's normal plugin command log.
+
 #### Scenario: Stop cannot target an unrelated process
 
 - **GIVEN** a service record whose pid or command no longer matches the
@@ -455,8 +475,11 @@ It SHALL explain that plugin installation requires Node.js `22.14.0` or newer
 and npm to acquire the exact prebuilt payload, that Node must remain installed
 for the supervised package launcher, that Rust and Cargo are not required, and
 that global npm and Homebrew installations are ignored. It SHALL also explain
-that local linking does not run build commands and reinstalling is Herdr v1's
-refresh mechanism for a GitHub-managed plugin. The repository SHALL add the
+that installation does not invoke runtime actions, the startup hook runs on the
+next Herdr server restore, startup failures do not stop Herdr, and bridge
+supervision and port-conflict behavior remain plugin-owned. Local linking does
+not run build commands and reinstalling is Herdr v1's refresh mechanism for a
+GitHub-managed plugin. The repository SHALL add the
 GitHub topic `herdr-plugin` only when the tagged install flow succeeds against
 the published matching npm package and is ready for public discovery.
 
@@ -504,10 +527,11 @@ Documentation SHALL distinguish:
 
 ### Manifest contract
 
-The initial manifest has one build entry and six workspace-scoped action
-entries. All commands SHALL be argv arrays and SHALL invoke the controller by
-path. The controller SHALL derive the repository root from its own location,
-so its behavior does not depend on Herdr's current working directory.
+The initial manifest has one build entry, one startup entry, and six
+workspace-scoped action entries. All commands SHALL be argv arrays and SHALL
+invoke the controller by path. The controller SHALL derive the repository root
+from its own location, so its behavior does not depend on Herdr's current
+working directory.
 
 The manifest version is a SemVer value without the leading release-tag `v` and
 SHALL have exactly one of these forms:
@@ -522,11 +546,15 @@ No other prerelease identifier or build metadata is allowed.
 
 ### Controller invocation contract
 
-The controller SHALL accept exactly:
+The controller SHALL accept exactly these public actions plus its private
+startup entrypoint:
 
 ```text
 build | start | stop | restart | status | open | doctor
 ```
+
+The startup entrypoint is `startup`; it is declared only in `[[startup]]` and
+is not exposed as a user action.
 
 Unknown or missing commands SHALL return a usage error without side effects.
 Runtime actions SHALL use `HERDR_BIN_PATH` for calls back into Herdr and SHALL
@@ -644,19 +672,21 @@ implementation SHALL demonstrate:
    npm payload;
 2. GitHub-style installation from a release ref after the matching npm version
    is published or verified;
-3. action listing and invocation;
-4. first start, repeated start, status, open, restart, and stop;
-5. browser load through the reported URL;
-6. terminal attach, snapshot, event observation, input, resize, scrolling,
+3. installation leaving the bridge stopped, followed by a Herdr server restart
+   that runs the startup hook and restores the bridge;
+4. action listing and invocation;
+5. first start, repeated start, status, open, restart, and stop;
+6. browser load through the reported URL;
+7. terminal attach, snapshot, event observation, input, resize, scrolling,
    upload, pane operations, and World surface load;
-7. two browser clients attached to the same bridge;
-8. two distinct Herdr sessions with isolated service records and ports;
-9. incompatible protocol, missing socket, stale process, and port collision
+8. two browser clients attached to the same bridge;
+9. two distinct Herdr sessions with isolated service records and ports;
+10. incompatible protocol, missing socket, stale process, and port collision
    failures;
-10. uninstall/refresh behavior with service cleanup and retained config/state;
-11. a different globally installed npm or Homebrew version remaining unused
-    and unchanged; and
-12. unsupported architecture, musl or unknown libc, missing Node/npm during
+11. uninstall/refresh behavior with service cleanup and retained config/state;
+12. a different globally installed npm or Homebrew version remaining unused
+   and unchanged; and
+13. unsupported architecture, musl or unknown libc, missing Node/npm during
     installation, missing or old Node during runtime, missing package version,
     alternate scoped-registry configuration, and package/manifest mismatch
     failures without a service.

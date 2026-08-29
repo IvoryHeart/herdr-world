@@ -204,7 +204,26 @@ as your user, then install the current default branch:
 
 ```bash
 herdr plugin install IvoryHeart/herdr-world
-herdr plugin action invoke start --plugin ivoryheart.herdr-world
+```
+
+Installation runs the plugin's build command and registers it, but it does not
+invoke runtime actions or start Herdr World immediately. Herdr's startup hook
+starts the bridge the next time a Herdr server restores its session. To start
+it now, invoke `open` (which also asks the desktop browser to open the URL) or
+`start` explicitly:
+
+```bash
+herdr plugin action invoke open --plugin ivoryheart.herdr-world
+```
+
+The startup hook starts only the Herdr World bridge; it never installs or
+starts Herdr itself. Startup hooks are asynchronous and one-shot. A failed
+startup is recorded by Herdr and does not stop Herdr; inspect the action log
+and run `doctor` after fixing the reported prerequisite:
+
+```bash
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 20
+herdr plugin action invoke doctor --plugin ivoryheart.herdr-world
 ```
 
 To pin a release, use a tag that contains the plugin implementation:
@@ -231,11 +250,23 @@ herdr plugin config-dir ivoryheart.herdr-world
 
 Set `host`, `port`, `port_range`, `session_name` or `socket_path`,
 `upload_dir`, `allowed_hosts`, `allowed_origins`, `allowed_connect_origins`,
-and `bridge_label` in `config.json` as needed. Named sessions use the first
-free port in `8787`–`8877`. Non-loopback binding requires explicit host and
-origin allow-lists and an operator-managed VPN, SSH forward, or authenticated
-reverse proxy; Host and Origin checks are not authentication. Stopping the
-plugin bridge disconnects browser clients but does not stop Herdr or its panes.
+and `bridge_label` in `config.json` as needed. The default target stays on
+`8787`: if that port is occupied, automatic or explicit start fails without
+claiming another port. A configured `session_name` or `socket_path`, or a
+target started while another managed target is recorded, uses the first free
+port in `port_range` (default `8787`–`8877`); an explicitly configured `port`
+always fails when occupied. No bridge process is left behind by a failed
+start. Non-loopback binding requires explicit host and origin
+allow-lists and an operator-managed VPN, SSH forward, or authenticated reverse
+proxy; Host and Origin checks are not authentication. Stopping the plugin
+bridge disconnects browser clients but does not stop Herdr or its panes.
+
+After the bridge has started, Linux `systemd --user` or macOS `launchd` keeps
+the plugin bridge running and restarts it after an unexpected exit. The
+portable fallback process group does not retry a crash; check `status` and
+invoke `restart` when no native user supervisor is available. A supervisor
+restarts the same recorded port; it does not move a crashed bridge to another
+port.
 
 The plugin has no uninstall cleanup hook. Stop the bridge before removing the
 managed plugin checkout. Plugin action invocation is asynchronous and target-

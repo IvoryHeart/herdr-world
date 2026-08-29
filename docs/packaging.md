@@ -35,14 +35,24 @@ tarball is used. Node must remain installed for runtime supervision.
 
 The plugin's config and service state live in Herdr's injected per-user plugin directories, not in
 the repository checkout or release archives. It uses the invoking `HERDR_SOCKET_PATH` by default,
-binds loopback port `8787`, and allocates named-session bridges from `8787`–`8877`. Its packaged
-static assets are fixed to the npm payload; only the upload directory is configurable. The plugin
-has no uninstall cleanup hook, so stop the plugin bridge before uninstalling the plugin. Plugin
-actions are asynchronous and target-scoped: wait for each stop action's log to report success,
-then run and wait for a successful status action showing that target is not running. Repeat this
-for every managed Herdr session before uninstalling. Stopping the bridge disconnects browser
-clients but does not stop Herdr or its panes. The plugin and the standalone distributions below are
-independent install paths.
+binds loopback port `8787`, and allocates named-session bridges from `8787`–`8877`. Installation
+registers and builds the plugin but does not start it; its Herdr `[[startup]]` hook starts the bridge
+on the next Herdr server restore. Invoke the `open` or `start` action once for an already-running
+Herdr server. The hook starts Herdr World only, never Herdr itself, and Herdr records a startup
+failure without stopping its server. Its packaged static assets are fixed to the npm payload; only
+the upload directory is configurable.
+
+The default target does not silently move away from `8787`: an occupied default port makes start
+fail. A configured `session_name` or `socket_path`, or a target started while another managed target
+is recorded, selects the first free port in the configured range, while an explicit `port` always
+fails when occupied. Linux `systemd --user` and macOS `launchd` restart a bridge that exits
+unexpectedly; the portable fallback process group does not retry, and a supervisor always retries the
+same recorded port. The plugin has no uninstall cleanup
+hook, so stop the plugin bridge before uninstalling the plugin. Plugin actions are asynchronous and target-scoped:
+wait for each stop action's log to report success, then run and wait for a successful
+status action showing that target is not running. Repeat this for every managed Herdr session before
+uninstalling. Stopping the bridge disconnects browser clients but does not stop Herdr or its panes.
+The plugin and the standalone distributions below are independent install paths.
 
 ## Release Artifacts
 

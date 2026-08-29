@@ -4,17 +4,17 @@
 - **Implemented at:** 2026-08-29
 - **Implementation status:** Implementation complete; first tagged release validation pending
 
-> The approved parent specification remains immutable. This summary records
-> the delivered implementation, decisions, validation evidence, and the
-> release-time operational gate.
+> This summary records the delivered implementation, subsequent contract
+> clarification, decisions, validation evidence, and the release-time
+> operational gate.
 
 ## Delivered implementation
 
 ### 2026-08-29 — Exact npm payload and lifecycle controller
 
 - Added the root `herdr-plugin.toml` for `ivoryheart.herdr-world`, with the
-  approved versioned build command and workspace actions: `start`, `stop`,
-  `restart`, `status`, `open`, and `doctor`.
+  approved versioned build command, a Herdr startup hook, and workspace
+  actions: `start`, `stop`, `restart`, `status`, `open`, and `doctor`.
 - Added `scripts/herdr-world-plugin.sh` and its Node controller. The build
   installs exactly `@ivoryheart/herdr-world@<manifest-version>` into the
   private `.herdr-world-plugin` prefix using npmjs registry pinning,
@@ -36,6 +36,20 @@
 - Kept static assets paired to the private package; only the upload directory
   is configurable. Stop/restart/uninstall messaging distinguishes the bridge
   from the Herdr server and its panes.
+
+### 2026-08-29 — Herdr-native startup behavior
+
+- Added the manifest's one-shot `[[startup]]` hook. It invokes the same
+  idempotent controller start path on the next Herdr server restore, but does
+  not make plugin installation start a process or make Herdr supervise the
+  bridge.
+- Kept bridge supervision in the existing platform-owned layer: Linux
+  `systemd --user` and macOS `launchd` restart unexpected exits; the detached
+  fallback does not retry. Documented that a supervisor retries the recorded
+  port rather than selecting a replacement after a crash.
+- Documented default-port refusal, named-target range allocation, explicit-port
+  refusal, startup failure logs, and the explicit `open` action for an already
+  running Herdr server.
 
 ### Release and documentation integration
 

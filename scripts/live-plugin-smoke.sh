@@ -179,6 +179,19 @@ for action in start stop restart status open doctor; do
   [[ "$actions" == *"$action"* ]] || { echo "plugin action is missing: $action" >&2; exit 1; }
 done
 
+echo "Verifying installation does not start the bridge and Herdr startup restores it"
+if curl --fail --silent --show-error --max-time 1 http://127.0.0.1:8787/api/capabilities >/dev/null 2>&1; then
+  echo "plugin installation unexpectedly started the bridge" >&2
+  exit 1
+fi
+invoke_default stop >/dev/null
+kill "$PID_A" 2>/dev/null || true
+wait "$PID_A" 2>/dev/null || true
+PID_A=0
+start_default_herdr
+wait_for_herdr default
+wait_for_bridge http://127.0.0.1:8787
+
 echo "Starting and reusing the default plugin service"
 invoke_default start
 wait_for_bridge http://127.0.0.1:8787
