@@ -126,6 +126,14 @@
           <h2 id="install-title">From archive<br />to office.</h2>
           <p>Herdr stays independent. Choose Linux x86-64, macOS Apple Silicon, or macOS Intel from the release, verify it, and run the included bridge and web app. The macOS previews are currently unsigned. If Herdr is not ready, the launcher offers a consent-based setup.</p>
           <a href="https://github.com/IvoryHeart/herdr-world#requirements">Read requirements ↗</a>
+          <div class="plugin-note">
+            <p class="eyebrow">Herdr plugin / automatic bridge start</p>
+            <h3>Install once.<br />Wake with Herdr.</h3>
+            <p>Install registers and builds the plugin; it does not start the bridge immediately. The Herdr startup hook starts Herdr World on the next server restore. Start it now with <code>open</code>. Herdr itself is never installed or started by the plugin.</p>
+            <pre><code>herdr plugin install IvoryHeart/herdr-world
+herdr plugin action invoke open --plugin ivoryheart.herdr-world</code></pre>
+            <a href="https://github.com/IvoryHeart/herdr-world#herdr-plugin">Read plugin lifecycle ↗</a>
+          </div>
         </div>
 
         <div class="terminal-card">

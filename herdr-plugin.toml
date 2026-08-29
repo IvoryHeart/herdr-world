@@ -8,6 +8,9 @@ platforms = ["linux", "macos"]
 [[build]]
 command = ["bash", "scripts/herdr-world-plugin.sh", "build"]
 
+[[startup]]
+command = ["bash", "scripts/herdr-world-plugin.sh", "startup"]
+
 [[actions]]
 id = "start"
 title = "Start Herdr World"

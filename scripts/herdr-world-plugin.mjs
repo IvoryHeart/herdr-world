@@ -35,6 +35,7 @@ export const DEFAULT_PORT_RANGE = [8787, 8877];
 export const CONFIG_FILE = "config.json";
 export const SERVICE_SCHEMA_VERSION = 1;
 export const ACTIONS = ["build", "start", "stop", "restart", "status", "open", "doctor"];
+export const STARTUP_COMMAND = "startup";
 export const SUPPORTED_TARGETS = {
   "linux-x64": "linux-x64",
   "darwin-arm64": "macos-arm64",
@@ -152,7 +153,11 @@ export function validatePluginManifest(manifest) {
   if (build.length !== 1 || !arraysEqual(build[0]?.command, ["bash", "scripts/herdr-world-plugin.sh", "build"])) {
     errors.push("manifest must declare the exact plugin build command");
   }
-  for (const forbidden of ["startup", "events", "panes", "link_handlers"]) {
+  const startup = manifest.blocks?.filter((entry) => entry.type === "startup") ?? [];
+  if (startup.length !== 1 || !arraysEqual(startup[0]?.command, ["bash", "scripts/herdr-world-plugin.sh", STARTUP_COMMAND])) {
+    errors.push("manifest must declare the exact startup hook command");
+  }
+  for (const forbidden of ["events", "panes", "link_handlers"]) {
     if (manifest.blocks?.some((entry) => entry.type === forbidden)) {
       errors.push(`manifest must not declare [[${forbidden}]]`);
     }
@@ -1334,6 +1339,10 @@ async function startAction(options = {}) {
   return startPrepared(prepareStart(options));
 }
 
+async function startupAction(options = {}) {
+  return startAction(options);
+}
+
 function contextRecord(context) {
   return readRecord(targetRecordPath(context.stateDir, context.target.identity));
 }
@@ -1511,9 +1520,10 @@ async function doctorAction({ root = ROOT, env = process.env, platform = process
 }
 
 export async function runAction(action, options = {}) {
-  if (!ACTIONS.includes(action)) throw new PluginError(`unknown action ${action}; expected ${ACTIONS.join(" | ")}`);
+  if (![...ACTIONS, STARTUP_COMMAND].includes(action)) throw new PluginError(`unknown action ${action}; expected ${[...ACTIONS, STARTUP_COMMAND].join(" | ")}`);
   if (action === "build") return buildPayload(options);
   if (action === "start") return startAction(options);
+  if (action === STARTUP_COMMAND) return startupAction(options);
   if (action === "stop") return stopAction(options);
   if (action === "restart") return restartAction(options);
   if (action === "status") return statusAction(options);
@@ -1523,8 +1533,8 @@ export async function runAction(action, options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
   const [action, ...extra] = process.argv.slice(2);
-  if (!action || extra.length > 0 || !ACTIONS.includes(action)) {
-    console.error(`Usage: herdr-world-plugin.sh ${ACTIONS.join(" | ")}`);
+  if (!action || extra.length > 0 || ![...ACTIONS, STARTUP_COMMAND].includes(action)) {
+    console.error(`Usage: herdr-world-plugin.sh ${[...ACTIONS, STARTUP_COMMAND].join(" | ")}`);
     process.exit(2);
   }
   runAction(action).catch((error) => {

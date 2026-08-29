@@ -27,6 +27,7 @@ import {
   selectSupervisor,
   selectTarget,
   serviceName,
+  STARTUP_COMMAND,
   targetRecordPath,
   validateConfig,
   validatePluginManifest,
@@ -50,13 +51,17 @@ test("the checked-in manifest declares the exact plugin contract", () => {
   const manifest = parsePluginManifest(readFileSync(path.join(ROOT, "herdr-plugin.toml"), "utf8"));
   assert.doesNotThrow(() => assertPluginManifest(manifest));
   assert.equal(manifest.version, MANIFEST_VERSION);
+  const startup = manifest.blocks.find((entry) => entry.type === "startup");
+  assert.deepEqual(startup?.command, ["bash", "scripts/herdr-world-plugin.sh", STARTUP_COMMAND]);
   assert.deepEqual(ACTIONS, ["build", "start", "stop", "restart", "status", "open", "doctor"]);
 });
 
-test("manifest validation rejects panes, startup hooks, and malformed actions", () => {
+test("manifest validation rejects panes and malformed startup hooks or actions", () => {
   const manifest = parsePluginManifest(readFileSync(path.join(ROOT, "herdr-plugin.toml"), "utf8"));
   manifest.blocks.push({ type: "panes", id: "world", command: ["sh"] });
   assert.match(validatePluginManifest(manifest).join("\n"), /must not declare \[\[panes\]\]/);
+  manifest.blocks.find((entry) => entry.type === "startup").command = ["sh", "start"];
+  assert.match(validatePluginManifest(manifest).join("\n"), /exact startup hook command/);
 });
 
 test("release versions use strict stable or numbered RC syntax", () => {
@@ -290,6 +295,8 @@ test("supervisor definitions contain the absolute Node command and safe environm
   assert.match(unit, /Environment="HERDR_SOCKET_PATH=\/private\/herdr\.sock"/);
   const plist = renderLaunchdPlist(record, environment, "/private/service.log");
   assert.match(plist, /<key>ProgramArguments<\/key>/);
+  assert.match(plist, /<key>RunAtLoad<\/key><true\/>/);
+  assert.match(plist, /<key>KeepAlive<\/key><true\/>/);
   assert.match(plist, /<string>\/opt\/node\/bin\/node<\/string>/);
   assert.match(plist, /<key>HERDR_WORLD_SETUP<\/key><string>never<\/string>/);
 });
