@@ -17,6 +17,30 @@ candidates in `IvoryHeart/homebrew-tap`. Each Formula installs the complete bund
 exposes only the `herdr-world` launcher. The two Formulae conflict so they cannot both provide the
 same command.
 
+## Herdr Plugin Payload
+
+The Herdr plugin is installed from this GitHub repository and acquires the exact version named by
+`herdr-plugin.toml`:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
+```
+
+Herdr builds the manifest's controller checkout, which runs Node.js `22.14.0` or newer and npm to
+install `@ivoryheart/herdr-world@X.Y.Z` into `.herdr-world-plugin/`. The npm and scope registries
+are pinned to npmjs, lifecycle scripts are disabled, and the package name, version, selected native
+bridge, web assets, and legal payload are validated before the plugin is registered. No Rust,
+Cargo, compiler, web dependency tree, global npm package, Homebrew installation, or desktop
+tarball is used. Node must remain installed for runtime supervision.
+
+The plugin's config and service state live in Herdr's injected per-user plugin directories, not in
+the repository checkout or release archives. It uses the invoking `HERDR_SOCKET_PATH` by default,
+binds loopback port `8787`, and allocates named-session bridges from `8787`–`8877`. Its packaged
+static assets are fixed to the npm payload; only the upload directory is configurable. Stop and
+uninstall operations affect the plugin bridge only: they disconnect browser clients but do not stop
+Herdr or its panes. The plugin and the standalone distributions below are independent install
+paths.
+
 ## Release Artifacts
 
 Recommended GitHub release assets:

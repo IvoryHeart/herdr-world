@@ -73,6 +73,9 @@ site/                Dependency-free GitHub Pages project site
 android/             Capacitor Android shell for the bundled web app
 bridge/              Slim Rust HTTP/WebSocket bridge executable
 vendor/herdr-compat/ minimal Herdr protocol/API compatibility crate
+herdr-plugin.toml    Herdr plugin manifest
+scripts/herdr-world-plugin.sh
+scripts/live-plugin-smoke.sh
 scripts/run-bridge.sh
 scripts/check-vendor.sh
 docs/android.md
@@ -187,6 +190,56 @@ bin/herdr-world --host 0.0.0.0 --port 4000 \
 
 See [docs/packaging.md](docs/packaging.md) for release artifact layout and
 [docs/android.md](docs/android.md) for Android behavior.
+
+## Herdr Plugin
+
+The Herdr plugin is a lifecycle facade for the browser client. It installs the
+exact release-matched `@ivoryheart/herdr-world` payload into Herdr's managed
+plugin checkout, then supervises one local bridge for the invoking Herdr
+session. It does not build Rust or web sources, use a global npm/Homebrew
+installation, or host the Android client.
+
+Inspect the manifest and controller before installing a plugin that runs code
+as your user, then install a release ref:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.5
+herdr plugin action invoke start --plugin ivoryheart.herdr-world
+```
+
+The unpinned form follows the repository's current default branch:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world
+```
+
+Plugin installation and runtime actions require Node.js `22.14.0` or newer
+and npm. Node must remain installed because the supervised bridge runs through
+the package's Node entrypoint. Local linking skips the build command; after
+linking, install the exact payload explicitly with the command printed by:
+
+```bash
+bash scripts/herdr-world-plugin.sh build
+```
+
+The plugin uses loopback `http://127.0.0.1:8787` by default. Its editable JSON
+configuration is outside the managed checkout; find its directory with:
+
+```bash
+herdr plugin config-dir ivoryheart.herdr-world
+```
+
+Set `host`, `port`, `port_range`, `session_name` or `socket_path`,
+`upload_dir`, `allowed_hosts`, `allowed_origins`, `allowed_connect_origins`,
+and `bridge_label` in `config.json` as needed. Named sessions use the first
+free port in `8787`–`8877`. Non-loopback binding requires explicit host and
+origin allow-lists and an operator-managed VPN, SSH forward, or authenticated
+reverse proxy; Host and Origin checks are not authentication. Stopping the
+plugin bridge disconnects browser clients but does not stop Herdr or its panes.
+
+The plugin is separate from the standalone npm package, Homebrew Formula,
+desktop tarball, and Android companion distribution. See [docs/packaging.md](docs/packaging.md)
+and [docs/release.md](docs/release.md) for their independent workflows.
 
 ## Development Setup
 

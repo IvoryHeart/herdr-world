@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import {
@@ -9,6 +9,7 @@ import {
   normalizeReleaseTag,
   releaseVersion,
 } from "./release-version.mjs";
+import { assertPluginManifest, parsePluginManifest } from "./herdr-world-plugin.mjs";
 
 const root = process.cwd();
 const suppliedTag = process.argv[2] ?? process.env.GITHUB_REF_NAME;
@@ -87,12 +88,20 @@ for (const relativePath of ["package.json", "web/package.json"]) {
 const pluginPath = join(root, "herdr-plugin.toml");
 try {
   const plugin = readFileSync(pluginPath, "utf8");
-  const pluginVersion = plugin.match(/^version\s*=\s*"([^"]+)"\s*$/m)?.[1];
-  if (pluginVersion !== releaseVersion(tag)) {
-    fail(`herdr-plugin.toml version must be ${releaseVersion(tag)}`);
+  const manifest = assertPluginManifest(parsePluginManifest(plugin));
+  if (manifest.version !== releaseVersion(tag)) fail(`herdr-plugin.toml version must be ${releaseVersion(tag)}`);
+  for (const entrypoint of ["scripts/herdr-world-plugin.sh", "scripts/herdr-world-plugin.mjs"]) {
+    const pathname = join(root, entrypoint);
+    try {
+      const mode = statSync(pathname).mode;
+      if ((mode & 0o111) === 0) fail(`${entrypoint} must be executable`);
+    } catch (error) {
+      fail(`${entrypoint} is missing or unreadable: ${error.message}`);
+    }
   }
 } catch (error) {
-  if (error.code !== "ENOENT") fail(`could not read herdr-plugin.toml: ${error.message}`);
+  if (error.code === "ENOENT") fail("herdr-plugin.toml is required for plugin-enabled releases");
+  fail(`could not read herdr-plugin.toml: ${error.message}`);
 }
 
 console.log(`Validated protected release ${tag} at ${tagSha}`);

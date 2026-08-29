@@ -9,6 +9,7 @@ the release tag.
 
 - Clean `main` branch.
 - Node.js 22 or newer.
+- npm, with Node.js `22.14.0` or newer required for Herdr plugin payload installation and runtime.
 - Rust stable.
 - `cargo-about` 0.9.2 (`cargo install cargo-about --version 0.9.2 --locked --features cli`).
 - JDK 21 and Android SDK when validating the Android shell.
@@ -40,6 +41,16 @@ scripts/check-vendor.sh
 npm run check
 ```
 
+4. From the current `main`, explicitly start the complete distribution preflight:
+
+```bash
+gh workflow run release.yml --ref main
+```
+
+Wait for the `Release distribution` run to pass before cutting the release. Rerun it if `main`
+advances before release preparation continues. The preflight builds and exercises synthetic
+artifacts but cannot publish.
+
 Do not cut a release without bridge test/build coverage.
 
 Corrections use a new release-candidate number. For example, a correction after
@@ -48,11 +59,38 @@ Corrections use a new release-candidate number. For example, a correction after
 ## Package Artifacts
 
 Desktop artifacts are built from the final tag by `.github/workflows/release.yml`; do not upload a
-locally built substitute. Pull requests that affect the desktop assembly run the same Linux,
-Apple-Silicon, and Intel matrix without publishing. Each job checks the native CPU format and bundle
-contents, then exercises the packaged bridge against two checksum-pinned stock Herdr v0.8.2 daemons.
-One required notice gate validates the complete cross-platform dependency closure before any native
-job starts, avoiding three redundant builds of the notice generator.
+locally built substitute. The explicit distribution preflight runs the same Linux, Apple-Silicon,
+and Intel matrix without publishing; ordinary pull requests rely on the normal CI workflow,
+including its release unit tests. Each native job checks the CPU format and bundle contents, then
+exercises the packaged bridge against two checksum-pinned stock Herdr v0.8.2 daemons. One required
+notice gate validates the complete cross-platform dependency closure before any native job starts,
+avoiding three redundant builds of the notice generator.
+
+## Herdr Plugin Release
+
+The plugin is released with the application tag but does not publish a second application artifact.
+After the exact npm package has been published or verified at the unprefixed tag version, the
+workflow installs `IvoryHeart/herdr-world --ref vX.Y.Z` and runs the plugin lifecycle smoke on all
+three supported targets: Linux x86-64/glibc 2.34+, macOS ARM64, and macOS x86-64. The smoke uses a
+checksum-pinned stock Herdr v0.8.2 daemon, checks action listing, first/repeated start, status,
+open, doctor, restart, browser readiness, a second session/port, stop, and uninstall. Its result
+and public repository URL appear in the common release summary. It does not publish, rebuild, or
+substitute the npm payload.
+
+Install the plugin from the default branch or pin a release:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world
+herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
+```
+
+Plugin installation requires Node.js `22.14.0` or newer and npm. Rust and Cargo are not required;
+the build installs the exact prebuilt npm payload with lifecycle scripts disabled. Global npm and
+Homebrew installations are ignored. Local `herdr plugin link` skips the build command, so run the
+exact payload install command printed by `bash scripts/herdr-world-plugin.sh build` before invoking
+actions. Reinstalling the GitHub plugin is the refresh mechanism; config and state remain in
+Herdr's per-user plugin directories. Add the `herdr-plugin` GitHub topic only after the tagged
+install and three-platform smoke pass.
 
 Linux desktop tarball:
 

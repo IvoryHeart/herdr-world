@@ -6,6 +6,11 @@
 
 ### Added
 
+- Added the Herdr World plugin manifest and lifecycle controller. Herdr can install the exact
+  release-matched npm payload privately, supervise one loopback bridge per session, and expose
+  start/stop/restart/status/open/doctor actions without changing the standalone npm, Homebrew,
+  desktop, or Android distributions.
+
 ### Changed
 
 ### Fixed
