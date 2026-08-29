@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Updated Homebrew release validation for current name-based audit and trusted-tap requirements.
+
 ### Removed
 
 ## [0.1.0-rc.2] - 2026-08-29

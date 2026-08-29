@@ -718,11 +718,19 @@ jobs:
             exit 1
           }
           formula_name="$(basename "$formula_file" .rb)"
-          brew audit --strict --online "$formula_file"
-          brew install --formula "$formula_file"
-          brew test "$formula_name"
-          brew reinstall --formula "$formula_name"
-          brew uninstall --force "$formula_name"
+          tap_owner="${HOMEBREW_TAP_REPOSITORY%%/*}"
+          tap_repository="${HOMEBREW_TAP_REPOSITORY#*/}"
+          tap_name="$tap_owner/${tap_repository#homebrew-}"
+          brew tap "$tap_name"
+          tap_root="$(brew --repository "$tap_name")"
+          mkdir -p "$tap_root/Formula"
+          cp "$formula_file" "$tap_root/Formula/${formula_name}.rb"
+          qualified_formula="$tap_name/$formula_name"
+          brew audit --strict --online "$qualified_formula"
+          brew install --formula "$qualified_formula"
+          brew test "$qualified_formula"
+          brew reinstall --formula "$qualified_formula"
+          brew uninstall --force "$qualified_formula"
 
   npm_publish:
     name: Publish npm channel
