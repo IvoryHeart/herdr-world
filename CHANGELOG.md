@@ -10,9 +10,13 @@
 
 ### Fixed
 
-- Synchronized the Herdr plugin release smoke with asynchronous startup-hook completion on macOS.
-
 ### Removed
+
+## [0.1.0-rc.13] - 2026-08-29
+
+### Fixed
+
+- Synchronized the Herdr plugin release smoke with asynchronous startup-hook completion on macOS.
 
 ## [0.1.0-rc.12] - 2026-08-29
 
