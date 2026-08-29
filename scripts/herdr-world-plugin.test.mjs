@@ -336,7 +336,9 @@ test("documents and tests the explicit stop-before-uninstall contract", () => {
   assert.match(packaging, /actions are asynchronous and target-scoped/);
   assert.match(smoke, /Installing .* while Herdr is stopped/);
   assert.match(smoke, /plugin install .*--ref/);
+  assert.match(smoke, /wait_for_startup/);
   assert.ok(smoke.indexOf('plugin install IvoryHeart/herdr-world') < smoke.indexOf('echo "Starting stock Herdr release smoke daemon and restoring the plugin service"'));
+  assert.ok(smoke.indexOf("wait_for_startup") < smoke.indexOf("wait_for_bridge http://127.0.0.1:8787"));
   assert.ok(smoke.indexOf("invoke_default stop") < smoke.indexOf('plugin uninstall "$PLUGIN_ID"'));
   assert.match(smoke, /no uninstall hook/);
 });

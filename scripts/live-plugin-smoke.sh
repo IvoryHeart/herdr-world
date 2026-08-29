@@ -163,6 +163,33 @@ process.stdin.on("end", () => {
   exit 1
 }
 
+wait_for_startup() {
+  local logs state
+  for _ in $(seq 1 100); do
+    logs="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
+      "$HERDR_BIN" plugin log list --plugin "$PLUGIN_ID" --limit 100 2>/dev/null || true)"
+    state="$(node --input-type=module - "$logs" <<'NODE'
+try {
+  const value = JSON.parse(process.argv[2]);
+  const startup = value.result?.logs?.find((entry) => entry.event === "startup");
+  if (startup) process.stdout.write(JSON.stringify({ status: startup.status, stderr: startup.stderr ?? "" }));
+} catch {}
+NODE
+    )"
+    if [[ "$state" == *'"status":"succeeded"'* ]]; then return; fi
+    if [[ "$state" == *'"status":"failed"'* ]]; then
+      node --input-type=module - "$state" <<'NODE' >&2
+const value = JSON.parse(process.argv[2]);
+process.stderr.write(value.stderr || "Herdr plugin startup hook failed");
+NODE
+      return 1
+    fi
+    sleep 0.2
+  done
+  echo "Herdr plugin startup hook did not finish" >&2
+  exit 1
+}
+
 # Herdr runs startup hooks asynchronously after the ready message. Install while
 # it is stopped so the install test cannot race that one-shot startup dispatch.
 echo "Installing $PLUGIN_ID from GitHub at $VERSION while Herdr is stopped"
@@ -181,6 +208,7 @@ fi
 echo "Starting stock Herdr release smoke daemon and restoring the plugin service"
 start_default_herdr
 wait_for_herdr default
+wait_for_startup
 
 actions="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin action list --plugin "$PLUGIN_ID")"
