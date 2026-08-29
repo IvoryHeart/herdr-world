@@ -26,7 +26,7 @@ navigation, multi-client viewing, mobile input controls, synchronized pane selec
 visualizations. The upstream relationship and synchronization record are documented in
 [`UPSTREAM.md`](UPSTREAM.md).
 
-> **Public preview:** [`v0.1.0-rc.5`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.5)
+> **Public preview:** [`v0.1.0-rc.6`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.6)
 > provides native archives for Linux x86-64 and macOS on Apple Silicon and Intel. Herdr World
 > currently requires Herdr `v0.8.2` or newer reporting terminal protocol `20`.
 
@@ -113,8 +113,8 @@ Android development also needs a JDK and Android SDK. See [docs/android.md](docs
 
 | Platform | Status |
 | --- | --- |
-| Linux x86-64 | Available in [`v0.1.0-rc.5`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.5) |
-| macOS ARM64 / x86-64 | Available unsigned in [`v0.1.0-rc.5`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.5) |
+| Linux x86-64 | Available in [`v0.1.0-rc.6`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.6) |
+| macOS ARM64 / x86-64 | Available unsigned in [`v0.1.0-rc.6`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.6) |
 | Android | Source and debug build workflow are available; no signed public APK yet |
 
 ## Quick Start From Release
@@ -123,7 +123,7 @@ Choose `linux-x86_64`, `macos-arm64` (Apple Silicon), or `macos-x86_64` (Intel),
 verify the current release candidate:
 
 ```bash
-VERSION=v0.1.0-rc.5
+VERSION=v0.1.0-rc.6
 PLATFORM=linux-x86_64
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz"
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"

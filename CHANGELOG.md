@@ -6,21 +6,27 @@
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.0-rc.6] - 2026-08-29
+
+### Added
+
 - Added the Herdr World plugin manifest and lifecycle controller. Herdr can install the exact
   release-matched npm payload privately, supervise one loopback bridge per session, and expose
   start/stop/restart/status/open/doctor actions without changing the standalone npm, Homebrew,
   desktop, or Android distributions.
   [Herdr World PR #36](https://github.com/IvoryHeart/herdr-world/pull/36)
 
-### Changed
-
 ### Fixed
 
 - Allowed npm release publication to wait for publish-time malware scanning before verifying the
   immutable version, integrity, and channel pointer.
   [Herdr World PR #34](https://github.com/IvoryHeart/herdr-world/pull/34)
-
-### Removed
 
 ## [0.1.0-rc.5] - 2026-08-29
 
