@@ -55,7 +55,10 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   assert.match(html, /npm install --global @ivoryheart\/herdr-world@next/);
   assert.match(html, /brew install IvoryHeart\/tap\/herdr-world-rc/);
   assert.match(html, new RegExp("herdr plugin install IvoryHeart/herdr-world --ref " + currentRelease));
-  assert.match(html, /data-cli-command/);
+  assert.match(html, /<details class="cli-note">/);
+  assert.match(html, /data-cli-command>VERSION=v0\.1\.0-rc\.8/);
+  assert.match(html, /curl -fLO .*herdr-world-\$\{VERSION\}-linux-x86_64\.tar\.gz/);
+  assert.match(html, /tar -xzf .*herdr-world-\$\{VERSION\}-linux-x86_64\.tar\.gz/);
   assert.match(readFileSync(join(output, "site.js"), "utf8"), /data-install-tab/);
   assert.doesNotMatch(html, /(?:src|href)="\/(?!\/)/, "local references must be relative");
   assert.doesNotMatch(html, /file:\/\//, "local filesystem URLs must not ship");
