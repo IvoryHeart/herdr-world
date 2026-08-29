@@ -439,9 +439,10 @@ plugin job SHALL install the tagged GitHub plugin, exercise the declared
 actions, and include the plugin version, result, and public URL in the common
 release summary. The plugin job SHALL depend on successful npm publication or
 same-version integrity verification; it SHALL not publish, rebuild, or
-substitute an application payload itself. Pull-request and manual validation
-runs MAY use the exact generated npm tarball but SHALL NOT publish or advertise
-the plugin.
+substitute an application payload itself. Explicit manual validation runs MAY
+use the exact generated npm tarball but SHALL NOT publish or advertise the
+plugin. Ordinary pull requests rely on the normal CI release tests and do not
+run the complete distribution matrix.
 
 The release documentation SHALL explain both installation forms:
 

@@ -107,9 +107,11 @@ including a previously unused version, SHALL fail before any channel mutation.
 ## One release workflow
 
 Except for the one-time npm bootstrap defined below, a valid release-tag push
-SHALL be the only event that can publish. Pull-request and manual workflow runs
-MAY build and validate synthetic versions, but SHALL NOT create tags, releases,
-registry versions, plugin publications, or tap commits.
+SHALL be the only event that can publish. Explicit manual workflow runs MAY
+build and validate synthetic versions, but SHALL NOT create tags, releases,
+registry versions, plugin publications, or tap commits. Ordinary pull requests
+SHALL use the normal CI workflow, including release unit tests, without running
+the complete distribution matrix.
 
 ### Release authorization and provenance
 
@@ -139,8 +141,8 @@ All tag-triggered release workflows SHALL share one constant GitHub Actions
 concurrency group that is independent of tag, ref, version, run, and channel.
 The group SHALL use `queue: max` and `cancel-in-progress: false`. The initial
 implementation SHALL serialize the complete tag-triggered workflow, from
-validation through final publication verification. Pull-request and manual
-validation runs SHALL use separate concurrency groups and cannot publish.
+validation through final publication verification. Explicit manual validation
+runs SHALL use separate concurrency groups and cannot publish.
 
 Holding one mutex across the whole release prevents npm, Homebrew, GitHub, the
 Herdr plugin, and future channels from interleaving mutations from different
@@ -337,8 +339,8 @@ enabled channels.
   gate SHALL be the release authorization boundary.
 - One shared queued release group plus in-lock external state checks SHALL
   prevent publication races between release tags.
-- Pull-request and fork workflows SHALL receive neither publication credentials
-  nor a publishing OIDC permission.
+- Pull-request CI, fork workflows, and manual validation runs SHALL receive
+  neither publication credentials nor a publishing OIDC permission.
 - npm SHALL use OIDC after bootstrap, not a stored npm publishing token.
 - `HOMEBREW_TAP_TOKEN` SHALL be restricted to the tap and SHALL not enter an
   artifact, cache, Formula, or log.
@@ -362,7 +364,8 @@ Implementation is complete when automated evidence shows:
   its monotonicity checks while holding the shared release mutex;
 - an unprotected tag or a tag whose commit is not correctly stamped and
   reachable from protected `origin/main` cannot reach publication credentials;
-- pull-request and manual runs exercise packaging without publication;
+- explicit manual runs exercise packaging without publication, while ordinary
+  pull requests run the release unit tests without the distribution matrix;
 - the native matrix builds and live-smokes each archive once;
 - GitHub releases are draft-first and contain the complete asset set;
 - the exact tested npm tarball is published through OIDC with the correct
