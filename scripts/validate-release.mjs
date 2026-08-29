@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   assertCurrentReleaseReferences,
   escapeRegex,
+  isReleaseCommitSubject,
   normalizeReleaseTag,
   releaseVersion,
 } from "./release-version.mjs";
@@ -57,8 +58,8 @@ try {
 }
 
 const subject = output("git", ["show", "-s", "--format=%s", tagSha]);
-if (subject !== `Release ${tag}`) {
-  fail(`tagged commit subject must be exactly Release ${tag}; found ${subject}`);
+if (!isReleaseCommitSubject(subject, tag)) {
+  fail(`tagged commit subject must be Release ${tag} or GitHub's squash-merge form Release ${tag} (#<number>); found ${subject}`);
 }
 
 try {

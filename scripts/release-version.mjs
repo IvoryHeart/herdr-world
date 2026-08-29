@@ -41,6 +41,11 @@ export function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+export function isReleaseCommitSubject(subject, tag) {
+  const expected = `Release ${normalizeReleaseTag(tag)}`;
+  return subject === expected || new RegExp(`^${escapeRegex(expected)} \\(#\\d+\\)$`).test(subject);
+}
+
 export function releaseVersion(value) {
   return parseReleaseTag(value).tag.slice(1);
 }
