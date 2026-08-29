@@ -2,7 +2,7 @@
 
 - **Parent spec:** [`016-herdr-world-plugin-release-spec.md`](016-herdr-world-plugin-release-spec.md)
 - **Implemented at:** 2026-08-29
-- **Implementation status:** Complete
+- **Implementation status:** Implementation complete; first tagged release validation pending
 
 > The approved parent specification remains immutable. This summary records
 > the delivered implementation, decisions, validation evidence, and the
@@ -61,7 +61,9 @@
 - Hashed stable target identities and service names.
 - `open` uses only the platform browser helper, with a headless manual URL
   fallback; no separate `logs` or `url` actions were added.
-- The current `0.1.0-rc.5` release is the initial advertised version.
+- The manifest starts at `0.1.0-rc.5` for exact npm payload compatibility; the
+  `v0.1.0-rc.5` tag predates this plugin implementation and is not advertised as
+  the first tagged plugin release.
 - No offline cache or binary-first desktop-artifact installer was added.
 
 ## Acceptance evidence
@@ -74,7 +76,7 @@
 - Live local checks passed for systemd start/status/restart/stop, doctor,
   action invocation, an isolated named Herdr session, and capability
   readiness. The pre-existing unrelated bridge on port 8787 was left alone.
-- `npm run test:release` — passed, including 59 tests and plugin manifest,
+- `npm run test:release` — passed, including 62 tests and plugin manifest,
   payload, configuration, ownership, readiness, supervisor, and workflow
   coverage.
 - `npm run check` — passed, including vendor and notice checks, web lint,
@@ -85,15 +87,17 @@
 ## Constraints and operational notes
 
 - The three-platform published-ref smoke is implemented in CI but cannot be
-  fully run from this Linux worktree until this branch is published/tagged and
-  the matching npm version is available. The release job is intentionally
-  gated on npm publication or same-version integrity verification.
+  fully run from this Linux worktree until a tag containing this implementation
+  is published and the matching npm version is available. The release job is
+  intentionally gated on npm publication or same-version integrity
+  verification.
 - The public `herdr-plugin` GitHub topic remains a release-operator decision;
   add it only after the tagged install and three-platform smoke pass.
 - No generated `.herdr-world-plugin`, `web/dist`, bridge target, or release
   archive is part of the source changes. Existing user screenshot changes in
   the worktree were preserved untouched.
 
-**Drift from approved spec:** None.
+**Drift from approved spec:** None identified in the implementation; first
+tagged post-publication three-platform smoke remains pending.
 
 **Follow-up extension:** None.

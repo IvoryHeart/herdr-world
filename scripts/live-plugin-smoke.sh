@@ -206,7 +206,9 @@ node --input-type=module - "$PLUGIN_CONFIG_DIR/config.json" <<'NODE'
 import { writeFileSync } from "node:fs";
 writeFileSync(process.argv[2], "{}\n", { mode: 0o600 });
 NODE
+# Herdr has no uninstall hook; stop the controller-owned bridge first.
 invoke_default stop >/dev/null
+invoke_default status >/dev/null
 HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin uninstall "$PLUGIN_ID"
 [[ -d "$PLUGIN_CONFIG_DIR" ]] || { echo "uninstall removed plugin config/state unexpectedly" >&2; exit 1; }

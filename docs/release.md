@@ -72,7 +72,7 @@ After the exact npm package has been published or verified at the unprefixed tag
 workflow installs `IvoryHeart/herdr-world --ref vX.Y.Z` and runs the plugin lifecycle smoke on all
 three supported targets: Linux x86-64/glibc 2.34+, macOS ARM64, and macOS x86-64. The smoke uses a
 checksum-pinned stock Herdr v0.8.2 daemon, checks action listing, first/repeated start, status,
-open, doctor, restart, browser readiness, a second session/port, stop, and uninstall. Its result
+open, doctor, restart, browser readiness, a second session/port, and stop-before-uninstall. Its result
 and public repository URL appear in the common release summary. It does not publish, rebuild, or
 substitute the npm payload.
 

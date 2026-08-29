@@ -22,8 +22,12 @@ import {
   requirePayload,
   renderLaunchdPlist,
   renderSystemdUnit,
+  resolveTargetIdentity,
+  runAction,
   selectSupervisor,
   selectTarget,
+  serviceName,
+  targetRecordPath,
   validateConfig,
   validatePluginManifest,
   waitForReadiness,
@@ -174,6 +178,55 @@ test("port allocation keeps the default port fixed and separates named targets",
   }
 });
 
+test("distinct injected sockets allocate another default-range port without config changes", async () => {
+  const state = temporaryDirectory();
+  try {
+    const config = validateConfig({});
+    assert.equal(await choosePort(config, "socket:first", state, { portFree: async () => true }), 8787);
+    mkdirSync(path.join(state, "runtimes"), { recursive: true });
+    writeFileSync(path.join(state, "runtimes", "first.json"), JSON.stringify({ target_identity: "socket:first", port: 8787 }));
+    assert.equal(
+      await choosePort(config, "socket:second", state, { portFree: async (host, port) => port !== 8787 }),
+      8788,
+    );
+  } finally {
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
+test("restart validates its start plan before stopping the existing service", async () => {
+  const configDir = temporaryDirectory("herdr-world-plugin-config-");
+  const stateDir = temporaryDirectory("herdr-world-plugin-state-");
+  const env = {
+    ...process.env,
+    HERDR_PLUGIN_CONFIG_DIR: configDir,
+    HERDR_PLUGIN_STATE_DIR: stateDir,
+    HERDR_SOCKET_PATH: path.join(stateDir, "herdr.sock"),
+    HERDR_WORLD_NODE_PATH: path.join(stateDir, "missing-node"),
+  };
+  try {
+    const target = resolveTargetIdentity(validateConfig({}), env);
+    const recordPath = targetRecordPath(stateDir, target.identity);
+    mkdirSync(path.dirname(recordPath), { recursive: true });
+    writeFileSync(recordPath, JSON.stringify({
+      schema_version: 1,
+      target_identity: target.identity,
+      package_name: PACKAGE_NAME,
+      service_name: serviceName(target.identity, "fallback"),
+      supervisor: "fallback",
+      pid: 999999999,
+    }));
+    await assert.rejects(
+      runAction("restart", { root: ROOT, env, platform: "linux", arch: "x64", glibcVersion: "2.39" }),
+      /required executable is not available/,
+    );
+    assert.equal(fsExists(recordPath), true);
+  } finally {
+    rmSync(configDir, { recursive: true, force: true });
+    rmSync(stateDir, { recursive: true, force: true });
+  }
+});
+
 test("readiness requires bridge, Herdr, protocol, and web compatibility", async () => {
   const response = (body, ok = true) => ({ ok, status: ok ? 200 : 503, json: async () => body, body: { cancel: async () => {} } });
   const expected = { package_version: "0.1.0-rc.5" };
@@ -249,6 +302,17 @@ test("release workflow gates the three-platform plugin smoke on npm publication"
   assert.equal((workflow.match(/platform: linux-x86_64/g) ?? []).length >= 2, true);
   assert.match(workflow.slice(pluginJob), /platform: macos-arm64/);
   assert.match(workflow.slice(pluginJob), /platform: macos-x86_64/);
+});
+
+test("documents and tests the explicit stop-before-uninstall contract", () => {
+  const readme = readFileSync(path.join(ROOT, "README.md"), "utf8");
+  const packaging = readFileSync(path.join(ROOT, "docs/packaging.md"), "utf8");
+  const smoke = readFileSync(path.join(ROOT, "scripts/live-plugin-smoke.sh"), "utf8");
+  assert.match(readme, /herdr plugin action invoke stop --plugin ivoryheart\.herdr-world/);
+  assert.match(readme, /herdr plugin uninstall ivoryheart\.herdr-world/);
+  assert.match(packaging, /stop the plugin bridge before uninstalling the plugin/);
+  assert.ok(smoke.indexOf("invoke_default stop") < smoke.indexOf('plugin uninstall "$PLUGIN_ID"'));
+  assert.match(smoke, /no uninstall hook/);
 });
 
 test("target locks are atomic and cleaned up after completion", async () => {

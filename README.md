@@ -200,17 +200,17 @@ session. It does not build Rust or web sources, use a global npm/Homebrew
 installation, or host the Android client.
 
 Inspect the manifest and controller before installing a plugin that runs code
-as your user, then install a release ref:
-
-```bash
-herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.5
-herdr plugin action invoke start --plugin ivoryheart.herdr-world
-```
-
-The unpinned form follows the repository's current default branch:
+as your user, then install the current default branch:
 
 ```bash
 herdr plugin install IvoryHeart/herdr-world
+herdr plugin action invoke start --plugin ivoryheart.herdr-world
+```
+
+To pin a release, use a tag that contains the plugin implementation:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
 Plugin installation and runtime actions require Node.js `22.14.0` or newer
@@ -236,6 +236,14 @@ free port in `8787`–`8877`. Non-loopback binding requires explicit host and
 origin allow-lists and an operator-managed VPN, SSH forward, or authenticated
 reverse proxy; Host and Origin checks are not authentication. Stopping the
 plugin bridge disconnects browser clients but does not stop Herdr or its panes.
+
+The plugin has no uninstall cleanup hook. Stop the bridge before removing the
+managed plugin checkout:
+
+```bash
+herdr plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr plugin uninstall ivoryheart.herdr-world
+```
 
 The plugin is separate from the standalone npm package, Homebrew Formula,
 desktop tarball, and Android companion distribution. See [docs/packaging.md](docs/packaging.md)

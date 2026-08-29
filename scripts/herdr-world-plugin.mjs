@@ -433,11 +433,11 @@ export function resolveTargetIdentity(config, env) {
   };
 }
 
-function targetRecordPath(stateDir, identity) {
+export function targetRecordPath(stateDir, identity) {
   return path.join(stateDir, "runtimes", `${hash(identity).slice(0, 32)}.json`);
 }
 
-function serviceName(identity, supervisor) {
+export function serviceName(identity, supervisor) {
   const suffix = hash(identity).slice(0, 24);
   return supervisor === "launchd" ? `io.ivoryheart.herdr-world.${suffix}` : `herdr-world-${suffix}.service`;
 }
@@ -805,6 +805,7 @@ export async function choosePort(config, identity, stateDir, { portFree = portIs
   const requested = config.port;
   const explicit = config.port_was_explicit === true;
   const namedTarget = config.session_name !== null || config.socket_path !== null;
+  const hasDifferentTarget = records.some(({ record }) => record.target_identity !== identity);
   if (explicit) {
     if (recordActivePort(records, identity, requested) || !(await portFree(config.host, requested))) {
       throw new PluginError(`configured bridge port ${requested} is already in use; choose another port`);
@@ -812,7 +813,7 @@ export async function choosePort(config, identity, stateDir, { portFree = portIs
     return requested;
   }
   if (!recordActivePort(records, identity, requested) && await portFree(config.host, requested)) return requested;
-  if (!namedTarget) {
+  if (!namedTarget && !hasDifferentTarget) {
     throw new PluginError(`default bridge port ${requested} is already in use; stop the owner or configure another port`);
   }
   for (let port = config.port_range[0]; port <= config.port_range[1]; port += 1) {
@@ -1259,7 +1260,7 @@ function printService(record, capabilities, prefix = "Herdr World") {
   console.log(`  access: ${displayPosture(record.host)}`);
 }
 
-async function startAction({ root = ROOT, env = process.env, platform = process.platform, arch = process.arch, glibcVersion } = {}) {
+function prepareStart({ root = ROOT, env = process.env, platform = process.platform, arch = process.arch, glibcVersion } = {}) {
   const manifestVersion = readManifestVersion(root);
   const targetPlatform = selectTarget({ platform, arch, glibcVersion });
   const node = checkNode(resolveNode({ env }));
@@ -1267,7 +1268,13 @@ async function startAction({ root = ROOT, env = process.env, platform = process.
   const targetStatus = resolveHerdrTarget(context.config, env);
   const target = { ...context.target, socket_path: targetStatus.socket_path };
   const payload = requirePayload(root, manifestVersion, targetPlatform.target);
-  return withTargetLock(context.stateDir, context.target.identity, async () => {
+  const supervisor = selectSupervisor(platform, env);
+  return { root, env, platform, context, manifestVersion, targetPlatform, node, target, payload, supervisor };
+}
+
+async function startPrepared(plan, { lockHeld = false } = {}) {
+  const { root, env, platform, context, manifestVersion, node, target, payload, supervisor } = plan;
+  const start = async () => {
     const recordPath = targetRecordPath(context.stateDir, context.target.identity);
     const previous = readRecord(recordPath);
     if (previous) {
@@ -1283,7 +1290,6 @@ async function startAction({ root = ROOT, env = process.env, platform = process.
       removeRecord(recordPath);
     }
     const port = await choosePort(context.config, context.target.identity, context.stateDir);
-    const supervisor = selectSupervisor(platform, env);
     const { record, environment } = createRecord({
       identity: context.target.identity,
       target,
@@ -1320,7 +1326,12 @@ async function startAction({ root = ROOT, env = process.env, platform = process.
       if (error instanceof PluginError) throw error;
       throw new PluginError(`could not start Herdr World: ${error.message}`);
     }
-  });
+  };
+  return lockHeld ? start() : withTargetLock(context.stateDir, context.target.identity, start);
+}
+
+async function startAction(options = {}) {
+  return startPrepared(prepareStart(options));
 }
 
 function contextRecord(context) {
@@ -1342,16 +1353,19 @@ async function stopAction({ root = ROOT, env = process.env, platform = process.p
   return record;
 }
 
-async function restartAction(options) {
-  const context = runtimeContext(options.env ?? process.env);
+export async function restartAction(options = {}) {
+  const plan = prepareStart(options);
+  const { context, env, platform } = plan;
   const recordPath = targetRecordPath(context.stateDir, context.target.identity);
-  const record = readRecord(recordPath);
-  if (record) {
-    await stopRecord(record, options.env ?? process.env, options.platform ?? process.platform);
-    removeRecord(recordPath);
-    console.log("Restarting Herdr World; browser clients will disconnect briefly.");
-  }
-  return startAction(options);
+  return withTargetLock(context.stateDir, context.target.identity, async () => {
+    const record = readRecord(recordPath);
+    if (record) {
+      await stopRecord(record, env, platform);
+      removeRecord(recordPath);
+      console.log("Restarting Herdr World; browser clients will disconnect briefly.");
+    }
+    return startPrepared(plan, { lockHeld: true });
+  });
 }
 
 async function statusAction({ env = process.env, platform = process.platform } = {}) {
