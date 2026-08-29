@@ -698,14 +698,22 @@ jobs:
           path: formula
           run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
-      - name: Validate Formula syntax on validation runs
-        if: github.event_name != 'push'
+      - name: Download the local native archive for manual validation
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-${{ matrix.platform }}-${{ github.run_id }}
+          path: formula-native
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Validate Formula syntax on pull requests
+        if: github.event_name == 'pull_request'
         run: |
           formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
           [[ -n "$formula_file" ]] || { echo "no channel-specific Formula was downloaded" >&2; exit 1; }
           ruby -c "$formula_file"
       - name: Install, exercise, reinstall, and uninstall Formula
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           formula_file="$(find formula -maxdepth 1 -type f \( -name 'herdr-world.rb' -o -name 'herdr-world-rc.rb' \) -print -quit)"
@@ -726,7 +734,36 @@ jobs:
           mkdir -p "$tap_root/Formula"
           cp "$formula_file" "$tap_root/Formula/${formula_name}.rb"
           qualified_formula="$tap_name/$formula_name"
-          brew audit --strict --online "$qualified_formula"
+          other_formula="herdr-world-rc"
+          [[ "$formula_name" == "herdr-world-rc" ]] && other_formula="herdr-world"
+          audit_args=()
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            audit_args+=(--online)
+          fi
+          if [[ ! -f "$tap_root/Formula/${other_formula}.rb" ]]; then
+            # The first channel cannot resolve its declared peer until that peer is published.
+            audit_args+=(--except=conflicts)
+          fi
+          brew audit "${audit_args[@]}" "$qualified_formula"
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            archive="$(find formula-native -maxdepth 1 -type f -name 'herdr-world-*.tar.gz' -print -quit)"
+            [[ -n "$archive" ]] || { echo "no native archive was downloaded for manual Formula validation" >&2; exit 1; }
+            archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
+            FORMULA_ARCHIVE_URL="file://${archive}" FORMULA_PLATFORM="${{ matrix.platform }}" \
+              node --input-type=module - "$tap_root/Formula/${formula_name}.rb" <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const formulaPath = process.argv[2];
+          const platform = process.env.FORMULA_PLATFORM;
+          const pattern = new RegExp(`https://github\\.com/IvoryHeart/herdr-world/releases/download/[^\"]+/herdr-world-[^\"]+-${platform}\\.tar\\.gz`);
+          const formula = readFileSync(formulaPath, 'utf8');
+          const localFormula = formula.replace(pattern, process.env.FORMULA_ARCHIVE_URL);
+          if (localFormula === formula) {
+            console.error(`could not select the ${platform} archive URL for manual Formula validation`);
+            process.exit(1);
+          }
+          writeFileSync(formulaPath, localFormula);
+          NODE
+          fi
           brew install --formula "$qualified_formula"
           brew test "$qualified_formula"
           brew reinstall --formula "$qualified_formula"
