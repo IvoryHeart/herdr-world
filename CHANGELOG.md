@@ -17,7 +17,8 @@
 ### Fixed
 
 - Fixed RC npm publication to pass the downloaded package tarball as an explicit filesystem path.
-  [Herdr World PR #39](https://github.com/IvoryHeart/herdr-world/pull/39)
+  [Herdr World PR #39](https://github.com/IvoryHeart/herdr-world/pull/39); release correction:
+  [Herdr World PR #40](https://github.com/IvoryHeart/herdr-world/pull/40)
 
 ## [0.1.0-rc.6] - 2026-08-29
 
