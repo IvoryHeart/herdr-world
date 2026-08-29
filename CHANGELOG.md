@@ -6,6 +6,16 @@
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.0-rc.9] - 2026-08-29
+
+### Added
+
 - Added a Herdr-native startup hook that starts the plugin bridge on the next Herdr server restore,
   with documented install, crash-restart, and port-conflict behavior.
   [Herdr World PR #41](https://github.com/IvoryHeart/herdr-world/pull/41)
@@ -23,10 +33,6 @@
   [Herdr World PR #44](https://github.com/IvoryHeart/herdr-world/pull/44)
 - Renamed the user-facing archive tab to `CLI` while keeping archive details in the CLI panel.
   [Herdr World PR #45](https://github.com/IvoryHeart/herdr-world/pull/45)
-
-### Fixed
-
-### Removed
 
 ## [0.1.0-rc.8] - 2026-08-29
 
