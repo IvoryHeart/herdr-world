@@ -117,17 +117,18 @@ test("switches site install channels when moving from an RC to stable", () => {
     writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
     writeFileSync(
       join(root, "site", "index.html"),
-      "v1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+      "v1.2.3-rc.1 @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
     );
     writeFileSync(
       join(root, "site", "site.js"),
-      "v1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+      "v1.2.3-rc.1 @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
     );
 
     stampCurrentRelease("v1.2.3", root);
 
     for (const relativePath of ["site/index.html", "site/site.js"]) {
       const contents = readFileSync(join(root, relativePath), "utf8");
+      assert.match(contents, /@1\.2\.3/);
       assert.match(contents, /@latest/);
       assert.match(contents, /tap\/herdr-world/);
       assert.match(contents, /upgrade herdr-world/);

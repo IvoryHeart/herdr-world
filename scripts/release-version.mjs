@@ -128,6 +128,10 @@ export function stampCurrentRelease(
       updated = updated
         .replaceAll(`@${npmDistributionTag(current)}`, `@${npmDistributionTag(newTag)}`)
         .replaceAll(
+          `@${releaseVersion(current)}`,
+          `@${releaseVersion(newTag)}`,
+        )
+        .replaceAll(
           `tap/${homebrewFormulaName(current)}`,
           `tap/${homebrewFormulaName(newTag)}`,
         )
