@@ -10,6 +10,10 @@
 
 ### Fixed
 
+- Allowed npm release publication to wait for publish-time malware scanning before verifying the
+  immutable version, integrity, and channel pointer.
+  [Herdr World PR #34](https://github.com/IvoryHeart/herdr-world/pull/34)
+
 ### Removed
 
 ## [0.1.0-rc.5] - 2026-08-29
