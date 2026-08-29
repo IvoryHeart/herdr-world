@@ -12,6 +12,14 @@
 
 ### Removed
 
+## [0.1.0-rc.10] - 2026-08-29
+
+### Fixed
+
+- Accepted GitHub's squash-merge suffix on protected release commit subjects so the release
+  provenance gate matches the repository's PR merge strategy.
+  [Herdr World PR #47](https://github.com/IvoryHeart/herdr-world/pull/47)
+
 ## [0.1.0-rc.9] - 2026-08-29
 
 ### Added
