@@ -18,6 +18,8 @@
 - Kept the primary install tabs to the two commands users need and moved archive and lifecycle
   commands into a collapsed advanced CLI section.
   [Herdr World PR #43](https://github.com/IvoryHeart/herdr-world/pull/43)
+- Split the installation card into npm, Homebrew, Herdr plugin, and CLI archive tabs, with
+  method-specific advanced instructions and preview/stable channel guidance.
 
 ### Fixed
 

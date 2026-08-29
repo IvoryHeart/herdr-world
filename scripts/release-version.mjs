@@ -45,6 +45,14 @@ export function releaseVersion(value) {
   return parseReleaseTag(value).tag.slice(1);
 }
 
+export function npmDistributionTag(value) {
+  return parseReleaseTag(value).rc === null ? "latest" : "next";
+}
+
+export function homebrewFormulaName(value) {
+  return parseReleaseTag(value).rc === null ? "herdr-world" : "herdr-world-rc";
+}
+
 export function compareReleaseTags(left, right) {
   const a = parseReleaseTag(left);
   const b = parseReleaseTag(right);
@@ -115,7 +123,23 @@ export function stampCurrentRelease(
     const contents = readFileSync(path, "utf8");
     const oldReference = relativePath === "herdr-plugin.toml" ? releaseVersion(current) : current;
     const newReference = relativePath === "herdr-plugin.toml" ? releaseVersion(newTag) : newTag;
-    const updated = contents.replaceAll(oldReference, newReference);
+    let updated = contents.replaceAll(oldReference, newReference);
+    if (relativePath === "site/index.html" || relativePath === "site/site.js") {
+      updated = updated
+        .replaceAll(`@${npmDistributionTag(current)}`, `@${npmDistributionTag(newTag)}`)
+        .replaceAll(
+          `tap/${homebrewFormulaName(current)}`,
+          `tap/${homebrewFormulaName(newTag)}`,
+        )
+        .replaceAll(
+          `upgrade ${homebrewFormulaName(current)}`,
+          `upgrade ${homebrewFormulaName(newTag)}`,
+        )
+        .replaceAll(
+          `uninstall ${homebrewFormulaName(current)}`,
+          `uninstall ${homebrewFormulaName(newTag)}`,
+        );
+    }
     if (updated === contents || updated.includes(oldReference)) {
       throw new Error(`could not replace every ${oldReference} reference in ${relativePath}`);
     }
