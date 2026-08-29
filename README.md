@@ -238,12 +238,32 @@ reverse proxy; Host and Origin checks are not authentication. Stopping the
 plugin bridge disconnects browser clients but does not stop Herdr or its panes.
 
 The plugin has no uninstall cleanup hook. Stop the bridge before removing the
-managed plugin checkout:
+managed plugin checkout. Plugin action invocation is asynchronous and target-
+scoped, so repeat the stop-and-status sequence for every Herdr target or named
+session that has a managed bridge. Wait for each action's `log_id` to report
+`status: succeeded`; a returned `status: running` only means that Herdr queued
+the action.
 
 ```bash
+# For the current/default target:
 herdr plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr plugin action invoke status --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+
+# Repeat the same four commands for every named target, replacing NAME:
+herdr --session NAME plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
+herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
+
+# Only after every stop/status action reports succeeded and the target is not running:
 herdr plugin uninstall ivoryheart.herdr-world
 ```
+
+Run the `log list` command again until the corresponding action's `log_id` has
+`status: succeeded`; for `status`, also confirm its output says the bridge is
+not running. Then uninstall the plugin.
 
 The plugin is separate from the standalone npm package, Homebrew Formula,
 desktop tarball, and Android companion distribution. See [docs/packaging.md](docs/packaging.md)

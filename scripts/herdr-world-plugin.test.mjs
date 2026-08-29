@@ -310,7 +310,12 @@ test("documents and tests the explicit stop-before-uninstall contract", () => {
   const smoke = readFileSync(path.join(ROOT, "scripts/live-plugin-smoke.sh"), "utf8");
   assert.match(readme, /herdr plugin action invoke stop --plugin ivoryheart\.herdr-world/);
   assert.match(readme, /herdr plugin uninstall ivoryheart\.herdr-world/);
+  assert.match(readme, /asynchronous and target-\s*scoped/);
+  assert.match(readme, /every Herdr target or named\s*session/);
+  assert.match(readme, /status: succeeded/);
+  assert.match(readme, /herdr --session NAME plugin action invoke stop/);
   assert.match(packaging, /stop the plugin bridge before uninstalling the plugin/);
+  assert.match(packaging, /actions are asynchronous and target-scoped/);
   assert.ok(smoke.indexOf("invoke_default stop") < smoke.indexOf('plugin uninstall "$PLUGIN_ID"'));
   assert.match(smoke, /no uninstall hook/);
 });

@@ -37,9 +37,12 @@ The plugin's config and service state live in Herdr's injected per-user plugin d
 the repository checkout or release archives. It uses the invoking `HERDR_SOCKET_PATH` by default,
 binds loopback port `8787`, and allocates named-session bridges from `8787`–`8877`. Its packaged
 static assets are fixed to the npm payload; only the upload directory is configurable. The plugin
-has no uninstall cleanup hook, so stop the plugin bridge before uninstalling the plugin. Stopping
-the bridge disconnects browser clients but does not stop Herdr or its panes. The plugin and the
-standalone distributions below are independent install paths.
+has no uninstall cleanup hook, so stop the plugin bridge before uninstalling the plugin. Plugin
+actions are asynchronous and target-scoped: wait for each stop action's log to report success,
+then run and wait for a successful status action showing that target is not running. Repeat this
+for every managed Herdr session before uninstalling. Stopping the bridge disconnects browser
+clients but does not stop Herdr or its panes. The plugin and the standalone distributions below are
+independent install paths.
 
 ## Release Artifacts
 
