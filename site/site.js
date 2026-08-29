@@ -6,6 +6,13 @@ herdr-world`,
 herdr-world`,
   herdr: `herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.8
 herdr plugin action invoke open --plugin ivoryheart.herdr-world`,
+  cli: `VERSION=v0.1.0-rc.8
+PLATFORM=linux-x86_64
+curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-\${PLATFORM}.tar.gz"
+curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-\${PLATFORM}.tar.gz.sha256"
+tar -xzf "herdr-world-\${VERSION}-\${PLATFORM}.tar.gz"
+cd "herdr-world-\${VERSION}-\${PLATFORM}"
+bin/herdr-world`,
 };
 
 const installTabs = [...document.querySelectorAll("[data-install-tab]")];

@@ -122,9 +122,9 @@
       <section class="install" id="install" aria-labelledby="install-title">
         <div class="section-index" aria-hidden="true">02 / ENTER</div>
         <div class="install-heading">
-          <p class="eyebrow">Three ways in</p>
+          <p class="eyebrow">Four ways in</p>
           <h2 id="install-title">Choose your<br /><em>path.</em></h2>
-          <p>Use npm or Homebrew for the standalone <code>herdr-world</code> command, or let Herdr manage the bridge as a native plugin. The Herdr route keeps its runtime inside Herdr’s plugin system and never writes a new command into your shell. The macOS previews are currently unsigned.</p>
+          <p>Use npm, Homebrew, or a manual archive for the standalone <code>herdr-world</code> command, or let Herdr manage the bridge as a native plugin. The Herdr route keeps its runtime inside Herdr’s plugin system and never writes a new command into your shell. The macOS previews are currently unsigned.</p>
           <a href="https://github.com/IvoryHeart/herdr-world#requirements">Read requirements ↗</a>
           <div class="plugin-note">
             <p class="eyebrow">Herdr plugin / native lifecycle</p>
@@ -143,6 +143,7 @@
             <button class="install-tab" type="button" role="tab" id="install-tab-npm" aria-controls="install-panel-npm" aria-selected="true" tabindex="0" data-install-tab="npm">npm</button>
             <button class="install-tab" type="button" role="tab" id="install-tab-brew" aria-controls="install-panel-brew" aria-selected="false" tabindex="-1" data-install-tab="brew">Homebrew</button>
             <button class="install-tab" type="button" role="tab" id="install-tab-herdr" aria-controls="install-panel-herdr" aria-selected="false" tabindex="-1" data-install-tab="herdr">Herdr plugin</button>
+            <button class="install-tab" type="button" role="tab" id="install-tab-cli" aria-controls="install-panel-cli" aria-selected="false" tabindex="-1" data-install-tab="cli">CLI archive</button>
           </div>
 
           <section class="install-panel" id="install-panel-npm" role="tabpanel" aria-labelledby="install-tab-npm" data-install-panel="npm">
@@ -150,46 +151,76 @@
             <pre tabindex="0" aria-label="npm installation commands"><code data-install-command="npm"><span class="prompt">$</span> npm install --global @ivoryheart/herdr-world@next
 <span class="prompt">$</span> herdr-world</code></pre>
             <p class="install-panel-note">The npm package includes the tested Linux x64, macOS ARM64, and macOS Intel bridges.</p>
+            <details class="install-advanced">
+              <summary>Advanced npm options</summary>
+              <div class="install-advanced-content">
+                <p class="install-panel-label">Pin a version or choose a session</p>
+                <pre tabindex="0" aria-label="Advanced npm commands"><code><span class="prompt">$</span> npm install --global @ivoryheart/herdr-world@0.1.0-rc.8
+<span class="prompt">$</span> herdr-world --session NAME
+<span class="prompt">$</span> herdr-world --port 8791</code></pre>
+                <p class="install-panel-note">Release candidates use npm’s <code>next</code> channel. Stable releases use <code>latest</code>; pin an exact version when you need a fixed build.</p>
+              </div>
+            </details>
           </section>
 
           <section class="install-panel" id="install-panel-brew" role="tabpanel" aria-labelledby="install-tab-brew" data-install-panel="brew" hidden>
             <p class="install-panel-label">Standalone / macOS or Linux</p>
             <pre tabindex="0" aria-label="Homebrew installation commands"><code data-install-command="brew"><span class="prompt">$</span> brew install IvoryHeart/tap/herdr-world-rc
 <span class="prompt">$</span> herdr-world</code></pre>
-            <p class="install-panel-note">For a stable release, use <code>IvoryHeart/tap/herdr-world</code>. Stable and RC Formulae cannot be installed together.</p>
+            <p class="install-panel-note">This preview Formula exposes the same <code>herdr-world</code> command as the stable Formula.</p>
+            <details class="install-advanced">
+              <summary>Advanced Homebrew options</summary>
+              <div class="install-advanced-content">
+                <p class="install-panel-label">Preview and stable channels</p>
+                <pre tabindex="0" aria-label="Advanced Homebrew commands"><code><span class="prompt">$</span> brew update
+<span class="prompt">$</span> brew upgrade IvoryHeart/tap/herdr-world-rc
+<span class="prompt">$</span> brew uninstall herdr-world-rc</code></pre>
+                <p class="install-panel-note">RCs use <code>herdr-world-rc</code>; stable releases use <code>herdr-world</code>. The Formulae conflict because both provide the same command, so they cannot be installed together.</p>
+              </div>
+            </details>
           </section>
 
           <section class="install-panel" id="install-panel-herdr" role="tabpanel" aria-labelledby="install-tab-herdr" data-install-panel="herdr" hidden>
             <p class="install-panel-label">Herdr-managed / Herdr 0.8.2+</p>
             <pre tabindex="0" aria-label="Herdr plugin installation commands"><code data-install-command="herdr"><span class="prompt">$</span> herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.8
 <span class="prompt">$</span> herdr plugin action invoke open --plugin ivoryheart.herdr-world</code></pre>
-            <p class="install-panel-note">Install registers and builds the plugin. The startup hook starts the bridge on the next Herdr server restore; <code>open</code> starts it now and requests the browser. Herdr itself is never installed or started by the plugin.</p>
+            <p class="install-panel-note">Install registers and builds the plugin. The <code>open</code> action starts the bridge for an already-running Herdr server.</p>
+            <details class="install-advanced">
+              <summary>Herdr plugin lifecycle</summary>
+              <div class="install-advanced-content">
+                <p class="install-panel-label">Herdr manages the bridge</p>
+                <pre tabindex="0" aria-label="Herdr plugin lifecycle commands"><code><span class="comment"># Inspect or control the installed plugin:</span>
+<span class="prompt">$</span> herdr plugin action invoke status --plugin ivoryheart.herdr-world
+<span class="prompt">$</span> herdr plugin action invoke doctor --plugin ivoryheart.herdr-world
+<span class="prompt">$</span> herdr plugin action invoke restart --plugin ivoryheart.herdr-world
+<span class="prompt">$</span> herdr plugin action invoke stop --plugin ivoryheart.herdr-world</code></pre>
+                <p class="install-panel-note">The startup hook starts the bridge on the next Herdr server restore. It never installs or starts Herdr, and it does not add a <code>herdr-world</code> shell command. Stop the bridge before uninstalling the plugin.</p>
+              </div>
+            </details>
           </section>
 
-          <details class="cli-note">
-            <summary>CLI / advanced installation and lifecycle</summary>
-            <div class="cli-note-content">
-              <p class="install-panel-label">Manual release archive / Linux x86-64</p>
-              <pre tabindex="0" aria-label="CLI archive installation commands"><code data-cli-command>VERSION=v0.1.0-rc.8
-<span class="prompt">$</span> curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz"
-<span class="prompt">$</span> curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
-<span class="prompt">$</span> sha256sum --check "herdr-world-${VERSION}-linux-x86_64.tar.gz.sha256"
-<span class="prompt">$</span> tar -xzf "herdr-world-${VERSION}-linux-x86_64.tar.gz"
-<span class="prompt">$</span> cd "herdr-world-${VERSION}-linux-x86_64"
+          <section class="install-panel" id="install-panel-cli" role="tabpanel" aria-labelledby="install-tab-cli" data-install-panel="cli" hidden>
+            <p class="install-panel-label">Manual release archive / Linux x86-64, macOS ARM64, or macOS Intel</p>
+            <pre tabindex="0" aria-label="CLI archive installation commands"><code data-install-command="cli">VERSION=v0.1.0-rc.8
+PLATFORM=linux-x86_64 # or macos-arm64 / macos-x86_64
+<span class="prompt">$</span> curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz"
+<span class="prompt">$</span> curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
+<span class="prompt">$</span> tar -xzf "herdr-world-${VERSION}-${PLATFORM}.tar.gz"
+<span class="prompt">$</span> cd "herdr-world-${VERSION}-${PLATFORM}"
 <span class="prompt">$</span> bin/herdr-world</code></pre>
+            <p class="install-panel-note">Use <code>sha256sum --check</code> on Linux or <code>shasum -a 256 --check</code> on macOS before extracting. <a href="https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.8">Download the current release candidate ↗</a></p>
+            <details class="install-advanced">
+              <summary>Advanced CLI options</summary>
+              <div class="install-advanced-content">
+                <p class="install-panel-label">Runtime options</p>
+                <pre tabindex="0" aria-label="Advanced CLI commands"><code><span class="prompt">$</span> bin/herdr-world --help
+<span class="prompt">$</span> bin/herdr-world --session NAME
+<span class="prompt">$</span> bin/herdr-world --port 8791</code></pre>
+                <p class="install-panel-note">The archive launcher can guide an interactive Herdr setup when no compatible default session is available. Use <code>--no-herdr-setup</code> for a non-interactive launch.</p>
+              </div>
+            </details>
+          </section>
 
-              <p class="install-panel-label cli-runtime-label">Runtime and Herdr plugin commands</p>
-              <pre tabindex="0" aria-label="Herdr World CLI runtime commands"><code><span class="prompt">$</span> herdr-world --help
-<span class="prompt">$</span> herdr-world --port 8791
-
-<span class="comment"># Herdr plugin users:</span>
-<span class="prompt">$</span> herdr plugin action invoke status --plugin ivoryheart.herdr-world
-<span class="prompt">$</span> herdr plugin action invoke doctor --plugin ivoryheart.herdr-world</code></pre>
-              <p class="install-panel-note">The Herdr plugin intentionally uses Herdr’s action menu and CLI namespace; it does not install a second global <code>herdr-world</code> executable.</p>
-            </div>
-          </details>
-
-          <p class="archive-note">Prefer a manual desktop archive? <a href="https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.8">Download the current release candidate ↗</a></p>
         </div>
       </section>
 

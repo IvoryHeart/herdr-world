@@ -9,6 +9,8 @@ import {
   assertCurrentReleaseReferences,
   compareReleaseTags,
   escapeRegex,
+  homebrewFormulaName,
+  npmDistributionTag,
   normalizeReleaseTag,
   parseReleaseTag,
   releaseVersion,
@@ -47,6 +49,13 @@ test("compares stable and release-candidate precedence", () => {
   assert.equal(compareReleaseTags("v1.2.3-rc.9", "v1.2.3"), -1);
   assert.equal(compareReleaseTags("v1.2.4", "v1.2.3"), 1);
   assert.equal(compareReleaseTags("v1.2.3", "1.2.3"), 0);
+});
+
+test("maps release types to their public install channels", () => {
+  assert.equal(npmDistributionTag("v1.2.3-rc.1"), "next");
+  assert.equal(npmDistributionTag("v1.2.3"), "latest");
+  assert.equal(homebrewFormulaName("v1.2.3-rc.1"), "herdr-world-rc");
+  assert.equal(homebrewFormulaName("v1.2.3"), "herdr-world");
 });
 
 test("escapes release versions for literal changelog matching", () => {
@@ -95,6 +104,36 @@ test("stamps the plugin manifest's intentionally unprefixed version", () => {
     assert.equal(assertCurrentReleaseReferences(root), "v1.2.3-rc.1");
     stampCurrentRelease("v1.2.3-rc.2", root);
     assert.equal(readFileSync(join(root, "herdr-plugin.toml"), "utf8"), 'version = "1.2.3-rc.2"\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("switches site install channels when moving from an RC to stable", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-world-release-channels-"));
+  try {
+    mkdirSync(join(root, "site"));
+    writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
+    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
+    writeFileSync(
+      join(root, "site", "index.html"),
+      "v1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+    );
+    writeFileSync(
+      join(root, "site", "site.js"),
+      "v1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+    );
+
+    stampCurrentRelease("v1.2.3", root);
+
+    for (const relativePath of ["site/index.html", "site/site.js"]) {
+      const contents = readFileSync(join(root, relativePath), "utf8");
+      assert.match(contents, /@latest/);
+      assert.match(contents, /tap\/herdr-world/);
+      assert.match(contents, /upgrade herdr-world/);
+      assert.match(contents, /uninstall herdr-world/);
+      assert.doesNotMatch(contents, /@next|herdr-world-rc/);
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
