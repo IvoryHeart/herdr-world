@@ -17,6 +17,7 @@
 ### Fixed
 
 - Fixed the Herdr plugin doctor check to compare the active Node.js executable with the service record.
+  [Herdr World PR #53](https://github.com/IvoryHeart/herdr-world/pull/53)
 
 ## [0.1.0-rc.11] - 2026-08-29
 
