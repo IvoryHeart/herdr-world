@@ -16,19 +16,24 @@
 ## 1. Purpose
 
 Herdr World currently ships as a downstream browser/mobile application with a
-Rust HTTP/WebSocket bridge. Users must build or unpack that application and
+Rust HTTP/WebSocket bridge. Users must install or unpack that application and
 start the bridge independently of Herdr. This specification defines the
 smallest Herdr plugin integration that makes the existing application
 installable and operable through Herdr's plugin ecosystem without changing its
 browser-first product shape.
 
-The outcome is a public Herdr plugin that builds the existing web assets and
-bridge, starts one bridge service for the invoking Herdr runtime, reports its
-state, and gives the user a URL for the browser or PWA client. The existing
-desktop tarball and Android distribution remain supported products.
+The outcome is a public Herdr plugin that installs the exact version-matched
+`@ivoryheart/herdr-world` npm payload inside its managed checkout, starts one
+bridge service for the invoking Herdr runtime, reports its state, and gives the
+user a URL for the browser or PWA client. The standalone npm, Homebrew, desktop
+tarball, and Android distributions remain supported products.
 
 The companion research and ecosystem record is
 [Herdr plugin release analysis](../analysis/herdr-plugin-release-analysis-2026-08-26.md).
+That analysis predates the approved and implemented
+[automated release distribution contract](017-herdr-world-automated-release-distribution-spec.md);
+its source-build-first packaging recommendation is superseded by this
+specification's npm-payload decision.
 The integration relies on the [Herdr plugin manifest and runtime contract](https://herdr.dev/docs/plugins/),
 the [Herdr socket/CLI API](https://herdr.dev/docs/socket-api/), and the
 [automatic marketplace listing rules](https://herdr.dev/docs/marketplace/).
@@ -40,11 +45,11 @@ This feature includes:
 - a root-level `herdr-plugin.toml` in this repository;
 - plugin metadata for `ivoryheart.herdr-world`, versioned with the application
   release version and requiring Herdr `0.8.2` or newer;
-- Linux and macOS plugin support, matching the currently tested desktop
-  release platforms;
+- Linux x86-64 with glibc `2.34` or newer, macOS ARM64, and macOS x86-64 plugin
+  support, matching the published npm payload matrix;
 - a plugin controller at `scripts/herdr-world-plugin.sh`;
-- an install-time source build using the repository's existing web and Cargo
-  dependency trees;
+- install-time acquisition of the exact release-matched
+  `@ivoryheart/herdr-world` npm payload into a private plugin-local prefix;
 - lifecycle and diagnostic actions for starting, stopping, restarting,
   inspecting, opening, and diagnosing the bridge;
 - service state and editable configuration stored outside the managed plugin
@@ -54,8 +59,8 @@ This feature includes:
 - loopback-safe defaults, explicit remote-access configuration, readiness
   probing, and actionable diagnostics;
 - automated controller tests and manual Herdr plugin install/link smoke tests;
-- release validation that keeps the manifest version aligned with the tagged
-  application release; and
+- release validation that keeps the manifest, tagged application release, and
+  npm payload versions aligned and validates the plugin after npm publication;
 - documentation for installation, configuration, actions, upgrades,
   uninstall, security, and the relationship to the existing tarballs and
   Android client.
@@ -75,8 +80,11 @@ This feature includes:
   that connects to a configured bridge.
 - Removing or changing the desktop tarball launcher, its consent-based Herdr
   setup behavior, or its documented artifact layout.
-- Shipping a separate binary-download plugin repository in the first
-  implementation tranche.
+- Shipping a separate plugin repository or downloading desktop archives from a
+  plugin-specific installer.
+- Rebuilding the web application or native bridge during plugin installation.
+- Using a global npm or Homebrew installation as the plugin runtime, or making
+  Homebrew a plugin prerequisite.
 - Supporting Windows before the bridge controller and service lifecycle are
   implemented and tested on that platform.
 - Adding plugin-owned credentials, authentication, or a claim that Host,
@@ -117,14 +125,33 @@ browser reload, or Herdr server handoff.
 ### Release and repository constraints
 
 The repository's public application release tag is the source of truth. Root
-and web npm package versions remain `0.0.0` because this repository does not
-publish npm packages. The release helper currently stamps `release.json`,
-README, and Pages references, so plugin version stamping must be added as an
-explicit release concern rather than inferred from npm metadata.
+and web development manifests remain private at version `0.0.0`; the release
+workflow generates and publishes the separate public
+`@ivoryheart/herdr-world` package at the release version. Plugin version
+stamping remains an explicit release concern and SHALL agree with that
+generated package rather than either private development manifest.
 
-The current desktop tarball builds the same web assets and bridge but does not
-include Herdr. Plugin installation likewise requires a compatible Herdr
-installation and local toolchains for the initial source-build path.
+Release `v0.1.0-rc.5` established the distribution baseline: the
+[exact npm package](https://www.npmjs.com/package/@ivoryheart/herdr-world/v/0.1.0-rc.5)
+is public with `next` pointing to `0.1.0-rc.5`, the
+[Homebrew RC Formula](https://github.com/IvoryHeart/homebrew-tap/blob/main/Formula/herdr-world-rc.rb)
+is published and validated, and the
+[GitHub release](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.5)
+contains all three desktop archives and checksums. RC5 is implementation and
+validation evidence, not a permanently fixed plugin version.
+
+Herdr installs marketplace plugins from GitHub and runs their `[[build]]`
+commands; it does not install Herdr plugins directly from npm. The root
+manifest and controller therefore remain in this repository while the
+version-matched npm package supplies the prebuilt application payload. The
+package already contains the verified web assets, legal payload, and bridges
+for Linux x86-64, macOS ARM64, and macOS x86-64. Plugin installation requires
+Node.js `22.14.0` or newer and npm, but it SHALL NOT require Rust, Cargo, a
+native compiler, or the web development dependency tree.
+
+Herdr's manifest platform field distinguishes operating systems but not CPU or
+Linux libc. The controller SHALL enforce the narrower published payload matrix
+before creating a service.
 
 ## 5. Requirements
 
@@ -163,44 +190,60 @@ initial release.
 - **THEN** Herdr refuses the plugin using its normal minimum-version error
   before any plugin build or runtime action executes.
 
-### Requirement: Build the existing application from the plugin checkout
+### Requirement: Install the exact released application payload
 
-The `build` controller action SHALL build the web distribution and release
-bridge from the plugin checkout using the repository's existing lockfiles and
-targets. It SHALL perform the equivalent of:
+The `build` controller action SHALL read the plugin version from the root
+manifest and install exactly
+`@ivoryheart/herdr-world@<manifest-version>` into the deterministic private
+prefix `.herdr-world-plugin/` under the managed plugin checkout. It SHALL use
+the equivalent of:
 
 ```text
-npm ci --prefix web
-npm run build:web
-cargo build --release --manifest-path bridge/Cargo.toml --bin herdr-web-bridge
+npm install --prefix .herdr-world-plugin --ignore-scripts --no-save \
+  --package-lock=false --no-audit --no-fund --omit=dev \
+  @ivoryheart/herdr-world@<manifest-version>
 ```
 
-The build SHALL fail closed if Node.js, npm, Rust, Cargo, lockfiles, or a
-required dependency is unavailable. It SHALL not download or install a
-toolchain on the user's behalf. The resulting paths SHALL be deterministic:
+The build SHALL use an exact version, never an npm dist-tag, `npx`, a global
+installation, or a package selected from the ambient `PATH`. It SHALL disable
+package lifecycle scripts and SHALL NOT run a web build, Cargo, a native
+compiler, an installer embedded in another distribution, or Herdr onboarding.
 
-- web assets: `web/dist/`;
-- bridge binary: `bridge/target/release/herdr-web-bridge`.
+Before installation the build SHALL fail closed unless Node.js `22.14.0` or
+newer and npm are available and the current OS, architecture, and Linux libc
+are supported. After installation it SHALL verify the installed package name
+and version, the private `node_modules/.bin/herdr-world` entrypoint, packaged
+web assets, selected native bridge, and required legal payload. A missing
+registry version, engine mismatch, unsupported target, package mismatch, or
+incomplete payload SHALL abort installation before Herdr registers the plugin.
 
-The source-build path SHALL preserve the repository's existing legal asset
-staging and dependency-notice expectations. It SHALL not modify generated
-outputs outside the plugin checkout's normal build directories.
+The resulting package root and executable SHALL be deterministic:
 
-#### Scenario: A GitHub installation builds successfully
+- package root:
+  `.herdr-world-plugin/node_modules/@ivoryheart/herdr-world/`;
+- executable: `.herdr-world-plugin/node_modules/.bin/herdr-world`.
 
-- **GIVEN** a clean checkout, Node.js 22 or newer, npm, Rust stable, and a
-  compatible Herdr installation
+Generated package files SHALL remain inside `.herdr-world-plugin/` and SHALL
+not be committed. npm's registry integrity verification and the release
+workflow's recorded package integrity remain authoritative for the payload.
+
+#### Scenario: A GitHub installation acquires the package successfully
+
+- **GIVEN** a clean checkout, Node.js `22.14.0` or newer, npm, a supported
+  target, the exact manifest-version package published on npm, and a compatible
+  Herdr installation
 - **WHEN** Herdr runs the manifest build command during `plugin install`
-- **THEN** the web assets and release bridge are produced at the documented
-  paths and the plugin is registered only after the build succeeds.
+- **THEN** the exact prebuilt payload is installed and validated at the
+  documented private paths, no source or native build runs, and the plugin is
+  registered only after installation succeeds.
 
 #### Scenario: Local linking is used
 
-- **GIVEN** a linked checkout with no prebuilt web assets or release bridge
+- **GIVEN** a linked checkout with no private npm payload
 - **WHEN** the user invokes an action
 - **THEN** the controller prints that local linking does not run manifest build
-  commands and provides the exact build command; it does not silently run a
-  partial or debug build.
+  commands and provides the exact payload-install command; it does not use a
+  global package, a dist-tag, or silently build from source.
 
 ### Requirement: Start one bridge for one Herdr runtime
 
@@ -208,7 +251,8 @@ The `start` action SHALL:
 
 1. Resolve the target socket from the invocation's `HERDR_SOCKET_PATH`, unless
    the user has explicitly configured a named session or socket target.
-2. Use the release bridge and `web/dist` from the plugin checkout.
+2. Use only the exact private npm payload installed for the manifest version;
+   it SHALL not resolve `herdr-world` from the ambient `PATH`.
 3. Bind to `127.0.0.1` by default on port `8787` for the default profile.
 4. Allocate or validate a distinct port for another concurrently managed
    runtime; it SHALL never attach a second bridge to the same service record.
@@ -224,6 +268,13 @@ The `start` action SHALL:
    and web compatibility before reporting success.
 10. Print the bridge URL, target session, bridge/Herdr compatibility, and
     whether the endpoint is loopback-only or remotely exposed.
+
+The controller SHALL supervise the package's foreground `herdr-world`
+entrypoint with Herdr onboarding explicitly disabled. The package entrypoint
+remains responsible for selecting its verified native bridge and bundled web
+assets. The controller SHALL pass the selected Herdr target and all bridge
+security options explicitly and SHALL reject a missing or version-mismatched
+private payload before creating supervisor state.
 
 The controller SHALL be idempotent. If a healthy matching service already
 exists, `start` SHALL report it and return success without spawning another
@@ -266,7 +317,7 @@ The controller SHALL implement these action behaviors:
 | `restart` | Stop and start the selected service, then verify readiness. |
 | `status` | Report service ownership, target, pid/supervisor state, endpoint, and capability state without starting anything. |
 | `open` | Ensure the service is ready, print the URL, and request the platform default browser when one is available; remain usable on headless hosts. |
-| `doctor` | Run non-destructive checks for platform, tools, Herdr target, build outputs, config, state, service ownership, port, and capability compatibility. |
+| `doctor` | Run non-destructive checks for platform, tools, Herdr target, private payload, config, state, service ownership, port, and capability compatibility. |
 
 Action output SHALL be human-readable by default and SHALL never print
 credentials, full socket contents, or arbitrary environment values. Failures
@@ -300,9 +351,12 @@ Configuration SHALL support, at minimum:
 
 - bind host, default port or a safe port range;
 - optional explicit Herdr session/socket target;
-- static asset and upload directory overrides only when explicitly needed;
+- an upload directory override only when explicitly needed;
 - allowed hosts/origins for non-loopback use; and
 - optional bridge label.
+
+The packaged static assets SHALL not be replaceable through initial plugin
+configuration; their version must remain paired with the packaged bridge.
 
 The controller SHALL validate ports, paths, session names, hosts, origins, and
 platform values before launching the bridge. It SHALL not write editable
@@ -314,8 +368,8 @@ configuration, credentials, or durable runtime records under
 - **GIVEN** a configured plugin whose GitHub installation is reinstalled
 - **WHEN** Herdr replaces the managed plugin checkout
 - **THEN** the controller retains the user's config/state, detects any service
-  whose executable path changed, and provides a safe restart or migration
-  result rather than silently running deleted code.
+  whose package version or executable path changed, and provides a safe restart
+  or migration result rather than silently running deleted code.
 
 ### Requirement: Preserve bridge security posture
 
@@ -347,14 +401,27 @@ boundary.
 ### Requirement: Align plugin and application release versions
 
 The release process SHALL treat the plugin manifest version as a public
-release reference. Before a release commit is created, validation SHALL prove
-that:
+release reference. Before a release commit is created, static validation SHALL
+prove that:
 
 - the manifest version equals the application release version without `v`;
+- the version is exactly `X.Y.Z` or `X.Y.Z-rc.N`, matching the release identity
+  forms defined by Spec 017;
 - `min_herdr_version` and the advertised platform list are intentional;
 - all declared controller entrypoints exist and are executable;
-- the release tag can install the plugin from GitHub; and
-- no npm package publication is implied.
+- the build controller derives the exact npm package version from the manifest
+  and cannot select a dist-tag or global installation; and
+- the plugin introduces no second release command or independently rebuilt
+  application artifact.
+
+After the release workflow publishes or verifies the exact npm package, its
+plugin job SHALL install the tagged GitHub plugin, exercise the declared
+actions, and include the plugin version, result, and public URL in the common
+release summary. The plugin job SHALL depend on successful npm publication or
+same-version integrity verification; it SHALL not publish, rebuild, or
+substitute an application payload itself. Pull-request and manual validation
+runs MAY use the exact generated npm tarball but SHALL NOT publish or advertise
+the plugin.
 
 The release documentation SHALL explain both installation forms:
 
@@ -363,33 +430,38 @@ herdr plugin install IvoryHeart/herdr-world
 herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
-It SHALL explain that the first release uses source builds, requires Node.js
-22 and Rust, local linking does not run build commands, and reinstalling is
-Herdr v1's refresh mechanism for a GitHub-managed plugin. The repository SHALL
-add the GitHub topic `herdr-plugin` only when the manifest and install flow
-are ready for public discovery.
+It SHALL explain that plugin installation requires Node.js `22.14.0` or newer
+and npm to acquire the exact prebuilt payload, does not require Rust or Cargo,
+and ignores global npm and Homebrew installations. It SHALL also explain that
+local linking does not run build commands and reinstalling is Herdr v1's
+refresh mechanism for a GitHub-managed plugin. The repository SHALL add the
+GitHub topic `herdr-plugin` only when the tagged install flow succeeds against
+the published matching npm package and is ready for public discovery.
 
 #### Scenario: A release version drifts
 
-- **GIVEN** `release.json`, the manifest, or a public release reference names
-  different versions
+- **GIVEN** `release.json`, the manifest, the generated npm package, or another
+  public release reference names different versions
 - **WHEN** release validation runs
 - **THEN** it fails with the mismatched paths and does not create or publish a
   release commit or tag.
 
 ### Requirement: Preserve standalone distributions
 
-The plugin changes SHALL not require the desktop tarball or Android client to
-install the plugin. Existing tarball packaging SHALL continue to use its
-bundled `bin/herdr-world` launcher and `bin/herdr-world-bridge`; plugin
-actions SHALL use the source checkout's `web/dist` and release bridge.
+The plugin SHALL install its own exact npm payload inside the managed checkout.
+It SHALL not require, discover, modify, or remove a global npm package,
+Homebrew Formula, desktop tarball installation, or Android client. Existing
+tarball packaging SHALL continue to use its bundled `bin/herdr-world` launcher
+and `bin/herdr-world-bridge`; plugin actions SHALL use only the private package
+installed for the manifest version.
 
 Documentation SHALL distinguish:
 
 - the Herdr plugin as a lifecycle/install facade;
 - the browser/PWA as the main World client;
 - the Android application as a companion client; and
-- the desktop tarball as an independently usable distribution.
+- npm, Homebrew, and the desktop tarball as independently usable
+  distributions.
 
 #### Scenario: Existing tarball packaging is checked
 
@@ -397,6 +469,14 @@ Documentation SHALL distinguish:
 - **WHEN** the documented desktop packaging check runs
 - **THEN** the tarball still contains its documented files, does not require a
   plugin-managed checkout, and its launcher behavior remains unchanged.
+
+#### Scenario: A standalone installation is present
+
+- **GIVEN** a different Herdr World version is installed globally through npm
+  or Homebrew
+- **WHEN** a plugin action runs
+- **THEN** the controller uses its manifest-matched private payload and leaves
+  the standalone installation unchanged.
 
 ## 6. Data and interface contract
 
@@ -407,10 +487,16 @@ entries. All commands SHALL be argv arrays and SHALL invoke the controller by
 path. The controller SHALL derive the repository root from its own location,
 so its behavior does not depend on Herdr's current working directory.
 
-The manifest version is a SemVer value without the leading release-tag `v`.
+The manifest version is a SemVer value without the leading release-tag `v` and
+SHALL have exactly one of these forms:
+
+```text
+MAJOR.MINOR.PATCH
+MAJOR.MINOR.PATCH-rc.NUMBER
+```
+
 The Git tag and application release metadata retain their existing `v` prefix.
-Prerelease identifiers are allowed and SHALL be copied exactly between the
-release tag and manifest version.
+No other prerelease identifier or build metadata is allowed.
 
 ### Controller invocation contract
 
@@ -424,7 +510,9 @@ Unknown or missing commands SHALL return a usage error without side effects.
 Runtime actions SHALL use `HERDR_BIN_PATH` for calls back into Herdr and SHALL
 honor `HERDR_SOCKET_PATH` as the default target. The controller SHALL not
 assume `herdr` is on `PATH` and SHALL not parse human-oriented Herdr output
-when a stable CLI/socket response is available.
+when a stable CLI/socket response is available. It SHALL resolve the
+application entrypoint only from the deterministic private npm prefix and run
+it with Herdr onboarding disabled.
 
 ### Service record contract
 
@@ -440,21 +528,25 @@ file under `HERDR_PLUGIN_STATE_DIR`. The schema SHALL include at least:
   "host": "127.0.0.1",
   "port": 8787,
   "url": "http://127.0.0.1:8787",
-  "bridge_path": "/managed/checkout/bridge/target/release/herdr-web-bridge",
-  "static_dir": "/managed/checkout/web/dist",
+  "package_name": "@ivoryheart/herdr-world",
+  "package_version": "0.1.0-rc.5",
+  "payload_root": "/managed/checkout/.herdr-world-plugin/node_modules/@ivoryheart/herdr-world",
+  "payload_entrypoint": "/managed/checkout/.herdr-world-plugin/node_modules/.bin/herdr-world",
   "supervisor": "systemd-user|launchd|fallback",
   "service_name": "opaque-owned-service-name",
   "pid": 12345,
-  "application_version": "0.1.0-rc.1",
+  "application_version": "0.1.0-rc.5",
   "herdr_protocol": 20,
   "updated_at": "RFC-3339 timestamp"
 }
 ```
 
-The exact identity derivation, filename, supervisor unit/plist contents, and
-config file format are implementation details, but they SHALL be documented
-and tested. Socket paths and records are local control data; diagnostics must
-redact them when full disclosure is not required.
+The package version shown above is illustrative; every record SHALL contain the
+actual manifest-matched version. The exact identity derivation, filename,
+supervisor unit/plist contents, and config file format are implementation
+details, but they SHALL be documented and tested. Socket paths and records are
+local control data; diagnostics must redact them when full disclosure is not
+required.
 
 ### Readiness contract
 
@@ -466,10 +558,15 @@ or live process without a valid capability response is not readiness.
 ## 7. Privacy and security
 
 - Plugin installation and build commands execute arbitrary repository code as
-  the installing user. README and install documentation SHALL direct users to
-  inspect the manifest and controller before confirming installation.
+  the installing user and acquire a prebuilt native npm payload. README and
+  install documentation SHALL direct users to inspect the manifest,
+  controller, exact npm version, and corresponding release provenance before
+  confirming installation.
 - The marketplace topic and listing are discovery metadata, not a security
   review or endorsement.
+- npm installation SHALL disable lifecycle scripts and remain inside the
+  managed checkout. Runtime actions SHALL neither resolve nor mutate a global
+  package or Homebrew installation.
 - No secret may be placed in the manifest, plugin checkout, service command
   line, or ordinary action output.
 - Config/state directories SHALL be user-scoped and excluded from repository
@@ -492,14 +589,19 @@ evidence:
 
 - manifest parsing/validation tests cover required metadata, action IDs,
   platform fields, version alignment, and missing entrypoints;
+- payload installation tests cover the exact package selector, Node.js floor,
+  supported OS/architecture/libc matrix, disabled lifecycle scripts, private
+  prefix, missing registry version, mismatched package metadata, incomplete
+  payload, and refusal to use dist-tags or global installations;
 - controller tests cover argument validation, config/state paths, atomic
-  records, port allocation, idempotent start, stale ownership, readiness
-  failure, redaction, and security defaults;
+  records, package-version ownership, port allocation, idempotent start, stale
+  ownership, readiness failure, redaction, and security defaults;
 - Linux supervisor behavior is tested with deterministic fakes for
   `systemd --user`, and macOS behavior with deterministic fakes for `launchd`;
 - fallback supervision is tested for bounded shutdown and stale-process
   refusal;
-- release tests cover manifest version stamping and mismatch failure; and
+- release tests cover manifest version stamping, exact npm payload derivation,
+  post-publication plugin job ordering, and mismatch failure; and
 - `git diff --check`, `npm run test:release`, and the repository's normal
   `npm run check` pass when the implementation is complete.
 
@@ -508,8 +610,10 @@ evidence:
 Against a local Herdr `v0.8.2` daemon reporting terminal protocol `20`, the
 implementation SHALL demonstrate:
 
-1. `herdr plugin link` followed by an explicit local build;
-2. GitHub-style installation from a release ref;
+1. `herdr plugin link` followed by explicit installation of the exact private
+   npm payload;
+2. GitHub-style installation from a release ref after the matching npm version
+   is published or verified;
 3. action listing and invocation;
 4. first start, repeated start, status, open, restart, and stop;
 5. browser load through the reported URL;
@@ -518,12 +622,18 @@ implementation SHALL demonstrate:
 7. two browser clients attached to the same bridge;
 8. two distinct Herdr sessions with isolated service records and ports;
 9. incompatible protocol, missing socket, stale process, and port collision
-   failures; and
-10. uninstall/refresh behavior with service cleanup and retained config/state.
+   failures;
+10. uninstall/refresh behavior with service cleanup and retained config/state;
+11. a different globally installed npm or Homebrew version remaining unused
+    and unchanged; and
+12. unsupported architecture, musl or unknown libc, missing Node/npm, missing
+    package version, and package/manifest mismatch failures without a service.
 
 The existing `npm run check:acceptance` and packaged desktop smoke suite remain
-required. Plugin-specific tests may use fakes for supervisors and HTTP probes,
-but the final smoke must use an unmodified compatible Herdr daemon.
+required. The existing npm install tests and Homebrew Formula validation SHALL
+remain green. Plugin-specific tests may use fakes for supervisors and HTTP
+probes, but the final smoke must use an unmodified compatible Herdr daemon and
+the exact published package for the selected release.
 
 ### Marketplace readiness
 
@@ -532,10 +642,11 @@ branch that:
 
 - the root manifest parses with the minimum supported Herdr;
 - a reviewer can inspect every build/runtime command;
-- source-build prerequisites and security posture are documented;
+- npm-payload prerequisites, exact-version behavior, prebuilt-code trust, and
+  security posture are documented;
 - the default branch contains the versioned manifest and controller; and
 - `herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z` succeeds for the
-  tagged release.
+  tagged release using the matching published npm package.
 
 ## 9. Deferred decisions
 
@@ -549,20 +660,20 @@ implementation PR SHALL record its selected value in the delivery summary:
 - whether `open` uses only platform browser helpers or supports an explicit
   `HERDR_WORLD_BROWSER` override;
 - whether `logs` and `url` become separate actions or remain part of `status`
-  and diagnostics;
-- whether the first public plugin release advertises the current prerelease
-  tag or waits for a stable application release; and
-- the later binary-first installer that downloads and checksum-verifies the
-  existing desktop artifacts.
+  and diagnostics; and
+- whether an explicit offline package-cache input is needed after the public
+  registry path is established and measured.
 
 The following are intentionally not deferred: the thin-facade architecture,
-root-repository manifest, plugin ID, source-build-first strategy, loopback
-default, Herdr protocol-20 gate, external config/state ownership, and Linux/
-macOS-only initial platform scope.
+root-repository manifest, plugin ID, exact npm-payload strategy, private
+plugin-local installation, loopback default, Herdr protocol-20 gate, external
+config/state ownership, and the Linux x86-64/glibc 2.34+, macOS ARM64, and
+macOS x86-64 initial target matrix.
 
 ## Related repository documentation
 
 - [Herdr World plugin release analysis](../analysis/herdr-plugin-release-analysis-2026-08-26.md)
+- [Automated release distribution](017-herdr-world-automated-release-distribution-spec.md)
 - [World packaging and upstream boundaries](004-world-packaging-and-upstream-boundaries-spec.md)
 - [Development](../development.md)
 - [Packaging](../packaging.md)
