@@ -887,6 +887,61 @@ jobs:
           echo "url=$url" >> "$GITHUB_OUTPUT"
           echo "npm: $result — $url" >> "$GITHUB_STEP_SUMMARY"
 
+  plugin_smoke:
+    name: Herdr plugin smoke (${{ matrix.platform }})
+    if: >-
+      github.event_name == 'push' && github.ref_type == 'tag' &&
+      needs.npm_publish.result == 'success' &&
+      needs.npm_publish.outputs.publication_result != 'action-required'
+    needs: [npm_publish]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+            herdr_asset: herdr-linux-x86_64
+            herdr_sha256: 976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4
+          - platform: macos-arm64
+            runner: macos-15
+            herdr_asset: herdr-macos-aarch64
+            herdr_sha256: a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574
+          - platform: macos-x86_64
+            runner: macos-15-intel
+            herdr_asset: herdr-macos-x86_64
+            herdr_sha256: ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.14.0
+          package-manager-cache: false
+      - name: Download verified stock Herdr v0.8.2
+        env:
+          HERDR_ASSET: ${{ matrix.herdr_asset }}
+          HERDR_SHA256: ${{ matrix.herdr_sha256 }}
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 3 \
+            "https://github.com/herdrdev/herdr/releases/download/v0.8.2/${HERDR_ASSET}" \
+            --output "${RUNNER_TEMP}/herdr"
+          if command -v sha256sum >/dev/null 2>&1; then
+            actual="$(sha256sum "${RUNNER_TEMP}/herdr" | awk '{print $1}')"
+          else
+            actual="$(shasum -a 256 "${RUNNER_TEMP}/herdr" | awk '{print $1}')"
+          fi
+          [[ "$actual" == "$HERDR_SHA256" ]]
+          chmod +x "${RUNNER_TEMP}/herdr"
+      - name: Install and exercise the tagged Herdr plugin
+        env:
+          HERDR_BIN: ${{ runner.temp }}/herdr
+          VERSION: ${{ github.ref_name }}
+        run: scripts/live-plugin-smoke.sh
+
   homebrew_publish:
     name: Publish Homebrew channel
     if: github.event_name == 'push' && github.ref_type == 'tag'
@@ -925,7 +980,7 @@ jobs:
   publication_summary:
     name: Release publication summary
     if: always() && github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [github_release, npm_publish, homebrew_publish]
+    needs: [github_release, npm_publish, homebrew_publish, plugin_smoke]
     runs-on: ubuntu-24.04
     steps:
       - name: Summarize every channel
@@ -940,7 +995,7 @@ jobs:
             echo "| GitHub | ${VERSION#v} | ${{ needs.github_release.outputs.publication_result || needs.github_release.result }} | ${{ needs.github_release.outputs.publication_url || '—' }} |"
             echo "| npm (${NPM_PACKAGE_NAME}) | ${VERSION#v} | ${{ needs.npm_publish.outputs.publication_result || needs.npm_publish.result }} | ${{ needs.npm_publish.outputs.publication_url || '—' }} |"
             echo "| Homebrew (${HOMEBREW_TAP_REPOSITORY}) | ${VERSION#v} | ${{ needs.homebrew_publish.outputs.publication_result || needs.homebrew_publish.result }} | ${{ needs.homebrew_publish.outputs.publication_url || '—' }} |"
-            echo "| Herdr plugin | — | not enabled; Spec 016 remains a separate release tranche | — |"
+            echo "| Herdr plugin | ${VERSION#v} | ${{ needs.plugin_smoke.result == 'success' && 'validated' || needs.npm_publish.outputs.publication_result == 'action-required' && 'action-required' || needs.plugin_smoke.result }} | https://github.com/IvoryHeart/herdr-world |"
             echo
             echo "Source commit: $GITHUB_SHA"
           } >> "$GITHUB_STEP_SUMMARY"

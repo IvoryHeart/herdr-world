@@ -89,7 +89,8 @@ export function assertCurrentReleaseReferences(root = process.cwd()) {
     (relativePath) => relativePath !== "release.json",
   )) {
     const contents = readFileSync(join(root, relativePath), "utf8");
-    if (!contents.includes(current)) {
+    const expected = relativePath === "herdr-plugin.toml" ? releaseVersion(current) : current;
+    if (!contents.includes(expected)) {
       throw new Error(`${relativePath} does not reference the current release ${current}`);
     }
   }
@@ -112,9 +113,11 @@ export function stampCurrentRelease(
     .map((relativePath) => {
     const path = join(root, relativePath);
     const contents = readFileSync(path, "utf8");
-    const updated = contents.replaceAll(current, newTag);
-    if (updated === contents || updated.includes(current)) {
-      throw new Error(`could not replace every ${current} reference in ${relativePath}`);
+    const oldReference = relativePath === "herdr-plugin.toml" ? releaseVersion(current) : current;
+    const newReference = relativePath === "herdr-plugin.toml" ? releaseVersion(newTag) : newTag;
+    const updated = contents.replaceAll(oldReference, newReference);
+    if (updated === contents || updated.includes(oldReference)) {
+      throw new Error(`could not replace every ${oldReference} reference in ${relativePath}`);
     }
     return { path, updated };
     });

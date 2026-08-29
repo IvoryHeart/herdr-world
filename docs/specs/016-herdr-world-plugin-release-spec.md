@@ -1,12 +1,12 @@
 # Herdr World plugin distribution and lifecycle facade
 
 - **Spec ID:** `016-herdr-world-plugin-release`
-- **Status:** Draft
+- **Status:** Approved
 - **Created:** 2026-08-27
 - **Owner:** IvoryHeart / Herdr World
 - **Reviewers:** IvoryHeart (repository owner)
-- **Approved by:** —
-- **Approved at:** —
+- **Approved by:** IvoryHeart
+- **Approved at:** 2026-08-29
 
 > This document may be edited only while its status is `Draft` or `In review`.
 > After approval it is immutable. After implementation completes, record

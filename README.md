@@ -73,6 +73,9 @@ site/                Dependency-free GitHub Pages project site
 android/             Capacitor Android shell for the bundled web app
 bridge/              Slim Rust HTTP/WebSocket bridge executable
 vendor/herdr-compat/ minimal Herdr protocol/API compatibility crate
+herdr-plugin.toml    Herdr plugin manifest
+scripts/herdr-world-plugin.sh
+scripts/live-plugin-smoke.sh
 scripts/run-bridge.sh
 scripts/check-vendor.sh
 docs/android.md
@@ -187,6 +190,84 @@ bin/herdr-world --host 0.0.0.0 --port 4000 \
 
 See [docs/packaging.md](docs/packaging.md) for release artifact layout and
 [docs/android.md](docs/android.md) for Android behavior.
+
+## Herdr Plugin
+
+The Herdr plugin is a lifecycle facade for the browser client. It installs the
+exact release-matched `@ivoryheart/herdr-world` payload into Herdr's managed
+plugin checkout, then supervises one local bridge for the invoking Herdr
+session. It does not build Rust or web sources, use a global npm/Homebrew
+installation, or host the Android client.
+
+Inspect the manifest and controller before installing a plugin that runs code
+as your user, then install the current default branch:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world
+herdr plugin action invoke start --plugin ivoryheart.herdr-world
+```
+
+To pin a release, use a tag that contains the plugin implementation:
+
+```bash
+herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
+```
+
+Plugin installation and runtime actions require Node.js `22.14.0` or newer
+and npm. Node must remain installed because the supervised bridge runs through
+the package's Node entrypoint. Local linking skips the build command; after
+linking, install the exact payload explicitly with the command printed by:
+
+```bash
+bash scripts/herdr-world-plugin.sh build
+```
+
+The plugin uses loopback `http://127.0.0.1:8787` by default. Its editable JSON
+configuration is outside the managed checkout; find its directory with:
+
+```bash
+herdr plugin config-dir ivoryheart.herdr-world
+```
+
+Set `host`, `port`, `port_range`, `session_name` or `socket_path`,
+`upload_dir`, `allowed_hosts`, `allowed_origins`, `allowed_connect_origins`,
+and `bridge_label` in `config.json` as needed. Named sessions use the first
+free port in `8787`–`8877`. Non-loopback binding requires explicit host and
+origin allow-lists and an operator-managed VPN, SSH forward, or authenticated
+reverse proxy; Host and Origin checks are not authentication. Stopping the
+plugin bridge disconnects browser clients but does not stop Herdr or its panes.
+
+The plugin has no uninstall cleanup hook. Stop the bridge before removing the
+managed plugin checkout. Plugin action invocation is asynchronous and target-
+scoped, so repeat the stop-and-status sequence for every Herdr target or named
+session that has a managed bridge. Wait for each action's `log_id` to report
+`status: succeeded`; a returned `status: running` only means that Herdr queued
+the action.
+
+```bash
+# For the current/default target:
+herdr plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr plugin action invoke status --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+
+# Repeat the same four commands for every named target, replacing NAME:
+herdr --session NAME plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
+herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
+
+# Only after every stop/status action reports succeeded and the target is not running:
+herdr plugin uninstall ivoryheart.herdr-world
+```
+
+Run the `log list` command again until the corresponding action's `log_id` has
+`status: succeeded`; for `status`, also confirm its output says the bridge is
+not running. Then uninstall the plugin.
+
+The plugin is separate from the standalone npm package, Homebrew Formula,
+desktop tarball, and Android companion distribution. See [docs/packaging.md](docs/packaging.md)
+and [docs/release.md](docs/release.md) for their independent workflows.
 
 ## Development Setup
 

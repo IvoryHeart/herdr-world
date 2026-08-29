@@ -82,6 +82,24 @@ test("stamps every public release reference from one source of truth", () => {
   }
 });
 
+test("stamps the plugin manifest's intentionally unprefixed version", () => {
+  const root = mkdtempSync(join(tmpdir(), "herdr-world-release-plugin-"));
+  try {
+    mkdirSync(join(root, "site"));
+    writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
+    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "site", "index.html"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "site", "site.js"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "herdr-plugin.toml"), 'version = "1.2.3-rc.1"\n');
+
+    assert.equal(assertCurrentReleaseReferences(root), "v1.2.3-rc.1");
+    stampCurrentRelease("v1.2.3-rc.2", root);
+    assert.equal(readFileSync(join(root, "herdr-plugin.toml"), "utf8"), 'version = "1.2.3-rc.2"\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("fails closed when a required public surface has drifted", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-world-release-version-"));
   try {

@@ -1,0 +1,45 @@
+id = "ivoryheart.herdr-world"
+name = "Herdr World"
+version = "0.1.0-rc.5"
+min_herdr_version = "0.8.2"
+description = "Browser and mobile client for monitoring and controlling Herdr agents."
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["bash", "scripts/herdr-world-plugin.sh", "build"]
+
+[[actions]]
+id = "start"
+title = "Start Herdr World"
+contexts = ["workspace"]
+command = ["bash", "scripts/herdr-world-plugin.sh", "start"]
+
+[[actions]]
+id = "stop"
+title = "Stop Herdr World"
+contexts = ["workspace"]
+command = ["bash", "scripts/herdr-world-plugin.sh", "stop"]
+
+[[actions]]
+id = "restart"
+title = "Restart Herdr World"
+contexts = ["workspace"]
+command = ["bash", "scripts/herdr-world-plugin.sh", "restart"]
+
+[[actions]]
+id = "status"
+title = "Herdr World Status"
+contexts = ["workspace"]
+command = ["bash", "scripts/herdr-world-plugin.sh", "status"]
+
+[[actions]]
+id = "open"
+title = "Open Herdr World"
+contexts = ["workspace"]
+command = ["bash", "scripts/herdr-world-plugin.sh", "open"]
+
+[[actions]]
+id = "doctor"
+title = "Diagnose Herdr World"
+contexts = ["workspace"]
+command = ["bash", "scripts/herdr-world-plugin.sh", "doctor"]
