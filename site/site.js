@@ -1,4 +1,4 @@
-const installCommand = `VERSION=v0.1.0-rc.7
+const installCommand = `VERSION=v0.1.0-rc.8
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-linux-x86_64.tar.gz"
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-linux-x86_64.tar.gz.sha256"
 sha256sum --check "herdr-world-\${VERSION}-linux-x86_64.tar.gz.sha256"
