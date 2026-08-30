@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -46,6 +48,140 @@ function temporaryDirectory(prefix = "herdr-world-plugin-test-") {
 function executableScript(pathname, body) {
   writeFileSync(pathname, body);
   chmodSync(pathname, 0o755);
+}
+
+async function freePort() {
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  return port;
+}
+
+async function launchdFixture({ real = false } = {}) {
+  const root = temporaryDirectory("herdr-world-launchd-test-");
+  const bin = path.join(root, "bin");
+  const configDir = path.join(root, "config");
+  const stateDir = path.join(root, "state");
+  const packageRoot = path.join(root, ".herdr-world-plugin/node_modules/@ivoryheart/herdr-world");
+  const entrypoint = path.join(root, ".herdr-world-plugin/node_modules/.bin/herdr-world");
+  const socketPath = path.join(root, "herdr.sock");
+  const port = await freePort();
+  mkdirSync(bin, { recursive: true });
+  mkdirSync(configDir, { recursive: true });
+  for (const target of ["macos-arm64", "macos-x64"]) mkdirSync(path.join(packageRoot, `lib/bridges/${target}`), { recursive: true });
+  mkdirSync(path.join(packageRoot, "share/herdr-world/web/legal"), { recursive: true });
+  mkdirSync(path.dirname(entrypoint), { recursive: true });
+  writeFileSync(path.join(root, "herdr-plugin.toml"), readFileSync(path.join(ROOT, "herdr-plugin.toml")));
+  writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ port, port_range: [port, port] }));
+  writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: PACKAGE_NAME, version: MANIFEST_VERSION }));
+  writeFileSync(path.join(packageRoot, "share/herdr-world/web/index.html"), "<title>fixture</title>");
+  writeFileSync(path.join(packageRoot, "share/herdr-world/web/legal/manifest.json"), JSON.stringify({ schema_version: 1, files: [] }));
+  for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md", "UPSTREAM.md"]) writeFileSync(path.join(packageRoot, file), "fixture");
+  for (const target of ["macos-arm64", "macos-x64"]) {
+    executableScript(path.join(packageRoot, `lib/bridges/${target}/herdr-world-bridge`), "#!/bin/sh\nexit 0\n");
+  }
+  executableScript(path.join(packageRoot, "lib/herdr-world-launcher.sh"), "#!/bin/sh\nexit 0\n");
+  executableScript(entrypoint, `#!/usr/bin/env node
+const http = require("node:http");
+const args = process.argv.slice(2);
+const port = Number(args[args.indexOf("--port") + 1]);
+const server = http.createServer((request, response) => {
+  if (request.url === "/api/capabilities") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ bridge_api_version: 1, herdr_version: "0.8.2", terminal_protocol: 20, web_compat: 1 }));
+    return;
+  }
+  response.writeHead(200, { "content-type": "text/html" });
+  response.end("<title>fixture</title>");
+});
+server.listen(port, "127.0.0.1");
+`);
+  const herdr = path.join(bin, "herdr");
+  executableScript(herdr, `#!/usr/bin/env node
+console.log(JSON.stringify({ running: true, status: "running", compatible: true, version: "0.8.2", protocol: 20, socket: process.env.HERDR_SOCKET_PATH }));
+`);
+  const fakeLaunchctl = path.join(bin, "launchctl");
+  const statePath = path.join(bin, "service.pid");
+  const logPath = path.join(bin, "launchctl.log");
+  const commandPath = path.join(bin, "service-command.json");
+  const failPath = path.join(bin, "bootstrap-fails");
+  const cleanupFailPath = path.join(bin, "bootout-fails");
+  executableScript(fakeLaunchctl, `#!/usr/bin/env node
+const { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } = require("node:fs");
+const { spawn } = require("node:child_process");
+const path = require("node:path");
+const bin = path.dirname(path.resolve(process.argv[1]));
+const args = process.argv.slice(2);
+const statePath = path.join(bin, "service.pid");
+const logPath = path.join(bin, "launchctl.log");
+const commandPath = path.join(bin, "service-command.json");
+const failPath = path.join(bin, "bootstrap-fails");
+const cleanupFailPath = path.join(bin, "bootout-fails");
+appendFileSync(logPath, JSON.stringify(args) + "\\n");
+if (args[0] === "print") {
+  const service = args[1]?.split("/").length === 3;
+  if (!service) process.exit(0);
+  if (!existsSync(statePath)) process.exit(1);
+  const pid = readFileSync(statePath, "utf8").trim();
+  process.stdout.write("pid = " + pid + "\\nstate = running\\n");
+  process.exit(0);
+}
+if (args[0] === "bootstrap") {
+  const command = JSON.parse(readFileSync(commandPath, "utf8"));
+  const child = spawn(command[0], command.slice(1), { detached: true, stdio: "ignore" });
+  child.unref();
+  writeFileSync(statePath, String(child.pid));
+  if (existsSync(failPath)) {
+    process.stderr.write("fixture bootstrap failed\\n");
+    process.exit(7);
+  }
+  process.exit(0);
+}
+if (args[0] === "bootout") {
+  if (existsSync(cleanupFailPath)) {
+    process.stderr.write("fixture bootout failed\\n");
+    process.exit(8);
+  }
+  if (existsSync(statePath)) {
+    const pid = Number(readFileSync(statePath, "utf8"));
+    try { process.kill(pid, "SIGTERM"); } catch {}
+    rmSync(statePath, { force: true });
+  }
+  process.exit(0);
+}
+process.exit(0);
+`);
+  writeFileSync(commandPath, JSON.stringify([process.execPath, entrypoint, "--host", "127.0.0.1", "--port", String(port)]));
+  const socketServer = net.createServer();
+  await new Promise((resolve, reject) => {
+    socketServer.once("error", reject);
+    socketServer.listen(socketPath, resolve);
+  });
+  const env = {
+    ...process.env,
+    HERDR_PLUGIN_CONFIG_DIR: configDir,
+    HERDR_PLUGIN_STATE_DIR: stateDir,
+    HERDR_SOCKET_PATH: socketPath,
+    HERDR_BIN_PATH: herdr,
+    HERDR_WORLD_NODE_PATH: process.execPath,
+  };
+  if (!real) env.HERDR_WORLD_LAUNCHCTL = fakeLaunchctl;
+  return {
+    root,
+    port,
+    socketPath,
+    socketServer,
+    stateDir,
+    statePath,
+    logPath,
+    failPath,
+    cleanupFailPath,
+    env,
+  };
 }
 
 test("the checked-in manifest declares the exact plugin contract", () => {
@@ -309,6 +445,91 @@ test("supervisor definitions contain the absolute Node command and safe environm
   assert.match(plist, /<key>HERDR_WORLD_SETUP<\/key><string>never<\/string>/);
 });
 
+test("launchd bootstraps RunAtLoad services once and unloads partial startup", async () => {
+  const fixture = await launchdFixture();
+  const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
+  try {
+    const record = await runAction("start", options);
+    assert.equal(record.supervisor, "launchd");
+    assert.equal(record.port, fixture.port);
+    const commands = readFileSync(fixture.logPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.ok(commands.some((args) => args[0] === "bootstrap"));
+    assert.equal(commands.some((args) => args[0] === "kickstart"), false);
+    assert.ok(commands.some((args) => args[0] === "print" && args[1].split("/").length === 3));
+
+    await runAction("stop", options);
+    assert.equal(fsExists(fixture.statePath), false);
+
+    const bootoutCount = () => readFileSync(fixture.logPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .filter((args) => args[0] === "bootout").length;
+    writeFileSync(fixture.statePath, "999999\n");
+    const beforeExistingStart = bootoutCount();
+    await assert.rejects(runAction("start", options), /launchd service .* already loaded/);
+    assert.equal(fsExists(fixture.statePath), true);
+    assert.equal(bootoutCount(), beforeExistingStart);
+    rmSync(fixture.statePath, { force: true });
+
+    writeFileSync(fixture.failPath, "fixture\n");
+    writeFileSync(fixture.cleanupFailPath, "fixture\n");
+    await assert.rejects(runAction("start", options), /launchctl bootstrap .*fixture bootstrap failed;.*cleanup could not be verified/);
+    assert.equal(fsExists(fixture.statePath), true);
+    const identity = resolveTargetIdentity(validateConfig({}), fixture.env);
+    assert.equal(fsExists(targetRecordPath(fixture.stateDir, identity.identity)), true);
+    rmSync(fixture.cleanupFailPath, { force: true });
+    rmSync(fixture.failPath, { force: true });
+    await runAction("stop", options);
+    assert.equal(fsExists(fixture.statePath), false);
+  } finally {
+    if (fsExists(fixture.statePath)) {
+      const pid = Number(readFileSync(fixture.statePath, "utf8"));
+      try { process.kill(pid, "SIGTERM"); } catch {}
+    }
+    await new Promise((resolve) => fixture.socketServer.close(resolve));
+    rmSync(fixture.socketPath, { force: true });
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+if (process.env.HERDR_WORLD_REAL_LAUNCHD === "1") {
+  test("real macOS launchd starts, restarts, and stops the plugin service", { timeout: 30_000 }, async () => {
+    assert.equal(process.platform, "darwin");
+    const fixture = await launchdFixture({ real: true });
+    const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: process.arch };
+    const identity = resolveTargetIdentity(validateConfig({}), fixture.env);
+    const label = serviceName(identity.identity, "launchd");
+    const serviceTarget = `gui/${process.getuid()}/${label}`;
+    try {
+      const first = await runAction("start", options);
+      assert.equal(first.supervisor, "launchd");
+      assert.equal(first.port, fixture.port);
+
+      const repeated = await runAction("start", options);
+      assert.equal(repeated.service_name, first.service_name);
+
+      const restarted = await runAction("restart", options);
+      assert.equal(restarted.supervisor, "launchd");
+      assert.equal(restarted.port, fixture.port);
+
+      await runAction("stop", options);
+      assert.equal(await runAction("status", options), null);
+    } finally {
+      try { await runAction("stop", options); } catch {}
+      spawnSync("/bin/launchctl", ["bootout", serviceTarget], { stdio: "ignore", timeout: 5_000 });
+      await new Promise((resolve) => fixture.socketServer.close(resolve));
+      rmSync(fixture.socketPath, { force: true });
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+}
+
 test("release workflow gates the three-platform plugin smoke on npm publication", () => {
   const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
   const npmJob = workflow.indexOf("  npm_publish:");
@@ -320,6 +541,14 @@ test("release workflow gates the three-platform plugin smoke on npm publication"
   assert.match(workflow.slice(pluginJob), /platform: macos-arm64/);
   assert.match(workflow.slice(pluginJob), /platform: macos-x86_64/);
   assert.match(workflow, /package_path="\$\{GITHUB_WORKSPACE\}\/npm-output\/herdr-world-\$\{VERSION\}\.tgz"/);
+});
+
+test("PR CI exercises real launchd on both macOS architectures", () => {
+  const workflow = readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  assert.match(workflow, /macos-15/);
+  assert.match(workflow, /macos-15-intel/);
+  assert.match(workflow, /HERDR_WORLD_REAL_LAUNCHD: "1"/);
+  assert.match(workflow, /node --test scripts\/herdr-world-plugin\.test\.mjs/);
 });
 
 test("documents and tests the explicit stop-before-uninstall contract", () => {
