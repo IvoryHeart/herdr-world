@@ -140,9 +140,10 @@ licence inventories, World asset record, and Herdr vendor manifest are present.
 For APKs, inspect the package listing or metadata and verify the bundled
 `public/legal/manifest.json` and every file it names.
 
-The macOS archives are intentionally unsigned and unnotarized until Developer ID credentials are
-available. Release notes and user documentation must retain that limitation. The workflow does not
-attempt to weaken Gatekeeper or modify a user's security policy.
+The macOS archives are intentionally unsigned and unnotarized. Developer ID signing and
+notarization are deferred for the first stable `v0.1.0` release and can be revisited when project
+credentials are available. Release notes and user documentation must retain that limitation. The
+workflow does not attempt to weaken Gatekeeper or modify a user's security policy.
 
 For the desktop installer, verify `./install --install-only` creates versioned user-local files and
 working `herdr-world`/`herdr-world-installer` command links without starting Herdr. Verify the

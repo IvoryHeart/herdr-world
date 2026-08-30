@@ -62,3 +62,8 @@ The app expects these bridge routes:
 Launcher execution belongs to the bridge. The frontend selects a preset and placement; it does not
 construct Herdr `agent.start` requests. Built-in agents use Herdr's managed-agent flow after the
 bridge creates the destination pane, while custom presets retain their exact configured `argv`.
+
+Pane snapshots may include an optional bounded `task_summary` mapped from Herdr pane metadata.
+The Office treats it as untrusted presentation text and remains compatible when it is absent. The
+bridge subscribes to `pane.updated`, so reports, clears, and expiry are reflected by the normal
+snapshot refresh path rather than a frontend-only update channel.

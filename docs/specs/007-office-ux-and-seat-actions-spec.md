@@ -7,6 +7,7 @@
 - **Reviewers:** —
 - **Approved by:** Requester
 - **Approved at:** 2026-08-11
+- **Updated:** 2026-08-30 — semantic touch-target extension
 
 > Approved contract. Implementation is authorized within the scope below.
 
@@ -27,6 +28,8 @@ without leaving the Office view.
 - A discoverable `New seat` action that uses existing bridge and launcher
   capabilities to create a real Herdr-backed tab/pane and open its terminal.
 - Accessible keyboard, touch, and semantic alternatives for the new actions.
+- Touch-sized semantic scene targets and a complete compact target chooser for
+  rooms, desks, and agents.
 
 ## 3. Non-goals
 
@@ -88,6 +91,22 @@ equivalent, and callouts MUST remain bounded and readable on narrow layouts.
 - **THEN** the same essential state and action information is available through
   accessible text or an inspector region.
 
+#### Scenario: User selects compact pixel art by touch
+
+- **GIVEN** a rendered room, desk station, or agent is visually smaller than a
+  reliable touch target
+- **WHEN** the user navigates or taps the Office
+- **THEN** an exact semantic target of at least 48 by 48 CSS pixels selects the
+  same qualified identity, with occupied desk-and-agent art exposed as one
+  non-duplicated target.
+
+#### Scenario: Pixel-art navigation is impractical on a phone
+
+- **GIVEN** the Office is shown in the compact application layout
+- **WHEN** the user opens the Office targets chooser
+- **THEN** bounded agent, room, and desk lists expose the same selection and
+  available Spaces handoff actions through touch-sized controls.
+
 ### Requirement: Show bounded activity context
 
 The Office MAY show a bounded activity history for an agent, but every entry
@@ -142,6 +161,12 @@ The first implementation MUST reuse existing bridge capabilities, launcher
 presets, snapshot identity, activity state, and completion records. It MUST
 NOT add a new Herdr protocol field solely for presentation.
 
+Semantic scene targets are derived from the published Office layout revision
+and admitted projection. Each visible station contributes either its occupant
+agent identity or its empty desk identity, never both. The compact chooser is
+bounded by the existing roster presentation limit and adds no persisted state
+or bridge contract.
+
 The new-seat action MUST report the requested host, workspace, launcher choice,
 and resulting qualified pane/tab identity only through existing command and
 snapshot paths. Local transient UI state may track an in-flight request, but
@@ -162,8 +187,9 @@ the action MUST converge to the admitted snapshot or an explicit error.
 - Unit tests for callout fallback ordering, bounded text, stale activity, and
   accessible labels.
 - Unit tests for new-seat capability gating and failure handling.
-- Browser tests covering agent/desk inspection, keyboard access, successful
-  seat creation, and normal exit reconciliation.
+- Browser tests covering agent/desk inspection, keyboard access, 48 CSS-pixel
+  semantic targets, the compact chooser, successful seat creation, and normal
+  exit reconciliation.
 - Manual Office smoke test with at least one managed agent and one ordinary
   shell-backed desk.
 - Responsive verification at the existing desktop and phone evidence sizes.
@@ -173,5 +199,6 @@ the action MUST converge to the admitted snapshot or an explicit error.
 - Stable harness-reported task-summary metadata and its upstream contract.
 - Rich traces/logs/tool-call timeline data.
 - Persisted seat templates, saved layouts, or automatic seat restoration.
-- Mobile-specific Office composition and navigation.
+- A dedicated mobile Office composition beyond the semantic-target and compact
+  chooser fallback.
 - A dedicated Office close-seat control beyond normal Herdr exit/close.

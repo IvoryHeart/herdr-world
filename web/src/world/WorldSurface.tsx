@@ -37,6 +37,7 @@ import type {
   OfficeRoomAlignment,
 } from "./officeGeometry";
 import type { PublishedOfficeLayout } from "./officeLayout";
+import { officeSemanticTargets } from "./officeSemanticTargets";
 import {
   MAX_SAVED_WORLD_WINDOWS,
   readWorldViewPrefs,
@@ -784,6 +785,15 @@ function WorldStage({
           <RotateCcw size={16} />
         </button>
       </header>
+      {context.compact ? (
+        <WorldCompactTargetChooser
+          projection={projection}
+          selectedKey={context.selectedKey}
+          onSelect={context.onSelect}
+          onActivateAgent={onActivateAgent}
+          onActivateRoom={onActivateRoom}
+        />
+      ) : null}
       <div
         ref={scrollRef}
         className="world-stage-scroll"
@@ -826,6 +836,18 @@ function WorldStage({
             onSelect={context.onSelect}
             onActivateAgent={onActivateAgent}
           />
+          {officeLayout ? (
+            <WorldSemanticTargets
+              layout={officeLayout}
+              projection={projection}
+              selectedKey={context.selectedKey}
+              interactive={agentBarReady}
+              onSelect={context.onSelect}
+              onActivateAgent={onActivateAgent}
+              onActivateRoom={onActivateRoom}
+              onHover={onCanvasHover}
+            />
+          ) : null}
           {officeLayout ? (
             <WorldRoomActions
               layout={officeLayout}
@@ -900,6 +922,208 @@ function WorldStage({
         );
       })}
     </div>
+  );
+}
+
+function WorldSemanticTargets({
+  layout,
+  projection,
+  selectedKey,
+  interactive,
+  onSelect,
+  onActivateAgent,
+  onActivateRoom,
+  onHover,
+}: {
+  layout: PublishedOfficeLayout;
+  projection: HerdrOfficeProjection;
+  selectedKey: string | null;
+  interactive: boolean;
+  onSelect: (key: string) => void;
+  onActivateAgent: (key: string) => void;
+  onActivateRoom: (key: string) => void;
+  onHover: (hover: OfficeCanvasHover | null) => void;
+}) {
+  const targets = officeSemanticTargets(projection, layout);
+  return (
+    <div
+      className="world-semantic-targets-overlay"
+      aria-label="Office scene targets"
+      aria-hidden={!interactive}
+    >
+      {targets.map((target) => (
+        <button
+          key={`${target.kind}:${target.key}`}
+          className="world-semantic-target"
+          type="button"
+          data-kind={target.kind}
+          data-target-key={target.key}
+          aria-label={target.label}
+          aria-pressed={selectedKey === target.key}
+          disabled={!interactive}
+          title={target.label}
+          style={{
+            left: `${target.rect.x}px`,
+            top: `${target.rect.y}px`,
+            width: `${target.rect.width}px`,
+            height: `${target.rect.height}px`,
+          }}
+          onClick={() => onSelect(target.key)}
+          onPointerMove={(event) => onHover({
+            key: target.key,
+            clientX: event.clientX,
+            clientY: event.clientY,
+          })}
+          onPointerLeave={() => onHover(null)}
+          onDoubleClick={() => {
+            if (!target.canActivate) {
+              return;
+            }
+            if (target.kind === "agent") {
+              onActivateAgent(target.key);
+            } else if (target.kind === "room") {
+              onActivateRoom(target.key);
+            }
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+const COMPACT_TARGET_PAGE_SIZE = OFFICE_PRESENTATION_BOUNDS.rosterPage;
+
+function WorldCompactTargetChooser({
+  projection,
+  selectedKey,
+  onSelect,
+  onActivateAgent,
+  onActivateRoom,
+}: {
+  projection: HerdrOfficeProjection;
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
+  onActivateAgent: (key: string) => void;
+  onActivateRoom: (key: string) => void;
+}) {
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+  const agents = projection.roster.slice(0, COMPACT_TARGET_PAGE_SIZE);
+  const rooms = projection.roomRoster.slice(0, COMPACT_TARGET_PAGE_SIZE);
+  const desks = projection.deskRoster.slice(0, COMPACT_TARGET_PAGE_SIZE);
+  const select = (key: string) => {
+    onSelect(key);
+    detailsRef.current?.removeAttribute("open");
+  };
+  const activate = (callback: () => void) => {
+    callback();
+    detailsRef.current?.removeAttribute("open");
+  };
+  return (
+    <details ref={detailsRef} className="world-compact-target-chooser">
+      <summary>
+        <span>Office targets</span>
+        <small>{projection.roster.length} agents · {projection.roomRoster.length} rooms</small>
+      </summary>
+      <div className="world-compact-target-panel">
+        <TargetListSection title="Agents" total={projection.roster.length} shown={agents.length}>
+          {agents.map(({ agent, roomLabel, hostLabel }) => {
+            const status = agent.stale
+              ? "stale"
+              : agent.stateLabels[agent.semanticStatus] ?? agent.semanticStatus;
+            return (
+              <li key={agent.key}>
+                <button
+                  type="button"
+                  className="world-compact-target-select"
+                  data-target-key={agent.key}
+                  aria-pressed={selectedKey === agent.key}
+                  onClick={() => select(agent.key)}
+                >
+                  <strong>{agent.displayLabel}</strong>
+                  <span>{status} · {roomLabel} · {hostLabel}</span>
+                  {agent.taskSummary ? <small>{agent.taskSummary}</small> : null}
+                </button>
+                {agent.canOpenInSpaces ? (
+                  <button
+                    type="button"
+                    className="world-compact-target-open"
+                    aria-label={`Open ${agent.displayLabel} in Spaces`}
+                    onClick={() => activate(() => onActivateAgent(agent.key))}
+                  >
+                    Open
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
+        </TargetListSection>
+        <TargetListSection title="Rooms" total={projection.roomRoster.length} shown={rooms.length}>
+          {rooms.map((room) => (
+            <li key={room.key}>
+              <button
+                type="button"
+                className="world-compact-target-select"
+                data-target-key={room.key}
+                aria-pressed={selectedKey === room.key}
+                onClick={() => select(room.key)}
+              >
+                <strong>{room.displayLabel}</strong>
+                <span>{room.stale ? "stale · " : ""}{room.hostLabel}</span>
+              </button>
+              {room.canOpenInSpaces ? (
+                <button
+                  type="button"
+                  className="world-compact-target-open"
+                  aria-label={`Open room ${room.displayLabel} in Spaces`}
+                  onClick={() => activate(() => onActivateRoom(room.key))}
+                >
+                  Open
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </TargetListSection>
+        <TargetListSection title="Desks" total={projection.deskRoster.length} shown={desks.length}>
+          {desks.map(({ desk, roomLabel, hostLabel }) => (
+            <li key={desk.key}>
+              <button
+                type="button"
+                className="world-compact-target-select"
+                data-target-key={desk.key}
+                aria-pressed={selectedKey === desk.key}
+                onClick={() => select(desk.key)}
+              >
+                <strong>{desk.displayLabel}</strong>
+                <span>{roomLabel} · {hostLabel}</span>
+              </button>
+            </li>
+          ))}
+        </TargetListSection>
+      </div>
+    </details>
+  );
+}
+
+function TargetListSection({
+  title,
+  total,
+  shown,
+  children,
+}: {
+  title: string;
+  total: number;
+  shown: number;
+  children: ReactNode;
+}) {
+  if (total === 0) {
+    return null;
+  }
+  return (
+    <section className="world-compact-target-section" aria-labelledby={`world-targets-${title.toLowerCase()}`}>
+      <h3 id={`world-targets-${title.toLowerCase()}`}>{title}</h3>
+      <ul>{children}</ul>
+      {total > shown ? <p>Showing {shown} of {total} {title.toLowerCase()}.</p> : null}
+    </section>
   );
 }
 

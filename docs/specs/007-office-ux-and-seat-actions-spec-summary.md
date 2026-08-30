@@ -18,3 +18,20 @@
 - **Callouts and seat placement:** In-scene callouts use bounded authoritative metadata with the existing roster as the semantic fallback. Each room exposes a `+` at the next available desk location; after Herdr admits the created tab, the new desk occupies that location and the action advances to the next slot. Once a room reaches eight desks, the room-local affordance remains visible as a disabled `ROOM FULL` marker rather than disappearing.
 - **Conversation lifecycle hardening:** Office terminal bubbles are now retained across transient snapshot loading, reconnect generation changes, and projection refreshes. Selection changes and room-local seat creation do not implicitly clear existing bubbles; a bubble is removed automatically only after a ready, admitted snapshot confirms that its pane no longer exists. A newly-created seat is selected and opened after its pane is admitted.
 - **Resize safety:** Terminal fitting is debounced during rapid host-size changes and its pending timer/frame is cancelled during teardown, preventing a resize burst from monopolising the page or leaving stale renderer work behind.
+
+### 2026-08-30 — Semantic touch-target extension
+
+- **Implemented:** The published Office layout now drives transparent semantic
+  buttons for rooms, waiting/standing agents, and each desk station. Every
+  target is at least 48 by 48 CSS pixels, carries a qualified accessible label,
+  and preserves single-click selection plus supported double-click Spaces
+  handoff. An occupied desk and its agent share one target, avoiding ambiguous
+  duplicate selection.
+- **Compact fallback:** Phone layouts expose a touch-sized `Office targets`
+  chooser with bounded Agents, Rooms, and Desks sections. It remains usable
+  independently of precise canvas hit testing and exposes task summaries and
+  available Spaces actions.
+- **Evidence:** Geometry unit coverage checks exact target identities, labels,
+  and minimum dimensions. Component coverage checks compact selection, and the
+  compact World browser flow verifies semantic target dimensions and chooser
+  selection at 375 px.

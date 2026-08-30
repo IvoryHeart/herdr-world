@@ -14,7 +14,7 @@ describe("terminal attach focus guard", () => {
     const control = document.createElement("button");
     document.body.append(terminal, control);
     terminal.focus();
-    const attachSnapshot = {
+    const activationSnapshot = {
       target: document.activeElement,
       externalFocusSequence: 0,
     };
@@ -26,14 +26,39 @@ describe("terminal attach focus guard", () => {
         autoFocus: true,
         currentTarget: control,
         currentExternalFocusSequence: 1,
-        attachSnapshot,
+        activationSnapshot,
       }),
     ).toBe(false);
   });
 
-  it("restores focus only when the attach-time focus state is unchanged", () => {
+  it("does not renew autofocus eligibility when a later attach attempt starts", () => {
+    const opener = document.createElement("button");
+    const officeStage = document.createElement("div");
+    officeStage.tabIndex = 0;
+    document.body.append(opener, officeStage);
+    opener.focus();
+    const activationSnapshot = {
+      target: document.activeElement,
+      externalFocusSequence: 2,
+    };
+
+    officeStage.focus();
+
+    // A socket retry may begin after this focus change, but the terminal
+    // activation still owns the original snapshot.
+    expect(
+      shouldRestoreTerminalFocus({
+        autoFocus: true,
+        currentTarget: officeStage,
+        currentExternalFocusSequence: 3,
+        activationSnapshot,
+      }),
+    ).toBe(false);
+  });
+
+  it("restores focus only when the activation-time focus state is unchanged", () => {
     const terminal = document.createElement("div");
-    const attachSnapshot = {
+    const activationSnapshot = {
       target: terminal,
       externalFocusSequence: 4,
     };
@@ -43,7 +68,7 @@ describe("terminal attach focus guard", () => {
         autoFocus: true,
         currentTarget: terminal,
         currentExternalFocusSequence: 4,
-        attachSnapshot,
+        activationSnapshot,
       }),
     ).toBe(true);
     expect(
@@ -51,7 +76,15 @@ describe("terminal attach focus guard", () => {
         autoFocus: false,
         currentTarget: terminal,
         currentExternalFocusSequence: 4,
-        attachSnapshot,
+        activationSnapshot,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRestoreTerminalFocus({
+        autoFocus: true,
+        currentTarget: terminal,
+        currentExternalFocusSequence: 5,
+        activationSnapshot,
       }),
     ).toBe(false);
   });

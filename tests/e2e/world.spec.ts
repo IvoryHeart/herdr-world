@@ -221,6 +221,23 @@ test("uses stage-first compact navigation and horizontal office scrolling at 375
   await page.goto("/world");
   await waitForOffice(page);
   await expect(page.getByRole("button", { name: "Back to Herdr sidebar" })).toBeVisible();
+  const targetChooser = page.locator(".world-compact-target-chooser > summary");
+  await expect(targetChooser).toBeVisible();
+  expect((await targetChooser.boundingBox())?.height).toBeGreaterThanOrEqual(48);
+  const sceneTargets = page.locator(".world-semantic-target");
+  await expect(sceneTargets.first()).toBeEnabled();
+  expect(await sceneTargets.evaluateAll((targets) => targets.every((target) => {
+    const rect = target.getBoundingClientRect();
+    return rect.width >= 48 && rect.height >= 48 && Boolean(target.getAttribute("aria-label"));
+  }))).toBe(true);
+  await targetChooser.click();
+  const compactAgent = page.locator(".world-compact-target-select").filter({ hasText: "Codex A" });
+  await expect(compactAgent).toBeVisible();
+  const compactAgentBox = await compactAgent.boundingBox();
+  expect(compactAgentBox?.width).toBeGreaterThanOrEqual(48);
+  expect(compactAgentBox?.height).toBeGreaterThanOrEqual(48);
+  await compactAgent.click();
+  await expect(compactAgent).toHaveAttribute("aria-pressed", "true");
   await expect
     .poll(() =>
       page.locator(".world-stage-scroll").evaluate((element) => ({
@@ -298,9 +315,10 @@ test("opens one stable live conversation bubble for the selected Office agent", 
   const secondAgent = page.locator(".agent-row").filter({ hasText: "Codex B" });
   await secondAgent.click();
   const openBubbles = page.locator("[data-world-conversation='open']");
+  const secondDialog = page.getByRole("dialog", { name: "Codex B" });
   await expect(openBubbles).toHaveCount(2);
   await expect(page.getByRole("dialog", { name: "Codex A" })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Codex B" })).toBeVisible();
+  await expect(secondDialog).toBeVisible();
   await expect(connector.locator("path[data-anchor='workbench']")).toHaveCount(2);
   await expect(connector.locator("path[data-anchor='agent']")).toHaveCount(2);
 
@@ -308,10 +326,9 @@ test("opens one stable live conversation bubble for the selected Office agent", 
   await expect(officeStage).toBeVisible();
   await expect
     .poll(() =>
-      page.evaluate(() => Boolean(
-        document.activeElement instanceof Element
-          && document.activeElement.closest(".world-conversation-terminal"),
-      )),
+      secondDialog.locator(".world-conversation-terminal").evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
     )
     .toBe(true);
   // Let terminal autofocus settle, then move focus to the persistent page
@@ -874,7 +891,7 @@ test("keeps single-click and empty-desk gestures read-only, then opens a canvas 
   const canvas = page.locator("canvas[data-office-canvas='true']");
   const position = { x: agent.x, y: agent.characterFeetY - 34 };
 
-  await canvas.dblclick({ position });
+  await doubleClickCanvasPosition(page, canvas, position);
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator(".stage-title")).toHaveText("Codex A");
   await expect
@@ -1039,11 +1056,9 @@ test("opens the same standing room agent from its semantic row and canvas sprite
   await expect.poll(() => stage.evaluate((element) => element.scrollTop)).toBe(scrollTop);
   const canvas = page.locator("canvas[data-office-canvas='true']");
 
-  await canvas.dblclick({
-    position: {
-      x: anchor.x,
-      y: anchor.characterFeetY - scrollTop - 34,
-    },
+  await doubleClickCanvasPosition(page, canvas, {
+    x: anchor.x,
+    y: anchor.characterFeetY - scrollTop - 34,
   });
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator(".stage-title")).toHaveText("Agent 10");
@@ -1162,12 +1177,14 @@ test("revalidates a colliding live agent and opens its exact host in Spaces", as
   const hostBReception = layout.ceoBlocks.receptions[1];
   expect(hostBReception).toBeDefined();
   const waitingAgent = receptionAgentAnchor(hostBReception, 0);
-  await page.locator("canvas[data-office-canvas='true']").dblclick({
-    position: {
+  await doubleClickCanvasPosition(
+    page,
+    page.locator("canvas[data-office-canvas='true']"),
+    {
       x: waitingAgent.x,
       y: waitingAgent.characterFeetY - 34,
     },
-  });
+  );
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator(".stage-title")).toHaveText("Codex B");
 });
@@ -1297,6 +1314,19 @@ function coreSocketUrls(urls: readonly string[]) {
 
 function terminalSocketUrls(urls: readonly string[]) {
   return urls.filter((url) => /\/ws\/terminal(?:\?|$)/.test(url));
+}
+
+async function doubleClickCanvasPosition(
+  page: Page,
+  canvas: Locator,
+  position: { x: number; y: number },
+) {
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.dblclick(
+    (bounds?.x ?? 0) + position.x,
+    (bounds?.y ?? 0) + position.y,
+  );
 }
 
 async function fixtureLog(request: import("@playwright/test").APIRequestContext) {

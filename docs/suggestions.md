@@ -93,7 +93,7 @@ of hidden requirements.
 
 ### SUG-002 — OTEL-backed Office observability boards
 
-- **Status:** open
+- **Status:** promoted
 - **Scope:** `observability`, `office-view`
 - **Value:** Make agent activity, traces, logs, metrics, and later derived
   signals useful from the same Office context as the live terminal.
@@ -105,10 +105,17 @@ of hidden requirements.
 - **Owner:** Open
 - **Added:** 2026-08-06
 - **Related:** [`002-herdr-observability-extension-contract-spec.md`](specs/002-herdr-observability-extension-contract-spec.md)
+- **Related:** [`005-observability-provider-and-office-projection-spec.md`](specs/005-observability-provider-and-office-projection-spec.md)
+- **Related:** [`006-office-observability-settings-spec.md`](specs/006-office-observability-settings-spec.md)
+- **Current slice:** The versioned provider contract, optional Prometheus read
+  adapter, live provider configuration and health, and bounded Workforce and
+  Economy Office boards are delivered. Exact per-agent attribution, traces,
+  logs, and the separate activity timeline remain possible later slices rather
+  than unfinished requirements of the current boards.
 
 ### SUG-003 — Unified Herdr Office distribution
 
-- **Status:** open
+- **Status:** promoted
 - **Scope:** `packaging`, `herdr-web`, `office-view`
 - **Value:** Let users install and run the compatible Herdr runtime, web
   experience, bridge, Office view, and optional extensions as one product.
@@ -119,6 +126,13 @@ of hidden requirements.
   licensing/trademark review.
 - **Owner:** Open
 - **Added:** 2026-08-06
+- **Related:** [`016-herdr-world-plugin-release-spec.md`](specs/016-herdr-world-plugin-release-spec.md)
+- **Related:** [`017-herdr-world-automated-release-distribution-spec.md`](specs/017-herdr-world-automated-release-distribution-spec.md)
+- **Current slice:** Versioned GitHub archives, one universal npm package,
+  Linux/macOS Homebrew Formulae, checksums, a single launcher, and the Herdr
+  plugin lifecycle are delivered and validated through one protected release
+  workflow. The first stable `v0.1.0` release remains pending. Signed Android,
+  additional native targets, and official Homebrew submission remain deferred.
 
 ### SUG-004 — Multi-server bridge or connection coordinator
 
@@ -372,7 +386,7 @@ of hidden requirements.
 
 ### SUG-020 — Large semantic mobile hit targets
 
-- **Status:** open
+- **Status:** promoted
 - **Scope:** `office-view`, `mobile`
 - **Value:** Make desks, agents, and rooms reliably selectable on touch screens
   even when their art remains compact.
@@ -383,6 +397,13 @@ of hidden requirements.
   keyboard accessibility, and duplicate-selection handling.
 - **Owner:** Open
 - **Added:** 2026-08-06
+- **Current slice:** The canvas exposes qualified room, agent, and desk-station
+  buttons of at least 48 by 48 CSS pixels, grouping an occupied desk with its
+  agent to avoid duplicate selection. Compact layouts also provide bounded
+  Agents, Rooms, and Desks lists with touch-sized selection and available
+  Spaces handoff controls. A redesigned mobile-specific scene composition
+  remains tracked by SUG-019.
+- **Related:** [`007-office-ux-and-seat-actions-spec.md`](specs/007-office-ux-and-seat-actions-spec.md)
 
 ### SUG-021 — Agent, room, and Office cost attribution
 
@@ -440,8 +461,12 @@ of hidden requirements.
 - **Added:** 2026-08-09
 - **Current slice:** Herdr Web accepts optional `task_summary` metadata on
   snapshots and activity messages, bounds it, and surfaces it as a persistent
-  selected-agent Office callout. A native producer, TTL, privacy filter, and
-  upstream contract remain deferred.
+  selected-agent Office callout. The packaged `herdr-world task-summary`
+  producer now reports or clears the existing Herdr pane-metadata token, binds
+  reports to the active agent session, applies a bounded TTL, normalizes and
+  redacts credential-shaped text, and triggers live snapshot refresh through
+  `pane.updated`. Automatic harness-specific integrations and richer structured
+  progress remain deferred; the current slice needs no new upstream schema.
 - **Related:** [`008-office-productivity-ux-spec.md`](specs/008-office-productivity-ux-spec.md)
 - **Related:** [`002-herdr-observability-extension-contract-spec.md`](specs/002-herdr-observability-extension-contract-spec.md)
 

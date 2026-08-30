@@ -1002,8 +1002,138 @@ button {
 .world-room-actions-overlay {
   position: absolute;
   inset: 0;
-  z-index: 7;
+  z-index: 9;
   pointer-events: none;
+}
+
+.world-semantic-targets-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  pointer-events: none;
+}
+
+.world-semantic-target {
+  position: absolute;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: transparent;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.world-semantic-target:focus-visible {
+  border-color: #f2d78f;
+  outline: 2px solid #f2d78f;
+  outline-offset: -3px;
+  background: color-mix(in srgb, var(--yellow) 12%, transparent);
+}
+
+.world-compact-target-chooser {
+  position: relative;
+  z-index: 30;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface0) 94%, #080812);
+}
+
+.world-compact-target-chooser > summary {
+  display: flex;
+  min-height: 48px;
+  padding: 7px 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.world-compact-target-chooser > summary small {
+  color: var(--muted);
+}
+
+.world-compact-target-panel {
+  max-height: min(42dvh, 360px);
+  padding: 0 10px 10px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+
+.world-compact-target-section h3 {
+  margin: 10px 2px 5px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.world-compact-target-section ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-compact-target-section li {
+  display: flex;
+  min-width: 0;
+  gap: 4px;
+}
+
+.world-compact-target-select,
+.world-compact-target-open {
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text);
+  background: var(--surface1);
+  touch-action: manipulation;
+}
+
+.world-compact-target-select {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 6px 9px;
+  justify-items: start;
+  text-align: left;
+}
+
+.world-compact-target-select span,
+.world-compact-target-select small {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-compact-target-select[aria-pressed="true"] {
+  border-color: var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 12%, var(--surface1));
+}
+
+.world-compact-target-open {
+  min-width: 64px;
+  flex: 0 0 auto;
+  padding: 0 10px;
+}
+
+.world-compact-target-select:hover,
+.world-compact-target-select:focus-visible,
+.world-compact-target-open:hover,
+.world-compact-target-open:focus-visible {
+  border-color: var(--accent);
+}
+
+.world-compact-target-section > p {
+  margin: 6px 2px 0;
+  color: var(--muted);
+  font-size: 9px;
 }
 
 .world-room-actions {

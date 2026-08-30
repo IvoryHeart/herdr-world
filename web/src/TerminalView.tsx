@@ -17,7 +17,7 @@ import { addNativeResumeHandler } from "./native";
 import { shellQuote } from "./shell";
 import {
   shouldRestoreTerminalFocus,
-  type TerminalAttachFocusSnapshot,
+  type TerminalAutoFocusSnapshot,
 } from "./terminalAttachFocus";
 import {
   isNonRetryableTerminalClose,
@@ -229,6 +229,7 @@ export function TerminalView({
   const autoFocusRef = useRef(autoFocus);
   autoFocusRef.current = autoFocus;
   const externalFocusSequenceRef = useRef(0);
+  const terminalActivationFocusSnapshotRef = useRef<TerminalAutoFocusSnapshot | null>(null);
   const scrollSensitivityRef = useRef(scrollSensitivity);
   scrollSensitivityRef.current = scrollSensitivity;
   const mobileControlsRef = useRef(mobileControls);
@@ -527,6 +528,15 @@ export function TerminalView({
   useEffect(() => {
     const host = hostRef.current;
     const terminalId = pane?.terminal_id ?? null;
+    // Autofocus belongs to this terminal activation, not to an individual
+    // socket attempt. Reusing this snapshot prevents reconnects from renewing
+    // permission after the user has focused something outside the terminal.
+    terminalActivationFocusSnapshotRef.current = terminalId
+      ? {
+          target: document.activeElement,
+          externalFocusSequence: externalFocusSequenceRef.current,
+        }
+      : null;
     const previousOverlayTerminalId = overlayTerminalIdRef.current;
     delayConnectingOverlayRef.current = Boolean(
       terminalId && previousOverlayTerminalId && previousOverlayTerminalId !== terminalId,
@@ -846,10 +856,7 @@ export function TerminalView({
       if (socket) {
         closeActiveSocket();
       }
-      const attachFocusSnapshot: TerminalAttachFocusSnapshot = {
-        target: document.activeElement,
-        externalFocusSequence: externalFocusSequenceRef.current,
-      };
+      const activationFocusSnapshot = terminalActivationFocusSnapshotRef.current;
       reconnectScheduledForSocket.clear();
       const currentSocketGeneration = socketGeneration + 1;
       socketGeneration = currentSocketGeneration;
@@ -903,18 +910,18 @@ export function TerminalView({
         if (size) {
           sendResize(size);
         }
-        if (shouldRestoreTerminalFocus({
+        if (activationFocusSnapshot && shouldRestoreTerminalFocus({
           autoFocus: autoFocusRef.current,
           currentTarget: document.activeElement,
           currentExternalFocusSequence: externalFocusSequenceRef.current,
-          attachSnapshot: attachFocusSnapshot,
+          activationSnapshot: activationFocusSnapshot,
         })) {
           window.setTimeout(() => {
             if (shouldRestoreTerminalFocus({
               autoFocus: autoFocusRef.current,
               currentTarget: document.activeElement,
               currentExternalFocusSequence: externalFocusSequenceRef.current,
-              attachSnapshot: attachFocusSnapshot,
+              activationSnapshot: activationFocusSnapshot,
             })) {
               ready.renderer.focus();
             }

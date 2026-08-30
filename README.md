@@ -64,6 +64,20 @@ herdr-world --no-herdr-setup
 The interactive launcher can offer to install, update, or start Herdr. It asks before each action;
 `--no-herdr-setup` disables those prompts.
 
+Agent harnesses running inside a Herdr pane can publish a short, expiring task summary for the
+Office without starting another bridge:
+
+```bash
+herdr-world task-summary "Reviewing release checks"
+herdr-world task-summary --clear
+```
+
+The command uses `HERDR_PANE_ID`, binds reports to the pane's active agent session, defaults to a
+15-minute TTL, and accepts `--ttl-ms`, `--pane`, and `--session` for explicit bounded targets. It
+normalizes whitespace, caps summaries at 160 Unicode characters, and redacts obvious
+credential-shaped values. See the [development guide](docs/development.md#reporting-agent-task-summaries)
+for the full contract.
+
 Useful plugin operations include:
 
 ```bash
