@@ -11,11 +11,13 @@
 - Made release publication fail closed behind the exact unpublished npm payload's full Herdr plugin
   lifecycle and the generated Homebrew Formula lifecycle on Linux x86-64, macOS ARM64, and macOS
   x86-64. The explicit distribution preflight now exercises those same gates before any tag is cut.
+  [Herdr World PR #57](https://github.com/IvoryHeart/herdr-world/pull/57)
 
 ### Fixed
 
 - Kept release-smoke Herdr sockets below the macOS Unix-domain socket path limit instead of nesting
   them under the runner's long temporary directory.
+  [Herdr World PR #57](https://github.com/IvoryHeart/herdr-world/pull/57)
 
 ### Removed
 
