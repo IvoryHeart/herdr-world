@@ -649,10 +649,6 @@ test("moves and resizes the Office conversation bubble without losing its live a
   const resizeBox = await resizeHandle.boundingBox();
   expect(beforeResize).not.toBeNull();
   expect(resizeBox).not.toBeNull();
-  const rendererBeforeResize = await page.evaluate(() => ({
-    sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
-    sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
-  }));
   await page.mouse.move((resizeBox?.x ?? 0) + 12, (resizeBox?.y ?? 0) + 12);
   await page.mouse.down();
   await page.mouse.move(
@@ -682,14 +678,18 @@ test("moves and resizes the Office conversation bubble without losing its live a
   expect(afterResize.width).toBeGreaterThan(960);
   expect(afterResize.height).toBeGreaterThanOrEqual(beforeResize?.height ?? 0);
   await expect(slot).toHaveAttribute("data-positioned", "true");
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
+  }));
   const rendererAfterResize = await page.evaluate(() => ({
     sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
     sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
   }));
-  expect(
-    rendererAfterResize.sceneRenders - rendererBeforeResize.sceneRenders +
-      rendererAfterResize.sceneSkips - rendererBeforeResize.sceneSkips,
-  ).toBeLessThanOrEqual(12);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => ({
+    sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
+    sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
+  }))).toEqual(rendererAfterResize);
 
   await page.locator(".agent-row").filter({ hasText: "Codex B" }).click();
   await expect(page.getByRole("dialog", { name: "Codex B" })).toBeVisible();
