@@ -4,690 +4,121 @@
 [![CI](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Herdr World is an independent downstream application built to work with
-[Herdr](https://github.com/herdrdev/herdr) and based in part on
-[Herdr Web](https://github.com/kcosr/herdr-web). It is not associated with,
-endorsed by, or maintained by either upstream project.
+Herdr World is a browser and mobile workspace for [Herdr](https://github.com/herdrdev/herdr).
+It combines live terminal Spaces with a visual Pixel Office, multi-host viewing, shared navigation,
+mobile controls, notes, uploads, and agent-aware workflows.
 
-It combines the familiar Spaces terminal UI with World visualizations such as
-the Pixel Office at `/world`, direct multi-bridge support, and downstream
-integrations such as Office observability.
-
-This repository is a standalone monorepo that can be distributed without asking users to
-modify their installed Herdr checkout. Release bundles ship the repo-owned bridge as
-`herdr-world-bridge`; its development-only Cargo target remains `herdr-web-bridge` so generic bridge
-changes stay easy to compare with Herdr Web. It uses vendored Herdr compatibility code because the
-app needs private Herdr APIs for terminal attach, terminal resize/scroll/input, workspace snapshots,
-and event subscriptions.
-
-The goal is to provide a browser-native interface for monitoring and controlling Herdr agents from
-desktop and mobile clients. It keeps the terminal experience close to Herdr while adding web-focused
-navigation, multi-client viewing, mobile input controls, synchronized pane selection, and alternative
-visualizations. The upstream relationship and synchronization record are documented in
-[`UPSTREAM.md`](UPSTREAM.md).
-
-> **Public preview:** [`v0.1.0-rc.15`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15)
-> provides native archives for Linux x86-64 and macOS on Apple Silicon and Intel. Herdr World
-> currently requires Herdr `v0.8.2` or newer reporting terminal protocol `20`.
-
-Visit the [Herdr World project site](https://ivoryheart.github.io/herdr-world/) for a visual
-overview, or jump directly to the release above for the checksum-verified archive.
-
-## Highlights
-
-- Shared browser terminal viewing with synchronized pane selection across desktop and mobile.
-- Mobile-friendly text input with stage/send actions, configurable tap focus, and extended
-  terminal key controls.
-- Agent-focused sidebar with styled icons for detected Codex/OpenAI, Claude, Pi, Grok, and OpenCode panes.
-- Image and file uploads from the terminal toolbar, paste, or drag/drop, with uploaded paths inserted
-  into the active terminal input.
-- Context menus for renaming, closing, splitting, and moving panes between tabs or spaces.
-
-## Screenshots
-
-### Pixel Office
+The current public preview is
+[`v0.1.0-rc.15`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15).
+It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer
+with terminal protocol `20`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
+an interactive overview.
 
 | Desktop | Mobile |
 |:--:|:--:|
-| <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing multiple hosts, workspaces, agents, and the Agent Bar" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
+| <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing hosts, workspaces, and agents" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
 
-### Spaces
+## Quick Start
 
-| Desktop | Android tablet |
-|:--:|:--:|
-| <img src="docs/images/desktop.png" alt="herdr-world desktop terminal workspace" width="640"> | <img src="docs/images/android-tablet.png" alt="herdr-world Android tablet terminal workspace" width="640"> |
+Start or attach to a Herdr session, then choose an installation method. npm and the Herdr plugin
+require Node.js `22.14.0` or newer.
 
-| Android phone switcher | Android phone terminal |
-|:--:|:--:|
-| <img src="docs/images/android-phone-switcher.png" alt="herdr-world Android phone switcher" width="260"> | <img src="docs/images/android-phone-terminal.png" alt="herdr-world Android phone terminal" width="260"> |
-
-| Android bridge configuration |
-|:--:|
-| <img src="docs/images/android-phone-bridge-settings.png" alt="herdr-world Android bridge settings and color picker" width="260"> |
-
-## Layout
-
-```text
-web/                 React + Vite browser app
-site/                Dependency-free GitHub Pages project site
-android/             Capacitor Android shell for the bundled web app
-bridge/              Slim Rust HTTP/WebSocket bridge executable
-vendor/herdr-compat/ minimal Herdr protocol/API compatibility crate
-herdr-plugin.toml    Herdr plugin manifest
-scripts/herdr-world-plugin.sh
-scripts/live-plugin-smoke.sh
-scripts/run-bridge.sh
-scripts/check-vendor.sh
-docs/android.md
-docs/vendoring.md
-docs/packaging.md
-docs/release.md
-docs/suggestions.md
-```
-
-The bridge is compiled as a repo-owned executable and run with:
+### npm
 
 ```bash
-bridge/target/debug/herdr-web-bridge --static-dir web/dist
+npm install --global @ivoryheart/herdr-world@next
+herdr-world
 ```
 
-The top-level scripts hide that detail.
-
-## Requirements
-
-For release tarball users:
-
-- A running Herdr `v0.8.2` or newer daemon/session that reports terminal protocol `20`
-- A Linux x86-64, macOS Apple Silicon, or macOS Intel host
-
-For source development:
-
-- Node.js 22 or newer
-- npm
-- Rust stable
-- A running Herdr `v0.8.2` or newer daemon/session that reports terminal protocol `20`
-
-Android development also needs a JDK and Android SDK. See [docs/android.md](docs/android.md).
-
-### Public artifact status
-
-| Platform | Status |
-| --- | --- |
-| Linux x86-64 | Available in [`v0.1.0-rc.15`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15) |
-| macOS ARM64 / x86-64 | Available unsigned in [`v0.1.0-rc.15`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15) |
-| Android | Source and debug build workflow are available; no signed public APK yet |
-
-## Quick Start From Release
-
-Choose `linux-x86_64`, `macos-arm64` (Apple Silicon), or `macos-x86_64` (Intel), then download and
-verify the current release candidate:
+### Homebrew
 
 ```bash
-VERSION=v0.1.0-rc.15
-PLATFORM=linux-x86_64
-curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz"
-curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/${VERSION}/herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
-if command -v sha256sum >/dev/null; then
-  sha256sum --check "herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
-else
-  shasum -a 256 --check "herdr-world-${VERSION}-${PLATFORM}.tar.gz.sha256"
-fi
-tar -xzf "herdr-world-${VERSION}-${PLATFORM}.tar.gz"
-cd "herdr-world-${VERSION}-${PLATFORM}"
-./install
+brew install IvoryHeart/tap/herdr-world-rc
+herdr-world
 ```
 
-Open:
-
-```text
-http://127.0.0.1:8787
-```
-
-`./install` installs the complete versioned World bundle under `~/.local/share/herdr-world`, exposes
-`herdr-world` and `herdr-world-installer` under `~/.local/bin`, and continues into the consent-based
-Herdr dependency setup. The desktop tarball includes the web assets and `herdr-world-bridge`; it
-does not embed Herdr.
-The macOS binaries are not yet Developer ID signed or notarized. macOS may therefore require you to
-confirm the first launch in System Settings → Privacy & Security after you have verified the
-downloaded checksum and source. Signing and notarization will be added when project credentials are
-available.
-If the default Herdr session is missing or incompatible, the installed `herdr-world` command
-explains the requirement and asks separately before downloading the [official Herdr
-installer](https://herdr.dev/docs/install/), stopping an incompatible detached server, or starting
-Herdr. Stopping a server exits the terminal panes and processes it owns. Before starting Herdr, the
-launcher asks for the directory containing the work you want Herdr to manage. Declining any action
-leaves that action undone and prints manual instructions.
-
-Use `./install --install-only` when installation and startup should be separate. The bundle remains
-portable: `bin/herdr-world` still runs directly without copying anything into the user directories.
-
-The launcher never performs guided setup in a non-interactive environment or when `--session`,
-`HERDR_SESSION`, or a socket override selects an operator-managed target. Pass
-`--no-herdr-setup` or set `HERDR_WORLD_SETUP=never` to disable prompts explicitly. You can always
-start Herdr yourself from a project directory, detach with <kbd>Ctrl</kbd>+<kbd>B</kbd> then
-<kbd>Q</kbd>, and rerun Herdr World.
-
-Use another unused port when needed:
+### Herdr plugin
 
 ```bash
-herdr-world --port 8791
-```
-
-If Herdr uses a non-default socket, provide it explicitly:
-
-```bash
-HERDR_SOCKET_PATH=/path/to/herdr.sock herdr-world --port 8791
-```
-
-Android currently uses a locally built debug APK; no signed APK is included in the public RC.
-LAN bridges must admit the bridge hostname and Android's app origin explicitly:
-
-```bash
-bin/herdr-world --host 0.0.0.0 --port 4000 \
-  --allow-host herdr-host.example \
-  --allow-origin http://localhost
-```
-
-See [docs/packaging.md](docs/packaging.md) for release artifact layout and
-[docs/android.md](docs/android.md) for Android behavior.
-
-## Herdr Plugin
-
-The Herdr plugin is a lifecycle facade for the browser client. It installs the
-exact release-matched `@ivoryheart/herdr-world` payload into Herdr's managed
-plugin checkout, then supervises one local bridge for the invoking Herdr
-session. It does not build Rust or web sources, use a global npm/Homebrew
-installation, or host the Android client.
-
-Inspect the manifest and controller before installing a plugin that runs code
-as your user, then install the current default branch:
-
-```bash
-herdr plugin install IvoryHeart/herdr-world
-```
-
-Installation runs the plugin's build command and registers it, but it does not
-invoke runtime actions or start Herdr World immediately. Herdr's startup hook
-starts the bridge the next time a Herdr server restores its session. To start
-it now, invoke `open` (which also asks the desktop browser to open the URL) or
-`start` explicitly:
-
-```bash
+herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.15
 herdr plugin action invoke open --plugin ivoryheart.herdr-world
 ```
 
-The startup hook starts only the Herdr World bridge; it never installs or
-starts Herdr itself. Startup hooks are asynchronous and one-shot. A failed
-startup is recorded by Herdr and does not stop Herdr; inspect the action log
-and run `doctor` after fixing the reported prerequisite:
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787) if the browser does not open automatically.
+Checksum-verified standalone archives are available on the
+[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15).
+
+The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
+may need approval in **System Settings → Privacy & Security**.
+
+## Advanced Usage
+
+Select a session, socket, or alternate port with normal launcher options:
 
 ```bash
-herdr plugin log list --plugin ivoryheart.herdr-world --limit 20
-herdr plugin action invoke doctor --plugin ivoryheart.herdr-world
+herdr-world --session NAME
+HERDR_SOCKET_PATH=/path/to/herdr.sock herdr-world --port 8791
+herdr-world --no-herdr-setup
 ```
 
-To pin a release, use a tag that contains the plugin implementation:
+The interactive launcher can offer to install, update, or start Herdr. It asks before each action;
+`--no-herdr-setup` disables those prompts.
+
+Useful plugin operations include:
 
 ```bash
-herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
-```
-
-Plugin installation and runtime actions require Node.js `22.14.0` or newer
-and npm. Node must remain installed because the supervised bridge runs through
-the package's Node entrypoint. Local linking skips the build command; after
-linking, install the exact payload explicitly with the command printed by:
-
-```bash
-bash scripts/herdr-world-plugin.sh build
-```
-
-The plugin uses loopback `http://127.0.0.1:8787` by default. Its editable JSON
-configuration is outside the managed checkout; find its directory with:
-
-```bash
-herdr plugin config-dir ivoryheart.herdr-world
-```
-
-Set `host`, `port`, `port_range`, `session_name` or `socket_path`,
-`upload_dir`, `allowed_hosts`, `allowed_origins`, `allowed_connect_origins`,
-and `bridge_label` in `config.json` as needed. The default target stays on
-`8787`: if that port is occupied, automatic or explicit start fails without
-claiming another port. A configured `session_name` or `socket_path`, or a
-target started while another managed target is recorded, uses the first free
-port in `port_range` (default `8787`–`8877`); an explicitly configured `port`
-always fails when occupied. No bridge process is left behind by a failed
-start. Non-loopback binding requires explicit host and origin
-allow-lists and an operator-managed VPN, SSH forward, or authenticated reverse
-proxy; Host and Origin checks are not authentication. Stopping the plugin
-bridge disconnects browser clients but does not stop Herdr or its panes.
-
-After the bridge has started, Linux `systemd --user` or macOS `launchd` keeps
-the plugin bridge running and restarts it after an unexpected exit. The
-portable fallback process group does not retry a crash; check `status` and
-invoke `restart` when no native user supervisor is available. A supervisor
-restarts the same recorded port; it does not move a crashed bridge to another
-port.
-
-The plugin has no uninstall cleanup hook. Stop the bridge before removing the
-managed plugin checkout. Plugin action invocation is asynchronous and target-
-scoped, so repeat the stop-and-status sequence for every Herdr target or named
-session that has a managed bridge. Wait for each action's `log_id` to report
-`status: succeeded`; a returned `status: running` only means that Herdr queued
-the action.
-
-```bash
-# For the current/default target:
-herdr plugin action invoke stop --plugin ivoryheart.herdr-world
-herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
 herdr plugin action invoke status --plugin ivoryheart.herdr-world
-herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr plugin action invoke doctor --plugin ivoryheart.herdr-world
+herdr plugin action invoke restart --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 20
+```
 
-# Repeat the same four commands for every named target, replacing NAME:
+Plugin actions are asynchronous and target-scoped. Before uninstalling, repeat the stop-and-status
+sequence for every Herdr target or named session and wait for each action log to report
+`status: succeeded`:
+
+```bash
+herdr plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr plugin action invoke status --plugin ivoryheart.herdr-world
 herdr --session NAME plugin action invoke stop --plugin ivoryheart.herdr-world
-herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
 herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
-herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
-
-# Only after every stop/status action reports succeeded and the target is not running:
 herdr plugin uninstall ivoryheart.herdr-world
 ```
 
-Run the `log list` command again until the corresponding action's `log_id` has
-`status: succeeded`; for `status`, also confirm its output says the bridge is
-not running. Then uninstall the plugin.
-
-The plugin is separate from the standalone npm package, Homebrew Formula,
-desktop tarball, and Android companion distribution. See [docs/packaging.md](docs/packaging.md)
-and [docs/release.md](docs/release.md) for their independent workflows.
-
-## Development Setup
+To run from source:
 
 ```bash
 npm install
 npm install --prefix web
-```
-
-For the supervised development workflow, start the bridge and Vite together:
-
-```bash
-npm run dev
-```
-
-The command keeps both processes on loopback by default, waits for the bridge
-capabilities endpoint before starting Vite, proxies frontend `/api` and `/ws`
-traffic to the bridge, and stops both children when either one exits. It builds
-the bridge when its executable is missing. Use `HERDR_SOCKET_PATH` or pass
-bridge session arguments as needed:
-
-```bash
-HERDR_SOCKET_PATH="$HOME/.config/herdr-dev/herdr.sock" npm run dev
-npm run dev -- --session SESSION_NAME
-```
-
-Address overrides are namespaced: `HERDR_WEB_BRIDGE_HOST`,
-`HERDR_WEB_BRIDGE_PORT`, `HERDR_WEB_DEV_HOST`, and `HERDR_WEB_DEV_PORT`.
-`npm run dev:local` remains available for the downstream workflow that reuses
-an already-running bridge.
-
-## Development Build And Test
-
-```bash
-npm run lint
-npm run test
-npm run build
-```
-
-Useful narrower commands:
-
-```bash
-npm run test:dev
-npm run lint:web
-npm run test:web
-npm run build:web
-npm run build:pages
-npm run bridge:fmt
-npm run bridge:test
-npm run bridge:build
-npm run android:sync
-npm run android:build:debug
-scripts/package-tarball.sh vX.Y.Z linux-x86_64
-scripts/package-tarball.sh vX.Y.Z macos-arm64
-scripts/package-tarball.sh vX.Y.Z macos-x86_64
-scripts/check-vendor.sh
-```
-
-The Android app is a Capacitor shell around the bundled `web/dist` assets. It starts disconnected
-and uses the Bridge area in Settings to save one or more Herdr bridge URLs. Browser-served builds
-still default to the same-origin bridge that served the page. See [docs/android.md](docs/android.md)
-for HTTP/cleartext behavior, Android SDK setup, and APK verification notes.
-
-## Settings
-
-Settings are grouped by area:
-
-- Bridge: same-origin and saved bridge profiles, reachability testing, and bridge enablement.
-- Features: client feature toggles such as Notes.
-- Display: browser-wide navigation synchronization, agent features in Tabs, multi-host Space
-  selection, top/bottom app padding, and mobile terminal controls size.
-- Terminal: browser-to-bridge terminal input transport and input batching delay,
-  terminal font size, and the default-off bounded screen-reader text mirror for
-  the visible terminal viewport.
-- Mobile: touch-specific terminal behavior when running on a coarse pointer device.
-
-When viewing all of multiple hosts, use the Spaces list `…` menu to group spaces by host or keep a
-flat list with host context in each row. The menu stays hidden in single-host scope.
-
-Multi-host Space selection is enabled by default, retaining one active Space per host in
-Space-scoped views. Turn it off under Settings → Display to keep only the selected host's Space,
-Agents, Tabs, and Notes in those views. All scope continues to show content from every host.
-
-Terminal input payloads can be sent as JSON or binary WebSocket frames. JSON remains the default;
-binary is available for comparing terminal input performance. Terminal input batching is off by
-default. When enabled, short input chunks are coalesced for `32`, `64`, `128`, or `256` ms and are
-flushed early once the pending UTF-8 input reaches 32 bytes, so paste-like input bypasses the delay.
-The web app and bridge compress terminal output with gzip when both support it. Older bridges and
-browsers keep uncompressed output.
-
-## Launcher Presets
-
-The create menu is owned by the bridge. By default it shows these built-ins, in order:
-
-`Shell`, `Codex`, `Claude`, `pi`, `Grok`, `OpenCode`.
-
-The bridge can load local launcher presets from:
-
-```text
-${XDG_CONFIG_HOME:-~/.config}/herdr-web/launcher-presets.json
-```
-
-Override the path with `--launcher-presets PATH` or `HERDR_WEB_LAUNCHER_PRESETS=PATH`. The legacy
-configuration name and location are retained so existing Herdr Web/World installations do not lose
-their launcher list during the product rename.
-
-Optional `builtins` is an allowlist that chooses which built-ins appear and in what order. Omit it to
-show every built-in. Use `[]` to hide all built-ins and keep only custom presets. Entries may be short
-names (`shell`) or full ids (`builtin:shell`). Unknown names are ignored with a warning. Bridges that
-do not yet understand `builtins` reject the whole file (unknown field); upgrade the bridge before
-adding this key.
-
-Example:
-
-```json
-{
-  "version": 1,
-  "builtins": ["shell", "claude", "grok", "opencode"],
-  "presets": [
-    {
-      "id": "codex-gpt5",
-      "label": "Codex GPT-5",
-      "agent_hint": "codex",
-      "argv": ["codex", "--model", "gpt-5"]
-    },
-    {
-      "id": "remote-codex",
-      "label": "Remote Codex",
-      "agent_hint": "codex",
-      "argv": ["ssh", "-t", "host", "cd ~/repo && exec codex --model gpt-5"]
-    },
-    {
-      "id": "team-agent",
-      "label": "Team Agent",
-      "argv": ["team-agent"]
-    }
-  ]
-}
-```
-
-Presets use explicit argv, not multi-step terminal typing. Use `["bash", "-lc", "... && exec codex"]`
-when shell sequencing is needed. `agent_hint` injects `HERDR_AGENT=<agent>` for the launched process;
-Herdr uses that hint to detect agents behind wrappers, SSH, containers, and VMs.
-
-Built-in agent choices are managed Herdr agents. For a new tab or split, the bridge first creates
-the destination pane, then calls Herdr `agent.start` with that pane and the built-in agent kind. It
-waits for the agent to become interactive; a rejected launch, early process exit, or startup timeout
-closes the tab or pane created for that attempt. Shell creates the destination shell without an
-`agent.start` call.
-
-Custom presets are intentionally different: the bridge gives their complete `argv` to Herdr's
-layout command unchanged. It does not reinterpret the executable as a managed built-in or prepend
-an agent command. This preserves wrappers, SSH commands, containers, and other exact command lines;
-`agent_hint` remains optional detection metadata for the launched process.
-
-## Run Locally
-
-The canonical working directory is this repository root. For the complete local stack, start or
-attach a normal Herdr `v0.8.2` or newer session with terminal protocol `20` first, then run:
-
-```bash
-herdr status server
-herdr session list
 npm run dev:local
 ```
 
-Open the full app at:
+The full application is served at [http://127.0.0.1:8787](http://127.0.0.1:8787). Run
+`npm run check` before submitting changes.
 
-```text
-http://127.0.0.1:8787
-```
-
-`dev:local` starts or reuses the bridge and starts Vite for frontend hot reload. The bridge URL is
-the canonical URL because it serves the complete built app and connects directly to Herdr. Vite
-normally uses `http://127.0.0.1:5173`; if that port is occupied, it reports the next available
-port. Stop the foreground process with `Ctrl-C`.
-
-For the detailed layer checklist, optional OTEL setup, manual two-terminal startup, and diagnosis,
-see [docs/development.md](docs/development.md).
-
-The equivalent manual production-style startup is:
-
-```bash
-npm run build
-scripts/run-bridge.sh
-```
-
-The launcher uses the installed/stable Herdr socket by default:
-
-```text
-~/.config/herdr/herdr.sock
-```
-
-This avoids debug builds falling back to Herdr's `herdr-dev` app directory. To target a named or
-development Herdr session, either pass `--session NAME` to the bridge or set `HERDR_SOCKET_PATH`
-explicitly before running the script.
-
-Open:
-
-```text
-http://127.0.0.1:8787
-```
-
-For LAN/mobile testing, replace the example hostname with the exact hostname the client uses:
-
-```bash
-HOST=0.0.0.0 PORT=4000 scripts/run-bridge.sh \
-  --allow-host herdr-host.example \
-  --allow-origin http://localhost
-```
-
-Uploads are saved under `HERDR_WEB_UPLOAD_DIR`, `XDG_DATA_HOME/herdr-web/uploads`, or
-`~/.local/share/herdr-web/uploads` by default. These legacy storage names remain compatible with
-existing installations. Override the bridge upload directory with:
-
-```bash
-UPLOAD_DIR=/tmp/herdr-world-uploads scripts/run-bridge.sh
-```
-
-The bridge rejects cross-origin browser requests unless the request origin is explicitly allowed.
-The bundled Android app uses `http://localhost`, so LAN Android testing needs
-`--allow-origin http://localhost`. Bind to `0.0.0.0` only on trusted networks.
-
-For browser-served multi-bridge setups, configure both directions explicitly:
-
-- On the bridge being called, use `--allow-origin ORIGIN` for the web page origin that may call it.
-- On the bridge serving the web page, use `--allow-connect-origin ORIGIN` for each other bridge
-  origin that the page may connect to. This expands the served page's Content Security Policy for
-  both HTTP and WebSocket bridge traffic.
-
-For example, if the page is opened from `http://host-a:8787` and should connect to
-`http://host-b:8787`:
-
-```bash
-# host A, serving the web page
-HOST=0.0.0.0 scripts/run-bridge.sh \
-  --bridge-label "Host A" \
-  --allow-host host-a \
-  --allow-origin http://host-a:8787 \
-  --allow-connect-origin http://host-b:8787
-
-# host B, serving the backend being called
-HOST=0.0.0.0 scripts/run-bridge.sh \
-  --bridge-label "Host B" \
-  --allow-host host-b \
-  --allow-origin http://host-a:8787
-```
-
-There is no central gateway: the browser talks directly to each configured bridge, and each bridge
-talks only to its host-local Herdr runtime. See [docs/federation.md](docs/federation.md) for complete
-startup, SSH-forwarding, failure, and compatibility guidance, and
-[docs/architecture.md](docs/architecture.md) for the client boundaries.
-
-## Keyboard Shortcuts
-
-These app shortcuts are ignored while dialogs, menus, and normal text inputs are active. They still
-work when the terminal's hidden keyboard input has focus. OS-reserved shortcuts such as `Cmd+Tab`,
-`Meta+Tab`, or some `Alt+Tab` setups may not reach the browser.
-
-| Action | macOS | Windows/Linux |
-| --- | --- | --- |
-| Select previous/next agent pane | `Cmd/Option+Shift+Up/Down` | `Meta/Alt+Shift+Up/Down` |
-| Select previous/next tab in the active space | `Cmd/Option+Shift+Left/Right` | `Meta/Alt+Shift+Left/Right` |
-| Focus split left/down/up/right | `Cmd/Option(+Shift)+H/J/K/L` | `Meta/Alt(+Shift)+H/J/K/L` |
-| Cycle split next | `Cmd/Option+Tab` | `Meta/Alt+Tab` |
-| Cycle split previous | `Cmd/Option+Shift+Tab` | `Meta/Alt+Shift+Tab` |
-| Split selected pane down | `Cmd/Option+Shift+V` | `Meta/Alt+Shift+V` |
-| Split selected pane right | `Cmd/Option+Shift+-` | `Meta/Alt+Shift+-` |
-| Open the new-tab launch modal | `Cmd/Option+Shift+T` | `Meta/Alt+Shift+T` |
-| Confirm close for the focused split, or tab when only one split exists | `Cmd/Option+Shift+X` | `Meta/Alt+Shift+X` |
-
-## Runtime Model
-
-The bridge exposes:
-
-- `GET /api/capabilities`: bridge feature flags and allow-listed browser commands
-- `GET /api/snapshot`: workspaces, tabs, panes, layouts, and shared web selection
-- `POST /api/command`: allow-listed workspace/tab/pane commands
-- `POST /api/selection`: bridge-owned selected pane for syncing browser clients
-- `GET /api/notes` and `POST /api/notes...`: bridge-owned pane notes
-- `GET /api/agent-activity`: bridge-tracked agent status transition activity
-- `GET /api/agent-pins` and `POST /api/agent-pins/{pane_id}/pin|unpin`: bridge-owned agent pins
-- `POST /api/uploads`: save uploaded files into the configured upload directory
-- `GET /ws/activity`: bridge-owned pane activity deltas
-- `GET /ws/events`: Herdr structural events
-- `GET /ws/ui-events`: bridge-local UI events such as selection changes
-- `GET /ws/terminal`: terminal attach stream
-
-Herdr core currently allows only one terminal attach owner per terminal. The bridge works around
-that by opening one Herdr terminal attach per `terminal_id` and broadcasting output to all browser
-clients viewing that terminal.
-
-When their individual capabilities are advertised, input, scroll, and resize from any browser are
-forwarded through the shared attach. A host that advertises only terminal attach remains read-only.
-Sizing is currently last resize wins. The header's refit button forces the current browser to send a
-fresh fit/resize frame only when resize is supported.
-
-API and WebSocket requests must use an allowed bridge `Host` header. Browser-originated requests
-must also be same-origin with the bridge, an explicitly allowed origin such as Android's
-`http://localhost`, or a loopback development proxy origin allowed for Vite. Hostname backends must
-be explicitly allowed with `--allow-host HOSTNAME`. This is a DNS-rebinding/CSRF guard, not user
-authentication.
-
-Bridge-owned notes are part of that same request policy. Any allowed bridge client can read and
-mutate saved note content, including clients connecting over a trusted LAN when the bridge is bound
-to a non-loopback interface. Do not store sensitive notes on a bridge exposed to untrusted networks.
-
-Bridge-served pages also send a Content Security Policy. By default, `connect-src` allows only the
-serving bridge origin and `data:`. Use `--allow-connect-origin ORIGIN` on the serving bridge when
-that page should connect to another bridge; the bridge adds matching HTTP and WebSocket
-`connect-src` entries for that origin.
-
-Sync navigation is on by default. Selecting a pane updates `/api/selection`, broadcasts over
-`/ws/ui-events`, and other clients with sync enabled switch to the same pane. Clients can turn sync
-off in Display settings to keep each open tab's pane selection in that tab's in-memory app state.
-The Sync setting is shared by every tab on the same browser origin; no pane selection is stored per
-tab. Navigation with sync off still uses the same Herdr session: terminal input, structural
-commands, and workspace, tab, and pane changes remain shared.
-
-## Vendoring Strategy
-
-The repository intentionally vendors only the Herdr compatibility pieces the bridge builds against,
-not the full upstream Herdr application. This is the practical short-term path because the web app
-needs private APIs that are not available from released Herdr:
-
-- internal API client and schema types
-- client socket path discovery
-- terminal attach protocol messages
-- terminal ANSI render encoding
-- scroll and resize protocol frames
-
-The shipped bridge is `herdr-world-bridge`, a slim executable owned by this repo. It depends on the
-local `vendor/herdr-compat` crate for copied Herdr protocol/schema/client/socket helpers and keeps
-bridge HTTP/WebSocket behavior in `bridge/src/web_bridge.rs`. A separate upstream Herdr checkout can
-be used for refreshes and drift audits, but a full `vendor/herdr` snapshot is not part of this repo.
-The cost is that `vendor/herdr-compat` must be kept compatible with Herdr protocol changes.
-The current compatibility baseline is Herdr `v0.8.2` and terminal protocol `20`; the bridge requires
-that exact protocol rather than attempting to decode older or newer private wire formats.
-
-See [docs/vendoring.md](docs/vendoring.md) for the refresh process.
-
-See [docs/packaging.md](docs/packaging.md) for desktop tarball, npm, Homebrew, and APK artifact packaging.
-
-See [docs/release.md](docs/release.md) for release validation, browser smoke testing, tagging,
-single-workflow distribution, and the one-time npm bootstrap.
+Binding the bridge beyond loopback is security-sensitive and requires explicit host and origin
+allow-lists. Use a VPN, SSH tunnel, or authenticated reverse proxy for remote access. See the
+[development](docs/development.md), [federation](docs/federation.md), [Android](docs/android.md), and
+[packaging](docs/packaging.md) guides for detailed workflows.
 
 ## Contributing And Support
 
-Focused contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md).
-Use [GitHub Issues](https://github.com/IvoryHeart/herdr-world/issues) for bugs
-and scoped feature proposals. Security issues should follow
-[`SECURITY.md`](SECURITY.md) and must not be disclosed publicly before a fix is
-available. Community support is best-effort and has no SLA.
+Contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md). Use
+[GitHub Issues](https://github.com/IvoryHeart/herdr-world/issues) for bugs and focused feature
+requests. Security reports must follow [`SECURITY.md`](SECURITY.md) and should not be disclosed
+publicly before a fix is available. Community support is best-effort.
 
-## License And Attribution
+## Licensing
 
-Herdr World's MIT license retains the Herdr Web copyright notice and adds the
-downstream `IvoryHeart contributors` notice; publishing under the IvoryHeart
-project identity does not require exposing a maintainer's legal name.
-
-Apache-2.0 Herdr compatibility source, Claw-Empire character assets and Office
-adaptations, and the PixiJS MIT dependency are declared in
-[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Exact Herdr source hashes
-are in [`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml),
-and the World asset hashes and modification record are in
-[`docs/world-assets.md`](docs/world-assets.md). Complete generated production
-npm and desktop Cargo licence inventories are retained under
-[`third_party/dependencies`](third_party/dependencies/README.md) and shipped in
-binary bundles.
-
-## Long-Term Direction
-
-The cleaner upstream shape is for Herdr to expose a supported web bridge or public protocol surface:
-
-- stable snapshot endpoint
-- stable command allow-listing
-- stable event stream
-- terminal attach fanout or multi-client attach
-- exact pane focus/selection API
-- resize ownership semantics
-- browser auth/token support
-
-Once that exists, this repository can drop most or all of `vendor/herdr-compat` and use the public
-surface.
+Herdr World is available under the [MIT License](LICENSE). Bundled components and assets retain
+their own licences and notices; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
+generated inventories in [`third_party/dependencies`](third_party/dependencies/README.md).
 
 ## Acknowledgements
 
-`herdr-world` builds on several projects and tools:
-
-- [Herdr](https://github.com/herdrdev/herdr), the terminal workspace manager this app extends.
-- [Ghostty Web](https://www.npmjs.com/package/ghostty-web), used by the browser terminal renderer.
-- [Ghostty](https://github.com/ghostty-org/ghostty), including Ghostty VT / `libghostty-vt`,
-  vendored through Herdr and used for terminal emulation in Herdr core.
+Herdr World builds on [Herdr](https://github.com/herdrdev/herdr),
+[Herdr Web](https://github.com/kcosr/herdr-web),
+[Ghostty Web](https://www.npmjs.com/package/ghostty-web),
+[Ghostty](https://github.com/ghostty-org/ghostty), [PixiJS](https://pixijs.com/), and character art
+adapted from [Claw-Empire](https://github.com/thinkinaixyz/claw-empire). Thank you to their
+maintainers and contributors.
