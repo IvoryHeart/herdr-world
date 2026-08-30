@@ -1,6 +1,6 @@
 id = "ivoryheart.herdr-world"
 name = "Herdr World"
-version = "0.1.0-rc.14"
+version = "0.1.0-rc.15"
 min_herdr_version = "0.8.2"
 description = "Browser and mobile client for monitoring and controlling Herdr agents."
 platforms = ["linux", "macos"]
