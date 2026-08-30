@@ -1,4 +1,4 @@
-export type TerminalAttachFocusSnapshot = {
+export type TerminalAutoFocusSnapshot = {
   target: Element | null;
   externalFocusSequence: number;
 };
@@ -7,11 +7,11 @@ export function shouldRestoreTerminalFocus(options: {
   autoFocus: boolean;
   currentTarget: Element | null;
   currentExternalFocusSequence: number;
-  attachSnapshot: TerminalAttachFocusSnapshot;
+  activationSnapshot: TerminalAutoFocusSnapshot;
 }) {
   return (
     options.autoFocus
-    && options.currentExternalFocusSequence === options.attachSnapshot.externalFocusSequence
-    && options.currentTarget === options.attachSnapshot.target
+    && options.currentExternalFocusSequence === options.activationSnapshot.externalFocusSequence
+    && options.currentTarget === options.activationSnapshot.target
   );
 }

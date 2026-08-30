@@ -298,9 +298,10 @@ test("opens one stable live conversation bubble for the selected Office agent", 
   const secondAgent = page.locator(".agent-row").filter({ hasText: "Codex B" });
   await secondAgent.click();
   const openBubbles = page.locator("[data-world-conversation='open']");
+  const secondDialog = page.getByRole("dialog", { name: "Codex B" });
   await expect(openBubbles).toHaveCount(2);
   await expect(page.getByRole("dialog", { name: "Codex A" })).toBeVisible();
-  await expect(page.getByRole("dialog", { name: "Codex B" })).toBeVisible();
+  await expect(secondDialog).toBeVisible();
   await expect(connector.locator("path[data-anchor='workbench']")).toHaveCount(2);
   await expect(connector.locator("path[data-anchor='agent']")).toHaveCount(2);
 
@@ -308,10 +309,9 @@ test("opens one stable live conversation bubble for the selected Office agent", 
   await expect(officeStage).toBeVisible();
   await expect
     .poll(() =>
-      page.evaluate(() => Boolean(
-        document.activeElement instanceof Element
-          && document.activeElement.closest(".world-conversation-terminal"),
-      )),
+      secondDialog.locator(".world-conversation-terminal").evaluate((element) =>
+        element.contains(document.activeElement),
+      ),
     )
     .toBe(true);
   // Let terminal autofocus settle, then move focus to the persistent page

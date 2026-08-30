@@ -21,6 +21,12 @@
 
 ### Fixed
 
+- Preserved external Office focus across terminal connection retries so a late
+  terminal autofocus cannot consume Escape instead of closing the topmost
+  conversation window.
+  [Issue #5](https://github.com/IvoryHeart/herdr-world/issues/5),
+  [Herdr World PR #61](https://github.com/IvoryHeart/herdr-world/pull/61)
+
 ### Removed
 
 ## [0.1.0-rc.15] - 2026-08-30
