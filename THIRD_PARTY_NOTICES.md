@@ -41,6 +41,15 @@ World rendering uses PixiJS 8.3.4, licensed under the MIT License, Copyright
 [`third_party/licenses/PixiJS-MIT.txt`](third_party/licenses/PixiJS-MIT.txt)
 and alongside the shipped World assets.
 
+## JetBrains Mono Nerd Font
+
+The terminal includes `JetBrainsMonoNerdFontMono-Regular.woff2` as a fallback
+for box-drawing, symbol, and private-use glyphs. The font is licensed under the
+SIL Open Font License 1.1, Copyright 2020 The JetBrains Mono Project Authors.
+The copyright notice and full license are retained in
+[`web/public/fonts/OFL.txt`](web/public/fonts/OFL.txt) and shipped alongside
+the font.
+
 ## Other dependencies
 
 JavaScript and Rust dependency versions are pinned by `package-lock.json`,
