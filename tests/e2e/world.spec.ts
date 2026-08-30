@@ -304,8 +304,8 @@ test("opens one stable live conversation bubble for the selected Office agent", 
   await expect(connector.locator("path[data-anchor='workbench']")).toHaveCount(2);
   await expect(connector.locator("path[data-anchor='agent']")).toHaveCount(2);
 
-  const resetOfficeView = page.getByRole("button", { name: "Reset office view" });
-  await expect(resetOfficeView).toBeVisible();
+  const officeStage = page.getByRole("region", { name: "Scrollable Pixel Office scene" });
+  await expect(officeStage).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => Boolean(
@@ -314,13 +314,15 @@ test("opens one stable live conversation bubble for the selected Office agent", 
       )),
     )
     .toBe(true);
-  await resetOfficeView.focus();
-  await expect(resetOfficeView).toBeFocused();
+  // Let terminal autofocus settle, then move focus to the persistent page
+  // region before exercising the page-level Escape handler.
+  await officeStage.focus();
+  await expect(officeStage).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(openBubbles).toHaveCount(1);
   await expect(page.getByRole("dialog", { name: "Codex A" })).toBeVisible();
-  await resetOfficeView.focus();
-  await expect(resetOfficeView).toBeFocused();
+  await officeStage.focus();
+  await expect(officeStage).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(openBubbles).toHaveCount(0);
 });
