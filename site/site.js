@@ -1,12 +1,12 @@
-// Current public preview: v0.1.0-rc.14
+// Current public preview: v0.1.0-rc.15
 const installCommands = {
   npm: `npm install --global @ivoryheart/herdr-world@next
 herdr-world`,
   brew: `brew install IvoryHeart/tap/herdr-world-rc
 herdr-world`,
-  herdr: `herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.14
+  herdr: `herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.15
 herdr plugin action invoke open --plugin ivoryheart.herdr-world`,
-  cli: `VERSION=v0.1.0-rc.14
+  cli: `VERSION=v0.1.0-rc.15
 PLATFORM=linux-x86_64
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-\${PLATFORM}.tar.gz"
 curl -fLO "https://github.com/IvoryHeart/herdr-world/releases/download/\${VERSION}/herdr-world-\${VERSION}-\${PLATFORM}.tar.gz.sha256"
