@@ -2,7 +2,7 @@
 
 - **Parent spec:** [`016-herdr-world-plugin-release-spec.md`](016-herdr-world-plugin-release-spec.md)
 - **Implemented at:** 2026-08-29
-- **Implementation status:** Implementation complete; first tagged release validation pending
+- **Implementation status:** Complete; tagged three-platform validation passed
 
 > This summary records the delivered implementation, subsequent contract
 > clarification, decisions, validation evidence, and the release-time
@@ -115,3 +115,21 @@
 tagged post-publication three-platform smoke remains pending.
 
 **Follow-up extension:** None.
+
+### 2026-08-30 — Tagged release validation completed
+
+- **Implemented:** Published Herdr World through the protected `v0.1.0-rc.15`
+  release workflow, retained the public `herdr-plugin` repository topic, and
+  made the plugin discoverable through the generated Herdr marketplace index.
+- **Evidence:** The tagged release workflow passed the stock-Herdr plugin
+  lifecycle smoke on Linux x86-64, macOS ARM64, and macOS x86-64. The same run
+  published the matching GitHub release, npm `next` package, and Homebrew RC
+  Formula. See [release run 33308114443](https://github.com/IvoryHeart/herdr-world/actions/runs/33308114443)
+  and [release `v0.1.0-rc.15`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15).
+- **Constraints / operational notes:** The marketplace index is generated on
+  its own schedule, so the displayed manifest version may briefly trail the
+  repository and published package. Installation remains exact-versioned and
+  does not depend on that displayed version.
+- **Drift from approved spec:** None. This evidence satisfies the pending
+  tagged post-publication validation recorded above.
+- **Follow-up extension:** None.

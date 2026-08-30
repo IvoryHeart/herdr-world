@@ -93,7 +93,7 @@ of hidden requirements.
 
 ### SUG-002 — OTEL-backed Office observability boards
 
-- **Status:** open
+- **Status:** promoted
 - **Scope:** `observability`, `office-view`
 - **Value:** Make agent activity, traces, logs, metrics, and later derived
   signals useful from the same Office context as the live terminal.
@@ -105,10 +105,17 @@ of hidden requirements.
 - **Owner:** Open
 - **Added:** 2026-08-06
 - **Related:** [`002-herdr-observability-extension-contract-spec.md`](specs/002-herdr-observability-extension-contract-spec.md)
+- **Related:** [`005-observability-provider-and-office-projection-spec.md`](specs/005-observability-provider-and-office-projection-spec.md)
+- **Related:** [`006-office-observability-settings-spec.md`](specs/006-office-observability-settings-spec.md)
+- **Current slice:** The versioned provider contract, optional Prometheus read
+  adapter, live provider configuration and health, and bounded Workforce and
+  Economy Office boards are delivered. Exact per-agent attribution, traces,
+  logs, and the separate activity timeline remain possible later slices rather
+  than unfinished requirements of the current boards.
 
 ### SUG-003 — Unified Herdr Office distribution
 
-- **Status:** open
+- **Status:** promoted
 - **Scope:** `packaging`, `herdr-web`, `office-view`
 - **Value:** Let users install and run the compatible Herdr runtime, web
   experience, bridge, Office view, and optional extensions as one product.
@@ -119,6 +126,13 @@ of hidden requirements.
   licensing/trademark review.
 - **Owner:** Open
 - **Added:** 2026-08-06
+- **Related:** [`016-herdr-world-plugin-release-spec.md`](specs/016-herdr-world-plugin-release-spec.md)
+- **Related:** [`017-herdr-world-automated-release-distribution-spec.md`](specs/017-herdr-world-automated-release-distribution-spec.md)
+- **Current slice:** Versioned GitHub archives, one universal npm package,
+  Linux/macOS Homebrew Formulae, checksums, a single launcher, and the Herdr
+  plugin lifecycle are delivered and validated through one protected release
+  workflow. The first stable `v0.1.0` release remains pending. Signed Android,
+  additional native targets, and official Homebrew submission remain deferred.
 
 ### SUG-004 — Multi-server bridge or connection coordinator
 
