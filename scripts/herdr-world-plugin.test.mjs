@@ -275,6 +275,8 @@ test("build installs and verifies the exact payload using a private prefix", () 
   mkdirSync(bin);
   writeFileSync(path.join(root, "herdr-plugin.toml"), readFileSync(path.join(ROOT, "herdr-plugin.toml")));
   const log = path.join(root, "npm-args.json");
+  const localPackage = path.join(root, `herdr-world-v${MANIFEST_VERSION}.tgz`);
+  writeFileSync(localPackage, "release candidate fixture");
   const fakeNpm = path.join(bin, "npm");
   const manifestVersion = JSON.stringify(MANIFEST_VERSION);
   executableScript(fakeNpm, `#!${process.execPath}
@@ -296,7 +298,12 @@ fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: 
   try {
     buildPayload({
       root,
-      env: { ...process.env, PATH: bin, FAKE_NPM_LOG: log },
+      env: {
+        ...process.env,
+        PATH: bin,
+        FAKE_NPM_LOG: log,
+        HERDR_WORLD_PLUGIN_PACKAGE: localPackage,
+      },
       nodePath: process.execPath,
       npmPath: fakeNpm,
       platform: "linux",
@@ -304,11 +311,32 @@ fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: 
       glibcVersion: "2.39",
     });
     const args = JSON.parse(readFileSync(log, "utf8"));
-    assert.equal(args.at(-1), `${PACKAGE_NAME}@${MANIFEST_VERSION}`);
+    assert.equal(args.at(-1), localPackage);
     assert.equal(args[args.indexOf("--ignore-scripts")], "--ignore-scripts");
     assert.equal(args[args.indexOf("--registry=https://registry.npmjs.org/")], "--registry=https://registry.npmjs.org/");
     assert.equal(args[args.indexOf("--@ivoryheart:registry=https://registry.npmjs.org/")], "--@ivoryheart:registry=https://registry.npmjs.org/");
     assert.equal(fsExists(path.join(root, ".herdr-world-plugin/node_modules/@ivoryheart/herdr-world/package.json")), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("build rejects a relative local release-candidate package path", () => {
+  const root = temporaryDirectory();
+  try {
+    writeFileSync(path.join(root, "herdr-plugin.toml"), readFileSync(path.join(ROOT, "herdr-plugin.toml")));
+    assert.throws(
+      () => buildPayload({
+        root,
+        env: { ...process.env, HERDR_WORLD_PLUGIN_PACKAGE: "candidate.tgz" },
+        nodePath: process.execPath,
+        npmPath: process.execPath,
+        platform: "linux",
+        arch: "x64",
+        glibcVersion: "2.39",
+      }),
+      /HERDR_WORLD_PLUGIN_PACKAGE must be an absolute path/,
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -530,13 +558,19 @@ if (process.env.HERDR_WORLD_REAL_LAUNCHD === "1") {
   });
 }
 
-test("release workflow gates the three-platform plugin smoke on npm publication", () => {
+test("release workflow gates publication on the three-platform unpublished plugin smoke", () => {
   const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
-  const npmJob = workflow.indexOf("  npm_publish:");
+  const packageJob = workflow.indexOf("  npm_package:");
+  const githubJob = workflow.indexOf("  github_release:");
   const pluginJob = workflow.indexOf("  plugin_smoke:");
-  assert.ok(npmJob >= 0 && pluginJob > npmJob);
-  assert.match(workflow.slice(pluginJob, workflow.indexOf("  homebrew_publish:", pluginJob)), /needs: \[npm_publish\]/);
-  assert.match(workflow.slice(pluginJob, workflow.indexOf("  homebrew_publish:", pluginJob)), /live-plugin-smoke\.sh/);
+  assert.ok(packageJob >= 0 && githubJob >= 0 && pluginJob >= 0);
+  const pluginSection = workflow.slice(pluginJob, workflow.indexOf("  homebrew_publish:", pluginJob));
+  const githubSection = workflow.slice(githubJob, workflow.indexOf("  homebrew_test:", githubJob));
+  assert.match(pluginSection, /needs: \[npm_package\]/);
+  assert.match(pluginSection, /PLUGIN_CHECKOUT:/);
+  assert.match(pluginSection, /PLUGIN_PACKAGE:/);
+  assert.match(pluginSection, /live-plugin-smoke\.sh/);
+  assert.match(githubSection, /needs: \[[^\]]*plugin_smoke[^\]]*homebrew_test[^\]]*\]/);
   assert.equal((workflow.match(/platform: linux-x86_64/g) ?? []).length >= 2, true);
   assert.match(workflow.slice(pluginJob), /platform: macos-arm64/);
   assert.match(workflow.slice(pluginJob), /platform: macos-x86_64/);
@@ -566,6 +600,9 @@ test("documents and tests the explicit stop-before-uninstall contract", () => {
   assert.match(smoke, /Installing .* while Herdr is stopped/);
   assert.match(smoke, /plugin install .*--ref/);
   assert.match(smoke, /wait_for_startup/);
+  assert.match(smoke, /mktemp -d \/tmp\/hwp\.XXXXXX/);
+  assert.match(smoke, /HERDR_WORLD_PLUGIN_PACKAGE="\$PLUGIN_PACKAGE"/);
+  assert.match(smoke, /plugin link "\$PLUGIN_CHECKOUT" --enabled/);
   assert.ok(smoke.indexOf('plugin install IvoryHeart/herdr-world') < smoke.indexOf('echo "Starting stock Herdr release smoke daemon and restoring the plugin service"'));
   assert.ok(smoke.indexOf("wait_for_startup") < smoke.indexOf("wait_for_bridge http://127.0.0.1:8787"));
   assert.ok(smoke.indexOf("invoke_default stop") < smoke.indexOf('plugin uninstall "$PLUGIN_ID"'));

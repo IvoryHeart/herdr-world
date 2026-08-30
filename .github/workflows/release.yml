@@ -514,7 +514,7 @@ jobs:
   github_release:
     name: Assemble and publish GitHub release
     if: github.event_name == 'push' && github.ref_type == 'tag'
-    needs: [provenance, native, external_state]
+    needs: [provenance, native, external_state, npm_install_test, plugin_smoke, homebrew_test]
     outputs:
       publication_result: ${{ steps.publish.outputs.result }}
       publication_url: ${{ steps.publish.outputs.url }}
@@ -638,10 +638,8 @@ jobs:
 
   homebrew_test:
     name: Homebrew Formula test (${{ matrix.platform }})
-    needs: [formula, github_release]
-    if: >-
-      always() && needs.formula.result == 'success' &&
-      (github.event_name != 'push' || needs.github_release.result == 'success')
+    needs: [formula]
+    if: always() && needs.formula.result == 'success'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -662,8 +660,7 @@ jobs:
           path: formula
           run-id: ${{ github.run_id }}
           github-token: ${{ github.token }}
-      - name: Download the local native archive for explicit preflight
-        if: github.event_name == 'workflow_dispatch'
+      - name: Download the local verified native archive
         uses: actions/download-artifact@v8
         with:
           name: desktop-${{ matrix.platform }}-${{ github.run_id }}
@@ -694,20 +691,16 @@ jobs:
           other_formula="herdr-world-rc"
           [[ "$formula_name" == "herdr-world-rc" ]] && other_formula="herdr-world"
           audit_args=()
-          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
-            audit_args+=(--online)
-          fi
           if [[ ! -f "$tap_root/Formula/${other_formula}.rb" ]]; then
             # The first channel cannot resolve its declared peer until that peer is published.
             audit_args+=(--except=conflicts)
           fi
           brew audit "${audit_args[@]}" "$qualified_formula"
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            archive="$(find formula-native -maxdepth 1 -type f -name 'herdr-world-*.tar.gz' -print -quit)"
-            [[ -n "$archive" ]] || { echo "no native archive was downloaded for manual Formula validation" >&2; exit 1; }
-            archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
-            FORMULA_ARCHIVE_URL="file://${archive}" FORMULA_PLATFORM="${{ matrix.platform }}" \
-              node --input-type=module - "$tap_root/Formula/${formula_name}.rb" <<'NODE'
+          archive="$(find formula-native -maxdepth 1 -type f -name 'herdr-world-*.tar.gz' -print -quit)"
+          [[ -n "$archive" ]] || { echo "no verified native archive was downloaded for Formula validation" >&2; exit 1; }
+          archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
+          FORMULA_ARCHIVE_URL="file://${archive}" FORMULA_PLATFORM="${{ matrix.platform }}" \
+            node --input-type=module - "$tap_root/Formula/${formula_name}.rb" <<'NODE'
           import { readFileSync, writeFileSync } from 'node:fs';
           const formulaPath = process.argv[2];
           const platform = process.env.FORMULA_PLATFORM;
@@ -720,7 +713,6 @@ jobs:
           }
           writeFileSync(formulaPath, localFormula);
           NODE
-          fi
           brew install --formula "$qualified_formula"
           brew test "$qualified_formula"
           brew reinstall --formula "$qualified_formula"
@@ -891,11 +883,8 @@ jobs:
 
   plugin_smoke:
     name: Herdr plugin smoke (${{ matrix.platform }})
-    if: >-
-      github.event_name == 'push' && github.ref_type == 'tag' &&
-      needs.npm_publish.result == 'success' &&
-      needs.npm_publish.outputs.publication_result != 'action-required'
-    needs: [npm_publish]
+    if: always() && needs.npm_package.result == 'success'
+    needs: [npm_package]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     strategy:
@@ -922,6 +911,40 @@ jobs:
         with:
           node-version: 22.14.0
           package-manager-cache: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package-${{ github.run_id }}
+          path: npm-output
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Stage the exact unpublished plugin candidate
+        id: candidate
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version="v0.0.0-rc.${GITHUB_RUN_ID}"
+          fi
+          checkout="${RUNNER_TEMP}/herdr-world-plugin-candidate"
+          mkdir -p "$checkout"
+          git archive HEAD | tar -x -C "$checkout"
+          node --input-type=module - "$checkout/herdr-plugin.toml" "${version#v}" <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const [manifestPath, version] = process.argv.slice(2);
+          const manifest = readFileSync(manifestPath, 'utf8');
+          const matches = manifest.match(/^version = "[^"]+"$/gm) ?? [];
+          if (matches.length !== 1) {
+            console.error('plugin manifest must contain exactly one top-level version');
+            process.exit(1);
+          }
+          writeFileSync(manifestPath, manifest.replace(matches[0], `version = "${version}"`));
+          NODE
+          package="${GITHUB_WORKSPACE}/npm-output/herdr-world-${version}.tgz"
+          [[ -f "$package" ]] || { echo "exact npm candidate is missing: $package" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "checkout=$checkout" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
       - name: Download verified stock Herdr v0.8.2
         env:
           HERDR_ASSET: ${{ matrix.herdr_asset }}
@@ -941,7 +964,9 @@ jobs:
       - name: Install and exercise the tagged Herdr plugin
         env:
           HERDR_BIN: ${{ runner.temp }}/herdr
-          VERSION: ${{ github.ref_name }}
+          VERSION: ${{ steps.candidate.outputs.version }}
+          PLUGIN_CHECKOUT: ${{ steps.candidate.outputs.checkout }}
+          PLUGIN_PACKAGE: ${{ steps.candidate.outputs.package }}
         run: scripts/live-plugin-smoke.sh
 
   homebrew_publish:

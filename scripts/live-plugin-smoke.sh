@@ -1,18 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Release smoke for the GitHub-installed plugin. The caller supplies a stock
-# Herdr binary for the runner's platform; the plugin itself supplies the
-# published npm payload and its platform-specific bridge.
+# Release smoke for either a local, unpublished candidate or the GitHub-installed
+# plugin. The caller supplies a stock Herdr binary for the runner's platform.
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HERDR_BIN="${HERDR_BIN:?set HERDR_BIN to the stock Herdr binary}"
 VERSION="${VERSION:?set VERSION to the release tag, including v}"
+PLUGIN_CHECKOUT="${PLUGIN_CHECKOUT:-}"
+PLUGIN_PACKAGE="${PLUGIN_PACKAGE:-}"
 PLUGIN_ID="ivoryheart.herdr-world"
 
 [[ -x "$HERDR_BIN" ]] || { echo "stock Herdr binary is not executable: $HERDR_BIN" >&2; exit 1; }
 [[ "$VERSION" == v* ]] || { echo "VERSION must be a v-prefixed release tag" >&2; exit 1; }
+if [[ -n "$PLUGIN_CHECKOUT" || -n "$PLUGIN_PACKAGE" ]]; then
+  [[ -n "$PLUGIN_CHECKOUT" && -n "$PLUGIN_PACKAGE" ]] || {
+    echo "PLUGIN_CHECKOUT and PLUGIN_PACKAGE must be supplied together" >&2
+    exit 1
+  }
+  [[ "$PLUGIN_CHECKOUT" == /* && -d "$PLUGIN_CHECKOUT" ]] || {
+    echo "PLUGIN_CHECKOUT must be an existing absolute directory" >&2
+    exit 1
+  }
+  [[ "$PLUGIN_PACKAGE" == /* && -f "$PLUGIN_PACKAGE" ]] || {
+    echo "PLUGIN_PACKAGE must be an existing absolute file" >&2
+    exit 1
+  }
+fi
 
-SMOKE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/herdr-world-plugin-smoke.XXXXXX")"
+# Keep every Herdr socket below macOS's short sockaddr_un path limit. In
+# particular, do not inherit the much longer per-runner TMPDIR on macOS.
+SMOKE_ROOT="$(mktemp -d /tmp/hwp.XXXXXX)"
 CONFIG_HOME="$SMOKE_ROOT/config"
 DATA_HOME="$SMOKE_ROOT/data"
 STATE_HOME="$SMOKE_ROOT/state"
@@ -192,9 +209,17 @@ NODE
 
 # Herdr runs startup hooks asynchronously after the ready message. Install while
 # it is stopped so the install test cannot race that one-shot startup dispatch.
-echo "Installing $PLUGIN_ID from GitHub at $VERSION while Herdr is stopped"
-HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
-  "$HERDR_BIN" plugin install IvoryHeart/herdr-world --ref "$VERSION" --yes
+if [[ -n "$PLUGIN_CHECKOUT" ]]; then
+  echo "Installing $PLUGIN_ID from the local $VERSION candidate while Herdr is stopped"
+  HERDR_WORLD_PLUGIN_PACKAGE="$PLUGIN_PACKAGE" \
+    bash "$PLUGIN_CHECKOUT/scripts/herdr-world-plugin.sh" build
+  HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
+    "$HERDR_BIN" plugin link "$PLUGIN_CHECKOUT" --enabled
+else
+  echo "Installing $PLUGIN_ID from GitHub at $VERSION while Herdr is stopped"
+  HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
+    "$HERDR_BIN" plugin install IvoryHeart/herdr-world --ref "$VERSION" --yes
+fi
 PLUGIN_CONFIG_DIR="$(HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin config-dir "$PLUGIN_ID")"
 [[ -d "$PLUGIN_CONFIG_DIR" ]] || { echo "plugin config directory was not retained" >&2; exit 1; }
@@ -248,7 +273,7 @@ NODE
 # Herdr has no uninstall hook; stop the controller-owned bridge first.
 invoke_default stop >/dev/null
 invoke_default status >/dev/null
-HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_STATE_HOME="$STATE_HOME" \
+HERDR_SOCKET_PATH="$SOCKET_A" XDG_CONFIG_HOME="$CONFIG_HOME" XDG_DATA_HOME="$DATA_HOME" XDG_STATE_HOME="$STATE_HOME" \
   "$HERDR_BIN" plugin uninstall "$PLUGIN_ID"
 [[ -d "$PLUGIN_CONFIG_DIR" ]] || { echo "uninstall removed plugin config/state unexpectedly" >&2; exit 1; }
 

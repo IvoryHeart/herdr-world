@@ -451,7 +451,11 @@ export function serviceName(identity, supervisor) {
   return supervisor === "launchd" ? `io.ivoryheart.herdr-world.${suffix}` : `herdr-world-${suffix}.service`;
 }
 
-export function npmInstallArgs(version, prefix = ".herdr-world-plugin") {
+export function npmInstallArgs(
+  version,
+  prefix = ".herdr-world-plugin",
+  packageSpec = `${PACKAGE_NAME}@${version}`,
+) {
   return [
     "install",
     `--registry=${REGISTRY}`,
@@ -464,7 +468,7 @@ export function npmInstallArgs(version, prefix = ".herdr-world-plugin") {
     "--no-audit",
     "--no-fund",
     "--omit=dev",
-    `${PACKAGE_NAME}@${version}`,
+    packageSpec,
   ];
 }
 
@@ -560,10 +564,22 @@ export function buildPayload({ root = ROOT, env = process.env, nodePath, npmPath
     throw new PluginError(`npm is unavailable: ${error.message}`);
   }
   const prefix = path.join(root, ".herdr-world-plugin");
+  let packageSpec = `${PACKAGE_NAME}@${manifest.version}`;
+  if (env.HERDR_WORLD_PLUGIN_PACKAGE) {
+    if (!path.isAbsolute(env.HERDR_WORLD_PLUGIN_PACKAGE)) {
+      throw new PluginError("HERDR_WORLD_PLUGIN_PACKAGE must be an absolute path");
+    }
+    try {
+      if (!statSync(env.HERDR_WORLD_PLUGIN_PACKAGE).isFile()) throw new Error("not a regular file");
+    } catch (error) {
+      throw new PluginError(`HERDR_WORLD_PLUGIN_PACKAGE is unavailable: ${error.message}`);
+    }
+    packageSpec = path.resolve(env.HERDR_WORLD_PLUGIN_PACKAGE);
+  }
   rmSync(prefix, { recursive: true, force: true });
   ensureDirectory(prefix);
   try {
-    const result = spawnSync(npm, npmInstallArgs(manifest.version, prefix), {
+    const result = spawnSync(npm, npmInstallArgs(manifest.version, prefix, packageSpec), {
       cwd: root,
       env: { ...env },
       stdio: "inherit",
