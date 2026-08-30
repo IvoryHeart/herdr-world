@@ -10,6 +10,7 @@
   on devices without an accessible Nerd Font.
   [PR #74](https://github.com/kcosr/herdr-web/pull/74), contributed by
   [Craig P. Motlin (@motlin)](https://github.com/motlin).
+  [Herdr World PR #60](https://github.com/IvoryHeart/herdr-world/pull/60)
 
 ### Changed
 
