@@ -1,20 +1,12 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
-
-### Added
-
-### Changed
+## [0.1.0-rc.14] - 2026-08-30
 
 ### Fixed
 
 - Fixed macOS launchd startup to rely on the plist's `RunAtLoad` behavior, include the failing
   supervisor command in diagnostics, and safely unload a partially bootstrapped service after
   startup failure while retaining recovery state when cleanup cannot be verified.
-
-### Removed
 
 ## [0.1.0-rc.13] - 2026-08-29
 
