@@ -48,8 +48,9 @@ gh workflow run release.yml --ref main
 ```
 
 Wait for the `Release distribution` run to pass before cutting the release. Rerun it if `main`
-advances before release preparation continues. The preflight builds and exercises synthetic
-artifacts but cannot publish.
+advances before release preparation continues. The preflight builds synthetic native, npm, and
+Homebrew artifacts; exercises the exact unpublished plugin and Formula on Linux x86-64, macOS
+ARM64, and macOS x86-64; and cannot publish.
 
 Do not cut a release without bridge test/build coverage.
 
@@ -60,21 +61,22 @@ Corrections use a new release-candidate number. For example, a correction after
 
 Desktop artifacts are built from the final tag by `.github/workflows/release.yml`; do not upload a
 locally built substitute. The explicit distribution preflight runs the same Linux, Apple-Silicon,
-and Intel matrix without publishing; ordinary pull requests rely on the normal CI workflow,
-including its release unit tests. Each native job checks the CPU format and bundle contents, then
-exercises the packaged bridge against two checksum-pinned stock Herdr v0.8.2 daemons. One required
-notice gate validates the complete cross-platform dependency closure before any native job starts,
-avoiding three redundant builds of the notice generator.
+and Intel artifact, Formula, and plugin lifecycle matrix without publishing; ordinary pull requests
+rely on the normal CI workflow, including its release unit tests. Each native job checks the CPU
+format and bundle contents, then exercises the packaged bridge against two checksum-pinned stock
+Herdr v0.8.2 daemons. One required notice gate validates the complete cross-platform dependency
+closure before any native job starts, avoiding three redundant builds of the notice generator.
+
 ## Herdr Plugin Release
 
 The plugin is released with the application tag but does not publish a second application artifact.
-After the exact npm package has been published or verified at the unprefixed tag version, the
-workflow installs `IvoryHeart/herdr-world --ref vX.Y.Z` and runs the plugin lifecycle smoke on all
-three supported targets: Linux x86-64/glibc 2.34+, macOS ARM64, and macOS x86-64. The smoke uses a
-checksum-pinned stock Herdr v0.8.2 daemon, checks action listing, first/repeated start, status,
-open, doctor, restart, browser readiness, a second session/port, and stop-before-uninstall. Its result
-and public repository URL appear in the common release summary. It does not publish, rebuild, or
-substitute the npm payload.
+Before any public channel is changed, the workflow installs the exact generated npm tarball into an
+isolated checkout and runs the plugin lifecycle smoke on all three supported targets: Linux
+x86-64/glibc 2.34+, macOS ARM64, and macOS x86-64. The smoke uses a checksum-pinned stock Herdr
+v0.8.2 daemon and checks the plugin build, action listing, startup restoration, first/repeated start,
+status, open, doctor, restart, browser readiness, a second session/port, and
+stop-before-uninstall. The explicit preflight and tagged workflow use the same unpublished-package
+path, so a failure prevents the GitHub release, npm channel, and Homebrew Formula from advancing.
 
 Install the plugin from the default branch or pin a release:
 
@@ -238,9 +240,10 @@ The script:
 - opens the next `## [Unreleased]` changelog section and pushes it
 
 The tag starts the release distribution workflow. It builds and verifies Linux x86-64, macOS ARM64,
-and macOS x86-64 archives, assembles a draft GitHub release, and publishes the enabled npm and
-Homebrew channels from the exact tested outputs. The release commit's site changes also trigger the
-Pages deployment. No separate desktop upload or documentation-edit step is required.
+and macOS x86-64 archives, npm package, plugin lifecycle, and Homebrew Formula before assembling the
+GitHub release or advancing a public package channel. It then publishes the enabled GitHub, npm, and
+Homebrew channels from those exact tested outputs. The release commit's site changes also trigger
+the Pages deployment. No separate desktop upload or documentation-edit step is required.
 
 ## Android Validation
 
