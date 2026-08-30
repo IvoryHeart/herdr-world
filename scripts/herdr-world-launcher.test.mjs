@@ -94,6 +94,19 @@ herdr_world_main --port 8794
   assert.doesNotMatch(namedSession.stderr, /unexpected socket lookup/);
 });
 
+test("task summaries go directly to the packaged reporter without starting or probing", () => {
+  const result = runLauncher(`
+herdr_world_default_socket() { echo 'unexpected socket lookup' >&2; return 1; }
+herdr_world_exec_bridge() { echo 'unexpected bridge start' >&2; }
+herdr_world_exec_task_summary() { printf 'summary'; printf ' <%s>' "$@"; printf '\\n'; }
+herdr_world_main task-summary "Running release tests" --ttl-ms 120000
+`);
+
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, "summary <Running release tests> <--ttl-ms> <120000>\n");
+  assert.doesNotMatch(result.stderr, /unexpected socket lookup|unexpected bridge start/);
+});
+
 test("a non-interactive launch fails safely with actionable instructions", () => {
   const result = runLauncher(`
 herdr_world_default_socket() { printf '/tmp/missing-herdr.sock\\n'; }

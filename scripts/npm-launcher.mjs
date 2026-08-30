@@ -49,8 +49,13 @@ export function selectBridge({
 
 export function packageHelp() {
   return `Usage: herdr-world [OPTIONS]
+       herdr-world task-summary [TEXT] [--ttl-ms N] [--pane ID] [--session NAME]
+       herdr-world task-summary --clear [--pane ID] [--session NAME]
 
 Starts the Herdr World browser bridge for the selected Herdr session.
+
+The task-summary command reports bounded, expiring harness metadata for the
+current Herdr pane without starting the browser bridge.
 
 Options are forwarded to the bridge:
   --host HOST                 Bind address (loopback by default)

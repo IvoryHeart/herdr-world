@@ -386,7 +386,7 @@ of hidden requirements.
 
 ### SUG-020 — Large semantic mobile hit targets
 
-- **Status:** open
+- **Status:** promoted
 - **Scope:** `office-view`, `mobile`
 - **Value:** Make desks, agents, and rooms reliably selectable on touch screens
   even when their art remains compact.
@@ -397,6 +397,13 @@ of hidden requirements.
   keyboard accessibility, and duplicate-selection handling.
 - **Owner:** Open
 - **Added:** 2026-08-06
+- **Current slice:** The canvas exposes qualified room, agent, and desk-station
+  buttons of at least 48 by 48 CSS pixels, grouping an occupied desk with its
+  agent to avoid duplicate selection. Compact layouts also provide bounded
+  Agents, Rooms, and Desks lists with touch-sized selection and available
+  Spaces handoff controls. A redesigned mobile-specific scene composition
+  remains tracked by SUG-019.
+- **Related:** [`007-office-ux-and-seat-actions-spec.md`](specs/007-office-ux-and-seat-actions-spec.md)
 
 ### SUG-021 — Agent, room, and Office cost attribution
 
@@ -454,8 +461,12 @@ of hidden requirements.
 - **Added:** 2026-08-09
 - **Current slice:** Herdr Web accepts optional `task_summary` metadata on
   snapshots and activity messages, bounds it, and surfaces it as a persistent
-  selected-agent Office callout. A native producer, TTL, privacy filter, and
-  upstream contract remain deferred.
+  selected-agent Office callout. The packaged `herdr-world task-summary`
+  producer now reports or clears the existing Herdr pane-metadata token, binds
+  reports to the active agent session, applies a bounded TTL, normalizes and
+  redacts credential-shaped text, and triggers live snapshot refresh through
+  `pane.updated`. Automatic harness-specific integrations and richer structured
+  progress remain deferred; the current slice needs no new upstream schema.
 - **Related:** [`008-office-productivity-ux-spec.md`](specs/008-office-productivity-ux-spec.md)
 - **Related:** [`002-herdr-observability-extension-contract-spec.md`](specs/002-herdr-observability-extension-contract-spec.md)
 

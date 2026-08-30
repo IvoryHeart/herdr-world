@@ -175,8 +175,13 @@ EOF
 herdr_world_help() {
   cat <<'EOF'
 Usage: herdr-world [OPTIONS]
+       herdr-world task-summary [TEXT] [--ttl-ms N] [--pane ID] [--session NAME]
+       herdr-world task-summary --clear [--pane ID] [--session NAME]
 
 Starts the Herdr World browser bridge for the selected Herdr session.
+
+The task-summary command reports bounded, expiring harness metadata for the
+current Herdr pane without starting the browser bridge.
 
 Options are forwarded to the bridge:
   --host HOST                 Bind address (loopback by default)
@@ -344,6 +349,10 @@ herdr_world_exec_bridge() {
   exec "$BRIDGE_BIN" --static-dir "$STATIC_DIR" "$@"
 }
 
+herdr_world_exec_task_summary() {
+  exec "$BRIDGE_BIN" task-summary "$@"
+}
+
 herdr_world_start_bridge() {
   local -a args=("$@")
   local port="8787"
@@ -372,6 +381,12 @@ herdr_world_main() {
   local herdr_bin=""
   local workspace=""
   local socket_is_ready=false
+
+  if [[ "${1:-}" == "task-summary" ]]; then
+    shift
+    herdr_world_exec_task_summary "$@"
+    return
+  fi
 
   for arg in "$@"; do
     if [[ "$arg" == "--no-herdr-setup" ]]; then

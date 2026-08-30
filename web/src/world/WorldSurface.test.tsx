@@ -92,6 +92,48 @@ describe("WorldSurface Agent Bar revision gating", () => {
     expect(agentBar()?.getAttribute("aria-hidden")).toBe("false");
     expect(agentButton()?.disabled).toBe(false);
   });
+
+  it("provides a compact semantic chooser that selects the exact agent", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const worldContext = context();
+    const agent = {
+      ...worldContext.projection.barAgents[0],
+      hostKey: "host-a",
+      roomKey: "room-a",
+      deskKey: "desk-a",
+      canOpenInSpaces: true,
+    };
+    worldContext.compact = true;
+    worldContext.projection.roster = [{
+      agent,
+      roomKey: "room-a",
+      roomLabel: "Platform",
+      hostKey: "host-a",
+      hostLabel: "Forge",
+      roomPresented: true,
+      deskPresented: true,
+      destinationPresented: true,
+    }];
+
+    await act(async () => {
+      root.render(<WorldSurface context={worldContext} />);
+    });
+
+    const chooser = container.querySelector<HTMLDetailsElement>(".world-compact-target-chooser");
+    const target = container.querySelector<HTMLButtonElement>(
+      ".world-compact-target-select[data-target-key='agent-a']",
+    );
+    expect(chooser).not.toBeNull();
+    expect(target?.textContent).toContain("Agent A");
+    expect(target?.textContent).toContain("Ready");
+
+    await act(async () => target?.click());
+
+    expect(worldContext.onSelect).toHaveBeenCalledWith("agent-a");
+  });
 });
 
 function layout(revision: number) {

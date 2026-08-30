@@ -121,6 +121,36 @@ To target an explicit socket:
 HERDR_SOCKET_PATH=/absolute/path/to/herdr.sock scripts/run-bridge.sh
 ```
 
+## Reporting agent task summaries
+
+A harness or hook running inside an active Herdr agent pane can publish a
+bounded status line for Office callouts:
+
+```bash
+herdr-world task-summary "Implementing semantic Office targets"
+herdr-world task-summary "Running browser shard 2/4" --ttl-ms 300000
+herdr-world task-summary --clear
+```
+
+The command talks directly to Herdr and does not start, stop, or restart the
+browser bridge. It uses `HERDR_PANE_ID` by default; `--pane ID` and
+`--session NAME` select an explicit target. New reports require an active
+`agent_session` and are bound to its agent and metadata source so stale harness
+state can be retired by Herdr. Clearing remains available after an agent exits.
+
+Summaries default to a 900,000 ms (15-minute) TTL; `--ttl-ms` accepts 1 through
+86,400,000 ms (24 hours). Input whitespace is normalized, output is capped at
+160 Unicode characters, and obvious bearer tokens, credential assignments,
+and common secret-key shapes are replaced with `[redacted]`. This is a bounded
+safety filter, not permission to include prompts, terminal output, credentials,
+or other secrets. The success result reports only the pane, operation, and TTL,
+not the summary text.
+
+Herdr World reads the existing `task_summary` pane-metadata token into browser
+snapshots. Herdr's `pane.updated` event refreshes the snapshot after reports,
+clears, and TTL expiry; no additional HTTP route or upstream protocol field is
+used.
+
 ## Optional Office telemetry
 
 The Office `Economy` board can read from any operator-managed Prometheus-

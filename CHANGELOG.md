@@ -6,6 +6,12 @@
 
 ### Added
 
+- Added `herdr-world task-summary` for agent harnesses to publish or clear bounded, expiring,
+  session-qualified Office summaries through Herdr's existing pane-metadata contract.
+  [Herdr World PR #61](https://github.com/IvoryHeart/herdr-world/pull/61)
+- Added 48 CSS-pixel semantic Office targets and a compact Agents, Rooms, and Desks chooser so
+  mobile users can select exact scene identities without relying on small pixel-art hit areas.
+  [Herdr World PR #61](https://github.com/IvoryHeart/herdr-world/pull/61)
 - Added a bundled JetBrainsMono Nerd Font Mono fallback for special terminal and LLM output glyphs
   on devices without an accessible Nerd Font.
   [PR #74](https://github.com/kcosr/herdr-web/pull/74), contributed by

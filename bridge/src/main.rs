@@ -7,6 +7,7 @@ mod observability_http;
 mod observability_prometheus;
 mod session;
 mod store_util;
+mod task_summary;
 mod web_bridge;
 mod workspace;
 

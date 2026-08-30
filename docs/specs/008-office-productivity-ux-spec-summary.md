@@ -42,3 +42,23 @@
 - **Follow-up extension:** None required for this slice. Future native summary
   metadata and authenticated federation require their own reviewed extension
   or upstream specification.
+
+### 2026-08-30 — Task-summary producer extension
+
+- **Implemented:** The packaged `herdr-world task-summary` command now reports
+  or clears the existing `task_summary` pane token without starting the web
+  bridge. Reports are bound to the pane's active agent session, normalized,
+  bounded to 160 Unicode characters, filtered for obvious credential-shaped
+  values, and expired by Herdr after a 15-minute default or caller-selected
+  bounded TTL. The bridge maps the token into snapshots and treats
+  `pane.updated` as structural so reports, clears, and expiry refresh the
+  browser.
+- **Evidence:** Rust unit coverage exercises command validation,
+  normalization, redaction, token mapping, snapshot serialization, and the
+  structural subscription. Launcher tests prove the command bypasses guided
+  setup. A live Herdr pane accepted, exposed, and cleared a report from the
+  built debug bridge.
+- **Contract change:** This supersedes the original producer/TTL deferral while
+  preserving the existing protocol boundary: Herdr `v0.8.2` already supplies
+  the metadata token, session-binding, expiry, and update-event primitives, so
+  no new upstream schema or browser route was needed.

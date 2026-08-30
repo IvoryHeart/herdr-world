@@ -145,9 +145,17 @@ pub(crate) struct RequestPolicy {
 struct Snapshot {
     workspaces: Vec<SnapshotWorkspaceInfo>,
     tabs: Vec<SnapshotTabInfo>,
-    panes: Vec<PaneInfo>,
+    panes: Vec<SnapshotPaneInfo>,
     layouts: Vec<PaneLayoutSnapshot>,
     selected_pane_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct SnapshotPaneInfo {
+    #[serde(flatten)]
+    info: PaneInfo,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    task_summary: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -887,6 +895,9 @@ impl From<io::Error> for UploadError {
 }
 
 pub(crate) fn run_command(args: &[String]) -> io::Result<i32> {
+    if crate::task_summary::is_task_summary_command(args) {
+        return crate::task_summary::run_task_summary_command(args);
+    }
     let options = match parse_options(args) {
         Ok(Some(options)) => options,
         Ok(None) => return Ok(0),
@@ -3084,6 +3095,14 @@ fn web_snapshot_from_session_snapshot(
         })
         .collect();
 
+    let panes = panes
+        .into_iter()
+        .map(|pane| SnapshotPaneInfo {
+            task_summary: crate::task_summary::task_summary_from_pane(&pane),
+            info: pane,
+        })
+        .collect();
+
     Snapshot {
         workspaces,
         tabs,
@@ -4285,6 +4304,7 @@ fn structural_event_subscriptions() -> Vec<Subscription> {
         Subscription::TabMoved {},
         Subscription::PaneCreated {},
         Subscription::PaneClosed {},
+        Subscription::PaneUpdated {},
         Subscription::PaneFocused {},
         Subscription::PaneMoved {},
         Subscription::PaneExited {},
@@ -5696,14 +5716,32 @@ mod tests {
 
     #[test]
     fn web_snapshot_adapter_preserves_web_shape_and_clear_name_flags() {
+        let mut session_snapshot = test_session_snapshot();
+        session_snapshot.panes[1].tokens.insert(
+            crate::task_summary::TASK_SUMMARY_TOKEN.to_string(),
+            "Reviewing the release checks".to_string(),
+        );
         let snapshot =
-            web_snapshot_from_session_snapshot(test_session_snapshot(), Some("pane-2".to_string()));
+            web_snapshot_from_session_snapshot(session_snapshot, Some("pane-2".to_string()));
 
         assert_eq!(snapshot.selected_pane_id.as_deref(), Some("pane-2"));
         assert_eq!(snapshot.workspaces.len(), 2);
         assert_eq!(snapshot.tabs.len(), 3);
         assert_eq!(snapshot.panes.len(), 4);
         assert_eq!(snapshot.layouts.len(), 3);
+        let summarized_pane = snapshot
+            .panes
+            .iter()
+            .find(|pane| pane.info.pane_id == "pane-2")
+            .unwrap();
+        assert_eq!(
+            summarized_pane.task_summary.as_deref(),
+            Some("Reviewing the release checks")
+        );
+        assert_eq!(
+            serde_json::to_value(summarized_pane).unwrap()["task_summary"],
+            "Reviewing the release checks"
+        );
 
         let default_workspace = snapshot
             .workspaces
@@ -5771,6 +5809,9 @@ mod tests {
             .any(|subscription| matches!(subscription, Subscription::PaneMoved {})));
         assert!(subscriptions
             .iter()
+            .any(|subscription| matches!(subscription, Subscription::PaneUpdated {})));
+        assert!(subscriptions
+            .iter()
             .any(|subscription| matches!(subscription, Subscription::LayoutUpdated {})));
         assert!(subscriptions
             .iter()
@@ -5825,6 +5866,10 @@ mod tests {
     fn structural_event_values_trigger_activity_resubscribe() {
         assert!(is_structural_event_value(&serde_json::json!({
             "event": "pane.created",
+            "data": { "pane_id": "pane-1" }
+        })));
+        assert!(is_structural_event_value(&serde_json::json!({
+            "event": "pane.updated",
             "data": { "pane_id": "pane-1" }
         })));
         assert!(!is_structural_event_value(&serde_json::json!({
