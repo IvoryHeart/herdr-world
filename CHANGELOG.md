@@ -8,6 +8,11 @@
 
 ### Changed
 
+- Replaced the reference-heavy README with a concise user guide covering installation, essential
+  advanced usage, contribution and support paths, licensing, acknowledgements, and Pixel Office
+  previews for desktop and mobile.
+  [Herdr World PR #59](https://github.com/IvoryHeart/herdr-world/pull/59)
+
 ### Fixed
 
 ### Removed
