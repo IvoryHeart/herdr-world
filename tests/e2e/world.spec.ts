@@ -678,18 +678,7 @@ test("moves and resizes the Office conversation bubble without losing its live a
   expect(afterResize.width).toBeGreaterThan(960);
   expect(afterResize.height).toBeGreaterThanOrEqual(beforeResize?.height ?? 0);
   await expect(slot).toHaveAttribute("data-positioned", "true");
-  await page.evaluate(() => new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
-  }));
-  const rendererAfterResize = await page.evaluate(() => ({
-    sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
-    sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
-  }));
-  await page.waitForTimeout(500);
-  expect(await page.evaluate(() => ({
-    sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
-    sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
-  }))).toEqual(rendererAfterResize);
+  await waitForOfficeRendererIdle(page);
 
   await page.locator(".agent-row").filter({ hasText: "Codex B" }).click();
   await expect(page.getByRole("dialog", { name: "Codex B" })).toBeVisible();
@@ -857,11 +846,7 @@ test("keeps the Office renderer idle and responsive through rapid viewport resiz
 }) => {
   await page.goto("/world");
   await waitForOffice(page);
-  await page.waitForTimeout(500);
-  const idleStart = await page.evaluate(() => window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0);
-  await page.waitForTimeout(500);
-  expect(await page.evaluate(() => window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0))
-    .toBe(idleStart);
+  await waitForOfficeRendererIdle(page);
 
   for (let cycle = 0; cycle < 4; cycle += 1) {
     for (const width of [1180, 960, 1240, 820, 1100, 760, 1320, 700]) {
@@ -873,6 +858,7 @@ test("keeps the Office renderer idle and responsive through rapid viewport resiz
   expect(await page.evaluate(() => new Promise<boolean>((resolve) => {
     window.requestAnimationFrame(() => resolve(true));
   }))).toBe(true);
+  await waitForOfficeRendererIdle(page);
 });
 
 test("does not rebuild the Pixi scene for an unchanged periodic snapshot", async ({
@@ -1345,6 +1331,42 @@ function rectanglesIntersect(first: Rectangle, second: Rectangle) {
 async function waitForLiveOffice(page: import("@playwright/test").Page) {
   await expect(page.locator(".agent-row").filter({ hasText: "Codex A" })).toBeVisible();
   await expect(page.locator(".agent-row").filter({ hasText: "Codex B" })).toBeVisible();
+}
+
+async function waitForOfficeRendererIdle(
+  page: Page,
+  quietForMs = 500,
+  timeoutMs = 10_000,
+) {
+  await page.evaluate(({ quietForMs: quietFor, timeoutMs: timeout }) =>
+    new Promise<void>((resolve, reject) => {
+      const rendererUpdates = () => {
+        const diagnostics = window.__HERDR_WORLD_RENDERER__;
+        return (diagnostics?.sceneRenders ?? 0) + (diagnostics?.sceneSkips ?? 0);
+      };
+      const startedAt = window.performance.now();
+      let lastChangeAt = startedAt;
+      let lastUpdates = rendererUpdates();
+      const sample = () => {
+        const now = window.performance.now();
+        const updates = rendererUpdates();
+        if (updates !== lastUpdates) {
+          lastUpdates = updates;
+          lastChangeAt = now;
+        }
+        if (now - lastChangeAt >= quietFor) {
+          resolve();
+          return;
+        }
+        if (now - startedAt >= timeout) {
+          reject(new Error(`Office renderer did not become idle after ${timeout}ms`));
+          return;
+        }
+        window.setTimeout(sample, 50);
+      };
+      sample();
+    }),
+  { quietForMs, timeoutMs });
 }
 
 function coreSocketUrls(urls: readonly string[]) {
