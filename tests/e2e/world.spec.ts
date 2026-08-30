@@ -649,9 +649,17 @@ test("moves and resizes the Office conversation bubble without losing its live a
   const resizeBox = await resizeHandle.boundingBox();
   expect(beforeResize).not.toBeNull();
   expect(resizeBox).not.toBeNull();
+  const rendererBeforeResize = await page.evaluate(() => ({
+    sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
+    sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
+  }));
   await page.mouse.move((resizeBox?.x ?? 0) + 12, (resizeBox?.y ?? 0) + 12);
   await page.mouse.down();
-  await page.mouse.move((resizeBox?.x ?? 0) + 52, (resizeBox?.y ?? 0) + 20);
+  await page.mouse.move(
+    (resizeBox?.x ?? 0) + 52,
+    (resizeBox?.y ?? 0) + 20,
+    { steps: 30 },
+  );
   await page.mouse.up();
 
   await expect.poll(async () => (await slot.boundingBox())?.width ?? 0).toBeGreaterThan(
@@ -674,6 +682,14 @@ test("moves and resizes the Office conversation bubble without losing its live a
   expect(afterResize.width).toBeGreaterThan(960);
   expect(afterResize.height).toBeGreaterThanOrEqual(beforeResize?.height ?? 0);
   await expect(slot).toHaveAttribute("data-positioned", "true");
+  const rendererAfterResize = await page.evaluate(() => ({
+    sceneRenders: window.__HERDR_WORLD_RENDERER__?.sceneRenders ?? 0,
+    sceneSkips: window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0,
+  }));
+  expect(
+    rendererAfterResize.sceneRenders - rendererBeforeResize.sceneRenders +
+      rendererAfterResize.sceneSkips - rendererBeforeResize.sceneSkips,
+  ).toBeLessThanOrEqual(12);
 
   await page.locator(".agent-row").filter({ hasText: "Codex B" }).click();
   await expect(page.getByRole("dialog", { name: "Codex B" })).toBeVisible();
@@ -834,6 +850,29 @@ test("shows perceptible working animation when motion is allowed", async ({ page
   expect(diagnostics?.reducedMotion).toBe(false);
   expect(diagnostics?.animation).toEqual({ characters: 1, monitors: 1, statuses: 1 });
   expect((diagnostics?.frames ?? 0) - start).toBeGreaterThan(2);
+});
+
+test("keeps the Office renderer idle and responsive through rapid viewport resizing", async ({
+  page,
+}) => {
+  await page.goto("/world");
+  await waitForOffice(page);
+  await page.waitForTimeout(500);
+  const idleStart = await page.evaluate(() => window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0);
+  await page.waitForTimeout(500);
+  expect(await page.evaluate(() => window.__HERDR_WORLD_RENDERER__?.sceneSkips ?? 0))
+    .toBe(idleStart);
+
+  for (let cycle = 0; cycle < 4; cycle += 1) {
+    for (const width of [1180, 960, 1240, 820, 1100, 760, 1320, 700]) {
+      await page.setViewportSize({ width, height: 900 });
+    }
+  }
+  await expect(page.getByRole("region", { name: "Scrollable Pixel Office scene" }))
+    .toBeVisible();
+  expect(await page.evaluate(() => new Promise<boolean>((resolve) => {
+    window.requestAnimationFrame(() => resolve(true));
+  }))).toBe(true);
 });
 
 test("does not rebuild the Pixi scene for an unchanged periodic snapshot", async ({

@@ -8,6 +8,7 @@ minimal effort.
 # Repository delivery workflow
 
 - Never commit or push directly to `main`. Make all repository changes, including release preparation and fixes, on a branch and deliver them through a pull request. Do not run automation that pushes `main` directly; stop and use a PR-based workflow or ask for direction if the automation cannot do that.
+- Treat opening the pull request as the delivery stopping point. Do not merge it unless the repository owner explicitly asks you to merge. Pull requests require independent review before merging unless the repository owner explicitly states that review is not required.
 
 Specifications are decision aids, not a gate on ordinary engineering work.
 Use one only when the repository owner asks for one or when a genuinely new

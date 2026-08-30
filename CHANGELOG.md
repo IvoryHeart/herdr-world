@@ -27,6 +27,10 @@
 
 ### Fixed
 
+- Stopped Office anchor updates from recursively rebuilding the Pixi scene while idle or resizing,
+  keeping the interface responsive without increasing terminal resize traffic.
+- Released scene-owned Pixi graphics contexts and text styles after each Office redraw so
+  long-running sessions do not retain every discarded scene until the tab crashes.
 - Preserved external Office focus across terminal connection retries so a late
   terminal autofocus cannot consume Escape instead of closing the topmost
   conversation window.
