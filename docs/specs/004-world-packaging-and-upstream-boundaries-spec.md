@@ -4,6 +4,7 @@
 - **Status:** Approved
 - **Created:** 2026-08-10
 - **Rewritten:** 2026-08-26
+- **Updated:** 2026-08-31
 - **Owner:** IvoryHeart / Herdr World
 - **Approved by:** IvoryHeart
 - **Supersedes:** the previous drafts of Specs 004, 010, and 011
@@ -46,7 +47,20 @@ shared upstream files. This is incremental cleanup, not a separate package or
 framework project.
 
 There is one application, one bridge manager, one runtime cache, and one
-terminal-session owner. `/` serves Spaces and `/world` serves World.
+terminal-session owner.
+
+## Product entry and primary navigation
+
+Office is the default Herdr World experience. A fresh application entry at
+`/`, and fallback resolution when no registered surface matches the current
+path, opens Office.
+
+The primary surface switch is ordered **Spaces** on the left and **Office** on
+the right. This is an intentional navigation order, independent of which
+surface opens by default. Spaces remains directly addressable at `/spaces`.
+The existing `/world` Office URL remains a compatible deep link, while `/` is
+the canonical Office entry URL. Switching surfaces and using browser
+back/forward navigation must keep the selected surface and URL in agreement.
 
 ## Updating from Herdr Web
 
@@ -105,6 +119,11 @@ The boundary is working when:
 
 - a clean Herdr World checkout installs, tests, and builds by itself;
 - one Herdr daemon and one World bridge serve working Spaces and World views;
+- a fresh load of `/` and an unknown-route fallback open Office;
+- the primary switch shows Spaces on the left and Office on the right;
+- `/spaces` opens Spaces, while `/world` continues to open Office;
+- switching surfaces and browser back/forward navigation preserve route and
+  view agreement;
 - `upstream/main` can be merged through ordinary Git;
 - most World changes stay inside the World-owned paths above;
 - the shared integration diff stays reviewable; and
