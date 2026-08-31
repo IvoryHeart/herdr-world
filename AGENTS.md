@@ -88,8 +88,13 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Changelog
 
-- `CHANGELOG.md` records Herdr World releases only. Do not copy the Herdr Web changelog into it;
-  correlate each World release with its exact Web synchronization point from `UPSTREAM.md`.
+- `CHANGELOG.md` records Herdr World release identities and downstream changes only. Do not copy or
+  relabel Herdr Web release sections. Follow the release-lineage convention in `UPSTREAM.md`.
+- Correlate every World release with the exact Herdr Web synchronization point from `UPSTREAM.md`.
+  Use "derived from" for synchronized Web source, "compatible with" for the external Herdr runtime
+  and protocol, and "depends on" only for an actual package or runtime dependency.
+- Update the synchronization point before release preparation. The release helper inserts it into
+  the World release section and release validation rejects a missing or stale correlation.
 - Add user-facing changes to `CHANGELOG.md` under `## [Unreleased]`.
 - Use these subsections when applicable: Breaking Changes, Added, Changed, Fixed, Removed.
 - Add the needed subsection under `## [Unreleased]` if it is missing; do not create duplicate subsection headings.
