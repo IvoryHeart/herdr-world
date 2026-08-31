@@ -62,6 +62,40 @@ The existing `/world` Office URL remains a compatible deep link, while `/` is
 the canonical Office entry URL. Switching surfaces and using browser
 back/forward navigation must keep the selected surface and URL in agreement.
 
+### World themes
+
+Office is the default World theme, not a separate application. The right-hand
+Office control becomes a theme selector in the same position, with **Office**,
+**Graph**, and **Mindcraft** as explicit choices. Spaces remains the separate
+left-hand primary surface. Changing the World theme must reuse the same bridge
+manager, runtime cache, terminal-session owner, and live application state; it
+must not start another collector or duplicate the Spaces/World data model.
+
+Graph is the next theme to implement. Its primary topology is project/space
+centric: each Herdr project or space is a main node, its agents are child
+nodes, and known agent-to-subagent relationships remain nested beneath their
+parent agent. The existing Agent Graph is reference implementation material,
+not code to copy unchanged: adapt its force-directed interaction, stable node
+identity, live status, selection, search, collapse, and fit behavior to Herdr
+World's React application and current bridge/runtime contracts.
+
+Mindcraft is the product name for the block-world theme. The existing Voxel
+skin is its starting material, but not its visual-quality baseline; Mindcraft
+needs substantial art, layout, interaction, and legibility work before it is a
+finished theme. It follows Graph in priority unless the repository owner
+changes that order.
+
+The source references reviewed for this direction are from
+[`IvoryHeart/ai-observability` at `ecde9e154bbfd5ec705080e3420ff55767892c88`](https://github.com/IvoryHeart/ai-observability/tree/ecde9e154bbfd5ec705080e3420ff55767892c88):
+
+- [`visualizations/public/graph/index.html`](https://github.com/IvoryHeart/ai-observability/blob/ecde9e154bbfd5ec705080e3420ff55767892c88/visualizations/public/graph/index.html)
+  contains the force-directed Graph presentation and interactions;
+- [`visualizations/server.js`](https://github.com/IvoryHeart/ai-observability/blob/ecde9e154bbfd5ec705080e3420ff55767892c88/visualizations/server.js)
+  contains the old workspace/repository/agent graph projection; and
+- [`visualizations/public/city/index.html`](https://github.com/IvoryHeart/ai-observability/blob/ecde9e154bbfd5ec705080e3420ff55767892c88/visualizations/public/city/index.html)
+  contains the Office/Neon/Voxel skin model and Voxel renderer that can inform
+  Mindcraft.
+
 ## Updating from Herdr Web
 
 Configure `kcosr/herdr-web` as the `upstream` Git remote. The normal update is:
@@ -124,6 +158,10 @@ The boundary is working when:
 - `/spaces` opens Spaces, while `/world` continues to open Office;
 - switching surfaces and browser back/forward navigation preserve route and
   view agreement;
+- the right-hand World control selects Office, Graph, or Mindcraft without
+  creating another bridge, runtime cache, terminal owner, or live-data poll;
+- Office remains the default theme, and Graph presents project/space nodes
+  with their agent and subagent descendants;
 - `upstream/main` can be merged through ordinary Git;
 - most World changes stay inside the World-owned paths above;
 - the shared integration diff stays reviewable; and
