@@ -577,6 +577,18 @@ test("release workflow gates publication on the three-platform unpublished plugi
   assert.match(workflow, /package_path="\$\{GITHUB_WORKSPACE\}\/npm-output\/herdr-world-\$\{VERSION\}\.tgz"/);
 });
 
+test("release workflow retries only the known Linux Homebrew SIGPIPE audit failure", () => {
+  const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
+  const homebrewJob = workflow.indexOf("  homebrew_test:");
+  const npmPublishJob = workflow.indexOf("  npm_publish:", homebrewJob);
+  assert.ok(homebrewJob >= 0 && npmPublishJob > homebrewJob);
+  const homebrewSection = workflow.slice(homebrewJob, npmPublishJob);
+  assert.match(homebrewSection, /if \[\[ "\$\(uname -s\)" != "Linux" \]\]; then/);
+  assert.match(homebrewSection, /for attempt in 1 2 3; do/);
+  assert.match(homebrewSection, /grep -Fq "Broken pipe" "\$audit_log"/);
+  assert.match(homebrewSection, /run_brew_audit "\$\{audit_args\[@\]\}" "\$qualified_formula"/);
+});
+
 test("PR CI exercises real launchd on both macOS architectures", () => {
   const workflow = readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(workflow, /macos-15/);
