@@ -52,6 +52,7 @@ Web's own release history remains in its upstream changelog.
   stable channels, removed release-candidate-only download labels, and made Pages validation aware
   of the selected release channel. Release preparation also keeps the changelog preamble outside
   the fresh empty `Unreleased` section so tag validation sees the intended release boundary.
+  [Herdr World PR #64](https://github.com/IvoryHeart/herdr-world/pull/64)
 - Stopped Office anchor updates from recursively rebuilding the Pixi scene while idle or resizing,
   keeping the interface responsive without increasing terminal resize traffic.
   [Herdr World PR #62](https://github.com/IvoryHeart/herdr-world/pull/62)
