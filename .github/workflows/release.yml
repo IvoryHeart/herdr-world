@@ -691,7 +691,11 @@ jobs:
           other_formula="herdr-world-rc"
           [[ "$formula_name" == "herdr-world-rc" ]] && other_formula="herdr-world"
           audit_args=()
-          if [[ ! -f "$tap_root/Formula/${other_formula}.rb" ]]; then
+          if [[ -f "$tap_root/Formula/${other_formula}.rb" ]]; then
+            # Homebrew requires explicit trust before loading a Formula from a
+            # third-party tap indirectly through conflicts_with.
+            brew trust --formula "$tap_name/$other_formula"
+          else
             # The first channel cannot resolve its declared peer until that peer is published.
             audit_args+=(--except=conflicts)
           fi

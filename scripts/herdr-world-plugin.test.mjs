@@ -589,6 +589,18 @@ test("release workflow retries only the known Linux Homebrew SIGPIPE audit failu
   assert.match(homebrewSection, /run_brew_audit "\$\{audit_args\[@\]\}" "\$qualified_formula"/);
 });
 
+test("release workflow trusts the published peer Formula before conflict validation", () => {
+  const workflow = readFileSync(path.join(ROOT, ".github/workflows/release.yml"), "utf8");
+  const homebrewJob = workflow.indexOf("  homebrew_test:");
+  const npmPublishJob = workflow.indexOf("  npm_publish:", homebrewJob);
+  assert.ok(homebrewJob >= 0 && npmPublishJob > homebrewJob);
+  const homebrewSection = workflow.slice(homebrewJob, npmPublishJob);
+  assert.match(
+    homebrewSection,
+    /if \[\[ -f "\$tap_root\/Formula\/\$\{other_formula\}\.rb" \]\]; then\s+# Homebrew requires explicit trust[\s\S]*brew trust --formula "\$tap_name\/\$other_formula"/,
+  );
+});
+
 test("PR CI exercises real launchd on both macOS architectures", () => {
   const workflow = readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
   assert.match(workflow, /macos-15/);
