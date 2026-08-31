@@ -27,6 +27,7 @@ Web's own release history remains in its upstream changelog.
 - Made release preparation a reviewed pull-request change, correlated each World release with its
   exact Herdr Web baseline instead of duplicating the upstream changelog, and restricted the
   post-merge release command to verifying exact `main` and creating the immutable release tag.
+  [Herdr World PR #63](https://github.com/IvoryHeart/herdr-world/pull/63)
 - Replaced the reference-heavy README with a concise user guide covering installation, essential
   advanced usage, contribution and support paths, licensing, acknowledgements, and Pixel Office
   previews for desktop and mobile.
