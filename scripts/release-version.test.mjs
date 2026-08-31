@@ -118,12 +118,15 @@ test("stamps the plugin manifest's intentionally unprefixed version", () => {
   }
 });
 
-test("switches site install channels when moving from an RC to stable", () => {
+test("switches public install channels when moving from an RC to stable", () => {
   const root = mkdtempSync(join(tmpdir(), "herdr-world-release-channels-"));
   try {
     mkdirSync(join(root, "site"));
     writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
-    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
+    writeFileSync(
+      join(root, "README.md"),
+      "v1.2.3-rc.1 @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+    );
     writeFileSync(
       join(root, "site", "index.html"),
       "v1.2.3-rc.1 @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
@@ -135,7 +138,7 @@ test("switches site install channels when moving from an RC to stable", () => {
 
     stampCurrentRelease("v1.2.3", root);
 
-    for (const relativePath of ["site/index.html", "site/site.js"]) {
+    for (const relativePath of ["README.md", "site/index.html", "site/site.js"]) {
       const contents = readFileSync(join(root, relativePath), "utf8");
       assert.match(contents, /@1\.2\.3/);
       assert.match(contents, /@latest/);

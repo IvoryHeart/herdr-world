@@ -129,7 +129,7 @@ export function stampCurrentRelease(
     const oldReference = relativePath === "herdr-plugin.toml" ? releaseVersion(current) : current;
     const newReference = relativePath === "herdr-plugin.toml" ? releaseVersion(newTag) : newTag;
     let updated = contents.replaceAll(oldReference, newReference);
-    if (relativePath === "site/index.html" || relativePath === "site/site.js") {
+    if (["README.md", "site/index.html", "site/site.js"].includes(relativePath)) {
       updated = updated
         .replaceAll(`@${npmDistributionTag(current)}`, `@${npmDistributionTag(newTag)}`)
         .replaceAll(
