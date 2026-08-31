@@ -8,7 +8,7 @@ import { normalizeReleaseTag, releaseVersion } from "./release-version.mjs";
 export function extractReleaseNotes(changelog, tag) {
   const version = releaseVersion(normalizeReleaseTag(tag));
   const sections = changelog.matchAll(
-    /(?:^|\n)## \[([^\]]+)\] - [^\n]+\n([\s\S]*?)(?=\n## \[|$)/g,
+    /(?:^|\n)## \[([^\]]+)\] - [^\n]+\n([\s\S]*?)(?=\n## |$)/g,
   );
   const match = [...sections].find(([, candidate]) => candidate === version);
   if (!match || !match[2].trim()) {

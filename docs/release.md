@@ -24,7 +24,7 @@ the release tag.
 - A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
   bridge smoke testing.
 
-## Prepare
+## Prepare And Review
 
 1. Confirm the changelog has user-facing notes under `## [Unreleased]`.
    Entries merged through pull requests should include the PR number or link before the PR is
@@ -41,16 +41,30 @@ scripts/check-vendor.sh
 npm run check
 ```
 
-4. From the current `main`, explicitly start the complete distribution preflight:
+4. Create a clean release branch from the current remote `main`:
 
 ```bash
-gh workflow run release.yml --ref main
+git switch main
+git pull --ff-only origin main
+git switch -c release/v0.1.0
 ```
 
-Wait for the `Release distribution` run to pass before cutting the release. Rerun it if `main`
-advances before release preparation continues. The preflight builds synthetic native, npm, and
-Homebrew artifacts; exercises the exact unpublished plugin and Formula on Linux x86-64, macOS
-ARM64, and macOS x86-64; and cannot publish.
+5. Generate the complete release diff without committing, tagging, or pushing:
+
+```bash
+node scripts/release.mjs prepare v0.1.0
+```
+
+The preparation command requires the branch to start exactly at `origin/main`, repeats the normal
+repository check, updates every release reference, promotes the changelog notes, removes empty
+released subsections, records the exact Herdr Web baseline from `UPSTREAM.md`, and opens the next
+empty `## [Unreleased]` section in the same diff. The World changelog contains World releases and
+downstream changes; it links the baseline instead of copying Herdr Web's release history.
+
+6. Inspect the diff, commit it with the exact subject `Release v0.1.0`, push the branch, and open a
+pull request with that exact title. Do not merge until independent review is complete. The squash
+merge subject will become `Release v0.1.0 (#<number>)`, which is the release provenance recorded by
+the tag.
 
 Do not cut a release without bridge test/build coverage.
 
@@ -220,25 +234,41 @@ instead of serving a partially compatible UI.
 
 ## Cut
 
-Choose the GitHub release version explicitly and run:
+After the reviewed release PR merges, use a clean origin-only release checkout. This avoids a
+same-named tag fetched from the Herdr Web upstream being mistaken for a Herdr World tag. Synchronize
+exact `main`, then explicitly start the complete distribution preflight:
 
 ```bash
-node scripts/release.mjs v0.1.0
+git switch main
+git pull --ff-only origin main
+gh workflow run release.yml --ref main
 ```
 
-The script:
+Wait for the `Release distribution` run to pass. The preflight builds synthetic native, npm, and
+Homebrew artifacts; exercises the exact unpublished plugin and Formula on Linux x86-64, macOS
+ARM64, and macOS x86-64; and cannot publish. The tag command rejects a preflight from any other
+commit.
+
+After the exact preflight and the browser/federation smoke above pass, create the release tag:
+
+```bash
+node scripts/release.mjs tag v0.1.0
+```
+
+The tag command:
 
 - requires a clean `main` branch
 - verifies both `origin` URLs and GitHub CLI access against `IvoryHeart/herdr-world`
+- verifies that `main` is the reviewed `Release v0.1.0 (#<number>)` squash merge
+- verifies the exact successful distribution preflight
 - runs `npm run check`
-- updates `release.json` and every current release reference in the README and Pages source
-- promotes `CHANGELOG.md` from `Unreleased` to the release version/date
-- removes empty unused subsections from the released version notes
-- rechecks the stamped release and Pages metadata
-- commits `Release vX.Y.Z`
-- tags `vX.Y.Z`
-- pushes `main` and the tag atomically
-- opens the next `## [Unreleased]` changelog section and pushes it
+- rechecks the stamped release, changelog, plugin manifest, and public references
+- rejects an existing local or public tag, release, npm version, or conflicting Homebrew version
+- pushes only the immutable `v0.1.0` tag at the exact verified commit
+
+It never commits or pushes `main`. If the release checkout already contains an unrelated upstream
+`v0.1.0` tag, stop and use a clean origin-only clone rather than moving or deleting that upstream
+identity.
 
 The tag starts the release distribution workflow. It builds and verifies Linux x86-64, macOS ARM64,
 and macOS x86-64 archives, npm package, plugin lifecycle, and Homebrew Formula before assembling the

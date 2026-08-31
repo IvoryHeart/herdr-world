@@ -5,6 +5,10 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { queryNpm } from "./npm-registry-query.mjs";
 import { homebrewFormulaReleaseTag } from "./homebrew-formula.mjs";
 import {
+  assertPreparedReleaseChangelog,
+  prepareReleaseChangelog,
+} from "./release-changelog.mjs";
+import {
   HOMEBREW_TAP_REPOSITORY,
   NPM_PACKAGE_NAME,
 } from "./release-publication.mjs";
@@ -16,17 +20,17 @@ import {
 } from "./release-target.mjs";
 import {
   compareReleaseTags,
-  escapeRegex,
+  assertCurrentReleaseReferences,
+  isReleaseCommitSubject,
   normalizeReleaseTag,
-  releaseReferencePaths,
   stampCurrentRelease,
 } from "./release-version.mjs";
 
 const RELEASE_BRANCH = "main";
-const RELEASE_ARG = process.argv[2];
+const [RELEASE_MODE, RELEASE_ARG] = process.argv.slice(2);
 
-if (!RELEASE_ARG || process.argv.length !== 3) {
-  console.error("Usage: node scripts/release.mjs <vX.Y.Z|X.Y.Z>");
+if (!["prepare", "tag"].includes(RELEASE_MODE) || !RELEASE_ARG || process.argv.length !== 4) {
+  console.error("Usage: node scripts/release.mjs <prepare|tag> <vX.Y.Z|X.Y.Z>");
   process.exit(1);
 }
 
@@ -39,7 +43,6 @@ try {
 }
 const version = tag.slice(1);
 const today = new Date().toISOString().slice(0, 10);
-const changelogSubsections = ["Breaking Changes", "Added", "Changed", "Fixed", "Removed"];
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
@@ -188,16 +191,13 @@ function checkExternalVersionAvailability() {
   }
 }
 
-function validatePreflight() {
+function validateCleanWorkingTree() {
   if (output("git", ["status", "--porcelain"]) !== "") {
     fail("release requires a clean working tree");
   }
+}
 
-  const branch = output("git", ["branch", "--show-current"]);
-  if (branch !== RELEASE_BRANCH) {
-    fail(`release must run from ${RELEASE_BRANCH}; current branch is ${branch || "(detached)"}`);
-  }
-
+function validateRepositoryAccess() {
   try {
     const fetchUrls = output("git", ["remote", "get-url", "--all", RELEASE_REMOTE])
       .split("\n")
@@ -228,19 +228,14 @@ function validatePreflight() {
   if (accessibleRepository.toLowerCase() !== RELEASE_REPOSITORY.toLowerCase()) {
     fail(`GitHub CLI resolved the release repository as ${accessibleRepository}`);
   }
+}
 
+function fetchMainWithoutTags() {
   run("git", ["fetch", RELEASE_REMOTE, RELEASE_BRANCH, "--no-tags"]);
-  const local = output("git", ["rev-parse", RELEASE_BRANCH]);
-  const remote = output("git", ["rev-parse", `${RELEASE_REMOTE}/${RELEASE_BRANCH}`]);
-  if (local !== remote) {
-    fail(
-      `${RELEASE_BRANCH} must match ${RELEASE_REMOTE}/${RELEASE_BRANCH}; run git pull --ff-only first`,
-    );
-  }
+  return output("git", ["rev-parse", `${RELEASE_REMOTE}/${RELEASE_BRANCH}`]);
+}
 
-  if (commandSucceeds("git", ["rev-parse", "--verify", "--quiet", tag])) {
-    fail(`tag already exists locally: ${tag}`);
-  }
+function validateRemoteReleaseTarget() {
   if (
     commandSucceeds("git", ["ls-remote", "--exit-code", "--tags", RELEASE_REMOTE, `refs/tags/${tag}`])
   ) {
@@ -253,77 +248,153 @@ function validatePreflight() {
   checkExternalVersionAvailability();
 }
 
-function readChangelogForRelease() {
-  const changelog = readFileSync("CHANGELOG.md", "utf8");
-  const unreleased = changelog.match(/## \[Unreleased\]\n([\s\S]*?)(?=\n## \[|$)/);
-  if (!unreleased) {
-    fail("CHANGELOG.md is missing an Unreleased section");
+function validatePreparationBase() {
+  validateCleanWorkingTree();
+  const branch = output("git", ["branch", "--show-current"]);
+  if (!branch || branch === RELEASE_BRANCH) {
+    fail("release preparation must run from a review branch, not main or detached HEAD");
   }
-  if (!removeEmptyChangelogSubsections(unreleased[1]).trim()) {
-    fail("CHANGELOG.md has no release notes under Unreleased");
-  }
-  return changelog;
-}
-
-function stampChangelog(changelog) {
-  const stamped = changelog.replace("## [Unreleased]", `## [${version}] - ${today}`);
-  const released = removeEmptyReleaseSubsections(stamped);
-  if (stamped === changelog) {
-    fail("CHANGELOG.md is missing an Unreleased section");
-  }
-  writeFileSync("CHANGELOG.md", released);
-  return released;
-}
-
-function removeEmptyReleaseSubsections(changelog) {
-  const releasePattern = new RegExp(
-    `(## \\[${escapeRegex(version)}\\] - [^\\n]+\\n)([\\s\\S]*?)(?=\\n## \\[|$)`,
-  );
-  return changelog.replace(releasePattern, (_match, heading, body) => {
-    return `${heading}${removeEmptyChangelogSubsections(body)}`;
-  });
-}
-
-function removeEmptyChangelogSubsections(body) {
-  let cleaned = body;
-  for (const subsection of changelogSubsections) {
-    cleaned = cleaned.replace(
-      new RegExp(`(^|\\n)### ${escapeRegex(subsection)}\\n\\n*(?=### |$)`, "g"),
-      "$1",
+  validateRepositoryAccess();
+  const remoteMain = fetchMainWithoutTags();
+  const head = output("git", ["rev-parse", "HEAD"]);
+  if (head !== remoteMain) {
+    fail(
+      `release preparation branch must start at ${RELEASE_REMOTE}/${RELEASE_BRANCH}; ` +
+      "create a fresh branch from the current remote main",
     );
   }
-  cleaned = cleaned.replace(/\n{3,}/g, "\n\n").trimEnd();
-  return cleaned ? `\n${cleaned.trimStart()}\n` : "\n";
+  validateRemoteReleaseTarget();
+  return head;
 }
 
-function openNextUnreleased(changelog) {
-  const next = changelog.replace(
-    "# Changelog\n\n",
-    "# Changelog\n\n## [Unreleased]\n\n### Breaking Changes\n\n### Added\n\n### Changed\n\n### Fixed\n\n### Removed\n\n",
-  );
-  if (next === changelog) {
-    fail("could not open next Unreleased changelog section");
+function validateSuccessfulDistributionPreflight(head) {
+  let runs;
+  try {
+    runs = JSON.parse(output("gh", withReleaseRepository([
+      "run",
+      "list",
+      "--workflow",
+      "release.yml",
+      "--event",
+      "workflow_dispatch",
+      "--commit",
+      head,
+      "--status",
+      "success",
+      "--limit",
+      "10",
+      "--json",
+      "databaseId,headSha,status,conclusion,url",
+    ])) || "[]");
+  } catch (error) {
+    fail(`could not verify the distribution preflight: ${error.message}`);
   }
-  writeFileSync("CHANGELOG.md", next);
+  const successful = runs.find((run) =>
+    run.headSha === head && run.status === "completed" && run.conclusion === "success"
+  );
+  if (!successful) {
+    fail(
+      `no successful workflow-dispatch release preflight exists for ${head}; ` +
+      `run gh workflow run release.yml --ref ${RELEASE_BRANCH} and wait for it to pass`,
+    );
+  }
+  return successful;
 }
 
-validatePreflight();
-const changelog = readChangelogForRelease();
+function validateTaggingBase() {
+  validateCleanWorkingTree();
+  const branch = output("git", ["branch", "--show-current"]);
+  if (branch !== RELEASE_BRANCH) {
+    fail(`release tagging must run from ${RELEASE_BRANCH}; current branch is ${branch || "(detached)"}`);
+  }
+  validateRepositoryAccess();
+  const remoteMain = fetchMainWithoutTags();
+  const head = output("git", ["rev-parse", "HEAD"]);
+  if (head !== remoteMain) {
+    fail(
+      `${RELEASE_BRANCH} must match ${RELEASE_REMOTE}/${RELEASE_BRANCH}; run git pull --ff-only first`,
+    );
+  }
+  if (commandSucceeds("git", ["show-ref", "--verify", "--quiet", `refs/tags/${tag}`])) {
+    fail(
+      `tag already exists locally: ${tag}; use a clean origin-only release clone so an ` +
+      "inherited upstream tag cannot be mistaken for the Herdr World release",
+    );
+  }
+  validateRemoteReleaseTarget();
 
-run("npm", ["run", "check"]);
+  let current;
+  try {
+    current = assertCurrentReleaseReferences();
+  } catch (error) {
+    fail(error.message);
+  }
+  if (current !== tag) {
+    fail(`public release references point to ${current}, not ${tag}`);
+  }
+  try {
+    assertPreparedReleaseChangelog(
+      readFileSync("CHANGELOG.md", "utf8"),
+      tag,
+      readFileSync("UPSTREAM.md", "utf8"),
+    );
+  } catch (error) {
+    fail(error.message);
+  }
+  const subject = output("git", ["show", "-s", "--format=%s", "HEAD"]);
+  if (!isReleaseCommitSubject(subject, tag)) {
+    fail(`release commit must be the reviewed squash merge Release ${tag} (#<number>); found ${subject}`);
+  }
+  const preflight = validateSuccessfulDistributionPreflight(head);
+  return { head, preflight };
+}
 
-stampCurrentRelease(tag);
-const released = stampChangelog(changelog);
+function prepareRelease() {
+  const head = validatePreparationBase();
+  const changelog = readFileSync("CHANGELOG.md", "utf8");
+  const upstream = readFileSync("UPSTREAM.md", "utf8");
+  run("npm", ["run", "check"]);
+  if (fetchMainWithoutTags() !== head) {
+    fail(`${RELEASE_REMOTE}/${RELEASE_BRANCH} advanced during release preparation; start again`);
+  }
+  validateRemoteReleaseTarget();
 
-run("npm", ["run", "test:release"]);
-run("npm", ["run", "test:pages"]);
+  try {
+    stampCurrentRelease(tag);
+    writeFileSync("CHANGELOG.md", prepareReleaseChangelog(changelog, tag, today, upstream));
+  } catch (error) {
+    fail(error.message);
+  }
 
-run("git", ["add", "CHANGELOG.md", ...releaseReferencePaths()]);
-run("git", ["commit", "-m", `Release ${tag}`]);
-run("git", ["tag", tag]);
-run("git", ["push", "--atomic", RELEASE_REMOTE, RELEASE_BRANCH, tag]);
+  run("npm", ["run", "test:release"]);
+  run("npm", ["run", "test:pages"]);
+  run("git", ["diff", "--check"]);
+  console.log(
+    `Prepared ${tag}. Review the generated diff, commit it as Release ${tag}, ` +
+    "and deliver it through an independently reviewed pull request.",
+  );
+}
 
-openNextUnreleased(released);
-run("git", ["add", "CHANGELOG.md"]);
-run("git", ["commit", "-m", "Prepare for next release"]);
-run("git", ["push", RELEASE_REMOTE, RELEASE_BRANCH]);
+function tagRelease() {
+  const { head, preflight } = validateTaggingBase();
+  run("npm", ["run", "check"]);
+  if (fetchMainWithoutTags() !== head) {
+    fail(`${RELEASE_REMOTE}/${RELEASE_BRANCH} advanced during release validation; do not tag`);
+  }
+  validateRemoteReleaseTarget();
+  run("git", [
+    "push",
+    RELEASE_REMOTE,
+    `${head}:refs/tags/${tag}`,
+  ]);
+  console.log(
+    `Tagged ${tag} at ${head} after distribution preflight ${preflight.url}. ` +
+    "Monitor Release distribution and Deploy GitHub Pages before announcing the release.",
+  );
+}
+
+if (RELEASE_MODE === "prepare") {
+  prepareRelease();
+} else {
+  tagRelease();
+}

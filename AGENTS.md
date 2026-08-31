@@ -78,8 +78,9 @@ This is a lightweight internal onboarding note for agents working in this repo.
   Mac, and `macos-x86_64` tarballs from an Intel Mac. Supplemental local build-service notes may
   describe the release operator's available build hosts, but the repo-owned packaging script remains
   the source of truth for tarball layout.
-- Build final release artifacts from the final release commit/tag after `scripts/release.mjs`
-  stamps the changelog and creates the release. Inspect tarball/APK contents before upload.
+- Build final release artifacts from the final reviewed release commit/tag after
+  `scripts/release.mjs tag` creates the immutable release tag. Inspect tarball/APK contents before
+  upload.
 - Desktop tarballs include `herdr-world-bridge`, bundled `web/dist` assets, the `herdr-world`
   wrapper, complete generated dependency licences, source/asset notices, and
   docs. They do not include Herdr itself. The development Cargo target remains
@@ -87,6 +88,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Changelog
 
+- `CHANGELOG.md` records Herdr World releases only. Do not copy the Herdr Web changelog into it;
+  correlate each World release with its exact Web synchronization point from `UPSTREAM.md`.
 - Add user-facing changes to `CHANGELOG.md` under `## [Unreleased]`.
 - Use these subsections when applicable: Breaking Changes, Added, Changed, Fixed, Removed.
 - Add the needed subsection under `## [Unreleased]` if it is missing; do not create duplicate subsection headings.
@@ -98,13 +101,17 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Release
 
-- Release from a clean `main` branch.
-- Ensure `CHANGELOG.md` has the release notes under `## [Unreleased]`.
-- Run `npm run check`.
-- Run the browser smoke checklist in `docs/release.md`.
-- Run `node scripts/release.mjs vX.Y.Z`.
-- The release script promotes the changelog, commits, tags, pushes, creates a GitHub release from changelog notes, and opens the next `## [Unreleased]` section.
-- Build/upload tarball and APK artifacts manually after the release exists. Use
-  `docs/packaging.md` and `docs/release.md`; do not commit `dist-packages/`, APKs, or generated
-  Android outputs.
+- Create a clean release branch from current `origin/main` and ensure `CHANGELOG.md` has the release
+  notes under `## [Unreleased]`.
+- Run `node scripts/release.mjs prepare vX.Y.Z`. Review the generated release-reference and
+  changelog diff, commit it as `Release vX.Y.Z`, and deliver it through an independently reviewed
+  pull request.
+- After that PR merges, synchronize a clean origin-only `main`, run the complete distribution
+  preflight and browser smoke checklist in `docs/release.md`, then run
+  `node scripts/release.mjs tag vX.Y.Z`.
+- The tag command verifies the reviewed squash-merge commit and exact successful preflight, then
+  pushes only the immutable release tag. It never commits or pushes `main`.
+- The release workflow builds and uploads the desktop, npm, plugin, and Homebrew outputs. Android
+  remains separate until a signed public APK exists. Do not commit `dist-packages/`, APKs, or
+  generated Android outputs.
 - Do not bump npm package versions until package publishing is defined.

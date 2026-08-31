@@ -26,9 +26,10 @@ admitted by the protocol-20 bridge. The stable compatibility reference above
 remains unchanged until a release is available for a complete refresh and
 stock-daemon validation.
 
-Git history is the synchronization record. The Herdr Web commit above is a
-merge ancestor of this repository; there is no separate hand-maintained
-adoption ledger.
+Git history is the detailed synchronization record, and the Herdr Web commit
+above is a merge ancestor of this repository. `CHANGELOG.md` repeats only the
+per-release baseline correlation; it does not copy the upstream release history
+or maintain a separate adoption ledger.
 
 To update:
 

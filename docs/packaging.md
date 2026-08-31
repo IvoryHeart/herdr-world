@@ -279,8 +279,10 @@ WebSocket.
 
 ## Automated Desktop Publication
 
-`node scripts/release.mjs vX.Y.Z` updates the public version references, pushes the stamped release
-tag, and triggers `.github/workflows/release.yml`. The workflow builds, inspects, live-tests, and
+`node scripts/release.mjs prepare vX.Y.Z` generates the reviewed release PR diff. After that PR is
+merged and its exact `main` commit passes the distribution preflight,
+`node scripts/release.mjs tag vX.Y.Z` pushes only the stamped release tag and triggers
+`.github/workflows/release.yml`. The workflow builds, inspects, live-tests, and
 retains all six Linux/macOS archive and checksum assets, assembles the GitHub release draft, and
 publishes npm and the matching Homebrew channel from the exact tested outputs. Existing public
 content is never replaced. The release command also updates the website source, so the same release
