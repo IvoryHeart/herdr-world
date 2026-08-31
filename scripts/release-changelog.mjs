@@ -75,7 +75,7 @@ export function prepareReleaseChangelog(changelog, tag, date, upstream) {
   return prepared;
 }
 
-export function assertPreparedReleaseChangelog(changelog, tag, upstream) {
+export function assertPreparedReleaseChangelog(changelog, tag, upstream, expectedDate) {
   const version = releaseVersion(normalizeReleaseTag(tag));
   const unreleased = changelog.match(/(?:^|\n)## \[Unreleased\]\n([\s\S]*?)(?=\n## |$)/);
   if (!unreleased) {
@@ -86,15 +86,23 @@ export function assertPreparedReleaseChangelog(changelog, tag, upstream) {
   }
 
   const releasePattern = new RegExp(
-    `(?:^|\\n)## \\[${escapeRegex(version)}\\] - [^\\n]+\\n([\\s\\S]*?)(?=\\n## |$)`,
+    `(?:^|\\n)## \\[${escapeRegex(version)}\\] - (\\d{4}-\\d{2}-\\d{2})\\n` +
+      `([\\s\\S]*?)(?=\\n## |$)`,
     "g",
   );
   const releases = [...changelog.matchAll(releasePattern)];
-  if (releases.length !== 1 || !releases[0][1].trim()) {
+  if (releases.length !== 1 || !releases[0][2].trim()) {
     throw new Error(`CHANGELOG.md must contain exactly one non-empty release section for ${tag}`);
   }
+  const releaseDate = releases[0][1];
+  if (expectedDate && releaseDate !== expectedDate) {
+    throw new Error(
+      `CHANGELOG.md release date for ${tag} is ${releaseDate}, not ${expectedDate}; ` +
+      "update and review the release PR before tagging",
+    );
+  }
   const expectedBaseline = herdrWebBaselineNote(upstream);
-  if (!releases[0][1].includes(expectedBaseline)) {
+  if (!releases[0][2].includes(expectedBaseline)) {
     throw new Error(
       `CHANGELOG.md release section for ${tag} must record the current Herdr Web baseline`,
     );

@@ -61,6 +61,10 @@ released subsections, records the exact Herdr Web baseline from `UPSTREAM.md`, a
 empty `## [Unreleased]` section in the same diff. The World changelog contains World releases and
 downstream changes; it links the baseline instead of copying Herdr Web's release history.
 
+The generated changelog date is the intended UTC release date. Merge, preflight, and tag on that
+date. If review delays the release past it, update the date in the release PR and have that revision
+reviewed. The tag command rejects a stale date instead of publishing inaccurate release notes.
+
 6. Inspect the diff, commit it with the exact subject `Release v0.1.0`, push the branch, and open a
 pull request with that exact title. Do not merge until independent review is complete. The squash
 merge subject will become `Release v0.1.0 (#<number>)`, which is the release provenance recorded by
@@ -260,6 +264,7 @@ The tag command:
 - requires a clean `main` branch
 - verifies both `origin` URLs and GitHub CLI access against `IvoryHeart/herdr-world`
 - verifies that `main` is the reviewed `Release v0.1.0 (#<number>)` squash merge
+- verifies that the changelog release date is the current UTC date
 - verifies the exact successful distribution preflight
 - runs `npm run check`
 - rechecks the stamped release, changelog, plugin manifest, and public references

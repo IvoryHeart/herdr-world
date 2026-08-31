@@ -57,7 +57,10 @@ test("prepares one reviewed release diff with the next Unreleased section alread
     prepared.match(/## \[1\.0\.0\][\s\S]*?(?=\n## |$)/)?.[0] ?? "",
     /Breaking Changes|### Changed|### Removed/,
   );
-  assert.equal(assertPreparedReleaseChangelog(prepared, "v1.0.0", upstream), true);
+  assert.equal(
+    assertPreparedReleaseChangelog(prepared, "v1.0.0", upstream, "2026-08-31"),
+    true,
+  );
 });
 
 test("formats the exact Herdr Web synchronization point as release provenance", () => {
@@ -103,5 +106,9 @@ test("rejects empty, duplicate, and post-preparation Unreleased notes", () => {
       upstream,
     ),
     /must record the current Herdr Web baseline/,
+  );
+  assert.throws(
+    () => assertPreparedReleaseChangelog(prepared, "v1.0.0", upstream, "2026-09-01"),
+    /release date for v1\.0\.0 is 2026-08-31, not 2026-09-01/,
   );
 });

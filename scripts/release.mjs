@@ -42,7 +42,10 @@ try {
   process.exit(1);
 }
 const version = tag.slice(1);
-const today = new Date().toISOString().slice(0, 10);
+
+function currentUtcDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
@@ -301,6 +304,15 @@ function validateSuccessfulDistributionPreflight(head) {
   return successful;
 }
 
+function validatePreparedChangelogForTag() {
+  assertPreparedReleaseChangelog(
+    readFileSync("CHANGELOG.md", "utf8"),
+    tag,
+    readFileSync("UPSTREAM.md", "utf8"),
+    currentUtcDate(),
+  );
+}
+
 function validateTaggingBase() {
   validateCleanWorkingTree();
   const branch = output("git", ["branch", "--show-current"]);
@@ -333,11 +345,7 @@ function validateTaggingBase() {
     fail(`public release references point to ${current}, not ${tag}`);
   }
   try {
-    assertPreparedReleaseChangelog(
-      readFileSync("CHANGELOG.md", "utf8"),
-      tag,
-      readFileSync("UPSTREAM.md", "utf8"),
-    );
+    validatePreparedChangelogForTag();
   } catch (error) {
     fail(error.message);
   }
@@ -358,10 +366,11 @@ function prepareRelease() {
     fail(`${RELEASE_REMOTE}/${RELEASE_BRANCH} advanced during release preparation; start again`);
   }
   validateRemoteReleaseTarget();
+  const releaseDate = currentUtcDate();
 
   try {
     stampCurrentRelease(tag);
-    writeFileSync("CHANGELOG.md", prepareReleaseChangelog(changelog, tag, today, upstream));
+    writeFileSync("CHANGELOG.md", prepareReleaseChangelog(changelog, tag, releaseDate, upstream));
   } catch (error) {
     fail(error.message);
   }
@@ -382,6 +391,11 @@ function tagRelease() {
     fail(`${RELEASE_REMOTE}/${RELEASE_BRANCH} advanced during release validation; do not tag`);
   }
   validateRemoteReleaseTarget();
+  try {
+    validatePreparedChangelogForTag();
+  } catch (error) {
+    fail(error.message);
+  }
   run("git", [
     "push",
     RELEASE_REMOTE,

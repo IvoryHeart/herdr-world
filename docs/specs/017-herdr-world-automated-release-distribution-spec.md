@@ -146,8 +146,9 @@ Release preparation SHALL never commit or push `main`. It SHALL promote the rele
 all public version references, and open the next empty `Unreleased` section in one branch diff. The
 released section SHALL identify the exact Herdr Web synchronization point recorded by `UPSTREAM.md`;
 the World changelog SHALL NOT duplicate Herdr Web's release history. The tag command SHALL require
-a successful explicit distribution preflight for the exact reviewed `main` commit and SHALL push
-only `HEAD:refs/tags/<tag>`.
+the reviewed changelog release date to equal the current UTC date, require a successful explicit
+distribution preflight for the exact reviewed `main` commit, and push only
+`HEAD:refs/tags/<tag>`.
 
 ### Cross-tag publication critical section
 
