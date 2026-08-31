@@ -599,6 +599,10 @@ test("release workflow trusts the published peer Formula before conflict validat
     homebrewSection,
     /if \[\[ -f "\$tap_root\/Formula\/\$\{other_formula\}\.rb" \]\]; then\s+# Homebrew requires explicit trust[\s\S]*brew trust --formula "\$tap_name\/\$other_formula"/,
   );
+  assert.ok(
+    homebrewSection.indexOf('brew trust --formula "$tap_name/$other_formula"') <
+      homebrewSection.indexOf('run_brew_audit "${audit_args[@]}" "$qualified_formula"'),
+  );
 });
 
 test("PR CI exercises real launchd on both macOS architectures", () => {
