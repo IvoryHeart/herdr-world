@@ -695,7 +695,36 @@ jobs:
             # The first channel cannot resolve its declared peer until that peer is published.
             audit_args+=(--except=conflicts)
           fi
-          brew audit "${audit_args[@]}" "$qualified_formula"
+          run_brew_audit() {
+            if [[ "$(uname -s)" != "Linux" ]]; then
+              brew audit "$@"
+              return
+            fi
+
+            # Homebrew's Linux bootstrap can still hit its known /proc/cpuinfo
+            # SIGPIPE race. Retry only that exact upstream failure; audit errors
+            # from the Formula itself must fail immediately.
+            local attempt audit_log status
+            audit_log="$(mktemp)"
+            for attempt in 1 2 3; do
+              if brew audit "$@" >"$audit_log" 2>&1; then
+                cat "$audit_log"
+                rm -f "$audit_log"
+                return 0
+              else
+                status=$?
+              fi
+              cat "$audit_log" >&2
+              if ! grep -Fq "Broken pipe" "$audit_log" || [[ "$attempt" == "3" ]]; then
+                rm -f "$audit_log"
+                return "$status"
+              fi
+              echo "Homebrew hit its known Linux SIGPIPE race; retrying audit ($attempt/3)" >&2
+              sleep "$((attempt * 2))"
+              : >"$audit_log"
+            done
+          }
+          run_brew_audit "${audit_args[@]}" "$qualified_formula"
           archive="$(find formula-native -maxdepth 1 -type f -name 'herdr-world-*.tar.gz' -print -quit)"
           [[ -n "$archive" ]] || { echo "no verified native archive was downloaded for Formula validation" >&2; exit 1; }
           archive="$(cd "$(dirname "$archive")" && pwd)/$(basename "$archive")"
