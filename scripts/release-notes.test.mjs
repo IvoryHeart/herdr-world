@@ -37,3 +37,18 @@ test("extractReleaseNotes rejects a missing release section", () => {
     /has no release notes/,
   );
 });
+
+test("extractReleaseNotes stops before any following level-two section", () => {
+  const changelog = `# Changelog
+
+## [1.0.0] - 2026-08-31
+
+- World release.
+
+## Appendix
+
+- Supporting information.
+`;
+
+  assert.equal(extractReleaseNotes(changelog, "v1.0.0"), "- World release.");
+});

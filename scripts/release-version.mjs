@@ -43,7 +43,7 @@ export function escapeRegex(value) {
 
 export function isReleaseCommitSubject(subject, tag) {
   const expected = `Release ${normalizeReleaseTag(tag)}`;
-  return subject === expected || new RegExp(`^${escapeRegex(expected)} \\(#\\d+\\)$`).test(subject);
+  return new RegExp(`^${escapeRegex(expected)} \\(#\\d+\\)$`).test(subject);
 }
 
 export function releaseVersion(value) {

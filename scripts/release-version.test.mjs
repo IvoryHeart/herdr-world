@@ -59,8 +59,8 @@ test("maps release types to their public install channels", () => {
   assert.equal(homebrewFormulaName("v1.2.3"), "herdr-world");
 });
 
-test("accepts exact and GitHub squash-merged release commit subjects", () => {
-  assert.equal(isReleaseCommitSubject("Release v1.2.3", "v1.2.3"), true);
+test("accepts only the reviewed GitHub squash-merged release commit subject", () => {
+  assert.equal(isReleaseCommitSubject("Release v1.2.3", "v1.2.3"), false);
   assert.equal(isReleaseCommitSubject("Release v1.2.3-rc.9 (#46)", "v1.2.3-rc.9"), true);
   assert.equal(isReleaseCommitSubject("Release v1.2.3-rc.9 (#)", "v1.2.3-rc.9"), false);
   assert.equal(isReleaseCommitSubject("Release v1.2.3-rc.9 (#46) extra", "v1.2.3-rc.9"), false);

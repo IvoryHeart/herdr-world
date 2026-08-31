@@ -5,11 +5,11 @@ import { join } from "node:path";
 
 import {
   assertCurrentReleaseReferences,
-  escapeRegex,
   isReleaseCommitSubject,
   normalizeReleaseTag,
   releaseVersion,
 } from "./release-version.mjs";
+import { assertPreparedReleaseChangelog } from "./release-changelog.mjs";
 import { assertPluginManifest, parsePluginManifest } from "./herdr-world-plugin.mjs";
 
 const root = process.cwd();
@@ -59,7 +59,7 @@ try {
 
 const subject = output("git", ["show", "-s", "--format=%s", tagSha]);
 if (!isReleaseCommitSubject(subject, tag)) {
-  fail(`tagged commit subject must be Release ${tag} or GitHub's squash-merge form Release ${tag} (#<number>); found ${subject}`);
+  fail(`tagged commit subject must be the reviewed squash merge Release ${tag} (#<number>); found ${subject}`);
 }
 
 try {
@@ -69,9 +69,14 @@ try {
 }
 
 const changelog = readFileSync(join(root, "CHANGELOG.md"), "utf8");
-const changelogHeading = new RegExp(`^## \\[${escapeRegex(releaseVersion(tag))}\\] - `, "m");
-if (!changelogHeading.test(changelog)) {
-  fail(`CHANGELOG.md has no released section for ${tag}`);
+try {
+  assertPreparedReleaseChangelog(
+    changelog,
+    tag,
+    readFileSync(join(root, "UPSTREAM.md"), "utf8"),
+  );
+} catch (error) {
+  fail(error.message);
 }
 
 for (const relativePath of ["package.json", "web/package.json"]) {

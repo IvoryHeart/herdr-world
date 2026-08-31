@@ -16,19 +16,23 @@ application once and automatically publishes every enabled distribution channel.
 npm, Homebrew, the Herdr plugin, and future Android or iOS publishers are outputs
 of that release; they are not separate operator-run release procedures.
 
-The operator interface remains:
+The operator interface is split at the reviewed-main boundary:
 
 ```bash
-node scripts/release.mjs vX.Y.Z
-node scripts/release.mjs vX.Y.Z-rc.N
+node scripts/release.mjs prepare vX.Y.Z
+node scripts/release.mjs tag vX.Y.Z
 ```
+
+The same commands accept `vX.Y.Z-rc.N`. `prepare` creates only a reviewable working-tree diff on a
+branch based exactly on `origin/main`; `tag` runs only after that release PR is squash-merged and
+pushes only the immutable tag.
 
 ## Decisions
 
 | Concern | Decision |
 | --- | --- |
 | Release identities | Stable `vX.Y.Z`; prerelease `vX.Y.Z-rc.N` only |
-| Release authorization | Protected release tags pointing at a stamped commit on protected `main` |
+| Release authorization | Protected release tags pointing at an independently reviewed, stamped squash merge on protected `main` |
 | Orchestration | One tag-triggered GitHub Actions workflow |
 | Cross-tag concurrency | One shared `queue: max`; running releases are never canceled |
 | Native build | Existing Linux x86-64, macOS ARM64, and macOS x86-64 matrix |
@@ -78,10 +82,12 @@ documentation, plugin metadata, package manifests, artifact names, and channel
 versions SHALL agree with it. Formats that do not accept the `v` prefix SHALL
 remove that prefix and no other text.
 
-The release command SHALL reject an invalid or existing local tag, origin tag,
-GitHub release, npm version, or conflicting Homebrew version before publication.
-It SHALL NOT support same-version reissue. Upstream remotes SHALL be fetched
-without importing unrelated tags into the Herdr World release namespace.
+Release preparation SHALL reject an invalid or existing origin tag, GitHub
+release, npm version, or conflicting Homebrew version before changing the working tree. The tag
+command SHALL repeat those checks and reject any same-named local tag, including an inherited
+upstream tag, so the operator must tag from a clean origin-only checkout. It SHALL NOT support
+same-version reissue. Upstream remotes SHALL be fetched without importing unrelated tags into the
+Herdr World release namespace.
 
 Release candidates SHALL increment `N` for corrections. A correction after
 `v1.2.3-rc.2` is `v1.2.3-rc.3`, never a replacement `rc.2`.
@@ -127,13 +133,22 @@ secret, a credential-free validation job SHALL fetch the canonical
 - the ref matches one of the two allowed release-tag forms;
 - the tag resolves to `GITHUB_SHA` and that commit is an ancestor of the fetched
   protected `origin/main`;
-- the commit is the correctly stamped `Release <tag>` commit; and
+- the commit is the correctly stamped, squash-merged `Release <tag> (#<number>)` pull-request
+  commit; and
 - its changelog, `release.json`, manifests, and other public version references
   agree with the tag.
 
 Publication jobs SHALL depend on that validation result and SHALL be the only
 jobs granted their channel credential. The local release helper performs the
 same checks for early feedback but is not the authorization boundary.
+
+Release preparation SHALL never commit or push `main`. It SHALL promote the release notes, update
+all public version references, and open the next empty `Unreleased` section in one branch diff. The
+released section SHALL identify the exact Herdr Web synchronization point recorded by `UPSTREAM.md`;
+the World changelog SHALL NOT duplicate Herdr Web's release history. The tag command SHALL require
+the reviewed changelog release date to equal the current UTC date, require a successful explicit
+distribution preflight for the exact reviewed `main` commit, and push only
+`HEAD:refs/tags/<tag>`.
 
 ### Cross-tag publication critical section
 

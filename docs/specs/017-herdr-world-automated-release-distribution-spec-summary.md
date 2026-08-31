@@ -65,3 +65,20 @@
 - **Follow-up extension:** None. Enabling GitHub release immutability or adding
   another signed/platform publisher remains a separately evaluated deferred
   decision.
+
+### 2026-08-31 — Reviewed release preparation boundary
+
+- **Implemented:** Split the operator command into branch-only `prepare` and post-merge `tag`
+  phases. Preparation now leaves one complete release diff—including the next empty Unreleased
+  section and exact Herdr Web baseline correlation—for independent pull-request review. The World
+  changelog no longer duplicates inherited Herdr Web release history. Tagging accepts only the exact
+  reviewed squash merge on current `origin/main`, requires a successful distribution preflight for
+  that commit, rejects a prepared changelog date that no longer matches the UTC tag date, and pushes
+  only the immutable release tag. A same-named tag inherited from Herdr Web is rejected locally and
+  handled by using an origin-only release checkout rather than moving an upstream identity.
+- **Constraints / operational notes:** The protected tag remains the publication trigger and
+  authorization boundary. The first stable `v0.1.0` release remains pending; this workflow change
+  does not cut it.
+- **Drift from approved spec:** The operator command is now explicitly two-phase so repository
+  changes follow the project-wide PR-review rule; artifact and publication semantics are unchanged.
+- **Follow-up extension:** None.
