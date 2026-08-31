@@ -17,6 +17,8 @@ Current synchronization points:
 
 const source = `# Changelog
 
+World releases and downstream changes only.
+
 ## [Unreleased]
 
 ### Breaking Changes
@@ -45,7 +47,10 @@ const source = `# Changelog
 test("prepares one reviewed release diff with the next Unreleased section already open", () => {
   const prepared = prepareReleaseChangelog(source, "v1.0.0", "2026-08-31", upstream);
 
-  assert.match(prepared, /^# Changelog\n\n## \[Unreleased\]/);
+  assert.match(
+    prepared,
+    /^# Changelog\n\nWorld releases and downstream changes only\.\n\n## \[Unreleased\]/,
+  );
   assert.match(prepared, /## \[1\.0\.0\] - 2026-08-31/);
   assert.match(
     prepared,

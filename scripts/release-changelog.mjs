@@ -61,15 +61,12 @@ export function prepareReleaseChangelog(changelog, tag, date, upstream) {
     throw new Error("CHANGELOG.md has no release notes under Unreleased");
   }
 
-  const released = changelog.replace(
+  const prepared = changelog.replace(
     unreleasedPattern,
-    `${unreleased[1]}## [${version}] - ${date}\n\n${herdrWebBaselineNote(upstream)}\n${releaseBody}`,
+    `${unreleased[1]}${UNRELEASED_CHANGELOG_TEMPLATE}\n` +
+      `## [${version}] - ${date}\n\n${herdrWebBaselineNote(upstream)}\n${releaseBody}`,
   );
-  const prepared = released.replace(
-    "# Changelog\n\n",
-    `# Changelog\n\n${UNRELEASED_CHANGELOG_TEMPLATE}\n`,
-  );
-  if (prepared === released) {
+  if (prepared === changelog) {
     throw new Error("could not open the next Unreleased changelog section");
   }
   return prepared;

@@ -9,7 +9,7 @@ It combines live terminal Spaces with a visual Pixel Office, multi-host viewing,
 mobile controls, notes, uploads, and agent-aware workflows.
 
 The current public preview is
-[`v0.1.0-rc.15`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15).
+[`v0.1.0`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0).
 It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer
 with terminal protocol `20`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
 an interactive overview.
@@ -26,27 +26,27 @@ require Node.js `22.14.0` or newer.
 ### npm
 
 ```bash
-npm install --global @ivoryheart/herdr-world@next
+npm install --global @ivoryheart/herdr-world@latest
 herdr-world
 ```
 
 ### Homebrew
 
 ```bash
-brew install IvoryHeart/tap/herdr-world-rc
+brew install IvoryHeart/tap/herdr-world
 herdr-world
 ```
 
 ### Herdr plugin
 
 ```bash
-herdr plugin install IvoryHeart/herdr-world --ref v0.1.0-rc.15
+herdr plugin install IvoryHeart/herdr-world --ref v0.1.0
 herdr plugin action invoke open --plugin ivoryheart.herdr-world
 ```
 
 Open [http://127.0.0.1:8787](http://127.0.0.1:8787) if the browser does not open automatically.
 Checksum-verified standalone archives are available on the
-[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0-rc.15).
+[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0).
 
 The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
 may need approval in **System Settings → Privacy & Security**.

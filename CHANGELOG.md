@@ -10,6 +10,19 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.0] - 2026-08-31
+
+> **Herdr Web baseline:** Derived from v0.5.0 plus the JetBrains Mono Nerd Font fallback merged in upstream PR #74 at
+> [`4384c884`](https://github.com/kcosr/herdr-web/commit/4384c884da418ea3f3fb75954da5347b2e12f063).
+
+### Added
+
 - Added `herdr-world task-summary` for agent harnesses to publish or clear bounded, expiring,
   session-qualified Office summaries through Herdr's existing pane-metadata contract.
   [Herdr World PR #61](https://github.com/IvoryHeart/herdr-world/pull/61)
@@ -35,6 +48,11 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Kept stable README and project-site installation instructions on the npm `latest` and Homebrew
+  stable channels, removed release-candidate-only download labels, and made Pages validation aware
+  of the selected release channel. Release preparation also keeps the changelog preamble outside
+  the fresh empty `Unreleased` section so tag validation sees the intended release boundary.
+  [Herdr World PR #64](https://github.com/IvoryHeart/herdr-world/pull/64)
 - Stopped Office anchor updates from recursively rebuilding the Pixi scene while idle or resizing,
   keeping the interface responsive without increasing terminal resize traffic.
   [Herdr World PR #62](https://github.com/IvoryHeart/herdr-world/pull/62)
@@ -46,8 +64,6 @@ Web's own release history remains in its upstream changelog.
   conversation window.
   [Issue #5](https://github.com/IvoryHeart/herdr-world/issues/5),
   [Herdr World PR #61](https://github.com/IvoryHeart/herdr-world/pull/61)
-
-### Removed
 
 ## [0.1.0-rc.15] - 2026-08-30
 

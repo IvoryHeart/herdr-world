@@ -5,7 +5,11 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-import { readCurrentReleaseTag } from "./release-version.mjs";
+import {
+  homebrewFormulaName,
+  npmDistributionTag,
+  readCurrentReleaseTag,
+} from "./release-version.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = join(root, "_site");
@@ -54,15 +58,24 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   assert.match(html, /data-install-tab="herdr"/);
   assert.match(html, /data-install-tab="cli"/);
   assert.match(html, /data-install-tab="cli">CLI<\/button>/);
-  assert.match(html, /npm install --global @ivoryheart\/herdr-world@next/);
+  assert.match(
+    html,
+    new RegExp(
+      "npm install --global @ivoryheart/herdr-world@" + npmDistributionTag(currentRelease),
+    ),
+  );
   assert.ok(html.includes(`@ivoryheart/herdr-world@${currentRelease.slice(1)}`));
-  assert.match(html, /brew install IvoryHeart\/tap\/herdr-world-rc/);
+  assert.match(
+    html,
+    new RegExp("brew install IvoryHeart/tap/" + homebrewFormulaName(currentRelease)),
+  );
   assert.match(html, new RegExp("herdr plugin install IvoryHeart/herdr-world --ref " + currentRelease));
   assert.match(html, /<details class="install-advanced">/);
   assert.ok(html.includes(`data-install-command="cli">VERSION=${currentRelease}`));
   assert.match(html, /curl -fLO .*herdr-world-\$\{VERSION\}-\$\{PLATFORM\}\.tar\.gz/);
   assert.match(html, /tar -xzf .*herdr-world-\$\{VERSION\}-\$\{PLATFORM\}\.tar\.gz/);
   assert.doesNotMatch(html, /Runtime and Herdr plugin commands/);
+  assert.doesNotMatch(html, /Download the RC|current release candidate|preview Formula/);
   assert.match(readFileSync(join(output, "site.js"), "utf8"), /data-install-tab/);
   assert.doesNotMatch(html, /(?:src|href)="\/(?!\/)/, "local references must be relative");
   assert.doesNotMatch(html, /file:\/\//, "local filesystem URLs must not ship");
