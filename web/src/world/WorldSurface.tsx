@@ -6,7 +6,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent, ReactNode, KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { SurfaceComponentProps } from "../surfaceRegistry";
 import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
@@ -264,6 +264,14 @@ function WorldStage({
   }, [persistWorldView]);
   const panelIds = context.conversationBubbles.map(({ id }) => id);
   const panelIdsKey = panelIds.join("|");
+  const conversationTargets = useMemo(
+    () => context.conversationBubbles.map((panel): OfficeConversationAnchorTarget => ({
+      id: panel.id,
+      selectedKey: panel.selectedKey,
+      targetKey: panel.targetKey,
+    })),
+    [context.conversationBubbles],
+  );
   const selectedRoomKey = projection.rooms.find(({ key }) => key === context.selectedKey)?.key ??
     projection.deskRoster.find(({ desk }) => desk.key === context.selectedKey)?.desk.roomKey ??
     projection.roster.find(({ agent }) => agent.key === context.selectedKey)?.agent.roomKey ??
@@ -806,11 +814,7 @@ function WorldStage({
           observability={context.observability}
           selectedKey={context.selectedKey}
           completionSeenKeys={context.completionSeenKeys}
-          conversationTargets={context.conversationBubbles.map((panel): OfficeConversationAnchorTarget => ({
-            id: panel.id,
-            selectedKey: panel.selectedKey,
-            targetKey: panel.targetKey,
-          }))}
+          conversationTargets={conversationTargets}
           onSelect={context.onSelect}
           onActivateAgent={onActivateAgent}
           onActivateRoom={onActivateRoom}

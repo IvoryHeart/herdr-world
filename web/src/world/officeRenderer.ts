@@ -57,6 +57,10 @@ import {
 } from "./officeLayout";
 import { officeDebug } from "../officeDebug";
 import { officeSceneSignature } from "./officeSceneSignature";
+import {
+  destroyOfficeSceneChildren,
+  OFFICE_SCENE_DESTROY_OPTIONS,
+} from "./officeRendererResources";
 import type { OfficeObservability } from "./officeObservability";
 import {
   formatOfficeCost,
@@ -256,7 +260,7 @@ export async function createOfficeRenderer(
     throw error;
   }
   if (disposed) {
-    app.destroy(true, { children: true });
+    app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
     throw new Error("renderer disposed");
   }
   officeDebug("renderer:pixi-ready");
@@ -275,7 +279,7 @@ export async function createOfficeRenderer(
     textures: textures.filter((texture) => texture !== Texture.EMPTY).length,
   });
   if (disposed) {
-    app.destroy(true, { children: true });
+    app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
     destroyTextures(textures);
     diagnostics.destroys += 1;
     diagnostics.activeApplications = Math.max(0, diagnostics.activeApplications - 1);
@@ -373,8 +377,7 @@ export async function createOfficeRenderer(
     lastSceneSignature = sceneSignature;
     diagnostics.sceneRenders += 1;
     animated.splice(0);
-    const children = app.stage.removeChildren();
-    children.forEach((child) => child.destroy({ children: true }));
+    destroyOfficeSceneChildren(app.stage);
     drawBackground(app.stage, layout);
     drawCeoReception(
       app.stage,
@@ -620,7 +623,7 @@ export async function createOfficeRenderer(
     pointerSequences.delete(select);
     canvasActivationCandidates.delete(select);
     app.ticker.remove(ticker);
-    app.destroy(true, { children: true });
+    app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
     destroyTextures(textures);
     diagnostics.activeApplications = Math.max(0, diagnostics.activeApplications - 1);
     diagnostics.activeTickers = Math.max(0, diagnostics.activeTickers - 1);
@@ -684,7 +687,7 @@ export async function createOfficeRenderer(
       pointerSequences.delete(select);
       canvasActivationCandidates.delete(select);
       app.ticker.remove(ticker);
-      app.destroy(true, { children: true });
+      app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
       destroyTextures(textures);
       if (ownsCanvas) {
         element.replaceChildren();

@@ -192,6 +192,25 @@ export function PixelOfficeCanvas({
   };
   const reportAnchorsRef = useRef(reportAnchors);
   reportAnchorsRef.current = reportAnchors;
+  const anchorFrameRef = useRef<number | null>(null);
+  const scheduleAnchorReport = () => {
+    if (anchorFrameRef.current !== null) {
+      return;
+    }
+    anchorFrameRef.current = window.requestAnimationFrame(() => {
+      anchorFrameRef.current = null;
+      reportAnchorsRef.current();
+    });
+  };
+  const scheduleAnchorReportRef = useRef(scheduleAnchorReport);
+  scheduleAnchorReportRef.current = scheduleAnchorReport;
+
+  useEffect(() => () => {
+    if (anchorFrameRef.current !== null) {
+      window.cancelAnimationFrame(anchorFrameRef.current);
+      anchorFrameRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     const element = hostRef.current;
@@ -241,7 +260,7 @@ export function PixelOfficeCanvas({
           latest.roomAlignment,
           latest.longRoomTitleMode,
         );
-        window.requestAnimationFrame(() => reportAnchorsRef.current());
+        scheduleAnchorReportRef.current();
       })
       .catch((error: unknown) => {
         if (!disposed) {
@@ -272,10 +291,9 @@ export function PixelOfficeCanvas({
       roomAlignment,
       longRoomTitleMode,
     );
-    window.requestAnimationFrame(() => reportAnchorsRef.current());
+    scheduleAnchorReportRef.current();
   }, [
     completionSeenKeys,
-    conversationTargets,
     longRoomTitleMode,
     observability,
     projection,
@@ -284,12 +302,16 @@ export function PixelOfficeCanvas({
   ]);
 
   useEffect(() => {
+    scheduleAnchorReportRef.current();
+  }, [conversationTargets]);
+
+  useEffect(() => {
     const host = hostRef.current;
     const scroll = host?.closest<HTMLElement>(".world-stage-scroll");
     if (!scroll) {
       return;
     }
-    const scheduleReport = () => window.requestAnimationFrame(() => reportAnchorsRef.current());
+    const scheduleReport = () => scheduleAnchorReportRef.current();
     scroll.addEventListener("scroll", scheduleReport, { passive: true });
     window.addEventListener("resize", scheduleReport);
     return () => {
