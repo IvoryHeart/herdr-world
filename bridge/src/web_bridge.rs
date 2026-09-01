@@ -9,7 +9,7 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{DefaultBodyLimit, Path as AxumPath, Query, State};
 use axum::http::header::{
@@ -27,7 +27,7 @@ use futures_util::{SinkExt, StreamExt};
 use herdr_compat::TryClone as _;
 use serde::{Deserialize, Serialize};
 use tokio::time::Instant;
-use tower::ServiceBuilder;
+use tower::{ServiceBuilder, ServiceExt};
 use tower_http::compression::CompressionLayer;
 use tower_http::services::{ServeDir, ServeFile};
 use tracing::{debug, info, warn};
@@ -1243,6 +1243,19 @@ where
     S: Clone + Send + Sync + 'static,
 {
     let world_entry = static_dir.join("index.html");
+    let fallback_entry = world_entry.clone();
+    let navigation_fallback = Router::new().fallback(move |request: AxumRequest| {
+        let entry = fallback_entry.clone();
+        async move {
+            if !is_world_navigation_path(request.uri().path()) {
+                return StatusCode::NOT_FOUND.into_response();
+            }
+            match ServeFile::new(entry).oneshot(request).await {
+                Ok(response) => response.map(Body::new),
+                Err(infallible) => match infallible {},
+            }
+        }
+    });
     Router::new()
         .route_service("/spaces", ServeFile::new(world_entry.clone()))
         .route_service("/spaces/", ServeFile::new(world_entry.clone()))
@@ -1251,9 +1264,26 @@ where
         .fallback_service(
             ServiceBuilder::new()
                 .layer(CompressionLayer::new())
-                .service(ServeDir::new(static_dir)),
+                .service(ServeDir::new(static_dir).fallback(navigation_fallback)),
         )
         .layer(middleware::from_fn(add_static_cache_headers))
+}
+
+fn is_world_navigation_path(path: &str) -> bool {
+    if path == "/api"
+        || path.starts_with("/api/")
+        || path == "/ws"
+        || path.starts_with("/ws/")
+        || ["/assets", "/fonts", "/legal"]
+            .iter()
+            .any(|prefix| path == *prefix || path.starts_with(&format!("{prefix}/")))
+    {
+        return false;
+    }
+    Path::new(path)
+        .file_name()
+        .and_then(|name| Path::new(name).extension())
+        .is_none()
 }
 
 async fn add_static_cache_headers(request: AxumRequest, next: Next) -> Response {
@@ -4760,7 +4790,15 @@ mod tests {
         let static_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../web");
         let app = static_routes(static_dir);
 
-        for path in ["/", "/spaces", "/spaces/", "/world", "/world/"] {
+        for path in [
+            "/",
+            "/spaces",
+            "/spaces/",
+            "/world",
+            "/world/",
+            "/future-navigation",
+            "/future/navigation/path",
+        ] {
             let response = app
                 .clone()
                 .oneshot(
@@ -4777,6 +4815,21 @@ mod tests {
                 "no-cache",
                 "{path}"
             );
+        }
+
+        for path in ["/missing.js", "/assets/missing.js", "/api/missing"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    HttpRequest::builder()
+                        .uri(path)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{path}");
+            assert!(response.headers().get(CACHE_CONTROL).is_none(), "{path}");
         }
     }
 

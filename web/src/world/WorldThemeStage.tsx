@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { useCoreNavigation } from "../CoreNavigation";
 import type { SurfaceComponentProps } from "../surfaceRegistry";
 import { SurfaceSlotBoundary } from "../SurfaceSlotBoundary";
+import { WorldConversationLayer } from "./WorldConversationLayer";
+import { isWorldSurfaceContext } from "./WorldSurface";
 import { worldThemeRegistry } from "./worldThemeRegistry";
 import type { WorldThemeRegistry } from "./worldThemeRegistry";
 
@@ -19,22 +21,31 @@ export function WorldThemeOutlet({
   if (!Theme) {
     return <div role="alert">World theme unavailable</div>;
   }
+  const context = isWorldSurfaceContext(props.context) ? props.context : null;
   return (
-    <SurfaceSlotBoundary
-      label={activeWorldTheme.label}
-      resetKey={activeWorldTheme.id}
-      recoveryLabel="Return to Office"
-      onRecover={() => navigateWorldTheme("office")}
+    <WorldConversationLayer
+      activeThemeId={activeWorldTheme.id}
+      panels={context?.conversationBubbles ?? []}
+      compact={context?.compact ?? false}
+      onFocus={context?.onFocusConversation ?? (() => {})}
+      onClose={context?.onCloseConversation ?? (() => {})}
     >
-      <Suspense
-        fallback={(
-          <div className="surface-loading surface-loading-stage" role="status">
-            Loading {activeWorldTheme.label}…
-          </div>
-        )}
+      <SurfaceSlotBoundary
+        label={activeWorldTheme.label}
+        resetKey={activeWorldTheme.id}
+        recoveryLabel="Return to Office"
+        onRecover={() => navigateWorldTheme("office")}
       >
-        <Theme {...props} />
-      </Suspense>
-    </SurfaceSlotBoundary>
+        <Suspense
+          fallback={(
+            <div className="surface-loading surface-loading-stage" role="status">
+              Loading {activeWorldTheme.label}…
+            </div>
+          )}
+        >
+          <Theme {...props} />
+        </Suspense>
+      </SurfaceSlotBoundary>
+    </WorldConversationLayer>
   );
 }

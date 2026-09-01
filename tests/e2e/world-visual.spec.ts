@@ -115,7 +115,7 @@ async function waitForOffice(page: import("@playwright/test").Page) {
 }
 
 async function selectOffice(page: Page) {
-  await page.locator(".world-theme-selector > button").click();
+  await page.locator(".world-theme-menu-trigger").click();
   await page.getByRole("menu", { name: "World themes" })
     .getByRole("menuitemradio", { name: "Office", exact: true })
     .click();

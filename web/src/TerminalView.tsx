@@ -211,6 +211,9 @@ export function TerminalView({
   const uploadInFlightRef = useRef(false);
   const uploadConflictRef = useRef<UploadConflictState | null>(null);
   const connectionKeyRef = useRef(connectionKey);
+  // Registry metadata can recreate an equivalent URL builder. The connection key, not the
+  // function identity, is the authoritative transport generation.
+  const wsUrlRef = useRef(wsUrl);
   const terminalIdRef = useRef(pane?.terminal_id ?? null);
   const overlayTerminalIdRef = useRef(pane?.terminal_id ?? null);
   const delayConnectingOverlayRef = useRef(false);
@@ -259,6 +262,7 @@ export function TerminalView({
   const terminalInputBatchDelayMsRef = useRef(terminalInputBatchDelayMs);
   terminalInputBatchDelayMsRef.current = terminalInputBatchDelayMs;
   connectionKeyRef.current = connectionKey;
+  wsUrlRef.current = wsUrl;
   terminalIdRef.current = pane?.terminal_id ?? null;
 
   useEffect(() => {
@@ -862,7 +866,7 @@ export function TerminalView({
       socketGeneration = currentSocketGeneration;
       const nextSocket = new WebSocket(
         terminalSocketUrl(
-          wsUrl,
+          wsUrlRef.current,
           terminalId,
           initialSize,
           terminalOutputCoalesceMs,
@@ -1197,7 +1201,6 @@ export function TerminalView({
     rendererReady,
     transparentBackground,
     terminalOutputCoalesceMs,
-    wsUrl,
   ]);
 
   useEffect(() => {

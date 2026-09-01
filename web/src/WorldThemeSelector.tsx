@@ -8,14 +8,17 @@ export function WorldThemeSelector({
   themes,
   activeTheme,
   worldActive,
+  onActivate,
   onSelect,
 }: {
   themes: readonly WorldThemeDefinition[];
   activeTheme: WorldThemeDefinition;
   worldActive: boolean;
+  onActivate: () => void;
   onSelect: (themeId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const selectorRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
@@ -41,7 +44,7 @@ export function WorldThemeSelector({
       if (
         target instanceof Node &&
         !menuRef.current?.contains(target) &&
-        !triggerRef.current?.contains(target)
+        !selectorRef.current?.contains(target)
       ) {
         dismiss();
       }
@@ -88,11 +91,28 @@ export function WorldThemeSelector({
 
   const Icon = activeTheme.id === "graph" ? Network : Building2;
   return (
-    <div className="world-theme-selector">
+    <div
+      ref={selectorRef}
+      className="world-theme-selector"
+      data-on={worldActive}
+      role="group"
+      aria-label="World"
+    >
       <button
-        ref={triggerRef}
+        className="world-theme-activate"
         type="button"
         data-on={worldActive}
+        aria-pressed={worldActive}
+        onClick={onActivate}
+      >
+        <Icon size={14} aria-hidden="true" />
+        <span>{activeTheme.label}</span>
+      </button>
+      <button
+        ref={triggerRef}
+        className="world-theme-menu-trigger"
+        type="button"
+        aria-label="Choose World theme"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={menuId}
@@ -107,8 +127,6 @@ export function WorldThemeSelector({
           }
         }}
       >
-        <Icon size={14} aria-hidden="true" />
-        <span>{activeTheme.label}</span>
         <ChevronDown size={13} aria-hidden="true" />
       </button>
       {open ? (

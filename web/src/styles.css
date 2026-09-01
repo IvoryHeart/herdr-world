@@ -362,7 +362,7 @@ button {
 }
 
 .primary-view-switch > button[data-on="true"],
-.primary-view-switch > .world-theme-selector > button[data-on="true"] {
+.primary-view-switch > .world-theme-selector[data-on="true"] {
   border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
   color: var(--text);
   background: var(--surface0);
@@ -371,15 +371,47 @@ button {
 
 .world-theme-selector {
   position: relative;
+  display: grid;
   min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  border: 1px solid transparent;
+  border-radius: calc(var(--r-sm) - 2px);
+  color: var(--overlay1);
 }
 
-.world-theme-selector > button svg:last-child {
-  margin-left: auto;
+.primary-view-switch > .world-theme-selector > button {
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+}
+
+.world-theme-selector[data-on="true"] > button {
+  color: var(--text);
+}
+
+.world-theme-selector > .world-theme-activate {
+  min-width: 0;
+  border-radius: calc(var(--r-sm) - 3px) 0 0 calc(var(--r-sm) - 3px);
+}
+
+.world-theme-activate span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-theme-selector > .world-theme-menu-trigger {
+  width: 34px;
+  padding: 0;
+  border-left: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  border-radius: 0 calc(var(--r-sm) - 3px) calc(var(--r-sm) - 3px) 0;
+}
+
+.world-theme-selector > .world-theme-menu-trigger svg {
   transition: transform 120ms ease;
 }
 
-.world-theme-selector > button[aria-expanded="true"] svg:last-child {
+.world-theme-selector > .world-theme-menu-trigger[aria-expanded="true"] svg {
   transform: rotate(180deg);
 }
 
@@ -943,6 +975,7 @@ button {
   text-align: center;
 }
 
+.world-theme-layer,
 .world-stage-shell {
   position: relative;
   display: flex;
@@ -952,6 +985,10 @@ button {
   flex-direction: column;
   overflow: hidden;
   background: #080812;
+}
+
+.world-theme-layer {
+  flex-direction: row;
 }
 
 /* ---------------------------------------------------------- World Graph */
@@ -1086,17 +1123,6 @@ button {
   fill: var(--accent);
   stroke: var(--base);
   stroke-width: 2;
-}
-
-.world-conversation-slot.graph-conversation-slot[data-positioned="true"] {
-  top: auto;
-  right: auto;
-  bottom: calc(18px + var(--graph-conversation-index, 0) * 18px);
-  left: calc(18px + var(--graph-conversation-index, 0) * 18px);
-  width: min(68%, 720px);
-  min-width: min(440px, calc(100% - 36px));
-  height: min(48%, 430px);
-  min-height: min(320px, calc(100% - 36px));
 }
 
 .graph-canvas-host canvas:active {

@@ -30,6 +30,7 @@ afterEach(async () => {
 describe("World theme selector", () => {
   it("lists each available theme once and supports keyboard selection and Escape focus return", async () => {
     const onSelect = vi.fn();
+    const onActivate = vi.fn();
     const container = document.createElement("div");
     document.body.append(container);
     const root = createRoot(container);
@@ -42,14 +43,20 @@ describe("World theme selector", () => {
           themes={worldThemeRegistry.list()}
           activeTheme={office}
           worldActive
+          onActivate={onActivate}
           onSelect={onSelect}
         />,
       );
     });
 
+    const active = container.querySelector<HTMLButtonElement>(".world-theme-activate");
     const trigger = container.querySelector<HTMLButtonElement>("[aria-haspopup='menu']");
-    expect(trigger?.textContent).toContain("Office");
+    expect(active?.textContent).toContain("Office");
+    expect(active?.getAttribute("aria-pressed")).toBe("true");
     expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => active?.click());
+    expect(onActivate).toHaveBeenCalledOnce();
+    expect(container.querySelector("[role='menu']")).toBeNull();
     await act(async () => {
       trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
@@ -91,9 +98,12 @@ describe("World theme selector", () => {
         themes={worldThemeRegistry.list()}
         activeTheme={office}
         worldActive={false}
+        onActivate={() => {}}
         onSelect={() => {}}
       />,
     ));
+    expect(container.querySelector(".world-theme-activate")?.getAttribute("aria-pressed"))
+      .toBe("false");
     const trigger = container.querySelector<HTMLButtonElement>("[aria-haspopup='menu']");
     await act(async () => trigger?.click());
     await act(async () => {

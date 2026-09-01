@@ -249,6 +249,7 @@ import {
 import type { WorkspaceReorderDirection } from "./workspaceReorder";
 
 const NoteMarkdownPreview = lazy(() => import("./NoteMarkdownPreview"));
+const EMPTY_GRAPH_PROJECTION = projectHerdrGraph([]);
 
 type LoadState = "loading" | "ready" | "error";
 type Scope = "space" | "all";
@@ -1503,8 +1504,10 @@ export function App() {
     [worldSourcesInScope],
   );
   const graphProjection = useMemo(
-    () => projectHerdrGraph(worldSourcesInScope),
-    [worldSourcesInScope],
+    () => activeSurface.id === "world" && activeWorldTheme.id === "graph"
+      ? projectHerdrGraph(worldSourcesInScope)
+      : EMPTY_GRAPH_PROJECTION,
+    [activeSurface.id, activeWorldTheme.id, worldSourcesInScope],
   );
   useEffect(() => {
     officeDebug("world:projection", {
@@ -8026,6 +8029,7 @@ function Switcher({
           themes={worldThemes}
           activeTheme={activeWorldTheme}
           worldActive={primaryView === "world"}
+          onActivate={() => onPrimaryView("world")}
           onSelect={onWorldTheme}
         />
       </div>

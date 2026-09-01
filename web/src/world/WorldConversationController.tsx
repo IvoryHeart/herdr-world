@@ -9,7 +9,7 @@ import type { TerminalSessionDescriptor } from "../terminalSessions";
 import type { PaneInfo } from "../types";
 import { officeDebug } from "../officeDebug";
 import { WorldConversationBubble } from "./WorldConversationBubble";
-import type { WorldConversationBubblePanel } from "./WorldSurface";
+import type { WorldConversationBubblePanel } from "./WorldConversationLayer";
 import type { HerdrOfficeProjection, OfficeAgent } from "./herdrOfficeProjection";
 
 export type WorldConversationTargetInput = {

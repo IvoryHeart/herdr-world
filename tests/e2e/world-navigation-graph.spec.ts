@@ -20,8 +20,11 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("group", { name: "Primary navigation" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
-    "aria-expanded",
-    "false",
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByRole("button", { name: "Choose World theme" })).toHaveAttribute(
+    "aria-expanded", "false",
   );
   const initialCoreSockets = coreSockets(sockets).length;
 
@@ -108,6 +111,38 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
   await page.mouse.move(headerBox.x + 130, headerBox.y + headerBox.height / 2 - 40, { steps: 4 });
   await page.mouse.up();
   await expect.poll(() => connector.getAttribute("d")).not.toBe(connectorBeforeMove);
+
+  const slot = conversation.locator("xpath=..");
+  const beforeResize = await slot.boundingBox();
+  const resizeHandle = slot.getByRole("button", { name: "Resize agent conversation" });
+  const resizeBox = await resizeHandle.boundingBox();
+  if (!beforeResize || !resizeBox) throw new Error("Graph terminal resize handle is not measurable");
+  await page.mouse.move(resizeBox.x + resizeBox.width - 6, resizeBox.y + resizeBox.height - 6);
+  await page.mouse.down();
+  await page.mouse.move(resizeBox.x + resizeBox.width + 74, resizeBox.y + resizeBox.height + 44, {
+    steps: 4,
+  });
+  await page.mouse.up();
+  await expect.poll(async () => (await slot.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(beforeResize.width + 50);
+
+  await selectTheme(page, "Office");
+  await waitForOffice(page);
+  await expect(conversation).toBeVisible();
+  await expect(slot.getByRole("button", { name: "Resize agent conversation" })).toBeVisible();
+  await expect(page.locator(
+    `.world-conversation-connector path[data-window-id="${windowId}"]`,
+  ).first()).toHaveAttribute("d", /M .+ C .+/);
+  expect(terminalSockets).toHaveLength(1);
+
+  await selectTheme(page, "Graph");
+  await waitForGraph(page);
+  await expect(conversation).toBeVisible();
+  await expect(page.locator(
+    `.graph-conversation-connectors path[data-window-id="${windowId}"]`,
+  )).toHaveAttribute("d", /M .+ C .+/);
+  expect(terminalSockets).toHaveLength(1);
+
   await conversation.getByRole("button", { name: "Close agent conversation" }).click();
   await expect(conversation).toHaveCount(0);
   await expect(page.locator(`.graph-conversation-connectors path[data-window-id="${windowId}"]`))
@@ -257,7 +292,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
 });
 
 async function selectTheme(page: Page, label: "Office" | "Graph") {
-  const trigger = page.locator(".world-theme-selector > button");
+  const trigger = page.locator(".world-theme-menu-trigger");
   await trigger.click();
   await page.getByRole("menu", { name: "World themes" })
     .getByRole("menuitemradio", { name: label, exact: true })

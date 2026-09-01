@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { hostProfile } from "../../hostProfile";
 import type { AgentStatus, PaneInfo, Snapshot, WorkspaceInfo } from "../../types";
@@ -128,6 +128,23 @@ describe("Herdr Graph projection", () => {
       presentedTerminals: 16,
       omittedTerminals: 3,
     });
+  });
+
+  it("indexes panes in bounded passes instead of rescanning them for every workspace", () => {
+    const workspaces = Array.from({ length: 512 }, (_, index) =>
+      workspace(`space-${index}`, index + 1, `Space ${index}`, undefined, false),
+    );
+    const panes = workspaces.map((item, index) =>
+      pane(`agent-${index}`, item.workspace_id, index % 2 === 0 ? "working" : "idle"),
+    );
+    const host = source("host-a", 0, workspaces, panes);
+    if (!host.snapshot) throw new Error("Snapshot missing");
+    const paneMap = vi.spyOn(host.snapshot.panes, "map");
+
+    const graph = projectHerdrGraph([host]);
+
+    expect(graph.coverage).toMatchObject({ observedSpaces: 512, observedTerminals: 512 });
+    expect(paneMap.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
   it("retains stale snapshot topology but disables actions and marks it disconnected", () => {

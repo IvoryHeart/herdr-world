@@ -30,8 +30,11 @@ test("uses one persistent frame for direct World entry, history, and view switch
   await expect(page.locator("section.stage")).toHaveCount(1);
   await expect(page.getByRole("group", { name: "Primary navigation" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
-    "aria-expanded",
-    "false",
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByRole("button", { name: "Choose World theme" })).toHaveAttribute(
+    "aria-expanded", "false",
   );
   await expect(page.getByRole("group", { name: "Sidebar view" })).toBeVisible();
   await expect(
@@ -861,6 +864,79 @@ test("keeps the Office renderer idle and responsive through rapid viewport resiz
   await waitForOfficeRendererIdle(page);
 });
 
+test("coalesces rapid refresh signals and keeps Office responsive during activity bursts", async ({
+  page,
+  request,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-a", snapshotVariant: "large" },
+  });
+  await page.goto("/world");
+  await waitForOffice(page);
+  await waitForOfficeRendererIdle(page);
+  const beforeLog = await fixtureLog(request);
+
+  const responses = await Promise.all([
+    ...Array.from({ length: 60 }, (_, index) => request.post(
+      "http://127.0.0.1:4173/__fixture/ws-event",
+      {
+        data: {
+          hostId: "host-a",
+          path: "/ws/activity",
+          event: {
+            type: "pane.agent_status_changed",
+            pane_id: "large-pane-0",
+            workspace_id: "workspace-1",
+            agent_status: index % 2 === 0 ? "working" : "idle",
+            agent: "codex",
+            title: null,
+            display_agent: "Agent 01",
+            state_labels: {},
+          },
+        },
+      },
+    )),
+    ...Array.from({ length: 60 }, () => request.post(
+      "http://127.0.0.1:4173/__fixture/ws-event",
+      {
+        data: {
+          hostId: "host-a",
+          path: "/ws/events",
+          event: { type: "snapshot_changed" },
+        },
+      },
+    )),
+  ]);
+  for (const response of responses) {
+    expect(response.ok()).toBe(true);
+    expect((await response.json()).sent).toBeGreaterThan(0);
+  }
+
+  await expect.poll(async () => (await fixtureLog(request)).snapshotRequests)
+    .toBeGreaterThan(beforeLog.snapshotRequests);
+  await waitForOfficeRendererIdle(page, 750, 15_000);
+  const afterLog = await fixtureLog(request);
+  expect(afterLog.snapshotRequests - beforeLog.snapshotRequests).toBeLessThanOrEqual(3);
+  expect(await page.evaluate(() => new Promise<boolean>((resolve) => {
+    window.requestAnimationFrame(() => resolve(true));
+  }))).toBe(true);
+  expect(await page.evaluate(() => window.__HERDR_WORLD_RENDERER__)).toMatchObject({
+    activeApplications: 1,
+    activeTickers: 1,
+    activeObservers: 1,
+    ready: true,
+  });
+  expect(pageErrors).toEqual([]);
+
+  await page.getByRole("button", { name: "Spaces", exact: true }).click();
+  await expect(page).toHaveURL(/\/spaces$/);
+  await page.getByRole("button", { name: "Office", exact: true }).click();
+  await waitForOffice(page);
+  await expect(page.locator("[role='menu'][aria-label='World themes']")).toHaveCount(0);
+});
+
 test("does not rebuild the Pixi scene for an unchanged periodic snapshot", async ({
   page,
   request,
@@ -1334,7 +1410,7 @@ async function waitForLiveOffice(page: import("@playwright/test").Page) {
 }
 
 async function selectOffice(page: Page) {
-  await page.locator(".world-theme-selector > button").click();
+  await page.locator(".world-theme-menu-trigger").click();
   await page.getByRole("menu", { name: "World themes" })
     .getByRole("menuitemradio", { name: "Office", exact: true })
     .click();

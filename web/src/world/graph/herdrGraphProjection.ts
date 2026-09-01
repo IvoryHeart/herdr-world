@@ -84,27 +84,74 @@ type SpaceCandidate = {
   workspace: WorkspaceInfo;
   terminals: Array<{ pane: PaneInfo; sourceIndex: number }>;
   sourceIndex: number;
+  terminalCount: number;
+  agentCount: number;
+  focused: boolean;
+  attention: boolean;
+  status: Record<AgentStatus, number>;
 };
 
 export function projectHerdrGraph(
   sources: readonly HerdrOfficeSourceHost[],
 ): HerdrGraphProjection {
-  const candidates = sortedSources(sources).flatMap((source) => {
+  const candidates: SpaceCandidate[] = [];
+  const orderedSources = sortedSources(sources);
+  const observedStatus = emptyStatusCounts();
+  let observedTerminals = 0;
+  let observedAgents = 0;
+  for (const source of orderedSources) {
     if (!source.profile.enabled || !source.snapshot) {
-      return [];
+      continue;
     }
-    return source.snapshot.workspaces.map((workspace, sourceIndex): SpaceCandidate => ({
-      source,
-      workspace,
-      sourceIndex,
-      terminals: source.snapshot?.panes
-        .map((pane, paneIndex) => ({ pane, sourceIndex: paneIndex }))
-        .filter(({ pane }) => pane.workspace_id === workspace.workspace_id) ?? [],
-    }));
-  });
+    const candidatesByWorkspace = new Map<string, SpaceCandidate>();
+    for (const [sourceIndex, workspace] of source.snapshot.workspaces.entries()) {
+      const candidate: SpaceCandidate = {
+        source,
+        workspace,
+        sourceIndex,
+        terminals: [],
+        terminalCount: 0,
+        agentCount: 0,
+        focused: workspace.focused,
+        attention: false,
+        status: emptyStatusCounts(),
+      };
+      candidates.push(candidate);
+      candidatesByWorkspace.set(workspace.workspace_id, candidate);
+    }
+    for (const pane of source.snapshot.panes) {
+      const candidate = candidatesByWorkspace.get(pane.workspace_id);
+      if (!candidate) continue;
+      const agent = isAgentPane(pane);
+      candidate.terminalCount += 1;
+      candidate.agentCount += Number(agent);
+      candidate.focused ||= pane.focused;
+      candidate.attention ||= isAttentionStatus(pane.agent_status);
+      candidate.status[pane.agent_status] += 1;
+      if (agent) {
+        observedStatus[pane.agent_status] += 1;
+      }
+      observedTerminals += 1;
+      observedAgents += Number(agent);
+    }
+  }
   candidates.sort(compareSpaces);
 
   const presentedCandidates = candidates.slice(0, GRAPH_PRESENTATION_BOUNDS.spaces);
+  const presentedBySource = new Map<HerdrOfficeSourceHost, Map<string, SpaceCandidate>>();
+  for (const candidate of presentedCandidates) {
+    const byWorkspace = presentedBySource.get(candidate.source) ?? new Map();
+    byWorkspace.set(candidate.workspace.workspace_id, candidate);
+    presentedBySource.set(candidate.source, byWorkspace);
+  }
+  for (const source of orderedSources) {
+    const byWorkspace = presentedBySource.get(source);
+    if (!byWorkspace || !source.snapshot) continue;
+    for (const [sourceIndex, pane] of source.snapshot.panes.entries()) {
+      const candidate = byWorkspace.get(pane.workspace_id);
+      if (candidate) retainPriorityTerminal(candidate.terminals, { pane, sourceIndex });
+    }
+  }
   const spaces = presentedCandidates.map(projectSpace);
   const nodes = spaces.flatMap(({ node, terminals }) => [node, ...terminals]);
   const edges = spaces.flatMap(({ node, terminals }) =>
@@ -114,35 +161,16 @@ export function projectHerdrGraph(
       kind: "contains",
     })),
   );
-  const allTerminals = candidates.flatMap(({ terminals }) => terminals.map(({ pane }) => pane));
-  const allAgents = allTerminals.filter(isAgentPane);
   const presentedTerminals = spaces.flatMap(({ terminals }) => terminals);
   const presentedAgents = presentedTerminals.filter(({ agentRunning }) => agentRunning);
   const omittedAgentsInPresentedSpaces = spaces.reduce((total, space, index) => {
-    const observedAgents = presentedCandidates[index]?.terminals
-      .filter(({ pane }) => isAgentPane(pane)).length ?? 0;
+    const candidateAgents = presentedCandidates[index]?.agentCount ?? 0;
     const shownAgents = space.terminals.filter(({ agentRunning }) => agentRunning).length;
-    return total + Math.max(0, observedAgents - shownAgents);
+    return total + Math.max(0, candidateAgents - shownAgents);
   }, 0);
-  const presentedSpaceIds = new Set(
-    presentedCandidates.map(({ source, workspace }) =>
-      qualifiedRuntimeKey(qualifyRuntimeTarget(
-        source.profile.profileId,
-        "workspace",
-        workspace.workspace_id,
-      )),
-    ),
-  );
-  const omittedAgentsInOmittedSpaces = candidates.reduce((total, candidate) => {
-    const id = qualifiedRuntimeKey(qualifyRuntimeTarget(
-      candidate.source.profile.profileId,
-      "workspace",
-      candidate.workspace.workspace_id,
-    ));
-    return presentedSpaceIds.has(id)
-      ? total
-      : total + candidate.terminals.filter(({ pane }) => isAgentPane(pane)).length;
-  }, 0);
+  const omittedAgentsInOmittedSpaces = candidates
+    .slice(GRAPH_PRESENTATION_BOUNDS.spaces)
+    .reduce((total, candidate) => total + candidate.agentCount, 0);
 
   return {
     version: 1,
@@ -153,17 +181,17 @@ export function projectHerdrGraph(
     coverage: {
       observedSpaces: candidates.length,
       presentedSpaces: spaces.length,
-      observedAgents: allAgents.length,
+      observedAgents,
       presentedAgents: presentedAgents.length,
-      omittedAgents: Math.max(0, allAgents.length - presentedAgents.length),
+      omittedAgents: Math.max(0, observedAgents - presentedAgents.length),
       omittedAgentsInPresentedSpaces,
       omittedAgentsInOmittedSpaces,
-      observedTerminals: allTerminals.length,
+      observedTerminals,
       presentedTerminals: presentedTerminals.length,
-      omittedTerminals: Math.max(0, allTerminals.length - presentedTerminals.length),
-      observedShells: allTerminals.length - allAgents.length,
+      omittedTerminals: Math.max(0, observedTerminals - presentedTerminals.length),
+      observedShells: observedTerminals - observedAgents,
       presentedShells: presentedTerminals.length - presentedAgents.length,
-      status: countStatuses(allAgents),
+      status: observedStatus,
     },
     presentationBounds: GRAPH_PRESENTATION_BOUNDS,
   };
@@ -179,8 +207,7 @@ function projectSpace(candidate: SpaceCandidate): WorldGraphSpace {
   const id = qualifiedRuntimeKey(workspaceRef);
   const stale = source.connectionState !== "compatible";
   const actionable = canOpenInSpaces(source);
-  const sortedTerminals = [...candidate.terminals].sort(compareTerminals);
-  const presentedTerminals = sortedTerminals.slice(0, GRAPH_PRESENTATION_BOUNDS.terminalsPerSpace);
+  const presentedTerminals = candidate.terminals;
   const hostLabel = boundedLabel(source.profile.label, "Host");
   const label = boundedLabel(workspace.label, "Workspace");
   const subtitle = boundedOptionalLabel(workspace.worktree?.repo_name, MAX_VISIBLE_LABEL);
@@ -192,15 +219,15 @@ function projectSpace(candidate: SpaceCandidate): WorldGraphSpace {
     hostLabel,
     label,
     ...(subtitle ? { subtitle } : {}),
-    status: aggregateSpaceStatus(workspace, candidate.terminals.map(({ pane }) => pane)),
-    focused: workspace.focused || candidate.terminals.some(({ pane }) => pane.focused),
+    status: aggregateSpaceStatus(workspace, candidate.status),
+    focused: candidate.focused,
     stale,
     disconnected: stale,
     actionable,
     selectionKey: id,
     omittedChildCount: Math.max(
       0,
-      sortedTerminals.length - GRAPH_PRESENTATION_BOUNDS.terminalsPerSpace,
+      candidate.terminalCount - presentedTerminals.length,
     ),
     searchText: searchable([label, subtitle, hostLabel]),
     handoff: actionable
@@ -215,7 +242,7 @@ function projectSpace(candidate: SpaceCandidate): WorldGraphSpace {
   return {
     node,
     terminals,
-    observedTerminalCount: sortedTerminals.length,
+    observedTerminalCount: candidate.terminalCount,
     omittedTerminalCount: node.omittedChildCount,
   };
 }
@@ -286,19 +313,24 @@ function sortedSources(sources: readonly HerdrOfficeSourceHost[]) {
 }
 
 function compareSpaces(left: SpaceCandidate, right: SpaceCandidate) {
-  const leftFocused = left.workspace.focused || left.terminals.some(({ pane }) => pane.focused);
-  const rightFocused = right.workspace.focused || right.terminals.some(({ pane }) => pane.focused);
-  const leftAttention = left.terminals.some(({ pane }) => isAttentionStatus(pane.agent_status));
-  const rightAttention = right.terminals.some(({ pane }) => isAttentionStatus(pane.agent_status));
   return (
-    Number(rightFocused) - Number(leftFocused) ||
-    Number(rightAttention) - Number(leftAttention) ||
+    Number(right.focused) - Number(left.focused) ||
+    Number(right.attention) - Number(left.attention) ||
     left.source.profile.displayOrder - right.source.profile.displayOrder ||
     left.source.profile.profileId.localeCompare(right.source.profile.profileId) ||
     left.workspace.number - right.workspace.number ||
     left.sourceIndex - right.sourceIndex ||
     left.workspace.workspace_id.localeCompare(right.workspace.workspace_id)
   );
+}
+
+function retainPriorityTerminal(
+  terminals: Array<{ pane: PaneInfo; sourceIndex: number }>,
+  candidate: { pane: PaneInfo; sourceIndex: number },
+) {
+  const index = terminals.findIndex((current) => compareTerminals(candidate, current) < 0);
+  terminals.splice(index < 0 ? terminals.length : index, 0, candidate);
+  if (terminals.length > GRAPH_PRESENTATION_BOUNDS.terminalsPerSpace) terminals.pop();
 }
 
 function compareTerminals(
@@ -315,10 +347,13 @@ function compareTerminals(
   );
 }
 
-function aggregateSpaceStatus(workspace: WorkspaceInfo, panes: readonly PaneInfo[]): AgentStatus {
-  for (const status of ["blocked", "working", "done", "idle"] as const) {
-    if (panes.some((pane) => pane.agent_status === status)) {
-      return status;
+function aggregateSpaceStatus(
+  workspace: WorkspaceInfo,
+  counts: Readonly<Record<AgentStatus, number>>,
+): AgentStatus {
+  for (const candidate of ["blocked", "working", "done", "idle"] as const) {
+    if (counts[candidate] > 0) {
+      return candidate;
     }
   }
   return workspace.agent_status;
@@ -346,18 +381,14 @@ function roomHandoff(
   return { kind: "room", key, profileId, observedGeneration, workspaceRef };
 }
 
-function countStatuses(panes: readonly PaneInfo[]): Record<AgentStatus, number> {
-  const statuses: Record<AgentStatus, number> = {
+function emptyStatusCounts(): Record<AgentStatus, number> {
+  return {
     idle: 0,
     working: 0,
     blocked: 0,
     done: 0,
     unknown: 0,
   };
-  for (const pane of panes) {
-    statuses[pane.agent_status] += 1;
-  }
-  return statuses;
 }
 
 function searchable(values: Array<string | undefined>) {

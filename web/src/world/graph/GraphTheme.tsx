@@ -15,18 +15,12 @@ import {
   useRef,
   useState,
 } from "react";
-import type {
-  CSSProperties,
-  KeyboardEvent as ReactKeyboardEvent,
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-} from "react";
 
 import { AgentIcon } from "../../AgentIcon";
 import type { SurfaceComponentProps } from "../../surfaceRegistry";
 import { GraphCanvas } from "./GraphCanvas";
 import type { GraphCanvasHandle, GraphConversationTarget } from "./GraphCanvas";
-import type { WorldConversationBubblePanel } from "../WorldSurface";
+import { useWorldConversationLayout } from "../WorldConversationLayer";
 import type { WorldGraphNode, WorldGraphSpace } from "./herdrGraphProjection";
 import {
   readGraphViewPrefs,
@@ -56,6 +50,13 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
   );
   const [query, setQuery] = useState("");
   const [conversationTargets, setConversationTargets] = useState<GraphConversationTarget[]>([]);
+  const { rects: conversationRects } = useWorldConversationLayout();
+  const conversationPanelsRef = useRef(context.conversationBubbles);
+  conversationPanelsRef.current = context.conversationBubbles;
+  const conversationPanelTargetsKey = context.conversationBubbles.map((panel) =>
+    `${panel.id}:${panel.selectedKey ?? panel.targetKey}`
+  ).join("|");
+  const conversationTargetSignatureRef = useRef("");
   const canvasRef = useRef<GraphCanvasHandle | null>(null);
   const visualRef = useRef<HTMLDivElement | null>(null);
   const semanticButtonsRef = useRef(new Map<string, HTMLButtonElement>());
@@ -136,6 +137,31 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
     else semanticButtonsRef.current.delete(selectionKey);
   };
 
+  useLayoutEffect(() => {
+    const visual = visualRef.current;
+    if (!visual) return;
+    const visualRect = visual.getBoundingClientRect();
+    const targets = conversationPanelsRef.current.flatMap((panel): GraphConversationTarget[] => {
+      const rect = conversationRects[panel.id];
+      const selectionKey = panel.selectedKey ?? panel.targetKey;
+      if (!rect || !selectionKey) return [];
+      return [{
+        id: panel.id,
+        selectionKey,
+        rect: {
+          left: rect.left - visualRect.left,
+          top: rect.top - visualRect.top,
+          right: rect.right - visualRect.left,
+          bottom: rect.bottom - visualRect.top,
+        },
+      }];
+    });
+    const signature = JSON.stringify(targets);
+    if (signature === conversationTargetSignatureRef.current) return;
+    conversationTargetSignatureRef.current = signature;
+    setConversationTargets(targets);
+  }, [conversationPanelTargetsKey, conversationRects]);
+
   return (
     <div className="graph-stage-shell">
       <header className="graph-stage-bar">
@@ -190,14 +216,6 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
               +{projection.omittedSpaceCount} spaces outside presentation bound
             </div>
           ) : null}
-          <GraphConversationLayer
-            visualRef={visualRef}
-            panels={context.conversationBubbles}
-            compact={context.compact}
-            onFocus={context.onFocusConversation}
-            onClose={context.onCloseConversation}
-            onTargetsChange={setConversationTargets}
-          />
         </div>
         <aside className="graph-semantic" aria-label="Graph semantic view">
           <div className="graph-semantic-head">
@@ -408,204 +426,6 @@ function GraphTerminalIdentity({ node }: { node: WorldGraphNode }) {
       <span className="graph-terminal-status">{statusSymbol(node)}</span>
     </span>
   );
-}
-
-function GraphConversationLayer({
-  visualRef,
-  panels,
-  compact,
-  onFocus,
-  onClose,
-  onTargetsChange,
-}: {
-  visualRef: RefObject<HTMLDivElement | null>;
-  panels: readonly WorldConversationBubblePanel[];
-  compact: boolean;
-  onFocus: (id: string) => void;
-  onClose: (id: string) => void;
-  onTargetsChange: (targets: GraphConversationTarget[]) => void;
-}) {
-  const refs = useRef(new Map<string, HTMLDivElement>());
-  const lastMeasurementRef = useRef("");
-  const measureRef = useRef<() => void>(() => {});
-  const interactionRef = useRef<{
-    id: string;
-    pointerId: number;
-    lastX: number;
-    lastY: number;
-  } | null>(null);
-  const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>({});
-  const [movingId, setMovingId] = useState<string | null>(null);
-
-  useLayoutEffect(() => {
-    const visual = visualRef.current;
-    if (!visual) return;
-    if (panels.length === 0) {
-      if (lastMeasurementRef.current !== "") {
-        lastMeasurementRef.current = "";
-        onTargetsChange([]);
-      }
-      return;
-    }
-    const measure = () => {
-      const visualRect = visual.getBoundingClientRect();
-      const targets = panels.flatMap((panel): GraphConversationTarget[] => {
-        const element = refs.current.get(panel.id);
-        const selectionKey = panel.selectedKey ?? panel.targetKey;
-        if (!element || !selectionKey) return [];
-        const rect = element.getBoundingClientRect();
-        return [{
-          id: panel.id,
-          selectionKey,
-          rect: {
-            left: rect.left - visualRect.left,
-            top: rect.top - visualRect.top,
-            right: rect.right - visualRect.left,
-            bottom: rect.bottom - visualRect.top,
-          },
-        }];
-      });
-      const measurement = JSON.stringify(targets);
-      if (measurement === lastMeasurementRef.current) return;
-      lastMeasurementRef.current = measurement;
-      onTargetsChange(targets);
-    };
-    measureRef.current = measure;
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    if (window.__HERDR_GRAPH_RENDERER__) {
-      window.__HERDR_GRAPH_RENDERER__.activeConversationObservers += 1;
-    }
-    observer.observe(visual);
-    for (const panel of panels) {
-      const element = refs.current.get(panel.id);
-      if (element) observer.observe(element);
-    }
-    return () => {
-      measureRef.current = () => {};
-      observer.disconnect();
-      if (window.__HERDR_GRAPH_RENDERER__) {
-        window.__HERDR_GRAPH_RENDERER__.activeConversationObservers -= 1;
-      }
-    };
-  }, [onTargetsChange, panels, visualRef]);
-
-  useLayoutEffect(() => measureRef.current(), [offsets]);
-
-  const movePanel = (id: string, requestedX: number, requestedY: number) => {
-    const visual = visualRef.current;
-    const panel = refs.current.get(id);
-    if (!visual || !panel) return;
-    const visualRect = visual.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    const deltaX = Math.max(
-      visualRect.left - panelRect.left,
-      Math.min(visualRect.right - panelRect.right, requestedX),
-    );
-    const deltaY = Math.max(
-      visualRect.top - panelRect.top,
-      Math.min(visualRect.bottom - panelRect.bottom, requestedY),
-    );
-    if (deltaX === 0 && deltaY === 0) return;
-    setOffsets((current) => {
-      const offset = current[id] ?? { x: 0, y: 0 };
-      return { ...current, [id]: { x: offset.x + deltaX, y: offset.y + deltaY } };
-    });
-  };
-
-  const beginMove = (panel: WorldConversationBubblePanel, event: ReactPointerEvent<HTMLDivElement>) => {
-    onFocus(panel.id);
-    const target = event.target instanceof Element ? event.target : null;
-    if (
-      event.button !== 0 ||
-      !target?.closest(".world-conversation-header") ||
-      target.closest("button, a, input, textarea, select")
-    ) {
-      return;
-    }
-    interactionRef.current = {
-      id: panel.id,
-      pointerId: event.pointerId,
-      lastX: event.clientX,
-      lastY: event.clientY,
-    };
-    setMovingId(panel.id);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-    event.preventDefault();
-  };
-
-  const continueMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const interaction = interactionRef.current;
-    if (!interaction || interaction.pointerId !== event.pointerId) return;
-    const deltaX = event.clientX - interaction.lastX;
-    const deltaY = event.clientY - interaction.lastY;
-    interaction.lastX = event.clientX;
-    interaction.lastY = event.clientY;
-    movePanel(interaction.id, deltaX, deltaY);
-  };
-
-  const endMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const interaction = interactionRef.current;
-    if (!interaction || interaction.pointerId !== event.pointerId) return;
-    interactionRef.current = null;
-    setMovingId(null);
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  };
-
-  const moveWithKeyboard = (
-    panel: WorldConversationBubblePanel,
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (!target?.closest(".world-conversation-header")) return;
-    const step = event.shiftKey ? 48 : 16;
-    const deltaX = event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
-    const deltaY = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
-    if (deltaX === 0 && deltaY === 0) return;
-    event.preventDefault();
-    movePanel(panel.id, deltaX, deltaY);
-  };
-
-  return panels.map((panel, index) => (
-    <div
-      key={panel.id}
-      ref={(element) => {
-        if (element) refs.current.set(panel.id, element);
-        else refs.current.delete(panel.id);
-      }}
-      className="world-conversation-slot graph-conversation-slot"
-      data-window-id={panel.id}
-      data-positioned="true"
-      data-active={index === panels.length - 1 ? "true" : undefined}
-      data-interaction={movingId === panel.id ? "moving" : undefined}
-      aria-busy={movingId === panel.id}
-      style={{
-        zIndex: 20 + index,
-        "--graph-conversation-index": index,
-        transform: `translate(${offsets[panel.id]?.x ?? 0}px, ${offsets[panel.id]?.y ?? 0}px)`,
-      } as CSSProperties}
-      onPointerDown={(event) => beginMove(panel, event)}
-      onPointerMove={continueMove}
-      onPointerUp={endMove}
-      onPointerCancel={endMove}
-      onKeyDown={(event) => {
-        if (
-          event.key === "Escape" &&
-          index === panels.length - 1 &&
-          !(event.target instanceof Element && event.target.closest(".world-conversation-terminal"))
-        ) {
-          event.preventDefault();
-          onClose(panel.id);
-          return;
-        }
-        moveWithKeyboard(panel, event);
-      }}
-      data-compact={compact ? "true" : undefined}
-    >
-      {panel.content}
-    </div>
-  ));
 }
 
 export function graphMatches(spaces: readonly WorldGraphSpace[], rawQuery: string) {
