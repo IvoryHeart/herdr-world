@@ -30,6 +30,6 @@ export async function expectGraphConnectorOutsideOverlay(page: Page, windowId: s
   }, windowId);
 
   expect(metrics).not.toBeNull();
-  expect(metrics?.pathLength).toBeGreaterThan(24);
+  expect(metrics?.pathLength, JSON.stringify(metrics)).toBeGreaterThan(24);
   expect(metrics?.sourceDistanceFromOverlay, JSON.stringify(metrics)).toBeGreaterThan(24);
 }

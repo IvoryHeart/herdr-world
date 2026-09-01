@@ -21,6 +21,7 @@ import type { GraphCamera, GraphViewPrefs, SavedGraphPosition } from "./graphVie
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 1.25;
+const MIN_CONVERSATION_CONNECTOR_DISTANCE = 32;
 
 type GraphRendererDiagnostics = {
   mounts: number;
@@ -207,6 +208,7 @@ class GraphRenderer {
   #conversationTargets: readonly GraphConversationTarget[] = [];
   #conversationParentNodeIds = new Map<string, string>();
   #connectorPaths = new Map<string, { path: SVGPathElement; dot: SVGCircleElement }>();
+  #revealedConversationTargetIds = new Set<string>();
   #onToggleCollapse: (spaceId: string) => void = () => {};
   #onViewChange: (
     camera: GraphCamera,
@@ -287,6 +289,7 @@ class GraphRenderer {
       elements.path.remove();
       elements.dot.remove();
       this.#connectorPaths.delete(id);
+      this.#revealedConversationTargetIds.delete(id);
     }
     for (const target of targets) {
       if (this.#connectorPaths.has(target.id)) continue;
@@ -298,6 +301,7 @@ class GraphRenderer {
       this.#connectors.append(path, dot);
       this.#connectorPaths.set(target.id, { path, dot });
     }
+    this.#revealPendingConversationTargets();
     this.#diagnostics.conversationLinks = targets.length;
     this.#requestFrame();
   }
@@ -335,8 +339,8 @@ class GraphRenderer {
     if (this.#fitOnFirstLayout && this.#layout.nodes.size > 0) {
       this.#fitOnFirstLayout = false;
       this.fit();
-      return;
     }
+    this.#revealPendingConversationTargets();
     this.#requestFrame();
   }
 
@@ -400,6 +404,7 @@ class GraphRenderer {
       elements.dot.remove();
     }
     this.#connectorPaths.clear();
+    this.#revealedConversationTargetIds.clear();
   }
 
   #resize(width: number, height: number) {
@@ -719,6 +724,39 @@ class GraphRenderer {
     }
   }
 
+  #revealPendingConversationTargets() {
+    for (const target of this.#conversationTargets) {
+      if (this.#revealedConversationTargetIds.has(target.id)) continue;
+      if (this.#revealConversationTarget(target)) {
+        this.#revealedConversationTargetIds.add(target.id);
+      }
+    }
+  }
+
+  #revealConversationTarget(target: GraphConversationTarget) {
+    const layout = this.#layout;
+    if (!layout) return false;
+    const nodesBySelectionKey = new Map(
+      [...layout.nodes.values()].map((node) => [node.source.selectionKey, node]),
+    );
+    const parentId = this.#conversationParentNodeIds.get(target.selectionKey);
+    const node = nodesBySelectionKey.get(target.selectionKey) ??
+      (parentId ? layout.nodes.get(parentId) : undefined);
+    if (!node) return false;
+    const nudge = graphConversationCameraNudge({
+      x: this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom,
+      y: this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom,
+    }, target.rect);
+    if (nudge.x !== 0 || nudge.y !== 0) {
+      this.#camera = {
+        ...this.#camera,
+        x: this.#camera.x + nudge.x,
+        y: this.#camera.y + nudge.y,
+      };
+    }
+    return true;
+  }
+
   #onVisibilityChange = () => {
     this.#hidden = document.visibilityState === "hidden";
     this.#diagnostics.paused = this.#hidden;
@@ -738,6 +776,27 @@ class GraphRenderer {
     );
     this.#onViewChange({ ...this.#camera }, this.#savedPositions);
   }
+}
+
+export function graphConversationCameraNudge(
+  point: { x: number; y: number },
+  overlay: GraphConversationTarget["rect"],
+) {
+  const outsideX = Math.max(overlay.left - point.x, 0, point.x - overlay.right);
+  const outsideY = Math.max(overlay.top - point.y, 0, point.y - overlay.bottom);
+  if (Math.hypot(outsideX, outsideY) >= MIN_CONVERSATION_CONNECTOR_DISTANCE) {
+    return { x: 0, y: 0 };
+  }
+  return [
+    { x: overlay.left - MIN_CONVERSATION_CONNECTOR_DISTANCE - point.x, y: 0 },
+    { x: overlay.right + MIN_CONVERSATION_CONNECTOR_DISTANCE - point.x, y: 0 },
+    { x: 0, y: overlay.top - MIN_CONVERSATION_CONNECTOR_DISTANCE - point.y },
+    { x: 0, y: overlay.bottom + MIN_CONVERSATION_CONNECTOR_DISTANCE - point.y },
+  ].reduce((nearest, candidate) =>
+    Math.hypot(candidate.x, candidate.y) < Math.hypot(nearest.x, nearest.y)
+      ? candidate
+      : nearest
+  );
 }
 
 function graphRendererDiagnostics() {

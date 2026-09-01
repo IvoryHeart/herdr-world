@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   GraphCanvas,
+  graphConversationCameraNudge,
   graphTerminalGlyphKind,
   LatestFrameValue,
 } from "./GraphCanvas";
@@ -173,6 +174,18 @@ describe("Graph renderer ownership", () => {
     expect(positions).toMatchObject({
       space: { x: 0, y: 0, pinned: true },
       terminal: { x: 100, y: 0, pinned: true },
+    });
+  });
+
+  it("nudges a newly connected node only enough to keep its connector visible", () => {
+    const overlay = { left: 620, top: 348, right: 1428, bottom: 888 };
+    expect(graphConversationCameraNudge({ x: 719, y: 339 }, overlay)).toEqual({
+      x: 0,
+      y: -23,
+    });
+    expect(graphConversationCameraNudge({ x: 719, y: 300 }, overlay)).toEqual({
+      x: 0,
+      y: 0,
     });
   });
 
