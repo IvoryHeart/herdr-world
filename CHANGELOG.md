@@ -20,8 +20,8 @@ Web's own release history remains in its upstream changelog.
 
 - Made Office the default `/` experience, moved Spaces to `/spaces`, retained `/world` as a
   compatibility alias, replaced the Office tab with an Office/Graph World theme selector, made a
-  fitted camera the fresh Graph default, and unified the initial Graph and Office terminal window
-  footprint.
+  settled fitted camera the Graph default while retaining explicit manual camera adjustments, and
+  unified the initial Graph and Office terminal window footprint.
   [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Fixed

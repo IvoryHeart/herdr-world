@@ -16,11 +16,13 @@ describe("Graph view preferences", () => {
   it("round-trips bounded camera, collapse, and pinned layout state", () => {
     writeGraphViewPrefs({
       camera: { x: 12, y: -30, zoom: 1.5 },
+      cameraMode: "manual",
       collapsedIds: ["space", "space"],
       positions: { agent: { x: 4, y: 8, pinned: true } },
     });
     expect(readGraphViewPrefs()).toEqual({
       camera: { x: 12, y: -30, zoom: 1.5 },
+      cameraMode: "manual",
       collapsedIds: ["space"],
       positions: { agent: { x: 4, y: 8, pinned: true } },
     });
@@ -36,25 +38,33 @@ describe("Graph view preferences", () => {
       },
     })).toEqual({
       camera: { x: 0, y: 0, zoom: 1 },
+      cameraMode: "fit",
       collapsedIds: ["ok"],
       positions: { ok: { x: 1, y: 2, pinned: false } },
     });
     window.localStorage.setItem(GRAPH_VIEW_PREFS_KEY, "not json");
     expect(readGraphViewPrefs()).toEqual({
       camera: { x: 0, y: 0, zoom: 1 },
+      cameraMode: "fit",
       collapsedIds: [],
       positions: {},
     });
   });
 
-  it("fits a fresh or malformed view but preserves a valid saved camera", () => {
+  it("fits fresh, malformed, fitted, and legacy views but preserves a manual camera", () => {
     expect(readInitialGraphViewPrefs()).toMatchObject({ fitOnMount: true });
 
     window.localStorage.setItem(GRAPH_VIEW_PREFS_KEY, JSON.stringify({ camera: "bad" }));
     expect(readInitialGraphViewPrefs()).toMatchObject({ fitOnMount: true });
 
+    window.localStorage.setItem(GRAPH_VIEW_PREFS_KEY, JSON.stringify({
+      camera: { x: 12, y: -30, zoom: 1.5 },
+    }));
+    expect(readInitialGraphViewPrefs()).toMatchObject({ fitOnMount: true });
+
     writeGraphViewPrefs({
-      camera: { x: 0, y: 0, zoom: 1 },
+      camera: { x: 12, y: -30, zoom: 1.5 },
+      cameraMode: "fit",
       collapsedIds: [],
       positions: {},
     });
@@ -62,6 +72,7 @@ describe("Graph view preferences", () => {
 
     writeGraphViewPrefs({
       camera: { x: 12, y: -30, zoom: 1.5 },
+      cameraMode: "manual",
       collapsedIds: [],
       positions: {},
     });

@@ -11,7 +11,7 @@ import {
   LatestFrameValue,
 } from "./GraphCanvas";
 import type { HerdrGraphProjection, WorldGraphNode } from "./herdrGraphProjection";
-import type { GraphCamera, SavedGraphPosition } from "./graphViewPrefs";
+import type { GraphCamera, GraphCameraMode, SavedGraphPosition } from "./graphViewPrefs";
 
 const roots: Root[] = [];
 let resizeCallback: ResizeObserverCallback | null = null;
@@ -86,7 +86,12 @@ describe("Graph renderer ownership", () => {
         selectedKey={null}
         matchedIds={null}
         conversationTargets={[]}
-        initialPrefs={{ camera: { x: 0, y: 0, zoom: 1 }, collapsedIds: [], positions: {} }}
+        initialPrefs={{
+          camera: { x: 0, y: 0, zoom: 1 },
+          cameraMode: "fit",
+          collapsedIds: [],
+          positions: {},
+        }}
         onSelect={() => {}}
         onActivate={() => {}}
         onToggleCollapse={() => {}}
@@ -168,9 +173,11 @@ describe("Graph renderer ownership", () => {
   it("fits the first non-empty layout when no camera has been saved", async () => {
     const onViewChange = vi.fn();
     await renderCanvas(spaceProjection(), { onViewChange, fitOnMount: true });
-    const [camera, positions] = onViewChange.mock.lastCall ?? [];
+    flushAllFrames();
+    const [camera, positions, cameraMode] = onViewChange.mock.lastCall ?? [];
     expect(camera).toMatchObject({ x: -70, zoom: 2 });
     expect(Math.abs(camera?.y ?? Number.POSITIVE_INFINITY)).toBe(0);
+    expect(cameraMode).toBe("fit");
     expect(positions).toMatchObject({
       space: { x: 0, y: 0, pinned: true },
       terminal: { x: 100, y: 0, pinned: true },
@@ -287,6 +294,7 @@ async function renderCanvas(
     onViewChange?: (
       camera: GraphCamera,
       positions: Record<string, SavedGraphPosition>,
+      cameraMode: GraphCameraMode,
     ) => void;
     fitOnMount?: boolean;
   } = {},
@@ -297,6 +305,7 @@ async function renderCanvas(
   roots.push(root);
   const initialPrefs = {
     camera: { x: 0, y: 0, zoom: 1 },
+    cameraMode: "fit" as const,
     collapsedIds: [],
     positions: {
       space: { x: 0, y: 0, pinned: true },

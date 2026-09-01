@@ -106,6 +106,38 @@ test("keeps a compact theme change to one traversable history entry", async ({ p
   }
 });
 
+test("fits the settled Graph by default while retaining explicit manual cameras", async ({ page }) => {
+  await page.goto("/spaces");
+  await page.evaluate(() => {
+    localStorage.setItem("herdr.world.graph-view.v1", JSON.stringify({
+      camera: { x: 901, y: -702, zoom: 0.25 },
+      collapsedIds: [],
+      positions: {},
+    }));
+  });
+  await page.goto("/?theme=graph");
+  await waitForSettledGraph(page);
+  await expect.poll(() => savedGraphView(page)).toMatchObject({ cameraMode: "fit" });
+  const automatic = await savedGraphView(page);
+  expect(automatic?.camera).not.toEqual({ x: 901, y: -702, zoom: 0.25 });
+
+  await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+  await waitForSettledGraph(page);
+  const explicit = await savedGraphView(page);
+  expect(explicit?.camera.x).toBeCloseTo(automatic?.camera.x ?? Number.NaN, 5);
+  expect(explicit?.camera.y).toBeCloseTo(automatic?.camera.y ?? Number.NaN, 5);
+  expect(explicit?.camera.zoom).toBeCloseTo(automatic?.camera.zoom ?? Number.NaN, 5);
+
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect.poll(() => savedGraphView(page)).toMatchObject({ cameraMode: "manual" });
+  const manual = await savedGraphView(page);
+  await selectTheme(page, "Office");
+  await waitForOffice(page);
+  await selectTheme(page, "Graph");
+  await waitForSettledGraph(page);
+  await expect.poll(() => savedGraphView(page)).toEqual(manual);
+});
+
 test("offers inspection, search, collapse, fit, and explicit Spaces handoff without accidental actions", async ({ page }) => {
   const terminalSockets: string[] = [];
   page.on("websocket", (socket) => {
@@ -387,6 +419,26 @@ async function waitForGraph(page: Page) {
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.ready ?? false,
   )).toBe(true);
+}
+
+async function waitForSettledGraph(page: Page) {
+  await waitForGraph(page);
+  await expect.poll(() => page.evaluate(
+    () => window.__HERDR_GRAPH_RENDERER__?.activeAnimationFrames ?? -1,
+  )).toBe(0);
+}
+
+async function savedGraphView(page: Page) {
+  return page.evaluate(() => {
+    const raw = localStorage.getItem("herdr.world.graph-view.v1");
+    if (!raw) return null;
+    return JSON.parse(raw) as {
+      camera: { x: number; y: number; zoom: number };
+      cameraMode: "fit" | "manual";
+      collapsedIds: string[];
+      positions: Record<string, { x: number; y: number; pinned: boolean }>;
+    };
+  });
 }
 
 async function savedGraphZoom(page: Page) {

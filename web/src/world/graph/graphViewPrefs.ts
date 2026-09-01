@@ -10,6 +10,8 @@ export type GraphCamera = {
   zoom: number;
 };
 
+export type GraphCameraMode = "fit" | "manual";
+
 export type SavedGraphPosition = {
   x: number;
   y: number;
@@ -18,6 +20,7 @@ export type SavedGraphPosition = {
 
 export type GraphViewPrefs = {
   camera: GraphCamera;
+  cameraMode: GraphCameraMode;
   collapsedIds: string[];
   positions: Record<string, SavedGraphPosition>;
 };
@@ -29,6 +32,7 @@ export type InitialGraphViewPrefs = {
 
 export const DEFAULT_GRAPH_VIEW_PREFS: GraphViewPrefs = Object.freeze({
   camera: Object.freeze({ x: 0, y: 0, zoom: 1 }),
+  cameraMode: "fit",
   collapsedIds: Object.freeze([]) as unknown as string[],
   positions: Object.freeze({}),
 });
@@ -42,9 +46,10 @@ export function readInitialGraphViewPrefs(): InitialGraphViewPrefs {
     const raw = window.localStorage.getItem(GRAPH_VIEW_PREFS_KEY);
     if (!raw) return { prefs: freshDefaults(), fitOnMount: true };
     const parsed = JSON.parse(raw);
+    const prefs = parseGraphViewPrefs(parsed);
     return {
-      prefs: parseGraphViewPrefs(parsed),
-      fitOnMount: !hasSavedCamera(parsed),
+      prefs,
+      fitOnMount: prefs.cameraMode === "fit",
     };
   } catch {
     return { prefs: freshDefaults(), fitOnMount: true };
@@ -64,11 +69,14 @@ export function parseGraphViewPrefs(value: unknown): GraphViewPrefs {
     return freshDefaults();
   }
   const cameraValue = isRecord(value.camera) ? value.camera : {};
+  const hasValidCamera = validCoordinate(cameraValue.x) &&
+    validCoordinate(cameraValue.y) && validZoom(cameraValue.zoom);
   const camera = {
     x: validCoordinate(cameraValue.x) ? cameraValue.x : 0,
     y: validCoordinate(cameraValue.y) ? cameraValue.y : 0,
     zoom: validZoom(cameraValue.zoom) ? cameraValue.zoom : 1,
   };
+  const cameraMode = hasValidCamera && value.cameraMode === "manual" ? "manual" : "fit";
   const collapsedIds = Array.isArray(value.collapsedIds)
     ? [...new Set(value.collapsedIds.filter(validNodeId))].slice(0, MAX_SAVED_NODE_IDS)
     : [];
@@ -87,11 +95,11 @@ export function parseGraphViewPrefs(value: unknown): GraphViewPrefs {
       }
     }
   }
-  return { camera, collapsedIds, positions };
+  return { camera, cameraMode, collapsedIds, positions };
 }
 
 function freshDefaults(): GraphViewPrefs {
-  return { camera: { x: 0, y: 0, zoom: 1 }, collapsedIds: [], positions: {} };
+  return { camera: { x: 0, y: 0, zoom: 1 }, cameraMode: "fit", collapsedIds: [], positions: {} };
 }
 
 function validNodeId(value: unknown): value is string {
@@ -104,18 +112,6 @@ function validCoordinate(value: unknown): value is number {
 
 function validZoom(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0.25 && value <= 3;
-}
-
-function hasSavedCamera(value: unknown) {
-  if (!isRecord(value) || !isRecord(value.camera)) return false;
-  if (!(validCoordinate(value.camera.x) &&
-    validCoordinate(value.camera.y) &&
-    validZoom(value.camera.zoom))) return false;
-  // Earlier builds wrote the untouched fallback camera on first visit. Treat
-  // that legacy placeholder as fresh so the new fit-first default takes over.
-  return value.camera.x !== DEFAULT_GRAPH_VIEW_PREFS.camera.x ||
-    value.camera.y !== DEFAULT_GRAPH_VIEW_PREFS.camera.y ||
-    value.camera.zoom !== DEFAULT_GRAPH_VIEW_PREFS.camera.zoom;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

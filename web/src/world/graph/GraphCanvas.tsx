@@ -16,7 +16,12 @@ import {
 } from "./graphLayout";
 import type { GraphLayoutNode, GraphLayoutState } from "./graphLayout";
 import type { HerdrGraphProjection } from "./herdrGraphProjection";
-import type { GraphCamera, GraphViewPrefs, SavedGraphPosition } from "./graphViewPrefs";
+import type {
+  GraphCamera,
+  GraphCameraMode,
+  GraphViewPrefs,
+  SavedGraphPosition,
+} from "./graphViewPrefs";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
@@ -71,7 +76,11 @@ type GraphCanvasProps = {
   onSelect: (selectionKey: string, hostKey: string) => void;
   onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void;
   onToggleCollapse: (spaceId: string) => void;
-  onViewChange: (camera: GraphCamera, positions: Record<string, SavedGraphPosition>) => void;
+  onViewChange: (
+    camera: GraphCamera,
+    positions: Record<string, SavedGraphPosition>,
+    cameraMode: GraphCameraMode,
+  ) => void;
 };
 
 export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(function GraphCanvas(
@@ -195,7 +204,8 @@ class GraphRenderer {
   #selectedKey: string | null = null;
   #matchedIds: ReadonlySet<string> | null = null;
   #camera: GraphCamera;
-  #fitOnFirstLayout: boolean;
+  #cameraMode: GraphCameraMode;
+  #fitWhenSettled: boolean;
   #width = 1;
   #height = 1;
   #alpha = 0;
@@ -213,6 +223,7 @@ class GraphRenderer {
   #onViewChange: (
     camera: GraphCamera,
     positions: Record<string, SavedGraphPosition>,
+    cameraMode: GraphCameraMode,
   ) => void = () => {};
 
   constructor(
@@ -226,7 +237,8 @@ class GraphRenderer {
     this.#connectors = connectors;
     this.#context = canvas.getContext("2d");
     this.#camera = { ...prefs.camera };
-    this.#fitOnFirstLayout = fitOnMount;
+    this.#cameraMode = prefs.cameraMode;
+    this.#fitWhenSettled = fitOnMount;
     this.#savedPositions = { ...prefs.positions };
     this.#diagnostics = graphRendererDiagnostics();
     this.#diagnostics.mounts += 1;
@@ -273,6 +285,7 @@ class GraphRenderer {
     onViewChange: (
       camera: GraphCamera,
       positions: Record<string, SavedGraphPosition>,
+      cameraMode: GraphCameraMode,
     ) => void,
   ) {
     this.#onSelect = onSelect;
@@ -336,16 +349,14 @@ class GraphRenderer {
     this.#diagnostics.nodes = this.#layout.nodes.size;
     this.#diagnostics.links = this.#layout.edges.length;
     if (reconciled.topologyChanged) this.#alpha = 1;
-    if (this.#fitOnFirstLayout && this.#layout.nodes.size > 0) {
-      this.#fitOnFirstLayout = false;
-      this.fit();
-    }
     this.#revealPendingConversationTargets();
     this.#requestFrame();
   }
 
   fit() {
     if (!this.#layout) return;
+    this.#fitWhenSettled = false;
+    this.#cameraMode = "fit";
     const bounds = graphBounds(this.#layout.nodes.values());
     const graphWidth = Math.max(1, bounds.maxX - bounds.minX);
     const graphHeight = Math.max(1, bounds.maxY - bounds.minY);
@@ -448,6 +459,12 @@ class GraphRenderer {
       this.#alpha *= energy < 0.08 ? 0.78 : 0.93;
     } else {
       this.#alpha = 0;
+    }
+    if (this.#alpha <= 0.015) {
+      this.#alpha = 0;
+      if (this.#fitWhenSettled && this.#layout && this.#layout.nodes.size > 0) {
+        this.fit();
+      }
     }
     this.#draw();
     this.#diagnostics.frames += 1;
@@ -606,6 +623,8 @@ class GraphRenderer {
     if (!pointer.moved || pointer.mode === "collapse") return;
     if (pointer.mode === "pan") {
       this.#camera = { ...this.#camera, x: this.#camera.x + dx, y: this.#camera.y + dy };
+      this.#cameraMode = "manual";
+      this.#fitWhenSettled = false;
     } else if (pointer.nodeId && this.#layout) {
       const node = this.#layout.nodes.get(pointer.nodeId);
       if (node) {
@@ -663,6 +682,8 @@ class GraphRenderer {
       y: pointY - beforeY * zoom,
       zoom,
     };
+    this.#cameraMode = "manual";
+    this.#fitWhenSettled = false;
     this.#emitViewChange();
     this.#requestFrame();
   }
@@ -776,7 +797,7 @@ class GraphRenderer {
       this.#layout,
       this.#projectionNodeIds,
     );
-    this.#onViewChange({ ...this.#camera }, this.#savedPositions);
+    this.#onViewChange({ ...this.#camera }, this.#savedPositions, this.#cameraMode);
   }
 }
 

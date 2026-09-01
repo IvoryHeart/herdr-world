@@ -28,7 +28,12 @@ import {
   readInitialGraphViewPrefs,
   writeGraphViewPrefs,
 } from "./graphViewPrefs";
-import type { GraphCamera, GraphViewPrefs, SavedGraphPosition } from "./graphViewPrefs";
+import type {
+  GraphCamera,
+  GraphCameraMode,
+  GraphViewPrefs,
+  SavedGraphPosition,
+} from "./graphViewPrefs";
 import { isWorldThemeContext } from "../worldThemeContext";
 import type { WorldThemeContext } from "../worldThemeContext";
 
@@ -127,9 +132,11 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
   const updateViewPrefs = useCallback((
     camera: GraphCamera,
     positions: Record<string, SavedGraphPosition>,
+    cameraMode: GraphCameraMode,
   ) => {
     schedulePrefsWrite({
       camera,
+      cameraMode,
       positions,
       collapsedIds: [...collapsedIdsRef.current],
     });
