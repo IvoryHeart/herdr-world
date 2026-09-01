@@ -10,9 +10,34 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
+- Added an accessible live Graph theme with bounded project/space and attached-terminal topology,
+  detected agent or empty-shell identity, stable force layout, search, collapse, pan/zoom/fit
+  controls, semantic navigation, connected live terminal overlays, and explicit Open-in-Spaces
+  handoff.
+  [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
+
 ### Changed
 
+- Made Office the default `/` experience, moved Spaces to `/spaces`, retained `/world` as a
+  compatibility alias, replaced the Office tab with an Office/Graph World theme selector, made a
+  settled fitted camera the Graph default while retaining explicit manual camera adjustments, and
+  unified the initial Graph and Office terminal window footprint. Expanded the README and project
+  site with privacy-safe Graph showcase captures and an accessible, reduced-motion-aware product
+  carousel.
+  [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
+
 ### Fixed
+
+- Kept World terminal windows resizable and attached to the same live session across Office/Graph
+  theme changes, retained a perceptible Graph node connector in desktop and compact layouts,
+  including while its space is collapsed, prioritized detected agents at Graph presentation
+  bounds, exposed complete terminal state and touch-sized bounded zoom controls accessibly,
+  distinguished connecting and degraded retained snapshots from offline hosts, kept movable spaces
+  clear of pinned nodes, composed compact theme navigation into one traversable history entry,
+  bounded Graph projection preprocessing, skipped inactive Graph work so rapid runtime refreshes
+  do not stall Office, and bounded terminal canvas refits and preference writes during rapid window
+  resizing so neither World theme can saturate the browser tab.
+  [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Removed
 

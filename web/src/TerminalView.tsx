@@ -35,6 +35,7 @@ import {
 } from "./terminalSelection";
 import { GhosttyRenderer } from "./terminalRenderer";
 import type { MobileTerminalTouchEvent, TerminalRenderer, TerminalSize } from "./terminalRenderer";
+import { createTerminalRefitScheduler } from "./terminalRefitScheduler";
 import { createTerminalResizeScheduler } from "./terminalResizeTransport";
 import {
   appendTerminalInputBatch,
@@ -211,6 +212,9 @@ export function TerminalView({
   const uploadInFlightRef = useRef(false);
   const uploadConflictRef = useRef<UploadConflictState | null>(null);
   const connectionKeyRef = useRef(connectionKey);
+  // Registry metadata can recreate an equivalent URL builder. The connection key, not the
+  // function identity, is the authoritative transport generation.
+  const wsUrlRef = useRef(wsUrl);
   const terminalIdRef = useRef(pane?.terminal_id ?? null);
   const overlayTerminalIdRef = useRef(pane?.terminal_id ?? null);
   const delayConnectingOverlayRef = useRef(false);
@@ -259,6 +263,7 @@ export function TerminalView({
   const terminalInputBatchDelayMsRef = useRef(terminalInputBatchDelayMs);
   terminalInputBatchDelayMsRef.current = terminalInputBatchDelayMs;
   connectionKeyRef.current = connectionKey;
+  wsUrlRef.current = wsUrl;
   terminalIdRef.current = pane?.terminal_id ?? null;
 
   useEffect(() => {
@@ -560,7 +565,7 @@ export function TerminalView({
     let disposeInput: (() => void) | null = null;
     let disposeScroll: (() => void) | null = null;
     let resizeObserver: ResizeObserver | null = null;
-    let resizeFrame: number | null = null;
+    let refitScheduler: ReturnType<typeof createTerminalRefitScheduler> | null = null;
     let lastMeasuredHostSize = { width: host.clientWidth, height: host.clientHeight };
     const generation = rendererGenerationRef.current + 1;
     rendererGenerationRef.current = generation;
@@ -634,7 +639,6 @@ export function TerminalView({
         });
 
         const flushResize = () => {
-          resizeFrame = null;
           if (disposed) {
             return;
           }
@@ -651,15 +655,9 @@ export function TerminalView({
             requestReconnectRef.current("resize");
           }
         };
-        // Ghostty's FitAddon already guards its own resize work. An additional
-        // trailing debounce makes the outer Office bubble visibly outrun the
-        // inner canvas during a drag, so keep refits frame-aligned instead.
-        const scheduleResize = () => {
-          if (resizeFrame === null) {
-            resizeFrame = window.requestAnimationFrame(flushResize);
-          }
-        };
-        resizeObserver = new ResizeObserver(scheduleResize);
+        const scheduler = createTerminalRefitScheduler(flushResize);
+        refitScheduler = scheduler;
+        resizeObserver = new ResizeObserver(() => scheduler.request());
         resizeObserver.observe(host);
 
         const fontReady = document.fonts?.ready;
@@ -698,10 +696,7 @@ export function TerminalView({
       disposeInput?.();
       disposeScroll?.();
       resizeObserver?.disconnect();
-      if (resizeFrame !== null) {
-        window.cancelAnimationFrame(resizeFrame);
-        resizeFrame = null;
-      }
+      refitScheduler?.cancel();
       if (rendererReadyRef.current?.generation === generation) {
         rendererReadyRef.current = null;
         setRendererReady(null);
@@ -862,7 +857,7 @@ export function TerminalView({
       socketGeneration = currentSocketGeneration;
       const nextSocket = new WebSocket(
         terminalSocketUrl(
-          wsUrl,
+          wsUrlRef.current,
           terminalId,
           initialSize,
           terminalOutputCoalesceMs,
@@ -1197,7 +1192,6 @@ export function TerminalView({
     rendererReady,
     transparentBackground,
     terminalOutputCoalesceMs,
-    wsUrl,
   ]);
 
   useEffect(() => {

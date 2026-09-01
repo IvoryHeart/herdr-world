@@ -94,7 +94,7 @@ export const coreSurfaceRegistry = new SurfaceRegistry([
   {
     id: "spaces",
     label: "Spaces",
-    route: "/",
+    route: "/spaces",
     semanticIcon: "terminal-workspaces",
     hostScope: "multi-host",
     requiredCapabilities: ["snapshot", "terminal_attach"],

@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
 const evidenceDir = resolve("docs/evidence/spec-010-extension-003");
@@ -98,7 +98,7 @@ test("captures the stable Office conversation bubble", async ({ page }) => {
   await page.getByRole("button", { name: "Back to Herdr sidebar" }).click();
   await expect(page.getByRole("group", { name: "Sidebar view" })).toBeVisible();
   await page.locator(".agent-row").filter({ hasText: "Agent 11" }).click();
-  await page.getByRole("button", { name: "Office", exact: true }).click();
+  await selectOffice(page);
   await waitForOffice(page);
   await expect(page.locator("[data-world-conversation='open']")).toBeVisible();
   await page.screenshot({
@@ -112,6 +112,13 @@ async function waitForOffice(page: import("@playwright/test").Page) {
     .poll(() => page.evaluate(() => window.__HERDR_WORLD_RENDERER__?.ready ?? false))
     .toBe(true);
   await expect(page.locator("canvas[data-office-canvas='true']")).toHaveCount(1);
+}
+
+async function selectOffice(page: Page) {
+  await page.locator(".world-theme-menu-trigger").click();
+  await page.getByRole("menu", { name: "World themes" })
+    .getByRole("menuitemradio", { name: "Office", exact: true })
+    .click();
 }
 
 async function waitForFrameFixtures(page: import("@playwright/test").Page) {

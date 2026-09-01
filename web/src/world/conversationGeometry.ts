@@ -10,6 +10,8 @@ export const CONVERSATION_MIN_WIDTH = 560;
 export const CONVERSATION_MIN_HEIGHT = 340;
 export const CONVERSATION_DEFAULT_MAX_WIDTH = 960;
 export const CONVERSATION_DEFAULT_MAX_HEIGHT = 560;
+const LEGACY_GRAPH_CONVERSATION_MAX_WIDTH = 720;
+const LEGACY_GRAPH_CONVERSATION_MAX_HEIGHT = 430;
 
 export function defaultConversationGeometry(
   viewportWidth: number,
@@ -33,6 +35,49 @@ export function defaultConversationGeometry(
     width,
     height,
   }, viewportWidth, viewportHeight);
+}
+
+export function defaultGraphConversationGeometry(
+  viewportWidth: number,
+  viewportHeight: number,
+): ConversationGeometry {
+  const { width, height } = defaultConversationGeometry(viewportWidth, viewportHeight);
+  return clampConversationGeometry({
+    left: viewportWidth - CONVERSATION_STAGE_MARGIN - width,
+    top: viewportHeight - CONVERSATION_STAGE_MARGIN - height,
+    width,
+    height,
+  }, viewportWidth, viewportHeight);
+}
+
+export function isLegacyDefaultGraphConversationGeometry(
+  geometry: ConversationGeometry,
+  viewportWidth: number,
+  viewportHeight: number,
+  index: number,
+) {
+  const width = boundedDimension(
+    viewportWidth * 0.52,
+    CONVERSATION_MIN_WIDTH,
+    LEGACY_GRAPH_CONVERSATION_MAX_WIDTH,
+    viewportWidth,
+  );
+  const height = boundedDimension(
+    viewportHeight * 0.48,
+    CONVERSATION_MIN_HEIGHT,
+    LEGACY_GRAPH_CONVERSATION_MAX_HEIGHT,
+    viewportHeight,
+  );
+  const legacy = clampConversationGeometry({
+    left: viewportWidth - CONVERSATION_STAGE_MARGIN - width - index * 34,
+    top: viewportHeight - CONVERSATION_STAGE_MARGIN - height - index * 28,
+    width,
+    height,
+  }, viewportWidth, viewportHeight);
+  return Math.abs(geometry.left - legacy.left) < 1 &&
+    Math.abs(geometry.top - legacy.top) < 1 &&
+    Math.abs(geometry.width - legacy.width) < 1 &&
+    Math.abs(geometry.height - legacy.height) < 1;
 }
 
 export function clampConversationGeometry(

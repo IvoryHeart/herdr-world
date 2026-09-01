@@ -15,20 +15,21 @@ describe("internal surface registry", () => {
     expect(coreSurfaceRegistry.get("spaces")).toMatchObject({
       id: "spaces",
       label: "Spaces",
-      route: "/",
+      route: "/spaces",
       semanticIcon: "terminal-workspaces",
       hostScope: "multi-host",
       requiredCapabilities: ["snapshot", "terminal_attach"],
     });
     expect(coreSurfaceRegistry.get("world")).toMatchObject({
       id: "world",
-      label: "Office",
-      route: "/world",
-      semanticIcon: "pixel-office",
+      label: "World",
+      route: "/",
+      semanticIcon: "world-themes",
       hostScope: "multi-host",
       requiredCapabilities: ["snapshot"],
     });
-    expect(coreSurfaceRegistry.resolvePath("/world/")?.id).toBe("world");
+    expect(coreSurfaceRegistry.resolvePath("/")?.id).toBe("world");
+    expect(coreSurfaceRegistry.resolvePath("/spaces/")?.id).toBe("spaces");
     expect(
       coreSurfaceRegistry.supports("spaces", {
         features: ["snapshot", "terminal_attach"],

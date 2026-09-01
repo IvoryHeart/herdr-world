@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Herdr World is a visual, multi-host control surface for your agents, combining terminal-first Spaces with a live Pixel Office." />
+    <meta name="description" content="Herdr World is a visual, multi-host control surface for your agents, combining terminal-first Spaces with live Pixel Office and Graph themes." />
     <meta name="theme-color" content="#0c0d1b" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Herdr World — Your agents. One office." />
@@ -12,7 +12,7 @@
     <meta property="og:url" content="https://ivoryheart.github.io/herdr-world/" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Herdr World — Your agents. One office." />
-    <meta name="twitter:description" content="Terminal-first Spaces and a live Pixel Office for your agents." />
+    <meta name="twitter:description" content="Terminal-first Spaces with live Pixel Office and Graph views for your agents." />
     <meta name="twitter:image" content="https://ivoryheart.github.io/herdr-world/assets/social-preview.png" />
     <link rel="canonical" href="https://ivoryheart.github.io/herdr-world/" />
     <link rel="icon" href="./assets/herdr-logo.svg" type="image/svg+xml" />
@@ -42,7 +42,7 @@
         <div class="hero-copy">
           <p class="signal"><span></span> Public preview / Linux + macOS</p>
           <h1 id="hero-title">Your agents.<br /><em>One office.</em></h1>
-          <p class="hero-intro">Herdr World turns live Herdr sessions into one visual workspace: terminal-first Spaces, a multi-host Pixel Office, and the controls to move between them without losing context.</p>
+          <p class="hero-intro">Herdr World turns live Herdr sessions into one visual workspace: terminal-first Spaces, a multi-host Pixel Office, a live topology Graph, and the controls to move between them without losing context.</p>
           <div class="hero-actions">
             <a class="button button-primary" href="https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0">Download <span aria-hidden="true">↓</span></a>
             <a class="button button-secondary" href="#install">View install</a>
@@ -54,10 +54,36 @@
           </dl>
         </div>
 
-        <div class="hero-stage" aria-label="Herdr World Pixel Office preview">
+        <div class="hero-stage">
           <div class="stage-label stage-label-top">LIVE / QUALIFIED STATE</div>
-          <div class="stage-frame">
-            <img src="./assets/pixel-office-desktop.png" alt="Herdr World Pixel Office showing multiple Herdr hosts, workspaces and agents" width="1440" height="900" />
+          <div class="stage-frame showcase-carousel" role="region" aria-roledescription="carousel" aria-label="Herdr World product previews" data-carousel>
+            <div class="carousel-viewport">
+              <div class="carousel-track" data-carousel-track>
+                <figure class="carousel-slide" aria-roledescription="slide" aria-label="1 of 3: Pixel Office" aria-hidden="false" data-carousel-slide>
+                  <img src="./assets/pixel-office-desktop.png" alt="Herdr World Pixel Office showing multiple Herdr hosts, workspaces and agents" width="1440" height="900" fetchpriority="high" />
+                  <figcaption><strong>Pixel Office</strong><span>Spatial awareness across live work</span></figcaption>
+                </figure>
+                <figure class="carousel-slide" aria-roledescription="slide" aria-label="2 of 3: Graph overview" aria-hidden="true" data-carousel-slide>
+                  <img src="./assets/graph-overview.png" alt="Herdr World Graph showing six synthetic example workspaces and fifteen agent or terminal nodes" width="1715" height="1428" loading="lazy" />
+                  <figcaption><strong>Graph overview</strong><span>Workspaces, agents, and state at a glance</span></figcaption>
+                </figure>
+                <figure class="carousel-slide" aria-roledescription="slide" aria-label="3 of 3: Connected terminals" aria-hidden="true" data-carousel-slide>
+                  <img src="./assets/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="1715" height="1428" loading="lazy" />
+                  <figcaption><strong>Connected terminals</strong><span>Work in place without losing topology</span></figcaption>
+                </figure>
+              </div>
+            </div>
+            <div class="carousel-controls">
+              <button class="carousel-arrow" type="button" aria-label="Show previous preview" data-carousel-previous>←</button>
+              <div class="carousel-dots" role="group" aria-label="Choose product preview">
+                <button type="button" aria-label="Show Pixel Office preview" aria-current="true" data-carousel-go-to="0"></button>
+                <button type="button" aria-label="Show Graph overview preview" aria-current="false" data-carousel-go-to="1"></button>
+                <button type="button" aria-label="Show connected terminals preview" aria-current="false" data-carousel-go-to="2"></button>
+              </div>
+              <button class="carousel-toggle" type="button" aria-label="Pause product previews" data-carousel-toggle><span data-carousel-toggle-label>Pause</span></button>
+              <button class="carousel-arrow" type="button" aria-label="Show next preview" data-carousel-next>→</button>
+            </div>
+            <p class="visually-hidden" aria-live="polite" aria-atomic="true" data-carousel-status></p>
           </div>
           <div class="stage-label stage-label-bottom">SPACES ↔ WORLD</div>
           <div class="pixel-cluster cluster-one" aria-hidden="true"></div>
@@ -86,8 +112,8 @@
           <article class="feature feature-world">
             <span class="feature-number">02</span>
             <div class="feature-icon office-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-            <h3>Pixel Office</h3>
-            <p>A live spatial projection of the same state—built for awareness, handoff and focus.</p>
+            <h3>World themes</h3>
+            <p>Pixel Office and Graph project the same live state for awareness, topology, handoff and focus.</p>
             <span class="feature-rule"></span>
           </article>
           <article class="feature feature-hosts">

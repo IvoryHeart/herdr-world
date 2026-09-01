@@ -19,6 +19,7 @@ const installTabs = [...document.querySelectorAll("[data-install-tab]")];
 const installPanels = [...document.querySelectorAll("[data-install-panel]")];
 const copyButton = document.querySelector("[data-copy-install]");
 const copyLabel = document.querySelector("[data-copy-label]");
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 function selectInstallTab(name, shouldFocus = false) {
   for (const tab of installTabs) {
@@ -64,7 +65,85 @@ copyButton?.addEventListener("click", async () => {
   }, 1800);
 });
 
-if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+const carousel = document.querySelector("[data-carousel]");
+
+if (carousel) {
+  const track = carousel.querySelector("[data-carousel-track]");
+  const slides = [...carousel.querySelectorAll("[data-carousel-slide]")];
+  const dots = [...carousel.querySelectorAll("[data-carousel-go-to]")];
+  const previous = carousel.querySelector("[data-carousel-previous]");
+  const next = carousel.querySelector("[data-carousel-next]");
+  const toggle = carousel.querySelector("[data-carousel-toggle]");
+  const toggleLabel = carousel.querySelector("[data-carousel-toggle-label]");
+  const status = carousel.querySelector("[data-carousel-status]");
+  let activeIndex = 0;
+  let timer = null;
+  let userPaused = reducedMotion.matches;
+  let pointerPaused = false;
+  let focusPaused = false;
+
+  const isPaused = () => userPaused || pointerPaused || focusPaused || document.hidden;
+
+  function scheduleAdvance() {
+    if (timer !== null) window.clearTimeout(timer);
+    timer = null;
+    if (slides.length < 2 || isPaused()) return;
+    timer = window.setTimeout(() => selectSlide(activeIndex + 1), 5200);
+  }
+
+  function syncToggle() {
+    const label = userPaused ? "Play" : "Pause";
+    if (toggleLabel) toggleLabel.textContent = label;
+    toggle?.setAttribute("aria-label", `${label} product previews`);
+  }
+
+  function selectSlide(nextIndex, announce = false) {
+    if (!track || slides.length === 0) return;
+    activeIndex = (nextIndex + slides.length) % slides.length;
+    track.style.transform = `translate3d(-${activeIndex * 100}%, 0, 0)`;
+    for (const [index, slide] of slides.entries()) {
+      slide.setAttribute("aria-hidden", String(index !== activeIndex));
+    }
+    for (const [index, dot] of dots.entries()) {
+      dot.setAttribute("aria-current", String(index === activeIndex));
+    }
+    if (announce && status) status.textContent = slides[activeIndex].getAttribute("aria-label") ?? "";
+    scheduleAdvance();
+  }
+
+  previous?.addEventListener("click", () => selectSlide(activeIndex - 1, true));
+  next?.addEventListener("click", () => selectSlide(activeIndex + 1, true));
+  for (const dot of dots) {
+    dot.addEventListener("click", () => selectSlide(Number(dot.dataset.carouselGoTo), true));
+  }
+  toggle?.addEventListener("click", () => {
+    userPaused = !userPaused;
+    syncToggle();
+    scheduleAdvance();
+  });
+  carousel.addEventListener("pointerenter", () => {
+    pointerPaused = true;
+    scheduleAdvance();
+  });
+  carousel.addEventListener("pointerleave", () => {
+    pointerPaused = false;
+    scheduleAdvance();
+  });
+  carousel.addEventListener("focusin", () => {
+    focusPaused = true;
+    scheduleAdvance();
+  });
+  carousel.addEventListener("focusout", (event) => {
+    if (event.relatedTarget instanceof Node && carousel.contains(event.relatedTarget)) return;
+    focusPaused = false;
+    scheduleAdvance();
+  });
+  document.addEventListener("visibilitychange", scheduleAdvance);
+  syncToggle();
+  selectSlide(0);
+}
+
+if (!reducedMotion.matches) {
   window.addEventListener("pointermove", (event) => {
     document.documentElement.style.setProperty("--pointer-x", `${event.clientX}px`);
     document.documentElement.style.setProperty("--pointer-y", `${event.clientY}px`);

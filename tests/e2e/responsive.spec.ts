@@ -24,7 +24,7 @@ for (const viewport of [
     await page.addInitScript((store) => {
       localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     }, hostStore());
-    await page.goto("/");
+    await page.goto("/spaces");
     await page
       .getByRole("group", { name: "Host" })
       .getByRole("button", { name: "All", exact: true })
@@ -49,7 +49,7 @@ test("captures the 375x812 switcher and usable terminal", async ({ page }) => {
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
   }, hostStore());
-  await page.goto("/");
+  await page.goto("/spaces");
   await expect(
     page.getByRole("button", { name: "Offline E, offline" }),
   ).toBeVisible();
@@ -83,7 +83,7 @@ test("keeps the terminal responsive through rapid window resizing", async ({ pag
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
   }, hostStore());
-  await page.goto("/");
+  await page.goto("/spaces");
   await page.getByRole("button", { name: "Remote B, compatible" }).click();
   await page.getByRole("button", { name: /^Codex B / }).click();
   await expect(page.getByRole("button", { name: "Refit terminal" })).toBeVisible();

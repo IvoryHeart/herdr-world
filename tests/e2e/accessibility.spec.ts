@@ -15,7 +15,7 @@ test("core controls are keyboard-visible, labelled, reduced-motion safe, and axe
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
+  await page.goto("/spaces");
   await expect
     .poll(() =>
       page.evaluate(

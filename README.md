@@ -5,8 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Herdr World is a browser and mobile workspace for [Herdr](https://github.com/herdrdev/herdr).
-It combines live terminal Spaces with a visual Pixel Office, multi-host viewing, shared navigation,
-mobile controls, notes, uploads, and agent-aware workflows.
+It combines live terminal Spaces with visual Pixel Office and Graph themes, multi-host viewing,
+shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
 
 The current public preview is
 [`v0.1.0`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0).
@@ -17,6 +17,10 @@ an interactive overview.
 | Desktop | Mobile |
 |:--:|:--:|
 | <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing hosts, workspaces, and agents" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
+
+| Graph overview | Connected terminals |
+|:--:|:--:|
+| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing six synthetic example workspaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
 
 ## Quick Start
 

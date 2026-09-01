@@ -198,9 +198,13 @@ async function startFixture(fixture) {
     }
     const log = logs.get(fixture.id);
     log.connections += 1;
+    const state = fixtureStates.get(fixture.id);
+    const terminalId = url.searchParams.get("terminal_id") || "terminal";
     webSocket.send(
       Buffer.from(
-        `\u001b[32m${fixture.label} terminal ready — λ🙂\u001b[0m\r\n`,
+        state?.snapshotVariant === "showcase"
+          ? showcaseTerminalOutput(terminalId)
+          : `\u001b[32m${fixture.label} terminal ready — λ🙂\u001b[0m\r\n`,
       ),
     );
     webSocket.on("message", (data, isBinary) => {
@@ -311,7 +315,7 @@ function setFixtureState(hostId, value) {
   const launchCreatesSeat = value.launchCreatesSeat ?? current.launchCreatesSeat;
   if (
     !["ready", "offline", "malformed"].includes(snapshotMode) ||
-    !["default", "empty", "large", "idle-desk", "long-title"].includes(snapshotVariant) ||
+    !["default", "empty", "empty-shell", "large", "idle-desk", "long-title", "showcase"].includes(snapshotVariant) ||
     (terminalProtocol !== null && ![19, 20, 21].includes(terminalProtocol)) ||
     (features !== null &&
       (!Array.isArray(features) || features.some((feature) => typeof feature !== "string"))) ||
@@ -339,6 +343,21 @@ function snapshot(fixture, stateOrVariant = "default") {
   if (variant === "empty") {
     return { workspaces: [], tabs: [], panes: [], layouts: [] };
   }
+  if (variant === "empty-shell") {
+    const result = snapshot(fixture, "default");
+    result.workspaces[0].agent_status = "unknown";
+    result.tabs[0].label = "Shell";
+    result.tabs[0].agent_status = "unknown";
+    result.panes[0] = {
+      ...result.panes[0],
+      label: "Shell",
+      agent: null,
+      display_agent: null,
+      agent_status: "unknown",
+      state_labels: {},
+    };
+    return result;
+  }
   if (variant === "large") {
     return largeSnapshot(fixture);
   }
@@ -347,6 +366,9 @@ function snapshot(fixture, stateOrVariant = "default") {
   }
   if (variant === "long-title") {
     return longTitleSnapshot(fixture);
+  }
+  if (variant === "showcase") {
+    return showcaseSnapshot(fixture);
   }
   const suffix = fixture.id.at(-1).toUpperCase();
   const result = {
@@ -437,6 +459,110 @@ function longTitleSnapshot(fixture) {
   result.panes[0].label = `Codex A — ${title}`;
   result.panes[0].display_agent = `Codex A — ${title}`;
   return result;
+}
+
+function showcaseSnapshot(fixture) {
+  const spaces = fixture.id === "host-a"
+    ? [
+        ["launch-control", "Launch Control", [
+          ["Codex Build", "codex", "working", "Building release"],
+          ["Claude Review", "claude", "blocked", "Needs approval"],
+          ["Shell", null, "unknown", "Ready"],
+        ]],
+        ["design-lab", "Design Lab", [
+          ["Claude Design", "claude", "working", "Refining flows"],
+          ["Codex UI", "codex", "done", "Ready for review"],
+          ["Aider", "aider", "idle", "Available"],
+        ]],
+        ["api-workshop", "API Workshop", [
+          ["Codex API", "codex", "working", "Implementing contract"],
+          ["Claude API", "claude", "working", "Reviewing edge cases"],
+          ["OpenCode", "opencode", "done", "Checks complete"],
+        ]],
+        ["quality-gate", "Quality Gate", [
+          ["Codex QA", "codex", "blocked", "Awaiting fixture"],
+          ["Claude QA", "claude", "done", "All checks passed"],
+        ]],
+      ]
+    : fixture.id === "host-b"
+      ? [
+          ["docs-studio", "Docs Studio", [
+            ["Codex Docs", "codex", "working", "Updating guide"],
+            ["Claude Docs", "claude", "idle", "Available"],
+          ]],
+          ["release-room", "Release Room", [
+            ["Codex Release", "codex", "done", "Artifact verified"],
+            ["Claude Release", "claude", "working", "Checking notes"],
+          ]],
+        ]
+      : [];
+  const workspaces = spaces.map(([id, label, agents], index) => ({
+    workspace_id: id,
+    number: index + 1,
+    label,
+    focused: index === 0,
+    pane_count: agents.length,
+    tab_count: 1,
+    active_tab_id: `tab-${id}`,
+    agent_status: aggregateShowcaseStatus(agents.map(([, , status]) => status)),
+  }));
+  const tabs = spaces.map(([id, , agents], index) => ({
+    tab_id: `tab-${id}`,
+    workspace_id: id,
+    number: 1,
+    label: "Agents",
+    focused: index === 0,
+    pane_count: agents.length,
+    agent_status: aggregateShowcaseStatus(agents.map(([, , status]) => status)),
+  }));
+  const panes = spaces.flatMap(([workspaceId, , agents], workspaceIndex) =>
+    agents.map(([label, agent, status, stateLabel], agentIndex) => {
+      const id = `${fixture.id}-${workspaceId}-${agentIndex + 1}`;
+      return {
+        pane_id: `pane-${id}`,
+        terminal_id: `terminal-${id}`,
+        workspace_id: workspaceId,
+        tab_id: `tab-${workspaceId}`,
+        focused: workspaceIndex === 0 && agentIndex === 0,
+        cwd: `/demo/${workspaceId}`,
+        label,
+        agent,
+        display_agent: agent ? label : null,
+        agent_status: status,
+        state_labels: { [status]: stateLabel },
+        revision: 1,
+      };
+    })
+  );
+  return { workspaces, tabs, panes, layouts: [], selected_pane_id: panes[0]?.pane_id };
+}
+
+function aggregateShowcaseStatus(statuses) {
+  return ["blocked", "working", "done", "idle", "unknown"]
+    .find((status) => statuses.includes(status)) ?? "unknown";
+}
+
+function showcaseTerminalOutput(terminalId) {
+  if (terminalId.includes("release") || terminalId.includes("quality-gate")) {
+    return [
+      "\u001b[36mHERDR WORLD / DEMO SESSION\u001b[0m",
+      "\u001b[90m/demo/release-room\u001b[0m",
+      "",
+      "$ npm run test:e2e -- graph",
+      "\u001b[32m✓ navigation   ✓ terminal handoff   ✓ accessibility\u001b[0m",
+      "\u001b[32mAll checks passed. Ready for review.\u001b[0m",
+      "",
+    ].join("\r\n");
+  }
+  return [
+    "\u001b[36mHERDR WORLD / DEMO SESSION\u001b[0m",
+    "\u001b[90m/demo/launch-control\u001b[0m",
+    "",
+    "$ npm run check",
+    "\u001b[32m✓ lint   ✓ unit tests   ✓ production build\u001b[0m",
+    "\u001b[33mRelease candidate prepared from fixture data.\u001b[0m",
+    "",
+  ].join("\r\n");
 }
 
 function largeSnapshot(fixture) {

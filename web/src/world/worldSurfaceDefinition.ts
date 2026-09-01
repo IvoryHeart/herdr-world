@@ -2,10 +2,10 @@ import type { SurfaceDefinition } from "../surfaceRegistry";
 
 export const worldSurfaceDefinition = {
   id: "world",
-  label: "Office",
-  route: "/world",
-  semanticIcon: "pixel-office",
+  label: "World",
+  route: "/",
+  semanticIcon: "world-themes",
   hostScope: "multi-host",
   requiredCapabilities: ["snapshot"],
-  load: () => import("./WorldSurface"),
+  load: () => import("./WorldThemeStage"),
 } satisfies SurfaceDefinition;

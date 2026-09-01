@@ -30,6 +30,8 @@ test("the Pages artifact is self-contained and release-accurate", () => {
     "styles.css",
     "site.js",
     ".nojekyll",
+    "assets/graph-live-terminals.png",
+    "assets/graph-overview.png",
     "assets/herdr-logo.svg",
     "assets/pixel-office-desktop.png",
     "assets/pixel-office-mobile.png",
@@ -51,6 +53,11 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   assert.match(html, /Protocol[\s\S]{0,80}<dd>20<\/dd>/i);
   assert.match(html, /assets\/pixel-office-desktop\.png/);
   assert.match(html, /assets\/pixel-office-mobile\.png/);
+  assert.match(html, /assets\/graph-overview\.png/);
+  assert.match(html, /assets\/graph-live-terminals\.png/);
+  assert.match(html, /role="region"[^>]+aria-roledescription="carousel"/);
+  assert.equal([...html.matchAll(/data-carousel-slide/g)].length, 3);
+  assert.match(html, /data-carousel-toggle/);
   assert.match(html, /property="og:image"[^>]+social-preview\.png/);
   assert.match(html, /role="tablist"[^>]+aria-label="Herdr World installation methods"/);
   assert.match(html, /data-install-tab="npm"/);
@@ -76,7 +83,10 @@ test("the Pages artifact is self-contained and release-accurate", () => {
   assert.match(html, /tar -xzf .*herdr-world-\$\{VERSION\}-\$\{PLATFORM\}\.tar\.gz/);
   assert.doesNotMatch(html, /Runtime and Herdr plugin commands/);
   assert.doesNotMatch(html, /Download the RC|current release candidate|preview Formula/);
-  assert.match(readFileSync(join(output, "site.js"), "utf8"), /data-install-tab/);
+  const siteJs = readFileSync(join(output, "site.js"), "utf8");
+  assert.match(siteJs, /data-install-tab/);
+  assert.match(siteJs, /data-carousel/);
+  assert.match(siteJs, /prefers-reduced-motion/);
   assert.doesNotMatch(html, /(?:src|href)="\/(?!\/)/, "local references must be relative");
   assert.doesNotMatch(html, /file:\/\//, "local filesystem URLs must not ship");
 

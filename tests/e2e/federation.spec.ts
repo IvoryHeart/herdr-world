@@ -12,7 +12,7 @@ test("one browser federates colliding native IDs and routes only to the owning b
   page,
   request,
 }) => {
-  await page.goto("/");
+  await page.goto("/spaces");
 
   await expect(
     page.getByRole("button", { name: "localhost, compatible" }),
@@ -64,7 +64,7 @@ test("one browser federates colliding native IDs and routes only to the owning b
 test("offline, incompatible, and malformed profiles stay isolated", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/spaces");
 
   await expect(
     page.getByRole("button", { name: "Protocol C, incompatible" }),
@@ -97,7 +97,7 @@ test("malformed snapshots are rejected without blanking another host", async ({
 }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.goto("/");
+  await page.goto("/spaces");
   await page
     .getByRole("group", { name: "Host" })
     .getByRole("button", { name: "All", exact: true })
@@ -122,7 +122,7 @@ test("retained offline rows cannot publish selection or focus mutations", async 
   page,
   request,
 }) => {
-  await page.goto("/");
+  await page.goto("/spaces");
   await page.getByRole("button", { name: "Remote B, compatible" }).click();
   await page.getByRole("button", { name: /^Codex B / }).click();
 
@@ -163,7 +163,7 @@ test("read-only terminal attach does not imply input, resize, scroll, or upload"
   await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-b", features: ["snapshot", "terminal_attach"] },
   });
-  await page.goto("/");
+  await page.goto("/spaces");
   await page.getByRole("button", { name: "Remote B, compatible" }).click();
   await expect
     .poll(async () => {
@@ -225,7 +225,7 @@ test("partial structural command declarations disable every unsupported entry po
   await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-b", commands: ["workspace.rename"] },
   });
-  await page.goto("/");
+  await page.goto("/spaces");
   await page.getByRole("button", { name: "Remote B, compatible" }).click();
 
   await expect(page.getByRole("button", { name: "New space" })).toBeDisabled();
@@ -245,7 +245,7 @@ test("core surface capabilities are enforced per host", async ({ page, request }
   await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-b", features: ["snapshot"] },
   });
-  await page.goto("/");
+  await page.goto("/spaces");
 
   await expect(page.getByRole("button", { name: "Remote B, incompatible" })).toBeVisible();
   await expect(page.getByRole("button", { name: "localhost, compatible" })).toBeVisible();
@@ -258,7 +258,7 @@ test("recovery re-handshakes capabilities before restoring controls", async ({
   page,
   request,
 }) => {
-  await page.goto("/");
+  await page.goto("/spaces");
   await expect(page.getByRole("button", { name: "Remote B, compatible" })).toBeVisible();
 
   await request.post("http://127.0.0.1:4173/__fixture/state", {

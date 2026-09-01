@@ -9,11 +9,11 @@ import type { TerminalSessionDescriptor } from "../terminalSessions";
 import type { PaneInfo } from "../types";
 import { officeDebug } from "../officeDebug";
 import { WorldConversationBubble } from "./WorldConversationBubble";
-import type { WorldConversationBubblePanel } from "./WorldSurface";
+import type { WorldConversationBubblePanel } from "./WorldConversationLayer";
 import type { HerdrOfficeProjection, OfficeAgent } from "./herdrOfficeProjection";
 
 export type WorldConversationTargetInput = {
-  kind: "agent" | "desk";
+  kind: "agent" | "desk" | "pane";
   targetKey: string;
   agentKey: string | null;
   bridgeId: BridgeId;
@@ -96,7 +96,7 @@ export function readWorldConversationTargets(): WorldConversationTarget[] {
       }
       const record = value as Record<string, unknown>;
       if (
-        (record.kind !== "agent" && record.kind !== "desk") ||
+        (record.kind !== "agent" && record.kind !== "desk" && record.kind !== "pane") ||
         typeof record.targetKey !== "string" ||
         typeof record.bridgeId !== "string" ||
         typeof record.paneId !== "string" ||
@@ -207,7 +207,7 @@ export function useWorldConversationController({
     const nextTarget = { ...target, windowId };
     const existing = targets.some(({ windowId: id }) => id === windowId);
     if (!existing && !compact && targets.length >= MAX_WORLD_CONVERSATIONS) {
-      onStatus("Five Office terminals are open. Close one before opening another.");
+      onStatus("Five World terminals are open. Close one before opening another.");
       return;
     }
     onSelectBridge(target.bridgeId);
@@ -287,7 +287,7 @@ export function useWorldConversationController({
               pane.title ??
               pane.terminal_title ??
               "Shell",
-            hostLabel: agentEntry?.hostLabel ?? deskEntry?.hostLabel ?? "Host",
+            hostLabel: agentEntry?.hostLabel ?? deskEntry?.hostLabel ?? runtime.label,
             pane,
             runtime,
             session,
@@ -382,7 +382,7 @@ export function useWorldConversationController({
     () => conversations.map((conversation) => ({
       id: conversation.windowId,
       targetKey: conversation.targetKey,
-      selectedKey: conversation.agent?.key ?? null,
+      selectedKey: conversation.agent?.key ?? conversation.targetKey,
       content: (
         <WorldConversationBubble
           key={`${conversation.windowId}:${conversation.session.sessionKey}`}

@@ -5,6 +5,8 @@ type SurfaceSlotBoundaryProps = {
   children: ReactNode;
   label: string;
   resetKey: string;
+  recoveryLabel?: string;
+  onRecover?: () => void;
 };
 
 type SurfaceSlotBoundaryState = {
@@ -36,7 +38,16 @@ export class SurfaceSlotBoundary extends Component<
       return (
         <div className="surface-unavailable" role="alert">
           <strong>{this.props.label} unavailable</strong>
-          <span>Use the primary view switch to continue in Spaces.</span>
+          <span>
+            {this.props.onRecover
+              ? "This presentation failed without stopping the rest of Herdr World."
+              : "Use the primary view switch to continue in Spaces."}
+          </span>
+          {this.props.onRecover ? (
+            <button className="btn" type="button" onClick={this.props.onRecover}>
+              {this.props.recoveryLabel ?? "Recover"}
+            </button>
+          ) : null}
         </div>
       );
     }
