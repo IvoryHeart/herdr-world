@@ -14,11 +14,13 @@ Web's own release history remains in its upstream changelog.
   detected agent or empty-shell identity, stable force layout, search, collapse, pan/zoom/fit
   controls, semantic navigation, connected live terminal overlays, and explicit Open-in-Spaces
   handoff.
+  [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Changed
 
 - Made Office the default `/` experience, moved Spaces to `/spaces`, retained `/world` as a
   compatibility alias, and replaced the Office tab with an Office/Graph World theme selector.
+  [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Fixed
 
