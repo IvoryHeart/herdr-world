@@ -21,8 +21,8 @@ import type {
 type CoreNavigationValue = {
   activeSurface: SurfaceDefinition;
   activeWorldTheme: WorldThemeDefinition;
-  navigate: (surfaceId: string) => void;
-  navigateWorldTheme: (themeId: string) => void;
+  navigate: (surfaceId: string, historyState?: unknown) => void;
+  navigateWorldTheme: (themeId: string, historyState?: unknown) => void;
 };
 
 const HISTORY_THEME_KEY = "__herdrWorldTheme";
@@ -115,7 +115,7 @@ export function CoreNavigationProvider({
     () => ({
       activeSurface,
       activeWorldTheme,
-      navigate: (surfaceId) => {
+      navigate: (surfaceId, historyState = window.history.state) => {
         const next = registry.get(surfaceId);
         if (!next || next.id === activeSurface.id) {
           return;
@@ -124,7 +124,7 @@ export function CoreNavigationProvider({
           ? worldThemeUrl(activeWorldTheme.id)
           : next.route;
         window.history.pushState(
-          withHistoryTheme({}, activeWorldTheme.id),
+          withHistoryTheme(historyState, activeWorldTheme.id),
           "",
           destination,
         );
@@ -141,13 +141,13 @@ export function CoreNavigationProvider({
           resolution: { ...resolution, needsReplace: false },
         });
       },
-      navigateWorldTheme: (themeId) => {
+      navigateWorldTheme: (themeId, historyState = window.history.state) => {
         const next = themeRegistry.get(themeId);
         if (!next || (activeSurface.id === "world" && next.id === activeWorldTheme.id)) {
           return;
         }
         const destination = worldThemeUrl(next.id);
-        window.history.pushState(withHistoryTheme({}, next.id), "", destination);
+        window.history.pushState(withHistoryTheme(historyState, next.id), "", destination);
         const resolution = resolveCoreRoute(registry, themeRegistry, "/", destination.slice(1));
         setNavigation({
           activeId: "world",

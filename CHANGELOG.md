@@ -28,8 +28,10 @@ Web's own release history remains in its upstream changelog.
   theme changes, retained a perceptible Graph node connector in desktop and compact layouts,
   including while its space is collapsed, prioritized detected agents at Graph presentation
   bounds, exposed complete terminal state and touch-sized bounded zoom controls accessibly,
-  kept movable spaces clear of pinned nodes, bounded Graph projection preprocessing, and skipped
-  inactive Graph work so rapid runtime refreshes do not stall Office.
+  distinguished connecting and degraded retained snapshots from offline hosts, kept movable spaces
+  clear of pinned nodes, composed compact theme navigation into one traversable history entry,
+  bounded Graph projection preprocessing, and skipped inactive Graph work so rapid runtime
+  refreshes do not stall Office.
   [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Removed

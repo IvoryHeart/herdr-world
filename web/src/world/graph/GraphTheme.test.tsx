@@ -86,6 +86,34 @@ describe("Graph semantic interface", () => {
     });
     expect(container.querySelector(".graph-empty")?.textContent).toContain("No presented spaces");
   });
+
+  it.each(["degraded", "connecting"] as const)(
+    "exposes %s retained snapshots as stale without calling them disconnected",
+    async (connectionState) => {
+      const value = context();
+      for (const node of value.graphProjection.nodes) {
+        node.stale = true;
+        node.disconnected = false;
+        node.connectionState = connectionState;
+      }
+      const container = document.createElement("div");
+      document.body.append(container);
+      const root = createRoot(container);
+      roots.push(root);
+      await act(async () => root.render(<GraphTheme context={value} />));
+
+      const agent = container.querySelector<HTMLButtonElement>(".graph-tree-terminal");
+      expect(agent?.getAttribute("aria-label")).toContain(
+        `working · ${connectionState} · stale · agent running`,
+      );
+      expect(agent?.getAttribute("aria-label")).not.toContain("disconnected");
+      value.selectedKey = "terminal";
+      await act(async () => root.render(<GraphTheme context={value} />));
+      expect(container.querySelector(".graph-details")?.textContent).toContain(
+        `Snapshot${connectionState} · stale`,
+      );
+    },
+  );
 });
 
 function context(): WorldThemeContext {
@@ -214,6 +242,7 @@ function node(overrides: Partial<WorldGraphNode> & Pick<WorldGraphNode, "id" | "
     focused: false,
     stale: false,
     disconnected: false,
+    connectionState: "compatible",
     actionable: true,
     omittedChildCount: 0,
     searchText: [overrides.label, overrides.taskSummary, overrides.stateLabel, "Forge"]

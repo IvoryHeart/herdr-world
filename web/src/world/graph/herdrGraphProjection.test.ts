@@ -168,7 +168,7 @@ describe("Herdr Graph projection", () => {
     expect(paneMap.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
-  it("retains stale snapshot topology but disables actions and marks it disconnected", () => {
+  it("retains an offline snapshot but reserves disconnected for the offline state", () => {
     const stale = source(
       "host-a",
       0,
@@ -179,9 +179,32 @@ describe("Herdr Graph projection", () => {
     const graph = projectHerdrGraph([stale]);
 
     expect(graph.nodes).toHaveLength(2);
-    expect(graph.nodes.every((node) => node.stale && node.disconnected)).toBe(true);
+    expect(graph.nodes.every((node) =>
+      node.stale && node.disconnected && node.connectionState === "offline"
+    )).toBe(true);
     expect(graph.nodes.every((node) => !node.actionable && node.handoff === null)).toBe(true);
   });
+
+  it.each(["degraded", "connecting"] as const)(
+    "retains a %s snapshot without reporting its nodes as disconnected",
+    (connectionState) => {
+      const retained = source(
+        "host-a",
+        0,
+        [workspace("space-a", 1, "Alpha")],
+        [pane("agent-a", "space-a", "working", { display_agent: "Codex" })],
+      );
+      retained.connectionState = connectionState;
+
+      const graph = projectHerdrGraph([retained]);
+
+      expect(graph.nodes).toHaveLength(2);
+      expect(graph.nodes.every((node) =>
+        node.stale && !node.disconnected && node.connectionState === connectionState
+      )).toBe(true);
+      expect(graph.nodes.every((node) => !node.actionable && node.handoff === null)).toBe(true);
+    },
+  );
 });
 
 function source(

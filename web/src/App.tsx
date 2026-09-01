@@ -3178,6 +3178,11 @@ export function App() {
     ensureMobileSidebarHistory();
     showDetailRef.current = true;
     setShowDetail(true);
+    if (isMobileDetailHistoryState(window.history.state)) {
+      mobileSidebarHistoryRef.current = true;
+      mobileDetailHistoryRef.current = true;
+      return;
+    }
     if (!mobileDetailHistoryRef.current) {
       window.history.pushState(
         withMobileDetailHistoryState(window.history.state),
@@ -4869,14 +4874,24 @@ export function App() {
           worldThemes={worldThemeRegistry.list()}
           onPrimaryView={(surfaceId) => {
             worldSelectionSeedPendingRef.current = surfaceId === "world";
-            navigatePrimaryView(surfaceId);
+            navigatePrimaryView(
+              surfaceId,
+              surfaceId === "world" && isCompactLayout
+                ? withMobileDetailHistoryState(window.history.state)
+                : undefined,
+            );
             if (surfaceId === "world" && isCompactLayout) {
               openMobileDetail();
             }
           }}
           onWorldTheme={(themeId) => {
             worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
-            navigateWorldTheme(themeId);
+            navigateWorldTheme(
+              themeId,
+              isCompactLayout
+                ? withMobileDetailHistoryState(window.history.state)
+                : undefined,
+            );
             if (isCompactLayout) {
               openMobileDetail();
             }

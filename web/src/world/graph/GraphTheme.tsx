@@ -415,6 +415,9 @@ function GraphDetails({
       <dl>
         <div><dt>Host</dt><dd>{node.hostLabel}</dd></div>
         <div><dt>Status</dt><dd>{displayStatus(node)}</dd></div>
+        {node.stale ? (
+          <div><dt>Snapshot</dt><dd>{connectionSummary(node)}</dd></div>
+        ) : null}
         {node.subtitle ? <div><dt>Project</dt><dd>{node.subtitle}</dd></div> : null}
         {node.modelLabel ? <div><dt>Agent</dt><dd>{node.modelLabel}</dd></div> : null}
       </dl>
@@ -471,7 +474,7 @@ export function graphMatches(spaces: readonly WorldGraphSpace[], rawQuery: strin
 }
 
 function displayStatus(node: WorldGraphNode) {
-  return node.stale ? "disconnected" : node.status;
+  return node.disconnected ? "disconnected" : node.status;
 }
 
 function statusSymbol(node: WorldGraphNode) {
@@ -484,7 +487,11 @@ function statusSymbol(node: WorldGraphNode) {
 }
 
 function nodeSummary(node: WorldGraphNode) {
-  const parts = [displayStatus(node), node.focused ? "focused" : null];
+  const parts = [
+    displayStatus(node),
+    node.stale ? connectionSummary(node) : null,
+    node.focused ? "focused" : null,
+  ];
   if (node.kind === "space") parts.push(node.hostLabel, node.subtitle ?? null);
   else parts.push(
     node.agentRunning ? "agent running" : "empty shell",
@@ -492,6 +499,10 @@ function nodeSummary(node: WorldGraphNode) {
     node.modelLabel ?? null,
   );
   return parts.filter(Boolean).join(" · ");
+}
+
+function connectionSummary(node: WorldGraphNode) {
+  return `${node.connectionState} · stale`;
 }
 
 function plural(count: number, singular: string, pluralValue: string) {

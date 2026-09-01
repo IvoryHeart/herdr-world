@@ -112,6 +112,31 @@ describe("core route contract", () => {
     expect(replace).toHaveBeenCalledTimes(1);
     expect(container.querySelector("output")?.textContent).toBe("world:graph");
   });
+
+  it("composes caller-owned state into the single theme history entry", async () => {
+    const push = vi.spyOn(window.history, "pushState");
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => {
+      root.render(
+        <CoreNavigationProvider registry={coreSurfaceRegistry}>
+          <NavigationHarness />
+        </CoreNavigationProvider>,
+      );
+    });
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>("[data-theme-state='graph']")?.click()
+    );
+
+    expect(push).toHaveBeenCalledTimes(1);
+    expect(window.history.state).toMatchObject({
+      __herdrWorldTheme: "graph",
+      callerMarker: "detail",
+    });
+  });
 });
 
 function NavigationHarness() {
@@ -120,6 +145,12 @@ function NavigationHarness() {
     <>
       <output>{navigation.activeSurface.id}:{navigation.activeWorldTheme.id}</output>
       <button data-theme="graph" onClick={() => navigation.navigateWorldTheme("graph")}>Graph</button>
+      <button
+        data-theme-state="graph"
+        onClick={() => navigation.navigateWorldTheme("graph", { callerMarker: "detail" })}
+      >
+        Graph with state
+      </button>
       <button data-surface="spaces" onClick={() => navigation.navigate("spaces")}>Spaces</button>
     </>
   );

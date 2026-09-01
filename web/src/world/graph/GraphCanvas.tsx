@@ -521,7 +521,11 @@ class GraphRenderer {
     if (source.stale) {
       context.fillStyle = "#f38ba8";
       context.font = "700 10px sans-serif";
-      context.fillText("OFFLINE", 0, -radius - 10);
+      context.fillText(
+        source.disconnected ? "OFFLINE" : source.connectionState.toLocaleUpperCase(),
+        0,
+        -radius - 10,
+      );
     }
     context.restore();
   }

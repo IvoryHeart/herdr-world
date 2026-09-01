@@ -130,6 +130,7 @@ function node(overrides: Partial<WorldGraphNode> & Pick<WorldGraphNode, "id" | "
     focused: false,
     stale: false,
     disconnected: false,
+    connectionState: "compatible",
     actionable: false,
     omittedChildCount: 0,
     searchText: overrides.id,

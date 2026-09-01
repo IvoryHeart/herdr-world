@@ -373,6 +373,7 @@ function spaceProjection(): HerdrGraphProjection {
     focused: false,
     stale: false,
     disconnected: false,
+    connectionState: "compatible",
     actionable: true,
     selectionKey: "space-selection",
     omittedChildCount: 0,

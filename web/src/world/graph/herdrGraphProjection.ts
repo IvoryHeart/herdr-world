@@ -3,6 +3,7 @@ import { agentIconKind } from "../../AgentIcon";
 import type { AgentIconKind } from "../../AgentIcon";
 import { qualifiedRuntimeKey, qualifyRuntimeTarget } from "../../runtimeIdentity";
 import type { QualifiedTarget } from "../../runtimeIdentity";
+import type { HostConnectionState } from "../../runtimeClient";
 import type { AgentStatus, PaneInfo, WorkspaceInfo } from "../../types";
 import type { OfficeHandoffRequest } from "../herdrOfficeHandoff";
 import type { HerdrOfficeSourceHost } from "../herdrOfficeProjection";
@@ -31,6 +32,7 @@ export type WorldGraphNode = {
   focused: boolean;
   stale: boolean;
   disconnected: boolean;
+  connectionState: HostConnectionState;
   actionable: boolean;
   selectionKey: string;
   omittedChildCount: number;
@@ -222,14 +224,22 @@ function projectSpace(candidate: SpaceCandidate): WorldGraphSpace {
     status: aggregateSpaceStatus(workspace, candidate.status),
     focused: candidate.focused,
     stale,
-    disconnected: stale,
+    disconnected: source.connectionState === "offline",
+    connectionState: source.connectionState,
     actionable,
     selectionKey: id,
     omittedChildCount: Math.max(
       0,
       candidate.terminalCount - presentedTerminals.length,
     ),
-    searchText: searchable([label, subtitle, hostLabel]),
+    searchText: searchable([
+      label,
+      subtitle,
+      hostLabel,
+      source.connectionState,
+      stale ? "stale" : undefined,
+      source.connectionState === "offline" ? "disconnected" : undefined,
+    ]),
     handoff: actionable
       ? roomHandoff(id, source.profile.profileId, source.generationKey ?? "", workspaceRef)
       : null,
@@ -283,7 +293,8 @@ function projectTerminal(
     status: pane.agent_status,
     focused: pane.focused,
     stale,
-    disconnected: stale,
+    disconnected: source.connectionState === "offline",
+    connectionState: source.connectionState,
     actionable,
     selectionKey,
     omittedChildCount: 0,
@@ -295,6 +306,9 @@ function projectTerminal(
       parent.label,
       parent.subtitle,
       parent.hostLabel,
+      source.connectionState,
+      stale ? "stale" : undefined,
+      source.connectionState === "offline" ? "disconnected" : undefined,
       agentRunning ? "agent running" : "empty shell",
     ]),
     handoff: null,

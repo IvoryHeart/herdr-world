@@ -73,6 +73,39 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   );
 });
 
+test("keeps a compact theme change to one traversable history entry", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await waitForOffice(page);
+  await page.getByRole("button", { name: "Back to Herdr sidebar" }).click();
+  await expect(page.locator(".app")).toHaveAttribute("data-detail", "false");
+  const beforeThemeChange = await page.evaluate(() => window.history.length);
+
+  await selectTheme(page, "Graph");
+  await waitForGraph(page);
+  await expect(page.locator(".app")).toHaveAttribute("data-detail", "true");
+  await expect.poll(() => page.evaluate(() => window.history.length))
+    .toBe(beforeThemeChange + 1);
+
+  for (let traversal = 0; traversal < 2; traversal += 1) {
+    await page.goBack();
+    await waitForOffice(page);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.locator(".app")).toHaveAttribute("data-detail", "false");
+    await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(await page.evaluate(() => window.history.length)).toBe(beforeThemeChange + 1);
+
+    await page.goForward();
+    await waitForGraph(page);
+    await expect(page).toHaveURL(/\/?theme=graph$/);
+    await expect(page.locator(".app")).toHaveAttribute("data-detail", "true");
+    expect(await page.evaluate(() => window.history.length)).toBe(beforeThemeChange + 1);
+  }
+});
+
 test("offers inspection, search, collapse, fit, and explicit Spaces handoff without accidental actions", async ({ page }) => {
   const terminalSockets: string[] = [];
   page.on("websocket", (socket) => {
