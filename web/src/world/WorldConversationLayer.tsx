@@ -8,6 +8,7 @@ import type {
 import {
   clampConversationGeometry,
   defaultConversationGeometry,
+  defaultGraphConversationGeometry,
   moveConversationGeometry,
   resizeConversationGeometry,
 } from "./conversationGeometry";
@@ -16,6 +17,8 @@ import type { WorldThemeId } from "./worldThemeRegistry";
 import {
   MAX_SAVED_WORLD_WINDOWS,
   readWorldViewPrefs,
+  withWorldViewThemeGeometry,
+  worldViewGeometryForTheme,
   writeWorldViewPrefs,
 } from "./worldViewPrefs";
 
@@ -67,6 +70,7 @@ export function WorldConversationLayer({
   } | null>(null);
   const [order, setOrder] = useState<string[]>(() => savedViewRef.current.order);
   const geometryRef = useRef<Record<string, ConversationGeometry>>({});
+  const geometryThemeRef = useRef(activeThemeId);
   const geometryFrameRef = useRef<number | null>(null);
   const interactionRef = useRef<{
     id: string;
@@ -81,14 +85,16 @@ export function WorldConversationLayer({
 
   const persistView = useCallback(() => {
     const latest = readWorldViewPrefs();
-    const next = {
-      geometry: { ...latest.geometry, ...geometryRef.current },
+    const next = withWorldViewThemeGeometry({
+      ...latest,
       order: order.filter(Boolean).slice(0, MAX_SAVED_WORLD_WINDOWS),
-      scrollTop: latest.scrollTop,
-    };
+    }, activeThemeId, {
+      ...worldViewGeometryForTheme(latest, activeThemeId),
+      ...geometryRef.current,
+    });
     savedViewRef.current = next;
     writeWorldViewPrefs(next);
-  }, [order]);
+  }, [activeThemeId, order]);
 
   const scheduleGeometryRender = () => {
     if (geometryFrameRef.current !== null) return;
@@ -135,11 +141,14 @@ export function WorldConversationLayer({
         next[panel.id] = clampConversationGeometry(current, layer.clientWidth, layer.clientHeight);
         continue;
       }
-      const base = defaultConversationGeometry(layer.clientWidth, layer.clientHeight);
+      const graphPlacement = activeThemeId === "graph";
+      const base = graphPlacement
+        ? defaultGraphConversationGeometry(layer.clientWidth, layer.clientHeight)
+        : defaultConversationGeometry(layer.clientWidth, layer.clientHeight);
       next[panel.id] = clampConversationGeometry({
         ...base,
-        left: base.left + index * 34,
-        top: base.top + index * 28,
+        left: base.left + index * 34 * (graphPlacement ? -1 : 1),
+        top: base.top + index * 28 * (graphPlacement ? -1 : 1),
       }, layer.clientWidth, layer.clientHeight);
     }
     const changed = Object.keys(geometryRef.current).length !== Object.keys(next).length ||
@@ -152,7 +161,7 @@ export function WorldConversationLayer({
       geometryRef.current = next;
       setGeometry(next);
     }
-  }, [compact, panelIdsKey]);
+  }, [activeThemeId, compact, panelIdsKey]);
 
   const measure = useCallback(() => {
     syncGeometry();
@@ -173,19 +182,22 @@ export function WorldConversationLayer({
     if (geometryFrameRef.current !== null) window.cancelAnimationFrame(geometryFrameRef.current);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const ids = new Set(panelIds);
+    const themeChanged = geometryThemeRef.current !== activeThemeId;
+    const savedGeometry = worldViewGeometryForTheme(savedViewRef.current, activeThemeId);
     if (compact) {
       geometryRef.current = {};
       setGeometry({});
     } else {
       const next = Object.fromEntries(panelIds.flatMap((id) => {
-        const value = geometryRef.current[id] ?? savedViewRef.current.geometry[id];
+        const value = (themeChanged ? undefined : geometryRef.current[id]) ?? savedGeometry[id];
         return value ? [[id, value] as const] : [];
       }));
       geometryRef.current = next;
       setGeometry(next);
     }
+    geometryThemeRef.current = activeThemeId;
     setRects((current) => Object.fromEntries(
       Object.entries(current).filter(([id]) => ids.has(id)),
     ));
@@ -201,7 +213,7 @@ export function WorldConversationLayer({
       setInteraction(null);
     }
     // The ID key intentionally isolates panel lifecycle from content-only refreshes.
-  }, [compact, panelIdsKey]);
+  }, [activeThemeId, compact, panelIdsKey]);
 
   useLayoutEffect(measure, [geometry, measure]);
 
@@ -348,7 +360,9 @@ export function WorldConversationLayer({
                 if (element) panelRefs.current[panel.id] = element;
                 else delete panelRefs.current[panel.id];
               }}
-              className="world-conversation-slot"
+              className={activeThemeId === "graph"
+                ? "world-conversation-slot graph-conversation-slot"
+                : "world-conversation-slot"}
               data-window-id={panel.id}
               data-positioned={panelGeometry ? "true" : "false"}
               data-active={orderIndex === order.length - 1 ? "true" : undefined}

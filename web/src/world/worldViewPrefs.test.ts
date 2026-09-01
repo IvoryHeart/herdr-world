@@ -20,12 +20,18 @@ describe("world view preferences", () => {
     const storage = memoryStorage();
     writeWorldViewPrefs({
       geometry: { "host-a:pane-a": { left: 12, top: 24, width: 720, height: 420 } },
+      themeGeometry: {
+        graph: { "host-a:pane-a": { left: 220, top: 180, width: 620, height: 360 } },
+      },
       order: ["host-a:pane-a"],
       scrollTop: 360,
     }, storage);
 
     expect(readWorldViewPrefs(storage)).toEqual({
       geometry: { "host-a:pane-a": { left: 12, top: 24, width: 720, height: 420 } },
+      themeGeometry: {
+        graph: { "host-a:pane-a": { left: 220, top: 180, width: 620, height: 360 } },
+      },
       order: ["host-a:pane-a"],
       scrollTop: 360,
     });
@@ -38,15 +44,27 @@ describe("world view preferences", () => {
         good: { left: -10, top: 30, width: 12_000, height: 40 },
         bad: { left: "nope" },
       },
+      themeGeometry: {
+        graph: { good: { left: -20, top: 60, width: 15_000, height: 80 } },
+        "NOT VALID": { ignored: { left: 1, top: 2, width: 3, height: 4 } },
+      },
       order: ["good", "good", 12],
       scrollTop: -4,
     }));
 
     expect(readWorldViewPrefs(storage)).toEqual({
       geometry: { good: { left: 0, top: 30, width: 10_000, height: 40 } },
+      themeGeometry: {
+        graph: { good: { left: 0, top: 60, width: 10_000, height: 80 } },
+      },
       order: ["good"],
       scrollTop: 0,
     });
-    expect(emptyWorldViewPrefs()).toEqual({ geometry: {}, order: [], scrollTop: 0 });
+    expect(emptyWorldViewPrefs()).toEqual({
+      geometry: {},
+      themeGeometry: {},
+      order: [],
+      scrollTop: 0,
+    });
   });
 });

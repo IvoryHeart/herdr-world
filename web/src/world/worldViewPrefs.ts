@@ -2,16 +2,34 @@ import type { ConversationGeometry } from "./conversationGeometry";
 
 export const WORLD_VIEW_PREFS_STORAGE_KEY = "herdrWeb.worldView.v1";
 export const MAX_SAVED_WORLD_WINDOWS = 5;
+const MAX_SAVED_WORLD_THEMES = 8;
 const MAX_SAVED_GEOMETRY = 10_000;
 
 export type WorldViewPrefs = {
   geometry: Record<string, ConversationGeometry>;
+  themeGeometry: Record<string, Record<string, ConversationGeometry>>;
   order: string[];
   scrollTop: number;
 };
 
 export function emptyWorldViewPrefs(): WorldViewPrefs {
-  return { geometry: {}, order: [], scrollTop: 0 };
+  return { geometry: {}, themeGeometry: {}, order: [], scrollTop: 0 };
+}
+
+export function worldViewGeometryForTheme(prefs: WorldViewPrefs, themeId: string) {
+  return themeId === "office" ? prefs.geometry : prefs.themeGeometry[themeId] ?? {};
+}
+
+export function withWorldViewThemeGeometry(
+  prefs: WorldViewPrefs,
+  themeId: string,
+  geometry: Record<string, ConversationGeometry>,
+): WorldViewPrefs {
+  if (themeId === "office") return { ...prefs, geometry };
+  return {
+    ...prefs,
+    themeGeometry: { ...prefs.themeGeometry, [themeId]: geometry },
+  };
 }
 
 export function readWorldViewPrefs(
@@ -47,16 +65,17 @@ function parseWorldViewPrefs(value: unknown): WorldViewPrefs {
     return emptyWorldViewPrefs();
   }
   const record = value as Record<string, unknown>;
-  const geometry: Record<string, ConversationGeometry> = {};
-  if (record.geometry && typeof record.geometry === "object" && !Array.isArray(record.geometry)) {
-    for (const [id, candidate] of Object.entries(record.geometry)) {
-      const parsed = parseGeometry(candidate);
-      if (parsed) {
-        geometry[id.slice(0, 160)] = parsed;
-      }
-      if (Object.keys(geometry).length >= MAX_SAVED_WORLD_WINDOWS) {
-        break;
-      }
+  const geometry = parseGeometryRecord(record.geometry);
+  const themeGeometry: Record<string, Record<string, ConversationGeometry>> = {};
+  if (
+    record.themeGeometry &&
+    typeof record.themeGeometry === "object" &&
+    !Array.isArray(record.themeGeometry)
+  ) {
+    for (const [themeId, candidate] of Object.entries(record.themeGeometry)) {
+      if (!/^[a-z0-9-]{1,40}$/.test(themeId)) continue;
+      themeGeometry[themeId] = parseGeometryRecord(candidate);
+      if (Object.keys(themeGeometry).length >= MAX_SAVED_WORLD_THEMES) break;
     }
   }
   const order = Array.isArray(record.order)
@@ -65,7 +84,18 @@ function parseWorldViewPrefs(value: unknown): WorldViewPrefs {
   const scrollTop = typeof record.scrollTop === "number" && Number.isFinite(record.scrollTop)
     ? Math.max(0, Math.min(MAX_SAVED_GEOMETRY, record.scrollTop))
     : 0;
-  return { geometry, order, scrollTop };
+  return { geometry, themeGeometry, order, scrollTop };
+}
+
+function parseGeometryRecord(value: unknown) {
+  const geometry: Record<string, ConversationGeometry> = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return geometry;
+  for (const [id, candidate] of Object.entries(value)) {
+    const parsed = parseGeometry(candidate);
+    if (parsed) geometry[id.slice(0, 160)] = parsed;
+    if (Object.keys(geometry).length >= MAX_SAVED_WORLD_WINDOWS) break;
+  }
+  return geometry;
 }
 
 function parseGeometry(value: unknown): ConversationGeometry | null {

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { expectGraphConnectorOutsideOverlay } from "./graphConnector";
 import { hostStore } from "./hostStore";
 
 test.describe.configure({ timeout: 90_000 });
@@ -9,6 +10,7 @@ test.beforeEach(async ({ page, request }) => {
   await request.post("http://127.0.0.1:4173/__fixture/reset");
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
+    localStorage.removeItem("herdrWeb.worldView.v1");
   }, hostStore());
 });
 
@@ -102,6 +104,7 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
     `.graph-conversation-connectors path[data-window-id="${windowId}"]`,
   );
   await expect(connector).toHaveAttribute("d", /M .+ C .+/);
+  await expectGraphConnectorOutsideOverlay(page, windowId as string);
   const connectorBeforeMove = await connector.getAttribute("d");
   const header = conversation.getByRole("group", { name: "Move agent conversation" });
   const headerBox = await header.boundingBox();

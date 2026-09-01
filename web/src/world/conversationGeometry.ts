@@ -10,6 +10,8 @@ export const CONVERSATION_MIN_WIDTH = 560;
 export const CONVERSATION_MIN_HEIGHT = 340;
 export const CONVERSATION_DEFAULT_MAX_WIDTH = 960;
 export const CONVERSATION_DEFAULT_MAX_HEIGHT = 560;
+const GRAPH_CONVERSATION_MAX_WIDTH = 720;
+const GRAPH_CONVERSATION_MAX_HEIGHT = 430;
 
 export function defaultConversationGeometry(
   viewportWidth: number,
@@ -30,6 +32,30 @@ export function defaultConversationGeometry(
   return clampConversationGeometry({
     left: (viewportWidth - width) / 2,
     top: (viewportHeight - height) / 2,
+    width,
+    height,
+  }, viewportWidth, viewportHeight);
+}
+
+export function defaultGraphConversationGeometry(
+  viewportWidth: number,
+  viewportHeight: number,
+): ConversationGeometry {
+  const width = boundedDimension(
+    viewportWidth * 0.52,
+    CONVERSATION_MIN_WIDTH,
+    GRAPH_CONVERSATION_MAX_WIDTH,
+    viewportWidth,
+  );
+  const height = boundedDimension(
+    viewportHeight * 0.48,
+    CONVERSATION_MIN_HEIGHT,
+    GRAPH_CONVERSATION_MAX_HEIGHT,
+    viewportHeight,
+  );
+  return clampConversationGeometry({
+    left: viewportWidth - CONVERSATION_STAGE_MARGIN - width,
+    top: viewportHeight - CONVERSATION_STAGE_MARGIN - height,
     width,
     height,
   }, viewportWidth, viewportHeight);

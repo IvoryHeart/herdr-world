@@ -15,6 +15,7 @@ beforeEach(() => {
     observe() {}
     disconnect() {}
   });
+  localStorage.clear();
 });
 
 afterEach(async () => {
@@ -81,5 +82,6 @@ describe("WorldConversationLayer", () => {
     expect(container.querySelector("[data-testid='terminal-probe']")).toBe(terminal);
     expect(lifecycle).toEqual({ mounts: 1, unmounts: 0 });
     expect(container.querySelector("[aria-label='Resize agent conversation']")).not.toBeNull();
+    expect(terminal?.parentElement?.classList.contains("graph-conversation-slot")).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import {
   CONVERSATION_MIN_WIDTH,
   clampConversationGeometry,
   defaultConversationGeometry,
+  defaultGraphConversationGeometry,
   moveConversationGeometry,
   resizeConversationGeometry,
 } from "./conversationGeometry";
@@ -15,6 +16,14 @@ describe("conversation geometry", () => {
     expect(geometry.height).toBeGreaterThanOrEqual(CONVERSATION_MIN_HEIGHT);
     expect(geometry.left + geometry.width / 2).toBeCloseTo(560);
     expect(geometry.top + geometry.height / 2).toBeCloseTo(405);
+  });
+
+  it("places the smaller Graph default against the lower-right edge", () => {
+    const geometry = defaultGraphConversationGeometry(1120, 810);
+    expect(geometry.width).toBeCloseTo(582.4);
+    expect(geometry.height).toBeCloseTo(388.8);
+    expect(geometry.left + geometry.width).toBeCloseTo(1108);
+    expect(geometry.top + geometry.height).toBeCloseTo(798);
   });
 
   it("clamps position and size to the stage", () => {
