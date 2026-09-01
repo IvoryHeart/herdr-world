@@ -10,6 +10,19 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [0.1.1] - 2026-09-01
+
+> **Herdr Web baseline:** Derived from v0.5.0 plus the JetBrains Mono Nerd Font fallback merged in upstream PR #74 at
+> [`4384c884`](https://github.com/kcosr/herdr-web/commit/4384c884da418ea3f3fb75954da5347b2e12f063).
+
+### Added
+
 - Added an accessible live Graph theme with bounded project/space and attached-terminal topology,
   detected agent or empty-shell identity, stable force layout, search, collapse, pan/zoom/fit
   controls, semantic navigation, connected live terminal overlays, and explicit Open-in-Spaces
@@ -38,8 +51,6 @@ Web's own release history remains in its upstream changelog.
   do not stall Office, and bounded terminal canvas refits and preference writes during rapid window
   resizing so neither World theme can saturate the browser tab.
   [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
-
-### Removed
 
 ## [0.1.0] - 2026-08-31
 
