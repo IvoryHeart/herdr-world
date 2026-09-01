@@ -15,6 +15,8 @@ for (const file of ["index.html", "styles.css", "site.js"]) {
 }
 
 for (const file of [
+  "graph-live-terminals.png",
+  "graph-overview.png",
   "pixel-office-desktop.png",
   "pixel-office-mobile.png",
   "social-preview.png",
