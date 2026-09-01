@@ -164,6 +164,18 @@ describe("Graph renderer ownership", () => {
     });
   });
 
+  it("fits the first non-empty layout when no camera has been saved", async () => {
+    const onViewChange = vi.fn();
+    await renderCanvas(spaceProjection(), { onViewChange, fitOnMount: true });
+    const [camera, positions] = onViewChange.mock.lastCall ?? [];
+    expect(camera).toMatchObject({ x: -70, zoom: 2 });
+    expect(Math.abs(camera?.y ?? Number.POSITIVE_INFINITY)).toBe(0);
+    expect(positions).toMatchObject({
+      space: { x: 0, y: 0, pinned: true },
+      terminal: { x: 100, y: 0, pinned: true },
+    });
+  });
+
   it("keeps single click, collapse, and dragging inspection-only but activates terminals on double-click", async () => {
     const onSelect = vi.fn();
     const onActivate = vi.fn();
@@ -263,6 +275,7 @@ async function renderCanvas(
       camera: GraphCamera,
       positions: Record<string, SavedGraphPosition>,
     ) => void;
+    fitOnMount?: boolean;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -288,6 +301,7 @@ async function renderCanvas(
       matchedIds={null}
       conversationTargets={[]}
       initialPrefs={initialPrefs}
+      fitOnMount={callbacks.fitOnMount}
       onSelect={callbacks.onSelect ?? (() => {})}
       onActivate={callbacks.onActivate ?? (() => {})}
       onToggleCollapse={callbacks.onToggleCollapse ?? (() => {})}

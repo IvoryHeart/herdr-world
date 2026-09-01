@@ -25,7 +25,7 @@ import type { GraphCanvasHandle, GraphConversationTarget } from "./GraphCanvas";
 import { useWorldConversationLayout } from "../WorldConversationLayer";
 import type { WorldGraphNode, WorldGraphSpace } from "./herdrGraphProjection";
 import {
-  readGraphViewPrefs,
+  readInitialGraphViewPrefs,
   writeGraphViewPrefs,
 } from "./graphViewPrefs";
 import type { GraphCamera, GraphViewPrefs, SavedGraphPosition } from "./graphViewPrefs";
@@ -46,7 +46,8 @@ export default function GraphTheme({ context: value }: SurfaceComponentProps) {
 
 function GraphStage({ context }: { context: WorldThemeContext }) {
   const projection = context.graphProjection;
-  const [initialPrefs] = useState(readGraphViewPrefs);
+  const [initialView] = useState(readInitialGraphViewPrefs);
+  const { prefs: initialPrefs, fitOnMount } = initialView;
   const [collapsedIds, setCollapsedIds] = useState(
     () => new Set(initialPrefs.collapsedIds),
   );
@@ -225,6 +226,7 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
             matchedIds={matches}
             conversationTargets={conversationTargets}
             initialPrefs={initialPrefs}
+            fitOnMount={fitOnMount}
             onSelect={selectFromCanvas}
             onActivate={context.onGraphOpenTerminal}
             onToggleCollapse={toggleCollapse}

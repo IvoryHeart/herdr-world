@@ -143,14 +143,16 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
   await expect(connector).toHaveAttribute("d", /M .+ C .+/);
   await expectGraphConnectorOutsideOverlay(page, windowId as string);
   const collapse = page.locator(".graph-collapse").first();
-  await collapse.click();
+  await collapse.focus();
+  await page.keyboard.press("Enter");
   await expect(collapse).toHaveAttribute("aria-expanded", "false");
   await expect(connector).toHaveAttribute("data-anchor-kind", "collapsed-parent");
   await expect(connector).toHaveAttribute("d", /M .+ C .+/);
   await expect(connector).not.toHaveAttribute("visibility", "hidden");
   expect(await connector.evaluate((path: SVGPathElement) => path.getTotalLength()))
     .toBeGreaterThan(1);
-  await collapse.click();
+  await collapse.focus();
+  await page.keyboard.press("Enter");
   await expect(collapse).toHaveAttribute("aria-expanded", "true");
   await expect(connector).toHaveAttribute("data-anchor-kind", "terminal");
   const connectorBeforeMove = await connector.getAttribute("d");

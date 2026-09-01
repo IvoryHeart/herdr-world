@@ -9,6 +9,7 @@ import {
   clampConversationGeometry,
   defaultConversationGeometry,
   defaultGraphConversationGeometry,
+  isLegacyDefaultGraphConversationGeometry,
   moveConversationGeometry,
   resizeConversationGeometry,
 } from "./conversationGeometry";
@@ -35,6 +36,7 @@ type WorldConversationLayout = {
 
 const EMPTY_LAYOUT: WorldConversationLayout = { rects: {} };
 const WorldConversationLayoutContext = createContext<WorldConversationLayout>(EMPTY_LAYOUT);
+const WORLD_VIEW_PERSIST_DELAY_MS = 120;
 
 export function useWorldConversationLayout() {
   return useContext(WorldConversationLayoutContext);
@@ -72,6 +74,9 @@ export function WorldConversationLayer({
   const geometryRef = useRef<Record<string, ConversationGeometry>>({});
   const geometryThemeRef = useRef(activeThemeId);
   const geometryFrameRef = useRef<number | null>(null);
+  const persistTimerRef = useRef<number | null>(null);
+  const persistViewRef = useRef<() => void>(() => {});
+  const persistEnabledRef = useRef(!compact);
   const interactionRef = useRef<{
     id: string;
     mode: "moving" | "resizing";
@@ -95,6 +100,26 @@ export function WorldConversationLayer({
     savedViewRef.current = next;
     writeWorldViewPrefs(next);
   }, [activeThemeId, order]);
+  persistViewRef.current = persistView;
+  persistEnabledRef.current = !compact;
+
+  const flushPersistView = useCallback(() => {
+    if (persistTimerRef.current !== null) {
+      window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    if (persistEnabledRef.current) persistViewRef.current();
+  }, []);
+
+  const schedulePersistView = useCallback(() => {
+    if (persistTimerRef.current !== null) {
+      window.clearTimeout(persistTimerRef.current);
+    }
+    persistTimerRef.current = window.setTimeout(() => {
+      persistTimerRef.current = null;
+      if (persistEnabledRef.current) persistViewRef.current();
+    }, WORLD_VIEW_PERSIST_DELAY_MS);
+  }, []);
 
   const scheduleGeometryRender = () => {
     if (geometryFrameRef.current !== null) return;
@@ -180,18 +205,29 @@ export function WorldConversationLayer({
 
   useEffect(() => () => {
     if (geometryFrameRef.current !== null) window.cancelAnimationFrame(geometryFrameRef.current);
-  }, []);
+    flushPersistView();
+  }, [flushPersistView]);
 
   useLayoutEffect(() => {
     const ids = new Set(panelIds);
+    const layer = layerRef.current;
     const themeChanged = geometryThemeRef.current !== activeThemeId;
     const savedGeometry = worldViewGeometryForTheme(savedViewRef.current, activeThemeId);
     if (compact) {
       geometryRef.current = {};
       setGeometry({});
     } else {
-      const next = Object.fromEntries(panelIds.flatMap((id) => {
-        const value = (themeChanged ? undefined : geometryRef.current[id]) ?? savedGeometry[id];
+      const next = Object.fromEntries(panelIds.flatMap((id, index) => {
+        const candidate = (themeChanged ? undefined : geometryRef.current[id]) ?? savedGeometry[id];
+        const value = activeThemeId === "graph" && candidate && layer &&
+            isLegacyDefaultGraphConversationGeometry(
+              candidate,
+              layer.clientWidth,
+              layer.clientHeight,
+              index,
+            )
+          ? undefined
+          : candidate;
         return value ? [[id, value] as const] : [];
       }));
       geometryRef.current = next;
@@ -240,8 +276,8 @@ export function WorldConversationLayer({
   }, [activeThemeId, measure, panelIdsKey]);
 
   useEffect(() => {
-    if (!compact) persistView();
-  }, [compact, geometry, order, persistView]);
+    if (!compact) schedulePersistView();
+  }, [compact, geometry, order, schedulePersistView]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -320,6 +356,7 @@ export function WorldConversationLayer({
     }
     interactionRef.current = null;
     setInteraction(null);
+    flushPersistView();
   };
 
   const moveWithKeyboard = (id: string, event: ReactKeyboardEvent<HTMLDivElement>) => {

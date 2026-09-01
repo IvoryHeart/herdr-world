@@ -19,7 +19,9 @@ Web's own release history remains in its upstream changelog.
 ### Changed
 
 - Made Office the default `/` experience, moved Spaces to `/spaces`, retained `/world` as a
-  compatibility alias, and replaced the Office tab with an Office/Graph World theme selector.
+  compatibility alias, replaced the Office tab with an Office/Graph World theme selector, made a
+  fitted camera the fresh Graph default, and unified the initial Graph and Office terminal window
+  footprint.
   [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Fixed
@@ -30,8 +32,9 @@ Web's own release history remains in its upstream changelog.
   bounds, exposed complete terminal state and touch-sized bounded zoom controls accessibly,
   distinguished connecting and degraded retained snapshots from offline hosts, kept movable spaces
   clear of pinned nodes, composed compact theme navigation into one traversable history entry,
-  bounded Graph projection preprocessing, and skipped inactive Graph work so rapid runtime
-  refreshes do not stall Office.
+  bounded Graph projection preprocessing, skipped inactive Graph work so rapid runtime refreshes
+  do not stall Office, and bounded terminal canvas refits and preference writes during rapid window
+  resizing so neither World theme can saturate the browser tab.
   [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Removed

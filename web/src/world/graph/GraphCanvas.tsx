@@ -66,6 +66,7 @@ type GraphCanvasProps = {
   matchedIds: ReadonlySet<string> | null;
   conversationTargets: readonly GraphConversationTarget[];
   initialPrefs: GraphViewPrefs;
+  fitOnMount?: boolean;
   onSelect: (selectionKey: string, hostKey: string) => void;
   onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void;
   onToggleCollapse: (spaceId: string) => void;
@@ -80,6 +81,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     matchedIds,
     conversationTargets,
     initialPrefs,
+    fitOnMount = false,
     onSelect,
     onActivate,
     onToggleCollapse,
@@ -97,13 +99,13 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     const canvas = canvasRef.current;
     const connectors = connectorRef.current;
     if (!host || !canvas || !connectors) return;
-    const renderer = new GraphRenderer(canvas, connectors, host, initialPrefs);
+    const renderer = new GraphRenderer(canvas, connectors, host, initialPrefs, fitOnMount);
     rendererRef.current = renderer;
     return () => {
       renderer.dispose();
       rendererRef.current = null;
     };
-  }, [initialPrefs]);
+  }, [fitOnMount, initialPrefs]);
 
   useEffect(() => {
     rendererRef.current?.setCallbacks(onSelect, onActivate, onToggleCollapse, onViewChange);
@@ -192,6 +194,7 @@ class GraphRenderer {
   #selectedKey: string | null = null;
   #matchedIds: ReadonlySet<string> | null = null;
   #camera: GraphCamera;
+  #fitOnFirstLayout: boolean;
   #width = 1;
   #height = 1;
   #alpha = 0;
@@ -215,11 +218,13 @@ class GraphRenderer {
     connectors: SVGSVGElement,
     host: HTMLElement,
     prefs: GraphViewPrefs,
+    fitOnMount: boolean,
   ) {
     this.#canvas = canvas;
     this.#connectors = connectors;
     this.#context = canvas.getContext("2d");
     this.#camera = { ...prefs.camera };
+    this.#fitOnFirstLayout = fitOnMount;
     this.#savedPositions = { ...prefs.positions };
     this.#diagnostics = graphRendererDiagnostics();
     this.#diagnostics.mounts += 1;
@@ -327,6 +332,11 @@ class GraphRenderer {
     this.#diagnostics.nodes = this.#layout.nodes.size;
     this.#diagnostics.links = this.#layout.edges.length;
     if (reconciled.topologyChanged) this.#alpha = 1;
+    if (this.#fitOnFirstLayout && this.#layout.nodes.size > 0) {
+      this.#fitOnFirstLayout = false;
+      this.fit();
+      return;
+    }
     this.#requestFrame();
   }
 

@@ -22,6 +22,11 @@ export type GraphViewPrefs = {
   positions: Record<string, SavedGraphPosition>;
 };
 
+export type InitialGraphViewPrefs = {
+  prefs: GraphViewPrefs;
+  fitOnMount: boolean;
+};
+
 export const DEFAULT_GRAPH_VIEW_PREFS: GraphViewPrefs = Object.freeze({
   camera: Object.freeze({ x: 0, y: 0, zoom: 1 }),
   collapsedIds: Object.freeze([]) as unknown as string[],
@@ -29,11 +34,20 @@ export const DEFAULT_GRAPH_VIEW_PREFS: GraphViewPrefs = Object.freeze({
 });
 
 export function readGraphViewPrefs(): GraphViewPrefs {
+  return readInitialGraphViewPrefs().prefs;
+}
+
+export function readInitialGraphViewPrefs(): InitialGraphViewPrefs {
   try {
     const raw = window.localStorage.getItem(GRAPH_VIEW_PREFS_KEY);
-    return raw ? parseGraphViewPrefs(JSON.parse(raw)) : freshDefaults();
+    if (!raw) return { prefs: freshDefaults(), fitOnMount: true };
+    const parsed = JSON.parse(raw);
+    return {
+      prefs: parseGraphViewPrefs(parsed),
+      fitOnMount: !hasSavedCamera(parsed),
+    };
   } catch {
-    return freshDefaults();
+    return { prefs: freshDefaults(), fitOnMount: true };
   }
 }
 
@@ -90,6 +104,18 @@ function validCoordinate(value: unknown): value is number {
 
 function validZoom(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0.25 && value <= 3;
+}
+
+function hasSavedCamera(value: unknown) {
+  if (!isRecord(value) || !isRecord(value.camera)) return false;
+  if (!(validCoordinate(value.camera.x) &&
+    validCoordinate(value.camera.y) &&
+    validZoom(value.camera.zoom))) return false;
+  // Earlier builds wrote the untouched fallback camera on first visit. Treat
+  // that legacy placeholder as fresh so the new fit-first default takes over.
+  return value.camera.x !== DEFAULT_GRAPH_VIEW_PREFS.camera.x ||
+    value.camera.y !== DEFAULT_GRAPH_VIEW_PREFS.camera.y ||
+    value.camera.zoom !== DEFAULT_GRAPH_VIEW_PREFS.camera.zoom;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

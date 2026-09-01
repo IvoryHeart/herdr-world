@@ -5,6 +5,7 @@ import {
   clampConversationGeometry,
   defaultConversationGeometry,
   defaultGraphConversationGeometry,
+  isLegacyDefaultGraphConversationGeometry,
   moveConversationGeometry,
   resizeConversationGeometry,
 } from "./conversationGeometry";
@@ -18,12 +19,22 @@ describe("conversation geometry", () => {
     expect(geometry.top + geometry.height / 2).toBeCloseTo(405);
   });
 
-  it("places the smaller Graph default against the lower-right edge", () => {
+  it("uses the Office footprint for Graph and places it against the lower-right edge", () => {
+    const office = defaultConversationGeometry(1120, 810);
     const geometry = defaultGraphConversationGeometry(1120, 810);
-    expect(geometry.width).toBeCloseTo(582.4);
-    expect(geometry.height).toBeCloseTo(388.8);
+    expect(geometry.width).toBeCloseTo(office.width);
+    expect(geometry.height).toBeCloseTo(office.height);
     expect(geometry.left + geometry.width).toBeCloseTo(1108);
     expect(geometry.top + geometry.height).toBeCloseTo(798);
+  });
+
+  it("recognizes only the former untouched Graph default for migration", () => {
+    const legacy = { left: 525.6, top: 409.2, width: 582.4, height: 388.8 };
+    expect(isLegacyDefaultGraphConversationGeometry(legacy, 1120, 810, 0)).toBe(true);
+    expect(isLegacyDefaultGraphConversationGeometry({
+      ...legacy,
+      width: legacy.width + 24,
+    }, 1120, 810, 0)).toBe(false);
   });
 
   it("clamps position and size to the stage", () => {

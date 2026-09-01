@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   GRAPH_VIEW_PREFS_KEY,
   parseGraphViewPrefs,
+  readInitialGraphViewPrefs,
   readGraphViewPrefs,
   writeGraphViewPrefs,
 } from "./graphViewPrefs";
@@ -43,6 +44,30 @@ describe("Graph view preferences", () => {
       camera: { x: 0, y: 0, zoom: 1 },
       collapsedIds: [],
       positions: {},
+    });
+  });
+
+  it("fits a fresh or malformed view but preserves a valid saved camera", () => {
+    expect(readInitialGraphViewPrefs()).toMatchObject({ fitOnMount: true });
+
+    window.localStorage.setItem(GRAPH_VIEW_PREFS_KEY, JSON.stringify({ camera: "bad" }));
+    expect(readInitialGraphViewPrefs()).toMatchObject({ fitOnMount: true });
+
+    writeGraphViewPrefs({
+      camera: { x: 0, y: 0, zoom: 1 },
+      collapsedIds: [],
+      positions: {},
+    });
+    expect(readInitialGraphViewPrefs()).toMatchObject({ fitOnMount: true });
+
+    writeGraphViewPrefs({
+      camera: { x: 12, y: -30, zoom: 1.5 },
+      collapsedIds: [],
+      positions: {},
+    });
+    expect(readInitialGraphViewPrefs()).toMatchObject({
+      fitOnMount: false,
+      prefs: { camera: { x: 12, y: -30, zoom: 1.5 } },
     });
   });
 });
