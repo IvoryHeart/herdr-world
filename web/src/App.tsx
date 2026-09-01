@@ -1,7 +1,6 @@
 import {
   Activity,
   Archive,
-  Building2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -169,7 +168,7 @@ import {
 import { terminalSessionDescriptor } from "./terminalSessions";
 import { coreSurfaceRegistry } from "./surfaceRegistry";
 import { SurfaceSlotBoundary } from "./SurfaceSlotBoundary";
-import type { WorldSurfaceContext } from "./world/WorldSurface";
+import { WorldThemeSelector } from "./WorldThemeSelector";
 import {
   officeAgentHandoffRequest,
   officeRoomHandoffRequest,
@@ -178,6 +177,7 @@ import {
 import type { OfficeHandoffRequest } from "./world/herdrOfficeHandoff";
 import { projectHerdrOffice } from "./world/herdrOfficeProjection";
 import type { OfficeAgent } from "./world/herdrOfficeProjection";
+import { projectHerdrGraph } from "./world/graph/herdrGraphProjection";
 import {
   useWorldConversationController,
   worldConversationAdmissionPending,
@@ -193,6 +193,9 @@ import {
   writeWorldCompletionSeenKeys,
 } from "./world/completionSeenState";
 import { herdrOfficeSourcesFromRuntime } from "./world/worldRuntime";
+import type { WorldThemeContext } from "./world/worldThemeContext";
+import { worldThemeRegistry } from "./world/worldThemeRegistry";
+import type { WorldThemeDefinition } from "./world/worldThemeRegistry";
 import {
   DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
   DEFAULT_TERMINAL_INPUT_TRANSPORT,
@@ -999,7 +1002,12 @@ function usePointerDragResize(
 
 export function App() {
   const bridge = useHostRegistry();
-  const { activeSurface, navigate: navigatePrimaryView } = useCoreNavigation();
+  const {
+    activeSurface,
+    activeWorldTheme,
+    navigate: navigatePrimaryView,
+    navigateWorldTheme,
+  } = useCoreNavigation();
   const {
     connectionStates,
     setConnectionStates,
@@ -1105,10 +1113,7 @@ export function App() {
   const [resizingNotesListPane, setResizingNotesListPane] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(initialPrefs.sidebarOpen);
   const [showDetail, setShowDetail] = useState(
-    () => {
-      const pathname = globalThis.location?.pathname;
-      return pathname === "/world" || pathname === "/world/";
-    },
+    () => activeSurface.id === "world",
   );
   const [worldSelectedKey, setWorldSelectedKey] = useState<string | null>(null);
   const [worldCompletionSeenKeys, setWorldCompletionSeenKeys] = useState<Set<string>>(
@@ -1494,6 +1499,10 @@ export function App() {
   );
   const worldProjection = useMemo(
     () => projectHerdrOffice(worldSourcesInScope, Date.now()),
+    [worldSourcesInScope],
+  );
+  const graphProjection = useMemo(
+    () => projectHerdrGraph(worldSourcesInScope),
     [worldSourcesInScope],
   );
   useEffect(() => {
@@ -1901,6 +1910,13 @@ export function App() {
       }, 300);
       return;
     }
+    setWorldSelectedKey(key);
+    setWorldHandoffStatus(null);
+  };
+  const selectGraphKey = (key: string, hostKey: string) => {
+    cancelWorldCanvasSelection();
+    pendingWorldPaneSelectionRef.current = null;
+    setSelectedBridgeId(hostKey);
     setWorldSelectedKey(key);
     setWorldHandoffStatus(null);
   };
@@ -4657,12 +4673,14 @@ export function App() {
       });
     },
   });
-  const worldSurfaceContext: WorldSurfaceContext = {
+  const worldSurfaceContext: WorldThemeContext = {
     projection: worldProjection,
+    graphProjection,
     observability: worldSettingsController.observability,
     selectedKey: worldSelectedKey,
     completionSeenKeys: worldCompletionSeenKeys,
     onSelect: selectWorldKey,
+    onGraphSelect: selectGraphKey,
     compact: isCompactLayout,
     onBackToSidebar: closeMobileDetail,
     onToggleSidebar: () => setSidebarOpen((open) => !open),
@@ -4684,11 +4702,11 @@ export function App() {
     onCloseRoom: worldRoomActions.openRoomClose,
   };
   const worldStage = WorldSurface ? (
-    <SurfaceSlotBoundary label="Pixel Office" resetKey={activeSurface.id}>
+    <SurfaceSlotBoundary label="World" resetKey={`${activeSurface.id}:${activeWorldTheme.id}`}>
       <Suspense
         fallback={
           <div className="surface-loading surface-loading-stage" role="status">
-            Loading Pixel Office…
+            Loading {activeWorldTheme.label}…
           </div>
         }
       >
@@ -4778,10 +4796,19 @@ export function App() {
         <Switcher
           bridgeViews={bridgeViews}
           primaryView={activeSurface.id}
+          activeWorldTheme={activeWorldTheme}
+          worldThemes={worldThemeRegistry.list()}
           onPrimaryView={(surfaceId) => {
             worldSelectionSeedPendingRef.current = surfaceId === "world";
             navigatePrimaryView(surfaceId);
             if (surfaceId === "world" && isCompactLayout) {
+              openMobileDetail();
+            }
+          }}
+          onWorldTheme={(themeId) => {
+            worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
+            navigateWorldTheme(themeId);
+            if (isCompactLayout) {
               openMobileDetail();
             }
           }}
@@ -4939,7 +4966,7 @@ export function App() {
         />
       </aside>
 
-      <HerdrMainStage label={activeSurface.id === "world" ? "Pixel Office" : "Terminal"}>
+      <HerdrMainStage label={activeSurface.id === "world" ? `World ${activeWorldTheme.label}` : "Terminal"}>
         {activeSurface.id === "world" ? worldStage : (
           <>
         <TabBar
@@ -6705,7 +6732,10 @@ function TabBar({
 function Switcher({
   bridgeViews,
   primaryView,
+  activeWorldTheme,
+  worldThemes,
   onPrimaryView,
+  onWorldTheme,
   selectedBridgeId,
   hostScope,
   snapshot,
@@ -6769,7 +6799,10 @@ function Switcher({
 }: {
   bridgeViews: BridgeConnectionView[];
   primaryView: string;
+  activeWorldTheme: WorldThemeDefinition;
+  worldThemes: readonly WorldThemeDefinition[];
   onPrimaryView: (surfaceId: string) => void;
+  onWorldTheme: (themeId: string) => void;
   selectedBridgeId: BridgeId | null;
   hostScope: HostScope;
   snapshot: Snapshot | null;
@@ -7913,7 +7946,7 @@ function Switcher({
         </button>
       </header>
 
-      <div className="primary-view-switch" role="group" aria-label="Spaces | Office">
+      <div className="primary-view-switch" role="group" aria-label="Primary navigation">
         <button
           type="button"
           data-on={primaryView === "spaces"}
@@ -7923,15 +7956,12 @@ function Switcher({
           <SquareTerminal size={14} aria-hidden="true" />
           Spaces
         </button>
-        <button
-          type="button"
-          data-on={primaryView === "world"}
-          aria-pressed={primaryView === "world"}
-          onClick={() => onPrimaryView("world")}
-        >
-          <Building2 size={14} aria-hidden="true" />
-          Office
-        </button>
+        <WorldThemeSelector
+          themes={worldThemes}
+          activeTheme={activeWorldTheme}
+          worldActive={primaryView === "world"}
+          onSelect={onWorldTheme}
+        />
       </div>
 
       <div className="sidebar-scope host-scope" role="group" aria-label="Host">

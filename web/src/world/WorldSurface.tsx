@@ -1290,7 +1290,7 @@ function WorldRoomActions({
   );
 }
 
-function isWorldSurfaceContext(value: unknown): value is WorldSurfaceContext {
+export function isWorldSurfaceContext(value: unknown): value is WorldSurfaceContext {
   if (!value || typeof value !== "object") {
     return false;
   }

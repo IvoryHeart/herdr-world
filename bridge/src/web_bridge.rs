@@ -1244,6 +1244,8 @@ where
 {
     let world_entry = static_dir.join("index.html");
     Router::new()
+        .route_service("/spaces", ServeFile::new(world_entry.clone()))
+        .route_service("/spaces/", ServeFile::new(world_entry.clone()))
         .route_service("/world", ServeFile::new(world_entry.clone()))
         .route_service("/world/", ServeFile::new(world_entry))
         .fallback_service(
@@ -4758,7 +4760,7 @@ mod tests {
         let static_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../web");
         let app = static_routes(static_dir);
 
-        for path in ["/", "/world", "/world/"] {
+        for path in ["/", "/spaces", "/spaces/", "/world", "/world/"] {
             let response = app
                 .clone()
                 .oneshot(
@@ -4820,6 +4822,8 @@ mod tests {
             "/index.html",
             "/manifest.json",
             "/herdr-logo.svg",
+            "/spaces",
+            "/spaces/",
             "/world",
             "/world/",
         ] {

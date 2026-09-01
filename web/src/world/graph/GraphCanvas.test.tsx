@@ -1,0 +1,294 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { GraphCanvas, LatestFrameValue } from "./GraphCanvas";
+import type { HerdrGraphProjection, WorldGraphNode } from "./herdrGraphProjection";
+
+const roots: Root[] = [];
+let resizeCallback: ResizeObserverCallback | null = null;
+let nextFrameId = 1;
+let frames = new Map<number, FrameRequestCallback>();
+
+beforeEach(() => {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
+    .IS_REACT_ACT_ENVIRONMENT = true;
+  delete window.__HERDR_GRAPH_RENDERER__;
+  frames = new Map();
+  nextFrameId = 1;
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+    const id = nextFrameId++;
+    frames.set(id, callback);
+    return id;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
+    frames.delete(id);
+  });
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    right: 800,
+    bottom: 600,
+    left: 0,
+    width: 800,
+    height: 600,
+    toJSON: () => ({}),
+  });
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) {
+      resizeCallback = callback;
+    }
+    observe() {}
+    disconnect() {}
+  });
+});
+
+afterEach(async () => {
+  await act(async () => {
+    for (const root of roots.splice(0)) root.unmount();
+  });
+  document.body.innerHTML = "";
+  resizeCallback = null;
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("Graph renderer ownership", () => {
+  it("coalesces 300 raw resize values and applies only the latest", () => {
+    const applied: number[] = [];
+    const coalescer = new LatestFrameValue<number>((value) => applied.push(value));
+    for (let index = 0; index < 300; index += 1) coalescer.push(index);
+    expect(frames.size).toBe(1);
+    flushOneFrame();
+    expect(applied).toEqual([299]);
+    coalescer.cancel();
+  });
+
+  it("returns observer, listener, frame, canvas, and retained topology ownership to baseline", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => root.render(
+      <GraphCanvas
+        projection={emptyProjection()}
+        collapsedIds={new Set()}
+        selectedKey={null}
+        matchedIds={null}
+        initialPrefs={{ camera: { x: 0, y: 0, zoom: 1 }, collapsedIds: [], positions: {} }}
+        onSelect={() => {}}
+        onToggleCollapse={() => {}}
+        onViewChange={() => {}}
+      />,
+    ));
+    expect(window.__HERDR_GRAPH_RENDERER__).toMatchObject({
+      mounts: 1,
+      destroys: 0,
+      activeRenderers: 1,
+      activeObservers: 1,
+      activeListeners: 6,
+      canvases: 1,
+      ready: true,
+    });
+    flushAllFrames();
+
+    for (let index = 0; index < 300; index += 1) {
+      resizeCallback?.([
+        { contentRect: { width: 500 + index, height: 300 + index } } as ResizeObserverEntry,
+      ], {} as ResizeObserver);
+    }
+    expect(frames.size).toBe(1);
+    flushOneFrame();
+    expect(window.__HERDR_GRAPH_RENDERER__).toMatchObject({
+      resizeObservations: 300,
+      resizeFrames: 1,
+    });
+
+    await act(async () => root.unmount());
+    roots.splice(roots.indexOf(root), 1);
+    expect(window.__HERDR_GRAPH_RENDERER__).toMatchObject({
+      mounts: 1,
+      destroys: 1,
+      activeRenderers: 0,
+      activeAnimationFrames: 0,
+      activeObservers: 0,
+      activeListeners: 0,
+      canvases: 0,
+      ready: false,
+      nodes: 0,
+      links: 0,
+    });
+  });
+
+  it("pauses while the page is hidden and resumes with only one frame owner", async () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    visibility.mockReturnValue("visible");
+    const { root } = await renderCanvas(emptyProjection());
+    flushAllFrames();
+    expect(frames.size).toBe(0);
+
+    visibility.mockReturnValue("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(window.__HERDR_GRAPH_RENDERER__).toMatchObject({
+      paused: true,
+      activeAnimationFrames: 0,
+    });
+
+    visibility.mockReturnValue("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(frames.size).toBe(1);
+    expect(window.__HERDR_GRAPH_RENDERER__).toMatchObject({
+      paused: false,
+      activeAnimationFrames: 1,
+    });
+
+    await act(async () => root.unmount());
+    roots.splice(roots.indexOf(root), 1);
+    expect(window.__HERDR_GRAPH_RENDERER__).toMatchObject({
+      paused: false,
+      activeAnimationFrames: 0,
+    });
+  });
+
+  it("keeps canvas selection, collapse, and dragging inspection-only", async () => {
+    const onSelect = vi.fn();
+    const onToggleCollapse = vi.fn();
+    const onViewChange = vi.fn();
+    const { container } = await renderCanvas(spaceProjection(), {
+      onSelect,
+      onToggleCollapse,
+      onViewChange,
+    });
+    const canvas = container.querySelector("canvas");
+    if (!canvas) throw new Error("Graph canvas missing");
+
+    await pointer(canvas, "pointerdown", 400, 300);
+    await pointer(canvas, "pointerup", 400, 300);
+    expect(onSelect).toHaveBeenCalledWith("space-selection", "host");
+
+    await pointer(canvas, "pointerdown", 436, 264);
+    await pointer(canvas, "pointerup", 436, 264);
+    expect(onToggleCollapse).toHaveBeenCalledWith("space");
+    expect(onSelect).toHaveBeenCalledTimes(1);
+
+    await pointer(canvas, "pointerdown", 400, 300);
+    await pointer(canvas, "pointermove", 430, 300);
+    await pointer(canvas, "pointerup", 430, 300);
+    expect(onViewChange).toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+});
+
+async function renderCanvas(
+  projection: HerdrGraphProjection,
+  callbacks: {
+    onSelect?: (selectionKey: string, hostKey: string) => void;
+    onToggleCollapse?: (spaceId: string) => void;
+    onViewChange?: () => void;
+  } = {},
+) {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(
+    <GraphCanvas
+      projection={projection}
+      collapsedIds={new Set()}
+      selectedKey={null}
+      matchedIds={null}
+      initialPrefs={{
+        camera: { x: 0, y: 0, zoom: 1 },
+        collapsedIds: [],
+        positions: { space: { x: 0, y: 0, pinned: true } },
+      }}
+      onSelect={callbacks.onSelect ?? (() => {})}
+      onToggleCollapse={callbacks.onToggleCollapse ?? (() => {})}
+      onViewChange={callbacks.onViewChange ?? (() => {})}
+    />,
+  ));
+  return { container, root };
+}
+
+async function pointer(
+  canvas: HTMLCanvasElement,
+  type: "pointerdown" | "pointermove" | "pointerup",
+  clientX: number,
+  clientY: number,
+) {
+  await act(async () => canvas.dispatchEvent(new PointerEvent(type, {
+    bubbles: true,
+    button: 0,
+    pointerId: 1,
+    clientX,
+    clientY,
+  })));
+}
+
+function flushOneFrame() {
+  const entry = frames.entries().next().value as [number, FrameRequestCallback] | undefined;
+  if (!entry) return;
+  frames.delete(entry[0]);
+  entry[1](performance.now());
+}
+
+function flushAllFrames() {
+  for (let index = 0; frames.size > 0 && index < 100; index += 1) flushOneFrame();
+}
+
+function emptyProjection(): HerdrGraphProjection {
+  return {
+    version: 1,
+    nodes: [],
+    edges: [],
+    spaces: [],
+    omittedSpaceCount: 0,
+    coverage: {
+      observedSpaces: 0,
+      presentedSpaces: 0,
+      observedAgents: 0,
+      presentedAgents: 0,
+      omittedAgents: 0,
+      omittedAgentsInPresentedSpaces: 0,
+      omittedAgentsInOmittedSpaces: 0,
+      status: { idle: 0, working: 0, blocked: 0, done: 0, unknown: 0 },
+    },
+    presentationBounds: { spaces: 128, agentsPerSpace: 16 },
+  };
+}
+
+function spaceProjection(): HerdrGraphProjection {
+  const space: WorldGraphNode = {
+    id: "space",
+    kind: "space",
+    parentId: null,
+    hostKey: "host",
+    hostLabel: "Host",
+    label: "Space",
+    status: "unknown",
+    focused: false,
+    stale: false,
+    disconnected: false,
+    actionable: true,
+    selectionKey: "space-selection",
+    omittedChildCount: 0,
+    searchText: "space host",
+    handoff: null,
+  };
+  return {
+    ...emptyProjection(),
+    nodes: [space],
+    spaces: [{ node: space, agents: [], observedAgentCount: 0, omittedAgentCount: 0 }],
+    coverage: {
+      ...emptyProjection().coverage,
+      observedSpaces: 1,
+      presentedSpaces: 1,
+    },
+  };
+}

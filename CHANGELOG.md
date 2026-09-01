@@ -10,7 +10,14 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
+- Added an accessible live Graph theme with bounded project/space and agent topology, stable
+  force layout, search, collapse, pan/zoom/fit controls, semantic navigation, and explicit
+  Open-in-Spaces handoff.
+
 ### Changed
+
+- Made Office the default `/` experience, moved Spaces to `/spaces`, retained `/world` as a
+  compatibility alias, and replaced the Office tab with an Office/Graph World theme selector.
 
 ### Fixed
 
