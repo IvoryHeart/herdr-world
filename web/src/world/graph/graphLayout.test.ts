@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HerdrGraphProjection, WorldGraphNode } from "./herdrGraphProjection";
-import { reconcileGraphLayout } from "./graphLayout";
+import { reconcileGraphLayout, stepGraphLayout } from "./graphLayout";
 
 describe("Graph layout reconciliation", () => {
   it("reuses node objects and settled geometry for status-only revisions", () => {
@@ -51,6 +51,42 @@ describe("Graph layout reconciliation", () => {
     expect(collapsed.topologyChanged).toBe(true);
     expect([...collapsed.state.nodes.keys()]).toEqual(["space"]);
     expect(collapsed.state.edges).toHaveLength(0);
+  });
+
+  it("repels movable spaces away from pinned spaces without moving the pin", () => {
+    const pinnedSource = node({ id: "pinned", kind: "space", parentId: null, selectionKey: "pinned" });
+    const movableSource = node({ id: "movable", kind: "space", parentId: null, selectionKey: "movable" });
+    const pinned = {
+      id: "pinned",
+      source: pinnedSource,
+      kind: "space" as const,
+      parentId: null,
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      pinned: true,
+    };
+    const movable = {
+      id: "movable",
+      source: movableSource,
+      kind: "space" as const,
+      parentId: null,
+      x: 40,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      pinned: false,
+    };
+
+    stepGraphLayout({
+      nodes: new Map([[pinned.id, pinned], [movable.id, movable]]),
+      edges: [],
+      topologyKey: "two-spaces",
+    }, 1);
+
+    expect(pinned).toMatchObject({ x: 0, y: 0, vx: 0, vy: 0 });
+    expect(movable.x).toBeGreaterThan(40);
   });
 });
 

@@ -316,6 +316,8 @@ function compareSpaces(left: SpaceCandidate, right: SpaceCandidate) {
   return (
     Number(right.focused) - Number(left.focused) ||
     Number(right.attention) - Number(left.attention) ||
+    Number(right.agentCount > 0) - Number(left.agentCount > 0) ||
+    right.agentCount - left.agentCount ||
     left.source.profile.displayOrder - right.source.profile.displayOrder ||
     left.source.profile.profileId.localeCompare(right.source.profile.profileId) ||
     left.workspace.number - right.workspace.number ||

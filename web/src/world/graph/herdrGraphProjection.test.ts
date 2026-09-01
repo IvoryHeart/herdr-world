@@ -130,6 +130,27 @@ describe("Herdr Graph projection", () => {
     });
   });
 
+  it("retains a detected agent when its unfocused space is last in source order", () => {
+    const workspaces = Array.from({ length: GRAPH_PRESENTATION_BOUNDS.spaces + 1 }, (_, index) =>
+      workspace(`space-${index}`, index + 1, `Space ${index}`, undefined, false),
+    );
+    const graph = projectHerdrGraph([source(
+      "host-a",
+      0,
+      workspaces,
+      [pane("last-agent", "space-128", "idle", { agent: "codex", display_agent: "Codex" })],
+    )]);
+
+    expect(graph.spaces).toHaveLength(GRAPH_PRESENTATION_BOUNDS.spaces);
+    expect(graph.spaces.some(({ node }) => node.label === "Space 128")).toBe(true);
+    expect(graph.spaces.some(({ node }) => node.label === "Space 127")).toBe(false);
+    expect(graph.coverage).toMatchObject({
+      observedAgents: 1,
+      presentedAgents: 1,
+      omittedAgentsInOmittedSpaces: 0,
+    });
+  });
+
   it("indexes panes in bounded passes instead of rescanning them for every workspace", () => {
     const workspaces = Array.from({ length: 512 }, (_, index) =>
       workspace(`space-${index}`, index + 1, `Space ${index}`, undefined, false),

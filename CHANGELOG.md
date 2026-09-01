@@ -26,8 +26,10 @@ Web's own release history remains in its upstream changelog.
 
 - Kept World terminal windows resizable and attached to the same live session across Office/Graph
   theme changes, retained a perceptible Graph node connector in desktop and compact layouts,
-  bounded Graph projection preprocessing, and skipped inactive Graph work so rapid runtime
-  refreshes do not stall Office.
+  including while its space is collapsed, prioritized detected agents at Graph presentation
+  bounds, exposed complete terminal state and touch-sized bounded zoom controls accessibly,
+  kept movable spaces clear of pinned nodes, bounded Graph projection preprocessing, and skipped
+  inactive Graph work so rapid runtime refreshes do not stall Office.
   [Herdr World PR #73](https://github.com/IvoryHeart/herdr-world/pull/73)
 
 ### Removed

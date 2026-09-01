@@ -56,7 +56,7 @@ export function reconcileGraphLayout(
 }
 
 export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
-  const spaces = [...state.nodes.values()].filter(({ kind, pinned }) => kind === "space" && !pinned);
+  const spaces = [...state.nodes.values()].filter(({ kind }) => kind === "space");
   const terminalsByParent = new Map<string, GraphLayoutNode[]>();
   for (const node of state.nodes.values()) {
     if (node.kind === "terminal" && node.parentId) {
@@ -69,8 +69,10 @@ export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
   for (let leftIndex = 0; leftIndex < spaces.length; leftIndex += 1) {
     const left = spaces[leftIndex];
     if (!left) continue;
-    left.vx += -left.x * 0.0007 * alpha;
-    left.vy += -left.y * 0.0007 * alpha;
+    if (!left.pinned) {
+      left.vx += -left.x * 0.0007 * alpha;
+      left.vy += -left.y * 0.0007 * alpha;
+    }
     for (let rightIndex = leftIndex + 1; rightIndex < spaces.length; rightIndex += 1) {
       const right = spaces[rightIndex];
       if (!right) continue;

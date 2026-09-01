@@ -10,6 +10,7 @@ test.beforeEach(async ({ page, request }) => {
   await request.post("http://127.0.0.1:4173/__fixture/reset");
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
+    localStorage.removeItem("herdr.world.graph-view.v1");
     localStorage.removeItem("herdrWeb.worldView.v1");
   }, hostStore());
 });
@@ -84,6 +85,9 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
   await search.fill("Codex A");
   await expect(page.getByText("1 matching spaces", { exact: true })).toBeVisible();
   const agent = page.locator(".graph-tree-terminal").filter({ hasText: "Codex A" });
+  await expect(agent).toHaveAccessibleName(
+    /Codex A, agent terminal: working · focused · agent running · Running · codex/i,
+  );
   await agent.click();
   await expect(page.getByRole("region", { name: "Selected Graph entity" })).toContainText("Codex A");
   expect(terminalSockets).toEqual([]);
@@ -105,6 +109,17 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
   );
   await expect(connector).toHaveAttribute("d", /M .+ C .+/);
   await expectGraphConnectorOutsideOverlay(page, windowId as string);
+  const collapse = page.locator(".graph-collapse").first();
+  await collapse.click();
+  await expect(collapse).toHaveAttribute("aria-expanded", "false");
+  await expect(connector).toHaveAttribute("data-anchor-kind", "collapsed-parent");
+  await expect(connector).toHaveAttribute("d", /M .+ C .+/);
+  await expect(connector).not.toHaveAttribute("visibility", "hidden");
+  expect(await connector.evaluate((path: SVGPathElement) => path.getTotalLength()))
+    .toBeGreaterThan(1);
+  await collapse.click();
+  await expect(collapse).toHaveAttribute("aria-expanded", "true");
+  await expect(connector).toHaveAttribute("data-anchor-kind", "terminal");
   const connectorBeforeMove = await connector.getAttribute("d");
   const header = conversation.getByRole("group", { name: "Move agent conversation" });
   const headerBox = await header.boundingBox();
@@ -155,7 +170,6 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
     links: window.__HERDR_GRAPH_RENDERER__?.conversationLinks ?? -1,
   }))).toEqual({ observer: 0, links: 0 });
 
-  const collapse = page.locator(".graph-collapse").first();
   await collapse.click();
   await expect(collapse).toHaveAttribute("aria-expanded", "false");
   expect(terminalSockets).toHaveLength(1);
@@ -231,6 +245,30 @@ test("fully disposes each Graph renderer and remains usable at compact width", a
     activeListeners: 0,
     canvases: 0,
     ready: false,
+  });
+});
+
+test.describe("touch-only Graph zoom", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test("offers touch-sized bounded zoom controls at compact width", async ({ page }) => {
+    await page.goto("/?theme=graph");
+    await waitForGraph(page);
+    const zoomIn = page.getByRole("button", { name: "Zoom in", exact: true });
+    const zoomOut = page.getByRole("button", { name: "Zoom out", exact: true });
+    for (const control of [zoomIn, zoomOut]) {
+      const box = await control.boundingBox();
+      expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+
+    await zoomIn.tap();
+    await expect.poll(() => savedGraphZoom(page)).toBeGreaterThan(1);
+    for (let index = 0; index < 8; index += 1) await zoomIn.tap();
+    await expect.poll(() => savedGraphZoom(page)).toBe(3);
+
+    for (let index = 0; index < 20; index += 1) await zoomOut.tap();
+    await expect.poll(() => savedGraphZoom(page)).toBe(0.25);
   });
 });
 
@@ -314,6 +352,15 @@ async function waitForGraph(page: Page) {
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.ready ?? false,
   )).toBe(true);
+}
+
+async function savedGraphZoom(page: Page) {
+  return page.evaluate(() => {
+    const raw = localStorage.getItem("herdr.world.graph-view.v1");
+    if (!raw) return null;
+    const value = JSON.parse(raw) as { camera?: { zoom?: unknown } };
+    return typeof value.camera?.zoom === "number" ? value.camera.zoom : null;
+  });
 }
 
 function coreSockets(urls: readonly string[]) {

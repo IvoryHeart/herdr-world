@@ -20,6 +20,7 @@ import type { GraphCamera, GraphViewPrefs, SavedGraphPosition } from "./graphVie
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
+const ZOOM_STEP = 1.25;
 
 type GraphRendererDiagnostics = {
   mounts: number;
@@ -48,6 +49,8 @@ declare global {
 
 export type GraphCanvasHandle = {
   fit: () => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
 };
 
 export type GraphConversationTarget = {
@@ -114,7 +117,11 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     rendererRef.current?.setConversationTargets(conversationTargets);
   }, [conversationTargets]);
 
-  useImperativeHandle(ref, () => ({ fit: () => rendererRef.current?.fit() }), []);
+  useImperativeHandle(ref, () => ({
+    fit: () => rendererRef.current?.fit(),
+    zoomIn: () => rendererRef.current?.zoomIn(),
+    zoomOut: () => rendererRef.current?.zoomOut(),
+  }), []);
 
   return (
     <div ref={hostRef} className="graph-canvas-host">
@@ -195,6 +202,7 @@ class GraphRenderer {
   #onSelect: (selectionKey: string, hostKey: string) => void = () => {};
   #onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void = () => {};
   #conversationTargets: readonly GraphConversationTarget[] = [];
+  #conversationParentNodeIds = new Map<string, string>();
   #connectorPaths = new Map<string, { path: SVGPathElement; dot: SVGCircleElement }>();
   #onToggleCollapse: (spaceId: string) => void = () => {};
   #onViewChange: (
@@ -296,6 +304,11 @@ class GraphRenderer {
     matchedIds: ReadonlySet<string> | null,
   ) {
     this.#projectionNodeIds = new Set(projection.nodes.map(({ id }) => id));
+    this.#conversationParentNodeIds = new Map(projection.nodes.flatMap((node) =>
+      node.kind === "terminal" && node.parentId
+        ? [[node.selectionKey, node.parentId] as const]
+        : []
+    ));
     this.#savedPositions = retainedGraphPositions(
       this.#savedPositions,
       null,
@@ -334,6 +347,14 @@ class GraphRenderer {
     };
     this.#emitViewChange();
     this.#requestFrame();
+  }
+
+  zoomIn() {
+    this.#zoomAt(this.#camera.zoom * ZOOM_STEP, 0, 0);
+  }
+
+  zoomOut() {
+    this.#zoomAt(this.#camera.zoom / ZOOM_STEP, 0, 0);
   }
 
   dispose() {
@@ -604,9 +625,18 @@ class GraphRenderer {
     const rect = this.#canvas.getBoundingClientRect();
     const pointX = event.clientX - rect.left - this.#width / 2;
     const pointY = event.clientY - rect.top - this.#height / 2;
+    this.#zoomAt(
+      this.#camera.zoom * Math.exp(-event.deltaY * 0.0015),
+      pointX,
+      pointY,
+    );
+  };
+
+  #zoomAt(nextZoom: number, pointX: number, pointY: number) {
+    const zoom = clamp(nextZoom, MIN_ZOOM, MAX_ZOOM);
+    if (zoom === this.#camera.zoom) return;
     const beforeX = (pointX - this.#camera.x) / this.#camera.zoom;
     const beforeY = (pointY - this.#camera.y) / this.#camera.zoom;
-    const zoom = clamp(this.#camera.zoom * Math.exp(-event.deltaY * 0.0015), MIN_ZOOM, MAX_ZOOM);
     this.#camera = {
       x: pointX - beforeX * zoom,
       y: pointY - beforeY * zoom,
@@ -614,7 +644,7 @@ class GraphRenderer {
     };
     this.#emitViewChange();
     this.#requestFrame();
-  };
+  }
 
   #onDoubleClick = (event: MouseEvent) => {
     const point = this.#point(event);
@@ -625,16 +655,29 @@ class GraphRenderer {
   };
 
   #drawConversationConnectors(layout: GraphLayoutState) {
+    const nodesBySelectionKey = new Map(
+      [...layout.nodes.values()].map((node) => [node.source.selectionKey, node]),
+    );
     for (const target of this.#conversationTargets) {
       const elements = this.#connectorPaths.get(target.id);
-      const node = [...layout.nodes.values()].find(
-        ({ source }) => source.selectionKey === target.selectionKey,
-      );
+      let node = nodesBySelectionKey.get(target.selectionKey);
+      let anchorKind = "terminal";
+      if (!node) {
+        const parentId = this.#conversationParentNodeIds.get(target.selectionKey);
+        node = parentId ? layout.nodes.get(parentId) : undefined;
+        anchorKind = "collapsed-parent";
+      }
       if (!elements || !node) {
         elements?.path.setAttribute("visibility", "hidden");
         elements?.dot.setAttribute("visibility", "hidden");
+        if (elements) {
+          delete elements.path.dataset.anchorKind;
+          delete elements.dot.dataset.anchorKind;
+        }
         continue;
       }
+      elements.path.dataset.anchorKind = anchorKind;
+      elements.dot.dataset.anchorKind = anchorKind;
       const nodeX = this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom;
       const nodeY = this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom;
       const edges = [

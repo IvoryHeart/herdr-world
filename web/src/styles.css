@@ -1071,6 +1071,18 @@ button {
   white-space: nowrap;
 }
 
+.graph-zoom-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.graph-zoom-button {
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
+}
+
 .graph-content {
   display: flex;
   min-width: 0;
@@ -5301,6 +5313,12 @@ button {
   min-width: 0;
   flex-basis: calc(100% - 92px);
   order: 3;
+}
+
+.app[data-compact="true"] .graph-zoom-button {
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .app[data-compact="true"] .graph-fit {

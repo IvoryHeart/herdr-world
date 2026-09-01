@@ -6,6 +6,8 @@ import {
   PanelLeft,
   Search,
   SquareTerminal,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   useCallback,
@@ -188,6 +190,26 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
+        <div className="graph-zoom-controls" role="group" aria-label="Graph zoom controls">
+          <button
+            className="icon-btn graph-zoom-button"
+            type="button"
+            aria-label="Zoom out"
+            title="Zoom out"
+            onClick={() => canvasRef.current?.zoomOut()}
+          >
+            <ZoomOut size={16} aria-hidden="true" />
+          </button>
+          <button
+            className="icon-btn graph-zoom-button"
+            type="button"
+            aria-label="Zoom in"
+            title="Zoom in"
+            onClick={() => canvasRef.current?.zoomIn()}
+          >
+            <ZoomIn size={16} aria-hidden="true" />
+          </button>
+        </div>
         <button className="btn graph-fit" type="button" onClick={() => canvasRef.current?.fit()}>
           <Maximize2 size={14} aria-hidden="true" />
           Fit graph
@@ -209,7 +231,7 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
             onViewChange={updateViewPrefs}
           />
           <div className="graph-visual-help">
-            Double-click a terminal to open it · drag nodes to pin · scroll to zoom
+            Double-click a terminal to open it · drag nodes to pin · use zoom controls or scroll
           </div>
           {projection.omittedSpaceCount > 0 ? (
             <div className="graph-overflow-badge">
@@ -335,7 +357,7 @@ function GraphSemanticSpace({
                 className="graph-tree-select graph-tree-terminal"
                 type="button"
                 aria-pressed={selectedKey === terminal.selectionKey}
-                aria-label={`${terminal.label}, ${terminal.agentRunning ? "agent terminal" : "empty shell"}. Double-click to open terminal.`}
+                aria-label={`${terminal.label}, ${terminal.agentRunning ? "agent terminal" : "empty shell"}: ${nodeSummary(terminal)}. Double-click to open terminal.`}
                 onClick={() => onSelect(terminal)}
                 onDoubleClick={() => terminal.actionable && onOpenTerminal(terminal)}
               >

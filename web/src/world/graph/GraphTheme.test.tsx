@@ -39,6 +39,9 @@ describe("Graph semantic interface", () => {
 
     const agentSelect = [...container.querySelectorAll<HTMLButtonElement>(".graph-tree-terminal")]
       .find((button) => button.textContent?.includes("Codex"));
+    expect(agentSelect?.getAttribute("aria-label")).toContain(
+      "Codex, agent terminal: working · agent running · Implementing",
+    );
     await act(async () => agentSelect?.click());
     expect(value.onGraphSelect).toHaveBeenCalledWith("terminal", "host");
     expect(value.onGraphOpenTerminal).not.toHaveBeenCalled();
