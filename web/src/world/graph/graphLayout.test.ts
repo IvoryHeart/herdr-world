@@ -56,27 +56,32 @@ describe("Graph layout reconciliation", () => {
 
 function projection(status: WorldGraphNode["status"], includeSecond = false): HerdrGraphProjection {
   const space = node({ id: "space", kind: "space", parentId: null, selectionKey: "space" });
-  const agent = node({ id: "agent", kind: "agent", parentId: "space", selectionKey: "terminal", status });
-  const agents = includeSecond
-    ? [agent, node({ id: "agent-2", kind: "agent", parentId: "space", selectionKey: "terminal-2" })]
+  const agent = node({ id: "agent", kind: "terminal", parentId: "space", selectionKey: "terminal", status });
+  const terminals = includeSecond
+    ? [agent, node({ id: "agent-2", kind: "terminal", parentId: "space", selectionKey: "terminal-2" })]
     : [agent];
   return {
     version: 1,
-    nodes: [space, ...agents],
-    edges: agents.map(({ id }) => ({ sourceId: "space", targetId: id, kind: "contains" })),
-    spaces: [{ node: space, agents, observedAgentCount: agents.length, omittedAgentCount: 0 }],
+    nodes: [space, ...terminals],
+    edges: terminals.map(({ id }) => ({ sourceId: "space", targetId: id, kind: "contains" })),
+    spaces: [{ node: space, terminals, observedTerminalCount: terminals.length, omittedTerminalCount: 0 }],
     omittedSpaceCount: 0,
     coverage: {
       observedSpaces: 1,
       presentedSpaces: 1,
-      observedAgents: agents.length,
-      presentedAgents: agents.length,
+      observedAgents: terminals.length,
+      presentedAgents: terminals.length,
       omittedAgents: 0,
       omittedAgentsInPresentedSpaces: 0,
       omittedAgentsInOmittedSpaces: 0,
+      observedTerminals: terminals.length,
+      presentedTerminals: terminals.length,
+      omittedTerminals: 0,
+      observedShells: 0,
+      presentedShells: 0,
       status: { idle: 0, working: 1, blocked: 0, done: 0, unknown: 0 },
     },
-    presentationBounds: { spaces: 128, agentsPerSpace: 16 },
+    presentationBounds: { spaces: 128, terminalsPerSpace: 16 },
   };
 }
 
@@ -94,5 +99,9 @@ function node(overrides: Partial<WorldGraphNode> & Pick<WorldGraphNode, "id" | "
     searchText: overrides.id,
     handoff: null,
     ...overrides,
+    paneId: overrides.paneId ?? (overrides.kind === "terminal" ? overrides.id : null),
+    observedGeneration: overrides.observedGeneration ?? "generation",
+    agentRunning: overrides.agentRunning ?? overrides.kind === "terminal",
+    agentKind: overrides.agentKind ?? null,
   };
 }

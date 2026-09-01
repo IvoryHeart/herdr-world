@@ -23,7 +23,7 @@ describe("World conversation controller boundary", () => {
       JSON.stringify([
         ...Array.from({ length: 6 }, (_, index) => ({
           windowId: "untrusted",
-          kind: index % 2 === 0 ? "agent" : "desk",
+          kind: index === 1 ? "pane" : index % 2 === 0 ? "agent" : "desk",
           targetKey: `target-${index}`,
           agentKey: index % 2 === 0 ? `agent-${index}` : null,
           bridgeId: `host-${index}`,
@@ -38,6 +38,10 @@ describe("World conversation controller boundary", () => {
     expect(readWorldConversationTargets()[0]).toMatchObject({
       windowId: "host-0:pane-0",
       targetKey: "target-0",
+    });
+    expect(readWorldConversationTargets()[1]).toMatchObject({
+      kind: "pane",
+      windowId: "host-1:pane-1",
     });
     expect(readWorldConversationTargets().map(({ targetKey }) => targetKey)).not.toContain(
       "missing-runtime-fields",

@@ -10,9 +10,10 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
-- Added an accessible live Graph theme with bounded project/space and agent topology, stable
-  force layout, search, collapse, pan/zoom/fit controls, semantic navigation, and explicit
-  Open-in-Spaces handoff.
+- Added an accessible live Graph theme with bounded project/space and attached-terminal topology,
+  detected agent or empty-shell identity, stable force layout, search, collapse, pan/zoom/fit
+  controls, semantic navigation, connected live terminal overlays, and explicit Open-in-Spaces
+  handoff.
 
 ### Changed
 

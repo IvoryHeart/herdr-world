@@ -79,8 +79,10 @@ describe("Graph renderer ownership", () => {
         collapsedIds={new Set()}
         selectedKey={null}
         matchedIds={null}
+        conversationTargets={[]}
         initialPrefs={{ camera: { x: 0, y: 0, zoom: 1 }, collapsedIds: [], positions: {} }}
         onSelect={() => {}}
+        onActivate={() => {}}
         onToggleCollapse={() => {}}
         onViewChange={() => {}}
       />,
@@ -90,7 +92,7 @@ describe("Graph renderer ownership", () => {
       destroys: 0,
       activeRenderers: 1,
       activeObservers: 1,
-      activeListeners: 6,
+      activeListeners: 7,
       canvases: 1,
       ready: true,
     });
@@ -116,6 +118,7 @@ describe("Graph renderer ownership", () => {
       activeRenderers: 0,
       activeAnimationFrames: 0,
       activeObservers: 0,
+      activeConversationObservers: 0,
       activeListeners: 0,
       canvases: 0,
       ready: false,
@@ -156,12 +159,14 @@ describe("Graph renderer ownership", () => {
     });
   });
 
-  it("keeps canvas selection, collapse, and dragging inspection-only", async () => {
+  it("keeps single click, collapse, and dragging inspection-only but activates terminals on double-click", async () => {
     const onSelect = vi.fn();
+    const onActivate = vi.fn();
     const onToggleCollapse = vi.fn();
     const onViewChange = vi.fn();
     const { container } = await renderCanvas(spaceProjection(), {
       onSelect,
+      onActivate,
       onToggleCollapse,
       onViewChange,
     });
@@ -176,12 +181,24 @@ describe("Graph renderer ownership", () => {
     await pointer(canvas, "pointerup", 436, 264);
     expect(onToggleCollapse).toHaveBeenCalledWith("space");
     expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onActivate).not.toHaveBeenCalled();
 
     await pointer(canvas, "pointerdown", 400, 300);
     await pointer(canvas, "pointermove", 430, 300);
     await pointer(canvas, "pointerup", 430, 300);
     expect(onViewChange).toHaveBeenCalled();
     expect(onSelect).toHaveBeenCalledTimes(1);
+
+    await act(async () => canvas.dispatchEvent(new MouseEvent("dblclick", {
+      bubbles: true,
+      button: 0,
+      clientX: 500,
+      clientY: 300,
+    })));
+    expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "terminal",
+      selectionKey: "terminal-selection",
+    }));
   });
 });
 
@@ -189,6 +206,7 @@ async function renderCanvas(
   projection: HerdrGraphProjection,
   callbacks: {
     onSelect?: (selectionKey: string, hostKey: string) => void;
+    onActivate?: (node: WorldGraphNode) => void;
     onToggleCollapse?: (spaceId: string) => void;
     onViewChange?: () => void;
   } = {},
@@ -203,12 +221,17 @@ async function renderCanvas(
       collapsedIds={new Set()}
       selectedKey={null}
       matchedIds={null}
+      conversationTargets={[]}
       initialPrefs={{
         camera: { x: 0, y: 0, zoom: 1 },
         collapsedIds: [],
-        positions: { space: { x: 0, y: 0, pinned: true } },
+        positions: {
+          space: { x: 0, y: 0, pinned: true },
+          terminal: { x: 100, y: 0, pinned: true },
+        },
       }}
       onSelect={callbacks.onSelect ?? (() => {})}
+      onActivate={callbacks.onActivate ?? (() => {})}
       onToggleCollapse={callbacks.onToggleCollapse ?? (() => {})}
       onViewChange={callbacks.onViewChange ?? (() => {})}
     />,
@@ -257,9 +280,14 @@ function emptyProjection(): HerdrGraphProjection {
       omittedAgents: 0,
       omittedAgentsInPresentedSpaces: 0,
       omittedAgentsInOmittedSpaces: 0,
+      observedTerminals: 0,
+      presentedTerminals: 0,
+      omittedTerminals: 0,
+      observedShells: 0,
+      presentedShells: 0,
       status: { idle: 0, working: 0, blocked: 0, done: 0, unknown: 0 },
     },
-    presentationBounds: { spaces: 128, agentsPerSpace: 16 },
+    presentationBounds: { spaces: 128, terminalsPerSpace: 16 },
   };
 }
 
@@ -280,11 +308,27 @@ function spaceProjection(): HerdrGraphProjection {
     omittedChildCount: 0,
     searchText: "space host",
     handoff: null,
+    paneId: null,
+    observedGeneration: "generation",
+    agentRunning: false,
+    agentKind: null,
+  };
+  const terminal: WorldGraphNode = {
+    ...space,
+    id: "terminal",
+    kind: "terminal",
+    parentId: space.id,
+    label: "Codex",
+    selectionKey: "terminal-selection",
+    paneId: "pane",
+    agentRunning: true,
+    agentKind: "codex",
   };
   return {
     ...emptyProjection(),
-    nodes: [space],
-    spaces: [{ node: space, agents: [], observedAgentCount: 0, omittedAgentCount: 0 }],
+    nodes: [space, terminal],
+    edges: [{ sourceId: space.id, targetId: terminal.id, kind: "contains" }],
+    spaces: [{ node: space, terminals: [terminal], observedTerminalCount: 1, omittedTerminalCount: 0 }],
     coverage: {
       ...emptyProjection().coverage,
       observedSpaces: 1,

@@ -14,6 +14,7 @@ test.beforeEach(async ({ page, request }) => {
   await request.post("http://127.0.0.1:4173/__fixture/reset");
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
+    localStorage.removeItem("herdr.world.graph-view.v1");
   }, hostStore());
 });
 
@@ -35,6 +36,41 @@ for (const viewport of [
     });
   });
 }
+
+test("captures the connected Graph terminal overlay", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?theme=graph");
+  await waitForSettledGraph(page);
+  await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+  await page.locator(".graph-tree-terminal").filter({ hasText: "Codex A" }).dblclick();
+  await expect(page.locator("[data-world-conversation='open']")).toBeVisible();
+  await expect(page.locator(".graph-conversation-connectors path")).toHaveAttribute("d", /M .+ C .+/);
+  await page.screenshot({
+    path: resolve(evidenceDir, "graph-terminal-1440x900.png"),
+    animations: "disabled",
+  });
+});
+
+test("captures the compact empty-shell identity and connected terminal", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-a", snapshotVariant: "empty-shell" },
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?theme=graph");
+  await waitForSettledGraph(page);
+  await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+  const shell = page.locator(".graph-tree-terminal").filter({ hasText: "Shell" });
+  await expect(shell.locator("[data-agent-kind='shell']")).toBeVisible();
+  await shell.locator("xpath=..").getByRole("button", { name: "Open terminal", exact: true }).click();
+  await expect(page.locator("[data-world-conversation='open']").filter({ hasText: "Shell" }))
+    .toBeVisible();
+  await expect(page.locator(".graph-conversation-connectors path")).toHaveAttribute("d", /M .+ C .+/);
+  await page.screenshot({
+    path: resolve(evidenceDir, "graph-empty-shell-terminal-390x844.png"),
+    fullPage: true,
+    animations: "disabled",
+  });
+});
 
 async function waitForSettledGraph(page: Page) {
   await expect(page.locator("canvas[data-graph-canvas='true']")).toHaveCount(1);

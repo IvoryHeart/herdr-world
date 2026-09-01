@@ -78,19 +78,52 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
   const search = page.getByRole("searchbox", { name: "Search Graph" });
   await search.fill("Codex A");
   await expect(page.getByText("1 matching spaces", { exact: true })).toBeVisible();
-  const agent = page.locator(".graph-tree-agent").filter({ hasText: "Codex A" });
+  const agent = page.locator(".graph-tree-terminal").filter({ hasText: "Codex A" });
   await agent.click();
   await expect(page.getByRole("region", { name: "Selected Graph entity" })).toContainText("Codex A");
   expect(terminalSockets).toEqual([]);
   await expect(page).toHaveURL(/\/?theme=graph$/);
 
+  await agent.dblclick();
+  const conversation = page.locator("[data-world-conversation='open']").filter({ hasText: "Codex A" });
+  await expect(conversation).toBeVisible();
+  await expect(page).toHaveURL(/\/?theme=graph$/);
+  await expect.poll(() => terminalSockets.length).toBe(1);
+  await expect.poll(() => page.evaluate(() => ({
+    observer: window.__HERDR_GRAPH_RENDERER__?.activeConversationObservers ?? -1,
+    links: window.__HERDR_GRAPH_RENDERER__?.conversationLinks ?? -1,
+  }))).toEqual({ observer: 1, links: 1 });
+  const windowId = await conversation.locator("xpath=..").getAttribute("data-window-id");
+  expect(windowId).not.toBeNull();
+  const connector = page.locator(
+    `.graph-conversation-connectors path[data-window-id="${windowId}"]`,
+  );
+  await expect(connector).toHaveAttribute("d", /M .+ C .+/);
+  const connectorBeforeMove = await connector.getAttribute("d");
+  const header = conversation.getByRole("group", { name: "Move agent conversation" });
+  const headerBox = await header.boundingBox();
+  if (!headerBox) throw new Error("Graph terminal header is not measurable");
+  await page.mouse.move(headerBox.x + 80, headerBox.y + headerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(headerBox.x + 130, headerBox.y + headerBox.height / 2 - 40, { steps: 4 });
+  await page.mouse.up();
+  await expect.poll(() => connector.getAttribute("d")).not.toBe(connectorBeforeMove);
+  await conversation.getByRole("button", { name: "Close agent conversation" }).click();
+  await expect(conversation).toHaveCount(0);
+  await expect(page.locator(`.graph-conversation-connectors path[data-window-id="${windowId}"]`))
+    .toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => ({
+    observer: window.__HERDR_GRAPH_RENDERER__?.activeConversationObservers ?? -1,
+    links: window.__HERDR_GRAPH_RENDERER__?.conversationLinks ?? -1,
+  }))).toEqual({ observer: 0, links: 0 });
+
   const collapse = page.locator(".graph-collapse").first();
   await collapse.click();
   await expect(collapse).toHaveAttribute("aria-expanded", "false");
-  expect(terminalSockets).toEqual([]);
+  expect(terminalSockets).toHaveLength(1);
   await collapse.click();
   await page.getByRole("button", { name: "Fit graph", exact: true }).click();
-  expect(terminalSockets).toEqual([]);
+  expect(terminalSockets).toHaveLength(1);
 
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(
@@ -104,6 +137,25 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
     .click();
   await expect(page).toHaveURL(/\/spaces$/);
   await expect(page.locator(".stage-title")).toHaveText("Codex A");
+});
+
+test("identifies an attached empty shell and opens it with a node connector", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-a", snapshotVariant: "empty-shell" },
+  });
+  await page.goto("/?theme=graph");
+  await waitForGraph(page);
+
+  const shell = page.locator(".graph-tree-terminal").filter({ hasText: "Shell" });
+  await expect(shell.locator(".graph-terminal-identity")).toHaveAttribute("data-agent-kind", "shell");
+  await expect(shell).toContainText("empty shell");
+  await shell.dblclick();
+
+  const conversation = page.locator("[data-world-conversation='open']").filter({ hasText: "Shell" });
+  await expect(conversation).toContainText("shell terminal");
+  const windowId = await conversation.locator("xpath=..").getAttribute("data-window-id");
+  await expect(page.locator(`.graph-conversation-connectors path[data-window-id="${windowId}"]`))
+    .toHaveAttribute("d", /M .+ C .+/);
 });
 
 test("fully disposes each Graph renderer and remains usable at compact width", async ({ page }) => {
@@ -137,6 +189,7 @@ test("fully disposes each Graph renderer and remains usable at compact width", a
     activeRenderers: 0,
     activeAnimationFrames: 0,
     activeObservers: 0,
+    activeConversationObservers: 0,
     activeListeners: 0,
     canvases: 0,
     ready: false,
@@ -155,7 +208,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
   await page.goto("/?theme=graph");
   await waitForGraph(page);
   await expect(page.locator(".graph-tree-space")).toHaveCount(128);
-  await expect(page.locator(".graph-tree-agent")).toHaveCount(16);
+  await expect(page.locator(".graph-tree-terminal")).toHaveCount(16);
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.activeAnimationFrames ?? -1,
   )).toBe(0);
@@ -192,7 +245,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
     activeRenderers: 1,
     activeAnimationFrames: 0,
     activeObservers: 1,
-    activeListeners: 6,
+    activeListeners: 7,
     canvases: 1,
     nodes: 144,
     links: 16,
@@ -234,7 +287,7 @@ function coreSockets(urls: readonly string[]) {
 
 async function setSnapshotVariant(
   request: import("@playwright/test").APIRequestContext,
-  snapshotVariant: "empty" | "idle-desk" | "large",
+  snapshotVariant: "empty" | "empty-shell" | "idle-desk" | "large",
 ) {
   const response = await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-a", snapshotVariant },

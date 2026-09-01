@@ -178,6 +178,7 @@ import type { OfficeHandoffRequest } from "./world/herdrOfficeHandoff";
 import { projectHerdrOffice } from "./world/herdrOfficeProjection";
 import type { OfficeAgent } from "./world/herdrOfficeProjection";
 import { projectHerdrGraph } from "./world/graph/herdrGraphProjection";
+import type { WorldGraphNode } from "./world/graph/herdrGraphProjection";
 import {
   useWorldConversationController,
   worldConversationAdmissionPending,
@@ -2037,6 +2038,69 @@ export function App() {
     terminalInputBatchDelayMs,
     terminalOutputCoalesceMs,
   });
+  const currentGraphTerminal = (node: WorldGraphNode) => {
+    if (node.kind !== "terminal" || !node.paneId) return null;
+    const latest = graphProjection.nodes.find(({ id }) => id === node.id);
+    const runtime = bridge.getRuntime(node.hostKey);
+    const state = runtime && connectionStates[runtime.id]?.connectionKey === runtime.generationKey
+      ? connectionStates[runtime.id]
+      : null;
+    const pane = state?.snapshot?.panes.find(({ pane_id }) => pane_id === node.paneId) ?? null;
+    if (
+      latest?.kind !== "terminal" ||
+      latest.paneId !== node.paneId ||
+      latest.selectionKey !== node.selectionKey ||
+      latest.observedGeneration !== node.observedGeneration ||
+      !runtime ||
+      runtime.generationKey !== node.observedGeneration ||
+      !pane ||
+      !runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"])
+    ) {
+      return null;
+    }
+    return { node: latest, runtime, pane };
+  };
+  const openGraphTerminal = (node: WorldGraphNode) => {
+    const current = currentGraphTerminal(node);
+    if (!current) {
+      setWorldHandoffStatus("That terminal is no longer available. Graph remains open.");
+      return;
+    }
+    const agentKey = worldProjection.roster.find(
+      ({ agent }) =>
+        agent.currentPaneRef.profileId === current.runtime.id &&
+        agent.currentPaneRef.nativeTargetId === current.pane.pane_id,
+    )?.agent.key ?? null;
+    worldConversationController.open({
+      kind: current.node.agentRunning ? "agent" : "pane",
+      targetKey: current.node.selectionKey,
+      agentKey,
+      bridgeId: current.runtime.id,
+      paneId: current.pane.pane_id,
+      generationKey: current.runtime.generationKey,
+    });
+  };
+  const openGraphNodeInSpaces = (node: WorldGraphNode) => {
+    if (node.kind === "space") {
+      const latest = graphProjection.nodes.find(({ id }) => id === node.id);
+      if (latest?.kind === "space" && latest.handoff) {
+        openWorldTargetInSpaces(latest.handoff);
+      } else {
+        setWorldHandoffStatus("That space is no longer available. Graph remains open.");
+      }
+      return;
+    }
+    const current = currentGraphTerminal(node);
+    if (!current) {
+      setWorldHandoffStatus("That terminal is no longer available. Graph remains open.");
+      return;
+    }
+    setWorldHandoffStatus(null);
+    clearWorldConversations();
+    navigatePrimaryView("spaces");
+    openPane(current.runtime.id, current.pane);
+    requestTerminalFocus();
+  };
   const effectiveAgentPinnedOnly =
     visibleHostBridgeViews(bridgeViews, selectedBridgeId, hostScope).some((view) =>
       supportsAgentPins(view.runtime.capabilities),
@@ -4681,6 +4745,8 @@ export function App() {
     completionSeenKeys: worldCompletionSeenKeys,
     onSelect: selectWorldKey,
     onGraphSelect: selectGraphKey,
+    onGraphOpenTerminal: openGraphTerminal,
+    onGraphOpenInSpaces: openGraphNodeInSpaces,
     compact: isCompactLayout,
     onBackToSidebar: closeMobileDetail,
     onToggleSidebar: () => setSidebarOpen((open) => !open),

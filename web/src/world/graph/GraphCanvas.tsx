@@ -25,6 +25,7 @@ type GraphRendererDiagnostics = {
   activeRenderers: number;
   activeAnimationFrames: number;
   activeObservers: number;
+  activeConversationObservers: number;
   activeListeners: number;
   canvases: number;
   frames: number;
@@ -34,6 +35,7 @@ type GraphRendererDiagnostics = {
   paused: boolean;
   nodes: number;
   links: number;
+  conversationLinks: number;
 };
 
 declare global {
@@ -46,13 +48,21 @@ export type GraphCanvasHandle = {
   fit: () => void;
 };
 
+export type GraphConversationTarget = {
+  id: string;
+  selectionKey: string;
+  rect: { left: number; top: number; right: number; bottom: number };
+};
+
 type GraphCanvasProps = {
   projection: HerdrGraphProjection;
   collapsedIds: ReadonlySet<string>;
   selectedKey: string | null;
   matchedIds: ReadonlySet<string> | null;
+  conversationTargets: readonly GraphConversationTarget[];
   initialPrefs: GraphViewPrefs;
   onSelect: (selectionKey: string, hostKey: string) => void;
+  onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void;
   onToggleCollapse: (spaceId: string) => void;
   onViewChange: (camera: GraphCamera, positions: Record<string, SavedGraphPosition>) => void;
 };
@@ -63,8 +73,10 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
     collapsedIds,
     selectedKey,
     matchedIds,
+    conversationTargets,
     initialPrefs,
     onSelect,
+    onActivate,
     onToggleCollapse,
     onViewChange,
   },
@@ -72,13 +84,15 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const connectorRef = useRef<SVGSVGElement | null>(null);
   const rendererRef = useRef<GraphRenderer | null>(null);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
     const canvas = canvasRef.current;
-    if (!host || !canvas) return;
-    const renderer = new GraphRenderer(canvas, host, initialPrefs);
+    const connectors = connectorRef.current;
+    if (!host || !canvas || !connectors) return;
+    const renderer = new GraphRenderer(canvas, connectors, host, initialPrefs);
     rendererRef.current = renderer;
     return () => {
       renderer.dispose();
@@ -87,12 +101,16 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
   }, [initialPrefs]);
 
   useEffect(() => {
-    rendererRef.current?.setCallbacks(onSelect, onToggleCollapse, onViewChange);
-  }, [onSelect, onToggleCollapse, onViewChange]);
+    rendererRef.current?.setCallbacks(onSelect, onActivate, onToggleCollapse, onViewChange);
+  }, [onActivate, onSelect, onToggleCollapse, onViewChange]);
 
   useEffect(() => {
     rendererRef.current?.update(projection, collapsedIds, selectedKey, matchedIds);
   }, [collapsedIds, matchedIds, projection, selectedKey]);
+
+  useEffect(() => {
+    rendererRef.current?.setConversationTargets(conversationTargets);
+  }, [conversationTargets]);
 
   useImperativeHandle(ref, () => ({ fit: () => rendererRef.current?.fit() }), []);
 
@@ -101,6 +119,12 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(funct
       <canvas
         ref={canvasRef}
         data-graph-canvas="true"
+        aria-hidden="true"
+      />
+      <svg
+        ref={connectorRef}
+        className="graph-conversation-connectors"
+        data-graph-conversation-connectors="true"
         aria-hidden="true"
       />
     </div>
@@ -147,6 +171,7 @@ export class LatestFrameValue<T> {
 
 class GraphRenderer {
   readonly #canvas: HTMLCanvasElement;
+  readonly #connectors: SVGSVGElement;
   readonly #context: CanvasRenderingContext2D | null;
   readonly #diagnostics: GraphRendererDiagnostics;
   readonly #resizeValues: LatestFrameValue<{ width: number; height: number }>;
@@ -165,14 +190,23 @@ class GraphRenderer {
   #disposed = false;
   #hidden = document.visibilityState === "hidden";
   #onSelect: (selectionKey: string, hostKey: string) => void = () => {};
+  #onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void = () => {};
+  #conversationTargets: readonly GraphConversationTarget[] = [];
+  #connectorPaths = new Map<string, { path: SVGPathElement; dot: SVGCircleElement }>();
   #onToggleCollapse: (spaceId: string) => void = () => {};
   #onViewChange: (
     camera: GraphCamera,
     positions: Record<string, SavedGraphPosition>,
   ) => void = () => {};
 
-  constructor(canvas: HTMLCanvasElement, host: HTMLElement, prefs: GraphViewPrefs) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    connectors: SVGSVGElement,
+    host: HTMLElement,
+    prefs: GraphViewPrefs,
+  ) {
     this.#canvas = canvas;
+    this.#connectors = connectors;
     this.#context = canvas.getContext("2d");
     this.#camera = { ...prefs.camera };
     this.#savedPositions = { ...prefs.positions };
@@ -207,14 +241,16 @@ class GraphRenderer {
     canvas.addEventListener("pointerup", this.#onPointerUp);
     canvas.addEventListener("pointercancel", this.#onPointerCancel);
     canvas.addEventListener("wheel", this.#onWheel, { passive: false });
+    canvas.addEventListener("dblclick", this.#onDoubleClick);
     document.addEventListener("visibilitychange", this.#onVisibilityChange);
-    this.#diagnostics.activeListeners += 6;
+    this.#diagnostics.activeListeners += 7;
     const rect = host.getBoundingClientRect();
     this.#resize(Math.max(1, rect.width), Math.max(1, rect.height));
   }
 
   setCallbacks(
     onSelect: (selectionKey: string, hostKey: string) => void,
+    onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void,
     onToggleCollapse: (spaceId: string) => void,
     onViewChange: (
       camera: GraphCamera,
@@ -222,8 +258,32 @@ class GraphRenderer {
     ) => void,
   ) {
     this.#onSelect = onSelect;
+    this.#onActivate = onActivate;
     this.#onToggleCollapse = onToggleCollapse;
     this.#onViewChange = onViewChange;
+  }
+
+  setConversationTargets(targets: readonly GraphConversationTarget[]) {
+    this.#conversationTargets = targets;
+    const targetIds = new Set(targets.map(({ id }) => id));
+    for (const [id, elements] of this.#connectorPaths) {
+      if (targetIds.has(id)) continue;
+      elements.path.remove();
+      elements.dot.remove();
+      this.#connectorPaths.delete(id);
+    }
+    for (const target of targets) {
+      if (this.#connectorPaths.has(target.id)) continue;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      path.dataset.windowId = target.id;
+      dot.dataset.windowId = target.id;
+      dot.setAttribute("r", "4");
+      this.#connectors.append(path, dot);
+      this.#connectorPaths.set(target.id, { path, dot });
+    }
+    this.#diagnostics.conversationLinks = targets.length;
+    this.#requestFrame();
   }
 
   update(
@@ -278,6 +338,7 @@ class GraphRenderer {
     this.#canvas.removeEventListener("pointerup", this.#onPointerUp);
     this.#canvas.removeEventListener("pointercancel", this.#onPointerCancel);
     this.#canvas.removeEventListener("wheel", this.#onWheel);
+    this.#canvas.removeEventListener("dblclick", this.#onDoubleClick);
     document.removeEventListener("visibilitychange", this.#onVisibilityChange);
     this.#pointer = null;
     this.#layout?.nodes.clear();
@@ -287,12 +348,18 @@ class GraphRenderer {
     this.#diagnostics.destroys += 1;
     this.#diagnostics.activeRenderers -= 1;
     this.#diagnostics.canvases -= 1;
-    this.#diagnostics.activeListeners -= 6;
+    this.#diagnostics.activeListeners -= 7;
     if (this.#resizeObserver) this.#diagnostics.activeObservers -= 1;
     this.#diagnostics.ready = this.#diagnostics.activeRenderers > 0;
     this.#diagnostics.paused = this.#diagnostics.activeRenderers > 0 && this.#hidden;
     this.#diagnostics.nodes = 0;
     this.#diagnostics.links = 0;
+    this.#diagnostics.conversationLinks = 0;
+    for (const elements of this.#connectorPaths.values()) {
+      elements.path.remove();
+      elements.dot.remove();
+    }
+    this.#connectorPaths.clear();
   }
 
   #resize(width: number, height: number) {
@@ -306,6 +373,9 @@ class GraphRenderer {
     this.#canvas.height = Math.round(nextHeight * density);
     this.#canvas.style.width = `${nextWidth}px`;
     this.#canvas.style.height = `${nextHeight}px`;
+    this.#connectors.setAttribute("viewBox", `0 0 ${nextWidth} ${nextHeight}`);
+    this.#connectors.setAttribute("width", String(nextWidth));
+    this.#connectors.setAttribute("height", String(nextHeight));
     this.#requestFrame();
   }
 
@@ -366,6 +436,7 @@ class GraphRenderer {
     );
     for (const node of nodes) this.#drawNode(context, node);
     context.restore();
+    this.#drawConversationConnectors(layout);
   }
 
   #drawNode(context: CanvasRenderingContext2D, node: GraphLayoutNode) {
@@ -392,8 +463,8 @@ class GraphRenderer {
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.font = source.kind === "space" ? "600 11px sans-serif" : "700 12px sans-serif";
-    if (source.kind === "agent") {
-      context.fillText(statusSymbol(source.status), 0, -2);
+    if (source.kind === "terminal") {
+      context.fillText(terminalMark(source), 0, -2);
       context.font = "600 9px sans-serif";
       context.fillStyle = "#cdd6f4";
       context.fillText(shortCanvasLabel(context, source.label, 70), 0, radius + 14);
@@ -404,7 +475,7 @@ class GraphRenderer {
       context.fillText(shortCanvasLabel(context, source.hostLabel, 72), 0, 11);
       if (source.omittedChildCount > 0) {
         context.fillStyle = "#f9e2af";
-        context.fillText(`+${source.omittedChildCount} agents`, 0, 25);
+        context.fillText(`+${source.omittedChildCount} terminals`, 0, 25);
       }
       context.beginPath();
       context.arc(36, -36, 11, 0, Math.PI * 2);
@@ -425,7 +496,7 @@ class GraphRenderer {
     context.restore();
   }
 
-  #point(event: PointerEvent) {
+  #point(event: { clientX: number; clientY: number }) {
     const rect = this.#canvas.getBoundingClientRect();
     return {
       clientX: event.clientX - rect.left,
@@ -536,6 +607,52 @@ class GraphRenderer {
     this.#requestFrame();
   };
 
+  #onDoubleClick = (event: MouseEvent) => {
+    const point = this.#point(event);
+    const node = this.#hitNode(point.worldX, point.worldY);
+    if (node?.source.kind !== "terminal" || !node.source.actionable) return;
+    event.preventDefault();
+    this.#onActivate(node.source);
+  };
+
+  #drawConversationConnectors(layout: GraphLayoutState) {
+    for (const target of this.#conversationTargets) {
+      const elements = this.#connectorPaths.get(target.id);
+      const node = [...layout.nodes.values()].find(
+        ({ source }) => source.selectionKey === target.selectionKey,
+      );
+      if (!elements || !node) {
+        elements?.path.setAttribute("visibility", "hidden");
+        elements?.dot.setAttribute("visibility", "hidden");
+        continue;
+      }
+      const nodeX = this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom;
+      const nodeY = this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom;
+      const edges = [
+        { x: target.rect.left, y: clamp(nodeY, target.rect.top + 18, target.rect.bottom - 18) },
+        { x: target.rect.right, y: clamp(nodeY, target.rect.top + 18, target.rect.bottom - 18) },
+        { x: clamp(nodeX, target.rect.left + 18, target.rect.right - 18), y: target.rect.top },
+        { x: clamp(nodeX, target.rect.left + 18, target.rect.right - 18), y: target.rect.bottom },
+      ];
+      const bubble = edges.reduce((nearest, candidate) =>
+        Math.hypot(candidate.x - nodeX, candidate.y - nodeY) <
+        Math.hypot(nearest.x - nodeX, nearest.y - nodeY)
+          ? candidate
+          : nearest,
+      );
+      const deltaX = bubble.x - nodeX;
+      const deltaY = bubble.y - nodeY;
+      elements.path.setAttribute(
+        "d",
+        `M ${nodeX} ${nodeY} C ${nodeX + deltaX * 0.42} ${nodeY + deltaY * 0.12}, ${bubble.x - deltaX * 0.12} ${bubble.y - deltaY * 0.42}, ${bubble.x} ${bubble.y}`,
+      );
+      elements.path.removeAttribute("visibility");
+      elements.dot.setAttribute("cx", String(nodeX));
+      elements.dot.setAttribute("cy", String(nodeY));
+      elements.dot.removeAttribute("visibility");
+    }
+  }
+
   #onVisibilityChange = () => {
     this.#hidden = document.visibilityState === "hidden";
     this.#diagnostics.paused = this.#hidden;
@@ -561,6 +678,7 @@ function graphRendererDiagnostics() {
       activeRenderers: 0,
       activeAnimationFrames: 0,
       activeObservers: 0,
+      activeConversationObservers: 0,
       activeListeners: 0,
       canvases: 0,
       frames: 0,
@@ -570,6 +688,7 @@ function graphRendererDiagnostics() {
       paused: false,
       nodes: 0,
       links: 0,
+      conversationLinks: 0,
     };
   }
   return window.__HERDR_GRAPH_RENDERER__;
@@ -613,6 +732,16 @@ function statusStroke(status: string) {
       : status === "done" ? "#89dceb"
         : status === "idle" ? "#cba6f7"
           : "#7f849c";
+}
+
+function terminalMark(node: import("./herdrGraphProjection").WorldGraphNode) {
+  if (!node.agentRunning) return ">_";
+  return node.agentKind === "claude" ? "CL"
+    : node.agentKind === "codex" ? "CX"
+      : node.agentKind === "opencode" ? "OC"
+        : node.agentKind === "grok" ? "GR"
+          : node.agentKind === "pi" ? "PI"
+            : statusSymbol(node.status);
 }
 
 function statusSymbol(status: string) {

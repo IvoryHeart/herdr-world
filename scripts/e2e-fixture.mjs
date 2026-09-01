@@ -311,7 +311,7 @@ function setFixtureState(hostId, value) {
   const launchCreatesSeat = value.launchCreatesSeat ?? current.launchCreatesSeat;
   if (
     !["ready", "offline", "malformed"].includes(snapshotMode) ||
-    !["default", "empty", "large", "idle-desk", "long-title"].includes(snapshotVariant) ||
+    !["default", "empty", "empty-shell", "large", "idle-desk", "long-title"].includes(snapshotVariant) ||
     (terminalProtocol !== null && ![19, 20, 21].includes(terminalProtocol)) ||
     (features !== null &&
       (!Array.isArray(features) || features.some((feature) => typeof feature !== "string"))) ||
@@ -338,6 +338,21 @@ function snapshot(fixture, stateOrVariant = "default") {
   const variant = typeof stateOrVariant === "string" ? stateOrVariant : stateOrVariant.snapshotVariant;
   if (variant === "empty") {
     return { workspaces: [], tabs: [], panes: [], layouts: [] };
+  }
+  if (variant === "empty-shell") {
+    const result = snapshot(fixture, "default");
+    result.workspaces[0].agent_status = "unknown";
+    result.tabs[0].label = "Shell";
+    result.tabs[0].agent_status = "unknown";
+    result.panes[0] = {
+      ...result.panes[0],
+      label: "Shell",
+      agent: null,
+      display_agent: null,
+      agent_status: "unknown",
+      state_labels: {},
+    };
+    return result;
   }
   if (variant === "large") {
     return largeSnapshot(fixture);

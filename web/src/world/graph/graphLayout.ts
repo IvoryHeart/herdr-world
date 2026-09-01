@@ -43,11 +43,11 @@ export function reconcileGraphLayout(
     nodes.set(source.id, reuseOrSeed(previous, source, index, spaces.length, savedPositions[source.id]));
   }
   for (const source of visibleNodes) {
-    if (source.kind !== "agent") {
+    if (source.kind !== "terminal") {
       continue;
     }
     const parent = source.parentId ? nodes.get(source.parentId) : null;
-    nodes.set(source.id, reuseOrSeedAgent(previous, source, parent, savedPositions[source.id]));
+    nodes.set(source.id, reuseOrSeedTerminal(previous, source, parent, savedPositions[source.id]));
   }
   return {
     state: { nodes, edges, topologyKey },
@@ -57,12 +57,12 @@ export function reconcileGraphLayout(
 
 export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
   const spaces = [...state.nodes.values()].filter(({ kind, pinned }) => kind === "space" && !pinned);
-  const agentsByParent = new Map<string, GraphLayoutNode[]>();
+  const terminalsByParent = new Map<string, GraphLayoutNode[]>();
   for (const node of state.nodes.values()) {
-    if (node.kind === "agent" && node.parentId) {
-      const siblings = agentsByParent.get(node.parentId) ?? [];
+    if (node.kind === "terminal" && node.parentId) {
+      const siblings = terminalsByParent.get(node.parentId) ?? [];
       siblings.push(node);
-      agentsByParent.set(node.parentId, siblings);
+      terminalsByParent.set(node.parentId, siblings);
     }
   }
 
@@ -78,18 +78,18 @@ export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
     }
   }
 
-  for (const [parentId, agents] of agentsByParent) {
+  for (const [parentId, terminals] of terminalsByParent) {
     const parent = state.nodes.get(parentId);
     if (!parent) continue;
-    for (let index = 0; index < agents.length; index += 1) {
-      const agent = agents[index];
-      if (!agent) continue;
-      if (!agent.pinned) {
-        spring(agent, parent, 110, 0.028, alpha);
+    for (let index = 0; index < terminals.length; index += 1) {
+      const terminal = terminals[index];
+      if (!terminal) continue;
+      if (!terminal.pinned) {
+        spring(terminal, parent, 110, 0.028, alpha);
       }
-      for (let otherIndex = index + 1; otherIndex < agents.length; otherIndex += 1) {
-        const other = agents[otherIndex];
-        if (other) repel(agent, other, 58, 1.5, alpha);
+      for (let otherIndex = index + 1; otherIndex < terminals.length; otherIndex += 1) {
+        const other = terminals[otherIndex];
+        if (other) repel(terminal, other, 58, 1.5, alpha);
       }
     }
   }
@@ -159,7 +159,7 @@ function reuseOrSeed(
   return layoutNode(source, saved?.x ?? Math.cos(angle) * radius, saved?.y ?? Math.sin(angle) * radius, saved?.pinned ?? false);
 }
 
-function reuseOrSeedAgent(
+function reuseOrSeedTerminal(
   previous: GraphLayoutState | null,
   source: WorldGraphNode,
   parent: GraphLayoutNode | null | undefined,

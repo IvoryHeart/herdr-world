@@ -9,7 +9,7 @@ import {
 } from "./herdrGraphProjection";
 
 describe("Herdr Graph projection", () => {
-  it("keeps runtime-qualified duplicate spaces distinct, includes empty spaces, and excludes ordinary panes", () => {
+  it("keeps duplicate spaces distinct and presents both agent terminals and empty shells", () => {
     const sources = ["host-a", "host-b"].map((hostId, index) => source(
       hostId,
       index,
@@ -35,8 +35,18 @@ describe("Herdr Graph projection", () => {
     expect(new Set(graph.spaces.map(({ node }) => node.id)).size).toBe(2);
     expect(graph.spaces.map(({ node }) => node.hostKey)).toEqual(["host-a", "host-b"]);
     expect(graph.spaces[0]?.node).toMatchObject({ label: "main", subtitle: "herdr-world" });
-    expect(graph.spaces[0]?.agents).toHaveLength(1);
-    expect(graph.spaces[1]?.agents).toHaveLength(0);
+    expect(graph.spaces[0]?.terminals).toHaveLength(2);
+    expect(graph.spaces[0]?.terminals).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Codex", agentRunning: true, agentKind: "codex" }),
+      expect.objectContaining({ label: "Shell", agentRunning: false, agentKind: null }),
+    ]));
+    expect(graph.spaces[1]?.terminals).toHaveLength(0);
+    expect(graph.coverage).toMatchObject({
+      observedTerminals: 2,
+      presentedTerminals: 2,
+      observedAgents: 1,
+      observedShells: 1,
+    });
     expect(graph.nodes.some(({ searchText }) => searchText.includes("/private"))).toBe(false);
   });
 
@@ -55,12 +65,28 @@ describe("Herdr Graph projection", () => {
     )]);
 
     expect(changed.spaces[0]?.node.id).toBe(first.spaces[0]?.node.id);
-    expect(changed.spaces[0]?.agents[0]?.id).toBe(first.spaces[0]?.agents[0]?.id);
-    expect(changed.spaces[0]?.agents[0]?.selectionKey).toBe(first.spaces[0]?.agents[0]?.selectionKey);
-    expect(changed.spaces[0]?.agents[0]).toMatchObject({
+    expect(changed.spaces[0]?.terminals[0]?.id).toBe(first.spaces[0]?.terminals[0]?.id);
+    expect(changed.spaces[0]?.terminals[0]?.selectionKey).toBe(first.spaces[0]?.terminals[0]?.selectionKey);
+    expect(changed.spaces[0]?.terminals[0]).toMatchObject({
       status: "blocked",
       focused: true,
       taskSummary: "Second",
+    });
+  });
+
+  it("marks an unrecognized detected agent for the generic icon fallback", () => {
+    const graph = projectHerdrGraph([source(
+      "host-a",
+      0,
+      [workspace("space-a", 1, "Alpha")],
+      [pane("agent-a", "space-a", "working", { agent: "aider", display_agent: "Aider" })],
+    )]);
+
+    expect(graph.spaces[0]?.terminals[0]).toMatchObject({
+      kind: "terminal",
+      label: "Aider",
+      agentRunning: true,
+      agentKind: null,
     });
   });
 
@@ -68,7 +94,7 @@ describe("Herdr Graph projection", () => {
     const workspaces = Array.from({ length: GRAPH_PRESENTATION_BOUNDS.spaces + 1 }, (_, index) =>
       workspace(`space-${index}`, index + 1, `Space ${index}`, undefined, index === 128),
     );
-    const panes = Array.from({ length: GRAPH_PRESENTATION_BOUNDS.agentsPerSpace + 3 }, (_, index) =>
+    const panes = Array.from({ length: GRAPH_PRESENTATION_BOUNDS.terminalsPerSpace + 3 }, (_, index) =>
       pane(
         `agent-${index}`,
         "space-0",
@@ -82,13 +108,13 @@ describe("Herdr Graph projection", () => {
     expect(graph.spaces.some(({ node }) => node.label === "Space 128")).toBe(true);
     expect(graph.spaces.some(({ node }) => node.label === "Space 127")).toBe(false);
     const firstSpace = graph.spaces.find(({ node }) => node.label === "Space 0");
-    expect(firstSpace?.agents).toHaveLength(16);
-    expect(firstSpace?.agents.slice(0, 3).map(({ label }) => label)).toEqual([
+    expect(firstSpace?.terminals).toHaveLength(16);
+    expect(firstSpace?.terminals.slice(0, 3).map(({ label }) => label)).toEqual([
       "Agent 16",
       "Agent 17",
       "Agent 18",
     ]);
-    expect(firstSpace?.omittedAgentCount).toBe(3);
+    expect(firstSpace?.omittedTerminalCount).toBe(3);
     expect(graph.omittedSpaceCount).toBe(1);
     expect(graph.coverage).toMatchObject({
       observedSpaces: 129,
@@ -98,6 +124,9 @@ describe("Herdr Graph projection", () => {
       omittedAgents: 3,
       omittedAgentsInPresentedSpaces: 3,
       omittedAgentsInOmittedSpaces: 0,
+      observedTerminals: 19,
+      presentedTerminals: 16,
+      omittedTerminals: 3,
     });
   });
 

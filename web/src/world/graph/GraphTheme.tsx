@@ -1,21 +1,32 @@
 import {
+  Bot,
   ChevronLeft,
   ChevronRight,
   Maximize2,
   PanelLeft,
   Search,
+  SquareTerminal,
 } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  PointerEvent as ReactPointerEvent,
+  RefObject,
+} from "react";
 
+import { AgentIcon } from "../../AgentIcon";
 import type { SurfaceComponentProps } from "../../surfaceRegistry";
 import { GraphCanvas } from "./GraphCanvas";
-import type { GraphCanvasHandle } from "./GraphCanvas";
+import type { GraphCanvasHandle, GraphConversationTarget } from "./GraphCanvas";
+import type { WorldConversationBubblePanel } from "../WorldSurface";
 import type { WorldGraphNode, WorldGraphSpace } from "./herdrGraphProjection";
 import {
   readGraphViewPrefs,
@@ -44,7 +55,9 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
     () => new Set(initialPrefs.collapsedIds),
   );
   const [query, setQuery] = useState("");
+  const [conversationTargets, setConversationTargets] = useState<GraphConversationTarget[]>([]);
   const canvasRef = useRef<GraphCanvasHandle | null>(null);
+  const visualRef = useRef<HTMLDivElement | null>(null);
   const semanticButtonsRef = useRef(new Map<string, HTMLButtonElement>());
   const focusSelectionRef = useRef<string | null>(null);
   const prefsRef = useRef<GraphViewPrefs>(initialPrefs);
@@ -71,8 +84,8 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
   );
   const visibleSpaces = useMemo(
     () => query.trim()
-      ? projection.spaces.filter(({ node, agents }) =>
-          matches?.has(node.id) || agents.some(({ id }) => matches?.has(id)),
+      ? projection.spaces.filter(({ node, terminals }) =>
+          matches?.has(node.id) || terminals.some(({ id }) => matches?.has(id)),
         )
       : projection.spaces,
     [matches, projection.spaces, query],
@@ -137,7 +150,7 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
         </button>
         <div className="graph-stage-heading">
           <strong>World Graph</strong>
-          <span>{projection.coverage.presentedSpaces} spaces · {projection.coverage.presentedAgents} agents</span>
+          <span>{projection.coverage.presentedSpaces} spaces · {projection.coverage.presentedTerminals} terminals</span>
         </div>
         <label className="graph-search">
           <Search size={14} aria-hidden="true" />
@@ -145,7 +158,7 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
           <input
             type="search"
             value={query}
-            placeholder="Search spaces and agents"
+            placeholder="Search spaces and terminals"
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
@@ -155,26 +168,36 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
         </button>
       </header>
       <div className="graph-content">
-        <div className="graph-visual" aria-label="Interactive World graph">
+        <div ref={visualRef} className="graph-visual" aria-label="Interactive World graph">
           <GraphCanvas
             ref={canvasRef}
             projection={projection}
             collapsedIds={collapsedIds}
             selectedKey={context.selectedKey}
             matchedIds={matches}
+            conversationTargets={conversationTargets}
             initialPrefs={initialPrefs}
             onSelect={selectFromCanvas}
+            onActivate={context.onGraphOpenTerminal}
             onToggleCollapse={toggleCollapse}
             onViewChange={updateViewPrefs}
           />
           <div className="graph-visual-help">
-            Drag nodes to pin · drag background to pan · scroll to zoom
+            Double-click a terminal to open it · drag nodes to pin · scroll to zoom
           </div>
           {projection.omittedSpaceCount > 0 ? (
             <div className="graph-overflow-badge">
               +{projection.omittedSpaceCount} spaces outside presentation bound
             </div>
           ) : null}
+          <GraphConversationLayer
+            visualRef={visualRef}
+            panels={context.conversationBubbles}
+            compact={context.compact}
+            onFocus={context.onFocusConversation}
+            onClose={context.onCloseConversation}
+            onTargetsChange={setConversationTargets}
+          />
         </div>
         <aside className="graph-semantic" aria-label="Graph semantic view">
           <div className="graph-semantic-head">
@@ -188,12 +211,13 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
           {selectedNode ? (
             <GraphDetails
               node={selectedNode}
-              onOpen={() => selectedNode.handoff && context.onOpenInSpaces(selectedNode.handoff)}
+              onOpenTerminal={() => context.onGraphOpenTerminal(selectedNode)}
+              onOpenInSpaces={() => context.onGraphOpenInSpaces(selectedNode)}
             />
           ) : (
-            <p className="graph-details-empty">Select a space or agent to inspect it.</p>
+            <p className="graph-details-empty">Select a space or terminal to inspect it.</p>
           )}
-          <ul className="graph-tree" aria-label="Presented projects, spaces, and agents">
+          <ul className="graph-tree" aria-label="Presented projects, spaces, and terminals">
             {visibleSpaces.map((space) => (
               <GraphSemanticSpace
                 key={space.node.id}
@@ -204,7 +228,8 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
                 queryActive={Boolean(query.trim())}
                 onToggle={() => toggleCollapse(space.node.id)}
                 onSelect={(node) => context.onGraphSelect(node.selectionKey, node.hostKey)}
-                onOpen={(node) => node.handoff && context.onOpenInSpaces(node.handoff)}
+                onOpenTerminal={context.onGraphOpenTerminal}
+                onOpenInSpaces={context.onGraphOpenInSpaces}
                 setButtonRef={setSemanticButtonRef}
               />
             ))}
@@ -234,7 +259,8 @@ function GraphSemanticSpace({
   queryActive,
   onToggle,
   onSelect,
-  onOpen,
+  onOpenTerminal,
+  onOpenInSpaces,
   setButtonRef,
 }: {
   space: WorldGraphSpace;
@@ -244,12 +270,13 @@ function GraphSemanticSpace({
   queryActive: boolean;
   onToggle: () => void;
   onSelect: (node: WorldGraphNode) => void;
-  onOpen: (node: WorldGraphNode) => void;
+  onOpenTerminal: (node: WorldGraphNode) => void;
+  onOpenInSpaces: (node: WorldGraphNode) => void;
   setButtonRef: (selectionKey: string, node: HTMLButtonElement | null) => void;
 }) {
-  const shownAgents = queryActive
-    ? space.agents.filter(({ id }) => matches?.has(id))
-    : space.agents;
+  const shownTerminals = queryActive
+    ? space.terminals.filter(({ id }) => matches?.has(id))
+    : space.terminals;
   return (
     <li className="graph-tree-space" data-status={displayStatus(space.node)}>
       <div className="graph-tree-row">
@@ -276,39 +303,46 @@ function GraphSemanticSpace({
           </span>
         </button>
         {space.node.actionable ? (
-          <button className="graph-tree-open" type="button" onClick={() => onOpen(space.node)}>
+          <button className="graph-tree-open" type="button" onClick={() => onOpenInSpaces(space.node)}>
             Open in Spaces
           </button>
         ) : null}
       </div>
       {!collapsed ? (
-        <ul aria-label={`Agents in ${space.node.label}`}>
-          {shownAgents.map((agent) => (
-            <li key={agent.id} data-status={displayStatus(agent)}>
+        <ul aria-label={`Terminals in ${space.node.label}`}>
+          {shownTerminals.map((terminal) => (
+            <li key={terminal.id} data-status={displayStatus(terminal)}>
               <button
-                ref={(node) => setButtonRef(agent.selectionKey, node)}
-                className="graph-tree-select graph-tree-agent"
+                ref={(node) => setButtonRef(terminal.selectionKey, node)}
+                className="graph-tree-select graph-tree-terminal"
                 type="button"
-                aria-pressed={selectedKey === agent.selectionKey}
-                onClick={() => onSelect(agent)}
+                aria-pressed={selectedKey === terminal.selectionKey}
+                aria-label={`${terminal.label}, ${terminal.agentRunning ? "agent terminal" : "empty shell"}. Double-click to open terminal.`}
+                onClick={() => onSelect(terminal)}
+                onDoubleClick={() => terminal.actionable && onOpenTerminal(terminal)}
               >
-                <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(agent)}</span>
+                <GraphTerminalIdentity node={terminal} />
                 <span>
-                  <strong>{agent.label}</strong>
-                  <small>{nodeSummary(agent)}</small>
+                  <strong>{terminal.label}</strong>
+                  <small>{nodeSummary(terminal)}</small>
                 </span>
               </button>
-              {agent.actionable ? (
-                <button className="graph-tree-open" type="button" onClick={() => onOpen(agent)}>
-                  Open in Spaces
-                </button>
+              {terminal.actionable ? (
+                <span className="graph-tree-actions">
+                  <button className="graph-tree-open" type="button" onClick={() => onOpenTerminal(terminal)}>
+                    Open terminal
+                  </button>
+                  <button className="graph-tree-open" type="button" onClick={() => onOpenInSpaces(terminal)}>
+                    Open in Spaces
+                  </button>
+                </span>
               ) : null}
             </li>
           ))}
-          {space.agents.length === 0 ? <li className="graph-tree-empty">No detected agents</li> : null}
-          {space.omittedAgentCount > 0 ? (
+          {space.terminals.length === 0 ? <li className="graph-tree-empty">No attached terminals</li> : null}
+          {space.omittedTerminalCount > 0 ? (
             <li className="graph-tree-overflow">
-              {space.omittedAgentCount} additional {plural(space.omittedAgentCount, "agent", "agents")} omitted by the per-space bound.
+              {space.omittedTerminalCount} additional {plural(space.omittedTerminalCount, "terminal", "terminals")} omitted by the per-space bound.
             </li>
           ) : null}
         </ul>
@@ -317,14 +351,24 @@ function GraphSemanticSpace({
   );
 }
 
-function GraphDetails({ node, onOpen }: { node: WorldGraphNode; onOpen: () => void }) {
+function GraphDetails({
+  node,
+  onOpenTerminal,
+  onOpenInSpaces,
+}: {
+  node: WorldGraphNode;
+  onOpenTerminal: () => void;
+  onOpenInSpaces: () => void;
+}) {
   return (
     <section className="graph-details" aria-label="Selected Graph entity">
       <div>
-        <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(node)}</span>
+        {node.kind === "terminal"
+          ? <GraphTerminalIdentity node={node} />
+          : <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(node)}</span>}
         <div>
           <strong>{node.label}</strong>
-          <span>{node.kind === "space" ? "Space" : "Agent"} · {nodeSummary(node)}</span>
+          <span>{node.kind === "space" ? "Space" : node.agentRunning ? "Agent terminal" : "Empty shell"} · {nodeSummary(node)}</span>
         </div>
       </div>
       {node.taskSummary ? <p>{node.taskSummary}</p> : null}
@@ -335,12 +379,233 @@ function GraphDetails({ node, onOpen }: { node: WorldGraphNode; onOpen: () => vo
         {node.modelLabel ? <div><dt>Agent</dt><dd>{node.modelLabel}</dd></div> : null}
       </dl>
       {node.actionable ? (
-        <button className="btn btn-primary" type="button" onClick={onOpen}>Open in Spaces</button>
+        <div className="graph-details-actions">
+          {node.kind === "terminal" ? (
+            <button className="btn btn-primary" type="button" onClick={onOpenTerminal}>Open terminal</button>
+          ) : null}
+          <button className={node.kind === "space" ? "btn btn-primary" : "btn"} type="button" onClick={onOpenInSpaces}>Open in Spaces</button>
+        </div>
       ) : (
         <span className="graph-action-unavailable">Open in Spaces unavailable</span>
       )}
     </section>
   );
+}
+
+function GraphTerminalIdentity({ node }: { node: WorldGraphNode }) {
+  return (
+    <span
+      className="graph-terminal-identity"
+      data-agent-kind={node.agentKind ?? (node.agentRunning ? "unknown" : "shell")}
+      title={node.agentRunning ? node.modelLabel ?? node.label : "Empty shell"}
+      aria-hidden="true"
+    >
+      {node.agentKind
+        ? <AgentIcon kind={node.agentKind} />
+        : node.agentRunning
+          ? <Bot size={16} />
+          : <SquareTerminal size={16} />}
+      <span className="graph-terminal-status">{statusSymbol(node)}</span>
+    </span>
+  );
+}
+
+function GraphConversationLayer({
+  visualRef,
+  panels,
+  compact,
+  onFocus,
+  onClose,
+  onTargetsChange,
+}: {
+  visualRef: RefObject<HTMLDivElement | null>;
+  panels: readonly WorldConversationBubblePanel[];
+  compact: boolean;
+  onFocus: (id: string) => void;
+  onClose: (id: string) => void;
+  onTargetsChange: (targets: GraphConversationTarget[]) => void;
+}) {
+  const refs = useRef(new Map<string, HTMLDivElement>());
+  const lastMeasurementRef = useRef("");
+  const measureRef = useRef<() => void>(() => {});
+  const interactionRef = useRef<{
+    id: string;
+    pointerId: number;
+    lastX: number;
+    lastY: number;
+  } | null>(null);
+  const [offsets, setOffsets] = useState<Record<string, { x: number; y: number }>>({});
+  const [movingId, setMovingId] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    const visual = visualRef.current;
+    if (!visual) return;
+    if (panels.length === 0) {
+      if (lastMeasurementRef.current !== "") {
+        lastMeasurementRef.current = "";
+        onTargetsChange([]);
+      }
+      return;
+    }
+    const measure = () => {
+      const visualRect = visual.getBoundingClientRect();
+      const targets = panels.flatMap((panel): GraphConversationTarget[] => {
+        const element = refs.current.get(panel.id);
+        const selectionKey = panel.selectedKey ?? panel.targetKey;
+        if (!element || !selectionKey) return [];
+        const rect = element.getBoundingClientRect();
+        return [{
+          id: panel.id,
+          selectionKey,
+          rect: {
+            left: rect.left - visualRect.left,
+            top: rect.top - visualRect.top,
+            right: rect.right - visualRect.left,
+            bottom: rect.bottom - visualRect.top,
+          },
+        }];
+      });
+      const measurement = JSON.stringify(targets);
+      if (measurement === lastMeasurementRef.current) return;
+      lastMeasurementRef.current = measurement;
+      onTargetsChange(targets);
+    };
+    measureRef.current = measure;
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    if (window.__HERDR_GRAPH_RENDERER__) {
+      window.__HERDR_GRAPH_RENDERER__.activeConversationObservers += 1;
+    }
+    observer.observe(visual);
+    for (const panel of panels) {
+      const element = refs.current.get(panel.id);
+      if (element) observer.observe(element);
+    }
+    return () => {
+      measureRef.current = () => {};
+      observer.disconnect();
+      if (window.__HERDR_GRAPH_RENDERER__) {
+        window.__HERDR_GRAPH_RENDERER__.activeConversationObservers -= 1;
+      }
+    };
+  }, [onTargetsChange, panels, visualRef]);
+
+  useLayoutEffect(() => measureRef.current(), [offsets]);
+
+  const movePanel = (id: string, requestedX: number, requestedY: number) => {
+    const visual = visualRef.current;
+    const panel = refs.current.get(id);
+    if (!visual || !panel) return;
+    const visualRect = visual.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    const deltaX = Math.max(
+      visualRect.left - panelRect.left,
+      Math.min(visualRect.right - panelRect.right, requestedX),
+    );
+    const deltaY = Math.max(
+      visualRect.top - panelRect.top,
+      Math.min(visualRect.bottom - panelRect.bottom, requestedY),
+    );
+    if (deltaX === 0 && deltaY === 0) return;
+    setOffsets((current) => {
+      const offset = current[id] ?? { x: 0, y: 0 };
+      return { ...current, [id]: { x: offset.x + deltaX, y: offset.y + deltaY } };
+    });
+  };
+
+  const beginMove = (panel: WorldConversationBubblePanel, event: ReactPointerEvent<HTMLDivElement>) => {
+    onFocus(panel.id);
+    const target = event.target instanceof Element ? event.target : null;
+    if (
+      event.button !== 0 ||
+      !target?.closest(".world-conversation-header") ||
+      target.closest("button, a, input, textarea, select")
+    ) {
+      return;
+    }
+    interactionRef.current = {
+      id: panel.id,
+      pointerId: event.pointerId,
+      lastX: event.clientX,
+      lastY: event.clientY,
+    };
+    setMovingId(panel.id);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
+  };
+
+  const continueMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const interaction = interactionRef.current;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - interaction.lastX;
+    const deltaY = event.clientY - interaction.lastY;
+    interaction.lastX = event.clientX;
+    interaction.lastY = event.clientY;
+    movePanel(interaction.id, deltaX, deltaY);
+  };
+
+  const endMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const interaction = interactionRef.current;
+    if (!interaction || interaction.pointerId !== event.pointerId) return;
+    interactionRef.current = null;
+    setMovingId(null);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
+  const moveWithKeyboard = (
+    panel: WorldConversationBubblePanel,
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest(".world-conversation-header")) return;
+    const step = event.shiftKey ? 48 : 16;
+    const deltaX = event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0;
+    const deltaY = event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0;
+    if (deltaX === 0 && deltaY === 0) return;
+    event.preventDefault();
+    movePanel(panel.id, deltaX, deltaY);
+  };
+
+  return panels.map((panel, index) => (
+    <div
+      key={panel.id}
+      ref={(element) => {
+        if (element) refs.current.set(panel.id, element);
+        else refs.current.delete(panel.id);
+      }}
+      className="world-conversation-slot graph-conversation-slot"
+      data-window-id={panel.id}
+      data-positioned="true"
+      data-active={index === panels.length - 1 ? "true" : undefined}
+      data-interaction={movingId === panel.id ? "moving" : undefined}
+      aria-busy={movingId === panel.id}
+      style={{
+        zIndex: 20 + index,
+        "--graph-conversation-index": index,
+        transform: `translate(${offsets[panel.id]?.x ?? 0}px, ${offsets[panel.id]?.y ?? 0}px)`,
+      } as CSSProperties}
+      onPointerDown={(event) => beginMove(panel, event)}
+      onPointerMove={continueMove}
+      onPointerUp={endMove}
+      onPointerCancel={endMove}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Escape" &&
+          index === panels.length - 1 &&
+          !(event.target instanceof Element && event.target.closest(".world-conversation-terminal"))
+        ) {
+          event.preventDefault();
+          onClose(panel.id);
+          return;
+        }
+        moveWithKeyboard(panel, event);
+      }}
+      data-compact={compact ? "true" : undefined}
+    >
+      {panel.content}
+    </div>
+  ));
 }
 
 export function graphMatches(spaces: readonly WorldGraphSpace[], rawQuery: string) {
@@ -350,13 +615,13 @@ export function graphMatches(spaces: readonly WorldGraphSpace[], rawQuery: strin
   for (const space of spaces) {
     if (space.node.searchText.includes(query)) {
       matches.add(space.node.id);
-      for (const agent of space.agents) matches.add(agent.id);
+      for (const terminal of space.terminals) matches.add(terminal.id);
       continue;
     }
-    for (const agent of space.agents) {
-      if (agent.searchText.includes(query)) {
+    for (const terminal of space.terminals) {
+      if (terminal.searchText.includes(query)) {
         matches.add(space.node.id);
-        matches.add(agent.id);
+        matches.add(terminal.id);
       }
     }
   }
@@ -379,7 +644,11 @@ function statusSymbol(node: WorldGraphNode) {
 function nodeSummary(node: WorldGraphNode) {
   const parts = [displayStatus(node), node.focused ? "focused" : null];
   if (node.kind === "space") parts.push(node.hostLabel, node.subtitle ?? null);
-  else parts.push(node.stateLabel ?? null, node.modelLabel ?? null);
+  else parts.push(
+    node.agentRunning ? "agent running" : "empty shell",
+    node.stateLabel ?? null,
+    node.modelLabel ?? null,
+  );
   return parts.filter(Boolean).join(" · ");
 }
 

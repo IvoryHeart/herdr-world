@@ -31,7 +31,8 @@ This specification defines:
 3. a compile-time World theme boundary shared by Office, Graph, and the future
    Mindcraft presentation; and
 4. the first new theme delivery: a project/space-centric live Graph whose
-   agents appear as child nodes.
+   attached terminals appear as child nodes, identified as running agents or
+   empty shells.
 
 The observable outcome of this specification is a working Office/Graph theme
 choice backed by one existing Herdr World runtime. Mindcraft is named and
@@ -53,11 +54,14 @@ This feature includes:
 - implementing Graph as the next available World theme;
 - projecting Graph nodes from the already admitted multi-host Herdr snapshots;
 - rendering one main node per qualified project/space and child nodes for its
-  detected agents, within explicit presentation bounds;
+  attached terminals, with detected agent identity or an empty-shell state,
+  within explicit presentation bounds;
 - preserving stable identity and layout across live snapshot updates;
 - providing pan, zoom, fit, search, collapse, selection, keyboard, and
   semantic-list behavior for Graph;
-- reusing the current selection, capability, and Open-in-Spaces action paths;
+- reusing the current selection, terminal-overlay, capability, and
+  Open-in-Spaces action paths, including a visual connector from an open
+  Graph terminal back to its node;
 - recording the exact earlier Graph and Voxel sources that may be reworked;
 - lifecycle, resize, long-session, accessibility, and multi-host validation;
   and
@@ -79,8 +83,8 @@ This feature does not:
 - add the old Agent Graph token-economy, CI, GitHub, or model dashboards;
 - infer project equality across hosts from matching labels or paths;
 - infer agent parentage from display names, paths, process names, or timing;
-- add host, tab, pane, tool, CI, or observability nodes to the first Graph
-  topology;
+- add host, tab, tool, CI, or observability nodes to the first Graph topology,
+  or represent a pane independently of its attached terminal;
 - create or mutate Herdr projects, spaces, panes, or agents from the graph;
 - redesign the Office scene, its actions, or its observability contract;
 - change the Herdr protocol or add a bridge route merely for theme selection;
@@ -123,6 +127,7 @@ default, World theme selection, and Graph presentation do not.
 | World theme | A trusted compile-time presentation of World state: Office, Graph, or later Mindcraft. |
 | Project/space | One runtime-qualified Herdr workspace. Exact worktree/project metadata may decorate it but does not merge it with another workspace. |
 | Agent | An admitted pane recognized by the existing Herdr World agent-detection rules. |
+| Terminal node | An admitted pane/terminal pair attached to a workspace. It is labelled as a detected agent terminal or an empty shell. |
 | Available theme | A theme whose implementation, assets, fallback, tests, and lifecycle checks all ship in the current build. |
 
 ### 4.4 Reusable source audit
@@ -154,7 +159,7 @@ BridgeManager + admitted runtime snapshots + current event stream
                    \          |          /
                     one World theme slot
                             |
-        existing selection, actions, terminal handoff, settings
+        existing selection, actions, terminal overlay/handoff, settings
 ```
 
 Theme components may own presentation-local camera, collapse, hover, and
@@ -295,11 +300,15 @@ workspace. The node's label comes from the workspace display label. Exact
 worktree metadata MAY add a project/repository subtitle or badge, but MUST NOT
 cause two workspace identities to merge.
 
-Each detected agent pane in that workspace SHALL be represented as a child
-node linked to its project/space node. Tabs, ordinary panes, hosts, tools, and
-observability records are attributes or filters, not first-class nodes in the
-initial graph. A project/space with no detected agent remains visible as an
-empty main node.
+Each attached pane/terminal pair in that workspace SHALL be represented as a
+terminal child node linked to its project/space node. A node whose pane is
+recognized by the existing agent-detection rules SHALL identify the agent
+kind, use the repository's existing Codex, Claude, Pi, Grok, or OpenCode glyph
+when detected, and use a deterministic generic-agent fallback otherwise. A
+node without a detected agent SHALL be labelled explicitly as an empty shell
+and use a terminal glyph. Tabs, hosts, tools, and observability records are
+attributes or filters, not first-class nodes in the initial graph. A
+project/space with no attached terminal remains visible as an empty main node.
 
 If a future admitted source provides an authoritative parent-agent identity,
 Graph MAY place that agent below its parent. Without that fact, the agent
@@ -317,11 +326,11 @@ disambiguate them.
 - **GIVEN** two admitted runtimes each report a workspace labelled `main`
 - **WHEN** Graph projects the combined snapshot
 - **THEN** two distinct main nodes appear with stable qualified identities and
-  visible host context, and their agents attach only to the correct node
+  visible host context, and their terminals attach only to the correct node
 
-#### Scenario: An agent status changes
+#### Scenario: An agent terminal status changes
 
-- **GIVEN** an agent node has a stable qualified pane identity
+- **GIVEN** an agent terminal node has a stable qualified pane identity
 - **WHEN** its status changes from working to blocked in a later snapshot/event
 - **THEN** the existing node updates its semantic and visual status without
   being removed, recreated, or losing its settled position
@@ -329,20 +338,20 @@ disambiguate them.
 ### Requirement: Bound Graph presentation explicitly
 
 The first Graph presentation SHALL render at most 128 project/space nodes and
-at most 16 agent nodes per presented project/space, matching the established
+at most 16 terminal nodes per presented project/space, matching the established
 Office room and room-agent presentation bounds. Ordering SHALL prioritize the
-focused space/agent, working or blocked agents, and stable source order so an
-important live agent is not omitted merely because it appears late in a
-snapshot.
+focused space/terminal, working or blocked agents, detected agents, and stable
+source order so an important live agent is not omitted merely because it
+appears late in a snapshot.
 
-Omitted projects or agents SHALL be represented by exact, non-interactive
+Omitted projects or terminals SHALL be represented by exact, non-interactive
 overflow counts in both the visual and semantic presentation. Complete
 observed counts remain available to status/coverage reporting. Bounds MUST be
 constants covered by tests rather than accidental renderer limits.
 
 #### Scenario: A snapshot exceeds presentation bounds
 
-- **GIVEN** more than 128 spaces or more than 16 detected agents in one space
+- **GIVEN** more than 128 spaces or more than 16 attached terminals in one space
 - **WHEN** Graph builds its presentation
 - **THEN** it remains responsive, includes priority entities, reports exact
   omitted counts, and does not silently imply that omitted entities vanished
@@ -354,15 +363,29 @@ Graph SHALL support:
 - pointer/touch pan and bounded zoom;
 - Fit graph;
 - expand/collapse for each project/space;
-- search across bounded display-safe project, space, agent, host, model, and
+- search across bounded display-safe project, space, terminal, agent, host, model, and
   task-summary labels already available to the browser;
 - selection with a details view;
 - visible working, blocked, idle, done, unknown, focused, stale, and
   disconnected distinctions where the source data supports them; and
-- explicit Open in Spaces activation for an actionable project/space or agent.
+- explicit Open in Spaces activation for an actionable project/space or
+  terminal; and
+- double-click activation of an actionable terminal node, plus an explicit
+  keyboard-operable Open terminal action, which opens the existing live World
+  terminal overlay without leaving Graph.
 
-Status MUST NOT rely on color alone. Selecting, dragging, expanding, or
-collapsing a node MUST NOT start, resume, stop, or send input to an agent.
+An open Graph terminal overlay SHALL be joined to its terminal node by a
+visible connector. The connector SHALL follow the node while the camera or
+layout moves, follow the overlay while its measured geometry changes, remain
+non-interactive, and be removed with the overlay or renderer. Opening a
+terminal SHALL revalidate the current runtime generation, observed pane, and
+`snapshot` / `terminal_attach` admission before attaching. Open in Spaces
+remains a separate explicit action.
+
+Status and agent/shell identity MUST NOT rely on color alone. Selecting,
+dragging, expanding, or collapsing a node MUST NOT start, resume, stop, or
+send input to an agent. Double-click applies only to an actionable terminal
+node and MUST NOT make space nodes or layout gestures actionable.
 Existing capability and qualified-target validation remains authoritative for
 Open in Spaces.
 
@@ -382,7 +405,8 @@ layout.
 
 The canvas SHALL NOT be the only way to perceive or operate Graph. A bounded
 semantic tree/list SHALL expose the same presented project/space hierarchy,
-agents, statuses, selection, overflow counts, and explicit actions. Keyboard
+terminals, agent/shell identities, statuses, selection, overflow counts, and
+explicit terminal and Spaces actions. Keyboard
 focus and selection remain synchronized between the semantic interface and
 the visual graph without requiring every moving canvas node to become a DOM
 element.
@@ -395,9 +419,9 @@ unusable.
 
 - **GIVEN** a screen-reader or keyboard-only user
 - **WHEN** Graph is selected
-- **THEN** they can find projects/spaces, inspect their agents and statuses,
-  select an entity, and invoke an allowed Open-in-Spaces action without using
-  canvas hit testing
+- **THEN** they can find projects/spaces, inspect their terminals, agent/shell
+  identities, and statuses, select an entity, and invoke allowed Open-terminal
+  and Open-in-Spaces actions without using canvas hit testing
 
 ### Requirement: Preserve Office and cross-theme continuity
 
@@ -466,7 +490,7 @@ The pure Graph projection SHALL expose equivalent bounded data:
 ```ts
 type WorldGraphNode = {
   id: string;
-  kind: "space" | "agent";
+  kind: "space" | "terminal";
   parentId: string | null;
   hostKey: string;
   label: string;
@@ -474,6 +498,10 @@ type WorldGraphNode = {
   focused: boolean;
   stale: boolean;
   actionable: boolean;
+  paneId: string | null;
+  observedGeneration: string;
+  agentRunning: boolean;
+  agentKind: "claude" | "codex" | "pi" | "grok" | "opencode" | null;
 };
 
 type WorldGraphEdge = {
@@ -517,9 +545,9 @@ approval.
 - Theme code is trusted compile-time application code and follows the same
   Content Security Policy. No remote scripts, remote theme manifests, or
   runtime code loading are introduced.
-- Open-in-Spaces and future explicit actions reuse existing capability,
-  target-generation, and command validation. Graph does not widen the browser
-  command allow-list.
+- Open-terminal, Open-in-Spaces, and future explicit actions reuse existing
+  capability, target-generation, and command validation. Graph does not widen
+  the browser command allow-list.
 - A remote host remains subject to the current Host, Origin, CSP, and operator
   network controls. Theme selection is not an authentication boundary.
 - Graph errors and diagnostics MUST NOT include terminal output, prompts,
@@ -542,14 +570,17 @@ Acceptance requires all of the following:
 
 ### Graph model and behavior
 
-- pure projection fixtures covering empty spaces, ordinary panes, agents,
+- pure projection fixtures covering empty spaces, empty shells, detected and
+  fallback agent identities,
   duplicate labels across hosts, worktree decoration, focus/status changes,
   stale/disconnected hosts, stable IDs, and exact overflow counts;
 - tests proving status-only updates preserve node object identity and layout
   state while topology changes add/remove only affected entities;
 - interaction tests for fit, search, collapse/expand, selection, semantic-list
-  synchronization, and explicit Open in Spaces;
-- tests proving pointer selection/drag/collapse cannot trigger an action;
+  synchronization, explicit Open in Spaces, double-click terminal overlay,
+  and the terminal-to-node connector;
+- tests proving pointer selection/drag/collapse cannot trigger an action while
+  terminal double-click and the semantic Open-terminal control can;
 - deterministic visual review at desktop and compact viewport sizes; and
 - status/selection review in grayscale or an equivalent check proving meaning
   is not carried by color alone.

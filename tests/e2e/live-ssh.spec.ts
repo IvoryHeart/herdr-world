@@ -28,7 +28,7 @@ test("one browser controls two operator-forwarded Herdr bridges", async ({
     { remoteOrigin: bridgeB },
   );
 
-  await page.goto(bridgeA);
+  await page.goto(new URL("/spaces", bridgeA).toString());
   await expect(
     page.getByRole("button", { name: "localhost, compatible" }),
   ).toBeVisible();

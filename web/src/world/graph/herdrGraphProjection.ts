@@ -1,4 +1,6 @@
 import { isAgentPane } from "../../agentDetection";
+import { agentIconKind } from "../../AgentIcon";
+import type { AgentIconKind } from "../../AgentIcon";
 import { qualifiedRuntimeKey, qualifyRuntimeTarget } from "../../runtimeIdentity";
 import type { QualifiedTarget } from "../../runtimeIdentity";
 import type { AgentStatus, PaneInfo, WorkspaceInfo } from "../../types";
@@ -7,7 +9,7 @@ import type { HerdrOfficeSourceHost } from "../herdrOfficeProjection";
 
 export const GRAPH_PRESENTATION_BOUNDS = Object.freeze({
   spaces: 128,
-  agentsPerSpace: 16,
+  terminalsPerSpace: 16,
 });
 
 const MAX_VISIBLE_LABEL = 80;
@@ -16,7 +18,7 @@ const MAX_TASK_SUMMARY = 160;
 
 export type WorldGraphNode = {
   id: string;
-  kind: "space" | "agent";
+  kind: "space" | "terminal";
   parentId: string | null;
   hostKey: string;
   hostLabel: string;
@@ -34,6 +36,10 @@ export type WorldGraphNode = {
   omittedChildCount: number;
   searchText: string;
   handoff: OfficeHandoffRequest | null;
+  paneId: string | null;
+  observedGeneration: string;
+  agentRunning: boolean;
+  agentKind: AgentIconKind | null;
 };
 
 export type WorldGraphEdge = {
@@ -44,9 +50,9 @@ export type WorldGraphEdge = {
 
 export type WorldGraphSpace = {
   node: WorldGraphNode;
-  agents: WorldGraphNode[];
-  observedAgentCount: number;
-  omittedAgentCount: number;
+  terminals: WorldGraphNode[];
+  observedTerminalCount: number;
+  omittedTerminalCount: number;
 };
 
 export type HerdrGraphProjection = {
@@ -63,6 +69,11 @@ export type HerdrGraphProjection = {
     omittedAgents: number;
     omittedAgentsInPresentedSpaces: number;
     omittedAgentsInOmittedSpaces: number;
+    observedTerminals: number;
+    presentedTerminals: number;
+    omittedTerminals: number;
+    observedShells: number;
+    presentedShells: number;
     status: Record<AgentStatus, number>;
   };
   presentationBounds: typeof GRAPH_PRESENTATION_BOUNDS;
@@ -71,7 +82,7 @@ export type HerdrGraphProjection = {
 type SpaceCandidate = {
   source: HerdrOfficeSourceHost;
   workspace: WorkspaceInfo;
-  agents: Array<{ pane: PaneInfo; sourceIndex: number }>;
+  terminals: Array<{ pane: PaneInfo; sourceIndex: number }>;
   sourceIndex: number;
 };
 
@@ -86,29 +97,33 @@ export function projectHerdrGraph(
       source,
       workspace,
       sourceIndex,
-      agents: source.snapshot?.panes
+      terminals: source.snapshot?.panes
         .map((pane, paneIndex) => ({ pane, sourceIndex: paneIndex }))
-        .filter(({ pane }) => pane.workspace_id === workspace.workspace_id && isAgentPane(pane)) ?? [],
+        .filter(({ pane }) => pane.workspace_id === workspace.workspace_id) ?? [],
     }));
   });
   candidates.sort(compareSpaces);
 
   const presentedCandidates = candidates.slice(0, GRAPH_PRESENTATION_BOUNDS.spaces);
   const spaces = presentedCandidates.map(projectSpace);
-  const nodes = spaces.flatMap(({ node, agents }) => [node, ...agents]);
-  const edges = spaces.flatMap(({ node, agents }) =>
-    agents.map((agent): WorldGraphEdge => ({
+  const nodes = spaces.flatMap(({ node, terminals }) => [node, ...terminals]);
+  const edges = spaces.flatMap(({ node, terminals }) =>
+    terminals.map((terminal): WorldGraphEdge => ({
       sourceId: node.id,
-      targetId: agent.id,
+      targetId: terminal.id,
       kind: "contains",
     })),
   );
-  const allAgents = candidates.flatMap(({ agents }) => agents.map(({ pane }) => pane));
-  const presentedAgents = spaces.flatMap(({ agents }) => agents);
-  const omittedAgentsInPresentedSpaces = spaces.reduce(
-    (total, space) => total + space.omittedAgentCount,
-    0,
-  );
+  const allTerminals = candidates.flatMap(({ terminals }) => terminals.map(({ pane }) => pane));
+  const allAgents = allTerminals.filter(isAgentPane);
+  const presentedTerminals = spaces.flatMap(({ terminals }) => terminals);
+  const presentedAgents = presentedTerminals.filter(({ agentRunning }) => agentRunning);
+  const omittedAgentsInPresentedSpaces = spaces.reduce((total, space, index) => {
+    const observedAgents = presentedCandidates[index]?.terminals
+      .filter(({ pane }) => isAgentPane(pane)).length ?? 0;
+    const shownAgents = space.terminals.filter(({ agentRunning }) => agentRunning).length;
+    return total + Math.max(0, observedAgents - shownAgents);
+  }, 0);
   const presentedSpaceIds = new Set(
     presentedCandidates.map(({ source, workspace }) =>
       qualifiedRuntimeKey(qualifyRuntimeTarget(
@@ -124,7 +139,9 @@ export function projectHerdrGraph(
       "workspace",
       candidate.workspace.workspace_id,
     ));
-    return presentedSpaceIds.has(id) ? total : total + candidate.agents.length;
+    return presentedSpaceIds.has(id)
+      ? total
+      : total + candidate.terminals.filter(({ pane }) => isAgentPane(pane)).length;
   }, 0);
 
   return {
@@ -141,6 +158,11 @@ export function projectHerdrGraph(
       omittedAgents: Math.max(0, allAgents.length - presentedAgents.length),
       omittedAgentsInPresentedSpaces,
       omittedAgentsInOmittedSpaces,
+      observedTerminals: allTerminals.length,
+      presentedTerminals: presentedTerminals.length,
+      omittedTerminals: Math.max(0, allTerminals.length - presentedTerminals.length),
+      observedShells: allTerminals.length - allAgents.length,
+      presentedShells: presentedTerminals.length - presentedAgents.length,
       status: countStatuses(allAgents),
     },
     presentationBounds: GRAPH_PRESENTATION_BOUNDS,
@@ -157,8 +179,8 @@ function projectSpace(candidate: SpaceCandidate): WorldGraphSpace {
   const id = qualifiedRuntimeKey(workspaceRef);
   const stale = source.connectionState !== "compatible";
   const actionable = canOpenInSpaces(source);
-  const sortedAgents = [...candidate.agents].sort(compareAgents);
-  const presentedAgents = sortedAgents.slice(0, GRAPH_PRESENTATION_BOUNDS.agentsPerSpace);
+  const sortedTerminals = [...candidate.terminals].sort(compareTerminals);
+  const presentedTerminals = sortedTerminals.slice(0, GRAPH_PRESENTATION_BOUNDS.terminalsPerSpace);
   const hostLabel = boundedLabel(source.profile.label, "Host");
   const label = boundedLabel(workspace.label, "Workspace");
   const subtitle = boundedOptionalLabel(workspace.worktree?.repo_name, MAX_VISIBLE_LABEL);
@@ -170,31 +192,35 @@ function projectSpace(candidate: SpaceCandidate): WorldGraphSpace {
     hostLabel,
     label,
     ...(subtitle ? { subtitle } : {}),
-    status: aggregateSpaceStatus(workspace, candidate.agents.map(({ pane }) => pane)),
-    focused: workspace.focused || candidate.agents.some(({ pane }) => pane.focused),
+    status: aggregateSpaceStatus(workspace, candidate.terminals.map(({ pane }) => pane)),
+    focused: workspace.focused || candidate.terminals.some(({ pane }) => pane.focused),
     stale,
     disconnected: stale,
     actionable,
     selectionKey: id,
     omittedChildCount: Math.max(
       0,
-      sortedAgents.length - GRAPH_PRESENTATION_BOUNDS.agentsPerSpace,
+      sortedTerminals.length - GRAPH_PRESENTATION_BOUNDS.terminalsPerSpace,
     ),
     searchText: searchable([label, subtitle, hostLabel]),
     handoff: actionable
       ? roomHandoff(id, source.profile.profileId, source.generationKey ?? "", workspaceRef)
       : null,
+    paneId: null,
+    observedGeneration: source.generationKey ?? "",
+    agentRunning: false,
+    agentKind: null,
   };
-  const agents = presentedAgents.map(({ pane }) => projectAgent(source, node, pane));
+  const terminals = presentedTerminals.map(({ pane }) => projectTerminal(source, node, pane));
   return {
     node,
-    agents,
-    observedAgentCount: sortedAgents.length,
-    omittedAgentCount: node.omittedChildCount,
+    terminals,
+    observedTerminalCount: sortedTerminals.length,
+    omittedTerminalCount: node.omittedChildCount,
   };
 }
 
-function projectAgent(
+function projectTerminal(
   source: HerdrOfficeSourceHost,
   parent: WorldGraphNode,
   pane: PaneInfo,
@@ -203,15 +229,23 @@ function projectAgent(
   const terminalRef = qualifyRuntimeTarget(source.profile.profileId, "terminal", pane.terminal_id);
   const id = qualifiedRuntimeKey(paneRef);
   const selectionKey = qualifiedRuntimeKey(terminalRef);
-  const label = boundedLabel(pane.display_agent || pane.agent, "Agent");
-  const modelLabel = boundedOptionalLabel(pane.agent, MAX_VISIBLE_LABEL);
+  const agentRunning = isAgentPane(pane);
+  const label = boundedLabel(
+    agentRunning
+      ? pane.display_agent || pane.agent || pane.label || pane.title
+      : pane.label || pane.title || pane.terminal_title_stripped || pane.terminal_title,
+    agentRunning ? "Agent" : "Shell",
+  );
+  const modelLabel = agentRunning
+    ? boundedOptionalLabel(pane.agent, MAX_VISIBLE_LABEL)
+    : undefined;
   const taskSummary = boundedOptionalLabel(pane.task_summary, MAX_TASK_SUMMARY);
   const stateLabel = boundedOptionalLabel(pane.state_labels?.[pane.agent_status], MAX_STATE_LABEL);
   const actionable = canOpenInSpaces(source);
   const stale = source.connectionState !== "compatible";
   return {
     id,
-    kind: "agent",
+    kind: "terminal",
     parentId: parent.id,
     hostKey: parent.hostKey,
     hostLabel: parent.hostLabel,
@@ -234,16 +268,13 @@ function projectAgent(
       parent.label,
       parent.subtitle,
       parent.hostLabel,
+      agentRunning ? "agent running" : "empty shell",
     ]),
-    handoff: actionable
-      ? agentHandoff(
-          selectionKey,
-          source.profile.profileId,
-          source.generationKey ?? "",
-          terminalRef,
-          paneRef,
-        )
-      : null,
+    handoff: null,
+    paneId: pane.pane_id,
+    observedGeneration: source.generationKey ?? "",
+    agentRunning,
+    agentKind: agentRunning ? agentIconKind(pane) : null,
   };
 }
 
@@ -255,10 +286,10 @@ function sortedSources(sources: readonly HerdrOfficeSourceHost[]) {
 }
 
 function compareSpaces(left: SpaceCandidate, right: SpaceCandidate) {
-  const leftFocused = left.workspace.focused || left.agents.some(({ pane }) => pane.focused);
-  const rightFocused = right.workspace.focused || right.agents.some(({ pane }) => pane.focused);
-  const leftAttention = left.agents.some(({ pane }) => isAttentionStatus(pane.agent_status));
-  const rightAttention = right.agents.some(({ pane }) => isAttentionStatus(pane.agent_status));
+  const leftFocused = left.workspace.focused || left.terminals.some(({ pane }) => pane.focused);
+  const rightFocused = right.workspace.focused || right.terminals.some(({ pane }) => pane.focused);
+  const leftAttention = left.terminals.some(({ pane }) => isAttentionStatus(pane.agent_status));
+  const rightAttention = right.terminals.some(({ pane }) => isAttentionStatus(pane.agent_status));
   return (
     Number(rightFocused) - Number(leftFocused) ||
     Number(rightAttention) - Number(leftAttention) ||
@@ -270,7 +301,7 @@ function compareSpaces(left: SpaceCandidate, right: SpaceCandidate) {
   );
 }
 
-function compareAgents(
+function compareTerminals(
   left: { pane: PaneInfo; sourceIndex: number },
   right: { pane: PaneInfo; sourceIndex: number },
 ) {
@@ -278,6 +309,7 @@ function compareAgents(
     Number(right.pane.focused) - Number(left.pane.focused) ||
     Number(isAttentionStatus(right.pane.agent_status)) -
       Number(isAttentionStatus(left.pane.agent_status)) ||
+    Number(isAgentPane(right.pane)) - Number(isAgentPane(left.pane)) ||
     left.sourceIndex - right.sourceIndex ||
     left.pane.pane_id.localeCompare(right.pane.pane_id)
   );
@@ -312,23 +344,6 @@ function roomHandoff(
   workspaceRef: QualifiedTarget,
 ): OfficeHandoffRequest {
   return { kind: "room", key, profileId, observedGeneration, workspaceRef };
-}
-
-function agentHandoff(
-  key: string,
-  profileId: string,
-  observedGeneration: string,
-  terminalRef: QualifiedTarget,
-  currentPaneRef: QualifiedTarget,
-): OfficeHandoffRequest {
-  return {
-    kind: "agent",
-    key,
-    profileId,
-    observedGeneration,
-    terminalRef,
-    currentPaneRef,
-  };
 }
 
 function countStatuses(panes: readonly PaneInfo[]): Record<AgentStatus, number> {
