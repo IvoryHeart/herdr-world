@@ -34,6 +34,12 @@ type WorldConversationLayout = {
   rects: Readonly<Record<string, DOMRect>>;
 };
 
+type WorldViewPersistSnapshot = {
+  themeId: WorldThemeId;
+  geometry: Record<string, ConversationGeometry>;
+  order: string[];
+};
+
 const EMPTY_LAYOUT: WorldConversationLayout = { rects: {} };
 const WorldConversationLayoutContext = createContext<WorldConversationLayout>(EMPTY_LAYOUT);
 const WORLD_VIEW_PERSIST_DELAY_MS = 120;
@@ -82,8 +88,8 @@ export function WorldConversationLayer({
   const measureRetryCountRef = useRef(0);
   const measureRef = useRef<() => void>(() => {});
   const persistTimerRef = useRef<number | null>(null);
-  const persistViewRef = useRef<() => void>(() => {});
-  const persistEnabledRef = useRef(!compact);
+  const pendingPersistSnapshotRef = useRef<WorldViewPersistSnapshot | null>(null);
+  const currentPersistSnapshotRef = useRef<() => WorldViewPersistSnapshot | null>(() => null);
   const interactionRef = useRef<{
     id: string;
     mode: "moving" | "resizing";
@@ -95,38 +101,53 @@ export function WorldConversationLayer({
   const panelIds = panels.map(({ id }) => id);
   const panelIdsKey = panelIds.join("|");
 
-  const persistView = useCallback(() => {
+  const persistSnapshot = useCallback((snapshot: WorldViewPersistSnapshot) => {
     const latest = readWorldViewPrefs();
     const next = withWorldViewThemeGeometry({
       ...latest,
-      order: order.filter(Boolean).slice(0, MAX_SAVED_WORLD_WINDOWS),
-    }, activeThemeId, {
-      ...worldViewGeometryForTheme(latest, activeThemeId),
-      ...geometryRef.current,
+      order: snapshot.order,
+    }, snapshot.themeId, {
+      ...worldViewGeometryForTheme(latest, snapshot.themeId),
+      ...snapshot.geometry,
     });
     savedViewRef.current = next;
     writeWorldViewPrefs(next);
-  }, [activeThemeId, order]);
-  persistViewRef.current = persistView;
-  persistEnabledRef.current = !compact;
+  }, []);
+  currentPersistSnapshotRef.current = () => compact ? null : {
+    themeId: activeThemeId,
+    geometry: copyConversationGeometry(geometryRef.current),
+    order: order.filter(Boolean).slice(0, MAX_SAVED_WORLD_WINDOWS),
+  };
 
   const flushPersistView = useCallback(() => {
     if (persistTimerRef.current !== null) {
       window.clearTimeout(persistTimerRef.current);
       persistTimerRef.current = null;
     }
-    if (persistEnabledRef.current) persistViewRef.current();
-  }, []);
+    const pending = pendingPersistSnapshotRef.current;
+    const current = currentPersistSnapshotRef.current();
+    pendingPersistSnapshotRef.current = null;
+    if (pending && pending.themeId !== current?.themeId) persistSnapshot(pending);
+    if (current) persistSnapshot(current);
+    else if (pending) persistSnapshot(pending);
+  }, [persistSnapshot]);
 
   const schedulePersistView = useCallback(() => {
+    const snapshot = currentPersistSnapshotRef.current();
+    if (!snapshot) return;
+    const pending = pendingPersistSnapshotRef.current;
+    if (pending && pending.themeId !== snapshot.themeId) persistSnapshot(pending);
     if (persistTimerRef.current !== null) {
       window.clearTimeout(persistTimerRef.current);
     }
+    pendingPersistSnapshotRef.current = snapshot;
     persistTimerRef.current = window.setTimeout(() => {
       persistTimerRef.current = null;
-      if (persistEnabledRef.current) persistViewRef.current();
+      const pendingSnapshot = pendingPersistSnapshotRef.current;
+      pendingPersistSnapshotRef.current = null;
+      if (pendingSnapshot) persistSnapshot(pendingSnapshot);
     }, WORLD_VIEW_PERSIST_DELAY_MS);
-  }, []);
+  }, [persistSnapshot]);
 
   const scheduleGeometryRender = () => {
     if (geometryFrameRef.current !== null) return;
@@ -332,7 +353,7 @@ export function WorldConversationLayer({
 
   useEffect(() => {
     if (!compact) schedulePersistView();
-  }, [compact, geometry, order, schedulePersistView]);
+  }, [activeThemeId, compact, geometry, order, schedulePersistView]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -521,4 +542,8 @@ function conversationRectMatchesGeometry(
     Math.abs(panelRect.top - layerRect.top - geometry.top) < LAYOUT_GEOMETRY_EPSILON_PX &&
     Math.abs(panelRect.width - geometry.width) < LAYOUT_GEOMETRY_EPSILON_PX &&
     Math.abs(panelRect.height - geometry.height) < LAYOUT_GEOMETRY_EPSILON_PX;
+}
+
+function copyConversationGeometry(geometry: Readonly<Record<string, ConversationGeometry>>) {
+  return Object.fromEntries(Object.entries(geometry).map(([id, value]) => [id, { ...value }]));
 }

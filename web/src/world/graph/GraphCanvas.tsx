@@ -218,7 +218,7 @@ class GraphRenderer {
   #conversationTargets: readonly GraphConversationTarget[] = [];
   #conversationParentNodeIds = new Map<string, string>();
   #connectorPaths = new Map<string, { path: SVGPathElement; dot: SVGCircleElement }>();
-  #revealedConversationTargetIds = new Set<string>();
+  #revealedConversationTargetSignatures = new Map<string, string>();
   #onToggleCollapse: (spaceId: string) => void = () => {};
   #onViewChange: (
     camera: GraphCamera,
@@ -302,7 +302,7 @@ class GraphRenderer {
       elements.path.remove();
       elements.dot.remove();
       this.#connectorPaths.delete(id);
-      this.#revealedConversationTargetIds.delete(id);
+      this.#revealedConversationTargetSignatures.delete(id);
     }
     for (const target of targets) {
       if (this.#connectorPaths.has(target.id)) continue;
@@ -371,7 +371,7 @@ class GraphRenderer {
       zoom,
     };
     this.#emitViewChange();
-    this.#revealedConversationTargetIds.clear();
+    this.#revealedConversationTargetSignatures.clear();
     this.#revealPendingConversationTargets();
     this.#requestFrame();
   }
@@ -417,7 +417,7 @@ class GraphRenderer {
       elements.dot.remove();
     }
     this.#connectorPaths.clear();
-    this.#revealedConversationTargetIds.clear();
+    this.#revealedConversationTargetSignatures.clear();
   }
 
   #resize(width: number, height: number) {
@@ -748,24 +748,27 @@ class GraphRenderer {
   }
 
   #revealPendingConversationTargets() {
-    for (const target of this.#conversationTargets) {
-      if (this.#revealedConversationTargetIds.has(target.id)) continue;
-      if (this.#revealConversationTarget(target)) {
-        this.#revealedConversationTargetIds.add(target.id);
-      }
-    }
-  }
-
-  #revealConversationTarget(target: GraphConversationTarget) {
     const layout = this.#layout;
-    if (!layout) return false;
+    if (!layout) return;
     const nodesBySelectionKey = new Map(
       [...layout.nodes.values()].map((node) => [node.source.selectionKey, node]),
     );
-    const parentId = this.#conversationParentNodeIds.get(target.selectionKey);
-    const node = nodesBySelectionKey.get(target.selectionKey) ??
-      (parentId ? layout.nodes.get(parentId) : undefined);
-    if (!node) return false;
+    for (const target of this.#conversationTargets) {
+      const parentId = this.#conversationParentNodeIds.get(target.selectionKey);
+      const node = nodesBySelectionKey.get(target.selectionKey) ??
+        (parentId ? layout.nodes.get(parentId) : undefined);
+      if (!node) {
+        this.#revealedConversationTargetSignatures.delete(target.id);
+        continue;
+      }
+      const signature = conversationTargetRevealSignature(target, node.id);
+      if (this.#revealedConversationTargetSignatures.get(target.id) === signature) continue;
+      this.#revealConversationTarget(target, node);
+      this.#revealedConversationTargetSignatures.set(target.id, signature);
+    }
+  }
+
+  #revealConversationTarget(target: GraphConversationTarget, node: GraphLayoutNode) {
     const nudge = graphConversationCameraNudge({
       x: this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom,
       y: this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom,
@@ -777,7 +780,6 @@ class GraphRenderer {
         y: this.#camera.y + nudge.y,
       };
     }
-    return true;
   }
 
   #onVisibilityChange = () => {
@@ -820,6 +822,11 @@ export function graphConversationCameraNudge(
       ? candidate
       : nearest
   );
+}
+
+function conversationTargetRevealSignature(target: GraphConversationTarget, anchorNodeId: string) {
+  const { left, top, right, bottom } = target.rect;
+  return `${anchorNodeId}:${left}:${top}:${right}:${bottom}`;
 }
 
 function graphRendererDiagnostics() {
