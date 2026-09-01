@@ -9,7 +9,7 @@ It combines live terminal Spaces with visual Pixel Office and Graph themes, mult
 shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
 
 The current public preview is
-[`v0.1.0`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0).
+[`v0.1.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
 It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer
 with terminal protocol `20`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
 an interactive overview.
@@ -44,13 +44,13 @@ herdr-world
 ### Herdr plugin
 
 ```bash
-herdr plugin install IvoryHeart/herdr-world --ref v0.1.0
+herdr plugin install IvoryHeart/herdr-world --ref v0.1.1
 herdr plugin action invoke open --plugin ivoryheart.herdr-world
 ```
 
 Open [http://127.0.0.1:8787](http://127.0.0.1:8787) if the browser does not open automatically.
 Checksum-verified standalone archives are available on the
-[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.0).
+[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
 
 The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
 may need approval in **System Settings → Privacy & Security**.
