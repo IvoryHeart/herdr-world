@@ -1,7 +1,10 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-import { expectGraphConnectorOutsideOverlay } from "./graphConnector";
+import {
+  expectGraphConnectorOutsideOverlay,
+  waitForStableConversationRect,
+} from "./graphConnector";
 import { hostStore } from "./hostStore";
 
 test.describe.configure({ timeout: 90_000 });
@@ -169,6 +172,7 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
   }))).toEqual({ observer: 1, links: 1 });
   const windowId = await conversation.locator("xpath=..").getAttribute("data-window-id");
   expect(windowId).not.toBeNull();
+  await waitForStableConversationRect(page, windowId as string);
   const connector = page.locator(
     `.graph-conversation-connectors path[data-window-id="${windowId}"]`,
   );

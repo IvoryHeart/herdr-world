@@ -66,6 +66,8 @@ export function WorldConversationLayer({
   const [rects, setRects] = useState<Record<string, DOMRect>>({});
   const rectSignatureRef = useRef("");
   const [geometry, setGeometry] = useState<Record<string, ConversationGeometry>>({});
+  const renderedGeometryRef = useRef(geometry);
+  renderedGeometryRef.current = geometry;
   const [interaction, setInteraction] = useState<{
     id: string;
     mode: "moving" | "resizing";
@@ -190,6 +192,12 @@ export function WorldConversationLayer({
 
   const measure = useCallback(() => {
     syncGeometry();
+    const renderedGeometry = renderedGeometryRef.current;
+    if (
+      !compact &&
+      (!conversationGeometryMapsEqual(geometryRef.current, renderedGeometry) ||
+        panelsRef.current.some(({ id }) => renderedGeometry[id] === undefined))
+    ) return;
     const next: Record<string, DOMRect> = {};
     for (const panel of panelsRef.current) {
       const element = panelRefs.current[panel.id];
@@ -201,7 +209,7 @@ export function WorldConversationLayer({
     if (signature === rectSignatureRef.current) return;
     rectSignatureRef.current = signature;
     setRects(next);
-  }, [syncGeometry]);
+  }, [compact, syncGeometry]);
 
   useEffect(() => () => {
     if (geometryFrameRef.current !== null) window.cancelAnimationFrame(geometryFrameRef.current);
@@ -234,8 +242,9 @@ export function WorldConversationLayer({
       setGeometry(next);
     }
     geometryThemeRef.current = activeThemeId;
+    if (themeChanged) rectSignatureRef.current = "";
     setRects((current) => Object.fromEntries(
-      Object.entries(current).filter(([id]) => ids.has(id)),
+      themeChanged ? [] : Object.entries(current).filter(([id]) => ids.has(id)),
     ));
     setOrder((current) => {
       const preferred = current.length > 0 ? current : savedViewRef.current.order;
@@ -438,4 +447,21 @@ export function WorldConversationLayer({
       </div>
     </WorldConversationLayoutContext.Provider>
   );
+}
+
+function conversationGeometryMapsEqual(
+  left: Readonly<Record<string, ConversationGeometry>>,
+  right: Readonly<Record<string, ConversationGeometry>>,
+) {
+  const leftIds = Object.keys(left);
+  if (leftIds.length !== Object.keys(right).length) return false;
+  return leftIds.every((id) => {
+    const leftGeometry = left[id];
+    const rightGeometry = right[id];
+    return rightGeometry !== undefined &&
+      leftGeometry.left === rightGeometry.left &&
+      leftGeometry.top === rightGeometry.top &&
+      leftGeometry.width === rightGeometry.width &&
+      leftGeometry.height === rightGeometry.height;
+  });
 }

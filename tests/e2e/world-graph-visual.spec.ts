@@ -2,7 +2,10 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-import { expectGraphConnectorOutsideOverlay } from "./graphConnector";
+import {
+  expectGraphConnectorOutsideOverlay,
+  waitForStableConversationRect,
+} from "./graphConnector";
 import { hostStore } from "./hostStore";
 
 const evidenceDir = resolve("docs/evidence/spec-018");
@@ -49,11 +52,13 @@ test("captures the connected Graph terminal overlay", async ({ page }) => {
   await expect(page.locator(".graph-conversation-connectors path")).toHaveAttribute("d", /M .+ C .+/);
   const windowId = await page.locator(".world-conversation-slot").getAttribute("data-window-id");
   if (!windowId) throw new Error("Graph terminal window ID is unavailable");
+  await waitForStableConversationRect(page, windowId);
   await expectGraphConnectorOutsideOverlay(page, windowId);
   await page.getByRole("button", { name: "Fit graph", exact: true }).click();
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.activeAnimationFrames ?? -1,
   )).toBe(0);
+  await waitForStableConversationRect(page, windowId);
   await expectGraphConnectorOutsideOverlay(page, windowId);
   await page.screenshot({
     path: resolve(evidenceDir, "graph-terminal-1440x900.png"),
