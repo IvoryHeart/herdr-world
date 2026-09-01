@@ -6,6 +6,8 @@ import {
   useRef,
 } from "react";
 
+import { AGENT_ICON_GLYPHS } from "../../AgentIcon";
+import type { AgentIconKind } from "../../AgentIcon";
 import {
   graphBounds,
   reconcileGraphLayout,
@@ -178,6 +180,7 @@ class GraphRenderer {
   readonly #resizeObserver: ResizeObserver | null;
   #layout: GraphLayoutState | null = null;
   #savedPositions: Record<string, SavedGraphPosition>;
+  #projectionNodeIds: ReadonlySet<string> = new Set();
   #collapsedIds: ReadonlySet<string> = new Set();
   #selectedKey: string | null = null;
   #matchedIds: ReadonlySet<string> | null = null;
@@ -292,6 +295,12 @@ class GraphRenderer {
     selectedKey: string | null,
     matchedIds: ReadonlySet<string> | null,
   ) {
+    this.#projectionNodeIds = new Set(projection.nodes.map(({ id }) => id));
+    this.#savedPositions = retainedGraphPositions(
+      this.#savedPositions,
+      null,
+      this.#projectionNodeIds,
+    );
     const reconciled = reconcileGraphLayout(
       this.#layout,
       projection,
@@ -464,7 +473,7 @@ class GraphRenderer {
     context.textBaseline = "middle";
     context.font = source.kind === "space" ? "600 11px sans-serif" : "700 12px sans-serif";
     if (source.kind === "terminal") {
-      context.fillText(terminalMark(source), 0, -2);
+      drawTerminalGlyph(context, source);
       context.font = "600 9px sans-serif";
       context.fillStyle = "#cdd6f4";
       context.fillText(shortCanvasLabel(context, source.label, 70), 0, radius + 14);
@@ -665,7 +674,11 @@ class GraphRenderer {
 
   #emitViewChange() {
     if (!this.#layout) return;
-    this.#savedPositions = savedGraphPositions(this.#layout);
+    this.#savedPositions = retainedGraphPositions(
+      this.#savedPositions,
+      this.#layout,
+      this.#projectionNodeIds,
+    );
     this.#onViewChange({ ...this.#camera }, this.#savedPositions);
   }
 }
@@ -734,14 +747,84 @@ function statusStroke(status: string) {
           : "#7f849c";
 }
 
-function terminalMark(node: import("./herdrGraphProjection").WorldGraphNode) {
-  if (!node.agentRunning) return ">_";
-  return node.agentKind === "claude" ? "CL"
-    : node.agentKind === "codex" ? "CX"
-      : node.agentKind === "opencode" ? "OC"
-        : node.agentKind === "grok" ? "GR"
-          : node.agentKind === "pi" ? "PI"
-            : statusSymbol(node.status);
+export type GraphTerminalGlyphKind = AgentIconKind | "generic-agent" | "terminal";
+
+export function graphTerminalGlyphKind(
+  node: Pick<import("./herdrGraphProjection").WorldGraphNode, "agentKind" | "agentRunning">,
+): GraphTerminalGlyphKind {
+  return node.agentKind ?? (node.agentRunning ? "generic-agent" : "terminal");
+}
+
+export function retainedGraphPositions(
+  retained: Readonly<Record<string, SavedGraphPosition>>,
+  visibleLayout: GraphLayoutState | null,
+  projectionNodeIds: ReadonlySet<string>,
+) {
+  const visible = savedGraphPositions(visibleLayout);
+  const positions: Record<string, SavedGraphPosition> = {};
+  for (const id of projectionNodeIds) {
+    const position = visible[id] ?? retained[id];
+    if (position) positions[id] = position;
+  }
+  return positions;
+}
+
+const OUTLINE_GLYPHS = {
+  "generic-agent": "M12 8V4H8 M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2 M2 14h2 M20 14h2 M15 13v2 M9 13v2",
+  terminal: "m7 11 2-2-2-2 M11 13h4 M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2",
+} as const;
+
+const canvasPathCache = new Map<string, Path2D>();
+
+function drawTerminalGlyph(
+  context: CanvasRenderingContext2D,
+  node: import("./herdrGraphProjection").WorldGraphNode,
+) {
+  const kind = graphTerminalGlyphKind(node);
+  context.save();
+  context.translate(0, -2);
+  if (kind === "generic-agent" || kind === "terminal") {
+    const scale = 0.76;
+    context.scale(scale, scale);
+    context.translate(-12, -12);
+    context.strokeStyle = "#f5e0dc";
+    context.lineWidth = 2;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.stroke(canvasPath(OUTLINE_GLYPHS[kind]));
+  } else {
+    const glyph = AGENT_ICON_GLYPHS[kind];
+    const [minX, minY, width, height] = glyph.viewBox.split(" ").map(Number);
+    const scale = Math.min(18 / width, 18 / height);
+    context.scale(scale, scale);
+    context.translate(-(minX + width / 2), -(minY + height / 2));
+    context.fillStyle = kind === "claude" ? "#d97757" : "#f5e0dc";
+    const inheritedAlpha = context.globalAlpha;
+    for (const path of glyph.paths) {
+      context.globalAlpha = inheritedAlpha * (path.opacity ?? 1);
+      context.fill(canvasPath(path.d), path.fillRule ?? "nonzero");
+    }
+  }
+  context.restore();
+
+  context.beginPath();
+  context.arc(15, -15, 6.5, 0, Math.PI * 2);
+  context.fillStyle = "#080812";
+  context.fill();
+  context.lineWidth = 1.25;
+  context.strokeStyle = statusStroke(node.status);
+  context.stroke();
+  context.fillStyle = "#f5e0dc";
+  context.font = "700 7px sans-serif";
+  context.fillText(statusSymbol(node.status), 15, -14.5);
+}
+
+function canvasPath(data: string) {
+  const existing = canvasPathCache.get(data);
+  if (existing) return existing;
+  const path = new Path2D(data);
+  canvasPathCache.set(data, path);
+  return path;
 }
 
 function statusSymbol(status: string) {

@@ -4,8 +4,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { GraphCanvas, LatestFrameValue } from "./GraphCanvas";
+import {
+  GraphCanvas,
+  graphTerminalGlyphKind,
+  LatestFrameValue,
+} from "./GraphCanvas";
 import type { HerdrGraphProjection, WorldGraphNode } from "./herdrGraphProjection";
+import type { GraphCamera, SavedGraphPosition } from "./graphViewPrefs";
 
 const roots: Root[] = [];
 let resizeCallback: ResizeObserverCallback | null = null;
@@ -200,6 +205,52 @@ describe("Graph renderer ownership", () => {
       selectionKey: "terminal-selection",
     }));
   });
+
+  it("uses each branded glyph and stable generic-agent and empty-shell fallbacks", () => {
+    for (const agentKind of ["claude", "codex", "pi", "grok", "opencode"] as const) {
+      expect(graphTerminalGlyphKind({ agentRunning: true, agentKind })).toBe(agentKind);
+    }
+    expect(graphTerminalGlyphKind({ agentRunning: true, agentKind: null })).toBe("generic-agent");
+    expect(graphTerminalGlyphKind({ agentRunning: false, agentKind: null })).toBe("terminal");
+  });
+
+  it("preserves hidden terminal positions across collapse and prunes removed topology", async () => {
+    const onSelect = vi.fn();
+    const onViewChange = vi.fn<(
+      camera: GraphCamera,
+      positions: Record<string, SavedGraphPosition>,
+    ) => void>();
+    const projection = spaceProjection();
+    const { canvas, rerender } = await renderCanvas(projection, { onSelect, onViewChange });
+
+    await rerender(projection, new Set(["space"]));
+    await wheel(canvas);
+    expect(onViewChange.mock.lastCall?.[1]).toMatchObject({
+      space: { x: 0, y: 0, pinned: true },
+      terminal: { x: 100, y: 0, pinned: true },
+    });
+
+    await rerender(projection, new Set());
+    await pointer(canvas, "pointerdown", 500, 300);
+    await pointer(canvas, "pointerup", 500, 300);
+    expect(onSelect).toHaveBeenLastCalledWith("terminal-selection", "host");
+
+    const spaceOnly: HerdrGraphProjection = {
+      ...projection,
+      nodes: projection.nodes.filter(({ kind }) => kind === "space"),
+      edges: [],
+      spaces: projection.spaces.map((space) => ({
+        ...space,
+        terminals: [],
+        observedTerminalCount: 0,
+      })),
+    };
+    await rerender(spaceOnly, new Set());
+    await wheel(canvas);
+    expect(onViewChange.mock.lastCall?.[1]).toEqual({
+      space: { x: 0, y: 0, pinned: true },
+    });
+  });
 });
 
 async function renderCanvas(
@@ -208,35 +259,45 @@ async function renderCanvas(
     onSelect?: (selectionKey: string, hostKey: string) => void;
     onActivate?: (node: WorldGraphNode) => void;
     onToggleCollapse?: (spaceId: string) => void;
-    onViewChange?: () => void;
+    onViewChange?: (
+      camera: GraphCamera,
+      positions: Record<string, SavedGraphPosition>,
+    ) => void;
   } = {},
 ) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(
+  const initialPrefs = {
+    camera: { x: 0, y: 0, zoom: 1 },
+    collapsedIds: [],
+    positions: {
+      space: { x: 0, y: 0, pinned: true },
+      terminal: { x: 100, y: 0, pinned: true },
+    },
+  };
+  const rerender = async (
+    nextProjection: HerdrGraphProjection,
+    collapsedIds: ReadonlySet<string>,
+  ) => act(async () => root.render(
     <GraphCanvas
-      projection={projection}
-      collapsedIds={new Set()}
+      projection={nextProjection}
+      collapsedIds={collapsedIds}
       selectedKey={null}
       matchedIds={null}
       conversationTargets={[]}
-      initialPrefs={{
-        camera: { x: 0, y: 0, zoom: 1 },
-        collapsedIds: [],
-        positions: {
-          space: { x: 0, y: 0, pinned: true },
-          terminal: { x: 100, y: 0, pinned: true },
-        },
-      }}
+      initialPrefs={initialPrefs}
       onSelect={callbacks.onSelect ?? (() => {})}
       onActivate={callbacks.onActivate ?? (() => {})}
       onToggleCollapse={callbacks.onToggleCollapse ?? (() => {})}
       onViewChange={callbacks.onViewChange ?? (() => {})}
     />,
   ));
-  return { container, root };
+  await rerender(projection, new Set());
+  const canvas = container.querySelector("canvas");
+  if (!canvas) throw new Error("Graph canvas missing");
+  return { canvas, container, rerender, root };
 }
 
 async function pointer(
@@ -251,6 +312,15 @@ async function pointer(
     pointerId: 1,
     clientX,
     clientY,
+  })));
+}
+
+async function wheel(canvas: HTMLCanvasElement) {
+  await act(async () => canvas.dispatchEvent(new WheelEvent("wheel", {
+    bubbles: true,
+    clientX: 400,
+    clientY: 300,
+    deltaY: 10,
   })));
 }
 
