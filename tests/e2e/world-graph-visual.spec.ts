@@ -50,6 +50,11 @@ test("captures the connected Graph terminal overlay", async ({ page }) => {
   const windowId = await page.locator(".world-conversation-slot").getAttribute("data-window-id");
   if (!windowId) throw new Error("Graph terminal window ID is unavailable");
   await expectGraphConnectorOutsideOverlay(page, windowId);
+  await page.getByRole("button", { name: "Fit graph", exact: true }).click();
+  await expect.poll(() => page.evaluate(
+    () => window.__HERDR_GRAPH_RENDERER__?.activeAnimationFrames ?? -1,
+  )).toBe(0);
+  await expectGraphConnectorOutsideOverlay(page, windowId);
   await page.screenshot({
     path: resolve(evidenceDir, "graph-terminal-1440x900.png"),
     animations: "disabled",

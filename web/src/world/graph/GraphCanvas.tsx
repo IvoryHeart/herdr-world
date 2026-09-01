@@ -360,6 +360,8 @@ class GraphRenderer {
       zoom,
     };
     this.#emitViewChange();
+    this.#revealedConversationTargetIds.clear();
+    this.#revealPendingConversationTargets();
     this.#requestFrame();
   }
 
