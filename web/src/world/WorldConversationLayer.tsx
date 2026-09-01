@@ -37,6 +37,8 @@ type WorldConversationLayout = {
 const EMPTY_LAYOUT: WorldConversationLayout = { rects: {} };
 const WorldConversationLayoutContext = createContext<WorldConversationLayout>(EMPTY_LAYOUT);
 const WORLD_VIEW_PERSIST_DELAY_MS = 120;
+const MAX_POST_LAYOUT_MEASURE_FRAMES = 8;
+const LAYOUT_GEOMETRY_EPSILON_PX = 1;
 
 export function useWorldConversationLayout() {
   return useContext(WorldConversationLayoutContext);
@@ -76,6 +78,9 @@ export function WorldConversationLayer({
   const geometryRef = useRef<Record<string, ConversationGeometry>>({});
   const geometryThemeRef = useRef(activeThemeId);
   const geometryFrameRef = useRef<number | null>(null);
+  const measureFrameRef = useRef<number | null>(null);
+  const measureRetryCountRef = useRef(0);
+  const measureRef = useRef<() => void>(() => {});
   const persistTimerRef = useRef<number | null>(null);
   const persistViewRef = useRef<() => void>(() => {});
   const persistEnabledRef = useRef(!compact);
@@ -190,6 +195,23 @@ export function WorldConversationLayer({
     }
   }, [activeThemeId, compact, panelIdsKey]);
 
+  const withholdRects = useCallback(() => {
+    rectSignatureRef.current = "";
+    setRects((current) => Object.keys(current).length === 0 ? current : {});
+  }, []);
+
+  const schedulePostLayoutMeasure = useCallback(() => {
+    if (
+      measureFrameRef.current !== null ||
+      measureRetryCountRef.current >= MAX_POST_LAYOUT_MEASURE_FRAMES
+    ) return;
+    measureRetryCountRef.current += 1;
+    measureFrameRef.current = window.requestAnimationFrame(() => {
+      measureFrameRef.current = null;
+      measureRef.current();
+    });
+  }, []);
+
   const measure = useCallback(() => {
     syncGeometry();
     const renderedGeometry = renderedGeometryRef.current;
@@ -197,22 +219,42 @@ export function WorldConversationLayer({
       !compact &&
       (!conversationGeometryMapsEqual(geometryRef.current, renderedGeometry) ||
         panelsRef.current.some(({ id }) => renderedGeometry[id] === undefined))
-    ) return;
+    ) {
+      withholdRects();
+      return;
+    }
+    const layer = layerRef.current;
+    if (!layer) return;
+    const layerRect = layer.getBoundingClientRect();
     const next: Record<string, DOMRect> = {};
     for (const panel of panelsRef.current) {
       const element = panelRefs.current[panel.id];
-      if (element) next[panel.id] = element.getBoundingClientRect();
+      if (!element) continue;
+      const rect = element.getBoundingClientRect();
+      const desired = renderedGeometry[panel.id];
+      if (
+        !compact && desired &&
+        !conversationRectMatchesGeometry(layerRect, rect, desired)
+      ) {
+        withholdRects();
+        schedulePostLayoutMeasure();
+        return;
+      }
+      next[panel.id] = rect;
     }
+    measureRetryCountRef.current = 0;
     const signature = Object.entries(next).map(([id, rect]) =>
       `${id}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`
     ).join("|");
     if (signature === rectSignatureRef.current) return;
     rectSignatureRef.current = signature;
     setRects(next);
-  }, [compact, syncGeometry]);
+  }, [compact, schedulePostLayoutMeasure, syncGeometry, withholdRects]);
+  measureRef.current = measure;
 
   useEffect(() => () => {
     if (geometryFrameRef.current !== null) window.cancelAnimationFrame(geometryFrameRef.current);
+    if (measureFrameRef.current !== null) window.cancelAnimationFrame(measureFrameRef.current);
     flushPersistView();
   }, [flushPersistView]);
 
@@ -220,6 +262,7 @@ export function WorldConversationLayer({
     const ids = new Set(panelIds);
     const layer = layerRef.current;
     const themeChanged = geometryThemeRef.current !== activeThemeId;
+    measureRetryCountRef.current = 0;
     const savedGeometry = worldViewGeometryForTheme(savedViewRef.current, activeThemeId);
     if (compact) {
       geometryRef.current = {};
@@ -260,7 +303,10 @@ export function WorldConversationLayer({
     // The ID key intentionally isolates panel lifecycle from content-only refreshes.
   }, [activeThemeId, compact, panelIdsKey]);
 
-  useLayoutEffect(measure, [geometry, measure]);
+  useLayoutEffect(() => {
+    measureRetryCountRef.current = 0;
+    measure();
+  }, [geometry, measure]);
 
   useEffect(() => {
     const layer = layerRef.current;
@@ -464,4 +510,15 @@ function conversationGeometryMapsEqual(
       leftGeometry.width === rightGeometry.width &&
       leftGeometry.height === rightGeometry.height;
   });
+}
+
+function conversationRectMatchesGeometry(
+  layerRect: DOMRect,
+  panelRect: DOMRect,
+  geometry: ConversationGeometry,
+) {
+  return Math.abs(panelRect.left - layerRect.left - geometry.left) < LAYOUT_GEOMETRY_EPSILON_PX &&
+    Math.abs(panelRect.top - layerRect.top - geometry.top) < LAYOUT_GEOMETRY_EPSILON_PX &&
+    Math.abs(panelRect.width - geometry.width) < LAYOUT_GEOMETRY_EPSILON_PX &&
+    Math.abs(panelRect.height - geometry.height) < LAYOUT_GEOMETRY_EPSILON_PX;
 }

@@ -30,6 +30,13 @@ describe("WorldConversationLayer", () => {
   it("publishes a new panel rect only after its default geometry is rendered", async () => {
     vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1440);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(900);
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", vi.fn((callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    }));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+    let positionedLayoutCommitted = false;
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
       this: HTMLElement,
     ) {
@@ -37,7 +44,7 @@ describe("WorldConversationLayer", () => {
         return new DOMRect(0, 0, 1440, 900);
       }
       if (this.classList.contains("world-conversation-slot")) {
-        const positioned = this.dataset.positioned === "true";
+        const positioned = this.dataset.positioned === "true" && positionedLayoutCommitted;
         return new DOMRect(
           positioned ? Number.parseFloat(this.style.left) : 240,
           positioned ? Number.parseFloat(this.style.top) : 180,
@@ -80,6 +87,20 @@ describe("WorldConversationLayer", () => {
 
     expect(container.querySelector(".world-conversation-slot")?.getAttribute("data-positioned"))
       .toBe("true");
+    expect(publishedLefts).toEqual([]);
+    expect(animationFrames).toHaveLength(1);
+
+    await act(async () => {
+      animationFrames.shift()?.(performance.now());
+    });
+    expect(publishedLefts).toEqual([]);
+    expect(animationFrames).toHaveLength(1);
+
+    positionedLayoutCommitted = true;
+    await act(async () => {
+      animationFrames.shift()?.(performance.now());
+    });
+
     expect(publishedLefts).toEqual([468]);
   });
 
