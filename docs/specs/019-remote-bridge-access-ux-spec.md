@@ -35,12 +35,13 @@ changes.
 | Client UI | Keep the existing Bridges UI and saved-profile behavior. |
 | Remote toggle | `Allow remote connections` is off by default and preserves accepted addresses when disabled. |
 | Accepted addresses | Hostnames or IP literals that clients may use in the bridge URL; they are not source-IP authentication. |
+| Browser policy | Keep accepted bridge hosts, allowed page origins, and allowed bridge destinations as separate high-level lists because they control different request directions. |
 | Suggestions | Show detected non-loopback addresses as unchecked suggestions. |
 | Password | Optional per-bridge password; `null` means no password. |
-| Local access | Loopback access bypasses the optional remote password. |
+| Local access | A verified local UI may bypass the optional remote password; loopback appearance alone never does. |
 | Persistence | Host settings persist in the plugin configuration; client profiles persist in browser/native client storage. |
 | Restart | Saving host settings applies them through the local controller and safely restarts the managed bridge. |
-| Transport | Direct HTTP/WebSocket remains the first implementation. SSH and native Herdr host transport remain replaceable future adapters. |
+| Transport | Use the existing direct HTTP/WebSocket bridge for this feature. Do not introduce a generic transport abstraction until a second concrete transport exists. |
 
 ## 3. Scope
 
@@ -54,10 +55,11 @@ This feature includes:
 - persistence of host settings without user-facing JSON editing;
 - a local-only management path for validating, persisting, and applying settings;
 - safe restart and rollback behavior when applying settings;
-- automatic derivation of low-level bind, Host, Origin, and CSP settings;
+- automatic derivation of low-level bind, Host, Origin, and CSP settings from
+  separate high-level policy lists;
 - authentication covering HTTP APIs and all WebSocket routes when a password is set;
 - actionable status and connection errors in the existing Bridges test flow; and
-- an internal transport boundary that can later support SSH or native Herdr host connections.
+- direct use of the existing HTTP/WebSocket bridge transport.
 
 ## 4. Non-goals
 
@@ -110,6 +112,8 @@ When remote access is enabled, it SHALL show:
 - accepted addresses as removable rows;
 - detected non-loopback address suggestions as unchecked rows;
 - an `Add address` control for a hostname or IP literal;
+- a compact browser-permissions section for page origins allowed to call this
+  bridge and bridge origins that the page served here may call;
 - the connection URL for the selected address with a copy action;
 - password state: `Not set` or `Protected`, with set/change/remove actions; and
 - apply status: applying, ready, or failed with a bounded reason.
@@ -136,6 +140,23 @@ The user MAY enter a hostname or IP literal manually. The field SHALL reject a
 scheme, path, query, fragment, credentials, or port because the bridge port is
 configured separately.
 
+The browser-permissions section SHALL keep these directional policies separate:
+
+- `Allowed page origins`: exact page origins permitted to call this bridge;
+- `Allowed bridge destinations`: exact bridge origins that the page served by
+  this bridge may call.
+
+The UI SHALL explain that the first protects this bridge's inbound browser
+requests and the second controls the page's outbound HTTP/WebSocket CSP. It
+SHALL offer bounded suggestions from the current page origin, supported local
+app origins, and saved client bridge profiles, all unchecked until selected.
+The user MAY add an origin manually, but the field SHALL accept only a complete
+HTTP(S) origin without credentials, path, query, fragment, or wildcard.
+
+When a tested bridge is missing a reciprocal page-origin or destination policy,
+the UI SHOULD show a short setup hint identifying which host-side permission is
+missing. It MUST not silently broaden either list.
+
 The UI MAY display real addresses to the local operator because they are the
 subject of the setting. It MUST NOT write them to logs, telemetry, generated
 documentation, test fixtures, or other repository content.
@@ -144,6 +165,10 @@ documentation, test fixtures, or other repository content.
 
 The existing Bridges area SHALL remain the client configuration surface. A
 client user continues to add a bridge URL, test it, save it, and enable it.
+When the current page is served by a managed local bridge, a saved bridge
+profile MAY be offered as an `Allowed bridge destination` suggestion in that
+host's Remote access area. The client profile store remains independent and is
+not itself authoritative for the host's CSP.
 
 When a password-protected bridge is tested or first used, the client SHALL ask
 for the password in a masked field. The password SHALL not be placed in a URL,
@@ -166,6 +191,8 @@ The user-facing host model SHALL be high-level:
   "remote_access": {
     "enabled": false,
     "accepted_hosts": [],
+    "allowed_page_origins": [],
+    "allowed_bridge_origins": [],
     "password_hash": null
   }
 }
@@ -180,7 +207,10 @@ Existing configurations SHALL migrate as follows:
 
 - loopback-only configurations infer `remote_access.enabled = false`;
 - non-loopback configurations infer `remote_access.enabled = true`;
-- existing accepted Host values are retained as `accepted_hosts`; and
+- existing accepted Host values are retained as `accepted_hosts`;
+- existing `allowed_origins` values are retained as `allowed_page_origins`;
+- existing `allowed_connect_origins` values are retained as
+  `allowed_bridge_origins`; and
 - an absent password remains `null`.
 
 Host settings SHALL be written atomically with restrictive permissions. A
@@ -195,9 +225,17 @@ store.
 ## 8. Local management path
 
 The implementation SHALL provide a narrow management path callable by the local
-host UI. It MAY be implemented by the bridge with a plugin-owned controller
-handoff, or by another local controller owned by the plugin lifecycle. The
-choice SHALL not expose arbitrary command execution to the browser.
+host UI. The plugin-owned controller SHALL own configuration writes and
+supervisor operations. The public bridge SHALL not expose privileged management
+routes.
+
+The local UI SHALL invoke the controller through a separate unforgeable local
+capability or an OS-level IPC/controller boundary. A loopback HTTP listener,
+the request Host header, or an ordinary Origin check alone is insufficient:
+SSH forwards and same-host reverse proxies can make remote traffic appear to
+come from loopback. If an environment cannot establish this local boundary,
+remote settings mutation and the local password bypass SHALL remain disabled
+there rather than falling back to loopback trust.
 
 The management path SHALL support:
 
@@ -207,11 +245,11 @@ The management path SHALL support:
 - atomically persisting the update; and
 - applying the update through the managed supervisor.
 
-Management requests SHALL be restricted to local operator access. In
-particular, a browser arriving through an accepted remote address MUST NOT be
-able to modify host settings. Origin checks alone are insufficient for the
-local-password bypass; the implementation SHALL use the loopback peer path or
-an equivalent local capability boundary.
+The capability SHALL be scoped to the local UI session, kept out of URLs, page
+markup, logs, exported profiles, and persistent bridge configuration, and must
+not be transferable through a remotely reachable bridge request. A browser
+arriving through an accepted remote address MUST NOT be able to modify host
+settings.
 
 Applying an update SHALL follow this sequence:
 
@@ -246,7 +284,21 @@ allowlist.
 
 The plugin SHALL continue to reject malformed, unconfigured, or wrong-port
 Host values. The bridge SHALL continue to enforce exact browser Origin policy
-and CSP connect sources derived from the accepted-address model.
+from `allowed_page_origins`, and CSP connect sources from
+`allowed_bridge_origins`. Neither list SHALL be inferred from
+`accepted_hosts` alone.
+
+For a page served from bridge A to call bridge B directly, A's
+`allowed_bridge_origins` MUST include B's bridge origin and B's
+`allowed_page_origins` MUST include A's page origin. An Android WebView page
+origin such as `http://localhost` is another explicit page-origin candidate;
+it is not implied by the bridge address.
+
+The direct two-host setup therefore has two host-side saves: the page-serving
+host permits the other bridge as a destination, and the target host permits the
+page origin. Adding a URL in the client Bridges area does not silently change
+either host's policy; it can only provide a local suggestion for the destination
+list.
 
 ### 9.2 Optional password
 
@@ -256,7 +308,10 @@ anyone able to reach an accepted address may connect.
 
 When a password is configured:
 
-- loopback peer connections MAY bypass password authentication;
+- loopback connections MAY bypass password authentication only after the same
+  unforgeable local capability or IPC/controller check used for management;
+- a forwarded or reverse-proxied connection that merely appears to be loopback
+  SHALL still require the password;
 - non-loopback HTTP requests SHALL authenticate before receiving protected data;
 - all event, activity, UI-event, and terminal WebSockets SHALL authenticate
   before sending events or terminal bytes;
@@ -299,20 +354,13 @@ The host Remote access area SHALL distinguish:
 - configuration rejected; and
 - service failed to become ready and previous settings restored.
 
-## 11. Transport boundary
+## 11. Direct transport
 
-The web application SHALL address a host through a transport-neutral bridge
-connection interface. The direct HTTP/WebSocket bridge remains the first
-implementation.
-
-The interface SHALL keep connection identity, capability probing, snapshot
-loading, event subscriptions, terminal sessions, and error classification
-separate from the storage and settings UI. A future SSH-backed connection or
-native Herdr remote-host adapter MAY implement the same interface.
-
-This feature SHALL not require or assume the final shape of main Herdr's
-multi-host protocol. When that protocol is available, Herdr World can replace
-the direct transport adapter without changing the host/client mental model.
+This feature SHALL use the existing direct HTTP/WebSocket bridge and its current
+client connection code. It SHALL not add a generic transport abstraction,
+SSH-tunnel manager, or native Herdr remote-host contract. A future transport
+can introduce its own boundary when a second concrete implementation and its
+common requirements are known.
 
 ## 12. Acceptance scenarios
 
@@ -358,11 +406,19 @@ the direct transport adapter without changing the host/client mental model.
 - **THEN** protected APIs and every WebSocket route reject the request without
   returning snapshot, event, or terminal data
 
-### Scenario: Local access bypasses the password
+### Scenario: Local access bypasses the password safely
 
 - **GIVEN** remote access is enabled with a password
-- **WHEN** the local UI connects through the loopback path
+- **WHEN** the local UI connects through the loopback path with the local
+  capability or IPC proof
 - **THEN** it remains usable without a password
+
+### Scenario: A forwarded loopback connection does not bypass the password
+
+- **GIVEN** remote access is enabled with a password
+- **WHEN** a browser reaches the bridge through an SSH forward or reverse proxy
+  that terminates on loopback without the local capability
+- **THEN** it still must authenticate
 
 ### Scenario: Applying settings fails safely
 
@@ -383,7 +439,10 @@ The implementation SHALL include:
 
 - unit tests for high-level configuration validation and low-level derivation;
 - migration tests for existing loopback and non-loopback configurations;
-- management-path tests proving remote requests cannot mutate host settings;
+- policy tests proving accepted hosts, allowed page origins, and allowed bridge
+  destinations remain directional and are not inferred from one another;
+- management-path tests proving remote requests cannot mutate host settings and
+  loopback appearance alone cannot satisfy the local boundary;
 - supervisor/restart tests covering success, readiness failure, rollback, and
   lost runtime records;
 - password tests covering null, valid, invalid, rate-limited, loopback, HTTP,
@@ -402,9 +461,12 @@ The implementation plan SHALL resolve these technical details without changing
 the user-facing decisions above:
 
 - which existing plugin/controller boundary owns the local management path;
+- how the local capability or IPC proof is minted and verified without making
+  it available to forwarded browsers;
 - how a managed service restart reports readiness to the browser;
 - the exact password hash and session-ticket libraries already compatible with
   the bridge build;
-- how the bridge obtains peer address information for the local bypass; and
-- how the transport-neutral interface maps native Herdr host errors when that
-  adapter is added later.
+- how the bridge obtains peer address information for diagnostics after the
+  capability check; and
+- how the UI presents separate page-origin and bridge-destination policy
+  without exposing raw runtime flags.
