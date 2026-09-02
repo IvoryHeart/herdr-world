@@ -6106,8 +6106,8 @@ mod tests {
         let policy = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
-            allowed_hosts: vec!["192.168.1.10".to_string()],
-            allowed_origins: vec!["http://192.168.1.10:4000".to_string()],
+            allowed_hosts: vec!["192.0.2.10".to_string()],
+            allowed_origins: vec!["http://192.0.2.10:4000".to_string()],
             allowed_connect_sources: Vec::new(),
         };
         assert!(!request_allowed(
@@ -6115,11 +6115,11 @@ mod tests {
             &policy
         ));
         assert!(request_allowed(
-            &origin_headers("192.168.1.10:4000", Some("http://192.168.1.10:4000")),
+            &origin_headers("192.0.2.10:4000", Some("http://192.0.2.10:4000")),
             &policy
         ));
         assert!(!request_allowed(
-            &origin_headers("192.168.1.10:8787", Some("http://192.168.1.10:8787")),
+            &origin_headers("192.0.2.10:8787", Some("http://192.0.2.10:8787")),
             &policy
         ));
     }
@@ -6132,7 +6132,7 @@ mod tests {
             &policy
         ));
         assert!(!request_allowed(
-            &origin_headers("192.168.1.10:8787", Some("http://127.0.0.1:5173")),
+            &origin_headers("192.0.2.10:8787", Some("http://127.0.0.1:5173")),
             &policy
         ));
         assert!(!request_allowed(
@@ -6146,16 +6146,16 @@ mod tests {
         let policy = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
-            allowed_hosts: vec!["192.168.1.10".to_string()],
+            allowed_hosts: vec!["192.0.2.10".to_string()],
             allowed_origins: vec!["http://localhost".to_string()],
             allowed_connect_sources: Vec::new(),
         };
         assert!(request_allowed(
-            &origin_headers("192.168.1.10:4000", Some("http://localhost")),
+            &origin_headers("192.0.2.10:4000", Some("http://localhost")),
             &policy
         ));
         assert!(!request_allowed(
-            &origin_headers("192.168.1.10:4000", Some("https://example.com")),
+            &origin_headers("192.0.2.10:4000", Some("https://example.com")),
             &policy
         ));
     }
@@ -6185,7 +6185,7 @@ mod tests {
             &policy
         ));
         assert!(!request_origin_allowed(
-            &origin_headers("192.168.1.10:8787", Some("http://127.0.0.1:5173")),
+            &origin_headers("192.0.2.10:8787", Some("http://127.0.0.1:5173")),
             &policy
         ));
         assert!(!request_origin_allowed(
@@ -6204,11 +6204,11 @@ mod tests {
         let lan = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
-            allowed_hosts: vec!["192.168.1.10".to_string()],
-            allowed_origins: vec!["http://192.168.1.10:4000".to_string()],
+            allowed_hosts: vec!["192.0.2.10".to_string()],
+            allowed_origins: vec!["http://192.0.2.10:4000".to_string()],
             allowed_connect_sources: Vec::new(),
         };
-        assert!(host_authority_allowed("192.168.1.10:4000", &lan));
+        assert!(host_authority_allowed("192.0.2.10:4000", &lan));
         assert!(host_authority_allowed("[::1]:5173", &lan));
         assert!(!host_authority_allowed("evil.example:4000", &lan));
     }
@@ -6233,20 +6233,20 @@ mod tests {
         let policy = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
-            allowed_hosts: vec!["192.168.1.10".to_string()],
+            allowed_hosts: vec!["192.0.2.10".to_string()],
             allowed_origins: vec!["http://localhost".to_string()],
             allowed_connect_sources: Vec::new(),
         };
         assert_eq!(
             cors_origin_header(
-                &origin_headers("192.168.1.10:4000", Some("http://localhost")),
+                &origin_headers("192.0.2.10:4000", Some("http://localhost")),
                 &policy
             )
             .and_then(|value| value.to_str().ok().map(str::to_string)),
             Some("http://localhost".to_string())
         );
         assert!(cors_origin_header(
-            &origin_headers("192.168.1.10:4000", Some("https://example.com")),
+            &origin_headers("192.0.2.10:4000", Some("https://example.com")),
             &policy
         )
         .is_none());
@@ -6601,7 +6601,7 @@ mod tests {
         assert!(is_loopback_bind_host("127.0.0.1"));
         assert!(is_loopback_bind_host("localhost"));
         assert!(!is_loopback_bind_host("0.0.0.0"));
-        assert!(!is_loopback_bind_host("192.168.1.10"));
+        assert!(!is_loopback_bind_host("192.0.2.10"));
     }
 
     #[test]
@@ -7154,7 +7154,7 @@ mod tests {
             "--host".to_string(),
             "0.0.0.0".to_string(),
             "--allow-host".to_string(),
-            "192.168.1.10".to_string(),
+            "192.0.2.10".to_string(),
         ];
         assert!(parse_options(&without_origin)
             .unwrap_err()
@@ -7164,14 +7164,14 @@ mod tests {
             "--host".to_string(),
             "0.0.0.0".to_string(),
             "--allow-host".to_string(),
-            "192.168.1.10".to_string(),
+            "192.0.2.10".to_string(),
             "--allow-origin".to_string(),
-            "http://192.168.1.10:4000".to_string(),
+            "http://192.0.2.10:4000".to_string(),
             "--bridge-label".to_string(),
             "Build host".to_string(),
         ];
         let options = parse_options(&explicit).unwrap().unwrap();
-        assert_eq!(options.allowed_hosts, vec!["192.168.1.10"]);
+        assert_eq!(options.allowed_hosts, vec!["192.0.2.10"]);
         assert_eq!(options.configured_label.as_deref(), Some("Build host"));
     }
 

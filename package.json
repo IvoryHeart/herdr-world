@@ -19,6 +19,7 @@
     "test:observability": "npm run test --prefix web -- observability.test.ts && cargo test --manifest-path bridge/Cargo.toml --bin herdr-web-bridge observability",
     "test:e2e": "npm run build:web && playwright test",
     "test:independence": "scripts/independence-audit.sh",
+    "test:privacy": "scripts/privacy-audit.sh",
     "test:security": "scripts/security-audit.sh",
     "lint:web": "npm run lint --prefix web",
     "vendor:check": "scripts/check-vendor.sh",
@@ -32,7 +33,7 @@
     "build": "npm run build:web && npm run bridge:build",
     "test": "npm run test:dev && npm run test:release && npm run test:pages && npm run test:web && npm run bridge:test",
     "lint": "npm run lint:web && npm run bridge:fmt",
-    "check": "npm run vendor:check && npm run notices:check && npm run lint && npm run test && npm run build",
+    "check": "npm run vendor:check && npm run notices:check && npm run test:privacy && npm run lint && npm run test && npm run build",
     "check:acceptance": "npm run check && npm run test:e2e && npm run test:security && npm run test:independence"
   },
   "devDependencies": {

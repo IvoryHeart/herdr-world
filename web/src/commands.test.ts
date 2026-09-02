@@ -27,7 +27,7 @@ describe("command helpers", () => {
   });
 
   it("uses injected bridge URLs for commands", async () => {
-    const httpUrl = (path: string) => `http://192.168.1.20:4000${path}`;
+    const httpUrl = (path: string) => `http://192.0.2.20:4000${path}`;
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ type: "ok" }), {
         status: 200,
@@ -38,7 +38,7 @@ describe("command helpers", () => {
 
     expect(fetch).toHaveBeenNthCalledWith(
       1,
-      "http://192.168.1.20:4000/api/command",
+      "http://192.0.2.20:4000/api/command",
       expect.objectContaining({ method: "POST" }),
     );
   });

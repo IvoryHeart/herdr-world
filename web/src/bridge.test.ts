@@ -25,27 +25,27 @@ afterEach(() => {
 
 describe("bridge URL normalization", () => {
   it("normalizes origin-only bridge URLs", () => {
-    expect(normalizeBridgeBaseUrl("192.168.1.20:4000")).toBe("http://192.168.1.20:4000");
+    expect(normalizeBridgeBaseUrl("192.0.2.20:4000")).toBe("http://192.0.2.20:4000");
     expect(normalizeBridgeBaseUrl(" http://herdr-host.local:4000/ ")).toBe(
       "http://herdr-host.local:4000",
     );
     expect(normalizeBridgeBaseUrl("https://herdr-host.local:443")).toBe(
       "https://herdr-host.local",
     );
-    expect(normalizeBridgeBaseUrl("http://192.168.1.20:80")).toBe("http://192.168.1.20");
-    expect(normalizeBridgeBaseUrl("http://[fd00::1234]:4000")).toBe(
-      "http://[fd00::1234]:4000",
+    expect(normalizeBridgeBaseUrl("http://192.0.2.20:80")).toBe("http://192.0.2.20");
+    expect(normalizeBridgeBaseUrl("http://[2001:db8::1234]:4000")).toBe(
+      "http://[2001:db8::1234]:4000",
     );
     expect(normalizeBridgeBaseUrl("http://100.64.0.1:4000")).toBe("http://100.64.0.1:4000");
     expect(normalizeBridgeBaseUrl("http://8.8.8.8:4000")).toBe("http://8.8.8.8:4000");
   });
 
   it("rejects unsupported URL shapes", () => {
-    expect(() => normalizeBridgeBaseUrl("ftp://192.168.1.20:4000")).toThrow(/http or https/iu);
-    expect(() => normalizeBridgeBaseUrl("http://user@192.168.1.20:4000")).toThrow(
+    expect(() => normalizeBridgeBaseUrl("ftp://192.0.2.20:4000")).toThrow(/http or https/iu);
+    expect(() => normalizeBridgeBaseUrl("http://user@192.0.2.20:4000")).toThrow(
       /credentials/iu,
     );
-    expect(() => normalizeBridgeBaseUrl("http://192.168.1.20:4000/api")).toThrow(
+    expect(() => normalizeBridgeBaseUrl("http://192.0.2.20:4000/api")).toThrow(
       /path/iu,
     );
   });
@@ -73,11 +73,11 @@ describe("bridge URL builders", () => {
   it("builds configured HTTP and WebSocket URLs", () => {
     const query = new URLSearchParams({ terminal_id: "term-1" });
 
-    expect(buildHttpUrl("http://192.168.1.20:4000", "/api/snapshot")).toBe(
-      "http://192.168.1.20:4000/api/snapshot",
+    expect(buildHttpUrl("http://192.0.2.20:4000", "/api/snapshot")).toBe(
+      "http://192.0.2.20:4000/api/snapshot",
     );
-    expect(buildWsUrl("http://192.168.1.20:4000", "/ws/terminal", query)).toBe(
-      "ws://192.168.1.20:4000/ws/terminal?terminal_id=term-1",
+    expect(buildWsUrl("http://192.0.2.20:4000", "/ws/terminal", query)).toBe(
+      "ws://192.0.2.20:4000/ws/terminal?terminal_id=term-1",
     );
   });
 });
@@ -101,8 +101,8 @@ describe("backend store parsing", () => {
         version: 1,
         activeBackendId: "missing",
         backends: [
-          { id: "one", name: "Home", baseUrl: "http://192.168.1.20:4000" },
-          { id: "bad", name: "Bad", baseUrl: "http://192.168.1.20:4000/api" },
+          { id: "one", name: "Home", baseUrl: "http://192.0.2.20:4000" },
+          { id: "bad", name: "Bad", baseUrl: "http://192.0.2.20:4000/api" },
         ],
       }),
     ).toEqual({
@@ -113,7 +113,7 @@ describe("backend store parsing", () => {
         {
           id: "one",
           name: "Home",
-          baseUrl: "http://192.168.1.20:4000",
+          baseUrl: "http://192.0.2.20:4000",
           lastConnectedAt: undefined,
         },
       ],
@@ -125,7 +125,7 @@ describe("backend store parsing", () => {
       parseBackendStore({
         version: 1,
         activeBackendId: "one",
-        backends: [{ id: "one", name: "Home", baseUrl: "http://192.168.1.20:4000" }],
+        backends: [{ id: "one", name: "Home", baseUrl: "http://192.0.2.20:4000" }],
       }),
     ).toEqual({
       version: 2,
@@ -135,7 +135,7 @@ describe("backend store parsing", () => {
         {
           id: "one",
           name: "Home",
-          baseUrl: "http://192.168.1.20:4000",
+          baseUrl: "http://192.0.2.20:4000",
           lastConnectedAt: undefined,
         },
       ],
@@ -148,7 +148,7 @@ describe("backend store parsing", () => {
         version: 2,
         enabledBridgeIds: ["one", "missing", "one", SAME_ORIGIN_BRIDGE_ID],
         lastSelectedBridgeId: "missing",
-        backends: [{ id: "one", name: "Home", baseUrl: "http://192.168.1.20:4000" }],
+        backends: [{ id: "one", name: "Home", baseUrl: "http://192.0.2.20:4000" }],
       }),
     ).toEqual({
       version: 2,
@@ -158,7 +158,7 @@ describe("backend store parsing", () => {
         {
           id: "one",
           name: "Home",
-          baseUrl: "http://192.168.1.20:4000",
+          baseUrl: "http://192.0.2.20:4000",
           lastConnectedAt: undefined,
         },
       ],
@@ -175,13 +175,13 @@ describe("backend store parsing", () => {
           {
             id: "one",
             name: "Home",
-            baseUrl: "http://192.168.1.20:4000",
+            baseUrl: "http://192.0.2.20:4000",
             color: "#A1b2C3",
           },
           {
             id: "two",
             name: "Work",
-            baseUrl: "http://192.168.1.21:4000",
+            baseUrl: "http://192.0.2.21:4000",
             color: "red",
           },
         ],
@@ -190,14 +190,14 @@ describe("backend store parsing", () => {
       {
         id: "one",
         name: "Home",
-        baseUrl: "http://192.168.1.20:4000",
+        baseUrl: "http://192.0.2.20:4000",
         color: "#a1b2c3",
         lastConnectedAt: undefined,
       },
       {
         id: "two",
         name: "Work",
-        baseUrl: "http://192.168.1.21:4000",
+        baseUrl: "http://192.0.2.21:4000",
         lastConnectedAt: undefined,
       },
     ]);
@@ -213,7 +213,7 @@ describe("backend store parsing", () => {
           {
             id: SAME_ORIGIN_BRIDGE_ID,
             name: "Impostor",
-            baseUrl: "http://192.168.1.20:4000",
+            baseUrl: "http://192.0.2.20:4000",
           },
         ],
       }),
@@ -229,7 +229,7 @@ describe("backend store parsing", () => {
     const legacyStore = {
       version: 1,
       activeBackendId: "one",
-      backends: [{ id: "one", name: "Home", baseUrl: "http://192.168.1.20:4000" }],
+      backends: [{ id: "one", name: "Home", baseUrl: "http://192.0.2.20:4000" }],
     };
     const setItem = vi.fn();
     const removeItem = vi.fn();
@@ -251,7 +251,7 @@ describe("backend store parsing", () => {
         {
           id: "one",
           name: "Home",
-          baseUrl: "http://192.168.1.20:4000",
+          baseUrl: "http://192.0.2.20:4000",
           lastConnectedAt: undefined,
         },
       ],
@@ -263,10 +263,10 @@ describe("backend store parsing", () => {
   });
 
   it("detects duplicate normalized backend URLs", () => {
-    const backends = [{ id: "one", name: "Home", baseUrl: "http://192.168.1.20:4000" }];
+    const backends = [{ id: "one", name: "Home", baseUrl: "http://192.0.2.20:4000" }];
 
-    expect(duplicateBackend(backends, "192.168.1.20:4000")?.id).toBe("one");
-    expect(duplicateBackend(backends, "192.168.1.20:4000", "one")).toBeNull();
+    expect(duplicateBackend(backends, "192.0.2.20:4000")?.id).toBe("one");
+    expect(duplicateBackend(backends, "192.0.2.20:4000", "one")).toBeNull();
   });
 
   it("removes note drafts scoped to a retired backend connection", () => {
@@ -421,9 +421,9 @@ describe("capabilities", () => {
       new Response(JSON.stringify(response), { status: 200 }),
     );
 
-    await expect(probeBridgeBaseUrl("192.168.1.20:4000")).resolves.toEqual(response);
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).resolves.toEqual(response);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://192.168.1.20:4000/api/capabilities",
+      "http://192.0.2.20:4000/api/capabilities",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
 
@@ -437,7 +437,7 @@ describe("capabilities", () => {
       }),
     );
 
-    await expect(probeBridgeBaseUrl("192.168.1.20:4000")).rejects.toThrow(/protocol 16/iu);
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(/protocol 16/iu);
 
     fetchMock.mockRestore();
   });
@@ -449,7 +449,7 @@ describe("capabilities", () => {
       }),
     );
 
-    await expect(probeBridgeBaseUrl("192.168.1.20:4000")).rejects.toThrow(
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
       new RegExp(`protocol ${terminalProtocol}`),
     );
 
@@ -463,7 +463,7 @@ describe("capabilities", () => {
       }),
     );
 
-    await expect(probeBridgeBaseUrl("192.168.1.20:4000")).rejects.toThrow(/0\.8\.2/iu);
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(/0\.8\.2/iu);
 
     fetchMock.mockRestore();
   });

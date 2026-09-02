@@ -39,8 +39,8 @@ saved bridge in the Bridge area of Settings.
 Supported backend examples:
 
 ```text
-http://192.168.1.20:4000
-http://10.0.0.42:8787
+http://bridge-a.example.test:4000
+http://bridge-b.example.test:8787
 http://herdr-host.local:4000
 https://herdr.example.test
 ```
@@ -191,7 +191,7 @@ On a trusted LAN:
 2. Install the debug APK on an Android device.
 3. Open the app and confirm the shell loads without network access.
 4. Open Settings and select the Bridge area.
-5. Add a backend such as `http://192.168.1.20:4000`.
+5. Add a backend such as `http://bridge-a.example.test:4000`.
 6. Use `Test` and confirm it reports reachable.
 7. Use `Save`, enable the saved bridge with its Enable toggle, and confirm the bridge chip appears
    in the sidebar.
