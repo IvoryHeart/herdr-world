@@ -54,6 +54,11 @@ status action showing that target is not running. Repeat this for every managed 
 uninstalling. Stopping the bridge disconnects browser clients but does not stop Herdr or its panes.
 The plugin and the standalone distributions below are independent install paths.
 
+Host-side direct network access is managed from Herdr World Settings → Remote access. The
+plugin-managed launch applies its normalized host policies through the owned supervisor and waits
+for bridge readiness; development and standalone launches report read-only status when they do not
+have that controller boundary. Client bridge URLs remain in the existing Settings → Bridge store.
+
 ## Release Artifacts
 
 Recommended GitHub release assets:

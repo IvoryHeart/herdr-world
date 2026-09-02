@@ -96,6 +96,40 @@ async function startFixture(fixture) {
       json(response, 200, { sent });
       return;
     }
+    if (url.pathname === "/api/local/remote-access") {
+      const state = fixtureStates.get(fixture.id);
+      if (!state?.remoteAccess) {
+        json(response, 404, { error: "not found" });
+        return;
+      }
+      if (request.method === "POST") {
+        const body = await readJson(request);
+        if (!body || typeof body.remote_access !== "object") {
+          json(response, 400, { error: "invalid remote access draft" });
+          return;
+        }
+        const remoteAccess = {
+          ...state.remoteAccess,
+          ...body.remote_access,
+          password_configured: body.password_action === "set"
+            ? true
+            : body.password_action === "remove"
+              ? false
+              : state.remoteAccess.password_configured,
+        };
+        fixtureStates.set(fixture.id, { ...state, remoteAccess });
+        json(response, 202, { state: "applying", reason: "settings saved; restarting", restored: null });
+        return;
+      }
+      json(response, 200, {
+        remote_access: state.remoteAccess,
+        port: fixture.port,
+        suggestions: ["bridge.example.test"],
+        mutation_allowed: true,
+        apply: { state: "ready", reason: null, restored: null },
+      });
+      return;
+    }
     if (url.pathname === "/api/capabilities") {
       logs.get(fixture.id).capabilityRequests += 1;
       if (fixture.variant === "malformed") {
@@ -299,6 +333,13 @@ function defaultFixtureState() {
     commands: null,
     launchCreatesSeat: false,
     launchedSeat: false,
+    remoteAccess: {
+      enabled: false,
+      accepted_hosts: [],
+      allowed_page_origins: ["http://127.0.0.1:4173"],
+      allowed_bridge_origins: [],
+      password_configured: false,
+    },
   };
 }
 
@@ -333,6 +374,7 @@ function setFixtureState(hostId, value) {
     commands,
     launchCreatesSeat,
     launchedSeat: current.launchedSeat,
+    remoteAccess: current.remoteAccess,
   });
   return true;
 }

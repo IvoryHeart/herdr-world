@@ -18,6 +18,7 @@ import {
   SAME_ORIGIN_BRIDGE_ID,
   sameOriginHostLabel,
 } from "./bridge";
+import { BridgeDiagnosticError } from "./bridgeApi";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -342,6 +343,16 @@ describe("capabilities", () => {
     expect(capabilityRetryDelayMs(1)).toBe(2000);
     expect(capabilityRetryDelayMs(3)).toBe(8000);
     expect(capabilityRetryDelayMs(10)).toBe(10000);
+  });
+
+  it("retains bounded policy and API diagnostics for the bridge test flow", () => {
+    expect(capabilityProbeFailure(new BridgeDiagnosticError("Host or Origin policy rejected the request"))).toEqual({
+      blocked: true,
+      state: "offline",
+      capabilities: null,
+      error: "Host or Origin policy rejected the request",
+      retry: true,
+    });
   });
 
   it("parses optional compatibility fields", () => {

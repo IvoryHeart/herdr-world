@@ -64,6 +64,7 @@ import {
 } from "./agentPins";
 import type { AgentPinsListResponse } from "./agentPins";
 import { BackendSettingsDialog } from "./BackendSettingsDialog";
+import { authenticatedFetch } from "./bridgeApi";
 import type { BridgeId, BridgeRuntime, CapabilityState } from "./bridge";
 import { createCommands, createdPaneId, createdWorkspaceId } from "./commands";
 import type { LaunchSpec, PaneFocusDirection, SplitDirection } from "./commands";
@@ -5460,6 +5461,7 @@ export function App() {
       {backendSettingsOpen ? (
         <BackendSettingsDialog
           showMobileTerminalSettings={isTouchInput}
+          showRemoteAccess={!isNativeAndroid()}
           onOpenWorldSettings={worldSettingsController.open}
           notesEnabled={notesEnabled}
           onNotesEnabled={setNotesEnabled}
@@ -10467,7 +10469,7 @@ async function syncSelectedPane(
   httpUrl: (path: string, query?: URLSearchParams) => string,
   paneId: string,
 ) {
-  const response = await fetch(httpUrl("/api/selection"), {
+  const response = await authenticatedFetch(httpUrl("/api/selection"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ pane_id: paneId }),

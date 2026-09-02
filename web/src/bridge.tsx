@@ -10,6 +10,11 @@ import {
 import type { ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
+import {
+  BridgeAuthenticationError,
+  BridgeDiagnosticError,
+  setBridgePasswordPromptHandler,
+} from "./bridgeApi";
 import { fetchWithTimeout } from "./fetchWithTimeout";
 import { normalizeHostProfileId, normalizeHostProfileLabel } from "./hostProfile";
 import { addNativeResumeHandler } from "./native";
@@ -76,6 +81,11 @@ export type BridgeCapabilities = {
   };
   web_compat?: number;
   min_android_app_compat?: number;
+  authentication?: {
+    required: boolean;
+    session: "bearer";
+    local_peer_bypass: boolean;
+  };
   observability?: BridgeObservabilityCapability;
 };
 
@@ -171,8 +181,22 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   const [probeRetryTokens, setProbeRetryTokens] = useState<Record<string, number>>({});
   const [resumeToken, setResumeToken] = useState(0);
   const storeEditedRef = useRef(false);
+  const [passwordPrompts, setPasswordPrompts] = useState<{
+    origin: string;
+    resolve: (password: string | null) => void;
+  }[]>([]);
 
   const sameOriginAvailable = defaultBridgeMode() === "same-origin";
+
+  useEffect(() => {
+    setBridgePasswordPromptHandler(
+      (origin) =>
+        new Promise<string | null>((resolve) => {
+          setPasswordPrompts((current) => [...current, { origin, resolve }]);
+        }),
+    );
+    return () => setBridgePasswordPromptHandler(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -493,7 +517,76 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
           }
         />
       ))}
+      {passwordPrompts[0] ? (
+        <BridgePasswordPrompt
+          origin={passwordPrompts[0].origin}
+          onCancel={() => {
+            passwordPrompts[0].resolve(null);
+            setPasswordPrompts((current) => current.slice(1));
+          }}
+          onSubmit={(password) => {
+            passwordPrompts[0].resolve(password);
+            setPasswordPrompts((current) => current.slice(1));
+          }}
+        />
+      ) : null}
     </BridgeContext.Provider>
+  );
+}
+
+function BridgePasswordPrompt({
+  origin,
+  onCancel,
+  onSubmit,
+}: {
+  origin: string;
+  onCancel: () => void;
+  onSubmit: (password: string) => void;
+}) {
+  const [password, setPassword] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => inputRef.current?.focus(), []);
+
+  return (
+    <div className="overlay-root bridge-auth-overlay">
+      <button
+        className="overlay-scrim"
+        type="button"
+        aria-label="Cancel bridge authentication"
+        onClick={onCancel}
+      />
+      <form
+        className="modal bridge-auth-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bridge-auth-title"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (password) onSubmit(password);
+        }}
+      >
+        <div id="bridge-auth-title" className="modal-title">Bridge password</div>
+        <p className="backend-note">
+          Enter the password for {origin}. It stays in memory for this browser session only.
+        </p>
+        <label className="field-label">
+          <span>Password</span>
+          <input
+            ref={inputRef}
+            className="field"
+            type="password"
+            value={password}
+            autoComplete="current-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={!password}>Connect</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1125,7 +1218,7 @@ export async function fetchCapabilities(
 ): Promise<BridgeCapabilities> {
   const response = await fetchWithTimeout(httpUrl("/api/capabilities"));
   if (!response.ok) {
-    throw new Error(`capabilities failed: ${response.status}`);
+    throw new BridgeDiagnosticError(capabilityHttpError(response.status));
   }
   let value: unknown;
   try {
@@ -1143,7 +1236,18 @@ export async function probeBridgeBaseUrl(baseUrl: string): Promise<BridgeCapabil
   if (error) {
     throw new Error(error);
   }
+  const snapshot = await fetchWithTimeout(buildHttpUrl(normalized, "/api/snapshot"));
+  if (!snapshot.ok) {
+    throw new BridgeDiagnosticError(capabilityHttpError(snapshot.status));
+  }
   return capabilities;
+}
+
+function capabilityHttpError(status: number) {
+  if (status === 401) return "Password required or rejected by the bridge";
+  if (status === 403) return "Host or Origin policy rejected the request; check the bridge's allowed page origin";
+  if (status === 404) return "Bridge API is unavailable at this address";
+  return `Bridge API request failed (${status})`;
 }
 
 export type CapabilityProbeOutcome = {
@@ -1178,11 +1282,13 @@ export function capabilityProbeSuccess(
 
 export function capabilityProbeFailure(error: unknown): CapabilityProbeOutcome {
   const contractFailure = error instanceof CapabilityContractError;
+  const authenticationFailure = error instanceof BridgeAuthenticationError;
+  const diagnosticFailure = error instanceof BridgeDiagnosticError;
   return {
     blocked: true,
     state: contractFailure ? "incompatible" : "offline",
     capabilities: null,
-    error: contractFailure ? error.message : "Bridge unavailable",
+    error: contractFailure || authenticationFailure || diagnosticFailure ? error.message : "Bridge unavailable",
     retry: !contractFailure,
   };
 }
@@ -1223,6 +1329,18 @@ export function parseCapabilities(value: unknown): BridgeCapabilities {
     web_compat: typeof value.web_compat === "number" ? value.web_compat : undefined,
     min_android_app_compat:
       typeof value.min_android_app_compat === "number" ? value.min_android_app_compat : undefined,
+    ...(isRecord(value.authentication) &&
+    typeof value.authentication.required === "boolean" &&
+    value.authentication.session === "bearer" &&
+    typeof value.authentication.local_peer_bypass === "boolean"
+      ? {
+          authentication: {
+            required: value.authentication.required as boolean,
+            session: "bearer" as const,
+            local_peer_bypass: value.authentication.local_peer_bypass as boolean,
+          },
+        }
+      : {}),
     agent_activity:
       isRecord(value.agent_activity) && value.agent_activity.version === 1
         ? { version: 1 }

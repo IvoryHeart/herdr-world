@@ -103,25 +103,13 @@ herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
 herdr plugin uninstall ivoryheart.herdr-world
 ```
 
-The plugin keeps editable settings outside its managed checkout. Find the directory with
-`herdr plugin config-dir ivoryheart.herdr-world` and edit its `config.json`; for a two-host LAN
-setup, `host` is the bind address, `allowed_hosts` lists accepted bridge hostnames/IPs,
-`allowed_origins` lists the exact page origins that may call this bridge, and
-`allowed_connect_origins` lists bridge origins that the page served here may call. For example:
-
-```json
-{
-  "host": "0.0.0.0",
-  "port": 8787,
-  "allowed_hosts": ["bridge-a.example.test", "bridge-b.example.test"],
-  "allowed_origins": ["http://localhost:8787", "http://bridge-a.example.test:8787", "http://bridge-b.example.test:8787"],
-  "allowed_connect_origins": ["http://bridge-a.example.test:8787", "http://bridge-b.example.test:8787"]
-}
-```
-
-Use the actual page origin, including its port; `http://127.0.0.1:8787` does not authorize a page
-opened at a LAN address. Restart the plugin after changing the file:
-`herdr plugin action invoke restart --plugin ivoryheart.herdr-world`.
+Host access is managed in Settings → Remote access, where the plugin-managed launch exposes a
+Direct network access toggle, separate accepted-address/page-origin/bridge-destination policies,
+an optional password, and a copyable connection address. Applying a change safely reconciles the
+owned bridge and reports when it is ready. Development or standalone launches show status but keep
+mutation disabled when no controller-owned restart boundary is available. Client bridge URLs,
+labels, colors, and enabled state remain independent in Settings → Bridge. Direct network access
+is intended for a LAN/VPN path; use TLS, a VPN, or SSH for untrusted networks.
 
 To run from source:
 

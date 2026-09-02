@@ -3,6 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { applyActivityMessage, parseActivityEventData, replayActivityMessages } from "./activity";
 import type { ActivityLogEntry } from "./activity";
 import type { BridgeId, BridgeRuntime } from "./bridge";
+import { bridgeWebSocketProtocols } from "./bridgeApi";
 import { createSnapshotRefreshController } from "./refreshCoordinator";
 import { fetchRuntimeSnapshot, RuntimeCache } from "./runtimeClient";
 import type { RuntimeLoadState } from "./runtimeClient";
@@ -560,7 +561,7 @@ function openEventsSocket(
     if (closed) {
       return;
     }
-    const next = new WebSocket(url);
+    const next = new WebSocket(url, bridgeWebSocketProtocols(url));
     socket = next;
     next.addEventListener("open", () => {
       attempts = 0;

@@ -10,6 +10,7 @@ import {
   Smartphone,
   SquareTerminal,
   StickyNote,
+  Wifi,
   X,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
@@ -27,6 +28,7 @@ import {
   useBridge,
 } from "./bridge";
 import type { BridgeBackendProfile } from "./bridge";
+import { RemoteAccessSettings } from "./RemoteAccessSettings";
 import {
   DEFAULT_CONTENT_INSET_BOTTOM_PX,
   DEFAULT_CONTENT_INSET_TOP_PX,
@@ -63,6 +65,7 @@ import { trapFocusWithin, useFocusReturn } from "./overlayFocus";
 
 type Props = {
   showMobileTerminalSettings: boolean;
+  showRemoteAccess: boolean;
   onOpenWorldSettings: () => void;
   notesEnabled: boolean;
   onNotesEnabled: (enabled: boolean) => void;
@@ -116,10 +119,11 @@ type FormState = {
 };
 
 type SelectionMode = "same-origin" | "new" | "backend";
-type SettingsArea = "bridge" | "features" | "display" | "terminal" | "mobile";
+type SettingsArea = "bridge" | "remote" | "features" | "display" | "terminal" | "mobile";
 
 export function BackendSettingsDialog({
   showMobileTerminalSettings,
+  showRemoteAccess,
   onOpenWorldSettings,
   notesEnabled,
   onNotesEnabled,
@@ -301,6 +305,7 @@ export function BackendSettingsDialog({
   const allBridgesEnabled = availableBridgeIds.length > 0 && enabledBridgeCount === availableBridgeIds.length;
   const areas: { id: SettingsArea; label: string; icon: typeof Server }[] = [
     { id: "bridge", label: "Bridge", icon: Server },
+    ...(showRemoteAccess ? [{ id: "remote" as const, label: "Remote access", icon: Wifi }] : []),
     { id: "features", label: "Features", icon: StickyNote },
     { id: "display", label: "Display", icon: SlidersHorizontal },
     { id: "terminal", label: "Terminal", icon: SquareTerminal },
@@ -541,6 +546,13 @@ export function BackendSettingsDialog({
                   </div>
                 ) : null}
               </>
+            ) : null}
+
+            {activeArea === "remote" && showRemoteAccess ? (
+              <RemoteAccessSettings
+                httpUrl={bridge.getRuntime(SAME_ORIGIN_BRIDGE_ID)?.httpUrl ?? ((path) => path)}
+                backends={bridge.store.backends}
+              />
             ) : null}
 
             {activeArea === "features" ? (
