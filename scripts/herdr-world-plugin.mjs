@@ -1027,6 +1027,86 @@ function launchdServicePresent(record, command) {
   return result.status === 0;
 }
 
+function launchdServiceDefinition(record, command) {
+  const args = ["print", launchdServiceTarget(record)];
+  const result = commandResult(command, args, { timeout: RUNTIME_TIMEOUT_MS });
+  const invocation = `${path.basename(command)} ${args.join(" ")}`;
+  if (result.error) throw new PluginError(`${invocation} failed: ${result.error.message}`);
+  if (result.status !== 0) return null;
+  return String(result.stdout ?? "");
+}
+
+function launchdServicePath(record, command) {
+  const definition = launchdServiceDefinition(record, command);
+  if (definition === null) return null;
+  return definition.match(/^\s*path = (.+)$/m)?.[1]?.trim() ?? null;
+}
+
+function unrecordedService(identity, supervisor) {
+  return {
+    target_identity: identity,
+    supervisor: supervisor.kind,
+    service_name: serviceName(identity, supervisor.kind),
+  };
+}
+
+async function recoverUnrecordedService(identity, stateDir, supervisor) {
+  if (supervisor.kind === "launchd") {
+    const record = unrecordedService(identity, supervisor);
+    if (!launchdServicePresent(record, supervisor.command)) return false;
+
+    const expectedPath = pathForSupervisor(stateDir, record, "plist");
+    const actualPath = launchdServicePath(record, supervisor.command);
+    if (actualPath !== expectedPath) {
+      throw new PluginError(
+        `launchd service ${record.service_name} is already loaded from an unexpected definition; refusing to stop an unrelated service`,
+      );
+    }
+    await unloadLaunchd(record, supervisor.command);
+    return true;
+  }
+
+  if (supervisor.kind === "systemd-user") {
+    const record = unrecordedService(identity, supervisor);
+    const result = commandResult(
+      supervisor.command,
+      ["--user", "show", record.service_name, "--property=LoadState", "--value"],
+      { timeout: RUNTIME_TIMEOUT_MS },
+    );
+    if (result.error) {
+      throw new PluginError(`systemctl --user show ${record.service_name} failed: ${result.error.message}`);
+    }
+    if (result.status !== 0 || String(result.stdout ?? "").trim() !== "loaded") return false;
+
+    const fragment = commandResult(
+      supervisor.command,
+      ["--user", "show", record.service_name, "--property=FragmentPath", "--value"],
+      { timeout: RUNTIME_TIMEOUT_MS },
+    );
+    if (fragment.error || fragment.status !== 0) {
+      throw new PluginError(
+        `systemd service ${record.service_name} is already loaded but its definition could not be verified; refusing to stop an unrelated service`,
+      );
+    }
+    const expectedPath = pathForSupervisor(stateDir, record, "service");
+    const actualPath = String(fragment.stdout ?? "").trim();
+    if (actualPath !== expectedPath) {
+      throw new PluginError(
+        `systemd service ${record.service_name} is already loaded from an unexpected definition; refusing to stop an unrelated service`,
+      );
+    }
+    runChecked(supervisor.command, ["--user", "stop", record.service_name]);
+    try {
+      runChecked(supervisor.command, ["--user", "disable", record.service_name]);
+    } catch {
+      // A stopped unit may already be disabled by the user supervisor.
+    }
+    return true;
+  }
+
+  return false;
+}
+
 export function selectSupervisor(platform, env) {
   if (platform === "linux") {
     const systemctl = systemdAvailable(env);
@@ -1359,6 +1439,10 @@ async function startPrepared(plan, { lockHeld = false } = {}) {
       if (ownership.state.active) await stopRecord(previous, env, platform);
       removeRecord(recordPath);
     }
+    const recovered = await recoverUnrecordedService(context.target.identity, context.stateDir, supervisor);
+    if (recovered) {
+      console.log("Recovered an unrecorded Herdr World service; applying the current configuration.");
+    }
     const port = await choosePort(context.config, context.target.identity, context.stateDir);
     const { record, environment } = createRecord({
       identity: context.target.identity,
@@ -1442,6 +1526,12 @@ async function stopAction({ root = ROOT, env = process.env, platform = process.p
   const recordPath = targetRecordPath(context.stateDir, context.target.identity);
   const record = readRecord(recordPath);
   if (!record) {
+    const supervisor = selectSupervisor(platform, env);
+    const recovered = await recoverUnrecordedService(context.target.identity, context.stateDir, supervisor);
+    if (recovered) {
+      console.log(`Stopped the unrecorded Herdr World service for ${displayTarget(context.target)}.`);
+      return null;
+    }
     console.log(`Herdr World is not running for ${displayTarget(context.target)}`);
     return null;
   }

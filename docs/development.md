@@ -3,7 +3,7 @@
 Work from the `herdr-world` repository root:
 
 ```bash
-cd /home/ny/Forge/ai-palace/herdr-world
+cd /path/to/herdr-world
 ```
 
 ## Quick start
@@ -163,7 +163,7 @@ When a Prometheus-compatible service is available, restart the Herdr World
 bridge with its API URL:
 
 ```bash
-cd /home/ny/Forge/ai-palace/herdr-world
+cd /path/to/herdr-world
 # Stop an existing bridge on 8787 first if dev:local reports that it is healthy.
 HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9101 npm run dev:local
 ```

@@ -53,6 +53,16 @@ This is a lightweight internal onboarding note for agents working in this repo.
   `vendor/herdr-compat/target/`, `dist-packages/`, and Android build outputs.
 - The bridge is local-first and currently has no full browser authentication. Treat LAN binding and upload behavior as security-sensitive.
 
+## Privacy And Local Data
+
+- Treat any environment-specific or user-specific data as sensitive by default.
+- Never copy such data into tracked files, tests, fixtures, documentation, issues, PRs, commit
+  messages, or generated artifacts. Keep real configuration outside the repository and use clearly
+  synthetic placeholders or reserved example domains/ranges instead.
+- Before committing or pushing, review the diff and relevant history for accidental disclosure. If
+  sensitive data is staged or pushed, remove it from unmerged history when possible and report what
+  was exposed and scrubbed; a follow-up deletion does not erase commit history.
+
 ## Testing
 
 - Run `npm install --prefix web` if dependencies are missing.

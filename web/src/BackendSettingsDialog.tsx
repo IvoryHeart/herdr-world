@@ -472,7 +472,7 @@ export function BackendSettingsDialog({
                           <input
                             className="field"
                             value={form.baseUrl}
-                            placeholder="http://192.168.1.20:4000"
+                            placeholder="http://bridge-a.example.test:4000"
                             autoComplete="off"
                             spellCheck={false}
                             onBlur={validateDuplicate}

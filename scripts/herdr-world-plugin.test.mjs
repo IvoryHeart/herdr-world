@@ -121,13 +121,16 @@ const logPath = path.join(bin, "launchctl.log");
 const commandPath = path.join(bin, "service-command.json");
 const failPath = path.join(bin, "bootstrap-fails");
 const cleanupFailPath = path.join(bin, "bootout-fails");
+const servicePath = path.join(bin, "service.plist");
 appendFileSync(logPath, JSON.stringify(args) + "\\n");
 if (args[0] === "print") {
   const service = args[1]?.split("/").length === 3;
   if (!service) process.exit(0);
   if (!existsSync(statePath)) process.exit(1);
   const pid = readFileSync(statePath, "utf8").trim();
+  const plistPath = existsSync(servicePath) ? readFileSync(servicePath, "utf8") : "";
   process.stdout.write("pid = " + pid + "\\nstate = running\\n");
+  if (plistPath) process.stdout.write("path = " + plistPath + "\\n");
   process.exit(0);
 }
 if (args[0] === "bootstrap") {
@@ -135,6 +138,7 @@ if (args[0] === "bootstrap") {
   const child = spawn(command[0], command.slice(1), { detached: true, stdio: "ignore" });
   child.unref();
   writeFileSync(statePath, String(child.pid));
+  writeFileSync(servicePath, args[2]);
   if (existsSync(failPath)) {
     process.stderr.write("fixture bootstrap failed\\n");
     process.exit(7);
@@ -150,6 +154,7 @@ if (args[0] === "bootout") {
     const pid = Number(readFileSync(statePath, "utf8"));
     try { process.kill(pid, "SIGTERM"); } catch {}
     rmSync(statePath, { force: true });
+    rmSync(servicePath, { force: true });
   }
   process.exit(0);
 }
@@ -520,6 +525,47 @@ test("launchd bootstraps RunAtLoad services once and unloads partial startup", a
       const pid = Number(readFileSync(fixture.statePath, "utf8"));
       try { process.kill(pid, "SIGTERM"); } catch {}
     }
+    await new Promise((resolve) => fixture.socketServer.close(resolve));
+    rmSync(fixture.socketPath, { force: true });
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("start recovers an owned launchd service when its runtime record is missing", async () => {
+  const fixture = await launchdFixture();
+  const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
+  const identity = resolveTargetIdentity(validateConfig({}), fixture.env);
+  const recordPath = targetRecordPath(fixture.stateDir, identity.identity);
+  try {
+    await runAction("start", options);
+    rmSync(recordPath, { force: true });
+
+    const configPath = path.join(fixture.env.HERDR_PLUGIN_CONFIG_DIR, "config.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        host: "0.0.0.0",
+        port: fixture.port,
+        port_range: [fixture.port, fixture.port],
+        allowed_hosts: ["world.example"],
+        allowed_origins: ["https://world.example"],
+      }),
+    );
+    await runAction("start", options);
+
+    const commands = readFileSync(fixture.logPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.ok(commands.some((args) => args[0] === "bootout"));
+    assert.ok(commands.some((args) => args[0] === "bootstrap"));
+    const plistName = readdirSync(path.join(fixture.stateDir, "supervisors")).find((name) => name.endsWith(".plist"));
+    assert.ok(plistName);
+    const serviceDefinition = readFileSync(path.join(fixture.stateDir, "supervisors", plistName), "utf8");
+    assert.match(serviceDefinition, /<string>0\.0\.0\.0<\/string>/);
+  } finally {
+    try { await runAction("stop", options); } catch {}
     await new Promise((resolve) => fixture.socketServer.close(resolve));
     rmSync(fixture.socketPath, { force: true });
     rmSync(fixture.root, { recursive: true, force: true });
