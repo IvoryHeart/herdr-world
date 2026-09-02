@@ -13,6 +13,7 @@ Web's own release history remains in its upstream changelog.
 - Added UI-managed Direct network access for plugin-hosted bridges, with separate accepted-address,
   page-origin, and bridge-destination policies, optional memory-hard password protection, in-memory
   client sessions, copyable addresses, readiness/rollback status, and actionable bridge diagnostics.
+  [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
 
 ### Changed
 
