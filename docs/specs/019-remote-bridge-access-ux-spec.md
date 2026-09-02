@@ -18,8 +18,9 @@ understand.
 
 This specification defines a small UI-managed access flow:
 
-1. a host-side Remote access area controls whether this bridge accepts remote
-   connections and which bridge addresses it accepts; and
+1. a host-side Remote access area, described in the UI as direct network access
+   for LAN/VPN use, controls whether this bridge accepts remote connections and
+   which bridge addresses it accepts; and
 2. the existing client-side Bridges area stores and enables bridge URLs.
 
 The observable outcome is that a user can enable access on one machine and add
@@ -33,7 +34,8 @@ changes.
 | --- | --- |
 | Host UI | Add a Remote access settings area modeled on the existing Bridges settings UI. |
 | Client UI | Keep the existing Bridges UI and saved-profile behavior. |
-| Remote toggle | `Allow remote connections` is off by default and preserves accepted addresses when disabled. |
+| Mode naming | Describe the first mode as `Direct network access` or `LAN/VPN access`; if the section remains `Remote access`, its helper text must not imply secure Internet exposure. |
+| Remote toggle | `Allow direct network connections` is off by default and preserves accepted addresses when disabled. |
 | Accepted addresses | Hostnames or IP literals that clients may use in the bridge URL; they are not source-IP authentication. |
 | Browser policy | Keep accepted bridge hosts, allowed page origins, and allowed bridge destinations as separate high-level lists because they control different request directions. |
 | Suggestions | Show detected non-loopback addresses as unchecked suggestions. |
@@ -65,7 +67,7 @@ This feature includes:
 
 This feature does not:
 
-- implement SSH tunneling or an SSH credential manager;
+- implement SSH tunneling or an SSH credential manager; SSH is a separate future desktop connection mode;
 - implement TLS, HTTPS, WSS, certificates, or a public reverse-proxy service;
 - implement source-IP allowlists or claim that accepted addresses authenticate a client;
 - add user accounts, roles, multi-factor authentication, or a shared identity system;
@@ -325,10 +327,11 @@ use an in-memory bearer/session credential for HTTP and a corresponding
 authenticated WebSocket handshake or first-message ticket. It MUST work for
 cross-origin bridge profiles without requiring insecure wildcard CORS.
 
-The password is a baseline against casual access, not protection against a
-network observer. The UI SHALL state that HTTP exposes credentials and session
-traffic to a capable network observer and recommend TLS, VPN, or SSH for
-untrusted networks.
+The password is defense-in-depth against casual access. Over cleartext HTTP it
+does not provide transport confidentiality, integrity, or server
+authentication, and it is not a substitute for TLS, VPN, or SSH. The UI SHALL
+state that HTTP exposes credentials and session traffic to a capable network
+observer and recommend TLS, VPN, or SSH for untrusted networks.
 
 ## 10. Diagnostics
 
@@ -361,6 +364,20 @@ client connection code. It SHALL not add a generic transport abstraction,
 SSH-tunnel manager, or native Herdr remote-host contract. A future transport
 can introduce its own boundary when a second concrete implementation and its
 common requirements are known.
+
+### Future SSH direction (informative, not part of this specification)
+
+A later desktop-oriented Bridges flow MAY offer two connection modes:
+
+- `SSH` (recommended): use system OpenSSH, the user's SSH config,
+  `known_hosts`, and `ssh-agent`, while keeping the remote World bridge
+  loopback-only; and
+- `Direct URL`: this specification's direct network path for trusted LAN/VPN,
+  Android, browser-only, and existing operator-managed reverse-proxy use.
+
+That SSH mode SHALL be a separate proposal and SHALL reuse the user-facing
+conventions of `herdr --remote` without managing private keys in the browser or
+introducing a generic transport abstraction here.
 
 ## 12. Acceptance scenarios
 
