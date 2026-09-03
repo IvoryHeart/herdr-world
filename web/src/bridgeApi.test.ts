@@ -49,6 +49,35 @@ describe("authenticated bridge requests", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
+  it("shares one prompt and authentication request across concurrent 401 responses", async () => {
+    let releaseAuthentication = () => {};
+    const authenticationStarted = new Promise<void>((resolve) => {
+      releaseAuthentication = resolve;
+    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/session")) {
+        await authenticationStarted;
+        return new Response(JSON.stringify({ token: "b".repeat(64) }), { status: 200 });
+      }
+      if (!new Headers(init?.headers).has("authorization")) {
+        return new Response(null, { status: 401 });
+      }
+      return new Response("{}", { status: 200 });
+    });
+    const prompt = vi.fn(async () => "synthetic-password");
+    setBridgePasswordPromptHandler(prompt);
+
+    const first = authenticatedFetch(`${bridgeUrl}/api/snapshot`);
+    const second = authenticatedFetch(`${bridgeUrl}/api/notes`);
+    await vi.waitFor(() => expect(prompt).toHaveBeenCalledOnce());
+    releaseAuthentication?.();
+
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/auth/session"))).toHaveLength(1);
+  });
+
   it("clears an invalidated session and prompts again instead of staying offline", async () => {
     let snapshotRequests = 0;
     let sessions = 0;

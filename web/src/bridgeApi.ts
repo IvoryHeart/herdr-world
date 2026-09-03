@@ -6,7 +6,7 @@ type AuthenticatedFetchOptions = {
 };
 
 const bridgeSessions = new Map<string, string>();
-const pendingPasswordPrompts = new Map<string, Promise<string | null>>();
+const pendingAuthentications = new Map<string, Promise<void>>();
 const bridgeReauthenticationNeeded = new Set<string>();
 let passwordPromptHandler: PasswordPromptHandler | null = null;
 
@@ -55,17 +55,7 @@ export async function authenticatedFetch(
 
   bridgeSessions.delete(origin);
   bridgeReauthenticationNeeded.add(origin);
-  let prompt = pendingPasswordPrompts.get(origin);
-  if (!prompt) {
-    prompt = passwordPromptHandler ? passwordPromptHandler(origin) : Promise.resolve(null);
-    pendingPasswordPrompts.set(origin, prompt);
-  }
-  const password = await prompt;
-  pendingPasswordPrompts.delete(origin);
-  if (password === null) {
-    throw new BridgeAuthenticationError();
-  }
-  await authenticateBridge(origin, password, init.signal ?? undefined, timeoutMs);
+  await authenticateBridgeSession(origin, init.signal ?? undefined, timeoutMs);
   const retry = await fetchWithSession(input, init, origin, timeoutMs);
   if (retry.status === 401) {
     bridgeSessions.delete(origin);
@@ -104,17 +94,42 @@ export async function refreshBridgeAuthentication(input: string | URL): Promise<
 
   bridgeSessions.delete(origin);
   bridgeReauthenticationNeeded.add(origin);
-  let prompt = pendingPasswordPrompts.get(origin);
-  if (!prompt) {
-    prompt = passwordPromptHandler ? passwordPromptHandler(origin) : Promise.resolve(null);
-    pendingPasswordPrompts.set(origin, prompt);
-  }
-  const password = await prompt;
-  pendingPasswordPrompts.delete(origin);
-  if (password === null) throw new BridgeAuthenticationError();
-  await authenticateBridge(origin, password);
+  await authenticateBridgeSession(origin);
   bridgeReauthenticationNeeded.delete(origin);
   return true;
+}
+
+function authenticateBridgeSession(
+  origin: string,
+  callerSignal?: AbortSignal,
+  timeoutMs?: number,
+): Promise<void> {
+  const existing = pendingAuthentications.get(origin);
+  if (existing) {
+    return existing;
+  }
+  const created = (async () => {
+    const password = passwordPromptHandler
+      ? await passwordPromptHandler(origin)
+      : null;
+    if (password === null) {
+      throw new BridgeAuthenticationError();
+    }
+    await authenticateBridge(origin, password, callerSignal, timeoutMs);
+    bridgeReauthenticationNeeded.delete(origin);
+  })();
+  pendingAuthentications.set(origin, created);
+  void created.then(
+    () => clearPendingAuthentication(origin, created),
+    () => clearPendingAuthentication(origin, created),
+  );
+  return created;
+}
+
+function clearPendingAuthentication(origin: string, pending: Promise<void>) {
+  if (pendingAuthentications.get(origin) === pending) {
+    pendingAuthentications.delete(origin);
+  }
 }
 
 async function fetchWithSession(
