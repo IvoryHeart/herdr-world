@@ -3,7 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import { applyActivityMessage, parseActivityEventData, replayActivityMessages } from "./activity";
 import type { ActivityLogEntry } from "./activity";
 import type { BridgeId, BridgeRuntime } from "./bridge";
-import { bridgeWebSocketProtocols } from "./bridgeApi";
+import { bridgeWebSocketProtocols, refreshBridgeAuthentication } from "./bridgeApi";
 import { createSnapshotRefreshController } from "./refreshCoordinator";
 import { fetchRuntimeSnapshot, RuntimeCache } from "./runtimeClient";
 import type { RuntimeLoadState } from "./runtimeClient";
@@ -230,7 +230,16 @@ export function RuntimeConnection({
       interval = window.setInterval(refresh, SNAPSHOT_REFRESH_INTERVAL_MS);
     }, SNAPSHOT_REFRESH_INTERVAL_MS + refreshOffset);
 
-    const events = openEventsSocket(wsUrlRef.current, "/ws/events", requestEventRefresh);
+    const events = openEventsSocket(wsUrlRef.current, "/ws/events", requestEventRefresh, {
+      onClose: () => {
+        void refreshBridgeAuthentication(wsUrlRef.current("/ws/events")).catch((error) => {
+          officeDebug("events-socket:reauthentication-failed", {
+            path: "/ws/events",
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      },
+    });
     const activity = openEventsSocket(
       wsUrlRef.current,
       "/ws/activity",
@@ -548,7 +557,7 @@ function openEventsSocket(
   wsUrl: (path: string, query?: URLSearchParams) => string,
   path: string,
   onEvent: (event: MessageEvent) => void,
-  options: { onOpen?: () => void } = {},
+  options: { onOpen?: () => void; onClose?: () => void } = {},
 ) {
   const url = wsUrl(path);
   let socket: WebSocket | null = null;
@@ -584,6 +593,7 @@ function openEventsSocket(
       if (closed || socket !== next || reconnectTimer !== null) {
         return;
       }
+      options.onClose?.();
       const delay = Math.min(500 * 2 ** attempts, 5_000);
       attempts += 1;
       officeDebug("events-socket:close", { path, attempts, retryDelayMs: delay });

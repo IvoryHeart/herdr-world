@@ -4,6 +4,7 @@ type PasswordPromptHandler = (origin: string) => Promise<string | null>;
 
 const bridgeSessions = new Map<string, string>();
 const pendingPasswordPrompts = new Map<string, Promise<string | null>>();
+const bridgeReauthenticationNeeded = new Set<string>();
 let passwordPromptHandler: PasswordPromptHandler | null = null;
 
 export class BridgeAuthenticationError extends Error {
@@ -26,7 +27,10 @@ export function setBridgePasswordPromptHandler(handler: PasswordPromptHandler | 
 
 export function clearBridgeSession(input: string | URL) {
   const origin = bridgeOrigin(input);
-  if (origin) bridgeSessions.delete(origin);
+  if (origin) {
+    bridgeSessions.delete(origin);
+    bridgeReauthenticationNeeded.delete(origin);
+  }
 }
 
 export function bridgeWebSocketProtocols(input: string | URL): string[] {
@@ -46,6 +50,7 @@ export async function authenticatedFetch(
   }
 
   bridgeSessions.delete(origin);
+  bridgeReauthenticationNeeded.add(origin);
   let prompt = pendingPasswordPrompts.get(origin);
   if (!prompt) {
     prompt = passwordPromptHandler ? passwordPromptHandler(origin) : Promise.resolve(null);
@@ -60,9 +65,52 @@ export async function authenticatedFetch(
   const retry = await fetchWithSession(input, init, origin);
   if (retry.status === 401) {
     bridgeSessions.delete(origin);
+    bridgeReauthenticationNeeded.add(origin);
     throw new BridgeAuthenticationError();
   }
   return retry;
+}
+
+/**
+ * Check a session after a WebSocket reconnect. Browsers do not expose the
+ * handshake's HTTP 401 to WebSocket clients, so a failed socket alone cannot
+ * trigger the normal password prompt. The status endpoint lets us distinguish
+ * an expired bridge session from a temporarily unavailable bridge.
+ */
+export async function refreshBridgeAuthentication(input: string | URL): Promise<boolean> {
+  const origin = bridgeOrigin(input);
+  if (!origin || (!bridgeSessions.has(origin) && !bridgeReauthenticationNeeded.has(origin))) {
+    return false;
+  }
+  let response: Response;
+  try {
+    response = await fetchWithSession(`${origin}/api/auth/status`, {}, origin);
+  } catch {
+    return false;
+  }
+  if (!response.ok) return false;
+  const payload = (await response.json().catch(() => null)) as {
+    required?: unknown;
+    authenticated?: unknown;
+  } | null;
+  if (payload?.required !== true || payload.authenticated === true) {
+    bridgeReauthenticationNeeded.delete(origin);
+    return false;
+  }
+
+  bridgeSessions.delete(origin);
+  bridgeReauthenticationNeeded.add(origin);
+  let prompt = pendingPasswordPrompts.get(origin);
+  if (!prompt) {
+    prompt = passwordPromptHandler ? passwordPromptHandler(origin) : Promise.resolve(null);
+    pendingPasswordPrompts.set(origin, prompt);
+  }
+  const password = await prompt;
+  pendingPasswordPrompts.delete(origin);
+  if (password === null) throw new BridgeAuthenticationError();
+  await authenticateBridge(origin, password);
+  bridgeReauthenticationNeeded.delete(origin);
+  return true;
 }
 
 async function fetchWithSession(
@@ -107,8 +155,12 @@ async function authenticateBridge(origin: string, password: string) {
 
 function bridgeOrigin(input: string | URL | RequestInfo): string | null {
   try {
-    if (typeof Request !== "undefined" && input instanceof Request) return new URL(input.url).origin;
-    return new URL(String(input), globalThis.location?.origin ?? "http://localhost").origin;
+    const url = typeof Request !== "undefined" && input instanceof Request
+      ? new URL(input.url)
+      : new URL(String(input), globalThis.location?.origin ?? "http://localhost");
+    if (url.protocol === "ws:") url.protocol = "http:";
+    if (url.protocol === "wss:") url.protocol = "https:";
+    return url.origin;
   } catch {
     return null;
   }

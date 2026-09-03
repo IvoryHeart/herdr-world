@@ -12,6 +12,8 @@ const logs = new Map();
 const fixtureStates = new Map();
 const fixtureSockets = new Map();
 const servers = [];
+const FIXTURE_PASSWORD = "fixture-only-password";
+const FIXTURE_SESSION_TOKEN = "fixture-session-token";
 
 const fixtures = [
   {
@@ -51,12 +53,13 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 async function startFixture(fixture) {
   const webSockets = new WebSocketServer({ noServer: true });
   const server = createServer(async (request, response) => {
-    setCorsHeaders(request, response);
+    setCorsHeaders(fixture, request, response);
     if (request.method === "OPTIONS") {
       response.writeHead(204).end();
       return;
     }
     const url = new URL(request.url ?? "/", `http://127.0.0.1:${fixture.port}`);
+    const state = fixtureStates.get(fixture.id);
     if (url.pathname === "/__fixture/requests") {
       json(response, 200, Object.fromEntries(logs));
       return;
@@ -97,7 +100,6 @@ async function startFixture(fixture) {
       return;
     }
     if (url.pathname === "/api/local/remote-access") {
-      const state = fixtureStates.get(fixture.id);
       if (!state?.remoteAccess) {
         json(response, 404, { error: "not found" });
         return;
@@ -128,6 +130,31 @@ async function startFixture(fixture) {
         mutation_allowed: true,
         apply: { state: "ready", reason: null, restored: null },
       });
+      return;
+    }
+    if (url.pathname === "/api/auth/status") {
+      json(response, 200, {
+        required: state?.remoteAccess?.password_configured === true,
+        authenticated: request.headers.authorization === `Bearer ${FIXTURE_SESSION_TOKEN}`,
+        local_peer_bypass: false,
+      });
+      return;
+    }
+    if (url.pathname === "/api/auth/session" && request.method === "POST") {
+      const body = await readJson(request);
+      if (body?.password !== FIXTURE_PASSWORD) {
+        json(response, 401, { error: "password required or rejected" });
+        return;
+      }
+      json(response, 200, { token: FIXTURE_SESSION_TOKEN.padEnd(32, "x") });
+      return;
+    }
+    if (
+      state?.remoteAccess?.password_configured === true &&
+      url.pathname !== "/api/capabilities" &&
+      request.headers.authorization !== `Bearer ${FIXTURE_SESSION_TOKEN.padEnd(32, "x")}`
+    ) {
+      json(response, 401, { error: "password required or rejected" });
       return;
     }
     if (url.pathname === "/api/capabilities") {
@@ -213,6 +240,15 @@ async function startFixture(fixture) {
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", `http://127.0.0.1:${fixture.port}`);
     if (!url.pathname.startsWith("/ws/")) {
+      socket.destroy();
+      return;
+    }
+    const state = fixtureStates.get(fixture.id);
+    if (
+      state?.remoteAccess?.password_configured === true &&
+      request.headers["sec-websocket-protocol"] !== `herdr-world-auth.${FIXTURE_SESSION_TOKEN.padEnd(32, "x")}`
+    ) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
       socket.destroy();
       return;
     }
@@ -354,6 +390,7 @@ function setFixtureState(hostId, value) {
   const features = value.features ?? current.features;
   const commands = value.commands ?? current.commands;
   const launchCreatesSeat = value.launchCreatesSeat ?? current.launchCreatesSeat;
+  const passwordConfigured = value.passwordConfigured ?? current.remoteAccess.password_configured;
   if (
     !["ready", "offline", "malformed"].includes(snapshotMode) ||
     !["default", "empty", "empty-shell", "large", "idle-desk", "long-title", "showcase"].includes(snapshotVariant) ||
@@ -362,7 +399,8 @@ function setFixtureState(hostId, value) {
       (!Array.isArray(features) || features.some((feature) => typeof feature !== "string"))) ||
     (commands !== null &&
       (!Array.isArray(commands) || commands.some((command) => typeof command !== "string"))) ||
-    typeof launchCreatesSeat !== "boolean"
+    typeof launchCreatesSeat !== "boolean" ||
+    typeof passwordConfigured !== "boolean"
   ) {
     return false;
   }
@@ -374,7 +412,7 @@ function setFixtureState(hostId, value) {
     commands,
     launchCreatesSeat,
     launchedSeat: current.launchedSeat,
-    remoteAccess: current.remoteAccess,
+    remoteAccess: { ...current.remoteAccess, password_configured: passwordConfigured },
   });
   return true;
 }
@@ -698,14 +736,15 @@ function largePane(index, status, tabId, focused = false) {
   };
 }
 
-function setCorsHeaders(request, response) {
+function setCorsHeaders(fixture, request, response) {
   const origin = request.headers.origin;
-  if (origin) {
+  const state = fixtureStates.get(fixture.id);
+  if (origin && state?.remoteAccess?.allowed_page_origins.includes(origin)) {
     response.setHeader("access-control-allow-origin", origin);
     response.setHeader("vary", "Origin");
   }
   response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
-  response.setHeader("access-control-allow-headers", "content-type");
+  response.setHeader("access-control-allow-headers", "content-type, authorization");
 }
 
 function json(response, status, value) {

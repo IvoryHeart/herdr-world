@@ -3,6 +3,7 @@ import {
   authenticatedFetch,
   bridgeWebSocketProtocols,
   clearBridgeSession,
+  refreshBridgeAuthentication,
   setBridgePasswordPromptHandler,
 } from "./bridgeApi";
 
@@ -42,6 +43,9 @@ describe("authenticated bridge requests", () => {
     expect(bridgeWebSocketProtocols(`${bridgeUrl}/ws/events`)).toEqual([
       `herdr-world-auth.${"a".repeat(64)}`,
     ]);
+    expect(bridgeWebSocketProtocols("ws://192.0.2.20:4000/ws/events")).toEqual([
+      `herdr-world-auth.${"a".repeat(64)}`,
+    ]);
     expect(fetchMock).toHaveBeenCalled();
   });
 
@@ -69,5 +73,36 @@ describe("authenticated bridge requests", () => {
     await authenticatedFetch(`${bridgeUrl}/api/snapshot`);
     expect(prompt).toHaveBeenCalledTimes(2);
     expect(sessions).toBe(2);
+  });
+
+  it("reauthenticates after a WebSocket session expires", async () => {
+    let sessionCount = 0;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/session")) {
+        sessionCount += 1;
+        return new Response(JSON.stringify({ token: `token-${sessionCount}`.padEnd(32, "x") }), {
+          status: 200,
+        });
+      }
+      if (url.endsWith("/api/auth/status")) {
+        return new Response(JSON.stringify({ required: true, authenticated: false }), { status: 200 });
+      }
+      return new Response(null, {
+        status: new Headers(init?.headers).has("authorization") ? 200 : 401,
+      });
+    });
+    const prompt = vi.fn()
+      .mockResolvedValueOnce("first-password")
+      .mockResolvedValueOnce("second-password");
+    setBridgePasswordPromptHandler(prompt);
+
+    await authenticatedFetch(`${bridgeUrl}/api/snapshot`);
+    await expect(refreshBridgeAuthentication("ws://192.0.2.20:4000/ws/events")).resolves.toBe(true);
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(bridgeWebSocketProtocols("ws://192.0.2.20:4000/ws/events")).toEqual([
+      `herdr-world-auth.${"token-2".padEnd(32, "x")}`,
+    ]);
+    expect(fetchMock).toHaveBeenCalled();
   });
 });

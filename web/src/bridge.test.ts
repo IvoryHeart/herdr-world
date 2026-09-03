@@ -428,8 +428,36 @@ describe("capabilities", () => {
 
   it("probes configured bridge capabilities", async () => {
     const response = compatibleCapabilities({ commands: ["pane.move"] });
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(response), { status: 200 }),
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(
+        url.endsWith("/api/capabilities")
+          ? JSON.stringify(response)
+          : JSON.stringify({ panes: [{ terminal_id: "terminal-test" }] }),
+        { status: 200 },
+      );
+    });
+    const sockets: string[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class ProbeWebSocket {
+        onopen: (() => void) | null = null;
+        onmessage: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor(url: string) {
+          sockets.push(url);
+          queueMicrotask(() => {
+            this.onopen?.();
+            if (url.includes("/ws/terminal")) this.onmessage?.();
+          });
+        }
+
+        close() {
+          this.onclose?.();
+        }
+      },
     );
 
     await expect(probeBridgeBaseUrl("192.0.2.20:4000")).resolves.toEqual(response);
@@ -437,7 +465,43 @@ describe("capabilities", () => {
       "http://192.0.2.20:4000/api/capabilities",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    expect(sockets).toEqual([
+      "ws://192.0.2.20:4000/ws/events",
+      "ws://192.0.2.20:4000/ws/terminal?terminal_id=terminal-test&cols=80&rows=24&takeover=false&coalesce_ms=16",
+    ]);
 
+    fetchMock.mockRestore();
+  });
+
+  it("reports a WebSocket upgrade failure separately from HTTP reachability", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(
+        url.endsWith("/api/capabilities")
+          ? JSON.stringify(compatibleCapabilities())
+          : JSON.stringify({ panes: [] }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal(
+      "WebSocket",
+      class FailingWebSocket {
+        onopen: (() => void) | null = null;
+        onmessage: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor() {
+          queueMicrotask(() => this.onerror?.());
+        }
+
+        close() {}
+      },
+    );
+
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
+      /WebSocket upgrade failed/iu,
+    );
     fetchMock.mockRestore();
   });
 

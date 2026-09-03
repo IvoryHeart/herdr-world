@@ -13,6 +13,7 @@ import { Preferences } from "@capacitor/preferences";
 import {
   BridgeAuthenticationError,
   BridgeDiagnosticError,
+  bridgeWebSocketProtocols,
   setBridgePasswordPromptHandler,
 } from "./bridgeApi";
 import { fetchWithTimeout } from "./fetchWithTimeout";
@@ -1240,7 +1241,101 @@ export async function probeBridgeBaseUrl(baseUrl: string): Promise<BridgeCapabil
   if (!snapshot.ok) {
     throw new BridgeDiagnosticError(capabilityHttpError(snapshot.status));
   }
+  let snapshotValue: unknown;
+  try {
+    snapshotValue = await snapshot.json();
+  } catch {
+    throw new BridgeDiagnosticError("Bridge snapshot response is malformed");
+  }
+  if (!isRecord(snapshotValue)) {
+    throw new BridgeDiagnosticError("Bridge snapshot response is malformed");
+  }
+
+  await probeBridgeWebSocket(normalized, "/ws/events", "Bridge WebSocket upgrade");
+  const terminalId = firstTerminalId(snapshotValue);
+  if (terminalId) {
+    const query = new URLSearchParams({
+      terminal_id: terminalId,
+      cols: "80",
+      rows: "24",
+      takeover: "false",
+      coalesce_ms: "16",
+    });
+    await probeBridgeWebSocket(
+      normalized,
+      "/ws/terminal",
+      "Bridge terminal attach",
+      query,
+      true,
+    );
+  }
   return capabilities;
+}
+
+function firstTerminalId(snapshot: Record<string, unknown>) {
+  if (!Array.isArray(snapshot.panes)) return null;
+  const pane = snapshot.panes.find(
+    (value): value is Record<string, unknown> =>
+      isRecord(value) && typeof value.terminal_id === "string" && value.terminal_id.length > 0,
+  );
+  return pane ? pane.terminal_id as string : null;
+}
+
+function probeBridgeWebSocket(
+  baseUrl: string,
+  path: string,
+  label: string,
+  query?: URLSearchParams,
+  waitForMessage = false,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof WebSocket === "undefined") {
+      reject(new BridgeDiagnosticError(`${label} is unavailable in this browser`));
+      return;
+    }
+    const url = buildWsUrl(baseUrl, path, query);
+    let settled = false;
+    const timer = globalThis.setTimeout(() => finish(new BridgeDiagnosticError(
+      `${label} timed out; check the bridge's Host, Origin, and password settings`,
+    )), 5000);
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timer);
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(url, bridgeWebSocketProtocols(url));
+    } catch {
+      finish(new BridgeDiagnosticError(`${label} could not be opened; check the bridge address`));
+      return;
+    }
+    socket.onopen = () => {
+      if (!waitForMessage) {
+        finish();
+        socket.close();
+      }
+    };
+    socket.onmessage = () => {
+      finish();
+      socket.close();
+    };
+    socket.onerror = () => {
+      finish(new BridgeDiagnosticError(
+        `${label} failed; check the bridge's Host, Origin, and password settings`,
+      ));
+    };
+    socket.onclose = () => {
+      if (!settled) {
+        finish(new BridgeDiagnosticError(`${label} closed before it was ready`));
+      }
+    };
+  });
 }
 
 function capabilityHttpError(status: number) {

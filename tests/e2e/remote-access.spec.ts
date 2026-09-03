@@ -26,3 +26,23 @@ test("manages direct network access as a draft with separate browser permissions
   await expect(page.getByText("Protected", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toContainText(/Bridge ready|Settings saved/iu);
 });
+
+test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and terminal paths", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-b", passwordConfigured: true },
+  });
+  await page.goto("/spaces");
+
+  const prompt = page.getByRole("dialog", { name: "Bridge password" });
+  await expect(prompt).toBeVisible();
+  await prompt.getByLabel("Password").fill("fixture-only-password");
+  await prompt.getByRole("button", { name: "Connect" }).click();
+  await expect(prompt).toBeHidden();
+
+  await page.getByRole("button", { name: "Settings" }).press("Enter");
+  await page.getByRole("tab", { name: "Bridge" }).click();
+  await page.locator(".backend-row-main").filter({ hasText: "Remote B" }).click();
+  await page.getByRole("button", { name: "Test", exact: true }).click();
+
+  await expect(page.getByText("Backend reachable.", { exact: true })).toBeVisible();
+});

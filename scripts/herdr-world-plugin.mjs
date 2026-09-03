@@ -418,7 +418,9 @@ export function configWithRemoteAccess(config, remoteAccess) {
   return validateConfig({
     ...config,
     remote_access,
-    host: remote_access.enabled ? "0.0.0.0" : "127.0.0.1",
+    host: remote_access.enabled
+      ? remoteBindHost(config.host, remote_access)
+      : loopbackBindHost(config.host),
     allowed_hosts: remote_access.accepted_hosts,
     allowed_origins: remote_access.allowed_page_origins,
     allowed_connect_origins: remote_access.allowed_bridge_origins,
@@ -432,7 +434,9 @@ export function validateConfig(input) {
   const remote_access = normalizeRemoteAccess(input);
   config.remote_access = remote_access;
   config.host = isObject(input.remote_access)
-    ? (remote_access.enabled ? "0.0.0.0" : "127.0.0.1")
+    ? (remote_access.enabled
+      ? remoteBindHost(config.host, remote_access)
+      : loopbackBindHost(config.host))
     : config.host;
   config.allowed_hosts = remote_access.accepted_hosts;
   config.allowed_origins = remote_access.allowed_page_origins;
@@ -480,9 +484,26 @@ export function loadConfig(configDir) {
 }
 
 function isLoopbackHost(host) {
-  if (host === "localhost") return true;
-  const version = net.isIP(host);
-  return version === 4 ? host.split(".")[0] === "127" : version === 6 && host === "::1";
+  const normalized = unbracketedHost(host).toLowerCase();
+  if (normalized === "localhost") return true;
+  const version = net.isIP(normalized);
+  return version === 4 ? normalized.split(".")[0] === "127" : version === 6 && normalized === "::1";
+}
+
+function isIpv6Host(host) {
+  return net.isIP(unbracketedHost(host)) === 6;
+}
+
+function loopbackBindHost(host) {
+  return isIpv6Host(host) ? "::1" : "127.0.0.1";
+}
+
+function remoteBindHost(host, remoteAccess) {
+  if (isIpv6Host(host) || remoteAccess.accepted_hosts.some((value) => isIpv6Host(value))) {
+    return "::";
+  }
+  const normalized = unbracketedHost(host);
+  return !isLoopbackHost(normalized) && normalized !== "0.0.0.0" ? normalized : "0.0.0.0";
 }
 
 function hash(value) {
@@ -933,7 +954,7 @@ export async function choosePort(config, identity, stateDir, { portFree = portIs
   throw new PluginError(`no free bridge port is available in ${config.port_range[0]}-${config.port_range[1]}`);
 }
 
-function selectedEnvironment(env, target, serviceId, root, nodePath) {
+function selectedEnvironment(env, target, serviceId, root, nodePath, supervisor) {
   const result = {
     HERDR_SOCKET_PATH: target.socket_path,
     HERDR_WORLD_SETUP: "never",
@@ -949,6 +970,12 @@ function selectedEnvironment(env, target, serviceId, root, nodePath) {
   }
   result.HERDR_WORLD_CONTROLLER = path.join(root, "scripts", "herdr-world-plugin.mjs");
   result.HERDR_WORLD_NODE_PATH = nodePath;
+  result.HERDR_WORLD_CONTROLLER_MODE = supervisor.kind;
+  if (supervisor.kind === "systemd-user") {
+    result.HERDR_WORLD_SYSTEMD_RUN = resolveExecutable("systemd-run", { env });
+  } else if (supervisor.kind === "launchd") {
+    result.HERDR_WORLD_LAUNCHCTL = supervisor.command;
+  }
   return result;
 }
 
@@ -990,6 +1017,18 @@ function pathForSupervisor(stateDir, record, suffix) {
     return path.join(stateDir, "supervisors", record.service_name);
   }
   return path.join(stateDir, "supervisors", `${hash(record.target_identity).slice(0, 32)}.${suffix}`);
+}
+
+function fallbackLeasePath(stateDir, identity) {
+  return path.join(stateDir, "supervisors", `${hash(identity).slice(0, 32)}.fallback-lease`);
+}
+
+function writeFallbackLease(stateDir, record) {
+  atomicWrite(fallbackLeasePath(stateDir, record.target_identity), `${JSON.stringify(record, null, 2)}\n`);
+}
+
+function removeFallbackLease(stateDir, identity) {
+  rmSync(fallbackLeasePath(stateDir, identity), { force: true });
 }
 
 function systemdEscape(value) {
@@ -1139,11 +1178,12 @@ function unrecordedService(identity, supervisor) {
   return {
     target_identity: identity,
     supervisor: supervisor.kind,
+    controller_mode: supervisor.kind,
     service_name: serviceName(identity, supervisor.kind),
   };
 }
 
-async function recoverUnrecordedService(identity, stateDir, supervisor) {
+async function recoverUnrecordedService(identity, stateDir, supervisor, platform = process.platform) {
   if (supervisor.kind === "launchd") {
     const record = unrecordedService(identity, supervisor);
     if (!launchdServicePresent(record, supervisor.command)) return false;
@@ -1197,6 +1237,31 @@ async function recoverUnrecordedService(identity, stateDir, supervisor) {
     return true;
   }
 
+  if (supervisor.kind === "fallback") {
+    const leasePath = fallbackLeasePath(stateDir, identity);
+    const record = readRecord(leasePath);
+    if (!record) return false;
+    if (
+      record.target_identity !== identity ||
+      record.supervisor !== "fallback" ||
+      record.service_name !== serviceName(identity, "fallback")
+    ) {
+      throw new PluginError("fallback service ownership is stale; refusing to signal an unrelated process");
+    }
+    const state = supervisorStatus(record, supervisor, platform);
+    if (!state.active) {
+      removeFallbackLease(stateDir, identity);
+      return false;
+    }
+    if (!state.owned) {
+      throw new PluginError("fallback service ownership is stale; refusing to signal an unrelated process");
+    }
+    stopProcessGroup(record.pid);
+    await waitForStopped(record, supervisor, platform);
+    removeFallbackLease(stateDir, identity);
+    return true;
+  }
+
   return false;
 }
 
@@ -1238,7 +1303,10 @@ function createRecord({ identity, target, config, payload, node, port, superviso
     root: path.resolve(root),
     updated_at: new Date().toISOString(),
   };
-  return { record, environment: selectedEnvironment(env, target, record.service_name, root, node.path) };
+  return {
+    record,
+    environment: selectedEnvironment(env, target, record.service_name, root, node.path, supervisor),
+  };
 }
 
 function spawnFallback(record, environment, stateDir) {
@@ -1252,6 +1320,12 @@ function spawnFallback(record, environment, stateDir) {
       stdio: ["ignore", fd, fd],
     });
     if (!Number.isInteger(child.pid)) throw new PluginError("fallback supervisor did not return a process id");
+    try {
+      writeFallbackLease(stateDir, { ...record, pid: child.pid });
+    } catch (error) {
+      try { process.kill(-child.pid, "SIGTERM"); } catch {}
+      throw error;
+    }
     child.unref();
     return child.pid;
   } finally {
@@ -1452,6 +1526,9 @@ async function stopRecord(record, env, platform = process.platform) {
     await unloadLaunchd(record, supervisor.command);
   }
   if (record.supervisor !== "launchd") await waitForStopped(record, supervisor, platform);
+  if (record.supervisor === "fallback" && env.HERDR_PLUGIN_STATE_DIR) {
+    removeFallbackLease(env.HERDR_PLUGIN_STATE_DIR, record.target_identity);
+  }
   if (record.supervisor === "systemd-user") {
     try {
       runChecked(supervisor.command, ["--user", "disable", record.service_name]);
@@ -1469,6 +1546,7 @@ function recordCompatible(record, manifestVersion, payload, config, target, node
     record.payload_root === payload.packageRoot &&
     record.node_path === node.path &&
     record.host === config.host &&
+    record.controller_mode === record.supervisor &&
     record.socket_path === target.socket_path &&
     record.session_name === target.session_name &&
     (config.port_was_explicit !== true || record.port === config.port) &&
@@ -1532,7 +1610,12 @@ async function startPrepared(plan, { lockHeld = false } = {}) {
       if (ownership.state.active) await stopRecord(previous, env, platform);
       removeRecord(recordPath);
     }
-    const recovered = await recoverUnrecordedService(context.target.identity, context.stateDir, supervisor);
+    const recovered = await recoverUnrecordedService(
+      context.target.identity,
+      context.stateDir,
+      supervisor,
+      platform,
+    );
     if (recovered) {
       console.log("Recovered an unrecorded Herdr World service; applying the current configuration.");
     }
@@ -1620,7 +1703,12 @@ async function stopAction({ root = ROOT, env = process.env, platform = process.p
   const record = readRecord(recordPath);
   if (!record) {
     const supervisor = selectSupervisor(platform, env);
-    const recovered = await recoverUnrecordedService(context.target.identity, context.stateDir, supervisor);
+    const recovered = await recoverUnrecordedService(
+      context.target.identity,
+      context.stateDir,
+      supervisor,
+      platform,
+    );
     if (recovered) {
       console.log(`Stopped the unrecorded Herdr World service for ${displayTarget(context.target)}.`);
       return null;
@@ -1845,6 +1933,10 @@ export async function applyRemoteAccessAction({
   arch = process.arch,
   glibcVersion,
 } = {}) {
+  const handoffGraceMs = Number(env.HERDR_WORLD_APPLY_GRACE_MS ?? 0);
+  if (Number.isFinite(handoffGraceMs) && handoffGraceMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(handoffGraceMs, 1000)));
+  }
   const context = runtimeContext(env);
   const configPath = path.join(context.configDir, CONFIG_FILE);
   const previousText = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
@@ -1859,6 +1951,20 @@ export async function applyRemoteAccessAction({
     if (record) {
       const ownership = assertRecordOwnership(record, env, platform);
       previousActive = ownership.state.active;
+    } else {
+      const supervisor = selectSupervisor(platform, env);
+      previousActive = await recoverUnrecordedService(
+        context.target.identity,
+        context.stateDir,
+        supervisor,
+        platform,
+      );
+      if (supervisor.kind === "fallback" && !previousActive) {
+        const reason = "fallback bridge service ownership could not be verified because its runtime record is missing; run the plugin stop and start actions before applying settings";
+        writeApplyStatus(context.stateDir, "failed", reason, false);
+        rmSync(draftPath, { force: true });
+        throw new PluginError(reason);
+      }
     }
     writeApplyStatus(context.stateDir, "applying", "settings saved; reconciling the managed bridge", null);
     try {
