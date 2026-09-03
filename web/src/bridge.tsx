@@ -1319,8 +1319,14 @@ function probeBridgeWebSocket(
         socket.close();
       }
     };
-    socket.onmessage = () => {
-      finish();
+    socket.onmessage = (event) => {
+      if (!waitForMessage) {
+        finish();
+        socket.close();
+        return;
+      }
+      const diagnostic = terminalProbeMessageError(label, event.data);
+      finish(diagnostic ?? undefined);
       socket.close();
     };
     socket.onerror = () => {
@@ -1334,6 +1340,28 @@ function probeBridgeWebSocket(
       }
     };
   });
+}
+
+function terminalProbeMessageError(label: string, data: unknown): Error | null {
+  if (typeof data !== "string") {
+    return new BridgeDiagnosticError(`${label} returned a malformed readiness frame`);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(data);
+  } catch {
+    return new BridgeDiagnosticError(`${label} returned a malformed readiness frame`);
+  }
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return new BridgeDiagnosticError(`${label} returned an unexpected readiness frame`);
+  }
+  if (value.type === "attach_ready") {
+    return null;
+  }
+  if (value.type === "closed" && typeof value.reason === "string" && value.reason.trim()) {
+    return new BridgeDiagnosticError(`${label} failed: ${value.reason.trim()}`);
+  }
+  return new BridgeDiagnosticError(`${label} returned an unexpected readiness frame (${value.type})`);
 }
 
 function capabilityHttpError(status: number) {

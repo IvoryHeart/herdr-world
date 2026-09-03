@@ -442,7 +442,7 @@ describe("capabilities", () => {
       "WebSocket",
       class ProbeWebSocket {
         onopen: (() => void) | null = null;
-        onmessage: (() => void) | null = null;
+        onmessage: ((event: { data: string }) => void) | null = null;
         onerror: (() => void) | null = null;
         onclose: (() => void) | null = null;
 
@@ -450,7 +450,9 @@ describe("capabilities", () => {
           sockets.push(url);
           queueMicrotask(() => {
             this.onopen?.();
-            if (url.includes("/ws/terminal")) this.onmessage?.();
+            if (url.includes("/ws/terminal")) {
+              this.onmessage?.({ data: JSON.stringify({ type: "attach_ready" }) });
+            }
           });
         }
 
@@ -470,6 +472,45 @@ describe("capabilities", () => {
       "ws://192.0.2.20:4000/ws/terminal?terminal_id=terminal-test&takeover=false&probe=true",
     ]);
 
+    fetchMock.mockRestore();
+  });
+
+  it("reports terminal attach failure frames instead of treating them as ready", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(
+        url.endsWith("/api/capabilities")
+          ? JSON.stringify(compatibleCapabilities())
+          : JSON.stringify({ panes: [{ terminal_id: "terminal-test" }] }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal(
+      "WebSocket",
+      class ClosedTerminalWebSocket {
+        onopen: (() => void) | null = null;
+        onmessage: ((event: { data: string }) => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor(url: string) {
+          queueMicrotask(() => {
+            this.onopen?.();
+            if (url.includes("/ws/terminal")) {
+              this.onmessage?.({
+                data: JSON.stringify({ type: "closed", reason: "terminal attach failed: terminal missing" }),
+              });
+            }
+          });
+        }
+
+        close() {}
+      },
+    );
+
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
+      /Bridge terminal attach failed: terminal attach failed: terminal missing/iu,
+    );
     fetchMock.mockRestore();
   });
 
