@@ -289,6 +289,21 @@ test("remote access preserves the configured IPv6 bind family", () => {
   assert.equal(disabled.host, "::1");
 });
 
+test("remote access keeps an IPv4 page reachable when accepted hosts include IPv6", () => {
+  const config = validateConfig({
+    host: "127.0.0.1",
+    allowed_hosts: [],
+    allowed_origins: [],
+  });
+  const enabled = configWithRemoteAccess(config, {
+    enabled: true,
+    accepted_hosts: ["192.0.2.20", "2001:db8::20"],
+    allowed_page_origins: ["http://192.0.2.20:8787"],
+    allowed_bridge_origins: [],
+  });
+  assert.equal(enabled.host, "0.0.0.0");
+});
+
 test("npm installation is exact, private, script-free, and registry-pinned", () => {
   assert.deepEqual(npmInstallArgs("0.1.0-rc.5", ".herdr-world-plugin"), [
     "install",
@@ -547,6 +562,7 @@ test("launchd bootstraps RunAtLoad services once and unloads partial startup", a
   try {
     const record = await runAction("start", options);
     assert.equal(record.supervisor, "launchd");
+    assert.equal(record.controller_mode, "launchd");
     assert.equal(record.port, fixture.port);
     const commands = readFileSync(fixture.logPath, "utf8")
       .trim()
@@ -556,6 +572,17 @@ test("launchd bootstraps RunAtLoad services once and unloads partial startup", a
     assert.ok(commands.some((args) => args[0] === "bootstrap"));
     assert.equal(commands.some((args) => args[0] === "kickstart"), false);
     assert.ok(commands.some((args) => args[0] === "print" && args[1].split("/").length === 3));
+
+    const bootstrapCount = () => readFileSync(fixture.logPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .filter((args) => args[0] === "bootstrap").length;
+    const beforeIdempotentStart = bootstrapCount();
+    const sameRecord = await runAction("start", options);
+    assert.equal(sameRecord.service_name, record.service_name);
+    assert.equal(bootstrapCount(), beforeIdempotentStart);
 
     await runAction("stop", options);
     assert.equal(fsExists(fixture.statePath), false);
@@ -658,7 +685,13 @@ test("remote access apply waits for readiness and restores the prior service on 
         allowed_bridge_origins: [],
       },
     }));
-    await applyRemoteAccessAction({ draftPath, ...options });
+    fixture.env.HERDR_WORLD_APPLY_GRACE_MS = "100";
+    const applying = applyRemoteAccessAction({ draftPath, ...options });
+    for (let attempt = 0; attempt < 20 && !fsExists(statusPath); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+    assert.equal(JSON.parse(readFileSync(statusPath, "utf8")).state, "applying");
+    await applying;
     const appliedConfig = JSON.parse(readFileSync(configPath, "utf8"));
     assert.equal(appliedConfig.remote_access.enabled, true);
     assert.deepEqual(appliedConfig.allowed_hosts, ["bridge.example.test"]);
@@ -723,6 +756,54 @@ test("fallback remote access apply recovers an owned service when its runtime re
     assert.equal(JSON.parse(readFileSync(configPath, "utf8")).remote_access.enabled, true);
     assert.equal(JSON.parse(readFileSync(statusPath, "utf8")).state, "ready");
     assert.equal(fsExists(fixture.statePath), false);
+  } finally {
+    try { await runAction("stop", options); } catch {}
+    await new Promise((resolve) => fixture.socketServer.close(resolve));
+    rmSync(fixture.socketPath, { force: true });
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("concurrent remote access applies roll back to the locked successful baseline", async () => {
+  const fixture = await launchdFixture();
+  mkdirSync(path.join(fixture.root, "scripts"), { recursive: true });
+  writeFileSync(
+    path.join(fixture.root, "scripts", "herdr-world-plugin.mjs"),
+    readFileSync(path.join(ROOT, "scripts", "herdr-world-plugin.mjs")),
+  );
+  const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
+  const configPath = path.join(fixture.env.HERDR_PLUGIN_CONFIG_DIR, "config.json");
+  const firstDraft = path.join(fixture.stateDir, "remote-access-first.json");
+  const secondDraft = path.join(fixture.stateDir, "remote-access-second.json");
+  try {
+    await runAction("start", options);
+    fixture.env.HERDR_WORLD_APPLY_GRACE_MS = "200";
+    writeFileSync(firstDraft, JSON.stringify({
+      remote_access: {
+        enabled: true,
+        accepted_hosts: ["first.example.test"],
+        allowed_page_origins: ["http://world.example.test"],
+        allowed_bridge_origins: [],
+      },
+    }));
+    writeFileSync(secondDraft, JSON.stringify({
+      remote_access: {
+        enabled: true,
+        accepted_hosts: ["second.example.test"],
+        allowed_page_origins: ["http://world.example.test"],
+        allowed_bridge_origins: [],
+      },
+    }));
+
+    const firstApply = applyRemoteAccessAction({ draftPath: firstDraft, ...options });
+    const secondApply = applyRemoteAccessAction({ draftPath: secondDraft, ...options });
+    await firstApply;
+    writeFileSync(fixture.failPath, "fail after first apply\n");
+    await assert.rejects(secondApply, /fixture bootstrap failed/);
+
+    const restored = JSON.parse(readFileSync(configPath, "utf8"));
+    assert.deepEqual(restored.allowed_hosts, ["first.example.test"]);
+    assert.equal(fsExists(fixture.statePath), true);
   } finally {
     try { await runAction("stop", options); } catch {}
     await new Promise((resolve) => fixture.socketServer.close(resolve));

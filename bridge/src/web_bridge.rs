@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::fmt;
 use std::io::{self, ErrorKind, Write};
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 #[cfg(test)]
@@ -100,6 +100,7 @@ const TERMINAL_OUTPUT_FRAME_GZIP: u8 = 1;
 const TERMINAL_OUTPUT_GZIP_MIN_BYTES: usize = 256;
 const TERMINAL_OUTPUT_GZIP_ACKNOWLEDGEMENT: &str =
     r#"{"type":"terminal_output_encoding","encoding":"gzip"}"#;
+const TERMINAL_ATTACH_READY: &str = r#"{"type":"attach_ready"}"#;
 const DAEMON_STATUS_TIMEOUT: Duration = Duration::from_secs(5);
 const ACTIVITY_WATCHER_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const ACTIVITY_WATCHER_MAX_BACKOFF: Duration = Duration::from_secs(30);
@@ -126,6 +127,10 @@ const AUTH_TOKEN_BYTES: usize = 32;
 const MAX_APPLY_REASON_BYTES: usize = 240;
 static UPLOAD_TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static CONTROLLER_TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static AUTH_TEST_VERIFICATION_PAUSE: AtomicBool = AtomicBool::new(false);
+#[cfg(test)]
+static AUTH_TEST_VERIFICATION_STARTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone)]
 struct BridgeOptions {
@@ -253,6 +258,60 @@ struct AuthSessions {
     pending: HashMap<String, usize>,
 }
 
+struct PendingPasswordVerification {
+    sessions: Arc<Mutex<AuthSessions>>,
+    key: String,
+    finished: bool,
+}
+
+impl PendingPasswordVerification {
+    fn new(sessions: Arc<Mutex<AuthSessions>>, key: String) -> Self {
+        Self {
+            sessions,
+            key,
+            finished: false,
+        }
+    }
+
+    fn finish(&mut self, valid: bool) -> Result<(Duration, bool), AuthFailure> {
+        let mut sessions = self.sessions.lock().map_err(|_| AuthFailure::Unavailable)?;
+        decrement_pending_verification(&mut sessions, &self.key);
+        let result = if valid {
+            sessions.failures.remove(&self.key);
+            (Duration::ZERO, true)
+        } else {
+            let failures = sessions.failures.entry(self.key.clone()).or_default();
+            failures.push_back(Instant::now());
+            (
+                AUTH_FAILURE_DELAY.saturating_mul(failures.len() as u32),
+                false,
+            )
+        };
+        self.finished = true;
+        Ok(result)
+    }
+}
+
+impl Drop for PendingPasswordVerification {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        if let Ok(mut sessions) = self.sessions.lock() {
+            decrement_pending_verification(&mut sessions, &self.key);
+        }
+    }
+}
+
+fn decrement_pending_verification(sessions: &mut AuthSessions, key: &str) {
+    if let Some(pending) = sessions.pending.get_mut(key) {
+        *pending = pending.saturating_sub(1);
+        if *pending == 0 {
+            sessions.pending.remove(key);
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct AuthenticationCapability {
     required: bool,
@@ -293,7 +352,7 @@ impl BridgeAuth {
     fn local_peer_allowed(peer: Option<SocketAddr>) -> bool {
         // This is intentionally based only on the accepted TCP peer address.
         // Host, Origin, and forwarding headers are not authentication input.
-        peer.is_some_and(|address| address.ip().is_loopback())
+        peer.is_some_and(peer_is_loopback)
     }
 
     fn token_is_valid(&self, token: &str) -> bool {
@@ -350,7 +409,7 @@ impl BridgeAuth {
         let Some(expected) = self.password_hash.as_deref() else {
             return Err(AuthFailure::NotRequired);
         };
-        let _verification_permit = self
+        let verification_permit = self
             .verification_slots
             .clone()
             .try_acquire_owned()
@@ -382,30 +441,20 @@ impl BridgeAuth {
 
         let expected = expected.to_owned();
         let password = password.to_owned();
-        let valid = tokio::task::spawn_blocking(move || verify_password(&expected, &password))
-            .await
-            .unwrap_or(false);
-
-        let (delay, authenticated) = {
-            let mut sessions = self.sessions.lock().map_err(|_| AuthFailure::Unavailable)?;
-            if let Some(pending) = sessions.pending.get_mut(&key) {
-                *pending = pending.saturating_sub(1);
-                if *pending == 0 {
-                    sessions.pending.remove(&key);
-                }
-            }
-            if valid {
-                sessions.failures.remove(&key);
-                (Duration::ZERO, true)
-            } else {
-                let failures = sessions.failures.entry(key).or_default();
-                failures.push_back(Instant::now());
-                (
-                    AUTH_FAILURE_DELAY.saturating_mul(failures.len() as u32),
-                    false,
-                )
-            }
-        };
+        let sessions = self.sessions.clone();
+        let key_for_verification = key.clone();
+        let pending = PendingPasswordVerification::new(sessions, key_for_verification);
+        let (delay, authenticated) = tokio::task::spawn_blocking(move || {
+            // Keep both the semaphore permit and the pending-accounting guard
+            // inside the blocking task. Dropping the request future must not
+            // make work look idle while password verification is still running.
+            let _verification_permit = verification_permit;
+            let mut pending = pending;
+            let valid = verify_password(&expected, &password);
+            pending.finish(valid)
+        })
+        .await
+        .map_err(|_| AuthFailure::Unavailable)??;
         if !delay.is_zero() {
             tokio::time::sleep(delay).await;
         }
@@ -468,6 +517,13 @@ async fn hash_password_async(password: &str) -> Result<String, String> {
 }
 
 fn verify_password(encoded: &str, password: &str) -> bool {
+    #[cfg(test)]
+    if password == "wrong-password" && AUTH_TEST_VERIFICATION_PAUSE.load(Ordering::Acquire) {
+        AUTH_TEST_VERIFICATION_STARTED.store(true, Ordering::Release);
+        while AUTH_TEST_VERIFICATION_PAUSE.load(Ordering::Acquire) {
+            thread::yield_now();
+        }
+    }
     let Ok(parsed) = PasswordHash::new(encoded) else {
         return false;
     };
@@ -805,6 +861,8 @@ struct TerminalQuery {
     output_encoding: Option<TerminalOutputWireEncoding>,
     #[serde(default)]
     takeover: bool,
+    #[serde(default)]
+    probe: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -1711,13 +1769,43 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
     spawn_agent_activity_watcher(state.clone());
     let app = bridge_router(state, options.static_dir.clone());
     let bind = listener_bind_address(&options.host, options.port);
-    let listener = tokio::net::TcpListener::bind(&bind).await?;
+    let dual_family = dual_family_listener_required(&options.host, &options.allowed_hosts);
+    let listener = if dual_family && is_ipv6_literal(&options.host) {
+        bind_ipv6_only_listener(options.port)?
+    } else {
+        tokio::net::TcpListener::bind(&bind).await?
+    };
+    let secondary_listener = if dual_family {
+        if is_ipv6_literal(&options.host) {
+            Some(
+                tokio::net::TcpListener::bind(format!("0.0.0.0:{}", listener.local_addr()?.port()))
+                    .await?,
+            )
+        } else {
+            Some(bind_ipv6_only_listener(listener.local_addr()?.port())?)
+        }
+    } else {
+        None
+    };
     info!(url = %format!("http://{bind}"), "Herdr World bridge listening");
-    axum::serve(
+    let primary = axum::serve(
         listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
+        app.clone()
+            .into_make_service_with_connect_info::<SocketAddr>(),
+    );
+    if let Some(listener) = secondary_listener {
+        let secondary_bind = listener.local_addr()?;
+        info!(url = %format!("http://{secondary_bind}"), "Herdr World bridge listening on the second IP family");
+        tokio::select! {
+            result = primary => result,
+            result = axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            ) => result,
+        }
+    } else {
+        primary.await
+    }
 }
 
 fn bridge_router(state: BridgeState, static_dir: PathBuf) -> Router {
@@ -1882,6 +1970,51 @@ fn listener_bind_address(host: &str, port: u16) -> String {
     } else {
         format!("{host}:{port}")
     }
+}
+
+fn is_ipv6_literal(host: &str) -> bool {
+    host.trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<IpAddr>()
+        .is_ok_and(|address| address.is_ipv6())
+}
+
+fn dual_family_listener_required(host: &str, allowed_hosts: &[String]) -> bool {
+    let host = host.trim().trim_start_matches('[').trim_end_matches(']');
+    if host != "0.0.0.0" && host != "::" {
+        return false;
+    }
+    let opposite_family = if host == "::" {
+        |address: IpAddr| address.is_ipv4()
+    } else {
+        |address: IpAddr| address.is_ipv6()
+    };
+    allowed_hosts.iter().any(|allowed| {
+        allowed
+            .trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<IpAddr>()
+            .is_ok_and(opposite_family)
+    })
+}
+
+fn bind_ipv6_only_listener(port: u16) -> io::Result<tokio::net::TcpListener> {
+    let socket = socket2::Socket::new(
+        socket2::Domain::IPV6,
+        socket2::Type::STREAM,
+        Some(socket2::Protocol::TCP),
+    )?;
+    socket.set_only_v6(true)?;
+    socket.set_reuse_address(true)?;
+    socket.bind(&socket2::SockAddr::from(SocketAddr::new(
+        IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        port,
+    )))?;
+    socket.listen(1024)?;
+    socket.set_nonblocking(true)?;
+    tokio::net::TcpListener::from_std(socket.into())
 }
 
 fn is_world_navigation_path(path: &str) -> bool {
@@ -2675,7 +2808,7 @@ fn host_authority_allowed_from_peer(
         return true;
     }
 
-    if peer.is_some_and(|address| address.ip().is_loopback())
+    if peer.is_some_and(peer_is_loopback)
         && is_loopback_host(host)
         && authority_port_matches(authority, policy.bind_port)
     {
@@ -2731,7 +2864,7 @@ fn request_origin_allowed_from_peer(
         .iter()
         .any(|allowed| allowed.eq_ignore_ascii_case(origin));
     if !is_loopback_bind_host(&policy.bind_host)
-        && !(peer.is_some_and(|address| address.ip().is_loopback())
+        && !(peer.is_some_and(peer_is_loopback)
             && is_loopback_authority(origin_authority)
             && is_loopback_authority(host))
     {
@@ -2870,6 +3003,16 @@ fn is_loopback_authority(authority: &str) -> bool {
 
 fn is_loopback_host(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
+}
+
+fn peer_is_loopback(address: SocketAddr) -> bool {
+    address.ip().is_loopback()
+        || matches!(
+            address.ip(),
+            IpAddr::V6(address) if address
+                .to_ipv4_mapped()
+                .is_some_and(|mapped| mapped.is_loopback())
+        )
 }
 
 fn authority_port_matches(authority: &str, expected_port: u16) -> bool {
@@ -4728,6 +4871,14 @@ async fn handle_terminal_socket(socket: WebSocket, state: BridgeState, query: Te
         }
     };
 
+    if query.probe {
+        let _ = ws_sender
+            .send(Message::Text(TERMINAL_ATTACH_READY.into()))
+            .await;
+        release_terminal_session(&state.terminal_sessions, &terminal_id, &session);
+        return;
+    }
+
     let write_tx = session.write_tx.clone();
     let mut terminal_rx = session.output_tx.subscribe();
     if output_encoding == TerminalOutputWireEncoding::Gzip {
@@ -6371,6 +6522,17 @@ mod tests {
         );
     }
 
+    #[test]
+    fn terminal_probe_query_is_non_mutating_and_has_no_resize_defaults() {
+        let query: TerminalQuery = serde_json::from_str(
+            r#"{"terminal_id":"terminal-test","takeover":false,"probe":true}"#,
+        )
+        .unwrap();
+        assert!(query.probe);
+        assert_eq!(query.cols, None);
+        assert_eq!(query.rows, None);
+    }
+
     fn test_terminal_writer() -> (TerminalWriter, mpsc::Receiver<ClientMessage>) {
         let (tx, rx) = mpsc::channel();
         (
@@ -7284,6 +7446,50 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancelling_password_verification_cleans_pending_state_and_releases_capacity() {
+        AUTH_TEST_VERIFICATION_STARTED.store(false, Ordering::Release);
+        AUTH_TEST_VERIFICATION_PAUSE.store(true, Ordering::Release);
+        let auth = Arc::new(BridgeAuth::new(Some(
+            hash_password("synthetic-password").unwrap(),
+        )));
+        let peer = "192.0.2.56:51234".parse().unwrap();
+        let task_auth = auth.clone();
+        let task =
+            tokio::spawn(
+                async move { task_auth.issue_session(Some(peer), "wrong-password").await },
+            );
+
+        let mut verification_started = false;
+        for _ in 0..100 {
+            verification_started = AUTH_TEST_VERIFICATION_STARTED.load(Ordering::Acquire);
+            if verification_started {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            verification_started,
+            "password verification did not become in-flight"
+        );
+        task.abort();
+        AUTH_TEST_VERIFICATION_PAUSE.store(false, Ordering::Release);
+        let _ = task.await;
+
+        for _ in 0..100 {
+            let pending = auth.sessions.lock().unwrap().pending.len();
+            if pending == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(auth.sessions.lock().unwrap().pending.is_empty());
+        assert_eq!(
+            auth.verification_slots.available_permits(),
+            MAX_PASSWORD_VERIFICATIONS
+        );
+    }
+
+    #[tokio::test]
     async fn password_session_transport_rejects_oversized_streams_before_body_extraction() {
         let handler_called = Arc::new(AtomicBool::new(false));
         let handler_called_for_route = handler_called.clone();
@@ -7490,13 +7696,14 @@ mod tests {
         };
 
         spawn_management_controller(&management, &request).unwrap();
-        for _ in 0..20 {
-            if marker.is_file() {
+        let mut process_group = String::new();
+        for _ in 0..200 {
+            process_group = std::fs::read_to_string(&marker).unwrap_or_default();
+            if !process_group.trim().is_empty() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(25));
         }
-        let process_group = std::fs::read_to_string(&marker).unwrap();
         let parent_group = unsafe { libc::getpgrp() }.to_string();
         assert!(!process_group.trim().is_empty());
         assert_ne!(process_group.trim(), parent_group);
@@ -8022,6 +8229,32 @@ mod tests {
                 .local_addr()
                 .expect("IPv6 listener address")
                 .is_ipv6());
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_ip_profiles_request_dual_family_listeners_and_map_loopback_peers() {
+        assert!(dual_family_listener_required(
+            "0.0.0.0",
+            &["2001:db8::20".to_string()]
+        ));
+        assert!(dual_family_listener_required(
+            "::",
+            &["192.0.2.20".to_string()]
+        ));
+        assert!(!dual_family_listener_required(
+            "0.0.0.0",
+            &["192.0.2.20".to_string()]
+        ));
+        assert!(peer_is_loopback(
+            "[::ffff:127.0.0.1]:51234".parse().unwrap()
+        ));
+        if let Ok(ipv4_listener) = std::net::TcpListener::bind("0.0.0.0:0") {
+            let port = ipv4_listener.local_addr().unwrap().port();
+            if let Ok(ipv6_listener) = bind_ipv6_only_listener(port) {
+                assert_eq!(ipv6_listener.local_addr().unwrap().port(), port);
+                assert!(ipv6_listener.local_addr().unwrap().is_ipv6());
+            }
         }
     }
 

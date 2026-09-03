@@ -23,6 +23,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 rand = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+socket2 = "0.6"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "compression-gzip"] }

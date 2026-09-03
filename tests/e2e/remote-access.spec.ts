@@ -21,6 +21,7 @@ test("manages direct network access as a draft with separate browser permissions
   await page.getByText("bridge.example.test", { exact: true }).click();
   await switchButton.click();
   await page.getByLabel("Set bridge password").fill("synthetic-password");
+  await expect(page.getByText(/unencrypted HTTP and WebSocket connections/iu)).toBeVisible();
   await page.getByRole("button", { name: "Apply", exact: true }).click();
 
   await expect(page.getByText("Protected", { exact: true })).toBeVisible();

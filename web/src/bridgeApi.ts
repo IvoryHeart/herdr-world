@@ -1,6 +1,9 @@
 export type BridgeHttpUrl = (path: string, query?: URLSearchParams) => string;
 
 type PasswordPromptHandler = (origin: string) => Promise<string | null>;
+type AuthenticatedFetchOptions = {
+  timeoutMs?: number;
+};
 
 const bridgeSessions = new Map<string, string>();
 const pendingPasswordPrompts = new Map<string, Promise<string | null>>();
@@ -42,9 +45,10 @@ export function bridgeWebSocketProtocols(input: string | URL): string[] {
 export async function authenticatedFetch(
   input: RequestInfo | URL,
   init: RequestInit = {},
+  { timeoutMs }: AuthenticatedFetchOptions = {},
 ): Promise<Response> {
   const origin = bridgeOrigin(input);
-  const first = await fetchWithSession(input, init, origin);
+  const first = await fetchWithSession(input, init, origin, timeoutMs);
   if (first.status !== 401 || !origin || isAuthenticationEndpoint(input)) {
     return first;
   }
@@ -61,8 +65,8 @@ export async function authenticatedFetch(
   if (password === null) {
     throw new BridgeAuthenticationError();
   }
-  await authenticateBridge(origin, password);
-  const retry = await fetchWithSession(input, init, origin);
+  await authenticateBridge(origin, password, init.signal ?? undefined, timeoutMs);
+  const retry = await fetchWithSession(input, init, origin, timeoutMs);
   if (retry.status === 401) {
     bridgeSessions.delete(origin);
     bridgeReauthenticationNeeded.add(origin);
@@ -117,25 +121,54 @@ async function fetchWithSession(
   input: RequestInfo | URL,
   init: RequestInit,
   origin: string | null,
+  timeoutMs?: number,
 ) {
   const headers = new Headers(init.headers);
   const token = origin ? bridgeSessions.get(origin) : undefined;
   if (token) headers.set("authorization", `Bearer ${token}`);
-  return fetch(input, { ...init, headers });
+  if (timeoutMs === undefined) return fetch(input, { ...init, headers });
+
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort(init.signal?.reason);
+  if (init.signal?.aborted) {
+    abortFromCaller();
+  } else {
+    init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+  }
+  const timer = globalThis.setTimeout(() => {
+    controller.abort(abortError());
+  }, timeoutMs);
+  try {
+    return await fetch(input, { ...init, headers, signal: controller.signal });
+  } finally {
+    globalThis.clearTimeout(timer);
+    init.signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
-async function authenticateBridge(origin: string, password: string) {
+function abortError() {
+  return typeof DOMException === "function"
+    ? new DOMException("Bridge request timed out", "AbortError")
+    : undefined;
+}
+
+async function authenticateBridge(
+  origin: string,
+  password: string,
+  callerSignal?: AbortSignal,
+  timeoutMs?: number,
+) {
   if (new TextEncoder().encode(password).length > 1024) {
     throw new BridgeAuthenticationError("Bridge password is too long");
   }
   let response: Response;
   try {
-    response = await fetch(`${origin}/api/auth/session`, {
+    response = await fetchWithSession(`${origin}/api/auth/session`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ password }),
-      signal: AbortSignal.timeout(5000),
-    });
+      signal: callerSignal,
+    }, null, timeoutMs ?? 5000);
   } catch {
     throw new BridgeAuthenticationError("Bridge authentication is unavailable");
   } finally {

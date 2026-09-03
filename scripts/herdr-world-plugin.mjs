@@ -499,8 +499,15 @@ function loopbackBindHost(host) {
 }
 
 function remoteBindHost(host, remoteAccess) {
-  if (isIpv6Host(host) || remoteAccess.accepted_hosts.some((value) => isIpv6Host(value))) {
+  const acceptedIpv6 = remoteAccess.accepted_hosts.some((value) => isIpv6Host(value));
+  if (isIpv6Host(host)) {
     return "::";
+  }
+  if (acceptedIpv6) {
+    // The bridge binds the opposite family as a second listener when this
+    // wildcard is paired with IPv6 accepted hosts. This keeps an existing
+    // IPv4 page reachable while the remote profile gains IPv6 support.
+    return "0.0.0.0";
   }
   const normalized = unbracketedHost(host);
   return !isLoopbackHost(normalized) && normalized !== "0.0.0.0" ? normalized : "0.0.0.0";
@@ -1293,6 +1300,7 @@ function createRecord({ identity, target, config, payload, node, port, superviso
     payload_entrypoint: payload.entrypoint,
     node_path: node.path,
     supervisor: supervisor.kind,
+    controller_mode: supervisor.kind,
     service_name: serviceName(identity, supervisor.kind),
     pid: 0,
     application_version: payload.packageJson.version,
@@ -1934,40 +1942,48 @@ export async function applyRemoteAccessAction({
   glibcVersion,
 } = {}) {
   const handoffGraceMs = Number(env.HERDR_WORLD_APPLY_GRACE_MS ?? 0);
-  if (Number.isFinite(handoffGraceMs) && handoffGraceMs > 0) {
-    await new Promise((resolve) => setTimeout(resolve, Math.min(handoffGraceMs, 1000)));
-  }
-  const context = runtimeContext(env);
-  const configPath = path.join(context.configDir, CONFIG_FILE);
-  const previousText = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
-  const previousConfig = context.config;
-  const remoteAccess = readRemoteAccessRequest(draftPath);
-  const nextConfig = configWithRemoteAccess(previousConfig, remoteAccess);
-  const recordPath = targetRecordPath(context.stateDir, context.target.identity);
+  const lockContext = runtimeContext(env);
 
   const execute = async () => {
-    const record = readRecord(recordPath);
+    let context;
+    let configPath;
+    let previousText = null;
+    let previousConfig;
     let previousActive = false;
-    if (record) {
-      const ownership = assertRecordOwnership(record, env, platform);
-      previousActive = ownership.state.active;
-    } else {
-      const supervisor = selectSupervisor(platform, env);
-      previousActive = await recoverUnrecordedService(
-        context.target.identity,
-        context.stateDir,
-        supervisor,
-        platform,
-      );
-      if (supervisor.kind === "fallback" && !previousActive) {
-        const reason = "fallback bridge service ownership could not be verified because its runtime record is missing; run the plugin stop and start actions before applying settings";
-        writeApplyStatus(context.stateDir, "failed", reason, false);
-        rmSync(draftPath, { force: true });
-        throw new PluginError(reason);
-      }
-    }
-    writeApplyStatus(context.stateDir, "applying", "settings saved; reconciling the managed bridge", null);
+    let baselineCaptured = false;
+
+    writeApplyStatus(lockContext.stateDir, "applying", "settings saved; reconciling the managed bridge", null);
     try {
+      if (Number.isFinite(handoffGraceMs) && handoffGraceMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(handoffGraceMs, 1000)));
+      }
+      context = runtimeContext(env);
+      if (context.target.identity !== lockContext.target.identity) {
+        throw new PluginError("selected Herdr target changed while remote access settings were waiting to apply");
+      }
+      configPath = path.join(context.configDir, CONFIG_FILE);
+      previousText = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
+      previousConfig = context.config;
+      baselineCaptured = true;
+      const remoteAccess = readRemoteAccessRequest(draftPath);
+      const nextConfig = configWithRemoteAccess(previousConfig, remoteAccess);
+      const recordPath = targetRecordPath(context.stateDir, context.target.identity);
+      const record = readRecord(recordPath);
+      if (record) {
+        const ownership = assertRecordOwnership(record, env, platform);
+        previousActive = ownership.state.active;
+      } else {
+        const supervisor = selectSupervisor(platform, env);
+        previousActive = await recoverUnrecordedService(
+          context.target.identity,
+          context.stateDir,
+          supervisor,
+          platform,
+        );
+        if (supervisor.kind === "fallback" && !previousActive) {
+          throw new PluginError("fallback bridge service ownership could not be verified because its runtime record is missing; run the plugin stop and start actions before applying settings");
+        }
+      }
       atomicWrite(configPath, `${JSON.stringify(nextConfig, null, 2)}\n`);
       if (previousActive) {
         const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: nextConfig });
@@ -1979,29 +1995,31 @@ export async function applyRemoteAccessAction({
       return nextConfig;
     } catch (error) {
       let restored = false;
-      try {
-        restoreConfig(configPath, previousText);
-        if (previousActive) {
-          const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: previousConfig });
-          await startPrepared(plan, { lockHeld: true });
+      if (baselineCaptured) {
+        try {
+          restoreConfig(configPath, previousText);
+          if (previousActive) {
+            const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: previousConfig });
+            await startPrepared(plan, { lockHeld: true });
+          }
+          restored = true;
+        } catch (restoreError) {
+          writeApplyStatus(
+            lockContext.stateDir,
+            "failed",
+            `settings apply failed and recovery could not be verified: ${restoreError.message}`,
+            false,
+          );
+          throw error;
         }
-        restored = true;
-      } catch (restoreError) {
-        writeApplyStatus(
-          context.stateDir,
-          "failed",
-          `settings apply failed and recovery could not be verified: ${restoreError.message}`,
-          false,
-        );
-        throw error;
       }
-      writeApplyStatus(context.stateDir, "failed", error instanceof Error ? error.message : String(error), restored);
+      writeApplyStatus(lockContext.stateDir, "failed", error instanceof Error ? error.message : String(error), restored);
       throw error;
     } finally {
       rmSync(draftPath, { force: true });
     }
   };
-  return withTargetLock(context.stateDir, context.target.identity, execute);
+  return withTargetLock(lockContext.stateDir, lockContext.target.identity, execute);
 }
 
 export async function runAction(action, options = {}) {

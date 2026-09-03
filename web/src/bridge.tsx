@@ -1256,10 +1256,8 @@ export async function probeBridgeBaseUrl(baseUrl: string): Promise<BridgeCapabil
   if (terminalId) {
     const query = new URLSearchParams({
       terminal_id: terminalId,
-      cols: "80",
-      rows: "24",
       takeover: "false",
-      coalesce_ms: "16",
+      probe: "true",
     });
     await probeBridgeWebSocket(
       normalized,

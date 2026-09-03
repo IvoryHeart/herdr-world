@@ -467,7 +467,7 @@ describe("capabilities", () => {
     );
     expect(sockets).toEqual([
       "ws://192.0.2.20:4000/ws/events",
-      "ws://192.0.2.20:4000/ws/terminal?terminal_id=terminal-test&cols=80&rows=24&takeover=false&coalesce_ms=16",
+      "ws://192.0.2.20:4000/ws/terminal?terminal_id=terminal-test&takeover=false&probe=true",
     ]);
 
     fetchMock.mockRestore();

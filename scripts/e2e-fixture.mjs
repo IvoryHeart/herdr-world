@@ -270,6 +270,10 @@ async function startFixture(fixture) {
     log.connections += 1;
     const state = fixtureStates.get(fixture.id);
     const terminalId = url.searchParams.get("terminal_id") || "terminal";
+    if (url.searchParams.get("probe") === "true") {
+      webSocket.send(JSON.stringify({ type: "attach_ready" }));
+      return;
+    }
     webSocket.send(
       Buffer.from(
         state?.snapshotVariant === "showcase"

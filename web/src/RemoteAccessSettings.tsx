@@ -1,5 +1,5 @@
 import { Copy, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BridgeBackendProfile } from "./bridge";
 import type { BridgeHttpUrl } from "./bridgeApi";
 import {
@@ -27,13 +27,19 @@ export function RemoteAccessSettings({ httpUrl, backends }: Props) {
   const [passwordAction, setPasswordAction] = useState<RemotePasswordAction>("keep");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const applyObserved = useRef(false);
 
   const reload = async () => {
     try {
       const next = await fetchRemoteAccess(httpUrl);
       setStatus(next);
       setDraft((current) => current ?? draftFromStatus(next));
-      if (next.apply.state !== "applying") setBusy(false);
+      if (next.apply.state === "applying") {
+        applyObserved.current = true;
+      } else if (applyObserved.current) {
+        applyObserved.current = false;
+        setBusy(false);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Remote access status unavailable");
     }
@@ -88,14 +94,19 @@ export function RemoteAccessSettings({ httpUrl, backends }: Props) {
     return true;
   };
   const save = async () => {
+    applyObserved.current = false;
     setBusy(true);
     setMessage("Settings saved; the bridge is restarting and will reconnect when ready.");
     try {
       const result = await applyRemoteAccess(httpUrl, draft, passwordAction, password || undefined);
+      applyObserved.current = result.state === "applying";
+      setStatus((current) => current ? { ...current, apply: result } : current);
+      if (result.state !== "applying") setBusy(false);
       setPassword("");
       setPasswordAction("keep");
       setMessage(result.reason ?? "Settings saved; waiting for the bridge to become ready.");
     } catch (error) {
+      applyObserved.current = false;
       setBusy(false);
       setMessage(error instanceof Error ? error.message : "Could not apply remote access settings");
     }
@@ -192,6 +203,7 @@ export function RemoteAccessSettings({ httpUrl, backends }: Props) {
       <div className="remote-access-subsection">
         <strong>Password</strong>
         <span className="backend-note">{status.remote_access.password_configured ? "Protected" : "Not set"}</span>
+        {draft.enabled ? <p className="backend-warning">Direct access uses unencrypted HTTP and WebSocket connections. A bridge password protects access, but does not protect passwords or session tokens from a network observer. Use TLS or a trusted VPN.</p> : null}
         {draft.enabled && !status.remote_access.password_configured ? <p className="backend-warning">Anyone who can reach an accepted address may connect until you set a password.</p> : null}
         <div className="remote-access-password-row">
           <input
