@@ -569,7 +569,8 @@ function BridgePasswordPrompt({
       >
         <div id="bridge-auth-title" className="modal-title">Bridge password</div>
         <p className="backend-note">
-          Enter the password for {origin}. It stays in memory for this browser session only.
+          Enter the password for {origin}. The password is not stored; authenticated access lasts
+          for this browser tab, including refreshes, until the session expires.
         </p>
         <label className="field-label">
           <span>Password</span>

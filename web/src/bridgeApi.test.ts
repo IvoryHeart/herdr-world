@@ -13,10 +13,12 @@ afterEach(() => {
   clearBridgeSession(bridgeUrl);
   setBridgePasswordPromptHandler(null);
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("authenticated bridge requests", () => {
-  it("prompts once, keeps the session in memory, and retries a protected request", async () => {
+  it("prompts once, keeps a tab-scoped session, and retries a protected request", async () => {
+    const storage = installSessionStorage();
     const calls: { url: string; init?: RequestInit }[] = [];
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = String(input);
@@ -46,7 +48,31 @@ describe("authenticated bridge requests", () => {
     expect(bridgeWebSocketProtocols("ws://192.0.2.20:4000/ws/events")).toEqual([
       `herdr-world-auth.${"a".repeat(64)}`,
     ]);
+    expect(storage.setItem).toHaveBeenCalledWith(
+      `herdrWeb.bridgeSession.v1:${encodeURIComponent(bridgeUrl)}`,
+      "a".repeat(64),
+    );
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("restores a bridge session after a page reload without prompting again", async () => {
+    const reloadedBridgeUrl = "http://192.0.2.21:4000";
+    const token = "c".repeat(64);
+    installSessionStorage(new Map([
+      [`herdrWeb.bridgeSession.v1:${encodeURIComponent(reloadedBridgeUrl)}`, token],
+    ]));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => (
+      new Response(null, {
+        status: new Headers(init?.headers).get("authorization") === `Bearer ${token}` ? 200 : 401,
+      })
+    ));
+    const prompt = vi.fn(async () => "synthetic-password");
+    setBridgePasswordPromptHandler(prompt);
+
+    await expect(authenticatedFetch(`${reloadedBridgeUrl}/api/snapshot`)).resolves.toHaveProperty("status", 200);
+    expect(prompt).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    clearBridgeSession(reloadedBridgeUrl);
   });
 
   it("shares one prompt and authentication request across concurrent 401 responses", async () => {
@@ -135,3 +161,13 @@ describe("authenticated bridge requests", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 });
+
+function installSessionStorage(values = new Map<string, string>()) {
+  const storage = {
+    getItem: vi.fn((key: string) => values.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => values.set(key, value)),
+    removeItem: vi.fn((key: string) => values.delete(key)),
+  };
+  vi.stubGlobal("sessionStorage", storage);
+  return storage;
+}

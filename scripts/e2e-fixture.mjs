@@ -135,7 +135,8 @@ async function startFixture(fixture) {
     if (url.pathname === "/api/auth/status") {
       json(response, 200, {
         required: state?.remoteAccess?.password_configured === true,
-        authenticated: request.headers.authorization === `Bearer ${FIXTURE_SESSION_TOKEN}`,
+        authenticated:
+          request.headers.authorization === `Bearer ${FIXTURE_SESSION_TOKEN.padEnd(32, "x")}`,
         local_peer_bypass: fixture.serveStatic,
       });
       return;

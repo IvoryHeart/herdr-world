@@ -11,9 +11,10 @@ Web's own release history remains in its upstream changelog.
 ### Added
 
 - Added UI-managed sharing for plugin-hosted bridges, with detected host addresses, an optional
-  memory-hard password, in-memory client sessions, copyable Bridge URLs, readiness/rollback status,
-  and advanced inbound browser-origin controls. Outbound destination permissions now live with
-  client Bridge profiles and reload the page when its browser policy changes.
+  memory-hard password, reload-safe tab-scoped client sessions, copyable Bridge URLs,
+  readiness/rollback status, and advanced inbound browser-origin controls. Outbound destination
+  permissions now live with client Bridge profiles and reload the page when its browser policy
+  changes.
   [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
 
 ### Changed

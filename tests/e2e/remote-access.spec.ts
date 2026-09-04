@@ -47,6 +47,14 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
   await prompt.getByLabel("Password").fill("fixture-only-password");
   await prompt.getByRole("button", { name: "Connect" }).click();
   await expect(prompt).toBeHidden();
+  await expect.poll(() => page.evaluate(() => (
+    sessionStorage.getItem(
+      `herdrWeb.bridgeSession.v1:${encodeURIComponent("http://127.0.0.1:4174")}`,
+    )
+  ))).not.toBeNull();
+
+  await page.reload();
+  await expect(prompt).toBeHidden();
 
   await page.getByRole("button", { name: "Settings" }).press("Enter");
   await page.getByRole("tab", { name: "Bridges" }).click();
@@ -55,9 +63,6 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
     page.getByRole("button", { name: "Allow saved bridges & reload" }).click(),
   ]);
 
-  await expect(prompt).toBeVisible();
-  await prompt.getByLabel("Password").fill("fixture-only-password");
-  await prompt.getByRole("button", { name: "Connect" }).click();
   await expect(prompt).toBeHidden();
   await page.getByRole("button", { name: "Settings" }).press("Enter");
   await page.getByRole("tab", { name: "Bridges" }).click();

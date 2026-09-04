@@ -185,9 +185,11 @@ When a password-protected bridge is tested or first used, the client SHALL ask
 for the password in a masked field. The password SHALL not be placed in a URL,
 browser history entry, log, exported profile, or persistent client profile.
 
-The initial implementation SHALL retain the authenticated session only for the
-current client runtime. A future explicit “remember” choice may use a platform
-secure store, but is not part of this feature.
+The initial implementation SHALL retain only the bearer session token in
+tab-scoped browser session storage so refreshes do not require another password.
+The password itself SHALL not be stored. The token SHALL be discarded when the
+tab session ends or the bridge rejects it; persistence across browser sessions
+and a future explicit “remember” choice are not part of this feature.
 
 ## 7. Host configuration and persistence
 
@@ -493,7 +495,8 @@ The implementation SHALL include:
   trust.
 - The browser polls bounded apply status until ready and then reloads so the
   new document receives the current CSP.
-- Passwords use the bridge's bounded Argon2 hash and in-memory session token
-  implementation.
+- Passwords use the bridge's bounded Argon2 hash. The password is never stored
+  client-side; only its bearer session token is retained for the current browser
+  tab so it survives a page reload.
 - Share this machine owns inbound client web app origins; Bridges owns outbound
   bridge destinations. Both remain exact-origin advanced settings.

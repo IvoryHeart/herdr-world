@@ -230,7 +230,8 @@ export function RemoteAccessSettings({
         </span>
         <p className="settings-help">
           Other devices are asked for this password when they connect. Passwords for bridges you
-          add are requested under Bridges and are kept only for the current app session.
+          add are not stored; authenticated access lasts until the browser tab closes or the
+          session expires.
         </p>
         {draft.enabled ? (
           <p className="backend-warning">

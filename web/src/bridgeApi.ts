@@ -8,6 +8,7 @@ type AuthenticatedFetchOptions = {
 const bridgeSessions = new Map<string, string>();
 const pendingAuthentications = new Map<string, Promise<void>>();
 const bridgeReauthenticationNeeded = new Set<string>();
+const bridgeSessionStoragePrefix = "herdrWeb.bridgeSession.v1:";
 let passwordPromptHandler: PasswordPromptHandler | null = null;
 
 export class BridgeAuthenticationError extends Error {
@@ -31,14 +32,14 @@ export function setBridgePasswordPromptHandler(handler: PasswordPromptHandler | 
 export function clearBridgeSession(input: string | URL) {
   const origin = bridgeOrigin(input);
   if (origin) {
-    bridgeSessions.delete(origin);
+    forgetBridgeSession(origin);
     bridgeReauthenticationNeeded.delete(origin);
   }
 }
 
 export function bridgeWebSocketProtocols(input: string | URL): string[] {
   const origin = bridgeOrigin(input);
-  const token = origin ? bridgeSessions.get(origin) : undefined;
+  const token = origin ? bridgeSession(origin) : undefined;
   return token ? [`herdr-world-auth.${token}`] : [];
 }
 
@@ -53,12 +54,12 @@ export async function authenticatedFetch(
     return first;
   }
 
-  bridgeSessions.delete(origin);
+  forgetBridgeSession(origin);
   bridgeReauthenticationNeeded.add(origin);
   await authenticateBridgeSession(origin, init.signal ?? undefined, timeoutMs);
   const retry = await fetchWithSession(input, init, origin, timeoutMs);
   if (retry.status === 401) {
-    bridgeSessions.delete(origin);
+    forgetBridgeSession(origin);
     bridgeReauthenticationNeeded.add(origin);
     throw new BridgeAuthenticationError();
   }
@@ -73,7 +74,7 @@ export async function authenticatedFetch(
  */
 export async function refreshBridgeAuthentication(input: string | URL): Promise<boolean> {
   const origin = bridgeOrigin(input);
-  if (!origin || (!bridgeSessions.has(origin) && !bridgeReauthenticationNeeded.has(origin))) {
+  if (!origin || (!bridgeSession(origin) && !bridgeReauthenticationNeeded.has(origin))) {
     return false;
   }
   let response: Response;
@@ -92,7 +93,7 @@ export async function refreshBridgeAuthentication(input: string | URL): Promise<
     return false;
   }
 
-  bridgeSessions.delete(origin);
+  forgetBridgeSession(origin);
   bridgeReauthenticationNeeded.add(origin);
   await authenticateBridgeSession(origin);
   bridgeReauthenticationNeeded.delete(origin);
@@ -139,7 +140,7 @@ async function fetchWithSession(
   timeoutMs?: number,
 ) {
   const headers = new Headers(init.headers);
-  const token = origin ? bridgeSessions.get(origin) : undefined;
+  const token = origin ? bridgeSession(origin) : undefined;
   if (token) headers.set("authorization", `Bearer ${token}`);
   if (timeoutMs === undefined) return fetch(input, { ...init, headers });
 
@@ -195,10 +196,63 @@ async function authenticateBridge(
     );
   }
   const payload = (await response.json().catch(() => null)) as { token?: unknown } | null;
-  if (!payload || typeof payload.token !== "string" || payload.token.length < 32) {
+  if (!payload || !isBridgeSessionToken(payload.token)) {
     throw new BridgeAuthenticationError("Bridge authentication response is invalid");
   }
-  bridgeSessions.set(origin, payload.token);
+  rememberBridgeSession(origin, payload.token);
+}
+
+function bridgeSession(origin: string): string | undefined {
+  const current = bridgeSessions.get(origin);
+  if (current) return current;
+
+  const storage = bridgeSessionStorage();
+  if (!storage) return undefined;
+  try {
+    const stored = storage.getItem(bridgeSessionStorageKey(origin));
+    if (!isBridgeSessionToken(stored)) {
+      if (stored !== null) storage.removeItem(bridgeSessionStorageKey(origin));
+      return undefined;
+    }
+    bridgeSessions.set(origin, stored);
+    return stored;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberBridgeSession(origin: string, token: string) {
+  bridgeSessions.set(origin, token);
+  try {
+    bridgeSessionStorage()?.setItem(bridgeSessionStorageKey(origin), token);
+  } catch {
+    // Storage may be unavailable; the in-memory session still works until reload.
+  }
+}
+
+function forgetBridgeSession(origin: string) {
+  bridgeSessions.delete(origin);
+  try {
+    bridgeSessionStorage()?.removeItem(bridgeSessionStorageKey(origin));
+  } catch {
+    // Storage may be unavailable or blocked.
+  }
+}
+
+function bridgeSessionStorage(): Storage | null {
+  try {
+    return typeof globalThis.sessionStorage === "undefined" ? null : globalThis.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function bridgeSessionStorageKey(origin: string) {
+  return `${bridgeSessionStoragePrefix}${encodeURIComponent(origin)}`;
+}
+
+function isBridgeSessionToken(value: unknown): value is string {
+  return typeof value === "string" && value.length >= 32 && value.length <= 64;
 }
 
 function bridgeOrigin(input: string | URL | RequestInfo): string | null {
