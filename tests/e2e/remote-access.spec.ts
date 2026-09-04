@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
 test.beforeEach(async ({ page, request }) => {
@@ -11,7 +11,7 @@ test.beforeEach(async ({ page, request }) => {
 test("shares this machine with host settings separate from bridge destinations", async ({ page }) => {
   await page.goto("/spaces");
   await expect(page.getByRole("button", { name: "localhost, compatible" })).toBeVisible();
-  await page.getByRole("button", { name: "Settings" }).press("Enter");
+  await switcherSettings(page).press("Enter");
   await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
   await page.getByRole("tab", { name: "Share this machine" }).click();
 
@@ -30,7 +30,7 @@ test("shares this machine with host settings separate from bridge destinations",
     page.getByRole("button", { name: "Apply", exact: true }).click(),
   ]);
 
-  await page.getByRole("button", { name: "Settings" }).press("Enter");
+  await switcherSettings(page).press("Enter");
   await page.getByRole("tab", { name: "Share this machine" }).click();
   await expect(page.getByText("Protected", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toContainText(/Bridge ready/iu);
@@ -56,7 +56,7 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
   await page.reload();
   await expect(prompt).toBeHidden();
 
-  await page.getByRole("button", { name: "Settings" }).press("Enter");
+  await switcherSettings(page).press("Enter");
   await page.getByRole("tab", { name: "Bridges" }).click();
   await Promise.all([
     page.waitForEvent("load"),
@@ -64,10 +64,16 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
   ]);
 
   await expect(prompt).toBeHidden();
-  await page.getByRole("button", { name: "Settings" }).press("Enter");
+  await switcherSettings(page).press("Enter");
   await page.getByRole("tab", { name: "Bridges" }).click();
   await page.locator(".backend-row-main").filter({ hasText: "Remote B" }).click();
   await page.getByRole("button", { name: "Test", exact: true }).click();
 
   await expect(page.getByText("Backend reachable.", { exact: true })).toBeVisible();
 });
+
+function switcherSettings(page: Page) {
+  return page
+    .getByRole("complementary", { name: "Switcher" })
+    .getByRole("button", { name: "Settings" });
+}
