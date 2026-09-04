@@ -1,11 +1,14 @@
-import { Copy, Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { BridgeBackendProfile } from "./bridge";
+import { Copy, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AccessOriginList, uniqueHttpOrigins } from "./AccessOriginList";
 import type { BridgeHttpUrl } from "./bridgeApi";
 import {
   applyRemoteAccess,
   bridgeAddress,
   fetchRemoteAccess,
+  remoteAccessDraft,
+  remoteAccessMatchesDraft,
+  waitForRemoteAccessReady,
   type RemoteAccessDraft,
   type RemoteAccessStatus,
   type RemotePasswordAction,
@@ -13,73 +16,47 @@ import {
 
 type Props = {
   httpUrl: BridgeHttpUrl;
-  backends: readonly BridgeBackendProfile[];
+  reloadPage?: () => void;
 };
 
-export function RemoteAccessSettings({ httpUrl, backends }: Props) {
+export function RemoteAccessSettings({
+  httpUrl,
+  reloadPage = () => window.location.reload(),
+}: Props) {
   const [status, setStatus] = useState<RemoteAccessStatus | null>(null);
   const [draft, setDraft] = useState<RemoteAccessDraft | null>(null);
   const [addressInput, setAddressInput] = useState("");
-  const [pageOriginInput, setPageOriginInput] = useState("");
-  const [bridgeOriginInput, setBridgeOriginInput] = useState("");
   const [selectedSuggestions, setSelectedSuggestions] = useState<string[]>([]);
   const [password, setPassword] = useState("");
   const [passwordAction, setPasswordAction] = useState<RemotePasswordAction>("keep");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const applyObserved = useRef(false);
-
-  const reload = async () => {
-    try {
-      const next = await fetchRemoteAccess(httpUrl);
-      setStatus(next);
-      setDraft((current) => current ?? draftFromStatus(next));
-      if (next.apply.state === "applying") {
-        applyObserved.current = true;
-      } else if (applyObserved.current) {
-        applyObserved.current = false;
-        setBusy(false);
-      }
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Remote access status unavailable");
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
     void fetchRemoteAccess(httpUrl).then((next) => {
       if (cancelled) return;
       setStatus(next);
-      setDraft(draftFromStatus(next));
+      setDraft(remoteAccessDraft(next));
     }).catch((error: unknown) => {
-      if (!cancelled) setMessage(error instanceof Error ? error.message : "Remote access status unavailable");
+      if (!cancelled) {
+        setMessage(error instanceof Error ? error.message : "Sharing settings unavailable");
+      }
     });
     return () => { cancelled = true; };
   }, [httpUrl]);
 
-  useEffect(() => {
-    if (!busy) return;
-    const timer = window.setInterval(() => { void reload(); }, 750);
-    return () => window.clearInterval(timer);
-  }, [busy, httpUrl]);
-
-  const pageOriginSuggestions = useMemo(() => {
-    const values = [
-      globalThis.location?.origin,
-      "http://localhost",
-      "http://127.0.0.1:8787",
-    ];
-    return uniqueOrigins(values);
-  }, []);
-  const bridgeOriginSuggestions = useMemo(
-    () => uniqueOrigins(backends.map((backend) => backend.baseUrl)),
-    [backends],
-  );
+  const clientOriginSuggestions = useMemo(() => uniqueHttpOrigins([
+    globalThis.location?.origin,
+    "http://127.0.0.1:8787",
+    "http://localhost:8787",
+    "http://localhost",
+  ]), []);
 
   if (!status || !draft) {
     return (
       <div className="settings-section settings-section-flat">
-        {message ?? "Loading remote access…"}
+        {message ?? "Loading sharing settings…"}
       </div>
     );
   }
@@ -87,205 +64,280 @@ export function RemoteAccessSettings({ httpUrl, backends }: Props) {
   const address = draft.accepted_hosts[0]
     ? bridgeAddress(draft.accepted_hosts[0], status.port)
     : null;
-  const addToList = (field: "accepted_hosts" | "allowed_page_origins" | "allowed_bridge_origins", raw: string) => {
+  const addAddress = (raw: string) => {
     const value = raw.trim();
-    if (!value || draft[field].includes(value)) return false;
-    setDraft({ ...draft, [field]: [...draft[field], value] });
+    if (!value || draft.accepted_hosts.includes(value)) return false;
+    setDraft({ ...draft, accepted_hosts: [...draft.accepted_hosts, value] });
     return true;
   };
+  const toggleSharing = () => {
+    if (draft.enabled) {
+      setDraft({ ...draft, enabled: false });
+      return;
+    }
+    const acceptedHosts = draft.accepted_hosts.length > 0
+      ? draft.accepted_hosts
+      : status.suggestions.slice(0, 1);
+    const allowedPageOrigins = draft.allowed_page_origins.length > 0
+      ? draft.allowed_page_origins
+      : clientOriginSuggestions;
+    setSelectedSuggestions((current) => uniqueValues([...current, ...acceptedHosts]));
+    setDraft({
+      ...draft,
+      enabled: true,
+      accepted_hosts: acceptedHosts,
+      allowed_page_origins: allowedPageOrigins,
+    });
+  };
   const save = async () => {
-    applyObserved.current = false;
     setBusy(true);
-    setMessage("Settings saved; the bridge is restarting and will reconnect when ready.");
+    setMessage("Saving sharing settings and restarting this bridge…");
     try {
-      const result = await applyRemoteAccess(httpUrl, draft, passwordAction, password || undefined);
-      applyObserved.current = result.state === "applying";
-      setStatus((current) => current ? { ...current, apply: result } : current);
-      if (result.state !== "applying") setBusy(false);
+      const apply = await applyRemoteAccess(httpUrl, draft, passwordAction, password || undefined);
+      setStatus((current) => current ? { ...current, apply } : current);
+      if (apply.state === "failed") {
+        throw new Error(apply.reason ?? "The bridge could not apply the sharing settings");
+      }
+      const expectedPasswordConfigured = passwordAction === "set"
+        ? true
+        : passwordAction === "remove"
+          ? false
+          : status.remote_access.password_configured;
+      const ready = await waitForRemoteAccessReady(
+        httpUrl,
+        (next) => remoteAccessMatchesDraft(next, draft, expectedPasswordConfigured),
+      );
+      setStatus(ready);
       setPassword("");
       setPasswordAction("keep");
-      setMessage(result.reason ?? "Settings saved; waiting for the bridge to become ready.");
-    } catch (error) {
-      applyObserved.current = false;
+      setMessage("Sharing settings applied. Reloading Herdr World…");
       setBusy(false);
-      setMessage(error instanceof Error ? error.message : "Could not apply remote access settings");
+      reloadPage();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not apply sharing settings");
+    } finally {
+      setBusy(false);
     }
   };
 
-  const applyState = busy ? "applying" : status.apply.state;
+  const invalidEnabledDraft = draft.enabled && (
+    draft.accepted_hosts.length === 0 || draft.allowed_page_origins.length === 0
+  );
 
   return (
     <div className="settings-section remote-access-settings">
-      <div className="settings-label">Direct network access</div>
+      <div className="settings-label">Share this bridge</div>
       <p className="settings-help">
-        LAN/VPN access uses the existing direct HTTP and WebSocket bridge. It is not a firewall or
-        source-address allow-list; use a VPN, SSH, or TLS for untrusted networks.
+        Let another device connect directly to the bridge running on this machine over a trusted
+        LAN or VPN. This is separate from adding other machines under Bridges.
       </p>
       <div className="settings-row remote-access-toggle-row">
-        <span>Allow direct network connections</span>
+        <span>Allow other devices to connect</span>
         <button
           className="backend-toggle"
           type="button"
           role="switch"
-          aria-label="Allow direct network connections"
+          aria-label="Allow other devices to connect"
           aria-checked={draft.enabled}
           data-on={draft.enabled ? "true" : undefined}
-          onClick={() => setDraft({ ...draft, enabled: !draft.enabled })}
+          onClick={toggleSharing}
         >
           <span aria-hidden="true" />
         </button>
       </div>
-      {!draft.enabled ? <p className="backend-note">This bridge is available only locally. Saved addresses remain available for later.</p> : null}
+      {!draft.enabled ? (
+        <p className="backend-note">
+          This machine accepts local connections only. Its saved sharing settings are retained.
+        </p>
+      ) : null}
 
       <div className="remote-access-subsection">
-        <strong>Accepted addresses</strong>
-        {draft.accepted_hosts.length === 0 ? <span className="backend-note">None selected</span> : null}
+        <strong>Addresses for this bridge</strong>
+        <p className="settings-help">
+          These are this machine&apos;s hostname or IP address—the value another device puts in its
+          Bridge URL. They are not addresses of allowed client devices.
+        </p>
+        {draft.accepted_hosts.length === 0 ? (
+          <span className="backend-warning">Add an address for this machine before applying.</span>
+        ) : null}
         {draft.accepted_hosts.map((host) => (
           <div className="remote-access-chip" key={host}>
             <span>{host}</span>
-            <button type="button" aria-label={`Remove ${host}`} onClick={() => setDraft({ ...draft, accepted_hosts: draft.accepted_hosts.filter((item) => item !== host) })}>
+            <button
+              type="button"
+              aria-label={`Remove ${host}`}
+              onClick={() => setDraft({
+                ...draft,
+                accepted_hosts: draft.accepted_hosts.filter((item) => item !== host),
+              })}
+            >
               <Trash2 size={13} />
             </button>
           </div>
         ))}
-        {draft.enabled ? (
-          <div className="remote-access-add-row">
-            <input className="field" aria-label="Add address" placeholder="hostname or IP literal" value={addressInput} onChange={(event) => setAddressInput(event.target.value)} />
-            <button type="button" className="btn" onClick={() => { if (addToList("accepted_hosts", addressInput)) setAddressInput(""); }}>Add address</button>
-          </div>
-        ) : null}
         {status.suggestions.filter((item) => !draft.accepted_hosts.includes(item)).map((suggestion) => (
           <label className="remote-access-suggestion" key={suggestion}>
             <input
               type="checkbox"
               checked={selectedSuggestions.includes(suggestion)}
               onChange={(event) => {
-                setSelectedSuggestions((current) => event.target.checked ? [...current, suggestion] : current.filter((item) => item !== suggestion));
-                if (event.target.checked) addToList("accepted_hosts", suggestion);
-                else setDraft((current) => current ? { ...current, accepted_hosts: current.accepted_hosts.filter((item) => item !== suggestion) } : current);
+                setSelectedSuggestions((current) => event.target.checked
+                  ? uniqueValues([...current, suggestion])
+                  : current.filter((item) => item !== suggestion));
+                if (event.target.checked) addAddress(suggestion);
+                else setDraft((current) => current ? {
+                  ...current,
+                  accepted_hosts: current.accepted_hosts.filter((item) => item !== suggestion),
+                } : current);
               }}
             />
             <span>{suggestion}</span>
-            <small>Suggested address</small>
+            <small>Detected on this machine</small>
           </label>
         ))}
+        <div className="remote-access-add-row">
+          <input
+            className="field"
+            aria-label="Add this machine address"
+            placeholder="hostname or IP literal"
+            value={addressInput}
+            onChange={(event) => setAddressInput(event.target.value)}
+          />
+          <button
+            type="button"
+            className="btn"
+            onClick={() => { if (addAddress(addressInput)) setAddressInput(""); }}
+          >
+            Add address
+          </button>
+        </div>
       </div>
 
-      <div className="remote-access-subsection">
-        <strong>Browser permissions</strong>
-        <p className="settings-help">Allowed page origins protect calls into this bridge. Allowed bridge destinations control where this page may connect over HTTP/WebSocket.</p>
-        <PermissionList
-          label="Allowed page origins"
-          values={draft.allowed_page_origins}
-          suggestions={pageOriginSuggestions}
-          input={pageOriginInput}
-          onInput={setPageOriginInput}
-          onChange={(values) => setDraft({ ...draft, allowed_page_origins: values })}
-        />
-        <PermissionList
-          label="Allowed bridge destinations"
-          values={draft.allowed_bridge_origins}
-          suggestions={bridgeOriginSuggestions}
-          input={bridgeOriginInput}
-          onInput={setBridgeOriginInput}
-          onChange={(values) => setDraft({ ...draft, allowed_bridge_origins: values })}
-        />
-      </div>
-
-      {address ? (
+      {draft.enabled && address ? (
         <div className="remote-access-address">
-          <span>Connection URL</span>
+          <span>Bridge URL for other devices</span>
           <code>{address}</code>
-          <button type="button" className="btn" onClick={() => void copyValue(address)}><Copy size={13} /> Copy</button>
+          <button type="button" className="btn" onClick={() => void copyValue(address)}>
+            <Copy size={13} /> Copy
+          </button>
         </div>
       ) : null}
 
       <div className="remote-access-subsection">
-        <strong>Password</strong>
-        <span className="backend-note">{status.remote_access.password_configured ? "Protected" : "Not set"}</span>
-        {draft.enabled ? <p className="backend-warning">Direct access uses unencrypted HTTP and WebSocket connections. A bridge password protects access, but does not protect passwords or session tokens from a network observer. Use TLS or a trusted VPN.</p> : null}
-        {draft.enabled && !status.remote_access.password_configured ? <p className="backend-warning">Anyone who can reach an accepted address may connect until you set a password.</p> : null}
+        <strong>Password for this bridge</strong>
+        <span className="backend-note">
+          {status.remote_access.password_configured ? "Protected" : "Not set"}
+        </span>
+        <p className="settings-help">
+          Other devices are asked for this password when they connect. Passwords for bridges you
+          add are requested under Bridges and are kept only for the current app session.
+        </p>
+        {draft.enabled ? (
+          <p className="backend-warning">
+            Direct access uses unencrypted HTTP and WebSocket connections. Use only a trusted LAN
+            or VPN; a password controls access but does not encrypt the connection.
+          </p>
+        ) : null}
+        {draft.enabled && !status.remote_access.password_configured ? (
+          <p className="backend-warning">
+            Anyone who can reach this bridge can use it until you set a password.
+          </p>
+        ) : null}
         <div className="remote-access-password-row">
           <input
             className="field"
             type="password"
-            aria-label={status.remote_access.password_configured ? "Change bridge password" : "Set bridge password"}
+            aria-label={status.remote_access.password_configured
+              ? "Change this bridge password"
+              : "Set this bridge password"}
             placeholder={status.remote_access.password_configured ? "New password" : "Set password"}
             autoComplete="new-password"
             value={password}
-            onChange={(event) => { setPassword(event.target.value); setPasswordAction("set"); }}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setPasswordAction("set");
+            }}
           />
-          {status.remote_access.password_configured ? <button type="button" className="btn btn-danger" onClick={() => { setPassword(""); setPasswordAction("remove"); setMessage("Password protection will be removed when you apply settings."); }}>Remove</button> : null}
+          {status.remote_access.password_configured ? (
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => {
+                setPassword("");
+                setPasswordAction("remove");
+                setMessage("Password protection will be removed when you apply settings.");
+              }}
+            >
+              Remove
+            </button>
+          ) : null}
         </div>
-        {status.remote_access.password_configured ? <span className="backend-note">Enter a new password to change it, or Remove to disable protection.</span> : null}
+        {status.remote_access.password_configured ? (
+          <span className="backend-note">
+            Enter a new password to change it, or Remove to disable protection.
+          </span>
+        ) : null}
       </div>
 
-      <div className={`remote-access-apply remote-access-apply-${applyState}`} role="status">
-        <strong>{busy ? "Settings saved; waiting to apply" : applyLabel(status.apply.state)}</strong>
-        <span>{status.apply.reason ?? message ?? (status.mutation_allowed ? "Ready to apply." : status.mutation_reason ?? "Settings are read-only in this launch.")}</span>
+      <details className="remote-access-advanced">
+        <summary>Advanced browser permissions</summary>
+        <div className="remote-access-advanced-content">
+          <p className="settings-help">
+            Client web app origins are the exact URLs from which a browser may call this bridge.
+            Change these only when a client loads Herdr World from a non-standard URL.
+          </p>
+          <AccessOriginList
+            label="Client web app origins"
+            values={draft.allowed_page_origins}
+            suggestions={clientOriginSuggestions}
+            onChange={(values) => setDraft({ ...draft, allowed_page_origins: values })}
+          />
+        </div>
+      </details>
+
+      <div
+        className={`remote-access-apply remote-access-apply-${busy ? "applying" : status.apply.state}`}
+        role="status"
+      >
+        <strong>{busy ? "Applying sharing settings" : applyLabel(status.apply.state)}</strong>
+        <span>
+          {status.apply.reason ?? message ?? (status.mutation_allowed
+            ? "Ready to apply."
+            : status.mutation_reason ?? "Settings are read-only in this launch.")}
+        </span>
       </div>
-      {!status.mutation_allowed ? <p className="backend-warning">{status.mutation_reason ?? "This launch cannot safely apply settings."}</p> : null}
-      {message && status.apply.state !== "applying" ? <div className="modal-message">{message}</div> : null}
+      {!status.mutation_allowed ? (
+        <p className="backend-warning">
+          {status.mutation_reason ?? "This launch cannot safely apply settings."}
+        </p>
+      ) : null}
+      {message && status.apply.state !== "applying" ? (
+        <div className="modal-message">{message}</div>
+      ) : null}
       <div className="modal-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || !status.mutation_allowed} onClick={() => void save()}>{busy ? "Applying…" : "Apply"}</button>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy || !status.mutation_allowed || invalidEnabledDraft}
+          onClick={() => void save()}
+        >
+          {busy ? "Applying…" : "Apply"}
+        </button>
       </div>
     </div>
   );
 }
 
-function PermissionList({ label, values, suggestions, input, onInput, onChange }: {
-  label: string;
-  values: string[];
-  suggestions: string[];
-  input: string;
-  onInput: (value: string) => void;
-  onChange: (values: string[]) => void;
-}) {
-  return (
-    <div className="remote-access-permission-list">
-      <span>{label}</span>
-      {values.map((value) => <div className="remote-access-chip" key={value}><span>{value}</span><button type="button" aria-label={`Remove ${value}`} onClick={() => onChange(values.filter((item) => item !== value))}><Trash2 size={13} /></button></div>)}
-      {suggestions.filter((item) => !values.includes(item)).map((suggestion) => (
-        <label className="remote-access-suggestion" key={suggestion}>
-          <input type="checkbox" checked={false} onChange={(event) => { if (event.target.checked) onChange([...values, suggestion]); }} />
-          <span>{suggestion}</span><small>Suggested</small>
-        </label>
-      ))}
-      <div className="remote-access-add-row">
-        <input className="field" aria-label={`Add ${label.toLowerCase()}`} placeholder="http(s)://host:port" value={input} onChange={(event) => onInput(event.target.value)} />
-        <button type="button" className="btn" onClick={() => { const value = input.trim(); if (value && !values.includes(value)) { onChange([...values, value]); onInput(""); } }}><Plus size={13} /> Add</button>
-      </div>
-    </div>
-  );
-}
-
-function draftFromStatus(status: RemoteAccessStatus): RemoteAccessDraft {
-  return {
-    enabled: status.remote_access.enabled,
-    accepted_hosts: status.remote_access.accepted_hosts,
-    allowed_page_origins: status.remote_access.allowed_page_origins,
-    allowed_bridge_origins: status.remote_access.allowed_bridge_origins,
-  };
-}
-
-function uniqueOrigins(values: readonly (string | undefined)[]) {
-  const origins: string[] = [];
-  for (const value of values) {
-    if (!value) continue;
-    try {
-      const parsed = new URL(value);
-      if ((parsed.protocol === "http:" || parsed.protocol === "https:") && parsed.pathname === "/" && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) {
-        if (!origins.includes(parsed.origin)) origins.push(parsed.origin);
-      }
-    } catch {
-      // Suggestions are optional and untrusted profile values are ignored.
-    }
-  }
-  return origins.slice(0, 8);
+function uniqueValues(values: readonly string[]) {
+  return [...new Set(values)];
 }
 
 function applyLabel(state: RemoteAccessStatus["apply"]["state"]) {
-  return state === "applying" ? "Service restarting" : state === "failed" ? "Apply failed" : "Bridge ready";
+  return state === "applying"
+    ? "Service restarting"
+    : state === "failed"
+      ? "Apply failed"
+      : "Bridge ready";
 }
 
 async function copyValue(value: string) {

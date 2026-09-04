@@ -47,12 +47,12 @@ HOST=0.0.0.0 scripts/run-bridge.sh \
   --allow-origin http://host-a:8787
 ```
 
-Add `http://host-b:8787` in Settings → Bridge in the browser. `--allow-origin` on B authorizes the
+Add `http://host-b:8787` in Settings → Bridges in the browser. `--allow-origin` on B authorizes the
 page origin to call B. `--allow-connect-origin` on A adds B's HTTP and WebSocket origins to the CSP
 of the page A serves. Neither option is authentication. Never expose this configuration to an
 untrusted network.
 
-In Settings → Bridge, `Enable all` and `Disable all` are convenience actions for the saved browser
+In Settings → Bridges, `Enable all` and `Disable all` are convenience actions for the saved browser
 profiles. They only change which directly reachable profiles are admitted to the current Office
 view; each bridge still has its own capability probe, connection state, origin policy, and failure
 boundary. This is a downstream coordination affordance, not a fleet gateway or authentication
@@ -119,7 +119,7 @@ asset service or central gateway.
 ## Verification checklist
 
 - Load two compatible host profiles in one browser and confirm both appear in All-host scope.
-- Use Settings → Bridge → Enable all and confirm every saved profile is admitted, then disable one
+- Use Settings → Bridges → Enable all and confirm every saved profile is admitted, then disable one
   profile and confirm the remaining host stays navigable.
 - Type, send control input, resize/refit, and create/rename/move/close on each owning host.
 - Exercise desktop IME composition and cancellation, dismiss a menu/dialog to

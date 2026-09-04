@@ -103,13 +103,13 @@ herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
 herdr plugin uninstall ivoryheart.herdr-world
 ```
 
-Host access is managed in Settings → Remote access, where the plugin-managed launch exposes a
-Direct network access toggle, separate accepted-address/page-origin/bridge-destination policies,
-an optional password, and a copyable connection address. Applying a change safely reconciles the
-owned bridge and reports when it is ready. Development or standalone launches show status but keep
-mutation disabled when no controller-owned restart boundary is available. Client bridge URLs,
-labels, colors, and enabled state remain independent in Settings → Bridge. Direct network access
-is intended for a LAN/VPN path; use TLS, a VPN, or SSH for untrusted networks.
+Use Settings → Share this machine to let another device reach the bridge running on this machine.
+The basic flow detects this machine's address, provides a copyable Bridge URL, and offers an optional
+password. Inbound browser-origin rules remain under Advanced browser permissions. Use Settings →
+Bridges to add other machines; the local page's outbound destination permission is applied there and
+the page reloads when its browser policy changes. Development or standalone launches show these
+settings as read-only when no controller-owned restart boundary is available. Direct connections are
+intended for a trusted LAN/VPN path; use TLS, a VPN, or SSH for untrusted networks.
 
 To run from source:
 

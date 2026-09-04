@@ -28,7 +28,9 @@ import {
   useBridge,
 } from "./bridge";
 import type { BridgeBackendProfile } from "./bridge";
+import { BridgeDestinationSettings } from "./BridgeDestinationSettings";
 import { RemoteAccessSettings } from "./RemoteAccessSettings";
+import { allowBridgeDestinations, fetchRemoteAccess } from "./remoteAccess";
 import {
   DEFAULT_CONTENT_INSET_BOTTOM_PX,
   DEFAULT_CONTENT_INSET_TOP_PX,
@@ -120,6 +122,7 @@ type FormState = {
 
 type SelectionMode = "same-origin" | "new" | "backend";
 type SettingsArea = "bridge" | "remote" | "features" | "display" | "terminal" | "mobile";
+const relativeHttpUrl = (path: string) => path;
 
 export function BackendSettingsDialog({
   showMobileTerminalSettings,
@@ -167,6 +170,7 @@ export function BackendSettingsDialog({
   onClose,
 }: Props) {
   const bridge = useBridge();
+  const localHttpUrl = bridge.getRuntime(SAME_ORIGIN_BRIDGE_ID)?.httpUrl ?? relativeHttpUrl;
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const [form, setForm] = useState<FormState>(() => newBackendForm(bridge.store.backends));
@@ -246,6 +250,17 @@ export function BackendSettingsDialog({
       const baseUrl = normalizeBridgeBaseUrl(form.baseUrl);
       const found = duplicateBackend(bridge.store.backends, baseUrl, form.id ?? undefined);
       setDuplicate(found);
+      if (showRemoteAccess) {
+        try {
+          const access = await fetchRemoteAccess(localHttpUrl);
+          if (!access.remote_access.allowed_bridge_origins.includes(new URL(baseUrl).origin)) {
+            setMessage("Save this bridge first. Herdr World will allow its URL and reload before connecting.");
+            return;
+          }
+        } catch {
+          // Standalone and development launches may not expose writable local management.
+        }
+      }
       await bridge.probeBackend(baseUrl);
       setMessage(found ? `Reachable; same URL as ${found.name}.` : "Backend reachable.");
     } catch (error) {
@@ -266,18 +281,41 @@ export function BackendSettingsDialog({
         setMessage(`This URL is already saved as ${found.name}.`);
         return;
       }
+      const profile = form.id
+        ? await bridge.updateBackend(form.id, { name: form.name, baseUrl, color: form.color })
+        : await bridge.addBackend({ name: form.name, baseUrl, color: form.color }, false);
+      setSelectionMode("backend");
+      setForm(backendFormFromProfile(profile));
+      let permissionChanged = false;
+      let permissionWarning: string | null = null;
+      if (showRemoteAccess) {
+        try {
+          const result = await allowBridgeDestinations(localHttpUrl, [new URL(baseUrl).origin]);
+          permissionChanged = result.changed;
+        } catch (error) {
+          permissionWarning = error instanceof Error
+            ? error.message
+            : "Browser connection permission could not be applied.";
+        }
+      }
+      if (permissionChanged) {
+        setMessage("Bridge saved and allowed. Reloading Herdr World to activate browser access…");
+        window.setTimeout(() => window.location.reload(), 0);
+        return;
+      }
       let probeWarning: string | null = null;
       try {
         await bridge.probeBackend(baseUrl);
       } catch (error) {
         probeWarning = error instanceof Error ? error.message : "Backend could not be reached.";
       }
-      const profile = form.id
-        ? await bridge.updateBackend(form.id, { name: form.name, baseUrl, color: form.color })
-        : await bridge.addBackend({ name: form.name, baseUrl, color: form.color }, false);
-      setSelectionMode("backend");
-      setForm(backendFormFromProfile(profile));
-      setMessage(probeWarning ? `Backend saved. ${probeWarning}` : "Backend saved.");
+      setMessage(
+        permissionWarning
+          ? `Bridge saved. ${permissionWarning}`
+          : probeWarning
+            ? `Bridge saved. ${probeWarning}`
+            : "Bridge saved.",
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not save backend");
     } finally {
@@ -304,8 +342,8 @@ export function BackendSettingsDialog({
   ).length;
   const allBridgesEnabled = availableBridgeIds.length > 0 && enabledBridgeCount === availableBridgeIds.length;
   const areas: { id: SettingsArea; label: string; icon: typeof Server }[] = [
-    { id: "bridge", label: "Bridge", icon: Server },
-    ...(showRemoteAccess ? [{ id: "remote" as const, label: "Remote access", icon: Wifi }] : []),
+    { id: "bridge", label: "Bridges", icon: Server },
+    ...(showRemoteAccess ? [{ id: "remote" as const, label: "Share this machine", icon: Wifi }] : []),
     { id: "features", label: "Features", icon: StickyNote },
     { id: "display", label: "Display", icon: SlidersHorizontal },
     { id: "terminal", label: "Terminal", icon: SquareTerminal },
@@ -382,6 +420,11 @@ export function BackendSettingsDialog({
           <div className="settings-panel" role="tabpanel">
             {activeArea === "bridge" ? (
               <>
+                <div className="settings-label">Connect to bridges</div>
+                <p className="settings-help">
+                  Add machines this browser should connect to. This list is stored separately for
+                  each Herdr World page URL, so a list saved on port 8787 is not copied to port 8791.
+                </p>
                 <div className="bridge-settings-grid">
                   <div className="backend-list" role="list" aria-label="Saved bridges">
                     <div className="backend-fleet-summary">
@@ -545,14 +588,17 @@ export function BackendSettingsDialog({
                     </button>
                   </div>
                 ) : null}
+                {showRemoteAccess ? (
+                  <BridgeDestinationSettings
+                    httpUrl={localHttpUrl}
+                    backends={bridge.store.backends}
+                  />
+                ) : null}
               </>
             ) : null}
 
             {activeArea === "remote" && showRemoteAccess ? (
-              <RemoteAccessSettings
-                httpUrl={bridge.getRuntime(SAME_ORIGIN_BRIDGE_ID)?.httpUrl ?? ((path) => path)}
-                backends={bridge.store.backends}
-              />
+              <RemoteAccessSettings httpUrl={localHttpUrl} />
             ) : null}
 
             {activeArea === "features" ? (

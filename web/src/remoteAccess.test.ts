@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { bridgeAddress, parseRemoteAccessStatus } from "./remoteAccess";
+import { describe, expect, it, vi } from "vitest";
+import {
+  bridgeAddress,
+  parseRemoteAccessStatus,
+  waitForRemoteAccessReady,
+} from "./remoteAccess";
 
 describe("remote access response handling", () => {
   it("keeps host policies directional and formats IPv6 addresses safely", () => {
@@ -38,4 +42,42 @@ describe("remote access response handling", () => {
       apply: { state: "ready" },
     })).toThrow(/malformed/iu);
   });
+
+  it("does not accept a stale ready status before the requested policy appears", async () => {
+    let allowedBridgeOrigins: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      const response = statusResponse(allowedBridgeOrigins);
+      allowedBridgeOrigins = ["http://bridge.example.test:4000"];
+      return new Response(JSON.stringify(response), { status: 200 });
+    });
+
+    const status = await waitForRemoteAccessReady(
+      (path) => path,
+      (next) => next.remote_access.allowed_bridge_origins.length === 1,
+      100,
+      0,
+    );
+
+    expect(status.remote_access.allowed_bridge_origins).toEqual([
+      "http://bridge.example.test:4000",
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    fetchMock.mockRestore();
+  });
 });
+
+function statusResponse(allowedBridgeOrigins: string[]) {
+  return {
+    remote_access: {
+      enabled: false,
+      accepted_hosts: [],
+      allowed_page_origins: [],
+      allowed_bridge_origins: allowedBridgeOrigins,
+      password_configured: false,
+    },
+    port: 4000,
+    suggestions: [],
+    mutation_allowed: true,
+    apply: { state: "ready" },
+  };
+}

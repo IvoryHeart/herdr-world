@@ -558,12 +558,21 @@ test("supervisor definitions contain the absolute Node command and safe environm
 
 test("launchd bootstraps RunAtLoad services once and unloads partial startup", async () => {
   const fixture = await launchdFixture();
+  fixture.env.HOSTNAME = "workstation.local";
   const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
   try {
     const record = await runAction("start", options);
     assert.equal(record.supervisor, "launchd");
     assert.equal(record.controller_mode, "launchd");
     assert.equal(record.port, fixture.port);
+    const plistName = readdirSync(path.join(fixture.stateDir, "supervisors"))
+      .find((name) => name.endsWith(".plist"));
+    assert.ok(plistName);
+    const serviceDefinition = readFileSync(
+      path.join(fixture.stateDir, "supervisors", plistName),
+      "utf8",
+    );
+    assert.match(serviceDefinition, /<key>HOSTNAME<\/key><string>workstation\.local<\/string>/);
     const commands = readFileSync(fixture.logPath, "utf8")
       .trim()
       .split("\n")

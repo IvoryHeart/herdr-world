@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::fmt;
 use std::io::{self, ErrorKind, Write};
-use std::net::{IpAddr, Ipv6Addr, SocketAddr};
+use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 #[cfg(test)]
@@ -597,34 +597,47 @@ fn is_link_local(address: IpAddr) -> bool {
     }
 }
 
+fn add_access_candidate(candidates: &mut Vec<String>, raw: &str) {
+    let value = raw.trim().trim_matches('.');
+    if value.is_empty() || value.eq_ignore_ascii_case("localhost") {
+        return;
+    }
+    let valid = normalize_allowed_host(value).ok().filter(|host| {
+        host.parse::<IpAddr>()
+            .map(|address| {
+                !address.is_loopback() && !address.is_unspecified() && !is_link_local(address)
+            })
+            .unwrap_or(true)
+    });
+    if let Some(value) = valid {
+        if !candidates
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case(&value))
+        {
+            candidates.push(value);
+        }
+    }
+}
+
+fn route_selected_address(bind: &str, destination: &str) -> Option<String> {
+    let socket = UdpSocket::bind(bind).ok()?;
+    socket.connect(destination).ok()?;
+    Some(socket.local_addr().ok()?.ip().to_string())
+}
+
 fn detected_access_candidates(policy: &RequestPolicy) -> Vec<String> {
     let mut candidates: Vec<String> = Vec::new();
-    let mut add = |value: &str| {
-        let value = value.trim().trim_matches('.');
-        if value.is_empty() || value.eq_ignore_ascii_case("localhost") {
-            return;
-        }
-        let valid = normalize_allowed_host(value).ok().filter(|host| {
-            host.parse::<IpAddr>()
-                .map(|address| {
-                    !address.is_loopback() && !address.is_unspecified() && !is_link_local(address)
-                })
-                .unwrap_or(true)
-        });
-        if let Some(value) = valid {
-            if !candidates
-                .iter()
-                .any(|item: &String| item.eq_ignore_ascii_case(&value))
-            {
-                candidates.push(value);
-            }
-        }
-    };
     if !is_loopback_bind_host(&policy.bind_host) {
-        add(&policy.bind_host);
+        add_access_candidate(&mut candidates, &policy.bind_host);
+    }
+    if let Some(address) = route_selected_address("0.0.0.0:0", "192.0.2.1:9") {
+        add_access_candidate(&mut candidates, &address);
+    }
+    if let Some(address) = route_selected_address("[::]:0", "[2001:db8::1]:9") {
+        add_access_candidate(&mut candidates, &address);
     }
     if let Ok(hostname) = env::var("HOSTNAME") {
-        add(&hostname);
+        add_access_candidate(&mut candidates, &hostname);
     }
     candidates.truncate(8);
     candidates
@@ -2159,6 +2172,7 @@ const CONTROLLER_ENVIRONMENT: &[&str] = &[
     "TMPDIR",
     "LANG",
     "LC_ALL",
+    "HOSTNAME",
     "PATH",
     "HERDR_PLUGIN_CONFIG_DIR",
     "HERDR_PLUGIN_STATE_DIR",
@@ -7336,6 +7350,23 @@ mod tests {
             &origin_headers("127.0.0.1:5173", Some("http://127.0.0.1:5173")),
             &policy
         ));
+    }
+
+    #[test]
+    fn access_candidates_keep_only_usable_machine_addresses() {
+        let mut candidates = Vec::new();
+        for value in [
+            "127.0.0.1",
+            "0.0.0.0",
+            "fe80::1",
+            "192.0.2.20",
+            "192.0.2.20",
+            "workstation.local.",
+        ] {
+            add_access_candidate(&mut candidates, value);
+        }
+
+        assert_eq!(candidates, ["192.0.2.20", "workstation.local"]);
     }
 
     #[test]

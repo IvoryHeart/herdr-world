@@ -136,7 +136,7 @@ async function startFixture(fixture) {
       json(response, 200, {
         required: state?.remoteAccess?.password_configured === true,
         authenticated: request.headers.authorization === `Bearer ${FIXTURE_SESSION_TOKEN}`,
-        local_peer_bypass: false,
+        local_peer_bypass: fixture.serveStatic,
       });
       return;
     }
@@ -151,6 +151,7 @@ async function startFixture(fixture) {
     }
     if (
       state?.remoteAccess?.password_configured === true &&
+      !fixture.serveStatic &&
       url.pathname !== "/api/capabilities" &&
       request.headers.authorization !== `Bearer ${FIXTURE_SESSION_TOKEN.padEnd(32, "x")}`
     ) {
@@ -246,6 +247,7 @@ async function startFixture(fixture) {
     const state = fixtureStates.get(fixture.id);
     if (
       state?.remoteAccess?.password_configured === true &&
+      !fixture.serveStatic &&
       request.headers["sec-websocket-protocol"] !== `herdr-world-auth.${FIXTURE_SESSION_TOKEN.padEnd(32, "x")}`
     ) {
       socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
