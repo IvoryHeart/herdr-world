@@ -74,7 +74,7 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
 function switcherSettings(page: Page) {
   return page
     .getByRole("complementary", { name: "Switcher" })
-    .getByRole("button", { name: "Settings" });
+    .locator('button[title^="Settings; bridge:"]');
 }
 
 async function openSettings(page: Page) {
