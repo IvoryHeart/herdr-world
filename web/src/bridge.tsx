@@ -1367,7 +1367,12 @@ function terminalProbeMessageError(label: string, data: unknown): Error | null {
 
 function capabilityHttpError(status: number) {
   if (status === 401) return "Password required or rejected by the bridge";
-  if (status === 403) return "Host or Origin policy rejected the request; check the bridge's allowed page origin";
+  if (status === 403) {
+    const pageOrigin = globalThis.location?.origin;
+    return pageOrigin
+      ? `Bridge policy rejected this page. On the target machine, add ${pageOrigin} under Share this machine → Advanced browser permissions.`
+      : "Bridge policy rejected this page; check the target bridge's additional client page origins";
+  }
   if (status === 404) return "Bridge API is unavailable at this address";
   return `Bridge API request failed (${status})`;
 }

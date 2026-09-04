@@ -284,11 +284,11 @@ export function RemoteAccessSettings({
         <summary>Advanced browser permissions</summary>
         <div className="remote-access-advanced-content">
           <p className="settings-help">
-            Client web app origins are the exact URLs from which a browser may call this bridge.
-            Change these only when a client loads Herdr World from a non-standard URL.
+            Add another Herdr World page&apos;s exact URL when it needs to call this bridge. Pages
+            loaded directly from this bridge are already allowed.
           </p>
           <AccessOriginList
-            label="Client web app origins"
+            label="Additional client page origins"
             values={draft.allowed_page_origins}
             suggestions={clientOriginSuggestions}
             onChange={(values) => setDraft({ ...draft, allowed_page_origins: values })}

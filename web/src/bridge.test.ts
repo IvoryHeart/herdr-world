@@ -514,6 +514,23 @@ describe("capabilities", () => {
     fetchMock.mockRestore();
   });
 
+  it("identifies the exact client page origin when target policy rejects it", async () => {
+    vi.stubGlobal("location", { origin: "http://192.0.2.30:8791" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => (
+      new Response(
+        String(input).endsWith("/api/capabilities")
+          ? JSON.stringify(compatibleCapabilities())
+          : JSON.stringify({ error: "cross-origin requests are not allowed" }),
+        { status: String(input).endsWith("/api/capabilities") ? 200 : 403 },
+      )
+    ));
+
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
+      /add http:\/\/192\.0\.2\.30:8791 under Share this machine/iu,
+    );
+    fetchMock.mockRestore();
+  });
+
   it("reports a WebSocket upgrade failure separately from HTTP reachability", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = String(input);

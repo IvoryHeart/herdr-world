@@ -716,11 +716,6 @@ fn validate_remote_access_draft(draft: &mut RemoteAccessDraft) -> Result<(), Bri
             "remote access needs at least one accepted address".into(),
         ));
     }
-    if draft.enabled && page_origins.is_empty() {
-        return Err(BridgeError::BadRequest(
-            "remote access needs at least one allowed page origin".into(),
-        ));
-    }
     if let Some(hash) = &draft.password_hash {
         if hash.as_bytes().len() > MAX_REMOTE_ACCESS_VALUE_BYTES || !hash.starts_with("$argon2") {
             return Err(BridgeError::BadRequest("password hash is invalid".into()));
@@ -1671,11 +1666,6 @@ fn parse_options(args: &[String]) -> Result<Option<BridgeOptions>, String> {
                 "non-loopback binding requires at least one explicit --allow-host value".into(),
             );
         }
-        if allowed_origins.is_empty() {
-            return Err(
-                "non-loopback binding requires at least one explicit --allow-origin value".into(),
-            );
-        }
     }
 
     if let Some(name) = explicit_session {
@@ -1709,9 +1699,10 @@ Usage: herdr-world-bridge [--session NAME] [--host HOST] [--port PORT] [--static
 Runs the local HTTP/WebSocket bridge for Herdr World.\n\
 Defaults to the active Herdr daemon sockets and 127.0.0.1:8787.\n\
 Use --session NAME to target a named Herdr session and ignore HERDR_SOCKET_PATH.\n\
-Non-loopback --host values require explicit --allow-host and --allow-origin values.\n\
+Non-loopback --host values require an explicit --allow-host value.\n\
 Every admitted browser has terminal-equivalent access; Host and Origin checks are not authentication.\n\
-Use --allow-origin http://localhost for bundled Android app access.\n\
+Same-origin pages matching an allowed Host are admitted automatically.\n\
+Use --allow-origin http://localhost for additional clients such as the bundled Android app.\n\
 Use --allow-host HOSTNAME to accept that exact DNS hostname in Host headers.\n\
 Use --allow-connect-origin ORIGIN to let the served web app connect to another bridge origin.\n\
 Use --password-hash HASH for the memory-hard Argon2id hash managed by the plugin controller.\n\
@@ -2882,7 +2873,7 @@ fn request_origin_allowed_from_peer(
             && is_loopback_authority(origin_authority)
             && is_loopback_authority(host))
     {
-        return explicitly_allowed;
+        return same_authority(origin_authority, host) || explicitly_allowed;
     }
 
     same_authority(origin_authority, host)
@@ -7783,7 +7774,7 @@ mod tests {
     }
 
     #[test]
-    fn request_gate_allows_configured_android_origin() {
+    fn request_gate_allows_same_origin_and_configured_android_origin() {
         let policy = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
@@ -7794,6 +7785,10 @@ mod tests {
         };
         assert!(request_allowed(
             &origin_headers("192.0.2.10:4000", Some("http://localhost")),
+            &policy
+        ));
+        assert!(request_allowed(
+            &origin_headers("192.0.2.10:4000", Some("http://192.0.2.10:4000")),
             &policy
         ));
         assert!(!request_allowed(
@@ -8829,7 +8824,7 @@ mod tests {
     }
 
     #[test]
-    fn non_loopback_options_require_explicit_host_and_origin() {
+    fn non_loopback_options_require_explicit_host_but_allow_same_origin_by_default() {
         let host_only = vec!["--host".to_string(), "0.0.0.0".to_string()];
         assert!(parse_options(&host_only)
             .unwrap_err()
@@ -8841,9 +8836,9 @@ mod tests {
             "--allow-host".to_string(),
             "192.0.2.10".to_string(),
         ];
-        assert!(parse_options(&without_origin)
-            .unwrap_err()
-            .contains("--allow-origin"));
+        let same_origin_only = parse_options(&without_origin).unwrap().unwrap();
+        assert_eq!(same_origin_only.allowed_hosts, vec!["192.0.2.10"]);
+        assert!(same_origin_only.allowed_origins.is_empty());
 
         let explicit = vec![
             "--host".to_string(),

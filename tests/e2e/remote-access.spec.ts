@@ -11,8 +11,7 @@ test.beforeEach(async ({ page, request }) => {
 test("shares this machine with host settings separate from bridge destinations", async ({ page }) => {
   await page.goto("/spaces");
   await expect(page.getByRole("button", { name: "localhost, compatible" })).toBeVisible();
-  await switcherSettings(page).press("Enter");
-  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+  await openSettings(page);
   await page.getByRole("tab", { name: "Share this machine" }).click();
 
   await expect(page.getByText("Share this bridge", { exact: true })).toBeVisible();
@@ -23,14 +22,14 @@ test("shares this machine with host settings separate from bridge destinations",
   await page.getByLabel("Set this bridge password").fill("fixture-only-password");
   await expect(page.getByText(/unencrypted HTTP and WebSocket connections/iu)).toBeVisible();
   await page.getByText("Advanced browser permissions", { exact: true }).click();
-  await expect(page.getByText("Client web app origins", { exact: true })).toBeVisible();
+  await expect(page.getByText("Additional client page origins", { exact: true })).toBeVisible();
   await expect(page.getByText("Bridge destinations for this page", { exact: true })).toHaveCount(0);
   await Promise.all([
     page.waitForEvent("load"),
     page.getByRole("button", { name: "Apply", exact: true }).click(),
   ]);
 
-  await switcherSettings(page).press("Enter");
+  await openSettings(page);
   await page.getByRole("tab", { name: "Share this machine" }).click();
   await expect(page.getByText("Protected", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toContainText(/Bridge ready/iu);
@@ -56,7 +55,7 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
   await page.reload();
   await expect(prompt).toBeHidden();
 
-  await switcherSettings(page).press("Enter");
+  await openSettings(page);
   await page.getByRole("tab", { name: "Bridges" }).click();
   await Promise.all([
     page.waitForEvent("load"),
@@ -64,7 +63,7 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
   ]);
 
   await expect(prompt).toBeHidden();
-  await switcherSettings(page).press("Enter");
+  await openSettings(page);
   await page.getByRole("tab", { name: "Bridges" }).click();
   await page.locator(".backend-row-main").filter({ hasText: "Remote B" }).click();
   await page.getByRole("button", { name: "Test", exact: true }).click();
@@ -76,4 +75,9 @@ function switcherSettings(page: Page) {
   return page
     .getByRole("complementary", { name: "Switcher" })
     .getByRole("button", { name: "Settings" });
+}
+
+async function openSettings(page: Page) {
+  await switcherSettings(page).click();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
 }

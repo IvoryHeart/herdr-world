@@ -237,7 +237,11 @@ test("target selection enforces the published platform and libc matrix", () => {
 
 test("configuration validates safe remote access and mutually exclusive targets", () => {
   assert.deepEqual(validateConfig({}).port_range, DEFAULT_PORT_RANGE);
-  assert.throws(() => validateConfig({ host: "0.0.0.0" }), /allowed_hosts and allowed_origins/);
+  assert.throws(() => validateConfig({ host: "0.0.0.0" }), /allowed_hosts/);
+  assert.doesNotThrow(() => validateConfig({
+    host: "0.0.0.0",
+    allowed_hosts: ["world.example"],
+  }));
   assert.doesNotThrow(() => validateConfig({
     host: "0.0.0.0",
     allowed_hosts: ["world.example"],
@@ -246,6 +250,23 @@ test("configuration validates safe remote access and mutually exclusive targets"
   assert.throws(() => validateConfig({ session_name: "a", socket_path: "/tmp/herdr.sock" }), /mutually exclusive/);
   assert.throws(() => validateConfig({ allowed_origins: ["https://world.example/path"] }), /allowed_origins/);
   assert.throws(() => validateConfig({ host: "https://world.example" }), /hostname or IP/);
+});
+
+test("remote access needs a served address but additional page origins are optional", () => {
+  assert.deepEqual(normalizeRemoteAccess({
+    remote_access: {
+      enabled: true,
+      accepted_hosts: ["world.example"],
+      allowed_page_origins: [],
+      allowed_bridge_origins: [],
+    },
+  }), {
+    enabled: true,
+    accepted_hosts: ["world.example"],
+    allowed_page_origins: [],
+    allowed_bridge_origins: [],
+    password_hash: null,
+  });
 });
 
 test("legacy host policies migrate without losing directional IPv6 bridge permissions", () => {

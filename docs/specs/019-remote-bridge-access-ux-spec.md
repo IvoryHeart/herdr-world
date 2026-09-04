@@ -38,7 +38,7 @@ changes.
 | Mode naming | Avoid `Remote access` because it obscures which machine and direction are being configured. |
 | Sharing toggle | `Allow other devices to connect` is off by default and preserves sharing settings when disabled. |
 | Machine addresses | Hostnames or IP literals that another device may use in this bridge's URL; they are not source-IP authentication. |
-| Browser policy | Keep inbound client web app origins and outbound bridge destinations as separate low-level policies, but place each only under its owning flow's Advanced browser permissions. |
+| Browser policy | Keep additional inbound client page origins and outbound bridge destinations as separate low-level policies, but place each only under its owning flow's Advanced browser permissions. |
 | Suggestions | Show detected non-loopback addresses and select the first usable one on first enable. |
 | Password | Optional per-bridge password; `null` means no password. |
 | Local access | Owner-approved initial implementation treats the actual loopback TCP peer as local. Proper SSH bridging remains future work. |
@@ -125,10 +125,13 @@ machine being shared, not the connecting devices. It SHALL say that the
 password protects this bridge and that passwords for other bridges are asked
 for when the client connects.
 
-An `Advanced browser permissions` disclosure SHALL contain only `Client web
-app origins`: the exact page origins permitted to call this bridge. The UI
-SHALL seed standard local Herdr World origins when sharing is first enabled and
-the list is empty. Non-standard client origins remain explicit operator input.
+An `Advanced browser permissions` disclosure SHALL contain only `Additional
+client page origins`: exact origins for Herdr World pages served somewhere else
+that need to call this bridge. A page loaded directly from this bridge is
+inherently admitted when its Origin exactly matches the already accepted Host
+and bridge port. The UI SHALL seed standard local Herdr World origins when
+sharing is first enabled and the list is empty for development and Android
+clients. Other client origins remain explicit operator input.
 
 The UI SHALL not expose bind flags, generated origins, CSP sources, supervisor
 names, service labels, or raw configuration paths in the normal flow.
@@ -297,9 +300,11 @@ checks, but the UI SHALL warn that this is not a network firewall or source-IP
 allowlist.
 
 The plugin SHALL continue to reject malformed, unconfigured, or wrong-port
-Host values. The bridge SHALL continue to enforce exact browser Origin policy
-from `allowed_page_origins`, and CSP connect sources from
-`allowed_bridge_origins`. Neither list SHALL be inferred from
+Host values. The bridge SHALL inherently admit an exact same-origin request
+whose authority matches the request's already accepted Host and bridge port.
+It SHALL continue to enforce exact additional browser Origin policy from
+`allowed_page_origins`, and CSP connect sources from
+`allowed_bridge_origins`. Neither configured list SHALL be inferred from
 `accepted_hosts` alone.
 
 For a page served from bridge A to call bridge B directly, A's
@@ -470,8 +475,9 @@ The implementation SHALL include:
 
 - unit tests for high-level configuration validation and low-level derivation;
 - migration tests for existing loopback and non-loopback configurations;
-- policy tests proving accepted hosts, allowed page origins, and allowed bridge
-  destinations remain directional and are not inferred from one another;
+- policy tests proving accepted hosts, additional page origins, and allowed
+  bridge destinations remain directional and are not inferred from one another,
+  while the exact served origin works without duplicate configuration;
 - management-path tests proving non-loopback requests cannot mutate host
   settings and forwarding headers cannot manufacture a loopback TCP peer;
 - supervisor/restart tests covering success, readiness failure, rollback, and
@@ -498,5 +504,6 @@ The implementation SHALL include:
 - Passwords use the bridge's bounded Argon2 hash. The password is never stored
   client-side; only its bearer session token is retained for the current browser
   tab so it survives a page reload.
-- Share this machine owns inbound client web app origins; Bridges owns outbound
-  bridge destinations. Both remain exact-origin advanced settings.
+- Share this machine owns additional inbound client page origins; Bridges owns
+  outbound bridge destinations. Both remain exact-origin advanced settings;
+  the bridge's own served origin does not require duplicate configuration.

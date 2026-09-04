@@ -401,8 +401,8 @@ export function normalizeRemoteAccess(input) {
   const allowed_page_origins = validStringArray(source.allowed_page_origins, validOrigin, "remote_access.allowed_page_origins (legacy allowed_origins)");
   const allowed_bridge_origins = validStringArray(source.allowed_bridge_origins, validOrigin, "remote_access.allowed_bridge_origins");
   if (!validPasswordHash(source.password_hash ?? null)) throw new PluginError("remote_access.password_hash must be null or a bounded Argon2 hash");
-  if (source.enabled && (accepted_hosts.length === 0 || allowed_page_origins.length === 0)) {
-    throw new PluginError("enabled remote access requires accepted_hosts and allowed_page_origins; legacy allowed_hosts and allowed_origins must not be empty");
+  if (source.enabled && accepted_hosts.length === 0) {
+    throw new PluginError("enabled remote access requires accepted_hosts; legacy allowed_hosts must not be empty");
   }
   return {
     enabled: source.enabled,
@@ -465,8 +465,8 @@ export function validateConfig(input) {
   if (config.bridge_label !== null && (typeof config.bridge_label !== "string" || config.bridge_label.length === 0 || config.bridge_label.length > 80 || /[\0\r\n]/.test(config.bridge_label))) {
     throw new PluginError("config bridge_label must be 1-80 characters without control characters");
   }
-  if (!isLoopbackHost(config.host) && (config.allowed_hosts.length === 0 || config.allowed_origins.length === 0)) {
-    throw new PluginError("non-loopback binding requires explicit allowed_hosts and allowed_origins configuration");
+  if (!isLoopbackHost(config.host) && config.allowed_hosts.length === 0) {
+    throw new PluginError("non-loopback binding requires explicit allowed_hosts configuration");
   }
   return config;
 }

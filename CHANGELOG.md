@@ -21,6 +21,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under
+  advanced client-origin settings, while retaining explicit policy for pages served elsewhere.
+  [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
 - Reconciled an owned launchd or systemd service whose runtime record was lost, so changing the
   plugin bind host or access policy can take effect instead of leaving an old loopback service
   loaded and blocking restart.
