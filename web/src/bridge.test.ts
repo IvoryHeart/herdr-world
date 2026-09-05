@@ -18,6 +18,7 @@ import {
   SAME_ORIGIN_BRIDGE_ID,
   sameOriginHostLabel,
 } from "./bridge";
+import { BridgeDiagnosticError } from "./bridgeApi";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -325,14 +326,14 @@ describe("capabilities", () => {
       blocked: true,
       state: "incompatible",
       capabilities: null,
-      error: "Bridge is not compatible with this web app",
+      error: "This Herdr is not compatible with this web app",
       retry: false,
     });
     expect(capabilityProbeFailure(new Error("network down"))).toEqual({
       blocked: true,
       state: "offline",
       capabilities: null,
-      error: "Bridge unavailable",
+      error: "Connection unavailable",
       retry: true,
     });
   });
@@ -342,6 +343,16 @@ describe("capabilities", () => {
     expect(capabilityRetryDelayMs(1)).toBe(2000);
     expect(capabilityRetryDelayMs(3)).toBe(8000);
     expect(capabilityRetryDelayMs(10)).toBe(10000);
+  });
+
+  it("retains bounded policy and API diagnostics for the bridge test flow", () => {
+    expect(capabilityProbeFailure(new BridgeDiagnosticError("Host or Origin policy rejected the request"))).toEqual({
+      blocked: true,
+      state: "offline",
+      capabilities: null,
+      error: "Host or Origin policy rejected the request",
+      retry: true,
+    });
   });
 
   it("parses optional compatibility fields", () => {
@@ -417,8 +428,38 @@ describe("capabilities", () => {
 
   it("probes configured bridge capabilities", async () => {
     const response = compatibleCapabilities({ commands: ["pane.move"] });
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify(response), { status: 200 }),
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(
+        url.endsWith("/api/capabilities")
+          ? JSON.stringify(response)
+          : JSON.stringify({ panes: [{ terminal_id: "terminal-test" }] }),
+        { status: 200 },
+      );
+    });
+    const sockets: string[] = [];
+    vi.stubGlobal(
+      "WebSocket",
+      class ProbeWebSocket {
+        onopen: (() => void) | null = null;
+        onmessage: ((event: { data: string }) => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor(url: string) {
+          sockets.push(url);
+          queueMicrotask(() => {
+            this.onopen?.();
+            if (url.includes("/ws/terminal")) {
+              this.onmessage?.({ data: JSON.stringify({ type: "attach_ready" }) });
+            }
+          });
+        }
+
+        close() {
+          this.onclose?.();
+        }
+      },
     );
 
     await expect(probeBridgeBaseUrl("192.0.2.20:4000")).resolves.toEqual(response);
@@ -426,7 +467,99 @@ describe("capabilities", () => {
       "http://192.0.2.20:4000/api/capabilities",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    expect(sockets).toEqual([
+      "ws://192.0.2.20:4000/ws/events",
+      "ws://192.0.2.20:4000/ws/terminal?terminal_id=terminal-test&takeover=false&probe=true",
+    ]);
 
+    fetchMock.mockRestore();
+  });
+
+  it("reports terminal attach failure frames instead of treating them as ready", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(
+        url.endsWith("/api/capabilities")
+          ? JSON.stringify(compatibleCapabilities())
+          : JSON.stringify({ panes: [{ terminal_id: "terminal-test" }] }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal(
+      "WebSocket",
+      class ClosedTerminalWebSocket {
+        onopen: (() => void) | null = null;
+        onmessage: ((event: { data: string }) => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor(url: string) {
+          queueMicrotask(() => {
+            this.onopen?.();
+            if (url.includes("/ws/terminal")) {
+              this.onmessage?.({
+                data: JSON.stringify({ type: "closed", reason: "terminal attach failed: terminal missing" }),
+              });
+            }
+          });
+        }
+
+        close() {}
+      },
+    );
+
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
+      /Connection terminal attach failed: terminal attach failed: terminal missing/iu,
+    );
+    fetchMock.mockRestore();
+  });
+
+  it("identifies the exact client page origin when target policy rejects it", async () => {
+    vi.stubGlobal("location", { origin: "http://192.0.2.30:8791" });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => (
+      new Response(
+        String(input).endsWith("/api/capabilities")
+          ? JSON.stringify(compatibleCapabilities())
+          : JSON.stringify({ error: "cross-origin requests are not allowed" }),
+        { status: String(input).endsWith("/api/capabilities") ? 200 : 403 },
+      )
+    ));
+
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
+      /Network → Allow connections → Advanced network permissions/iu,
+    );
+    fetchMock.mockRestore();
+  });
+
+  it("reports a WebSocket upgrade failure separately from HTTP reachability", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      return new Response(
+        url.endsWith("/api/capabilities")
+          ? JSON.stringify(compatibleCapabilities())
+          : JSON.stringify({ panes: [] }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal(
+      "WebSocket",
+      class FailingWebSocket {
+        onopen: (() => void) | null = null;
+        onmessage: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: (() => void) | null = null;
+
+        constructor() {
+          queueMicrotask(() => this.onerror?.());
+        }
+
+        close() {}
+      },
+    );
+
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
+      /WebSocket upgrade failed/iu,
+    );
     fetchMock.mockRestore();
   });
 

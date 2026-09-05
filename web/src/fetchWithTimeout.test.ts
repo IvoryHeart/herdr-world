@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearBridgeSession, setBridgePasswordPromptHandler } from "./bridgeApi";
 import { fetchWithTimeout } from "./fetchWithTimeout";
 
 afterEach(() => {
+  clearBridgeSession("http://localhost");
+  setBridgePasswordPromptHandler(null);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -50,5 +53,24 @@ describe("fetchWithTimeout", () => {
     await rejection;
     await vi.advanceTimersByTimeAsync(5000);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not spend the network timeout while waiting for a password prompt", async () => {
+    let authenticated = false;
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/session")) {
+        authenticated = true;
+        return new Response(JSON.stringify({ token: "t".repeat(64) }), { status: 200 });
+      }
+      return new Response(null, { status: authenticated ? 200 : 401 });
+    }));
+    setBridgePasswordPromptHandler(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      return "synthetic-password";
+    });
+
+    await expect(fetchWithTimeout("http://localhost/api/snapshot", { timeoutMs: 5 }))
+      .resolves.toHaveProperty("status", 200);
   });
 });

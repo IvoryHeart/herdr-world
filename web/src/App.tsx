@@ -64,6 +64,7 @@ import {
 } from "./agentPins";
 import type { AgentPinsListResponse } from "./agentPins";
 import { BackendSettingsDialog } from "./BackendSettingsDialog";
+import { authenticatedFetch } from "./bridgeApi";
 import type { BridgeId, BridgeRuntime, CapabilityState } from "./bridge";
 import { createCommands, createdPaneId, createdWorkspaceId } from "./commands";
 import type { LaunchSpec, PaneFocusDirection, SplitDirection } from "./commands";
@@ -361,10 +362,10 @@ export function launcherEmptyMessage(
   state: BridgeLauncherPresetsState | null,
 ) {
   if (!bridgeReady) {
-    return "Bridge is not ready. Close this dialog and reconnect.";
+    return "Connection is not ready. Close this dialog and reconnect.";
   }
   if (!launcherSupported) {
-    return "Launching is unavailable on this bridge. Update the bridge and reconnect.";
+    return "Launching is unavailable on this Herdr. Update it and reconnect.";
   }
   if (state?.loadState === "error") {
     return `Could not load launcher presets: ${state.error ?? "unknown error"}. Close and reopen this dialog to retry.`;
@@ -3400,7 +3401,7 @@ export function App() {
       !runtimeIsAdmitted(selectedRuntime.id) ||
       !supportsNotes(selectedRuntime.capabilities)
     ) {
-      setError("Notes are not available for this bridge");
+      setError("Notes are not available for this Herdr");
       return;
     }
     try {
@@ -3428,7 +3429,7 @@ export function App() {
     }
     const runtime = bridgeId ? bridge.getRuntime(bridgeId) : null;
     if (!runtime || !runtimeIsAdmitted(runtime.id) || !supportsNotes(runtime.capabilities)) {
-      setError("Notes are not available for this bridge");
+      setError("Notes are not available for this Herdr");
       return;
     }
     try {
@@ -3514,7 +3515,7 @@ export function App() {
       !runtimeIsAdmitted(runtime.id) ||
       !supportsNotes(runtime.capabilities)
     ) {
-      setError("Notes are not available for this bridge");
+      setError("Notes are not available for this Herdr");
       return;
     }
     const bridgeSnapshot = snapshotForBridge(bridgeId);
@@ -3546,7 +3547,7 @@ export function App() {
       !runtimeIsAdmitted(runtime.id) ||
       !supportsNotes(runtime.capabilities)
     ) {
-      setError("Notes are not available for this bridge");
+      setError("Notes are not available for this Herdr");
       return;
     }
     const bridgeSnapshot = snapshotForBridge(target.bridgeId);
@@ -3644,8 +3645,8 @@ export function App() {
   ) => {
     const runtime = bridge.getRuntime(entry.bridgeId);
     if (!runtime || !runtimeIsAdmitted(runtime.id) || !supportsNotes(runtime.capabilities)) {
-      setError("Bridge is not ready");
-      throw new Error("Bridge is not ready");
+      setError("Connection is not ready");
+      throw new Error("Connection is not ready");
     }
     try {
       const savedNote = await updateNote(runtime.httpUrl, entry.note.note_id, {
@@ -3676,7 +3677,7 @@ export function App() {
       !runtimeIsAdmitted(selectedRuntime.id) ||
       !supportsNotes(selectedRuntime.capabilities)
     ) {
-      setError("Select a pane on the same bridge first");
+      setError("Select a pane on the same Herdr first");
       return;
     }
     try {
@@ -3693,7 +3694,7 @@ export function App() {
   const detachScopedNote = async (entry: ScopedNoteEntry) => {
     const runtime = bridge.getRuntime(entry.bridgeId);
     if (!runtime || !runtimeIsAdmitted(runtime.id) || !supportsNotes(runtime.capabilities)) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     try {
@@ -3709,7 +3710,7 @@ export function App() {
   const archiveScopedNote = async (entry: ScopedNoteEntry) => {
     const runtime = bridge.getRuntime(entry.bridgeId);
     if (!runtime || !runtimeIsAdmitted(runtime.id) || !supportsNotes(runtime.capabilities)) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     try {
@@ -3725,7 +3726,7 @@ export function App() {
   const restoreScopedNote = async (entry: ScopedNoteEntry) => {
     const runtime = bridge.getRuntime(entry.bridgeId);
     if (!runtime || !runtimeIsAdmitted(runtime.id) || !supportsNotes(runtime.capabilities)) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     try {
@@ -3741,7 +3742,7 @@ export function App() {
   const deleteScopedNote = async (entry: ScopedNoteEntry) => {
     const runtime = bridge.getRuntime(entry.bridgeId);
     if (!runtime || !runtimeIsAdmitted(runtime.id) || !supportsNotes(runtime.capabilities)) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return false;
     }
     try {
@@ -4334,7 +4335,7 @@ export function App() {
         runtime.generationKey,
       )
     ) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return false;
     }
     let routed;
@@ -4345,7 +4346,7 @@ export function App() {
       return false;
     }
     if (routed.generationKey !== runtime.generationKey) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return false;
     }
     const requestConnectionKey = runtime.generationKey;
@@ -4511,7 +4512,7 @@ export function App() {
       );
     } else if (key === "move_new_space" && kind === "pane") {
       if (!commands) {
-        setError("Bridge is not ready");
+        setError("Connection is not ready");
         return;
       }
       void exec(
@@ -4531,7 +4532,7 @@ export function App() {
     const runtime = bridge.getRuntime(bridgeId);
     const commands = runtime ? createCommands(runtime.httpUrl) : null;
     if (!commands) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     const command =
@@ -4555,7 +4556,7 @@ export function App() {
     }
     const runtime = bridge.getRuntime(dialog.bridgeId);
     if (!runtime) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     void exec(
@@ -4588,7 +4589,7 @@ export function App() {
     const runtime = bridge.getRuntime(bridgeId);
     const commands = runtime ? createCommands(runtime.httpUrl) : null;
     if (!commands) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     const command = kind === "space" ? "workspace.rename" : "tab.rename";
@@ -4611,7 +4612,7 @@ export function App() {
     const runtime = bridge.getRuntime(bridgeId);
     const commands = runtime ? createCommands(runtime.httpUrl) : null;
     if (!commands) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     const command =
@@ -4635,11 +4636,11 @@ export function App() {
     const runtime = bridge.getRuntime(launchTarget.bridgeId);
     const commands = runtime ? createCommands(runtime.httpUrl) : null;
     if (!runtime || !commands) {
-      setError("Bridge is not ready");
+      setError("Connection is not ready");
       return;
     }
     if (!supportsLauncherPresets(runtime.capabilities)) {
-      setError("Launching is unavailable on this bridge. Update the bridge and reconnect.");
+      setError("Launching is unavailable on this Herdr. Update it and reconnect.");
       return;
     }
     if (!launchPresetState?.response) {
@@ -4904,7 +4905,7 @@ export function App() {
             Boolean(selectedRuntime?.canConnect) && !selectedBridgeView?.surfaceError
           }
           bridgeError={selectedBridgeView?.surfaceError ?? selectedRuntime?.capabilityError ?? null}
-          bridgeLabel={selectedRuntime?.label ?? "No bridge"}
+          bridgeLabel={selectedRuntime?.label ?? "No connection"}
           bridgeMode={selectedRuntime?.mode ?? "configured"}
           capabilityState={
             selectedBridgeView?.surfaceError
@@ -4975,7 +4976,7 @@ export function App() {
                   (commands) => commands.createWorkspace(),
                   true,
                 )
-              : setError("Bridge is not ready")
+              : setError("Connection is not ready")
           }
           onCreateTab={(bridgeId, workspaceId) =>
             setLaunchTarget({ mode: "tab", workspaceId, bridgeId })
@@ -5460,6 +5461,7 @@ export function App() {
       {backendSettingsOpen ? (
         <BackendSettingsDialog
           showMobileTerminalSettings={isTouchInput}
+          showRemoteAccess={!isNativeAndroid()}
           onOpenWorldSettings={worldSettingsController.open}
           notesEnabled={notesEnabled}
           onNotesEnabled={setNotesEnabled}
@@ -7770,7 +7772,7 @@ function Switcher({
         label={view.runtime.label}
         message={
           view.runtime.capabilityError ||
-          (view.loadState === "error" ? "Could not reach bridge" : "Bridge disconnected")
+          (view.loadState === "error" ? "Could not reach Herdr" : "Connection disconnected")
         }
         onSelect={() => {
           onSelectBridge(view.runtime.id);
@@ -7882,7 +7884,7 @@ function Switcher({
       return (
         <div className="empty">
           <strong>Notes unavailable</strong>
-          <span>Update the selected bridge to use pane notes.</span>
+          <span>Update the selected Herdr to use pane notes.</span>
         </div>
       );
     }
@@ -8012,7 +8014,7 @@ function Switcher({
           className="icon-btn"
           type="button"
           aria-label="Settings"
-          title={`Settings; bridge: ${bridgeLabel}`}
+          title={`Settings; Herdr: ${bridgeLabel}`}
           data-spin={capabilityState === "probing" ? "" : undefined}
           onClick={onBackendSettings}
         >
@@ -8136,20 +8138,20 @@ function Switcher({
           <div className="empty">
             <strong>
               {bridgeViews.length === 0
-                ? "No bridges enabled"
+                ? "No connections enabled"
                 : bridgeBlocked
-                ? "Bridge disconnected"
+                ? "Connection disconnected"
                 : loadState === "error"
-                  ? "Bridge unavailable"
+                  ? "Connection unavailable"
                   : "Connecting…"}
             </strong>
             <span>
               {bridgeViews.length === 0
-                ? "Enable one or more bridges in settings."
+                ? "Enable one or more connections in Network settings."
                 : bridgeBlocked
-                ? bridgeError || "Choose a usable bridge backend."
+                ? bridgeError || "Choose a usable connection."
                 : loadState === "error"
-                  ? "Could not reach the herdr bridge."
+                  ? "Could not reach this Herdr."
                   : ""}
             </span>
             {bridgeBlocked ? (
@@ -10442,10 +10444,10 @@ function stageBreadcrumb(
 ) {
   if (!pane) {
     if (!bridgeCanConnect) {
-      return "bridge disconnected";
+      return "connection disconnected";
     }
     if (loadState === "error") {
-      return "bridge unavailable";
+      return "connection unavailable";
     }
     return snapshot ? "no pane selected" : "connecting…";
   }
@@ -10467,7 +10469,7 @@ async function syncSelectedPane(
   httpUrl: (path: string, query?: URLSearchParams) => string,
   paneId: string,
 ) {
-  const response = await fetch(httpUrl("/api/selection"), {
+  const response = await authenticatedFetch(httpUrl("/api/selection"), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ pane_id: paneId }),

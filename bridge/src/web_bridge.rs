@@ -1,20 +1,31 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::fmt;
 use std::io::{self, ErrorKind, Write};
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv6Addr, SocketAddr, UdpSocket};
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+#[cfg(test)]
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
+#[cfg(unix)]
+use std::os::unix::process::CommandExt;
+
+use argon2::password_hash::{
+    rand_core::OsRng as PasswordOsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString,
+};
+use argon2::Argon2;
 use axum::body::{Body, Bytes};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{DefaultBodyLimit, Path as AxumPath, Query, State};
+use axum::extract::{ConnectInfo, DefaultBodyLimit, Path as AxumPath, Query, State};
 use axum::http::header::{
     ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-    ACCESS_CONTROL_MAX_AGE, ACCESS_CONTROL_REQUEST_HEADERS, CACHE_CONTROL, HOST, ORIGIN, VARY,
+    ACCESS_CONTROL_MAX_AGE, ACCESS_CONTROL_REQUEST_HEADERS, AUTHORIZATION, CACHE_CONTROL, HOST,
+    ORIGIN, SEC_WEBSOCKET_PROTOCOL, VARY, WWW_AUTHENTICATE,
 };
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::middleware::{self, Next};
@@ -25,7 +36,9 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures_util::{SinkExt, StreamExt};
 use herdr_compat::TryClone as _;
+use rand::{rngs::OsRng as TokenOsRng, RngCore};
 use serde::{Deserialize, Serialize};
+use tokio::sync::Semaphore;
 use tokio::time::Instant;
 use tower::{ServiceBuilder, ServiceExt};
 use tower_http::compression::CompressionLayer;
@@ -87,6 +100,7 @@ const TERMINAL_OUTPUT_FRAME_GZIP: u8 = 1;
 const TERMINAL_OUTPUT_GZIP_MIN_BYTES: usize = 256;
 const TERMINAL_OUTPUT_GZIP_ACKNOWLEDGEMENT: &str =
     r#"{"type":"terminal_output_encoding","encoding":"gzip"}"#;
+const TERMINAL_ATTACH_READY: &str = r#"{"type":"attach_ready"}"#;
 const DAEMON_STATUS_TIMEOUT: Duration = Duration::from_secs(5);
 const ACTIVITY_WATCHER_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
 const ACTIVITY_WATCHER_MAX_BACKOFF: Duration = Duration::from_secs(30);
@@ -97,7 +111,26 @@ const MANAGED_AGENT_SHELL_RETRY_INITIAL_DELAY: Duration = Duration::from_millis(
 const MANAGED_AGENT_SHELL_READY_TIMEOUT: Duration = Duration::from_secs(3);
 const MANAGED_AGENT_START_TIMEOUT: Duration = Duration::from_secs(30);
 const MANAGED_AGENT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const MAX_PASSWORD_BYTES: usize = 1024;
+const MAX_PASSWORD_REQUEST_BYTES: usize = 2048;
+const MAX_REMOTE_ACCESS_REQUEST_BYTES: usize = 64 * 1024;
+const MAX_REMOTE_ACCESS_ITEMS: usize = 32;
+const MAX_REMOTE_ACCESS_VALUE_BYTES: usize = 512;
+const AUTH_SESSION_TTL: Duration = Duration::from_secs(60 * 60);
+const AUTH_FAILURE_WINDOW: Duration = Duration::from_secs(60);
+const AUTH_FAILURE_LIMIT: usize = 5;
+const AUTH_FAILURE_DELAY: Duration = Duration::from_millis(250);
+const MAX_AUTH_FAILURE_PEERS: usize = 1024;
+const MAX_PASSWORD_VERIFICATIONS: usize = 4;
+const CONTROLLER_HANDOFF_GRACE_MS: &str = "1000";
+const AUTH_TOKEN_BYTES: usize = 32;
+const MAX_APPLY_REASON_BYTES: usize = 240;
 static UPLOAD_TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static CONTROLLER_TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
+#[cfg(test)]
+static AUTH_TEST_VERIFICATION_PAUSE: AtomicBool = AtomicBool::new(false);
+#[cfg(test)]
+static AUTH_TEST_VERIFICATION_STARTED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone)]
 struct BridgeOptions {
@@ -108,7 +141,9 @@ struct BridgeOptions {
     launcher_presets_path: Option<PathBuf>,
     allowed_hosts: Vec<String>,
     allowed_origins: Vec<String>,
+    allowed_connect_origins: Vec<String>,
     allowed_connect_sources: Vec<String>,
+    password_hash: Option<String>,
     configured_label: Option<String>,
 }
 
@@ -117,6 +152,8 @@ struct BridgeState {
     api: ApiClient,
     client_socket_path: PathBuf,
     request_policy: RequestPolicy,
+    auth: Arc<BridgeAuth>,
+    management: ManagementState,
     terminal_sessions: Arc<Mutex<TerminalSessions>>,
     selected_pane_id: Arc<Mutex<Option<String>>>,
     agent_activity: Arc<AgentActivityManager>,
@@ -138,7 +175,611 @@ pub(crate) struct RequestPolicy {
     bind_port: u16,
     allowed_hosts: Vec<String>,
     allowed_origins: Vec<String>,
+    allowed_connect_origins: Vec<String>,
     allowed_connect_sources: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct RemoteAccessModel {
+    enabled: bool,
+    accepted_hosts: Vec<String>,
+    allowed_page_origins: Vec<String>,
+    allowed_bridge_origins: Vec<String>,
+    password_configured: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RemoteAccessDraft {
+    enabled: bool,
+    accepted_hosts: Vec<String>,
+    allowed_page_origins: Vec<String>,
+    allowed_bridge_origins: Vec<String>,
+    #[serde(default)]
+    password_hash: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RemoteAccessApplyRequest {
+    remote_access: RemoteAccessDraft,
+    #[serde(default)]
+    password_action: PasswordAction,
+    #[serde(default)]
+    password: Option<String>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum PasswordAction {
+    #[default]
+    Keep,
+    Set,
+    Remove,
+}
+
+#[derive(Debug, Serialize)]
+struct RemoteAccessStatusResponse {
+    remote_access: RemoteAccessModel,
+    port: u16,
+    suggestions: Vec<String>,
+    mutation_allowed: bool,
+    mutation_reason: Option<String>,
+    apply: ApplyStatusResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ApplyStatusResponse {
+    id: Option<String>,
+    state: String,
+    reason: Option<String>,
+    restored: Option<bool>,
+}
+
+#[derive(Debug, Clone)]
+struct ManagementState {
+    config_path: Option<PathBuf>,
+    state_dir: Option<PathBuf>,
+    controller_node: Option<PathBuf>,
+    controller_script: Option<PathBuf>,
+    controller_mode: Option<String>,
+    controller_launcher: Option<PathBuf>,
+    mutation_reason: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct BridgeAuth {
+    password_hash: Option<String>,
+    sessions: Arc<Mutex<AuthSessions>>,
+    verification_slots: Arc<Semaphore>,
+}
+
+#[derive(Debug, Default)]
+struct AuthSessions {
+    tokens: HashMap<String, Instant>,
+    failures: HashMap<String, VecDeque<Instant>>,
+    pending: HashMap<String, usize>,
+}
+
+struct PendingPasswordVerification {
+    sessions: Arc<Mutex<AuthSessions>>,
+    key: String,
+    finished: bool,
+}
+
+impl PendingPasswordVerification {
+    fn new(sessions: Arc<Mutex<AuthSessions>>, key: String) -> Self {
+        Self {
+            sessions,
+            key,
+            finished: false,
+        }
+    }
+
+    fn finish(&mut self, valid: bool) -> Result<(Duration, bool), AuthFailure> {
+        let mut sessions = self.sessions.lock().map_err(|_| AuthFailure::Unavailable)?;
+        decrement_pending_verification(&mut sessions, &self.key);
+        let result = if valid {
+            sessions.failures.remove(&self.key);
+            (Duration::ZERO, true)
+        } else {
+            let failures = sessions.failures.entry(self.key.clone()).or_default();
+            failures.push_back(Instant::now());
+            (
+                AUTH_FAILURE_DELAY.saturating_mul(failures.len() as u32),
+                false,
+            )
+        };
+        self.finished = true;
+        Ok(result)
+    }
+}
+
+impl Drop for PendingPasswordVerification {
+    fn drop(&mut self) {
+        if self.finished {
+            return;
+        }
+        if let Ok(mut sessions) = self.sessions.lock() {
+            decrement_pending_verification(&mut sessions, &self.key);
+        }
+    }
+}
+
+fn decrement_pending_verification(sessions: &mut AuthSessions, key: &str) {
+    if let Some(pending) = sessions.pending.get_mut(key) {
+        *pending = pending.saturating_sub(1);
+        if *pending == 0 {
+            sessions.pending.remove(key);
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct AuthenticationCapability {
+    required: bool,
+    session: &'static str,
+    local_peer_bypass: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct PasswordRequest {
+    password: String,
+}
+
+#[derive(Debug, Serialize)]
+struct PasswordSessionResponse {
+    authenticated: bool,
+    expires_in_seconds: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token: Option<String>,
+}
+
+impl BridgeAuth {
+    fn new(password_hash: Option<String>) -> Self {
+        Self {
+            password_hash,
+            sessions: Arc::new(Mutex::new(AuthSessions::default())),
+            verification_slots: Arc::new(Semaphore::new(MAX_PASSWORD_VERIFICATIONS)),
+        }
+    }
+
+    fn required(&self) -> bool {
+        self.password_hash.is_some()
+    }
+
+    fn password_hash(&self) -> Option<String> {
+        self.password_hash.clone()
+    }
+
+    fn local_peer_allowed(peer: Option<SocketAddr>) -> bool {
+        // This is intentionally based only on the accepted TCP peer address.
+        // Host, Origin, and forwarding headers are not authentication input.
+        peer.is_some_and(peer_is_loopback)
+    }
+
+    fn token_is_valid(&self, token: &str) -> bool {
+        if token.is_empty() || token.len() > AUTH_TOKEN_BYTES * 2 {
+            return false;
+        }
+        let now = Instant::now();
+        let Ok(mut sessions) = self.sessions.lock() else {
+            return false;
+        };
+        sessions.tokens.retain(|_, expires_at| *expires_at > now);
+        sessions
+            .tokens
+            .get(token)
+            .is_some_and(|expires_at| *expires_at > now)
+    }
+
+    fn authorization_token(headers: &HeaderMap) -> Option<&str> {
+        let value = headers.get(AUTHORIZATION)?.to_str().ok()?;
+        let token = value.strip_prefix("Bearer ")?.trim();
+        (!token.is_empty()).then_some(token)
+    }
+
+    fn websocket_token(headers: &HeaderMap) -> Option<&str> {
+        headers
+            .get(SEC_WEBSOCKET_PROTOCOL)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| {
+                value
+                    .split(',')
+                    .map(str::trim)
+                    .find_map(|protocol| protocol.strip_prefix("herdr-world-auth."))
+            })
+            .filter(|token| !token.is_empty())
+    }
+
+    fn request_is_authorized(&self, headers: &HeaderMap, peer: Option<SocketAddr>) -> bool {
+        if !self.required() || Self::local_peer_allowed(peer) {
+            return true;
+        }
+        Self::authorization_token(headers)
+            .or_else(|| Self::websocket_token(headers))
+            .is_some_and(|token| self.token_is_valid(token))
+    }
+
+    async fn issue_session(
+        &self,
+        peer: Option<SocketAddr>,
+        password: &str,
+    ) -> Result<String, AuthFailure> {
+        if password.as_bytes().len() > MAX_PASSWORD_BYTES {
+            return Err(AuthFailure::InvalidInput);
+        }
+        let Some(expected) = self.password_hash.as_deref() else {
+            return Err(AuthFailure::NotRequired);
+        };
+        let verification_permit = self
+            .verification_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| AuthFailure::RateLimited)?;
+        let key = peer
+            .map(|address| address.ip().to_string())
+            .unwrap_or_else(|| "unknown-peer".to_string());
+        let now = Instant::now();
+        {
+            let mut sessions = self.sessions.lock().map_err(|_| AuthFailure::Unavailable)?;
+            sessions.failures.retain(|_, failures| {
+                failures.retain(|started| {
+                    now.saturating_duration_since(*started) < AUTH_FAILURE_WINDOW
+                });
+                !failures.is_empty()
+            });
+            let failures = sessions.failures.get(&key).map_or(0, VecDeque::len);
+            let pending = sessions.pending.get(&key).copied().unwrap_or(0);
+            if failures + pending >= AUTH_FAILURE_LIMIT {
+                return Err(AuthFailure::RateLimited);
+            }
+            if !sessions.failures.contains_key(&key)
+                && sessions.failures.len() >= MAX_AUTH_FAILURE_PEERS
+            {
+                return Err(AuthFailure::RateLimited);
+            }
+            *sessions.pending.entry(key.clone()).or_default() += 1;
+        }
+
+        let expected = expected.to_owned();
+        let password = password.to_owned();
+        let sessions = self.sessions.clone();
+        let key_for_verification = key.clone();
+        let pending = PendingPasswordVerification::new(sessions, key_for_verification);
+        let (delay, authenticated) = tokio::task::spawn_blocking(move || {
+            // Keep both the semaphore permit and the pending-accounting guard
+            // inside the blocking task. Dropping the request future must not
+            // make work look idle while password verification is still running.
+            let _verification_permit = verification_permit;
+            let mut pending = pending;
+            let valid = verify_password(&expected, &password);
+            pending.finish(valid)
+        })
+        .await
+        .map_err(|_| AuthFailure::Unavailable)??;
+        if !delay.is_zero() {
+            tokio::time::sleep(delay).await;
+        }
+        if !authenticated {
+            return Err(AuthFailure::Rejected);
+        }
+
+        let mut bytes = [0u8; AUTH_TOKEN_BYTES];
+        TokenOsRng.fill_bytes(&mut bytes);
+        let token = bytes
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let mut sessions = self.sessions.lock().map_err(|_| AuthFailure::Unavailable)?;
+        sessions
+            .tokens
+            .insert(token.clone(), Instant::now() + AUTH_SESSION_TTL);
+        Ok(token)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthFailure {
+    InvalidInput,
+    NotRequired,
+    RateLimited,
+    Rejected,
+    Unavailable,
+}
+
+fn hash_password(password: &str) -> Result<String, String> {
+    if password.as_bytes().len() > MAX_PASSWORD_BYTES {
+        return Err(format!(
+            "password must be at most {MAX_PASSWORD_BYTES} bytes"
+        ));
+    }
+    if password.is_empty() {
+        return Err("password must not be empty".into());
+    }
+    let salt = SaltString::generate(&mut PasswordOsRng);
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .map(|hash| hash.to_string())
+        .map_err(|_| "could not hash password".to_string())
+}
+
+async fn hash_password_async(password: &str) -> Result<String, String> {
+    if password.as_bytes().len() > MAX_PASSWORD_BYTES {
+        return Err(format!(
+            "password must be at most {MAX_PASSWORD_BYTES} bytes"
+        ));
+    }
+    if password.is_empty() {
+        return Err("password must not be empty".into());
+    }
+    let password = password.to_owned();
+    tokio::task::spawn_blocking(move || hash_password(&password))
+        .await
+        .map_err(|_| "password hashing task failed".to_string())?
+}
+
+fn verify_password(encoded: &str, password: &str) -> bool {
+    #[cfg(test)]
+    if password == "wrong-password" && AUTH_TEST_VERIFICATION_PAUSE.load(Ordering::Acquire) {
+        AUTH_TEST_VERIFICATION_STARTED.store(true, Ordering::Release);
+        while AUTH_TEST_VERIFICATION_PAUSE.load(Ordering::Acquire) {
+            thread::yield_now();
+        }
+    }
+    let Ok(parsed) = PasswordHash::new(encoded) else {
+        return false;
+    };
+    Argon2::default()
+        .verify_password(password.as_bytes(), &parsed)
+        .is_ok()
+}
+
+fn management_state_from_environment() -> ManagementState {
+    let config_path = env::var("HERDR_PLUGIN_CONFIG_DIR")
+        .ok()
+        .map(|dir| PathBuf::from(dir).join("config.json"));
+    let state_dir = env::var("HERDR_PLUGIN_STATE_DIR").ok().map(PathBuf::from);
+    let controller_node = env::var("HERDR_WORLD_NODE_PATH").ok().map(PathBuf::from);
+    let controller_script = env::var("HERDR_WORLD_CONTROLLER").ok().map(PathBuf::from);
+    let controller_mode = env::var("HERDR_WORLD_CONTROLLER_MODE").ok();
+    let controller_launcher = match controller_mode.as_deref() {
+        Some("systemd-user") => env::var("HERDR_WORLD_SYSTEMD_RUN").ok().map(PathBuf::from),
+        Some("launchd") => env::var("HERDR_WORLD_LAUNCHCTL").ok().map(PathBuf::from),
+        _ => None,
+    };
+    let mutation_reason = if config_path.is_none() || state_dir.is_none() {
+        Some("Remote access is read-only for this standalone or development launch; use the plugin-managed launch to apply settings safely.".to_string())
+    } else if controller_node.is_none() || controller_script.is_none() {
+        Some("This bridge has no controller-owned restart boundary, so settings mutation is disabled for safety.".to_string())
+    } else if !matches!(
+        controller_mode.as_deref(),
+        Some("systemd-user" | "launchd" | "fallback")
+    ) {
+        Some("This bridge does not have a supervisor-owned controller boundary, so settings mutation is disabled for safety.".to_string())
+    } else if !controller_node
+        .as_ref()
+        .is_some_and(|path| path.is_absolute())
+        || !controller_script
+            .as_ref()
+            .is_some_and(|path| path.is_absolute())
+    {
+        Some("The controller restart boundary is not absolute and cannot be trusted; settings mutation is disabled.".to_string())
+    } else if !controller_node.as_ref().is_some_and(|path| path.is_file())
+        || !controller_script
+            .as_ref()
+            .is_some_and(|path| path.is_file())
+    {
+        Some("The controller restart boundary is unavailable; settings mutation is disabled until the managed launch is repaired.".to_string())
+    } else if matches!(controller_mode.as_deref(), Some("systemd-user" | "launchd"))
+        && !controller_launcher
+            .as_ref()
+            .is_some_and(|path| path.is_absolute() && path.is_file())
+    {
+        Some("The supervisor controller launcher is unavailable; settings mutation is disabled until the managed launch is repaired.".to_string())
+    } else if controller_mode.as_deref() == Some("fallback") && cfg!(not(unix)) {
+        Some("This fallback launch cannot establish an independent controller process on this platform; settings mutation is disabled.".to_string())
+    } else {
+        None
+    };
+    ManagementState {
+        config_path,
+        state_dir,
+        controller_node,
+        controller_script,
+        controller_mode,
+        controller_launcher,
+        mutation_reason,
+    }
+}
+
+fn is_link_local(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(address) => address.octets()[0] == 169 && address.octets()[1] == 254,
+        IpAddr::V6(address) => address.segments()[0] & 0xffc0 == 0xfe80,
+    }
+}
+
+fn add_access_candidate(candidates: &mut Vec<String>, raw: &str) {
+    let value = raw.trim().trim_matches('.');
+    if value.is_empty() || value.eq_ignore_ascii_case("localhost") {
+        return;
+    }
+    let valid = normalize_allowed_host(value).ok().filter(|host| {
+        host.parse::<IpAddr>()
+            .map(|address| {
+                !address.is_loopback() && !address.is_unspecified() && !is_link_local(address)
+            })
+            .unwrap_or(true)
+    });
+    if let Some(value) = valid {
+        if !candidates
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case(&value))
+        {
+            candidates.push(value);
+        }
+    }
+}
+
+fn route_selected_address(bind: &str, destination: &str) -> Option<String> {
+    let socket = UdpSocket::bind(bind).ok()?;
+    socket.connect(destination).ok()?;
+    Some(socket.local_addr().ok()?.ip().to_string())
+}
+
+fn detected_access_candidates(policy: &RequestPolicy) -> Vec<String> {
+    let mut candidates: Vec<String> = Vec::new();
+    if !is_loopback_bind_host(&policy.bind_host) {
+        add_access_candidate(&mut candidates, &policy.bind_host);
+    }
+    if let Some(address) = route_selected_address("0.0.0.0:0", "192.0.2.1:9") {
+        add_access_candidate(&mut candidates, &address);
+    }
+    if let Some(address) = route_selected_address("[::]:0", "[2001:db8::1]:9") {
+        add_access_candidate(&mut candidates, &address);
+    }
+    if let Ok(hostname) = env::var("HOSTNAME") {
+        add_access_candidate(&mut candidates, &hostname);
+    }
+    candidates.truncate(8);
+    candidates
+}
+
+fn current_remote_access_model(policy: &RequestPolicy, auth: &BridgeAuth) -> RemoteAccessModel {
+    RemoteAccessModel {
+        enabled: !is_loopback_bind_host(&policy.bind_host),
+        accepted_hosts: policy.allowed_hosts.clone(),
+        allowed_page_origins: policy.allowed_origins.clone(),
+        allowed_bridge_origins: policy.allowed_connect_origins.clone(),
+        password_configured: auth.required(),
+    }
+}
+
+fn bounded_access_value(value: &str, label: &str) -> Result<(), BridgeError> {
+    if value.as_bytes().len() > MAX_REMOTE_ACCESS_VALUE_BYTES {
+        return Err(BridgeError::BadRequest(format!(
+            "{label} entries must be at most {MAX_REMOTE_ACCESS_VALUE_BYTES} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_remote_access_draft(draft: &mut RemoteAccessDraft) -> Result<(), BridgeError> {
+    if draft.accepted_hosts.len() > MAX_REMOTE_ACCESS_ITEMS {
+        return Err(BridgeError::BadRequest(
+            "too many accepted addresses".into(),
+        ));
+    }
+    if draft.allowed_page_origins.len() > MAX_REMOTE_ACCESS_ITEMS {
+        return Err(BridgeError::BadRequest(
+            "too many allowed page origins".into(),
+        ));
+    }
+    if draft.allowed_bridge_origins.len() > MAX_REMOTE_ACCESS_ITEMS {
+        return Err(BridgeError::BadRequest(
+            "too many allowed bridge destinations".into(),
+        ));
+    }
+    let mut accepted_hosts = Vec::new();
+    for value in &draft.accepted_hosts {
+        bounded_access_value(value, "accepted address")?;
+        let normalized = normalize_allowed_host(value).map_err(BridgeError::BadRequest)?;
+        if !accepted_hosts
+            .iter()
+            .any(|item: &String| item.eq_ignore_ascii_case(&normalized))
+        {
+            accepted_hosts.push(normalized);
+        }
+    }
+    let mut page_origins = Vec::new();
+    for value in &draft.allowed_page_origins {
+        bounded_access_value(value, "allowed page origin")?;
+        let normalized = normalize_allowed_origin(value).map_err(BridgeError::BadRequest)?;
+        if !page_origins
+            .iter()
+            .any(|item: &String| item.eq_ignore_ascii_case(&normalized))
+        {
+            page_origins.push(normalized);
+        }
+    }
+    let mut bridge_origins = Vec::new();
+    for value in &draft.allowed_bridge_origins {
+        bounded_access_value(value, "allowed bridge destination")?;
+        let normalized = normalize_allowed_origin(value).map_err(BridgeError::BadRequest)?;
+        if !bridge_origins
+            .iter()
+            .any(|item: &String| item.eq_ignore_ascii_case(&normalized))
+        {
+            bridge_origins.push(normalized);
+        }
+    }
+    if draft.enabled && accepted_hosts.is_empty() {
+        return Err(BridgeError::BadRequest(
+            "remote access needs at least one accepted address".into(),
+        ));
+    }
+    if let Some(hash) = &draft.password_hash {
+        if hash.as_bytes().len() > MAX_REMOTE_ACCESS_VALUE_BYTES || !hash.starts_with("$argon2") {
+            return Err(BridgeError::BadRequest("password hash is invalid".into()));
+        }
+    }
+    draft.accepted_hosts = accepted_hosts;
+    draft.allowed_page_origins = page_origins;
+    draft.allowed_bridge_origins = bridge_origins;
+    Ok(())
+}
+
+fn read_apply_status(management: &ManagementState) -> ApplyStatusResponse {
+    let Some(state_dir) = management.state_dir.as_deref() else {
+        return ApplyStatusResponse {
+            id: None,
+            state: "ready".into(),
+            reason: None,
+            restored: None,
+        };
+    };
+    let path = state_dir.join("remote-access-apply.json");
+    let Ok(bytes) = std::fs::read(path) else {
+        return ApplyStatusResponse {
+            id: None,
+            state: "ready".into(),
+            reason: None,
+            restored: None,
+        };
+    };
+    let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return ApplyStatusResponse {
+            id: None,
+            state: "failed".into(),
+            reason: Some("controller status is unavailable".into()),
+            restored: None,
+        };
+    };
+    let state = value
+        .get("state")
+        .and_then(serde_json::Value::as_str)
+        .filter(|state| matches!(*state, "applying" | "ready" | "failed"))
+        .unwrap_or("failed")
+        .to_string();
+    let reason = value
+        .get("reason")
+        .and_then(serde_json::Value::as_str)
+        .map(|reason| reason.chars().take(MAX_APPLY_REASON_BYTES).collect());
+    ApplyStatusResponse {
+        id: value
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| {
+                !id.is_empty()
+                    && id.len() <= 128
+                    && id
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+            })
+            .map(str::to_string),
+        state,
+        reason,
+        restored: value.get("restored").and_then(serde_json::Value::as_bool),
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -182,6 +823,7 @@ struct Capabilities {
     features: &'static [&'static str],
     commands: &'static [&'static str],
     web_compat: u32,
+    authentication: AuthenticationCapability,
     agent_activity: AgentActivityCapability,
     agent_pins: AgentPinsCapability,
     launcher_presets: LauncherPresetsCapability,
@@ -242,6 +884,8 @@ struct TerminalQuery {
     output_encoding: Option<TerminalOutputWireEncoding>,
     #[serde(default)]
     takeover: bool,
+    #[serde(default)]
+    probe: bool,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
@@ -790,7 +1434,6 @@ pub(crate) enum BridgeError {
 enum UploadError {
     BadRequest(String),
     Conflict { name: String, path: String },
-    Forbidden(String),
     TooLarge,
     Io(io::Error),
 }
@@ -871,10 +1514,6 @@ impl IntoResponse for UploadError {
                     "path": path,
                 }),
             ),
-            Self::Forbidden(message) => (
-                StatusCode::FORBIDDEN,
-                serde_json::json!({ "error": message }),
-            ),
             Self::TooLarge => (
                 StatusCode::PAYLOAD_TOO_LARGE,
                 serde_json::json!({ "error": "upload exceeds 25 MB limit" }),
@@ -904,7 +1543,7 @@ pub(crate) fn run_command(args: &[String]) -> io::Result<i32> {
         Err(message) => {
             eprintln!("{message}");
             eprintln!(
-                "usage: herdr-world-bridge [--session NAME] [--host HOST] [--port PORT] [--static-dir DIR] [--launcher-presets PATH] [--bridge-label LABEL] [--allow-origin ORIGIN] [--allow-host HOST] [--allow-connect-origin ORIGIN]"
+                "usage: herdr-world-bridge [--session NAME] [--host HOST] [--port PORT] [--static-dir DIR] [--launcher-presets PATH] [--bridge-label LABEL] [--allow-origin ORIGIN] [--allow-host HOST] [--allow-connect-origin ORIGIN] [--password-hash HASH]"
             );
             return Ok(2);
         }
@@ -933,7 +1572,9 @@ fn parse_options(args: &[String]) -> Result<Option<BridgeOptions>, String> {
     let mut launcher_presets_path = None;
     let mut allowed_hosts = Vec::new();
     let mut allowed_origins = Vec::new();
+    let mut allowed_connect_origins = Vec::new();
     let mut allowed_connect_sources = Vec::new();
+    let mut password_hash = None;
     let mut configured_label = None;
     let mut explicit_session = None;
     let mut index = 0;
@@ -1007,7 +1648,17 @@ fn parse_options(args: &[String]) -> Result<Option<BridgeOptions>, String> {
                 let Some(value) = args.get(index + 1) else {
                     return Err("missing value for --allow-connect-origin".into());
                 };
+                let origin = normalize_allowed_origin(value)?;
+                allowed_connect_origins.push(origin);
                 allowed_connect_sources.extend(connect_sources_for_origin(value)?);
+                index += 2;
+            }
+            "--password-hash" => {
+                let Some(value) = args.get(index + 1) else {
+                    return Err("missing value for --password-hash".into());
+                };
+                validate_password_hash(value)?;
+                password_hash = Some(value.clone());
                 index += 2;
             }
             "--bridge-label" => {
@@ -1030,11 +1681,6 @@ fn parse_options(args: &[String]) -> Result<Option<BridgeOptions>, String> {
                 "non-loopback binding requires at least one explicit --allow-host value".into(),
             );
         }
-        if allowed_origins.is_empty() {
-            return Err(
-                "non-loopback binding requires at least one explicit --allow-origin value".into(),
-            );
-        }
     }
 
     if let Some(name) = explicit_session {
@@ -1049,7 +1695,9 @@ fn parse_options(args: &[String]) -> Result<Option<BridgeOptions>, String> {
         launcher_presets_path,
         allowed_hosts,
         allowed_origins,
+        allowed_connect_origins,
         allowed_connect_sources,
+        password_hash,
         configured_label,
     }))
 }
@@ -1066,11 +1714,13 @@ Usage: herdr-world-bridge [--session NAME] [--host HOST] [--port PORT] [--static
 Runs the local HTTP/WebSocket bridge for Herdr World.\n\
 Defaults to the active Herdr daemon sockets and 127.0.0.1:8787.\n\
 Use --session NAME to target a named Herdr session and ignore HERDR_SOCKET_PATH.\n\
-Non-loopback --host values require explicit --allow-host and --allow-origin values.\n\
+Non-loopback --host values require an explicit --allow-host value.\n\
 Every admitted browser has terminal-equivalent access; Host and Origin checks are not authentication.\n\
-Use --allow-origin http://localhost for bundled Android app access.\n\
+Same-origin pages matching an allowed Host are admitted automatically.\n\
+Use --allow-origin http://localhost for additional clients such as the bundled Android app.\n\
 Use --allow-host HOSTNAME to accept that exact DNS hostname in Host headers.\n\
 Use --allow-connect-origin ORIGIN to let the served web app connect to another bridge origin.\n\
+Use --password-hash HASH for the memory-hard Argon2id hash managed by the plugin controller.\n\
 Use --bridge-label LABEL for a bounded diagnostic label; browser host profiles remain authoritative.\n\
 Use --launcher-presets PATH or HERDR_WEB_LAUNCHER_PRESETS to load custom launch presets.\n\
 Uploads default to HERDR_WEB_UPLOAD_DIR, XDG_DATA_HOME/herdr-web/uploads, or ~/.local/share/herdr-web/uploads."
@@ -1097,8 +1747,10 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         bind_port: options.port,
         allowed_hosts: options.allowed_hosts.clone(),
         allowed_origins: options.allowed_origins.clone(),
+        allowed_connect_origins: options.allowed_connect_origins.clone(),
         allowed_connect_sources: options.allowed_connect_sources.clone(),
     };
+    let auth = Arc::new(BridgeAuth::new(options.password_hash.clone()));
     let api = ApiClient::for_socket_path(crate::session::active_api_socket_path());
     let daemon_status = startup_daemon_status(&api)?;
     let daemon_protocol = daemon_status
@@ -1117,6 +1769,8 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         api,
         client_socket_path: crate::session::active_client_socket_path(),
         request_policy: request_policy.clone(),
+        auth,
+        management: management_state_from_environment(),
         terminal_sessions: Arc::new(Mutex::new(TerminalSessions::default())),
         selected_pane_id: Arc::new(Mutex::new(None)),
         agent_activity,
@@ -1132,6 +1786,49 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         configured_label: options.configured_label.clone(),
     };
     spawn_agent_activity_watcher(state.clone());
+    let app = bridge_router(state, options.static_dir.clone());
+    let bind = listener_bind_address(&options.host, options.port);
+    let dual_family = dual_family_listener_required(&options.host, &options.allowed_hosts);
+    let listener = if dual_family && is_ipv6_literal(&options.host) {
+        bind_ipv6_only_listener(options.port)?
+    } else {
+        tokio::net::TcpListener::bind(&bind).await?
+    };
+    let secondary_listener = if dual_family {
+        if is_ipv6_literal(&options.host) {
+            Some(
+                tokio::net::TcpListener::bind(format!("0.0.0.0:{}", listener.local_addr()?.port()))
+                    .await?,
+            )
+        } else {
+            Some(bind_ipv6_only_listener(listener.local_addr()?.port())?)
+        }
+    } else {
+        None
+    };
+    info!(url = %format!("http://{bind}"), "Herdr World bridge listening");
+    let primary = axum::serve(
+        listener,
+        app.clone()
+            .into_make_service_with_connect_info::<SocketAddr>(),
+    );
+    if let Some(listener) = secondary_listener {
+        let secondary_bind = listener.local_addr()?;
+        info!(url = %format!("http://{secondary_bind}"), "Herdr World bridge listening on the second IP family");
+        tokio::select! {
+            result = primary => result,
+            result = axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            ) => result,
+        }
+    } else {
+        primary.await
+    }
+}
+
+fn bridge_router(state: BridgeState, static_dir: PathBuf) -> Router {
+    let request_policy = state.request_policy.clone();
     let agent_activity_routes = Router::new().route(
         "/api/agent-activity",
         get(agent_activity_list_handler).options(preflight_handler),
@@ -1190,11 +1887,14 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
             "/api/launcher-presets/launch",
             post(launcher_preset_launch_handler).options(preflight_handler),
         );
+    let auth_session_route = post(auth_session_handler)
+        .options(preflight_handler)
+        .layer(DefaultBodyLimit::max(MAX_PASSWORD_REQUEST_BYTES));
     let observability_routes = crate::observability_http::routes(
         state.request_policy.clone(),
         state.observability.clone(),
     );
-    let static_routes = static_routes(options.static_dir.clone());
+    let static_routes = static_routes(static_dir);
     let app = Router::new()
         .merge(agent_activity_routes)
         .merge(agent_pins_routes)
@@ -1208,6 +1908,18 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         .route(
             "/api/capabilities",
             get(capabilities_handler).options(preflight_handler),
+        )
+        .route(
+            "/api/auth/status",
+            get(auth_status_handler).options(preflight_handler),
+        )
+        .route("/api/auth/session", auth_session_route)
+        .route(
+            "/api/local/remote-access",
+            get(remote_access_status_handler)
+                .post(remote_access_apply_handler)
+                .options(preflight_handler)
+                .layer(DefaultBodyLimit::max(MAX_REMOTE_ACCESS_REQUEST_BYTES)),
         )
         .route(
             "/api/command",
@@ -1227,15 +1939,16 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         .route("/ws/terminal", get(terminal_ws_handler))
         .merge(static_routes)
         .layer(middleware::from_fn_with_state(
+            state.clone(),
+            bridge_access_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
             request_policy.clone(),
             add_security_headers,
         ))
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
         .with_state(state);
-    let bind = format!("{}:{}", options.host, options.port);
-    let listener = tokio::net::TcpListener::bind(&bind).await?;
-    info!(url = %format!("http://{bind}"), "Herdr World bridge listening");
-    axum::serve(listener, app).await
+    app
 }
 
 fn static_routes<S>(static_dir: PathBuf) -> Router<S>
@@ -1267,6 +1980,60 @@ where
                 .service(ServeDir::new(static_dir).fallback(navigation_fallback)),
         )
         .layer(middleware::from_fn(add_static_cache_headers))
+}
+
+fn listener_bind_address(host: &str, port: u16) -> String {
+    let host = host.trim().trim_start_matches('[').trim_end_matches(']');
+    if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    }
+}
+
+fn is_ipv6_literal(host: &str) -> bool {
+    host.trim()
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .parse::<IpAddr>()
+        .is_ok_and(|address| address.is_ipv6())
+}
+
+fn dual_family_listener_required(host: &str, allowed_hosts: &[String]) -> bool {
+    let host = host.trim().trim_start_matches('[').trim_end_matches(']');
+    if host != "0.0.0.0" && host != "::" {
+        return false;
+    }
+    let opposite_family = if host == "::" {
+        |address: IpAddr| address.is_ipv4()
+    } else {
+        |address: IpAddr| address.is_ipv6()
+    };
+    allowed_hosts.iter().any(|allowed| {
+        allowed
+            .trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .parse::<IpAddr>()
+            .is_ok_and(opposite_family)
+    })
+}
+
+fn bind_ipv6_only_listener(port: u16) -> io::Result<tokio::net::TcpListener> {
+    let socket = socket2::Socket::new(
+        socket2::Domain::IPV6,
+        socket2::Type::STREAM,
+        Some(socket2::Protocol::TCP),
+    )?;
+    socket.set_only_v6(true)?;
+    socket.set_reuse_address(true)?;
+    socket.bind(&socket2::SockAddr::from(SocketAddr::new(
+        IpAddr::V6(Ipv6Addr::UNSPECIFIED),
+        port,
+    )))?;
+    socket.listen(1024)?;
+    socket.set_nonblocking(true)?;
+    tokio::net::TcpListener::from_std(socket.into())
 }
 
 fn is_world_navigation_path(path: &str) -> bool {
@@ -1313,7 +2080,11 @@ async fn add_security_headers(
     request: AxumRequest,
     next: Next,
 ) -> Response {
-    let cors_origin = cors_origin_header(request.headers(), &policy);
+    let peer = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0);
+    let cors_origin = cors_origin_header_from_peer(request.headers(), &policy, peer);
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
     headers.insert(
@@ -1330,19 +2101,453 @@ async fn add_security_headers(
     response
 }
 
-async fn preflight_handler(
+async fn bridge_access_middleware(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
-) -> Result<Response, BridgeError> {
-    preflight_response(&headers, &state.request_policy)
+    request: AxumRequest,
+    next: Next,
+) -> Response {
+    let path = request.uri().path();
+    if !(path.starts_with("/api/") || path.starts_with("/ws/")) {
+        return next.run(request).await;
+    }
+
+    let peer = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0);
+    if let Err(error) =
+        ensure_allowed_request_from_peer(request.headers(), &state.request_policy, peer)
+    {
+        return error.into_response();
+    }
+    if request.method() == axum::http::Method::OPTIONS {
+        return next.run(request).await;
+    }
+
+    if !is_public_bootstrap_path(path) {
+        if !state.auth.request_is_authorized(request.headers(), peer) {
+            return unauthorized_response();
+        }
+    }
+    next.run(request).await
 }
 
-pub(crate) fn preflight_response(
+fn is_public_bootstrap_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/capabilities" | "/api/auth/status" | "/api/auth/session" | "/api/local/remote-access"
+    )
+}
+
+fn unauthorized_response() -> Response {
+    let mut response = (
+        StatusCode::UNAUTHORIZED,
+        Json(serde_json::json!({
+            "code": "authentication_required",
+            "error": "password required or rejected",
+        })),
+    )
+        .into_response();
+    response.headers_mut().insert(
+        WWW_AUTHENTICATE,
+        HeaderValue::from_static("Bearer realm=herdr-world"),
+    );
+    response
+}
+
+fn local_management_allowed(
     headers: &HeaderMap,
     policy: &RequestPolicy,
+    peer: SocketAddr,
+) -> Result<(), BridgeError> {
+    ensure_allowed_request_from_peer(headers, policy, Some(peer))?;
+    if !BridgeAuth::local_peer_allowed(Some(peer)) {
+        return Err(BridgeError::Forbidden(
+            "local management requires an actual loopback TCP peer".into(),
+        ));
+    }
+    Ok(())
+}
+
+const CONTROLLER_ENVIRONMENT: &[&str] = &[
+    "HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME",
+    "XDG_STATE_HOME",
+    "HERDR_CONFIG_PATH",
+    "TMPDIR",
+    "LANG",
+    "LC_ALL",
+    "HOSTNAME",
+    "PATH",
+    "HERDR_PLUGIN_CONFIG_DIR",
+    "HERDR_PLUGIN_STATE_DIR",
+    "HERDR_SOCKET_PATH",
+    "HERDR_BIN_PATH",
+    "HERDR_WORLD_SETUP",
+    "HERDR_WORLD_PLUGIN_SERVICE_ID",
+    "HERDR_WORLD_CONTROLLER",
+    "HERDR_WORLD_NODE_PATH",
+    "HERDR_WORLD_CONTROLLER_MODE",
+    "HERDR_WORLD_SYSTEMCTL",
+    "HERDR_WORLD_LAUNCHCTL",
+    "HERDR_WORLD_SYSTEMD_RUN",
+];
+
+fn controller_environment_arguments() -> Vec<String> {
+    CONTROLLER_ENVIRONMENT
+        .iter()
+        .filter_map(|name| env::var(name).ok().map(|value| format!("{name}={value}")))
+        .collect()
+}
+
+fn apply_controller_environment(command: &mut Command) {
+    command.env_clear();
+    for value in controller_environment_arguments() {
+        if let Some((name, value)) = value.split_once('=') {
+            command.env(name, value);
+        }
+    }
+}
+
+fn spawn_management_controller(
+    management: &ManagementState,
+    request_path: &Path,
+) -> io::Result<()> {
+    let node = management
+        .controller_node
+        .as_deref()
+        .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "controller node is unavailable"))?;
+    let controller = management
+        .controller_script
+        .as_deref()
+        .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "controller script is unavailable"))?;
+    let mode = management.controller_mode.as_deref().unwrap_or_default();
+    let sequence = CONTROLLER_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel);
+    match mode {
+        "systemd-user" => {
+            let launcher = management
+                .controller_launcher
+                .as_deref()
+                .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "systemd-run is unavailable"))?;
+            let unit = format!(
+                "herdr-world-apply-{}-{sequence}.service",
+                std::process::id()
+            );
+            let mut command = Command::new(launcher);
+            command
+                .arg("--user")
+                .arg("--unit")
+                .arg(unit)
+                .arg("--collect")
+                .arg("--no-block");
+            for value in controller_environment_arguments() {
+                command.arg("--setenv").arg(value);
+            }
+            command.arg("--setenv").arg(format!(
+                "HERDR_WORLD_APPLY_GRACE_MS={CONTROLLER_HANDOFF_GRACE_MS}"
+            ));
+            command
+                .arg("--")
+                .arg(node)
+                .arg(controller)
+                .arg("apply")
+                .arg(request_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            let mut child = command.spawn()?;
+            let status = child.wait()?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(io::Error::new(
+                    ErrorKind::Other,
+                    "systemd-run did not start the controller",
+                ))
+            }
+        }
+        "launchd" => {
+            let launcher = management
+                .controller_launcher
+                .as_deref()
+                .ok_or_else(|| io::Error::new(ErrorKind::NotFound, "launchctl is unavailable"))?;
+            let label = format!(
+                "io.ivoryheart.herdr-world.apply.{}-{sequence}",
+                std::process::id()
+            );
+            let mut command = Command::new(launcher);
+            command
+                .arg("submit")
+                .arg("-l")
+                .arg(label)
+                .arg("--")
+                .arg("/usr/bin/env");
+            for value in controller_environment_arguments() {
+                command.arg(value);
+            }
+            command.arg(format!(
+                "HERDR_WORLD_APPLY_GRACE_MS={CONTROLLER_HANDOFF_GRACE_MS}"
+            ));
+            command
+                .arg(node)
+                .arg(controller)
+                .arg("apply")
+                .arg(request_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            let mut child = command.spawn()?;
+            let status = child.wait()?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(io::Error::new(
+                    ErrorKind::Other,
+                    "launchctl did not submit the controller",
+                ))
+            }
+        }
+        "fallback" => {
+            let mut command = Command::new(node);
+            apply_controller_environment(&mut command);
+            command.env("HERDR_WORLD_APPLY_GRACE_MS", CONTROLLER_HANDOFF_GRACE_MS);
+            command
+                .arg(controller)
+                .arg("apply")
+                .arg(request_path)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            #[cfg(unix)]
+            unsafe {
+                command.pre_exec(|| {
+                    if libc::setsid() == -1 {
+                        Err(io::Error::last_os_error())
+                    } else {
+                        Ok(())
+                    }
+                });
+            }
+            command.spawn().map(|_| ())
+        }
+        _ => Err(io::Error::new(
+            ErrorKind::PermissionDenied,
+            "controller supervisor boundary is unavailable",
+        )),
+    }
+}
+
+async fn auth_status_handler(
+    State(state): State<BridgeState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, BridgeError> {
+    ensure_allowed_request_from_peer(&headers, &state.request_policy, Some(peer))?;
+    Ok(Json(serde_json::json!({
+        "required": state.auth.required(),
+        "authenticated": state.auth.request_is_authorized(&headers, Some(peer)),
+        "local_peer_bypass": BridgeAuth::local_peer_allowed(Some(peer)),
+    })))
+}
+
+async fn auth_session_handler(
+    State(state): State<BridgeState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<PasswordSessionResponse>, Response> {
+    if let Err(error) =
+        ensure_allowed_request_from_peer(&headers, &state.request_policy, Some(peer))
+    {
+        return Err(error.into_response());
+    }
+    if body.len() > MAX_PASSWORD_REQUEST_BYTES {
+        return Err(
+            BridgeError::BadRequest("password request is too large".into()).into_response(),
+        );
+    }
+    let request: PasswordRequest = serde_json::from_slice(&body).map_err(|_| {
+        BridgeError::BadRequest("password request is invalid".into()).into_response()
+    })?;
+    if request.password.as_bytes().len() > MAX_PASSWORD_BYTES {
+        return Err(BridgeError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_BYTES} bytes"
+        ))
+        .into_response());
+    }
+    match state
+        .auth
+        .issue_session(Some(peer), &request.password)
+        .await
+    {
+        Ok(token) => Ok(Json(PasswordSessionResponse {
+            authenticated: true,
+            expires_in_seconds: AUTH_SESSION_TTL.as_secs(),
+            token: Some(token),
+        })),
+        Err(AuthFailure::InvalidInput) => Err(BridgeError::BadRequest(format!(
+            "password must be at most {MAX_PASSWORD_BYTES} bytes"
+        ))
+        .into_response()),
+        Err(AuthFailure::NotRequired) => Err(BridgeError::BadRequest(
+            "password protection is not enabled".into(),
+        )
+        .into_response()),
+        Err(AuthFailure::RateLimited) => Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({
+                "code": "authentication_rate_limited",
+                "error": "too many password attempts; retry shortly",
+            })),
+        )
+            .into_response()),
+        Err(AuthFailure::Rejected) => Err(unauthorized_response()),
+        Err(AuthFailure::Unavailable) => {
+            Err(BridgeError::Protocol("authentication service unavailable".into()).into_response())
+        }
+    }
+}
+
+async fn remote_access_status_handler(
+    State(state): State<BridgeState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+) -> Result<Json<RemoteAccessStatusResponse>, BridgeError> {
+    local_management_allowed(&headers, &state.request_policy, peer)?;
+    Ok(Json(remote_access_status(&state)))
+}
+
+fn remote_access_status(state: &BridgeState) -> RemoteAccessStatusResponse {
+    let model = current_remote_access_model(&state.request_policy, &state.auth);
+    RemoteAccessStatusResponse {
+        remote_access: model,
+        port: state.request_policy.bind_port,
+        suggestions: detected_access_candidates(&state.request_policy),
+        mutation_allowed: state.management.mutation_reason.is_none()
+            && state
+                .management
+                .config_path
+                .as_ref()
+                .is_some_and(|path| path.parent().is_some_and(Path::is_dir)),
+        mutation_reason: state.management.mutation_reason.clone(),
+        apply: read_apply_status(&state.management),
+    }
+}
+
+async fn remote_access_apply_handler(
+    State(state): State<BridgeState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<(StatusCode, Json<ApplyStatusResponse>), BridgeError> {
+    local_management_allowed(&headers, &state.request_policy, peer)?;
+    if let Some(reason) = &state.management.mutation_reason {
+        return Err(BridgeError::Forbidden(reason.clone()));
+    }
+    if state.management.config_path.as_ref().map_or(true, |path| {
+        path.parent().map_or(true, |parent| !parent.is_dir())
+    }) {
+        return Err(BridgeError::Forbidden(
+            "remote access configuration storage is unavailable".into(),
+        ));
+    }
+    if body.len() > 64 * 1024 {
+        return Err(BridgeError::BadRequest(
+            "remote access draft is too large".into(),
+        ));
+    }
+    let mut request: RemoteAccessApplyRequest = serde_json::from_slice(&body)
+        .map_err(|_| BridgeError::BadRequest("remote access draft is invalid".into()))?;
+    match request.password_action {
+        PasswordAction::Keep => {
+            request.remote_access.password_hash = state.auth.password_hash();
+            if request.password.is_some() {
+                return Err(BridgeError::BadRequest(
+                    "password is only accepted when setting or changing it".into(),
+                ));
+            }
+        }
+        PasswordAction::Remove => {
+            if request.password.is_some() {
+                return Err(BridgeError::BadRequest(
+                    "password is not accepted when removing protection".into(),
+                ));
+            }
+            request.remote_access.password_hash = None;
+        }
+        PasswordAction::Set => {
+            let password = request
+                .password
+                .as_deref()
+                .ok_or_else(|| BridgeError::BadRequest("a password is required".into()))?;
+            request.remote_access.password_hash = Some(
+                hash_password_async(password)
+                    .await
+                    .map_err(BridgeError::BadRequest)?,
+            );
+        }
+    }
+    validate_remote_access_draft(&mut request.remote_access)?;
+
+    let Some(state_dir) = state.management.state_dir.as_deref() else {
+        return Err(BridgeError::Forbidden(
+            "remote access mutation is unavailable".into(),
+        ));
+    };
+    std::fs::create_dir_all(state_dir).map_err(BridgeError::Io)?;
+    let sequence = UPLOAD_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel);
+    let apply_id = format!("{}-{sequence}", std::process::id());
+    let request_path = state_dir.join(format!(".remote-access-request-{apply_id}.json"));
+    let content = serde_json::to_vec(&serde_json::json!({
+        "apply_id": apply_id,
+        "remote_access": request.remote_access,
+    }))
+    .map_err(|error| BridgeError::Protocol(error.to_string()))?;
+    write_restrictive_file(&request_path, &content)?;
+    if let Err(error) = spawn_management_controller(&state.management, &request_path) {
+        let _ = std::fs::remove_file(&request_path);
+        return Err(BridgeError::Io(error));
+    }
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ApplyStatusResponse {
+            id: Some(apply_id),
+            state: "applying".into(),
+            reason: Some("settings saved; the managed bridge is restarting".into()),
+            restored: None,
+        }),
+    ))
+}
+
+fn write_restrictive_file(path: &Path, content: &[u8]) -> Result<(), BridgeError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(BridgeError::Io)?;
+    file.write_all(content).map_err(BridgeError::Io)?;
+    file.flush().map_err(BridgeError::Io)
+}
+
+async fn preflight_handler(
+    State(state): State<BridgeState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
 ) -> Result<Response, BridgeError> {
-    ensure_allowed_request(headers, policy)?;
-    let Some(origin) = cors_origin_header(headers, policy) else {
+    preflight_response_from_peer(&headers, &state.request_policy, Some(peer))
+}
+
+pub(crate) fn preflight_response_from_peer(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
+) -> Result<Response, BridgeError> {
+    ensure_allowed_request_from_peer(headers, policy, peer)?;
+    let Some(origin) = cors_origin_header_from_peer(headers, policy, peer) else {
         return Err(BridgeError::Forbidden(
             "cross-origin requests are not allowed".to_string(),
         ));
@@ -1357,9 +2562,18 @@ pub(crate) fn preflight_response(
     Ok(response)
 }
 
+#[cfg(test)]
 fn cors_origin_header(headers: &HeaderMap, policy: &RequestPolicy) -> Option<HeaderValue> {
+    cors_origin_header_from_peer(headers, policy, None)
+}
+
+fn cors_origin_header_from_peer(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
+) -> Option<HeaderValue> {
     let origin = headers.get(ORIGIN)?;
-    if request_allowed(headers, policy) {
+    if request_allowed_from_peer(headers, policy, peer) {
         Some(origin.clone())
     } else {
         None
@@ -1383,7 +2597,10 @@ fn insert_cors_headers(headers: &mut HeaderMap, origin: HeaderValue) {
 }
 
 fn is_loopback_bind_host(host: &str) -> bool {
-    matches!(host, "localhost" | "127.0.0.1" | "::1")
+    matches!(
+        host.to_ascii_lowercase().as_str(),
+        "localhost" | "127.0.0.1" | "::1"
+    )
 }
 
 fn default_upload_dir() -> PathBuf {
@@ -1554,11 +2771,12 @@ const CAPABILITY_FEATURES: &[&str] = &[
     "observability_extension",
 ];
 
-pub(crate) fn ensure_allowed_request(
+fn ensure_allowed_request_from_peer(
     headers: &HeaderMap,
     policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
 ) -> Result<(), BridgeError> {
-    if request_allowed(headers, policy) {
+    if request_allowed_from_peer(headers, policy, peer) {
         return Ok(());
     }
     Err(BridgeError::Forbidden(
@@ -1566,25 +2784,61 @@ pub(crate) fn ensure_allowed_request(
     ))
 }
 
+#[cfg(test)]
 fn request_allowed(headers: &HeaderMap, policy: &RequestPolicy) -> bool {
-    request_host_allowed(headers, policy) && request_origin_allowed(headers, policy)
+    request_allowed_from_peer(headers, policy, None)
 }
 
-fn request_host_allowed(headers: &HeaderMap, policy: &RequestPolicy) -> bool {
+fn request_allowed_from_peer(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
+) -> bool {
+    request_host_allowed_from_peer(headers, policy, peer)
+        && request_origin_allowed_from_peer(headers, policy, peer)
+}
+
+fn request_host_allowed_from_peer(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
+) -> bool {
     let Some(host) = headers.get(HOST).and_then(|host| host.to_str().ok()) else {
         return false;
     };
-    host_authority_allowed(host, policy)
+    host_authority_allowed_from_peer(host, policy, peer)
 }
 
+#[cfg(test)]
 fn host_authority_allowed(authority: &str, policy: &RequestPolicy) -> bool {
+    host_authority_allowed_from_peer(authority, policy, None)
+}
+
+fn host_authority_allowed_from_peer(
+    authority: &str,
+    policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
+) -> bool {
     let host = host_part(authority);
     if host.is_empty() {
         return false;
     }
 
-    if is_loopback_host(host) {
+    if is_loopback_bind_host(&policy.bind_host) && is_loopback_host(host) {
         return true;
+    }
+
+    if peer.is_some_and(peer_is_loopback)
+        && is_loopback_host(host)
+        && authority_port_matches(authority, policy.bind_port)
+    {
+        return true;
+    }
+
+    // A LAN/VPN listener must never accept a loopback Host value as a shortcut.
+    // The accepted TCP peer is checked separately for local authentication.
+    if is_loopback_host(host) {
+        return false;
     }
 
     if !authority_port_matches(authority, policy.bind_port) {
@@ -1599,10 +2853,19 @@ fn host_authority_allowed(authority: &str, policy: &RequestPolicy) -> bool {
         return true;
     }
 
-    host.eq_ignore_ascii_case(&policy.bind_host)
+    false
 }
 
+#[cfg(test)]
 fn request_origin_allowed(headers: &HeaderMap, policy: &RequestPolicy) -> bool {
+    request_origin_allowed_from_peer(headers, policy, None)
+}
+
+fn request_origin_allowed_from_peer(
+    headers: &HeaderMap,
+    policy: &RequestPolicy,
+    peer: Option<SocketAddr>,
+) -> bool {
     let Some(origin) = headers.get(ORIGIN) else {
         return true;
     };
@@ -1620,8 +2883,12 @@ fn request_origin_allowed(headers: &HeaderMap, policy: &RequestPolicy) -> bool {
         .allowed_origins
         .iter()
         .any(|allowed| allowed.eq_ignore_ascii_case(origin));
-    if !is_loopback_bind_host(&policy.bind_host) {
-        return explicitly_allowed;
+    if !is_loopback_bind_host(&policy.bind_host)
+        && !(peer.is_some_and(peer_is_loopback)
+            && is_loopback_authority(origin_authority)
+            && is_loopback_authority(host))
+    {
+        return same_authority(origin_authority, host) || explicitly_allowed;
     }
 
     same_authority(origin_authority, host)
@@ -1675,6 +2942,18 @@ fn content_security_policy(policy: &RequestPolicy) -> HeaderValue {
     HeaderValue::from_str(&value).expect("connect-src sources are validated origins")
 }
 
+fn websocket_auth_protocol(headers: &HeaderMap) -> Option<String> {
+    BridgeAuth::websocket_token(headers).map(|token| format!("herdr-world-auth.{token}"))
+}
+
+fn configure_websocket_protocol(ws: WebSocketUpgrade, headers: &HeaderMap) -> WebSocketUpgrade {
+    if let Some(protocol) = websocket_auth_protocol(headers) {
+        ws.protocols([protocol])
+    } else {
+        ws
+    }
+}
+
 fn normalize_allowed_host(host: &str) -> Result<String, String> {
     let host = host.trim().trim_matches('.');
     if host.is_empty() {
@@ -1693,6 +2972,15 @@ fn normalize_allowed_host(host: &str) -> Result<String, String> {
         return Err("allowed host is not a valid hostname or IP literal".into());
     }
     Ok(host.to_ascii_lowercase())
+}
+
+fn validate_password_hash(hash: &str) -> Result<(), String> {
+    if hash.as_bytes().len() > MAX_REMOTE_ACCESS_VALUE_BYTES || !hash.starts_with("$argon2") {
+        return Err("password hash must be a bounded Argon2 hash".into());
+    }
+    PasswordHash::new(hash)
+        .map(|_| ())
+        .map_err(|_| "password hash is invalid".to_string())
 }
 
 fn normalize_configured_label(label: &str) -> Result<String, String> {
@@ -1735,6 +3023,16 @@ fn is_loopback_authority(authority: &str) -> bool {
 
 fn is_loopback_host(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
+}
+
+fn peer_is_loopback(address: SocketAddr) -> bool {
+    address.ip().is_loopback()
+        || matches!(
+            address.ip(),
+            IpAddr::V6(address) if address
+                .to_ipv4_mapped()
+                .is_some_and(|mapped| mapped.is_loopback())
+        )
 }
 
 fn authority_port_matches(authority: &str, expected_port: u16) -> bool {
@@ -2033,15 +3331,6 @@ impl LauncherPresetError {
         }
     }
 
-    fn forbidden(message: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::FORBIDDEN,
-            code: "forbidden",
-            message: message.into(),
-            herdr_code: None,
-        }
-    }
-
     fn not_found(message: impl Into<String>) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,
@@ -2077,14 +3366,6 @@ impl LauncherPresetError {
             herdr_code: Some(code),
         }
     }
-
-    fn from_request_policy_error(err: BridgeError) -> Self {
-        match err {
-            BridgeError::Forbidden(message) => Self::forbidden(message),
-            BridgeError::BadRequest(message) => Self::invalid(message),
-            other => Self::invalid(other.to_string()),
-        }
-    }
 }
 
 impl IntoResponse for LauncherPresetError {
@@ -2102,10 +3383,8 @@ impl IntoResponse for LauncherPresetError {
 
 async fn command_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
     Json(body): Json<CommandRequest>,
 ) -> Result<Json<serde_json::Value>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     if !ALLOWED_COMMANDS.contains(&body.method.as_str()) {
         return Err(BridgeError::Forbidden(format!(
             "command not allowed: {}",
@@ -2163,19 +3442,14 @@ async fn command_handler(
 
 async fn launcher_presets_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
 ) -> Result<Json<crate::launcher_presets::LauncherPresetsResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     Ok(Json(state.launcher_presets.response()))
 }
 
 async fn launcher_preset_launch_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<LauncherPresetLaunchResponse>, LauncherPresetError> {
-    ensure_allowed_request(&headers, &state.request_policy)
-        .map_err(LauncherPresetError::from_request_policy_error)?;
     let body = parse_launcher_preset_launch_request(&body)?;
     let preset = state
         .launcher_presets
@@ -2915,10 +4189,8 @@ fn default_workspace_label_from_panes<'a>(
 
 async fn selection_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
     Json(body): Json<SelectionRequest>,
 ) -> Result<Json<serde_json::Value>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let pane_id = body.pane_id.trim();
     if pane_id.is_empty() {
         return Err(BridgeError::BadRequest("missing pane_id".to_string()));
@@ -2953,8 +4225,6 @@ async fn upload_handler(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<UploadResponse>, UploadError> {
-    ensure_allowed_request(&headers, &state.request_policy)
-        .map_err(|err| UploadError::Forbidden(err.to_string()))?;
     if body.len() > MAX_UPLOAD_BYTES {
         return Err(UploadError::TooLarge);
     }
@@ -3048,11 +4318,7 @@ async fn upload_handler(
     Ok(Json(response))
 }
 
-async fn snapshot_handler(
-    State(state): State<BridgeState>,
-    headers: HeaderMap,
-) -> Result<Json<Snapshot>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
+async fn snapshot_handler(State(state): State<BridgeState>) -> Result<Json<Snapshot>, BridgeError> {
     let api_state = state.clone();
     let session_snapshot = tokio::task::spawn_blocking(move || {
         match api_request(
@@ -3151,9 +4417,7 @@ fn is_default_tab_label(label: &str) -> bool {
 
 async fn capabilities_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
 ) -> Result<Json<Capabilities>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let observability = state
         .observability
         .descriptor()
@@ -3167,6 +4431,11 @@ async fn capabilities_handler(
         features: CAPABILITY_FEATURES,
         commands: ALLOWED_COMMANDS,
         web_compat: WEB_COMPAT_VERSION,
+        authentication: AuthenticationCapability {
+            required: state.auth.required(),
+            session: "bearer",
+            local_peer_bypass: true,
+        },
         agent_activity: AgentActivityCapability { version: 1 },
         agent_pins: AgentPinsCapability { version: 1 },
         launcher_presets: LauncherPresetsCapability { version: 1 },
@@ -3181,9 +4450,7 @@ async fn capabilities_handler(
 
 async fn agent_activity_list_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
 ) -> Result<Json<AgentActivityListResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let list_state = state.clone();
     let response = tokio::task::spawn_blocking(move || {
         let panes = current_panes(&list_state.api)?;
@@ -3197,9 +4464,7 @@ async fn agent_activity_list_handler(
 
 async fn agent_pins_list_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
 ) -> Result<Json<AgentPinsListResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     Ok(Json(
         run_store_task(state, move |state| {
             let panes = current_panes(&state.api)?;
@@ -3212,9 +4477,7 @@ async fn agent_pins_list_handler(
 async fn agent_pins_pin_handler(
     State(state): State<BridgeState>,
     AxumPath(pane_id): AxumPath<String>,
-    headers: HeaderMap,
 ) -> Result<Json<AgentPinsListResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let event_pane_id = pane_id.clone();
     let response = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
@@ -3228,9 +4491,7 @@ async fn agent_pins_pin_handler(
 async fn agent_pins_unpin_handler(
     State(state): State<BridgeState>,
     AxumPath(pane_id): AxumPath<String>,
-    headers: HeaderMap,
 ) -> Result<Json<AgentPinsListResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let event_pane_id = pane_id.clone();
     let response = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
@@ -3244,9 +4505,7 @@ async fn agent_pins_unpin_handler(
 async fn notes_list_handler(
     State(state): State<BridgeState>,
     Query(query): Query<NotesListQuery>,
-    headers: HeaderMap,
 ) -> Result<Json<NotesListResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     Ok(Json(
         run_store_task(state, move |state| {
             let panes = current_panes(&state.api)?;
@@ -3258,10 +4517,8 @@ async fn notes_list_handler(
 
 async fn notes_create_handler(
     State(state): State<BridgeState>,
-    headers: HeaderMap,
     Json(body): Json<CreateNoteRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.create(body, &panes)?)
@@ -3274,10 +4531,8 @@ async fn notes_create_handler(
 async fn notes_update_handler(
     State(state): State<BridgeState>,
     AxumPath(note_id): AxumPath<String>,
-    headers: HeaderMap,
     Json(body): Json<UpdateNoteRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.update(&note_id, body, &panes)?)
@@ -3290,10 +4545,8 @@ async fn notes_update_handler(
 async fn notes_attach_handler(
     State(state): State<BridgeState>,
     AxumPath(note_id): AxumPath<String>,
-    headers: HeaderMap,
     Json(body): Json<AttachNoteRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.attach(&note_id, body, &panes)?)
@@ -3306,10 +4559,8 @@ async fn notes_attach_handler(
 async fn notes_detach_handler(
     State(state): State<BridgeState>,
     AxumPath(note_id): AxumPath<String>,
-    headers: HeaderMap,
     Json(body): Json<RevisionRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.detach(&note_id, body, &panes)?)
@@ -3322,10 +4573,8 @@ async fn notes_detach_handler(
 async fn notes_archive_handler(
     State(state): State<BridgeState>,
     AxumPath(note_id): AxumPath<String>,
-    headers: HeaderMap,
     Json(body): Json<RevisionRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.archive(&note_id, body, &panes)?)
@@ -3338,10 +4587,8 @@ async fn notes_archive_handler(
 async fn notes_restore_handler(
     State(state): State<BridgeState>,
     AxumPath(note_id): AxumPath<String>,
-    headers: HeaderMap,
     Json(body): Json<RevisionRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.restore(&note_id, body, &panes)?)
@@ -3354,10 +4601,8 @@ async fn notes_restore_handler(
 async fn notes_delete_handler(
     State(state): State<BridgeState>,
     AxumPath(note_id): AxumPath<String>,
-    headers: HeaderMap,
     Json(body): Json<RevisionRequest>,
 ) -> Result<Json<NoteResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let note = run_store_task(state.clone(), move |state| {
         let panes = current_panes(&state.api)?;
         Ok(state.notes.delete(&note_id, body, &panes)?)
@@ -3459,10 +4704,8 @@ async fn terminal_ws_handler(
     Query(query): Query<TerminalQuery>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(err) = ensure_allowed_request(&headers, &state.request_policy) {
-        return err.into_response();
-    }
-    ws.on_upgrade(move |socket| handle_terminal_socket(socket, state, query))
+    configure_websocket_protocol(ws, &headers)
+        .on_upgrade(move |socket| handle_terminal_socket(socket, state, query))
         .into_response()
 }
 
@@ -3471,10 +4714,8 @@ async fn events_ws_handler(
     State(state): State<BridgeState>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(err) = ensure_allowed_request(&headers, &state.request_policy) {
-        return err.into_response();
-    }
-    ws.on_upgrade(move |socket| handle_events_socket(socket, state))
+    configure_websocket_protocol(ws, &headers)
+        .on_upgrade(move |socket| handle_events_socket(socket, state))
         .into_response()
 }
 
@@ -3483,10 +4724,8 @@ async fn activity_ws_handler(
     State(state): State<BridgeState>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(err) = ensure_allowed_request(&headers, &state.request_policy) {
-        return err.into_response();
-    }
-    ws.on_upgrade(move |socket| handle_activity_socket(socket, state))
+    configure_websocket_protocol(ws, &headers)
+        .on_upgrade(move |socket| handle_activity_socket(socket, state))
         .into_response()
 }
 
@@ -3495,10 +4734,8 @@ async fn ui_events_ws_handler(
     State(state): State<BridgeState>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(err) = ensure_allowed_request(&headers, &state.request_policy) {
-        return err.into_response();
-    }
-    ws.on_upgrade(move |socket| handle_ui_events_socket(socket, state))
+    configure_websocket_protocol(ws, &headers)
+        .on_upgrade(move |socket| handle_ui_events_socket(socket, state))
         .into_response()
 }
 
@@ -3653,6 +4890,14 @@ async fn handle_terminal_socket(socket: WebSocket, state: BridgeState, query: Te
             return;
         }
     };
+
+    if query.probe {
+        let _ = ws_sender
+            .send(Message::Text(TERMINAL_ATTACH_READY.into()))
+            .await;
+        release_terminal_session(&state.terminal_sessions, &terminal_id, &session);
+        return;
+    }
 
     let write_tx = session.write_tx.clone();
     let mut terminal_rx = session.output_tx.subscribe();
@@ -4782,6 +6027,7 @@ mod tests {
     use axum::body::Body;
     use axum::http::Request as HttpRequest;
     use flate2::read::GzDecoder;
+    use std::future::IntoFuture;
     use std::io::Read;
     use tower::ServiceExt;
 
@@ -5294,6 +6540,17 @@ mod tests {
                 data: "ls\n".to_string()
             }
         );
+    }
+
+    #[test]
+    fn terminal_probe_query_is_non_mutating_and_has_no_resize_defaults() {
+        let query: TerminalQuery = serde_json::from_str(
+            r#"{"terminal_id":"terminal-test","takeover":false,"probe":true}"#,
+        )
+        .unwrap();
+        assert!(query.probe);
+        assert_eq!(query.cols, None);
+        assert_eq!(query.rows, None);
     }
 
     fn test_terminal_writer() -> (TerminalWriter, mpsc::Receiver<ClientMessage>) {
@@ -6102,12 +7359,30 @@ mod tests {
     }
 
     #[test]
+    fn access_candidates_keep_only_usable_machine_addresses() {
+        let mut candidates = Vec::new();
+        for value in [
+            "127.0.0.1",
+            "0.0.0.0",
+            "fe80::1",
+            "192.0.2.20",
+            "192.0.2.20",
+            "workstation.local.",
+        ] {
+            add_access_candidate(&mut candidates, value);
+        }
+
+        assert_eq!(candidates, ["192.0.2.20", "workstation.local"]);
+    }
+
+    #[test]
     fn request_gate_rejects_dns_rebinding_hosts() {
         let policy = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
             allowed_hosts: vec!["192.0.2.10".to_string()],
             allowed_origins: vec!["http://192.0.2.10:4000".to_string()],
+            allowed_connect_origins: Vec::new(),
             allowed_connect_sources: Vec::new(),
         };
         assert!(!request_allowed(
@@ -6122,6 +7397,382 @@ mod tests {
             &origin_headers("192.0.2.10:8787", Some("http://192.0.2.10:8787")),
             &policy
         ));
+    }
+
+    #[test]
+    fn remote_peer_cannot_turn_a_lan_request_into_local_access() {
+        let policy = RequestPolicy {
+            bind_host: "0.0.0.0".to_string(),
+            bind_port: 4000,
+            allowed_hosts: vec!["192.0.2.10".to_string()],
+            allowed_origins: vec!["http://192.0.2.10:4000".to_string()],
+            allowed_connect_origins: Vec::new(),
+            allowed_connect_sources: Vec::new(),
+        };
+        let remote_peer = "192.0.2.55:51234".parse().unwrap();
+        let localhost = origin_headers("localhost:4000", None);
+        assert!(!request_allowed(&localhost, &policy));
+        assert!(!request_allowed_from_peer(
+            &localhost,
+            &policy,
+            Some(remote_peer)
+        ));
+        assert!(local_management_allowed(&localhost, &policy, remote_peer).is_err());
+        let loopback_peer = "127.0.0.1:51234".parse().unwrap();
+        assert!(request_allowed_from_peer(
+            &localhost,
+            &policy,
+            Some(loopback_peer)
+        ));
+        assert!(local_management_allowed(&localhost, &policy, loopback_peer).is_ok());
+
+        let mut forwarded = localhost.clone();
+        forwarded.insert("x-forwarded-for", "127.0.0.1".parse().unwrap());
+        assert!(!request_allowed_from_peer(
+            &forwarded,
+            &policy,
+            Some(remote_peer)
+        ));
+
+        let accepted_host = origin_headers("192.0.2.10:4000", None);
+        assert!(request_allowed(&accepted_host, &policy));
+        assert!(local_management_allowed(&accepted_host, &policy, remote_peer).is_err());
+        assert!(local_management_allowed(&accepted_host, &policy, loopback_peer).is_ok());
+
+        let auth = BridgeAuth::new(Some("not-a-valid-password-hash".to_string()));
+        assert!(!auth.request_is_authorized(&accepted_host, Some(remote_peer)));
+        assert!(
+            auth.request_is_authorized(&accepted_host, Some("127.0.0.1:51234".parse().unwrap()))
+        );
+    }
+
+    #[tokio::test]
+    async fn password_sessions_are_bounded_delayed_and_expire() {
+        let auth = BridgeAuth::new(Some("not-a-valid-password-hash".to_string()));
+        let peer = Some("192.0.2.55:51234".parse().unwrap());
+        let oversized = "x".repeat(MAX_PASSWORD_BYTES + 1);
+        assert_eq!(
+            auth.issue_session(peer, &oversized).await,
+            Err(AuthFailure::InvalidInput)
+        );
+
+        let started = std::time::Instant::now();
+        assert_eq!(
+            auth.issue_session(peer, "wrong").await,
+            Err(AuthFailure::Rejected)
+        );
+        assert!(started.elapsed() >= AUTH_FAILURE_DELAY);
+        for _ in 1..AUTH_FAILURE_LIMIT {
+            assert_eq!(
+                auth.issue_session(peer, "wrong").await,
+                Err(AuthFailure::Rejected)
+            );
+        }
+        assert_eq!(
+            auth.issue_session(peer, "wrong").await,
+            Err(AuthFailure::RateLimited)
+        );
+
+        let expired = "expired-token".to_string();
+        auth.sessions
+            .lock()
+            .unwrap()
+            .tokens
+            .insert(expired.clone(), Instant::now() - Duration::from_secs(1));
+        assert!(!auth.token_is_valid(&expired));
+    }
+
+    #[tokio::test]
+    async fn cancelling_password_verification_cleans_pending_state_and_releases_capacity() {
+        AUTH_TEST_VERIFICATION_STARTED.store(false, Ordering::Release);
+        AUTH_TEST_VERIFICATION_PAUSE.store(true, Ordering::Release);
+        let auth = Arc::new(BridgeAuth::new(Some(
+            hash_password("synthetic-password").unwrap(),
+        )));
+        let peer = "192.0.2.56:51234".parse().unwrap();
+        let task_auth = auth.clone();
+        let task =
+            tokio::spawn(
+                async move { task_auth.issue_session(Some(peer), "wrong-password").await },
+            );
+
+        let mut verification_started = false;
+        for _ in 0..100 {
+            verification_started = AUTH_TEST_VERIFICATION_STARTED.load(Ordering::Acquire);
+            if verification_started {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            verification_started,
+            "password verification did not become in-flight"
+        );
+        task.abort();
+        AUTH_TEST_VERIFICATION_PAUSE.store(false, Ordering::Release);
+        let _ = task.await;
+
+        for _ in 0..100 {
+            let pending = auth.sessions.lock().unwrap().pending.len();
+            if pending == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(auth.sessions.lock().unwrap().pending.is_empty());
+        assert_eq!(
+            auth.verification_slots.available_permits(),
+            MAX_PASSWORD_VERIFICATIONS
+        );
+    }
+
+    #[tokio::test]
+    async fn password_session_transport_rejects_oversized_streams_before_body_extraction() {
+        let handler_called = Arc::new(AtomicBool::new(false));
+        let handler_called_for_route = handler_called.clone();
+        let app = Router::new().route(
+            "/api/auth/session",
+            post(move |_: Bytes| async move {
+                handler_called_for_route.store(true, Ordering::Release);
+                StatusCode::OK
+            })
+            .layer(DefaultBodyLimit::max(MAX_PASSWORD_REQUEST_BYTES)),
+        );
+        let request = HttpRequest::builder()
+            .method("POST")
+            .uri("/api/auth/session")
+            .header("content-type", "application/json")
+            .body(Body::from(vec![b'x'; MAX_PASSWORD_REQUEST_BYTES + 1]))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        assert!(!handler_called.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn authentication_errors_keep_the_allowed_cross_origin_headers() {
+        let policy = RequestPolicy {
+            bind_host: "0.0.0.0".into(),
+            bind_port: 4000,
+            allowed_hosts: vec!["192.0.2.10".into()],
+            allowed_origins: vec!["https://world.example.test".into()],
+            allowed_connect_origins: Vec::new(),
+            allowed_connect_sources: Vec::new(),
+        };
+        let app = Router::new()
+            .route("/api/protected", get(|| async { unauthorized_response() }))
+            .layer(middleware::from_fn_with_state(policy, add_security_headers));
+        let request = HttpRequest::builder()
+            .uri("/api/protected")
+            .header(HOST, "192.0.2.10:4000")
+            .header(ORIGIN, "https://world.example.test")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response
+                .headers()
+                .get(ACCESS_CONTROL_ALLOW_ORIGIN)
+                .and_then(|value| value.to_str().ok()),
+            Some("https://world.example.test")
+        );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn running_bridge_management_endpoint_hands_off_to_an_independent_controller() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "herdr-world-management-http-test-{}",
+            CONTROLLER_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel)
+        ));
+        let config_dir = root.join("config");
+        let state_dir = root.join("state");
+        let notes_dir = root.join("notes");
+        let pins_dir = root.join("pins");
+        let upload_dir = root.join("uploads");
+        let controller = root.join("controller.sh");
+        let marker = root.join("controller.marker");
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::fs::write(
+            &controller,
+            format!("#!/bin/sh\nprintf '%s' \"$2\" > '{}'\n", marker.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&controller, std::fs::Permissions::from_mode(0o700)).unwrap();
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let policy = RequestPolicy {
+            bind_host: "127.0.0.1".into(),
+            bind_port: address.port(),
+            allowed_hosts: Vec::new(),
+            allowed_origins: Vec::new(),
+            allowed_connect_origins: Vec::new(),
+            allowed_connect_sources: Vec::new(),
+        };
+        let (ui_event_tx, _) = tokio::sync::broadcast::channel(8);
+        let (activity_tx, _) = tokio::sync::broadcast::channel(8);
+        let state = BridgeState {
+            api: ApiClient::for_socket_path(root.join("unused-herdr.sock")),
+            client_socket_path: root.join("unused-client.sock"),
+            request_policy: policy,
+            auth: Arc::new(BridgeAuth::new(None)),
+            management: ManagementState {
+                config_path: Some(config_dir.join("config.json")),
+                state_dir: Some(state_dir.clone()),
+                controller_node: Some(PathBuf::from("/bin/sh")),
+                controller_script: Some(controller),
+                controller_mode: Some("fallback".into()),
+                controller_launcher: None,
+                mutation_reason: None,
+            },
+            terminal_sessions: Arc::new(Mutex::new(TerminalSessions::default())),
+            selected_pane_id: Arc::new(Mutex::new(None)),
+            agent_activity: Arc::new(AgentActivityManager::new()),
+            agent_pins: Arc::new(AgentPinsManager::for_test(pins_dir, "session:test").unwrap()),
+            launcher_presets: Arc::new(LauncherPresetStore::load(None).unwrap()),
+            notes: Arc::new(NotesManager::for_test(notes_dir, "session:test").unwrap()),
+            observability: ObservabilityState::unavailable(),
+            ui_event_tx,
+            activity_tx,
+            upload_dir,
+            herdr_version: "0.8.2".into(),
+            terminal_protocol: PROTOCOL_VERSION,
+            configured_label: None,
+        };
+        let server = tokio::spawn(
+            axum::serve(
+                listener,
+                bridge_router(
+                    state,
+                    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../web"),
+                )
+                .into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .into_future(),
+        );
+
+        let response = reqwest::Client::new()
+            .post(format!(
+                "http://127.0.0.1:{}/api/local/remote-access",
+                address.port()
+            ))
+            .header(HOST, format!("127.0.0.1:{}", address.port()))
+            .json(&serde_json::json!({
+                "remote_access": {
+                    "enabled": true,
+                    "accepted_hosts": ["198.51.100.20"],
+                    "allowed_page_origins": ["https://world.example.test"],
+                    "allowed_bridge_origins": []
+                },
+                "password_action": "keep"
+            }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let accepted = response.json::<serde_json::Value>().await.unwrap();
+        let apply_id = accepted["id"].as_str().unwrap();
+        assert!(!apply_id.is_empty());
+
+        for _ in 0..40 {
+            if marker.is_file() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+        assert!(marker.is_file(), "controller did not receive the handoff");
+        let request_path = std::fs::read_to_string(&marker).unwrap();
+        let request = serde_json::from_str::<serde_json::Value>(
+            &std::fs::read_to_string(request_path).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(request["remote_access"]["enabled"], true);
+        assert_eq!(request["apply_id"], apply_id);
+
+        server.abort();
+        let _ = server.await;
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fallback_management_controller_has_an_independent_process_group() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!(
+            "herdr-world-controller-test-{}",
+            CONTROLLER_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel)
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let controller = root.join("controller.sh");
+        let marker = root.join("process-group");
+        let request = root.join("request.json");
+        std::fs::write(
+            &controller,
+            format!(
+                "#!/bin/sh\nps -o pgid= -p $$ | tr -d ' ' > {}\nprintf '%s' \"$2\" > {}\n",
+                marker.display(),
+                request.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&controller, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::write(&request, "{}").unwrap();
+        let management = ManagementState {
+            config_path: None,
+            state_dir: None,
+            controller_node: Some(PathBuf::from("/bin/sh")),
+            controller_script: Some(controller),
+            controller_mode: Some("fallback".into()),
+            controller_launcher: None,
+            mutation_reason: None,
+        };
+
+        spawn_management_controller(&management, &request).unwrap();
+        let mut process_group = String::new();
+        for _ in 0..200 {
+            process_group = std::fs::read_to_string(&marker).unwrap_or_default();
+            if !process_group.trim().is_empty() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let parent_group = unsafe { libc::getpgrp() }.to_string();
+        assert!(!process_group.trim().is_empty());
+        assert_ne!(process_group.trim(), parent_group);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn protected_route_inventory_keeps_only_negotiation_bootstrap_public() {
+        assert!(is_public_bootstrap_path("/api/capabilities"));
+        assert!(is_public_bootstrap_path("/api/auth/status"));
+        assert!(is_public_bootstrap_path("/api/auth/session"));
+        assert!(is_public_bootstrap_path("/api/local/remote-access"));
+        for path in [
+            "/api/snapshot",
+            "/api/command",
+            "/api/uploads",
+            "/api/observability/health",
+            "/ws/events",
+            "/ws/activity",
+            "/ws/ui-events",
+            "/ws/terminal",
+            "/ws/extensions/observability",
+        ] {
+            assert!(
+                !is_public_bootstrap_path(path),
+                "{path} must require authentication"
+            );
+        }
     }
 
     #[test]
@@ -6142,16 +7793,21 @@ mod tests {
     }
 
     #[test]
-    fn request_gate_allows_configured_android_origin() {
+    fn request_gate_allows_same_origin_and_configured_android_origin() {
         let policy = RequestPolicy {
             bind_host: "0.0.0.0".to_string(),
             bind_port: 4000,
             allowed_hosts: vec!["192.0.2.10".to_string()],
             allowed_origins: vec!["http://localhost".to_string()],
+            allowed_connect_origins: Vec::new(),
             allowed_connect_sources: Vec::new(),
         };
         assert!(request_allowed(
             &origin_headers("192.0.2.10:4000", Some("http://localhost")),
+            &policy
+        ));
+        assert!(request_allowed(
+            &origin_headers("192.0.2.10:4000", Some("http://192.0.2.10:4000")),
             &policy
         ));
         assert!(!request_allowed(
@@ -6206,10 +7862,11 @@ mod tests {
             bind_port: 4000,
             allowed_hosts: vec!["192.0.2.10".to_string()],
             allowed_origins: vec!["http://192.0.2.10:4000".to_string()],
+            allowed_connect_origins: Vec::new(),
             allowed_connect_sources: Vec::new(),
         };
         assert!(host_authority_allowed("192.0.2.10:4000", &lan));
-        assert!(host_authority_allowed("[::1]:5173", &lan));
+        assert!(!host_authority_allowed("[::1]:5173", &lan));
         assert!(!host_authority_allowed("evil.example:4000", &lan));
     }
 
@@ -6220,6 +7877,7 @@ mod tests {
             bind_port: 4000,
             allowed_hosts: vec!["herdr-host.local".to_string()],
             allowed_origins: Vec::new(),
+            allowed_connect_origins: Vec::new(),
             allowed_connect_sources: Vec::new(),
         };
         assert!(host_authority_allowed("herdr-host.local:4000", &policy));
@@ -6235,6 +7893,7 @@ mod tests {
             bind_port: 4000,
             allowed_hosts: vec!["192.0.2.10".to_string()],
             allowed_origins: vec!["http://localhost".to_string()],
+            allowed_connect_origins: Vec::new(),
             allowed_connect_sources: Vec::new(),
         };
         assert_eq!(
@@ -6602,6 +8261,46 @@ mod tests {
         assert!(is_loopback_bind_host("localhost"));
         assert!(!is_loopback_bind_host("0.0.0.0"));
         assert!(!is_loopback_bind_host("192.0.2.10"));
+    }
+
+    #[test]
+    fn ipv6_listener_bind_address_uses_a_real_ipv6_socket_authority() {
+        assert_eq!(listener_bind_address("::", 8787), "[::]:8787");
+        assert_eq!(listener_bind_address("[::1]", 8787), "[::1]:8787");
+        assert_eq!(listener_bind_address("192.0.2.10", 8787), "192.0.2.10:8787");
+
+        if let Ok(listener) = std::net::TcpListener::bind(listener_bind_address("::1", 0)) {
+            assert!(listener
+                .local_addr()
+                .expect("IPv6 listener address")
+                .is_ipv6());
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_ip_profiles_request_dual_family_listeners_and_map_loopback_peers() {
+        assert!(dual_family_listener_required(
+            "0.0.0.0",
+            &["2001:db8::20".to_string()]
+        ));
+        assert!(dual_family_listener_required(
+            "::",
+            &["192.0.2.20".to_string()]
+        ));
+        assert!(!dual_family_listener_required(
+            "0.0.0.0",
+            &["192.0.2.20".to_string()]
+        ));
+        assert!(peer_is_loopback(
+            "[::ffff:127.0.0.1]:51234".parse().unwrap()
+        ));
+        if let Ok(ipv4_listener) = std::net::TcpListener::bind("0.0.0.0:0") {
+            let port = ipv4_listener.local_addr().unwrap().port();
+            if let Ok(ipv6_listener) = bind_ipv6_only_listener(port) {
+                assert_eq!(ipv6_listener.local_addr().unwrap().port(), port);
+                assert!(ipv6_listener.local_addr().unwrap().is_ipv6());
+            }
+        }
     }
 
     #[test]
@@ -7144,7 +8843,7 @@ mod tests {
     }
 
     #[test]
-    fn non_loopback_options_require_explicit_host_and_origin() {
+    fn non_loopback_options_require_explicit_host_but_allow_same_origin_by_default() {
         let host_only = vec!["--host".to_string(), "0.0.0.0".to_string()];
         assert!(parse_options(&host_only)
             .unwrap_err()
@@ -7156,9 +8855,9 @@ mod tests {
             "--allow-host".to_string(),
             "192.0.2.10".to_string(),
         ];
-        assert!(parse_options(&without_origin)
-            .unwrap_err()
-            .contains("--allow-origin"));
+        let same_origin_only = parse_options(&without_origin).unwrap().unwrap();
+        assert_eq!(same_origin_only.allowed_hosts, vec!["192.0.2.10"]);
+        assert!(same_origin_only.allowed_origins.is_empty());
 
         let explicit = vec![
             "--host".to_string(),
@@ -7273,6 +8972,7 @@ mod tests {
             bind_port,
             allowed_hosts: Vec::new(),
             allowed_origins: Vec::new(),
+            allowed_connect_origins: Vec::new(),
             allowed_connect_sources: Vec::new(),
         }
     }

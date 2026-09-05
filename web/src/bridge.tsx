@@ -10,6 +10,12 @@ import {
 import type { ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { Preferences } from "@capacitor/preferences";
+import {
+  BridgeAuthenticationError,
+  BridgeDiagnosticError,
+  bridgeWebSocketProtocols,
+  setBridgePasswordPromptHandler,
+} from "./bridgeApi";
 import { fetchWithTimeout } from "./fetchWithTimeout";
 import { normalizeHostProfileId, normalizeHostProfileLabel } from "./hostProfile";
 import { addNativeResumeHandler } from "./native";
@@ -76,6 +82,11 @@ export type BridgeCapabilities = {
   };
   web_compat?: number;
   min_android_app_compat?: number;
+  authentication?: {
+    required: boolean;
+    session: "bearer";
+    local_peer_bypass: boolean;
+  };
   observability?: BridgeObservabilityCapability;
 };
 
@@ -171,8 +182,28 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   const [probeRetryTokens, setProbeRetryTokens] = useState<Record<string, number>>({});
   const [resumeToken, setResumeToken] = useState(0);
   const storeEditedRef = useRef(false);
+  const passwordPromptSequenceRef = useRef(0);
+  const [passwordPrompts, setPasswordPrompts] = useState<{
+    id: number;
+    origin: string;
+    resolve: (password: string | null) => void;
+  }[]>([]);
 
   const sameOriginAvailable = defaultBridgeMode() === "same-origin";
+
+  useEffect(() => {
+    setBridgePasswordPromptHandler(
+      (origin) =>
+        new Promise<string | null>((resolve) => {
+          passwordPromptSequenceRef.current += 1;
+          setPasswordPrompts((current) => [
+            ...current,
+            { id: passwordPromptSequenceRef.current, origin, resolve },
+          ]);
+        }),
+    );
+    return () => setBridgePasswordPromptHandler(null);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -493,7 +524,89 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
           }
         />
       ))}
+      {passwordPrompts[0] ? (
+        <BridgePasswordPrompt
+          key={passwordPrompts[0].id}
+          name={store.backends.find(
+            (backend) => backend.baseUrl === passwordPrompts[0].origin,
+          )?.name ?? "Herdr"}
+          origin={passwordPrompts[0].origin}
+          onCancel={() => {
+            passwordPrompts[0].resolve(null);
+            setPasswordPrompts((current) => current.slice(1));
+          }}
+          onSubmit={(password) => {
+            passwordPrompts[0].resolve(password);
+            setPasswordPrompts((current) => current.slice(1));
+          }}
+        />
+      ) : null}
     </BridgeContext.Provider>
+  );
+}
+
+export function BridgePasswordPrompt({
+  name,
+  origin,
+  onCancel,
+  onSubmit,
+}: {
+  name: string;
+  origin: string;
+  onCancel: () => void;
+  onSubmit: (password: string) => void;
+}) {
+  const [password, setPassword] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const address = new URL(origin).host;
+
+  useEffect(() => {
+    setPassword("");
+    inputRef.current?.focus();
+  }, [origin]);
+
+  return (
+    <div className="overlay-root bridge-auth-overlay">
+      <button
+        className="overlay-scrim"
+        type="button"
+        aria-label="Cancel connection"
+        onClick={onCancel}
+      />
+      <form
+        className="modal bridge-auth-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bridge-auth-title"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (password) onSubmit(password);
+        }}
+      >
+        <div id="bridge-auth-title" className="modal-title">Connect to Herdr</div>
+        <div className="bridge-auth-target" aria-label={`Connection destination: ${name}, ${address}`}>
+          <span>Password for</span>
+          <strong>{name}</strong>
+          <code>{address}</code>
+        </div>
+        <p className="backend-note">The password is not stored in Herdr World.</p>
+        <label className="field-label">
+          <span>Password</span>
+          <input
+            ref={inputRef}
+            className="field"
+            type="password"
+            value={password}
+            autoComplete="current-password"
+            onChange={(event) => setPassword(event.target.value)}
+          />
+        </label>
+        <div className="modal-actions">
+          <button type="button" className="btn" onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={!password}>Connect</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -977,23 +1090,23 @@ function isNativeApp() {
 export function normalizeBridgeBaseUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {
-    throw new Error("Enter a bridge URL");
+    throw new Error("Enter a Herdr address");
   }
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//iu.test(trimmed) ? trimmed : `http://${trimmed}`;
   let url: URL;
   try {
     url = new URL(withScheme);
   } catch {
-    throw new Error("Bridge URL is invalid");
+    throw new Error("Herdr address is invalid");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Bridge URL must use http or https");
+    throw new Error("Herdr address must use http or https");
   }
   if (url.username || url.password) {
-    throw new Error("Bridge URL must not include credentials");
+    throw new Error("Herdr address must not include credentials");
   }
   if ((url.pathname && url.pathname !== "/") || url.search || url.hash) {
-    throw new Error("Bridge URL must not include a path, query, or fragment");
+    throw new Error("Herdr address must not include a path, query, or fragment");
   }
   validateBridgeHost(url.hostname);
   return url.origin;
@@ -1002,7 +1115,7 @@ export function normalizeBridgeBaseUrl(input: string): string {
 function validateBridgeHost(hostname: string) {
   const host = stripIpv6Brackets(hostname).toLowerCase();
   if (!host) {
-    throw new Error("Bridge URL must include a host");
+    throw new Error("Herdr address must include a host");
   }
   if (parseIpv4(host)) {
     return;
@@ -1011,7 +1124,7 @@ function validateBridgeHost(hostname: string) {
     return;
   }
   if (!isValidHostname(host)) {
-    throw new Error("Bridge hostname is invalid");
+    throw new Error("Herdr hostname is invalid");
   }
 }
 
@@ -1125,7 +1238,7 @@ export async function fetchCapabilities(
 ): Promise<BridgeCapabilities> {
   const response = await fetchWithTimeout(httpUrl("/api/capabilities"));
   if (!response.ok) {
-    throw new Error(`capabilities failed: ${response.status}`);
+    throw new BridgeDiagnosticError(capabilityHttpError(response.status));
   }
   let value: unknown;
   try {
@@ -1143,7 +1256,143 @@ export async function probeBridgeBaseUrl(baseUrl: string): Promise<BridgeCapabil
   if (error) {
     throw new Error(error);
   }
+  const snapshot = await fetchWithTimeout(buildHttpUrl(normalized, "/api/snapshot"));
+  if (!snapshot.ok) {
+    throw new BridgeDiagnosticError(capabilityHttpError(snapshot.status));
+  }
+  let snapshotValue: unknown;
+  try {
+    snapshotValue = await snapshot.json();
+  } catch {
+    throw new BridgeDiagnosticError("Bridge snapshot response is malformed");
+  }
+  if (!isRecord(snapshotValue)) {
+    throw new BridgeDiagnosticError("Bridge snapshot response is malformed");
+  }
+
+  await probeBridgeWebSocket(normalized, "/ws/events", "Connection WebSocket upgrade");
+  const terminalId = firstTerminalId(snapshotValue);
+  if (terminalId) {
+    const query = new URLSearchParams({
+      terminal_id: terminalId,
+      takeover: "false",
+      probe: "true",
+    });
+    await probeBridgeWebSocket(
+      normalized,
+      "/ws/terminal",
+      "Connection terminal attach",
+      query,
+      true,
+    );
+  }
   return capabilities;
+}
+
+function firstTerminalId(snapshot: Record<string, unknown>) {
+  if (!Array.isArray(snapshot.panes)) return null;
+  const pane = snapshot.panes.find(
+    (value): value is Record<string, unknown> =>
+      isRecord(value) && typeof value.terminal_id === "string" && value.terminal_id.length > 0,
+  );
+  return pane ? pane.terminal_id as string : null;
+}
+
+function probeBridgeWebSocket(
+  baseUrl: string,
+  path: string,
+  label: string,
+  query?: URLSearchParams,
+  waitForMessage = false,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (typeof WebSocket === "undefined") {
+      reject(new BridgeDiagnosticError(`${label} is unavailable in this browser`));
+      return;
+    }
+    const url = buildWsUrl(baseUrl, path, query);
+    let settled = false;
+    const timer = globalThis.setTimeout(() => finish(new BridgeDiagnosticError(
+      `${label} timed out; check the Herdr address, network permissions, and password`,
+    )), 5000);
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timer);
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(url, bridgeWebSocketProtocols(url));
+    } catch {
+      finish(new BridgeDiagnosticError(`${label} could not be opened; check the Herdr address`));
+      return;
+    }
+    socket.onopen = () => {
+      if (!waitForMessage) {
+        finish();
+        socket.close();
+      }
+    };
+    socket.onmessage = (event) => {
+      if (!waitForMessage) {
+        finish();
+        socket.close();
+        return;
+      }
+      const diagnostic = terminalProbeMessageError(label, event.data);
+      finish(diagnostic ?? undefined);
+      socket.close();
+    };
+    socket.onerror = () => {
+      finish(new BridgeDiagnosticError(
+        `${label} failed; check the Herdr address, network permissions, and password`,
+      ));
+    };
+    socket.onclose = () => {
+      if (!settled) {
+        finish(new BridgeDiagnosticError(`${label} closed before it was ready`));
+      }
+    };
+  });
+}
+
+function terminalProbeMessageError(label: string, data: unknown): Error | null {
+  if (typeof data !== "string") {
+    return new BridgeDiagnosticError(`${label} returned a malformed readiness frame`);
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(data);
+  } catch {
+    return new BridgeDiagnosticError(`${label} returned a malformed readiness frame`);
+  }
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return new BridgeDiagnosticError(`${label} returned an unexpected readiness frame`);
+  }
+  if (value.type === "attach_ready") {
+    return null;
+  }
+  if (value.type === "closed" && typeof value.reason === "string" && value.reason.trim()) {
+    return new BridgeDiagnosticError(`${label} failed: ${value.reason.trim()}`);
+  }
+  return new BridgeDiagnosticError(`${label} returned an unexpected readiness frame (${value.type})`);
+}
+
+function capabilityHttpError(status: number) {
+  if (status === 401) return "Password required or rejected by this Herdr";
+  if (status === 403) {
+    const pageOrigin = globalThis.location?.origin;
+    return pageOrigin
+      ? `This Herdr does not allow the current page. On the target Herdr, add ${pageOrigin} under Network → Allow connections → Advanced network permissions.`
+      : "This Herdr does not allow the current page; check its advanced network permissions";
+  }
+  if (status === 404) return "Herdr is unavailable at this address";
+  return `Herdr connection request failed (${status})`;
 }
 
 export type CapabilityProbeOutcome = {
@@ -1178,11 +1427,13 @@ export function capabilityProbeSuccess(
 
 export function capabilityProbeFailure(error: unknown): CapabilityProbeOutcome {
   const contractFailure = error instanceof CapabilityContractError;
+  const authenticationFailure = error instanceof BridgeAuthenticationError;
+  const diagnosticFailure = error instanceof BridgeDiagnosticError;
   return {
     blocked: true,
     state: contractFailure ? "incompatible" : "offline",
     capabilities: null,
-    error: contractFailure ? error.message : "Bridge unavailable",
+    error: contractFailure || authenticationFailure || diagnosticFailure ? error.message : "Connection unavailable",
     retry: !contractFailure,
   };
 }
@@ -1223,6 +1474,18 @@ export function parseCapabilities(value: unknown): BridgeCapabilities {
     web_compat: typeof value.web_compat === "number" ? value.web_compat : undefined,
     min_android_app_compat:
       typeof value.min_android_app_compat === "number" ? value.min_android_app_compat : undefined,
+    ...(isRecord(value.authentication) &&
+    typeof value.authentication.required === "boolean" &&
+    value.authentication.session === "bearer" &&
+    typeof value.authentication.local_peer_bypass === "boolean"
+      ? {
+          authentication: {
+            required: value.authentication.required as boolean,
+            session: "bearer" as const,
+            local_peer_bypass: value.authentication.local_peer_bypass as boolean,
+          },
+        }
+      : {}),
     agent_activity:
       isRecord(value.agent_activity) && value.agent_activity.version === 1
         ? { version: 1 }
@@ -1270,7 +1533,7 @@ function compatibilityError(capabilities: BridgeCapabilities) {
     typeof capabilities.web_compat === "number" &&
     capabilities.web_compat < APP_MIN_WEB_COMPAT
   ) {
-    return "Bridge is not compatible with this web app";
+    return "This Herdr is not compatible with this web app";
   }
   return null;
 }

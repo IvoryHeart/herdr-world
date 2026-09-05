@@ -48,6 +48,9 @@ const RUNTIME_TIMEOUT_MS = 5_000;
 const START_TIMEOUT_MS = 15_000;
 const STOP_TIMEOUT_MS = 5_000;
 const LOCK_TIMEOUT_MS = 10_000;
+const APPLY_STATUS_FILE = "remote-access-apply.json";
+const MAX_REMOTE_ACCESS_ITEMS = 32;
+const MAX_REMOTE_ACCESS_VALUE_BYTES = 512;
 
 export class PluginError extends Error {
   constructor(message, options = {}) {
@@ -325,13 +328,27 @@ const DEFAULT_CONFIG = {
   allowed_origins: [],
   allowed_connect_origins: [],
   bridge_label: null,
+  remote_access: {
+    enabled: false,
+    accepted_hosts: [],
+    allowed_page_origins: [],
+    allowed_bridge_origins: [],
+    password_hash: null,
+  },
 };
 
 function validHost(value) {
   if (typeof value !== "string" || value.length === 0 || value.length > 253 || /[\s\0\r\n]/.test(value)) return false;
-  if (net.isIP(value)) return true;
-  return !value.includes("/") && !value.includes("\\") &&
-    /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(value);
+  const host = unbracketedHost(value);
+  if (value.trim().startsWith("[") && (net.isIP(host) !== 6 || !value.trim().endsWith("]"))) return false;
+  if (net.isIP(host)) return true;
+  return !host.includes("/") && !host.includes("\\") &&
+    /^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)(?:\.(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?))*$/.test(host);
+}
+
+function unbracketedHost(value) {
+  const trimmed = value.trim();
+  return trimmed.startsWith("[") && trimmed.endsWith("]") ? trimmed.slice(1, -1) : trimmed;
 }
 
 function validSession(value) {
@@ -351,6 +368,15 @@ function validOrigin(value) {
   }
 }
 
+function validPasswordHash(value) {
+  return value === null || (
+    typeof value === "string" &&
+    value.length <= MAX_REMOTE_ACCESS_VALUE_BYTES &&
+    value.startsWith("$argon2") &&
+    !/[\0\r\n]/.test(value)
+  );
+}
+
 function validStringArray(value, validator, label) {
   if (!Array.isArray(value) || value.length > 32 || value.some((item) => !validator(item))) {
     throw new PluginError(`${label} must be an array of valid values`);
@@ -358,11 +384,64 @@ function validStringArray(value, validator, label) {
   return [...new Set(value)];
 }
 
+export function normalizeRemoteAccess(input) {
+  const hasHighLevel = isObject(input.remote_access);
+  const source = hasHighLevel
+    ? input.remote_access
+    : {
+        enabled: !isLoopbackHost(input.host ?? DEFAULT_CONFIG.host),
+        accepted_hosts: input.allowed_hosts ?? [],
+        allowed_page_origins: input.allowed_origins ?? [],
+        allowed_bridge_origins: input.allowed_connect_origins ?? [],
+        password_hash: null,
+      };
+  if (typeof source.enabled !== "boolean") throw new PluginError("remote_access.enabled must be boolean");
+  const accepted_hosts = validStringArray(source.accepted_hosts, validHost, "remote_access.accepted_hosts")
+    .map(unbracketedHost);
+  const allowed_page_origins = validStringArray(source.allowed_page_origins, validOrigin, "remote_access.allowed_page_origins (legacy allowed_origins)");
+  const allowed_bridge_origins = validStringArray(source.allowed_bridge_origins, validOrigin, "remote_access.allowed_bridge_origins");
+  if (!validPasswordHash(source.password_hash ?? null)) throw new PluginError("remote_access.password_hash must be null or a bounded Argon2 hash");
+  if (source.enabled && accepted_hosts.length === 0) {
+    throw new PluginError("enabled remote access requires accepted_hosts; legacy allowed_hosts must not be empty");
+  }
+  return {
+    enabled: source.enabled,
+    accepted_hosts,
+    allowed_page_origins,
+    allowed_bridge_origins,
+    password_hash: source.password_hash ?? null,
+  };
+}
+
+export function configWithRemoteAccess(config, remoteAccess) {
+  const remote_access = normalizeRemoteAccess({ remote_access: remoteAccess });
+  return validateConfig({
+    ...config,
+    remote_access,
+    host: remote_access.enabled
+      ? remoteBindHost(config.host, remote_access)
+      : loopbackBindHost(config.host),
+    allowed_hosts: remote_access.accepted_hosts,
+    allowed_origins: remote_access.allowed_page_origins,
+    allowed_connect_origins: remote_access.allowed_bridge_origins,
+  });
+}
+
 export function validateConfig(input) {
   if (!isObject(input)) throw new PluginError("plugin config must be a JSON object");
   const config = { ...DEFAULT_CONFIG, ...input };
-  config.port_was_explicit = input.port_was_explicit === true;
   if (!validHost(config.host)) throw new PluginError("config host must be a non-empty hostname or IP literal");
+  const remote_access = normalizeRemoteAccess(input);
+  config.remote_access = remote_access;
+  config.host = isObject(input.remote_access)
+    ? (remote_access.enabled
+      ? remoteBindHost(config.host, remote_access)
+      : loopbackBindHost(config.host))
+    : config.host;
+  config.allowed_hosts = remote_access.accepted_hosts;
+  config.allowed_origins = remote_access.allowed_page_origins;
+  config.allowed_connect_origins = remote_access.allowed_bridge_origins;
+  config.port_was_explicit = input.port_was_explicit === true;
   if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
     throw new PluginError("config port must be an integer between 1 and 65535");
   }
@@ -386,11 +465,8 @@ export function validateConfig(input) {
   if (config.bridge_label !== null && (typeof config.bridge_label !== "string" || config.bridge_label.length === 0 || config.bridge_label.length > 80 || /[\0\r\n]/.test(config.bridge_label))) {
     throw new PluginError("config bridge_label must be 1-80 characters without control characters");
   }
-  config.allowed_hosts = validStringArray(config.allowed_hosts, validHost, "config allowed_hosts");
-  config.allowed_origins = validStringArray(config.allowed_origins, validOrigin, "config allowed_origins");
-  config.allowed_connect_origins = validStringArray(config.allowed_connect_origins, validOrigin, "config allowed_connect_origins");
-  if (!isLoopbackHost(config.host) && (config.allowed_hosts.length === 0 || config.allowed_origins.length === 0)) {
-    throw new PluginError("non-loopback binding requires explicit allowed_hosts and allowed_origins configuration");
+  if (!isLoopbackHost(config.host) && config.allowed_hosts.length === 0) {
+    throw new PluginError("non-loopback binding requires explicit allowed_hosts configuration");
   }
   return config;
 }
@@ -404,11 +480,47 @@ export function loadConfig(configDir) {
   } catch (error) {
     throw new PluginError(`could not parse ${configPath}: ${error.message}`);
   }
-  return validateConfig({ ...parsed, port_was_explicit: Object.hasOwn(parsed, "port") });
+  const portWasExplicit = Object.hasOwn(parsed, "port_was_explicit")
+    ? parsed.port_was_explicit === true
+    : Object.hasOwn(parsed, "port");
+  return validateConfig({ ...parsed, port_was_explicit: portWasExplicit });
+}
+
+function persistedConfig(config) {
+  const persisted = { ...config };
+  delete persisted.port_was_explicit;
+  if (config.port_was_explicit !== true) delete persisted.port;
+  return persisted;
 }
 
 function isLoopbackHost(host) {
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const normalized = unbracketedHost(host).toLowerCase();
+  if (normalized === "localhost") return true;
+  const version = net.isIP(normalized);
+  return version === 4 ? normalized.split(".")[0] === "127" : version === 6 && normalized === "::1";
+}
+
+function isIpv6Host(host) {
+  return net.isIP(unbracketedHost(host)) === 6;
+}
+
+function loopbackBindHost(host) {
+  return isIpv6Host(host) ? "::1" : "127.0.0.1";
+}
+
+function remoteBindHost(host, remoteAccess) {
+  const acceptedIpv6 = remoteAccess.accepted_hosts.some((value) => isIpv6Host(value));
+  if (isIpv6Host(host)) {
+    return "::";
+  }
+  if (acceptedIpv6) {
+    // The bridge binds the opposite family as a second listener when this
+    // wildcard is paired with IPv6 accepted hosts. This keeps an existing
+    // IPv4 page reachable while the remote profile gains IPv6 support.
+    return "0.0.0.0";
+  }
+  const normalized = unbracketedHost(host);
+  return !isLoopbackHost(normalized) && normalized !== "0.0.0.0" ? normalized : "0.0.0.0";
 }
 
 function hash(value) {
@@ -599,9 +711,9 @@ export function buildPayload({ root = ROOT, env = process.env, nodePath, npmPath
   }
 }
 
-function runtimeContext(env) {
+function runtimeContext(env, configOverride) {
   const directories = ensureRuntimeDirectories(env);
-  const config = loadConfig(directories.configDir);
+  const config = configOverride ?? loadConfig(directories.configDir);
   const target = resolveTargetIdentity(config, env);
   return { ...directories, config, target };
 }
@@ -699,10 +811,11 @@ function safeCapability(capabilities, expectedVersion) {
   return null;
 }
 
-export async function probeCapabilities(url, { timeoutMs = 750, fetchImpl = globalThis.fetch } = {}) {
+export async function probeCapabilities(url, { timeoutMs = 750, fetchImpl = globalThis.fetch, headers } = {}) {
   try {
     const response = await fetchImpl(`${url}/api/capabilities`, {
       signal: AbortSignal.timeout(timeoutMs),
+      ...(headers ? { headers } : {}),
     });
     if (!response.ok) {
       await response.body?.cancel?.();
@@ -720,11 +833,21 @@ export async function probeCapabilities(url, { timeoutMs = 750, fetchImpl = glob
   }
 }
 
+function probeHeaders(record) {
+  if (typeof record?.host !== "string" || !Number.isInteger(record.port)) return undefined;
+  const args = Array.isArray(record?.bridge_args) ? record.bridge_args : [];
+  const hostIndex = args.indexOf("--allow-host");
+  const acceptedHost = hostIndex >= 0 ? args[hostIndex + 1] : null;
+  const host = acceptedHost || probeHost(record.host);
+  const displayHost = net.isIP(host) === 6 ? `[${host}]` : host;
+  return { host: `${displayHost}:${record.port}` };
+}
+
 export async function waitForReadiness(url, expected, { timeoutMs = START_TIMEOUT_MS, fetchImpl } = {}) {
   const deadline = Date.now() + timeoutMs;
   let lastError = "no response";
   while (Date.now() < deadline) {
-    const result = await probeCapabilities(url, { fetchImpl });
+    const result = await probeCapabilities(url, { fetchImpl, headers: probeHeaders(expected) });
     if (result.ok) {
       const compatibility = safeCapability(result.capabilities, expected.package_version);
       if (!compatibility) return result.capabilities;
@@ -848,15 +971,28 @@ export async function choosePort(config, identity, stateDir, { portFree = portIs
   throw new PluginError(`no free bridge port is available in ${config.port_range[0]}-${config.port_range[1]}`);
 }
 
-function selectedEnvironment(env, target, serviceId) {
+function selectedEnvironment(env, target, serviceId, root, nodePath, supervisor) {
   const result = {
     HERDR_SOCKET_PATH: target.socket_path,
     HERDR_WORLD_SETUP: "never",
     HERDR_WORLD_PLUGIN_SERVICE_ID: serviceId,
     PATH: env.PATH || "/usr/local/bin:/usr/bin:/bin",
   };
-  for (const name of ["HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_CONFIG_PATH", "TMPDIR", "LANG", "LC_ALL"]) {
+  for (const name of [
+    "HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_CONFIG_PATH", "TMPDIR",
+    "LANG", "LC_ALL", "HOSTNAME", "HERDR_PLUGIN_CONFIG_DIR", "HERDR_PLUGIN_STATE_DIR",
+    "HERDR_BIN_PATH",
+    "HERDR_WORLD_LAUNCHCTL", "HERDR_WORLD_SYSTEMCTL",
+  ]) {
     if (env[name]) result[name] = env[name];
+  }
+  result.HERDR_WORLD_CONTROLLER = path.join(root, "scripts", "herdr-world-plugin.mjs");
+  result.HERDR_WORLD_NODE_PATH = nodePath;
+  result.HERDR_WORLD_CONTROLLER_MODE = supervisor.kind;
+  if (supervisor.kind === "systemd-user") {
+    result.HERDR_WORLD_SYSTEMD_RUN = resolveExecutable("systemd-run", { env });
+  } else if (supervisor.kind === "launchd") {
+    result.HERDR_WORLD_LAUNCHCTL = supervisor.command;
   }
   return result;
 }
@@ -869,6 +1005,7 @@ function bridgeArguments(config, target, port) {
   for (const host of config.allowed_hosts) args.push("--allow-host", host);
   for (const origin of config.allowed_origins) args.push("--allow-origin", origin);
   for (const origin of config.allowed_connect_origins) args.push("--allow-connect-origin", origin);
+  if (config.remote_access.password_hash) args.push("--password-hash", config.remote_access.password_hash);
   if (config.bridge_label) args.push("--bridge-label", config.bridge_label);
   return args;
 }
@@ -888,6 +1025,7 @@ function configSignature(config) {
     allowed_hosts: config.allowed_hosts,
     allowed_origins: config.allowed_origins,
     allowed_connect_origins: config.allowed_connect_origins,
+    password_hash: config.remote_access.password_hash,
     bridge_label: config.bridge_label,
   }));
 }
@@ -897,6 +1035,18 @@ function pathForSupervisor(stateDir, record, suffix) {
     return path.join(stateDir, "supervisors", record.service_name);
   }
   return path.join(stateDir, "supervisors", `${hash(record.target_identity).slice(0, 32)}.${suffix}`);
+}
+
+function fallbackLeasePath(stateDir, identity) {
+  return path.join(stateDir, "supervisors", `${hash(identity).slice(0, 32)}.fallback-lease`);
+}
+
+function writeFallbackLease(stateDir, record) {
+  atomicWrite(fallbackLeasePath(stateDir, record.target_identity), `${JSON.stringify(record, null, 2)}\n`);
+}
+
+function removeFallbackLease(stateDir, identity) {
+  rmSync(fallbackLeasePath(stateDir, identity), { force: true });
 }
 
 function systemdEscape(value) {
@@ -1046,11 +1196,12 @@ function unrecordedService(identity, supervisor) {
   return {
     target_identity: identity,
     supervisor: supervisor.kind,
+    controller_mode: supervisor.kind,
     service_name: serviceName(identity, supervisor.kind),
   };
 }
 
-async function recoverUnrecordedService(identity, stateDir, supervisor) {
+async function recoverUnrecordedService(identity, stateDir, supervisor, platform = process.platform) {
   if (supervisor.kind === "launchd") {
     const record = unrecordedService(identity, supervisor);
     if (!launchdServicePresent(record, supervisor.command)) return false;
@@ -1104,6 +1255,31 @@ async function recoverUnrecordedService(identity, stateDir, supervisor) {
     return true;
   }
 
+  if (supervisor.kind === "fallback") {
+    const leasePath = fallbackLeasePath(stateDir, identity);
+    const record = readRecord(leasePath);
+    if (!record) return false;
+    if (
+      record.target_identity !== identity ||
+      record.supervisor !== "fallback" ||
+      record.service_name !== serviceName(identity, "fallback")
+    ) {
+      throw new PluginError("fallback service ownership is stale; refusing to signal an unrelated process");
+    }
+    const state = supervisorStatus(record, supervisor, platform);
+    if (!state.active) {
+      removeFallbackLease(stateDir, identity);
+      return false;
+    }
+    if (!state.owned) {
+      throw new PluginError("fallback service ownership is stale; refusing to signal an unrelated process");
+    }
+    stopProcessGroup(record.pid);
+    await waitForStopped(record, supervisor, platform);
+    removeFallbackLease(stateDir, identity);
+    return true;
+  }
+
   return false;
 }
 
@@ -1135,6 +1311,7 @@ function createRecord({ identity, target, config, payload, node, port, superviso
     payload_entrypoint: payload.entrypoint,
     node_path: node.path,
     supervisor: supervisor.kind,
+    controller_mode: supervisor.kind,
     service_name: serviceName(identity, supervisor.kind),
     pid: 0,
     application_version: payload.packageJson.version,
@@ -1145,7 +1322,10 @@ function createRecord({ identity, target, config, payload, node, port, superviso
     root: path.resolve(root),
     updated_at: new Date().toISOString(),
   };
-  return { record, environment: selectedEnvironment(env, target, record.service_name) };
+  return {
+    record,
+    environment: selectedEnvironment(env, target, record.service_name, root, node.path, supervisor),
+  };
 }
 
 function spawnFallback(record, environment, stateDir) {
@@ -1159,6 +1339,12 @@ function spawnFallback(record, environment, stateDir) {
       stdio: ["ignore", fd, fd],
     });
     if (!Number.isInteger(child.pid)) throw new PluginError("fallback supervisor did not return a process id");
+    try {
+      writeFallbackLease(stateDir, { ...record, pid: child.pid });
+    } catch (error) {
+      try { process.kill(-child.pid, "SIGTERM"); } catch {}
+      throw error;
+    }
     child.unref();
     return child.pid;
   } finally {
@@ -1359,6 +1545,9 @@ async function stopRecord(record, env, platform = process.platform) {
     await unloadLaunchd(record, supervisor.command);
   }
   if (record.supervisor !== "launchd") await waitForStopped(record, supervisor, platform);
+  if (record.supervisor === "fallback" && env.HERDR_PLUGIN_STATE_DIR) {
+    removeFallbackLease(env.HERDR_PLUGIN_STATE_DIR, record.target_identity);
+  }
   if (record.supervisor === "systemd-user") {
     try {
       runChecked(supervisor.command, ["--user", "disable", record.service_name]);
@@ -1376,6 +1565,7 @@ function recordCompatible(record, manifestVersion, payload, config, target, node
     record.payload_root === payload.packageRoot &&
     record.node_path === node.path &&
     record.host === config.host &&
+    record.controller_mode === record.supervisor &&
     record.socket_path === target.socket_path &&
     record.session_name === target.session_name &&
     (config.port_was_explicit !== true || record.port === config.port) &&
@@ -1385,7 +1575,7 @@ function recordCompatible(record, manifestVersion, payload, config, target, node
 
 async function currentRecordReadiness(record) {
   if (!record?.url) return { ready: false, error: "service record has no URL" };
-  const result = await probeCapabilities(probeUrl(record.host, record.port));
+  const result = await probeCapabilities(probeUrl(record.host, record.port), { headers: probeHeaders(record) });
   if (!result.ok) return { ready: false, error: result.error };
   const error = safeCapability(result.capabilities, record.package_version);
   return error ? { ready: false, error } : { ready: true, capabilities: result.capabilities };
@@ -1410,11 +1600,11 @@ function printService(record, capabilities, prefix = "Herdr World") {
   console.log(`  access: ${displayPosture(record.host)}`);
 }
 
-function prepareStart({ root = ROOT, env = process.env, platform = process.platform, arch = process.arch, glibcVersion } = {}) {
+function prepareStart({ root = ROOT, env = process.env, platform = process.platform, arch = process.arch, glibcVersion, configOverride } = {}) {
   const manifestVersion = readManifestVersion(root);
   const targetPlatform = selectTarget({ platform, arch, glibcVersion });
   const node = checkNode(resolveNode({ env }));
-  const context = runtimeContext(env);
+  const context = runtimeContext(env, configOverride);
   const targetStatus = resolveHerdrTarget(context.config, env);
   const target = { ...context.target, socket_path: targetStatus.socket_path };
   const payload = requirePayload(root, manifestVersion, targetPlatform.target);
@@ -1439,7 +1629,12 @@ async function startPrepared(plan, { lockHeld = false } = {}) {
       if (ownership.state.active) await stopRecord(previous, env, platform);
       removeRecord(recordPath);
     }
-    const recovered = await recoverUnrecordedService(context.target.identity, context.stateDir, supervisor);
+    const recovered = await recoverUnrecordedService(
+      context.target.identity,
+      context.stateDir,
+      supervisor,
+      platform,
+    );
     if (recovered) {
       console.log("Recovered an unrecorded Herdr World service; applying the current configuration.");
     }
@@ -1527,7 +1722,12 @@ async function stopAction({ root = ROOT, env = process.env, platform = process.p
   const record = readRecord(recordPath);
   if (!record) {
     const supervisor = selectSupervisor(platform, env);
-    const recovered = await recoverUnrecordedService(context.target.identity, context.stateDir, supervisor);
+    const recovered = await recoverUnrecordedService(
+      context.target.identity,
+      context.stateDir,
+      supervisor,
+      platform,
+    );
     if (recovered) {
       console.log(`Stopped the unrecorded Herdr World service for ${displayTarget(context.target)}.`);
       return null;
@@ -1700,8 +1900,156 @@ async function doctorAction({ root = ROOT, env = process.env, platform = process
   return checks;
 }
 
+function applyStatusPath(stateDir) {
+  return path.join(stateDir, APPLY_STATUS_FILE);
+}
+
+function writeApplyStatus(stateDir, applyId, state, reason = null, restored = null) {
+  const boundedReason = typeof reason === "string" && reason.trim()
+    ? reason
+      .replace(/[\r\n]+/g, " ")
+      .replace(/(^|[\s("'=])((?:\/|[A-Za-z]:[\\/])[^\s,;)]+)/g, "$1[path]")
+      .trim()
+      .slice(0, 240)
+    : null;
+  atomicWrite(applyStatusPath(stateDir), `${JSON.stringify({
+    id: applyId,
+    state,
+    reason: boundedReason,
+    restored,
+    updated_at: new Date().toISOString(),
+  }, null, 2)}\n`);
+}
+
+function restoreConfig(configPath, previousText) {
+  if (previousText === null) {
+    rmSync(configPath, { force: true });
+  } else {
+    atomicWrite(configPath, previousText);
+  }
+}
+
+function readRemoteAccessRequest(draftPath) {
+  if (typeof draftPath !== "string" || !path.isAbsolute(draftPath)) {
+    throw new PluginError("remote access draft path must be absolute");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(draftPath, "utf8"));
+  } catch (error) {
+    throw new PluginError(`could not read remote access draft: ${error.message}`);
+  }
+  if (!isObject(parsed) || !isObject(parsed.remote_access) ||
+      (parsed.apply_id !== undefined &&
+        (typeof parsed.apply_id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(parsed.apply_id)))) {
+    throw new PluginError("remote access draft is invalid");
+  }
+  return {
+    applyId: parsed.apply_id ?? null,
+    remoteAccess: normalizeRemoteAccess(parsed),
+  };
+}
+
+export async function applyRemoteAccessAction({
+  draftPath,
+  root = ROOT,
+  env = process.env,
+  platform = process.platform,
+  arch = process.arch,
+  glibcVersion,
+} = {}) {
+  const handoffGraceMs = Number(env.HERDR_WORLD_APPLY_GRACE_MS ?? 0);
+  const lockContext = runtimeContext(env);
+  let applyId = null;
+  try {
+    applyId = readRemoteAccessRequest(draftPath).applyId;
+  } catch {
+    // The locked apply path below reports the bounded validation failure.
+  }
+
+  const execute = async () => {
+    let context;
+    let configPath;
+    let previousText = null;
+    let previousConfig;
+    let previousActive = false;
+    let baselineCaptured = false;
+
+    writeApplyStatus(lockContext.stateDir, applyId, "applying", "settings saved; reconciling the managed bridge", null);
+    try {
+      if (Number.isFinite(handoffGraceMs) && handoffGraceMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(handoffGraceMs, 1000)));
+      }
+      context = runtimeContext(env);
+      if (context.target.identity !== lockContext.target.identity) {
+        throw new PluginError("selected Herdr target changed while remote access settings were waiting to apply");
+      }
+      configPath = path.join(context.configDir, CONFIG_FILE);
+      previousText = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
+      previousConfig = context.config;
+      baselineCaptured = true;
+      const request = readRemoteAccessRequest(draftPath);
+      applyId = request.applyId;
+      const remoteAccess = request.remoteAccess;
+      const nextConfig = configWithRemoteAccess(previousConfig, remoteAccess);
+      const recordPath = targetRecordPath(context.stateDir, context.target.identity);
+      const record = readRecord(recordPath);
+      if (record) {
+        const ownership = assertRecordOwnership(record, env, platform);
+        previousActive = ownership.state.active;
+      } else {
+        const supervisor = selectSupervisor(platform, env);
+        previousActive = await recoverUnrecordedService(
+          context.target.identity,
+          context.stateDir,
+          supervisor,
+          platform,
+        );
+        if (supervisor.kind === "fallback" && !previousActive) {
+          throw new PluginError("fallback bridge service ownership could not be verified because its runtime record is missing; run the plugin stop and start actions before applying settings");
+        }
+      }
+      atomicWrite(configPath, `${JSON.stringify(persistedConfig(nextConfig), null, 2)}\n`);
+      if (previousActive) {
+        const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: nextConfig });
+        await startPrepared(plan, { lockHeld: true });
+        writeApplyStatus(context.stateDir, applyId, "ready", "bridge ready after applying settings", false);
+      } else {
+        writeApplyStatus(context.stateDir, applyId, "ready", "settings saved; the managed bridge was not running", false);
+      }
+      return nextConfig;
+    } catch (error) {
+      let restored = false;
+      if (baselineCaptured) {
+        try {
+          restoreConfig(configPath, previousText);
+          if (previousActive) {
+            const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: previousConfig });
+            await startPrepared(plan, { lockHeld: true });
+          }
+          restored = true;
+        } catch (restoreError) {
+          writeApplyStatus(
+            lockContext.stateDir,
+            applyId,
+            "failed",
+            `settings apply failed and recovery could not be verified: ${restoreError.message}`,
+            false,
+          );
+          throw error;
+        }
+      }
+      writeApplyStatus(lockContext.stateDir, applyId, "failed", error instanceof Error ? error.message : String(error), restored);
+      throw error;
+    } finally {
+      rmSync(draftPath, { force: true });
+    }
+  };
+  return withTargetLock(lockContext.stateDir, lockContext.target.identity, execute);
+}
+
 export async function runAction(action, options = {}) {
-  if (![...ACTIONS, STARTUP_COMMAND].includes(action)) throw new PluginError(`unknown action ${action}; expected ${[...ACTIONS, STARTUP_COMMAND].join(" | ")}`);
+  if (![...ACTIONS, STARTUP_COMMAND, "apply"].includes(action)) throw new PluginError(`unknown action ${action}; expected ${[...ACTIONS, STARTUP_COMMAND].join(" | ")}`);
   if (action === "build") return buildPayload(options);
   if (action === "start") return startAction(options);
   if (action === STARTUP_COMMAND) return startupAction(options);
@@ -1709,16 +2057,17 @@ export async function runAction(action, options = {}) {
   if (action === "restart") return restartAction(options);
   if (action === "status") return statusAction(options);
   if (action === "open") return openAction(options);
+  if (action === "apply") return applyRemoteAccessAction(options);
   return doctorAction(options);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
   const [action, ...extra] = process.argv.slice(2);
-  if (!action || extra.length > 0 || ![...ACTIONS, STARTUP_COMMAND].includes(action)) {
+  if (!action || (![...ACTIONS, STARTUP_COMMAND].includes(action) && action !== "apply") || (action !== "apply" && extra.length > 0) || (action === "apply" && extra.length !== 1)) {
     console.error(`Usage: herdr-world-plugin.sh ${[...ACTIONS, STARTUP_COMMAND].join(" | ")}`);
     process.exit(2);
   }
-  runAction(action).catch((error) => {
+  runAction(action, action === "apply" ? { draftPath: extra[0] } : {}).catch((error) => {
     console.error(`Herdr World plugin ${action} failed: ${error.message}`);
     process.exitCode = 1;
   });

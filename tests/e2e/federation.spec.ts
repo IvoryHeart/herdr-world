@@ -83,7 +83,7 @@ test("offline, incompatible, and malformed profiles stay isolated", async ({
   await expect(page.getByRole("button", { name: "New tab" })).toHaveCount(0);
   await expect(page.locator(".xterm-helper-textarea")).toHaveCount(0);
   await expect(
-    page.getByText("Bridge disconnected", { exact: true }),
+    page.getByText("Connection disconnected", { exact: true }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "localhost, compatible" }).click();

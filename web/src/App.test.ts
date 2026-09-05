@@ -155,10 +155,10 @@ describe("App connection guards", () => {
 describe("App multi-bridge helpers", () => {
   it("reports actionable launcher unavailability and load errors", () => {
     expect(launcherEmptyMessage(false, false, null)).toBe(
-      "Bridge is not ready. Close this dialog and reconnect.",
+      "Connection is not ready. Close this dialog and reconnect.",
     );
     expect(launcherEmptyMessage(true, false, null)).toBe(
-      "Launching is unavailable on this bridge. Update the bridge and reconnect.",
+      "Launching is unavailable on this Herdr. Update it and reconnect.",
     );
     expect(
       launcherEmptyMessage(true, true, {
