@@ -122,6 +122,18 @@ export function RemoteAccessSettings({
   };
 
   const invalidEnabledDraft = draft.enabled && draft.accepted_hosts.length === 0;
+  const passwordConfigured = status.remote_access.password_configured;
+  const passwordState = passwordAction === "remove"
+    ? "Removal pending"
+    : passwordAction === "set"
+      ? passwordConfigured ? "Change pending" : "Set pending"
+      : passwordConfigured ? "On" : "Off";
+  const applyActionLabel = passwordAction === "remove"
+    ? "Remove password & apply"
+    : passwordAction === "set"
+      ? passwordConfigured ? "Change password & apply" : "Set password & apply"
+      : "Apply changes";
+  const invalidPassword = passwordAction === "set" && !password;
 
   return (
     <div className="settings-section remote-access-settings">
@@ -186,54 +198,115 @@ export function RemoteAccessSettings({
       ) : null}
 
       {draft.enabled ? (
-        <div className="remote-access-subsection">
-          <strong>Authentication</strong>
-          <span className="backend-note">
-            {status.remote_access.password_configured ? "Password protected" : "No password"}
-          </span>
+        <div className="remote-access-subsection remote-access-authentication">
+          <div className="remote-access-password-heading">
+            <strong>Password protection</strong>
+            <span
+              className="remote-access-password-state"
+              data-state={passwordState === "On" ? "on" : passwordState === "Off" ? "off" : "pending"}
+            >
+              {passwordState}
+            </span>
+          </div>
+
+          {passwordConfigured && passwordAction === "keep" ? (
+            <>
+              <p className="settings-help">
+                A password is currently set. Connections must enter it, but it cannot be displayed
+                here.
+              </p>
+              <div className="remote-access-password-actions">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    setPassword("");
+                    setPasswordAction("set");
+                    setMessage(null);
+                  }}
+                >
+                  Change password
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => {
+                    setPassword("");
+                    setPasswordAction("remove");
+                    setMessage(null);
+                  }}
+                >
+                  Remove password
+                </button>
+              </div>
+            </>
+          ) : null}
+
+          {passwordAction === "remove" ? (
+            <div className="remote-access-password-pending" role="status">
+              <div>
+                <strong>Password will be removed</strong>
+                <span>Anyone who can reach this address will be able to connect after you apply.</span>
+              </div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setPassword("");
+                  setPasswordAction("keep");
+                  setMessage(null);
+                }}
+              >
+                Keep password
+              </button>
+            </div>
+          ) : null}
+
+          {passwordAction === "set" || !passwordConfigured ? (
+            <div className="remote-access-password-editor">
+              <label className="field-label">
+                <span>{passwordConfigured ? "New password" : "Set a password"}</span>
+                <input
+                  className="field"
+                  type="password"
+                  aria-label={passwordConfigured
+                    ? "Change connection password"
+                    : "Set connection password"}
+                  placeholder="Enter a new password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    setPasswordAction(event.target.value ? "set" : passwordConfigured ? "set" : "keep");
+                  }}
+                />
+              </label>
+              <span className="backend-note">
+                {passwordConfigured
+                  ? "The current password remains active until you apply this change."
+                  : "Without a password, anyone who can reach this address can connect."}
+              </span>
+              {passwordConfigured ? (
+                <div className="remote-access-password-actions">
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => {
+                      setPassword("");
+                      setPasswordAction("keep");
+                    }}
+                  >
+                    Cancel password change
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <p className="backend-warning">
             Direct connections are not encrypted. Use only a trusted LAN or VPN; a password
             controls access but does not hide network traffic.
           </p>
-          {!status.remote_access.password_configured ? (
-            <p className="backend-warning">
-              Anyone who can reach this address can connect until you set a password.
-            </p>
-          ) : null}
-          <div className="remote-access-password-row">
-            <input
-              className="field"
-              type="password"
-              aria-label={status.remote_access.password_configured
-                ? "Change connection password"
-                : "Set connection password"}
-              placeholder={status.remote_access.password_configured ? "New password" : "Set password"}
-              autoComplete="new-password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                setPasswordAction("set");
-              }}
-            />
-            {status.remote_access.password_configured ? (
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={() => {
-                  setPassword("");
-                  setPasswordAction("remove");
-                  setMessage("Password protection will be removed when you apply changes.");
-                }}
-              >
-                Remove
-              </button>
-            ) : null}
-          </div>
-          {status.remote_access.password_configured ? (
-            <span className="backend-note">
-              Enter a new password to change it, or remove password protection.
-            </span>
-          ) : null}
         </div>
       ) : null}
 
@@ -342,10 +415,10 @@ export function RemoteAccessSettings({
         <button
           type="button"
           className="btn btn-primary"
-          disabled={busy || !status.mutation_allowed || invalidEnabledDraft}
+          disabled={busy || !status.mutation_allowed || invalidEnabledDraft || invalidPassword}
           onClick={() => void save()}
         >
-          {busy ? "Applying…" : "Apply changes"}
+          {busy ? "Applying…" : applyActionLabel}
         </button>
       </div>
     </div>

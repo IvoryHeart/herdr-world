@@ -4788,6 +4788,66 @@ button {
   font-weight: 600;
 }
 
+.remote-access-password-heading,
+.remote-access-password-actions,
+.remote-access-password-pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.remote-access-password-heading {
+  justify-content: space-between;
+}
+
+.remote-access-password-heading strong,
+.remote-access-password-pending strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.remote-access-password-state {
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--overlay1);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.remote-access-password-state[data-state="on"] {
+  border-color: color-mix(in srgb, var(--green) 42%, var(--line));
+  color: var(--green);
+}
+
+.remote-access-password-state[data-state="pending"] {
+  border-color: color-mix(in srgb, var(--yellow) 42%, var(--line));
+  color: var(--yellow);
+}
+
+.remote-access-password-actions {
+  flex-wrap: wrap;
+}
+
+.remote-access-password-editor {
+  display: grid;
+  gap: 7px;
+}
+
+.remote-access-password-pending {
+  justify-content: space-between;
+  padding: 9px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 42%, var(--line));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--yellow) 7%, transparent);
+}
+
+.remote-access-password-pending > div {
+  display: grid;
+  gap: 2px;
+}
+
 .remote-access-chip {
   display: flex;
   min-width: 0;

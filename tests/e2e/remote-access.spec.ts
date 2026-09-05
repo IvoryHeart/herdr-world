@@ -26,13 +26,26 @@ test("allows connections with advanced inbound permissions separate from destina
   await expect(page.getByText("Herdrs this page may connect to", { exact: true })).toHaveCount(0);
   await Promise.all([
     page.waitForEvent("load"),
-    page.getByRole("button", { name: "Apply changes", exact: true }).click(),
+    page.getByRole("button", { name: "Set password & apply", exact: true }).click(),
   ]);
 
   await openSettings(page);
   await page.getByRole("tab", { name: "Allow connections" }).click();
-  await expect(page.getByText("Password protected", { exact: true })).toBeVisible();
+  const authentication = page.locator(".remote-access-authentication");
+  await expect(authentication.getByText("On", { exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toContainText(/Network ready/iu);
+
+  await authentication.getByRole("button", { name: "Remove password", exact: true }).click();
+  await expect(authentication.getByText("Password will be removed", { exact: true })).toBeVisible();
+  await expect(authentication.getByRole("button", { name: "Remove password", exact: true })).toHaveCount(0);
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.getByRole("button", { name: "Remove password & apply", exact: true }).click(),
+  ]);
+
+  await openSettings(page);
+  await page.getByRole("tab", { name: "Allow connections" }).click();
+  await expect(page.locator(".remote-access-authentication").getByText("Off", { exact: true })).toBeVisible();
 });
 
 test("adds and enables a connection from its address", async ({ page }) => {
@@ -42,6 +55,7 @@ test("adds and enables a connection from its address", async ({ page }) => {
   await page.getByRole("button", { name: "Delete connection" }).click();
   await page.getByRole("button", { name: /Add connection/ }).click();
   await page.getByLabel("Herdr address").fill("http://127.0.0.1:4174");
+  await expect(page.getByLabel("Connection name")).toHaveValue("127.0.0.1");
   await Promise.all([
     page.waitForEvent("load"),
     page.getByRole("button", { name: "Connect", exact: true }).click(),

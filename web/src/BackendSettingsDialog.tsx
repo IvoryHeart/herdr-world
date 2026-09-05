@@ -528,26 +528,42 @@ export function BackendSettingsDialog({
                                 autoComplete="off"
                                 spellCheck={false}
                                 onBlur={validateDuplicate}
+                                onChange={(event) => {
+                                  const baseUrl = event.target.value;
+                                  setForm((current) => {
+                                    const previousSuggestion = suggestedConnectionName(current.baseUrl);
+                                    const nameIsAutomatic = !current.name || current.name === previousSuggestion;
+                                    return {
+                                      ...current,
+                                      baseUrl,
+                                      name: nameIsAutomatic
+                                        ? suggestedConnectionName(baseUrl)
+                                        : current.name,
+                                    };
+                                  });
+                                }}
+                              />
+                            </label>
+                            <label className="field-label">
+                              <span>Connection name</span>
+                              <input
+                                className="field"
+                                value={form.name}
+                                placeholder="Ubuntu VM"
+                                autoComplete="off"
                                 onChange={(event) =>
-                                  setForm((current) => ({ ...current, baseUrl: event.target.value }))
+                                  setForm((current) => ({ ...current, name: event.target.value }))
                                 }
                               />
                             </label>
+                            {selectionMode === "new" ? (
+                              <span className="backend-note">
+                                Suggested from the address; change it to any name you recognize.
+                              </span>
+                            ) : null}
                             <details className="remote-access-advanced connection-customize">
-                              <summary>Customize connection</summary>
+                              <summary>Appearance</summary>
                               <div className="remote-access-advanced-content connection-customize-content">
-                                <label className="field-label">
-                                  <span>Name</span>
-                                  <input
-                                    className="field"
-                                    value={form.name}
-                                    placeholder="Ubuntu VM"
-                                    autoComplete="off"
-                                    onChange={(event) =>
-                                      setForm((current) => ({ ...current, name: event.target.value }))
-                                    }
-                                  />
-                                </label>
                                 <label className="field-label">
                                   <span>Color</span>
                                   <BackendColorControl
@@ -1511,6 +1527,19 @@ function newBackendForm(backends: readonly BridgeBackendProfile[]): FormState {
     baseUrl: "",
     color: suggestBackendColor(backends),
   };
+}
+
+export function suggestedConnectionName(input: string) {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//iu.test(trimmed)
+      ? trimmed
+      : `http://${trimmed}`);
+    return url.hostname.replace(/^\[|\]$/g, "");
+  } catch {
+    return "";
+  }
 }
 
 function backendFormFromProfile(backend: BridgeBackendProfile): FormState {

@@ -56,6 +56,7 @@ describe("RemoteAccessSettings", () => {
       'input[aria-label="Set connection password"]',
     );
     expect(password).not.toBeNull();
+    expect(container.textContent).toContain("Off");
     await act(async () => {
       if (password) {
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -64,7 +65,10 @@ describe("RemoteAccessSettings", () => {
         password.dispatchEvent(new Event("change", { bubbles: true }));
       }
     });
-    const apply = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Apply"));
+    expect(container.textContent).toContain("Set pending");
+    const apply = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Set password & apply",
+    );
     await act(async () => {
       apply?.click();
       await Promise.resolve();
@@ -99,6 +103,12 @@ describe("RemoteAccessSettings", () => {
       <RemoteAccessSettings httpUrl={(path) => path} reloadPage={() => {}} />,
     );
     await act(async () => Promise.resolve());
+    const change = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Change password",
+    );
+    await act(async () => change?.click());
+    expect(container.textContent).toContain("Change pending");
+    expect(container.textContent).toContain("current password remains active");
     const password = container.querySelector<HTMLInputElement>('input[aria-label="Change connection password"]');
     expect(password).not.toBeNull();
     await act(async () => {
@@ -138,9 +148,19 @@ describe("RemoteAccessSettings", () => {
       <RemoteAccessSettings httpUrl={(path) => path} reloadPage={() => {}} />,
     );
     await act(async () => Promise.resolve());
-    await act(async () => container.querySelector<HTMLButtonElement>('button.btn-danger')?.click());
+    const remove = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Remove password",
+    );
+    await act(async () => remove?.click());
+    expect(container.textContent).toContain("Password will be removed");
+    expect(Array.from(container.querySelectorAll("button")).some(
+      (button) => button.textContent === "Remove password",
+    )).toBe(false);
+    const apply = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Remove password & apply",
+    );
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[type="button"].btn-primary')?.click();
+      apply?.click();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -148,6 +168,27 @@ describe("RemoteAccessSettings", () => {
       password_action: "remove",
     });
     expect(JSON.parse(String(requests[0]?.body))).not.toHaveProperty("password");
+  });
+
+  it("can cancel a staged password removal without applying it", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(remoteAccessStatus(true)), { status: 200 }),
+    );
+    const { container } = await render(
+      <RemoteAccessSettings httpUrl={(path) => path} reloadPage={() => {}} />,
+    );
+    await act(async () => Promise.resolve());
+    const button = (label: string) => Array.from(container.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === label,
+    );
+
+    await act(async () => button("Remove password")?.click());
+    expect(button("Keep password")).toBeDefined();
+    await act(async () => button("Keep password")?.click());
+
+    expect(button("Remove password")).toBeDefined();
+    expect(container.textContent).toContain("A password is currently set");
+    expect(container.textContent).not.toContain("Password will be removed");
   });
 
   it("allows the directly served page without requiring extra page origins", async () => {
