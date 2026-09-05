@@ -1215,10 +1215,47 @@ function unrecordedService(identity, supervisor) {
   };
 }
 
-async function recoverUnrecordedService(identity, stateDir, supervisor, platform = process.platform) {
+function validServicePort(value) {
+  const port = Number(value);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
+function portFromBridgeArguments(args) {
+  if (!Array.isArray(args)) return null;
+  const ports = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--port") ports.push(validServicePort(args[index + 1]));
+  }
+  return ports.length === 1 ? ports[0] : null;
+}
+
+function portFromSupervisorDefinition(definition, kind) {
+  const pattern = kind === "launchd"
+    ? /<string>--port<\/string>\s*<string>(\d+)<\/string>/g
+    : /"--port"\s+"(\d+)"/g;
+  const ports = [...definition.matchAll(pattern)].map((match) => validServicePort(match[1]));
+  return ports.length === 1 ? ports[0] : null;
+}
+
+function requireRecoveredPort(port, serviceName, required) {
+  if (required && port === null) {
+    throw new PluginError(
+      `could not establish the active port for unrecorded service ${serviceName}; refusing to stop it during settings apply`,
+    );
+  }
+  return port;
+}
+
+async function recoverUnrecordedService(
+  identity,
+  stateDir,
+  supervisor,
+  platform = process.platform,
+  { requirePort = false } = {},
+) {
   if (supervisor.kind === "launchd") {
     const record = unrecordedService(identity, supervisor);
-    if (!launchdServicePresent(record, supervisor.command)) return false;
+    if (!launchdServicePresent(record, supervisor.command)) return null;
 
     const expectedPath = pathForSupervisor(stateDir, record, "plist");
     const actualPath = launchdServicePath(record, supervisor.command);
@@ -1227,8 +1264,15 @@ async function recoverUnrecordedService(identity, stateDir, supervisor, platform
         `launchd service ${record.service_name} is already loaded from an unexpected definition; refusing to stop an unrelated service`,
       );
     }
+    let definition = "";
+    try { definition = readFileSync(expectedPath, "utf8"); } catch {}
+    const port = requireRecoveredPort(
+      portFromSupervisorDefinition(definition, supervisor.kind),
+      record.service_name,
+      requirePort,
+    );
     await unloadLaunchd(record, supervisor.command);
-    return true;
+    return { port };
   }
 
   if (supervisor.kind === "systemd-user") {
@@ -1241,7 +1285,7 @@ async function recoverUnrecordedService(identity, stateDir, supervisor, platform
     if (result.error) {
       throw new PluginError(`systemctl --user show ${record.service_name} failed: ${result.error.message}`);
     }
-    if (result.status !== 0 || String(result.stdout ?? "").trim() !== "loaded") return false;
+    if (result.status !== 0 || String(result.stdout ?? "").trim() !== "loaded") return null;
 
     const fragment = commandResult(
       supervisor.command,
@@ -1260,19 +1304,26 @@ async function recoverUnrecordedService(identity, stateDir, supervisor, platform
         `systemd service ${record.service_name} is already loaded from an unexpected definition; refusing to stop an unrelated service`,
       );
     }
+    let definition = "";
+    try { definition = readFileSync(expectedPath, "utf8"); } catch {}
+    const port = requireRecoveredPort(
+      portFromSupervisorDefinition(definition, supervisor.kind),
+      record.service_name,
+      requirePort,
+    );
     runChecked(supervisor.command, ["--user", "stop", record.service_name]);
     try {
       runChecked(supervisor.command, ["--user", "disable", record.service_name]);
     } catch {
       // A stopped unit may already be disabled by the user supervisor.
     }
-    return true;
+    return { port };
   }
 
   if (supervisor.kind === "fallback") {
     const leasePath = fallbackLeasePath(stateDir, identity);
     const record = readRecord(leasePath);
-    if (!record) return false;
+    if (!record) return null;
     if (
       record.target_identity !== identity ||
       record.supervisor !== "fallback" ||
@@ -1283,18 +1334,24 @@ async function recoverUnrecordedService(identity, stateDir, supervisor, platform
     const state = supervisorStatus(record, supervisor, platform);
     if (!state.active) {
       removeFallbackLease(stateDir, identity);
-      return false;
+      return null;
     }
     if (!state.owned) {
       throw new PluginError("fallback service ownership is stale; refusing to signal an unrelated process");
     }
+    const argumentPort = portFromBridgeArguments(record.bridge_args);
+    const port = requireRecoveredPort(
+      validServicePort(record.port) === argumentPort ? argumentPort : null,
+      record.service_name,
+      requirePort,
+    );
     stopProcessGroup(record.pid);
     await waitForStopped(record, supervisor, platform);
     removeFallbackLease(stateDir, identity);
-    return true;
+    return { port };
   }
 
-  return false;
+  return null;
 }
 
 export function selectSupervisor(platform, env) {
@@ -2017,12 +2074,15 @@ export async function applyRemoteAccessAction({
         previousPort = previousActive ? record.port : null;
       } else {
         const supervisor = selectSupervisor(platform, env);
-        previousActive = await recoverUnrecordedService(
+        const recovered = await recoverUnrecordedService(
           context.target.identity,
           context.stateDir,
           supervisor,
           platform,
+          { requirePort: true },
         );
+        previousActive = Boolean(recovered);
+        previousPort = recovered?.port ?? null;
         if (supervisor.kind === "fallback" && !previousActive) {
           throw new PluginError("fallback bridge service ownership could not be verified because its runtime record is missing; run the plugin stop and start actions before applying settings");
         }
