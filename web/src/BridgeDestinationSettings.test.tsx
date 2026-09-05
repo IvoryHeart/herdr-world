@@ -21,16 +21,18 @@ describe("BridgeDestinationSettings", () => {
     const requests: RequestInit[] = [];
     const reloadPage = vi.fn();
     let allowedBridgeOrigins: string[] = [];
+    let applyId: string | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") {
         requests.push(init);
         const body = JSON.parse(String(init.body));
         allowedBridgeOrigins = body.remote_access.allowed_bridge_origins;
-        return new Response(JSON.stringify({ state: "applying", reason: "restarting" }), {
+        applyId = "apply-destinations";
+        return new Response(JSON.stringify({ id: applyId, state: "applying", reason: "restarting" }), {
           status: 202,
         });
       }
-      return new Response(JSON.stringify(remoteAccessStatus(allowedBridgeOrigins)), { status: 200 });
+      return new Response(JSON.stringify(remoteAccessStatus(allowedBridgeOrigins, applyId)), { status: 200 });
     });
 
     const { container } = await render(
@@ -67,7 +69,7 @@ describe("BridgeDestinationSettings", () => {
   });
 });
 
-function remoteAccessStatus(allowedBridgeOrigins: string[]) {
+function remoteAccessStatus(allowedBridgeOrigins: string[], applyId: string | null = null) {
   return {
     remote_access: {
       enabled: false,
@@ -79,7 +81,7 @@ function remoteAccessStatus(allowedBridgeOrigins: string[]) {
     port: 8791,
     suggestions: ["192.0.2.20"],
     mutation_allowed: true,
-    apply: { state: "ready", reason: null, restored: null },
+    apply: { id: applyId, state: "ready", reason: null, restored: null },
   };
 }
 

@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RemoteAccessSettings } from "./RemoteAccessSettings";
+import type { RemoteAccessStatus } from "./remoteAccess";
 
 const roots: Root[] = [];
 
@@ -31,8 +32,9 @@ describe("RemoteAccessSettings", () => {
             ...body.remote_access,
             password_configured: body.password_action === "set",
           },
+          apply: { id: "apply-1", state: "ready", reason: null, restored: false },
         };
-        return new Response(JSON.stringify({ state: "applying", reason: "restarting", restored: null }), { status: 202 });
+        return new Response(JSON.stringify({ id: "apply-1", state: "applying", reason: "restarting", restored: null }), { status: 202 });
       }
       return new Response(JSON.stringify(currentStatus), { status: 200 });
     });
@@ -83,12 +85,14 @@ describe("RemoteAccessSettings", () => {
 
   it("supports changing a password without persisting it in the draft", async () => {
     const requests: RequestInit[] = [];
+    let applyId: string | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") {
         requests.push(init);
-        return new Response(JSON.stringify({ state: "applying", reason: "restarting", restored: null }), { status: 202 });
+        applyId = "apply-2";
+        return new Response(JSON.stringify({ id: applyId, state: "applying", reason: "restarting", restored: null }), { status: 202 });
       }
-      return new Response(JSON.stringify(remoteAccessStatus(true)), { status: 200 });
+      return new Response(JSON.stringify(remoteAccessStatus(true, [], true, applyId)), { status: 200 });
     });
 
     const { container } = await render(
@@ -119,13 +123,15 @@ describe("RemoteAccessSettings", () => {
   it("supports removing password protection", async () => {
     const requests: RequestInit[] = [];
     let passwordConfigured = true;
+    let applyId: string | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") {
         requests.push(init);
         passwordConfigured = false;
-        return new Response(JSON.stringify({ state: "applying", reason: "restarting", restored: null }), { status: 202 });
+        applyId = "apply-3";
+        return new Response(JSON.stringify({ id: applyId, state: "applying", reason: "restarting", restored: null }), { status: 202 });
       }
-      return new Response(JSON.stringify(remoteAccessStatus(passwordConfigured)), { status: 200 });
+      return new Response(JSON.stringify(remoteAccessStatus(passwordConfigured, [], passwordConfigured, applyId)), { status: 200 });
     });
 
     const { container } = await render(
@@ -148,10 +154,13 @@ describe("RemoteAccessSettings", () => {
     const requests: RequestInit[] = [];
     const status = remoteAccessStatus(false, ["bridge.example.test"], true);
     status.remote_access.allowed_page_origins = [];
+    let applyId: string | null = null;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       if (init?.method === "POST") {
         requests.push(init);
-        return new Response(JSON.stringify({ state: "applying", reason: "restarting", restored: null }), { status: 202 });
+        applyId = "apply-4";
+        status.apply.id = applyId;
+        return new Response(JSON.stringify({ id: applyId, state: "applying", reason: "restarting", restored: null }), { status: 202 });
       }
       return new Response(JSON.stringify(status), { status: 200 });
     });
@@ -177,7 +186,8 @@ function remoteAccessStatus(
   passwordConfigured: boolean,
   suggestions: string[] = [],
   enabled = passwordConfigured,
-) {
+  applyId: string | null = null,
+): RemoteAccessStatus {
   return {
     remote_access: {
       enabled,
@@ -189,7 +199,7 @@ function remoteAccessStatus(
     port: 4000,
     suggestions,
     mutation_allowed: true,
-    apply: { state: "ready", reason: null, restored: null },
+    apply: { id: applyId, state: "ready", reason: null, restored: null },
   };
 }
 

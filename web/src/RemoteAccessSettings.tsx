@@ -105,6 +105,7 @@ export function RemoteAccessSettings({
           : status.remote_access.password_configured;
       const ready = await waitForRemoteAccessReady(
         httpUrl,
+        apply.id,
         (next) => remoteAccessMatchesDraft(next, draft, expectedPasswordConfigured),
       );
       setStatus(ready);

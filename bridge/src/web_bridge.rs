@@ -228,6 +228,7 @@ struct RemoteAccessStatusResponse {
 
 #[derive(Debug, Clone, Serialize)]
 struct ApplyStatusResponse {
+    id: Option<String>,
     state: String,
     reason: Option<String>,
     restored: Option<bool>,
@@ -730,6 +731,7 @@ fn validate_remote_access_draft(draft: &mut RemoteAccessDraft) -> Result<(), Bri
 fn read_apply_status(management: &ManagementState) -> ApplyStatusResponse {
     let Some(state_dir) = management.state_dir.as_deref() else {
         return ApplyStatusResponse {
+            id: None,
             state: "ready".into(),
             reason: None,
             restored: None,
@@ -738,6 +740,7 @@ fn read_apply_status(management: &ManagementState) -> ApplyStatusResponse {
     let path = state_dir.join("remote-access-apply.json");
     let Ok(bytes) = std::fs::read(path) else {
         return ApplyStatusResponse {
+            id: None,
             state: "ready".into(),
             reason: None,
             restored: None,
@@ -745,6 +748,7 @@ fn read_apply_status(management: &ManagementState) -> ApplyStatusResponse {
     };
     let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
         return ApplyStatusResponse {
+            id: None,
             state: "failed".into(),
             reason: Some("controller status is unavailable".into()),
             restored: None,
@@ -761,6 +765,17 @@ fn read_apply_status(management: &ManagementState) -> ApplyStatusResponse {
         .and_then(serde_json::Value::as_str)
         .map(|reason| reason.chars().take(MAX_APPLY_REASON_BYTES).collect());
     ApplyStatusResponse {
+        id: value
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| {
+                !id.is_empty()
+                    && id.len() <= 128
+                    && id
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+            })
+            .map(str::to_string),
         state,
         reason,
         restored: value.get("restored").and_then(serde_json::Value::as_bool),
@@ -2481,12 +2496,11 @@ async fn remote_access_apply_handler(
         ));
     };
     std::fs::create_dir_all(state_dir).map_err(BridgeError::Io)?;
-    let request_path = state_dir.join(format!(
-        ".remote-access-request-{}-{}.json",
-        std::process::id(),
-        UPLOAD_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel)
-    ));
+    let sequence = UPLOAD_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel);
+    let apply_id = format!("{}-{sequence}", std::process::id());
+    let request_path = state_dir.join(format!(".remote-access-request-{apply_id}.json"));
     let content = serde_json::to_vec(&serde_json::json!({
+        "apply_id": apply_id,
         "remote_access": request.remote_access,
     }))
     .map_err(|error| BridgeError::Protocol(error.to_string()))?;
@@ -2498,6 +2512,7 @@ async fn remote_access_apply_handler(
     Ok((
         StatusCode::ACCEPTED,
         Json(ApplyStatusResponse {
+            id: Some(apply_id),
             state: "applying".into(),
             reason: Some("settings saved; the managed bridge is restarting".into()),
             restored: None,
@@ -7663,6 +7678,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let accepted = response.json::<serde_json::Value>().await.unwrap();
+        let apply_id = accepted["id"].as_str().unwrap();
+        assert!(!apply_id.is_empty());
 
         for _ in 0..40 {
             if marker.is_file() {
@@ -7677,6 +7695,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(request["remote_access"]["enabled"], true);
+        assert_eq!(request["apply_id"], apply_id);
 
         server.abort();
         let _ = server.await;

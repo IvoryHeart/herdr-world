@@ -15,11 +15,14 @@ export type RemoteAccessStatus = {
   suggestions: string[];
   mutation_allowed: boolean;
   mutation_reason?: string | null;
-  apply: {
-    state: "applying" | "ready" | "failed";
-    reason?: string | null;
-    restored?: boolean | null;
-  };
+  apply: RemoteAccessApplyStatus;
+};
+
+export type RemoteAccessApplyStatus = {
+  id: string | null;
+  state: "applying" | "ready" | "failed";
+  reason?: string | null;
+  restored?: boolean | null;
 };
 
 export type RemoteAccessDraft = Omit<RemoteAccessModel, "password_configured">;
@@ -40,7 +43,7 @@ export async function applyRemoteAccess(
   draft: RemoteAccessDraft,
   passwordAction: RemotePasswordAction,
   password?: string,
-) {
+): Promise<RemoteAccessApplyStatus & { id: string }> {
   const response = await fetchWithTimeout(httpUrl("/api/local/remote-access"), {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -51,7 +54,9 @@ export async function applyRemoteAccess(
     }),
   });
   if (!response.ok) throw new Error((await apiErrorMessage(response)) ?? `Remote access failed (${response.status})`);
-  return (await response.json()) as RemoteAccessStatus["apply"];
+  const apply = parseApplyStatus(await response.json());
+  if (!apply.id) throw new Error("Remote access response is missing its apply identifier");
+  return { ...apply, id: apply.id };
 }
 
 export function remoteAccessDraft(status: RemoteAccessStatus): RemoteAccessDraft {
@@ -65,6 +70,7 @@ export function remoteAccessDraft(status: RemoteAccessStatus): RemoteAccessDraft
 
 export async function waitForRemoteAccessReady(
   httpUrl: BridgeHttpUrl,
+  applyId: string,
   expected: (status: RemoteAccessStatus) => boolean = () => true,
   timeoutMs = APPLY_TIMEOUT_MS,
   pollIntervalMs = APPLY_POLL_INTERVAL_MS,
@@ -78,8 +84,12 @@ export async function waitForRemoteAccessReady(
     } catch (error) {
       lastError = error;
     }
-    if (status?.apply.state === "ready" && expected(status)) return status;
-    if (status?.apply.state === "failed") {
+    if (status?.apply.id !== applyId) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, pollIntervalMs));
+      continue;
+    }
+    if (status.apply.state === "ready" && expected(status)) return status;
+    if (status.apply.state === "failed") {
       throw new Error(status.apply.reason ?? "The bridge could not apply the settings");
     }
     await new Promise((resolve) => globalThis.setTimeout(resolve, pollIntervalMs));
@@ -125,6 +135,7 @@ export async function allowBridgeDestinations(
   }
   const ready = await waitForRemoteAccessReady(
     httpUrl,
+    apply.id,
     (next) => additions.every(
       (origin) => next.remote_access.allowed_bridge_origins.includes(origin),
     ),
@@ -149,10 +160,7 @@ export function parseRemoteAccessStatus(value: unknown): RemoteAccessStatus {
   ) {
     throw new Error("Remote access response is malformed");
   }
-  const apply = value.apply;
-  if (apply.state !== "applying" && apply.state !== "ready" && apply.state !== "failed") {
-    throw new Error("Remote access response is malformed");
-  }
+  const apply = parseApplyStatus(value.apply);
   return {
     remote_access: {
       enabled: model.enabled,
@@ -165,11 +173,22 @@ export function parseRemoteAccessStatus(value: unknown): RemoteAccessStatus {
     suggestions: value.suggestions,
     mutation_allowed: value.mutation_allowed === true,
     mutation_reason: typeof value.mutation_reason === "string" ? value.mutation_reason : null,
-    apply: {
-      state: apply.state,
-      reason: typeof apply.reason === "string" ? apply.reason : null,
-      restored: typeof apply.restored === "boolean" ? apply.restored : null,
-    },
+    apply,
+  };
+}
+
+function parseApplyStatus(value: unknown): RemoteAccessApplyStatus {
+  if (!isRecord(value) ||
+      (value.id !== undefined && value.id !== null &&
+        (typeof value.id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(value.id))) ||
+      (value.state !== "applying" && value.state !== "ready" && value.state !== "failed")) {
+    throw new Error("Remote access response is malformed");
+  }
+  return {
+    id: typeof value.id === "string" ? value.id : null,
+    state: value.state,
+    reason: typeof value.reason === "string" ? value.reason : null,
+    restored: typeof value.restored === "boolean" ? value.restored : null,
   };
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   bridgeAddress,
   parseRemoteAccessStatus,
+  type RemoteAccessStatus,
   waitForRemoteAccessReady,
 } from "./remoteAccess";
 
@@ -18,7 +19,7 @@ describe("remote access response handling", () => {
       port: 4000,
       suggestions: ["2001:db8::20"],
       mutation_allowed: true,
-      apply: { state: "ready", reason: "bridge ready", restored: false },
+      apply: { id: null, state: "ready", reason: "bridge ready", restored: false },
     });
 
     expect(status.remote_access.accepted_hosts).toEqual(["[2001:db8::20]"]);
@@ -39,7 +40,7 @@ describe("remote access response handling", () => {
       },
       port: 4000,
       suggestions: [],
-      apply: { state: "ready" },
+      apply: { id: null, state: "ready" },
     })).toThrow(/malformed/iu);
   });
 
@@ -53,6 +54,7 @@ describe("remote access response handling", () => {
 
     const status = await waitForRemoteAccessReady(
       (path) => path,
+      "requested-apply",
       (next) => next.remote_access.allowed_bridge_origins.length === 1,
       100,
       0,
@@ -64,9 +66,54 @@ describe("remote access response handling", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
     fetchMock.mockRestore();
   });
+
+  it("waits for the requested password-only apply instead of accepting an older ready state", async () => {
+    const statuses = [
+      statusResponse([], { id: "older-apply", state: "ready" }),
+      statusResponse([], { id: "requested-apply", state: "applying" }),
+      statusResponse([], { id: "requested-apply", state: "ready" }),
+    ];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => (
+      new Response(JSON.stringify(statuses.shift()), { status: 200 })
+    ));
+
+    await expect(waitForRemoteAccessReady(
+      (path) => path,
+      "requested-apply",
+      () => true,
+      100,
+      0,
+    )).resolves.toMatchObject({ apply: { id: "requested-apply", state: "ready" } });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores an earlier failed apply while waiting for a retry", async () => {
+    const statuses = [
+      statusResponse([], { id: "failed-apply", state: "failed", reason: "old failure" }),
+      statusResponse([], { id: "retry-apply", state: "ready" }),
+    ];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => (
+      new Response(JSON.stringify(statuses.shift()), { status: 200 })
+    ));
+
+    await expect(waitForRemoteAccessReady(
+      (path) => path,
+      "retry-apply",
+      () => true,
+      100,
+      0,
+    )).resolves.toMatchObject({ apply: { id: "retry-apply", state: "ready" } });
+  });
 });
 
-function statusResponse(allowedBridgeOrigins: string[]) {
+function statusResponse(
+  allowedBridgeOrigins: string[],
+  apply: RemoteAccessStatus["apply"] = {
+    id: "requested-apply",
+    state: "ready",
+    reason: null,
+  },
+) {
   return {
     remote_access: {
       enabled: false,
@@ -78,6 +125,6 @@ function statusResponse(allowedBridgeOrigins: string[]) {
     port: 4000,
     suggestions: [],
     mutation_allowed: true,
-    apply: { state: "ready" },
+    apply,
   };
 }

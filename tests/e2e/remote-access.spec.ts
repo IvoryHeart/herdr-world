@@ -93,6 +93,32 @@ test("authenticates a cross-origin Herdr and diagnoses HTTP, WebSocket, and term
   await expect(page.getByText("Connection successful.", { exact: true })).toBeVisible();
 });
 
+test("clears a password before showing the next queued connection prompt", async ({ page, request }) => {
+  for (const hostId of ["host-b", "host-c"]) {
+    await request.post("http://127.0.0.1:4173/__fixture/state", {
+      data: {
+        hostId,
+        passwordConfigured: true,
+        ...(hostId === "host-c" ? { terminalProtocol: 20 } : {}),
+      },
+    });
+  }
+  await page.goto("/spaces");
+
+  const prompt = page.getByRole("dialog", { name: "Connect to Herdr" });
+  await expect(prompt).toBeVisible();
+  const firstOrigin = await prompt.textContent();
+  await prompt.getByLabel("Password").fill("fixture-only-password");
+  await prompt.getByRole("button", { name: "Connect" }).click();
+
+  await expect(prompt).toBeVisible();
+  await expect.poll(async () => prompt.textContent()).not.toBe(firstOrigin);
+  await expect(prompt.getByLabel("Password")).toHaveValue("");
+  await expect(prompt.getByRole("button", { name: "Connect" })).toBeDisabled();
+  await expect(prompt.getByLabel("Password")).toBeFocused();
+  await prompt.getByRole("button", { name: "Cancel" }).click();
+});
+
 function switcherSettings(page: Page) {
   return page
     .getByRole("complementary", { name: "Switcher" })

@@ -756,6 +756,82 @@ test("remote access apply waits for readiness and restores the prior service on 
   }
 });
 
+test("consecutive remote access applies preserve an automatically allocated target port", async () => {
+  const fixture = await launchdFixture();
+  mkdirSync(path.join(fixture.root, "scripts"), { recursive: true });
+  writeFileSync(
+    path.join(fixture.root, "scripts", "herdr-world-plugin.mjs"),
+    readFileSync(path.join(ROOT, "scripts", "herdr-world-plugin.mjs")),
+  );
+  const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
+  const configPath = path.join(fixture.env.HERDR_PLUGIN_CONFIG_DIR, "config.json");
+  const allocatedPort = fixture.port === 8787 ? await freePort() : fixture.port;
+  const selectedIdentity = resolveTargetIdentity(validateConfig({}), fixture.env).identity;
+  const otherRecordPath = targetRecordPath(fixture.stateDir, "other-target");
+  writeFileSync(configPath, JSON.stringify({ port_range: [allocatedPort, allocatedPort] }));
+  mkdirSync(path.dirname(otherRecordPath), { recursive: true });
+  writeFileSync(otherRecordPath, JSON.stringify({ target_identity: "other-target", port: 8787 }));
+
+  try {
+    const started = await runAction("start", options);
+    assert.equal(started.port, allocatedPort);
+    assert.notEqual(started.port, 8787);
+
+    for (const [index, enabled] of [true, false].entries()) {
+      const draftPath = path.join(fixture.stateDir, `remote-access-${index}.json`);
+      writeFileSync(draftPath, JSON.stringify({
+        apply_id: `apply-${index}`,
+        remote_access: {
+          enabled,
+          accepted_hosts: enabled ? ["bridge.example.test"] : [],
+          allowed_page_origins: enabled ? ["http://world.example.test"] : [],
+          allowed_bridge_origins: [],
+        },
+      }));
+      await applyRemoteAccessAction({ draftPath, ...options });
+
+      const record = JSON.parse(readFileSync(
+        targetRecordPath(fixture.stateDir, selectedIdentity),
+        "utf8",
+      ));
+      assert.equal(record.port, allocatedPort);
+      const persisted = JSON.parse(readFileSync(configPath, "utf8"));
+      assert.equal(Object.hasOwn(persisted, "port"), false);
+      assert.equal(Object.hasOwn(persisted, "port_was_explicit"), false);
+      assert.equal(JSON.parse(
+        readFileSync(path.join(fixture.stateDir, "remote-access-apply.json"), "utf8"),
+      ).id, `apply-${index}`);
+    }
+
+    const previousText = readFileSync(configPath, "utf8");
+    const failingDraft = path.join(fixture.stateDir, "remote-access-failing.json");
+    writeFileSync(failingDraft, JSON.stringify({
+      apply_id: "apply-failing",
+      remote_access: {
+        enabled: true,
+        accepted_hosts: ["bridge.example.test"],
+        allowed_page_origins: ["http://world.example.test"],
+        allowed_bridge_origins: [],
+      },
+    }));
+    writeFileSync(fixture.failPath, "fail once\n");
+    await assert.rejects(
+      applyRemoteAccessAction({ draftPath: failingDraft, ...options }),
+      /fixture bootstrap failed/,
+    );
+    assert.equal(readFileSync(configPath, "utf8"), previousText);
+    assert.equal(JSON.parse(readFileSync(
+      targetRecordPath(fixture.stateDir, selectedIdentity),
+      "utf8",
+    )).port, allocatedPort);
+  } finally {
+    try { await runAction("stop", options); } catch {}
+    await new Promise((resolve) => fixture.socketServer.close(resolve));
+    rmSync(fixture.socketPath, { force: true });
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
 test("fallback remote access apply recovers an owned service when its runtime record is missing", async () => {
   const fixture = await launchdFixture();
   const unavailableLaunchctl = path.join(fixture.root, "bin", "unavailable-launchctl");

@@ -4,8 +4,17 @@ type PasswordPromptHandler = (origin: string) => Promise<string | null>;
 type AuthenticatedFetchOptions = {
   timeoutMs?: number;
 };
+type BridgeSessionSnapshot = {
+  token: string | undefined;
+  generation: number;
+};
+type SessionFetchResult = {
+  response: Response;
+  session: BridgeSessionSnapshot | null;
+};
 
 const bridgeSessions = new Map<string, string>();
+const bridgeSessionGenerations = new Map<string, number>();
 const pendingAuthentications = new Map<string, Promise<void>>();
 const bridgeReauthenticationNeeded = new Set<string>();
 const bridgeSessionStoragePrefix = "herdrWeb.bridgeSession.v1:";
@@ -50,20 +59,34 @@ export async function authenticatedFetch(
 ): Promise<Response> {
   const origin = bridgeOrigin(input);
   const first = await fetchWithSession(input, init, origin, timeoutMs);
-  if (first.status !== 401 || !origin || isAuthenticationEndpoint(input)) {
-    return first;
+  if (first.response.status !== 401 || !origin || isAuthenticationEndpoint(input)) {
+    return first.response;
   }
 
-  forgetBridgeSession(origin);
+  const currentUnauthorized = await invalidateCurrentUnauthorized(
+    input,
+    init,
+    origin,
+    timeoutMs,
+    first,
+  );
+  if (currentUnauthorized.response.status !== 401) return currentUnauthorized.response;
   bridgeReauthenticationNeeded.add(origin);
   await authenticateBridgeSession(origin, init.signal ?? undefined, timeoutMs);
   const retry = await fetchWithSession(input, init, origin, timeoutMs);
-  if (retry.status === 401) {
-    forgetBridgeSession(origin);
+  if (retry.response.status === 401) {
+    const currentRetry = await invalidateCurrentUnauthorized(
+      input,
+      init,
+      origin,
+      timeoutMs,
+      retry,
+    );
+    if (currentRetry.response.status !== 401) return currentRetry.response;
     bridgeReauthenticationNeeded.add(origin);
     throw new BridgeAuthenticationError();
   }
-  return retry;
+  return retry.response;
 }
 
 /**
@@ -77,27 +100,31 @@ export async function refreshBridgeAuthentication(input: string | URL): Promise<
   if (!origin || (!bridgeSession(origin) && !bridgeReauthenticationNeeded.has(origin))) {
     return false;
   }
-  let response: Response;
-  try {
-    response = await fetchWithSession(`${origin}/api/auth/status`, {}, origin);
-  } catch {
-    return false;
-  }
-  if (!response.ok) return false;
-  const payload = (await response.json().catch(() => null)) as {
-    required?: unknown;
-    authenticated?: unknown;
-  } | null;
-  if (payload?.required !== true || payload.authenticated === true) {
-    bridgeReauthenticationNeeded.delete(origin);
-    return false;
-  }
+  while (true) {
+    let attempt: SessionFetchResult;
+    try {
+      attempt = await fetchWithSession(`${origin}/api/auth/status`, {}, origin);
+    } catch {
+      return false;
+    }
+    if (!attempt.response.ok) return false;
+    const payload = (await attempt.response.json().catch(() => null)) as {
+      required?: unknown;
+      authenticated?: unknown;
+    } | null;
+    if (payload?.required !== true || payload.authenticated === true) {
+      bridgeReauthenticationNeeded.delete(origin);
+      return false;
+    }
+    if (!attempt.session || !forgetBridgeSession(origin, attempt.session)) {
+      continue;
+    }
 
-  forgetBridgeSession(origin);
-  bridgeReauthenticationNeeded.add(origin);
-  await authenticateBridgeSession(origin);
-  bridgeReauthenticationNeeded.delete(origin);
-  return true;
+    bridgeReauthenticationNeeded.add(origin);
+    await authenticateBridgeSession(origin);
+    bridgeReauthenticationNeeded.delete(origin);
+    return true;
+  }
 }
 
 function authenticateBridgeSession(
@@ -138,11 +165,14 @@ async function fetchWithSession(
   init: RequestInit,
   origin: string | null,
   timeoutMs?: number,
-) {
+): Promise<SessionFetchResult> {
   const headers = new Headers(init.headers);
-  const token = origin ? bridgeSession(origin) : undefined;
+  const session = origin ? bridgeSessionSnapshot(origin) : null;
+  const token = session?.token;
   if (token) headers.set("authorization", `Bearer ${token}`);
-  if (timeoutMs === undefined) return fetch(input, { ...init, headers });
+  if (timeoutMs === undefined) {
+    return { response: await fetch(input, { ...init, headers }), session };
+  }
 
   const controller = new AbortController();
   const abortFromCaller = () => controller.abort(init.signal?.reason);
@@ -155,7 +185,10 @@ async function fetchWithSession(
     controller.abort(abortError());
   }, timeoutMs);
   try {
-    return await fetch(input, { ...init, headers, signal: controller.signal });
+    return {
+      response: await fetch(input, { ...init, headers, signal: controller.signal }),
+      session,
+    };
   } finally {
     globalThis.clearTimeout(timer);
     init.signal?.removeEventListener("abort", abortFromCaller);
@@ -179,12 +212,12 @@ async function authenticateBridge(
   }
   let response: Response;
   try {
-    response = await fetchWithSession(`${origin}/api/auth/session`, {
+    response = (await fetchWithSession(`${origin}/api/auth/session`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ password }),
       signal: callerSignal,
-    }, null, timeoutMs ?? 5000);
+    }, null, timeoutMs ?? 5000)).response;
   } catch {
     throw new BridgeAuthenticationError("Herdr authentication is unavailable");
   } finally {
@@ -215,6 +248,7 @@ function bridgeSession(origin: string): string | undefined {
       return undefined;
     }
     bridgeSessions.set(origin, stored);
+    advanceBridgeSessionGeneration(origin);
     return stored;
   } catch {
     return undefined;
@@ -223,6 +257,7 @@ function bridgeSession(origin: string): string | undefined {
 
 function rememberBridgeSession(origin: string, token: string) {
   bridgeSessions.set(origin, token);
+  advanceBridgeSessionGeneration(origin);
   try {
     bridgeSessionStorage()?.setItem(bridgeSessionStorageKey(origin), token);
   } catch {
@@ -230,13 +265,48 @@ function rememberBridgeSession(origin: string, token: string) {
   }
 }
 
-function forgetBridgeSession(origin: string) {
+function forgetBridgeSession(origin: string, expected?: BridgeSessionSnapshot) {
+  if (expected && (
+    (bridgeSessionGenerations.get(origin) ?? 0) !== expected.generation ||
+    bridgeSessions.get(origin) !== expected.token
+  )) {
+    return false;
+  }
   bridgeSessions.delete(origin);
+  advanceBridgeSessionGeneration(origin);
   try {
     bridgeSessionStorage()?.removeItem(bridgeSessionStorageKey(origin));
   } catch {
     // Storage may be unavailable or blocked.
   }
+  return true;
+}
+
+function bridgeSessionSnapshot(origin: string): BridgeSessionSnapshot {
+  const token = bridgeSession(origin);
+  return {
+    token,
+    generation: bridgeSessionGenerations.get(origin) ?? 0,
+  };
+}
+
+function advanceBridgeSessionGeneration(origin: string) {
+  bridgeSessionGenerations.set(origin, (bridgeSessionGenerations.get(origin) ?? 0) + 1);
+}
+
+async function invalidateCurrentUnauthorized(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  origin: string,
+  timeoutMs: number | undefined,
+  initial: SessionFetchResult,
+) {
+  let attempt = initial;
+  while (attempt.response.status === 401) {
+    if (attempt.session && forgetBridgeSession(origin, attempt.session)) return attempt;
+    attempt = await fetchWithSession(input, init, origin, timeoutMs);
+  }
+  return attempt;
 }
 
 function bridgeSessionStorage(): Storage | null {

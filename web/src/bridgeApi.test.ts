@@ -104,6 +104,54 @@ describe("authenticated bridge requests", () => {
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/auth/session"))).toHaveLength(1);
   });
 
+  it("does not let a delayed 401 discard a newer authenticated session", async () => {
+    const tokenA = "a".repeat(64);
+    const tokenB = "b".repeat(64);
+    let sessionCount = 0;
+    let releaseDelayed = () => {};
+    let markDelayedStarted = () => {};
+    const delayedStarted = new Promise<void>((resolve) => { markDelayedStarted = resolve; });
+    const delayedResponse = new Promise<void>((resolve) => { releaseDelayed = resolve; });
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get("authorization");
+      if (url.endsWith("/api/auth/session")) {
+        sessionCount += 1;
+        return new Response(JSON.stringify({ token: sessionCount === 1 ? tokenA : tokenB }), {
+          status: 200,
+        });
+      }
+      if (url.endsWith("/api/delayed") && authorization === `Bearer ${tokenA}`) {
+        markDelayedStarted();
+        await delayedResponse;
+        return new Response(null, { status: 401 });
+      }
+      if (url.endsWith("/api/rotate") && authorization === `Bearer ${tokenA}`) {
+        return new Response(null, { status: 401 });
+      }
+      return new Response("{}", {
+        status: authorization === `Bearer ${tokenA}` || authorization === `Bearer ${tokenB}`
+          ? 200
+          : 401,
+      });
+    });
+    const prompt = vi.fn(async () => "synthetic-password");
+    setBridgePasswordPromptHandler(prompt);
+
+    await authenticatedFetch(`${bridgeUrl}/api/snapshot`);
+    const delayed = authenticatedFetch(`${bridgeUrl}/api/delayed`);
+    await delayedStarted;
+    await expect(authenticatedFetch(`${bridgeUrl}/api/rotate`)).resolves.toHaveProperty("status", 200);
+    releaseDelayed();
+    await expect(delayed).resolves.toHaveProperty("status", 200);
+
+    expect(prompt).toHaveBeenCalledTimes(2);
+    expect(sessionCount).toBe(2);
+    expect(bridgeWebSocketProtocols(`${bridgeUrl}/ws/events`)).toEqual([
+      `herdr-world-auth.${tokenB}`,
+    ]);
+  });
+
   it("clears an invalidated session and prompts again instead of staying offline", async () => {
     let snapshotRequests = 0;
     let sessions = 0;

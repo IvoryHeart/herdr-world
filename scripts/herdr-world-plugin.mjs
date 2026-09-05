@@ -480,7 +480,17 @@ export function loadConfig(configDir) {
   } catch (error) {
     throw new PluginError(`could not parse ${configPath}: ${error.message}`);
   }
-  return validateConfig({ ...parsed, port_was_explicit: Object.hasOwn(parsed, "port") });
+  const portWasExplicit = Object.hasOwn(parsed, "port_was_explicit")
+    ? parsed.port_was_explicit === true
+    : Object.hasOwn(parsed, "port");
+  return validateConfig({ ...parsed, port_was_explicit: portWasExplicit });
+}
+
+function persistedConfig(config) {
+  const persisted = { ...config };
+  delete persisted.port_was_explicit;
+  if (config.port_was_explicit !== true) delete persisted.port;
+  return persisted;
 }
 
 function isLoopbackHost(host) {
@@ -1894,7 +1904,7 @@ function applyStatusPath(stateDir) {
   return path.join(stateDir, APPLY_STATUS_FILE);
 }
 
-function writeApplyStatus(stateDir, state, reason = null, restored = null) {
+function writeApplyStatus(stateDir, applyId, state, reason = null, restored = null) {
   const boundedReason = typeof reason === "string" && reason.trim()
     ? reason
       .replace(/[\r\n]+/g, " ")
@@ -1903,6 +1913,7 @@ function writeApplyStatus(stateDir, state, reason = null, restored = null) {
       .slice(0, 240)
     : null;
   atomicWrite(applyStatusPath(stateDir), `${JSON.stringify({
+    id: applyId,
     state,
     reason: boundedReason,
     restored,
@@ -1928,10 +1939,15 @@ function readRemoteAccessRequest(draftPath) {
   } catch (error) {
     throw new PluginError(`could not read remote access draft: ${error.message}`);
   }
-  if (!isObject(parsed) || !isObject(parsed.remote_access)) {
+  if (!isObject(parsed) || !isObject(parsed.remote_access) ||
+      (parsed.apply_id !== undefined &&
+        (typeof parsed.apply_id !== "string" || !/^[A-Za-z0-9_-]{1,128}$/.test(parsed.apply_id)))) {
     throw new PluginError("remote access draft is invalid");
   }
-  return normalizeRemoteAccess(parsed);
+  return {
+    applyId: parsed.apply_id ?? null,
+    remoteAccess: normalizeRemoteAccess(parsed),
+  };
 }
 
 export async function applyRemoteAccessAction({
@@ -1944,6 +1960,12 @@ export async function applyRemoteAccessAction({
 } = {}) {
   const handoffGraceMs = Number(env.HERDR_WORLD_APPLY_GRACE_MS ?? 0);
   const lockContext = runtimeContext(env);
+  let applyId = null;
+  try {
+    applyId = readRemoteAccessRequest(draftPath).applyId;
+  } catch {
+    // The locked apply path below reports the bounded validation failure.
+  }
 
   const execute = async () => {
     let context;
@@ -1953,7 +1975,7 @@ export async function applyRemoteAccessAction({
     let previousActive = false;
     let baselineCaptured = false;
 
-    writeApplyStatus(lockContext.stateDir, "applying", "settings saved; reconciling the managed bridge", null);
+    writeApplyStatus(lockContext.stateDir, applyId, "applying", "settings saved; reconciling the managed bridge", null);
     try {
       if (Number.isFinite(handoffGraceMs) && handoffGraceMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, Math.min(handoffGraceMs, 1000)));
@@ -1966,7 +1988,9 @@ export async function applyRemoteAccessAction({
       previousText = existsSync(configPath) ? readFileSync(configPath, "utf8") : null;
       previousConfig = context.config;
       baselineCaptured = true;
-      const remoteAccess = readRemoteAccessRequest(draftPath);
+      const request = readRemoteAccessRequest(draftPath);
+      applyId = request.applyId;
+      const remoteAccess = request.remoteAccess;
       const nextConfig = configWithRemoteAccess(previousConfig, remoteAccess);
       const recordPath = targetRecordPath(context.stateDir, context.target.identity);
       const record = readRecord(recordPath);
@@ -1985,13 +2009,13 @@ export async function applyRemoteAccessAction({
           throw new PluginError("fallback bridge service ownership could not be verified because its runtime record is missing; run the plugin stop and start actions before applying settings");
         }
       }
-      atomicWrite(configPath, `${JSON.stringify(nextConfig, null, 2)}\n`);
+      atomicWrite(configPath, `${JSON.stringify(persistedConfig(nextConfig), null, 2)}\n`);
       if (previousActive) {
         const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: nextConfig });
         await startPrepared(plan, { lockHeld: true });
-        writeApplyStatus(context.stateDir, "ready", "bridge ready after applying settings", false);
+        writeApplyStatus(context.stateDir, applyId, "ready", "bridge ready after applying settings", false);
       } else {
-        writeApplyStatus(context.stateDir, "ready", "settings saved; the managed bridge was not running", false);
+        writeApplyStatus(context.stateDir, applyId, "ready", "settings saved; the managed bridge was not running", false);
       }
       return nextConfig;
     } catch (error) {
@@ -2007,6 +2031,7 @@ export async function applyRemoteAccessAction({
         } catch (restoreError) {
           writeApplyStatus(
             lockContext.stateDir,
+            applyId,
             "failed",
             `settings apply failed and recovery could not be verified: ${restoreError.message}`,
             false,
@@ -2014,7 +2039,7 @@ export async function applyRemoteAccessAction({
           throw error;
         }
       }
-      writeApplyStatus(lockContext.stateDir, "failed", error instanceof Error ? error.message : String(error), restored);
+      writeApplyStatus(lockContext.stateDir, applyId, "failed", error instanceof Error ? error.message : String(error), restored);
       throw error;
     } finally {
       rmSync(draftPath, { force: true });

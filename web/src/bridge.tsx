@@ -182,7 +182,9 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   const [probeRetryTokens, setProbeRetryTokens] = useState<Record<string, number>>({});
   const [resumeToken, setResumeToken] = useState(0);
   const storeEditedRef = useRef(false);
+  const passwordPromptSequenceRef = useRef(0);
   const [passwordPrompts, setPasswordPrompts] = useState<{
+    id: number;
     origin: string;
     resolve: (password: string | null) => void;
   }[]>([]);
@@ -193,7 +195,11 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
     setBridgePasswordPromptHandler(
       (origin) =>
         new Promise<string | null>((resolve) => {
-          setPasswordPrompts((current) => [...current, { origin, resolve }]);
+          passwordPromptSequenceRef.current += 1;
+          setPasswordPrompts((current) => [
+            ...current,
+            { id: passwordPromptSequenceRef.current, origin, resolve },
+          ]);
         }),
     );
     return () => setBridgePasswordPromptHandler(null);
@@ -520,6 +526,7 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
       ))}
       {passwordPrompts[0] ? (
         <BridgePasswordPrompt
+          key={passwordPrompts[0].id}
           origin={passwordPrompts[0].origin}
           onCancel={() => {
             passwordPrompts[0].resolve(null);
@@ -535,7 +542,7 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function BridgePasswordPrompt({
+export function BridgePasswordPrompt({
   origin,
   onCancel,
   onSubmit,
@@ -547,7 +554,10 @@ function BridgePasswordPrompt({
   const [password, setPassword] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => {
+    setPassword("");
+    inputRef.current?.focus();
+  }, [origin]);
 
   return (
     <div className="overlay-root bridge-auth-overlay">

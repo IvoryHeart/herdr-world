@@ -14,6 +14,7 @@ const fixtureSockets = new Map();
 const servers = [];
 const FIXTURE_PASSWORD = "fixture-only-password";
 const FIXTURE_SESSION_TOKEN = "fixture-session-token";
+let remoteAccessApplySequence = 0;
 
 const fixtures = [
   {
@@ -119,8 +120,13 @@ async function startFixture(fixture) {
               ? false
               : state.remoteAccess.password_configured,
         };
-        fixtureStates.set(fixture.id, { ...state, remoteAccess });
-        json(response, 202, { state: "applying", reason: "settings saved; restarting", restored: null });
+        const applyId = `fixture-${remoteAccessApplySequence += 1}`;
+        fixtureStates.set(fixture.id, {
+          ...state,
+          remoteAccess,
+          remoteAccessApply: { id: applyId, state: "ready", reason: null, restored: false },
+        });
+        json(response, 202, { id: applyId, state: "applying", reason: "settings saved; restarting", restored: null });
         return;
       }
       json(response, 200, {
@@ -128,7 +134,7 @@ async function startFixture(fixture) {
         port: fixture.port,
         suggestions: ["bridge.example.test"],
         mutation_allowed: true,
-        apply: { state: "ready", reason: null, restored: null },
+        apply: state.remoteAccessApply,
       });
       return;
     }
@@ -383,6 +389,7 @@ function defaultFixtureState() {
       allowed_bridge_origins: [],
       password_configured: false,
     },
+    remoteAccessApply: { id: null, state: "ready", reason: null, restored: null },
   };
 }
 
@@ -420,6 +427,7 @@ function setFixtureState(hostId, value) {
     launchCreatesSeat,
     launchedSeat: current.launchedSeat,
     remoteAccess: { ...current.remoteAccess, password_configured: passwordConfigured },
+    remoteAccessApply: current.remoteAccessApply,
   });
   return true;
 }
