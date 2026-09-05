@@ -67,6 +67,8 @@ test("authenticates a cross-origin Herdr and diagnoses HTTP, WebSocket, and term
 
   const prompt = page.getByRole("dialog", { name: "Connect to Herdr" });
   await expect(prompt).toBeVisible();
+  await expect(prompt.getByText("Remote B", { exact: true })).toBeVisible();
+  await expect(prompt.getByText("127.0.0.1:4174", { exact: true })).toBeVisible();
   await prompt.getByLabel("Password").fill("fixture-only-password");
   await prompt.getByRole("button", { name: "Connect" }).click();
   await expect(prompt).toBeHidden();

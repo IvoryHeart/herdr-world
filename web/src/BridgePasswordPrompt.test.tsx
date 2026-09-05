@@ -20,11 +20,14 @@ describe("BridgePasswordPrompt", () => {
 
     await act(async () => root.render(
       <BridgePasswordPrompt
+        name="First Herdr"
         origin="http://first.example:8787"
         onCancel={onCancel}
         onSubmit={onSubmit}
       />,
     ));
+    expect(container.textContent).toContain("First Herdr");
+    expect(container.textContent).toContain("first.example:8787");
     const firstInput = container.querySelector<HTMLInputElement>('input[type="password"]');
     expect(firstInput).toBe(document.activeElement);
     await act(async () => {
@@ -36,12 +39,15 @@ describe("BridgePasswordPrompt", () => {
 
     await act(async () => root.render(
       <BridgePasswordPrompt
+        name="Second Herdr"
         origin="http://second.example:8787"
         onCancel={onCancel}
         onSubmit={onSubmit}
       />,
     ));
     const secondInput = container.querySelector<HTMLInputElement>('input[type="password"]');
+    expect(container.textContent).toContain("Second Herdr");
+    expect(container.textContent).toContain("second.example:8787");
     expect(secondInput?.value).toBe("");
     expect(secondInput).toBe(document.activeElement);
     expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);

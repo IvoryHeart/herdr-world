@@ -527,6 +527,9 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
       {passwordPrompts[0] ? (
         <BridgePasswordPrompt
           key={passwordPrompts[0].id}
+          name={store.backends.find(
+            (backend) => backend.baseUrl === passwordPrompts[0].origin,
+          )?.name ?? "Herdr"}
           origin={passwordPrompts[0].origin}
           onCancel={() => {
             passwordPrompts[0].resolve(null);
@@ -543,16 +546,19 @@ export function BridgeProvider({ children }: { children: ReactNode }) {
 }
 
 export function BridgePasswordPrompt({
+  name,
   origin,
   onCancel,
   onSubmit,
 }: {
+  name: string;
   origin: string;
   onCancel: () => void;
   onSubmit: (password: string) => void;
 }) {
   const [password, setPassword] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const address = new URL(origin).host;
 
   useEffect(() => {
     setPassword("");
@@ -578,10 +584,12 @@ export function BridgePasswordPrompt({
         }}
       >
         <div id="bridge-auth-title" className="modal-title">Connect to Herdr</div>
-        <p className="backend-note">
-          Enter the password for the Herdr at {origin}. The password is not stored. You may be asked
-          again if that Herdr restarts, the session expires, or this browser tab closes.
-        </p>
+        <div className="bridge-auth-target" aria-label={`Connection destination: ${name}, ${address}`}>
+          <span>Password for</span>
+          <strong>{name}</strong>
+          <code>{address}</code>
+        </div>
+        <p className="backend-note">The password is not stored in Herdr World.</p>
         <label className="field-label">
           <span>Password</span>
           <input

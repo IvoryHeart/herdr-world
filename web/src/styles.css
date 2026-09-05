@@ -4700,6 +4700,37 @@ button {
   color: var(--overlay1);
 }
 
+.bridge-auth-target {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--blue) 38%, var(--line));
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--blue) 8%, var(--surface0));
+}
+
+.bridge-auth-target span {
+  color: var(--overlay1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bridge-auth-target strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bridge-auth-target code {
+  overflow-wrap: anywhere;
+  color: var(--blue);
+  font-size: 13px;
+}
+
 .backend-warning {
   color: var(--peach);
 }
