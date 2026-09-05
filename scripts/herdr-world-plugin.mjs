@@ -948,12 +948,26 @@ function recordActivePort(records, identity, port) {
   return records.some(({ record }) => record.target_identity !== identity && record.port === port);
 }
 
-export async function choosePort(config, identity, stateDir, { portFree = portIsFree } = {}) {
+export async function choosePort(
+  config,
+  identity,
+  stateDir,
+  { portFree = portIsFree, preservePort = null } = {},
+) {
   const records = listRecords(stateDir);
   const requested = config.port;
   const explicit = config.port_was_explicit === true;
   const namedTarget = config.session_name !== null || config.socket_path !== null;
   const hasDifferentTarget = records.some(({ record }) => record.target_identity !== identity);
+  if (preservePort !== null) {
+    if (!Number.isInteger(preservePort) || preservePort < 1 || preservePort > 65535) {
+      throw new PluginError("running bridge record has an invalid port");
+    }
+    if (recordActivePort(records, identity, preservePort) || !(await portFree(config.host, preservePort))) {
+      throw new PluginError(`running bridge port ${preservePort} is no longer available; retry after resolving the port conflict`);
+    }
+    return preservePort;
+  }
   if (explicit) {
     if (recordActivePort(records, identity, requested) || !(await portFree(config.host, requested))) {
       throw new PluginError(`configured bridge port ${requested} is already in use; choose another port`);
@@ -1612,7 +1626,7 @@ function prepareStart({ root = ROOT, env = process.env, platform = process.platf
   return { root, env, platform, context, manifestVersion, targetPlatform, node, target, payload, supervisor };
 }
 
-async function startPrepared(plan, { lockHeld = false } = {}) {
+async function startPrepared(plan, { lockHeld = false, preservePort = null } = {}) {
   const { root, env, platform, context, manifestVersion, node, target, payload, supervisor } = plan;
   const start = async () => {
     const recordPath = targetRecordPath(context.stateDir, context.target.identity);
@@ -1638,7 +1652,9 @@ async function startPrepared(plan, { lockHeld = false } = {}) {
     if (recovered) {
       console.log("Recovered an unrecorded Herdr World service; applying the current configuration.");
     }
-    const port = await choosePort(context.config, context.target.identity, context.stateDir);
+    const port = await choosePort(context.config, context.target.identity, context.stateDir, {
+      preservePort,
+    });
     const { record, environment } = createRecord({
       identity: context.target.identity,
       target,
@@ -1973,6 +1989,7 @@ export async function applyRemoteAccessAction({
     let previousText = null;
     let previousConfig;
     let previousActive = false;
+    let previousPort = null;
     let baselineCaptured = false;
 
     writeApplyStatus(lockContext.stateDir, applyId, "applying", "settings saved; reconciling the managed bridge", null);
@@ -1997,6 +2014,7 @@ export async function applyRemoteAccessAction({
       if (record) {
         const ownership = assertRecordOwnership(record, env, platform);
         previousActive = ownership.state.active;
+        previousPort = previousActive ? record.port : null;
       } else {
         const supervisor = selectSupervisor(platform, env);
         previousActive = await recoverUnrecordedService(
@@ -2012,7 +2030,7 @@ export async function applyRemoteAccessAction({
       atomicWrite(configPath, `${JSON.stringify(persistedConfig(nextConfig), null, 2)}\n`);
       if (previousActive) {
         const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: nextConfig });
-        await startPrepared(plan, { lockHeld: true });
+        await startPrepared(plan, { lockHeld: true, preservePort: previousPort });
         writeApplyStatus(context.stateDir, applyId, "ready", "bridge ready after applying settings", false);
       } else {
         writeApplyStatus(context.stateDir, applyId, "ready", "settings saved; the managed bridge was not running", false);
@@ -2025,7 +2043,7 @@ export async function applyRemoteAccessAction({
           restoreConfig(configPath, previousText);
           if (previousActive) {
             const plan = prepareStart({ root, env, platform, arch, glibcVersion, configOverride: previousConfig });
-            await startPrepared(plan, { lockHeld: true });
+            await startPrepared(plan, { lockHeld: true, preservePort: previousPort });
           }
           restored = true;
         } catch (restoreError) {

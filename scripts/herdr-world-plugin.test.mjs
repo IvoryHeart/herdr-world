@@ -756,7 +756,7 @@ test("remote access apply waits for readiness and restores the prior service on 
   }
 });
 
-test("consecutive remote access applies preserve an automatically allocated target port", async () => {
+test("remote access apply and rollback preserve an automatic port after an earlier port is released", async () => {
   const fixture = await launchdFixture();
   mkdirSync(path.join(fixture.root, "scripts"), { recursive: true });
   writeFileSync(
@@ -765,17 +765,23 @@ test("consecutive remote access applies preserve an automatically allocated targ
   );
   const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
   const configPath = path.join(fixture.env.HERDR_PLUGIN_CONFIG_DIR, "config.json");
-  const allocatedPort = fixture.port === 8787 ? await freePort() : fixture.port;
+  const allocatedPort = fixture.port;
+  const earlierPort = allocatedPort - 1;
   const selectedIdentity = resolveTargetIdentity(validateConfig({}), fixture.env).identity;
-  const otherRecordPath = targetRecordPath(fixture.stateDir, "other-target");
-  writeFileSync(configPath, JSON.stringify({ port_range: [allocatedPort, allocatedPort] }));
-  mkdirSync(path.dirname(otherRecordPath), { recursive: true });
-  writeFileSync(otherRecordPath, JSON.stringify({ target_identity: "other-target", port: 8787 }));
+  const defaultRecordPath = targetRecordPath(fixture.stateDir, "other-default-target");
+  const earlierRecordPath = targetRecordPath(fixture.stateDir, "other-earlier-target");
+  writeFileSync(configPath, JSON.stringify({ port_range: [earlierPort, allocatedPort] }));
+  mkdirSync(path.dirname(defaultRecordPath), { recursive: true });
+  writeFileSync(defaultRecordPath, JSON.stringify({ target_identity: "other-default-target", port: 8787 }));
+  writeFileSync(earlierRecordPath, JSON.stringify({ target_identity: "other-earlier-target", port: earlierPort }));
 
   try {
     const started = await runAction("start", options);
     assert.equal(started.port, allocatedPort);
     assert.notEqual(started.port, 8787);
+
+    // Simulate the earlier target stopping and releasing its lower automatic port.
+    rmSync(earlierRecordPath, { force: true });
 
     for (const [index, enabled] of [true, false].entries()) {
       const draftPath = path.join(fixture.stateDir, `remote-access-${index}.json`);

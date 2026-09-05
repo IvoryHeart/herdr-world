@@ -54,4 +54,40 @@ describe("BridgePasswordPrompt", () => {
 
     await act(async () => root.unmount());
   });
+
+  it("contains keyboard focus, cancels with Escape, and restores the previous focus", async () => {
+    const opener = document.createElement("button");
+    const container = document.createElement("div");
+    document.body.append(opener, container);
+    opener.focus();
+    const root = createRoot(container);
+    const onCancel = vi.fn();
+
+    await act(async () => root.render(
+      <BridgePasswordPrompt
+        name="Remote Herdr"
+        origin="http://remote.example:8787"
+        onCancel={onCancel}
+        onSubmit={vi.fn()}
+      />,
+    ));
+
+    const form = container.querySelector<HTMLFormElement>("form");
+    const input = container.querySelector<HTMLInputElement>('input[type="password"]');
+    const cancel = Array.from(container.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent === "Cancel");
+    cancel?.focus();
+    await act(async () => {
+      cancel?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    });
+    expect(document.activeElement).toBe(input);
+
+    await act(async () => {
+      form?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(onCancel).toHaveBeenCalledOnce();
+
+    await act(async () => root.unmount());
+    expect(document.activeElement).toBe(opener);
+  });
 });

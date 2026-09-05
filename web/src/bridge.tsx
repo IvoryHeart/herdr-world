@@ -20,6 +20,7 @@ import { fetchWithTimeout } from "./fetchWithTimeout";
 import { normalizeHostProfileId, normalizeHostProfileLabel } from "./hostProfile";
 import { addNativeResumeHandler } from "./native";
 import { officeDebug } from "./officeDebug";
+import { trapFocusWithin, useFocusReturn } from "./overlayFocus";
 import {
   parseObservabilityCapability,
   type BridgeObservabilityCapability,
@@ -559,6 +560,7 @@ export function BridgePasswordPrompt({
   const [password, setPassword] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
   const address = new URL(origin).host;
+  useFocusReturn();
 
   useEffect(() => {
     setPassword("");
@@ -570,6 +572,7 @@ export function BridgePasswordPrompt({
       <button
         className="overlay-scrim"
         type="button"
+        tabIndex={-1}
         aria-label="Cancel connection"
         onClick={onCancel}
       />
@@ -581,6 +584,14 @@ export function BridgePasswordPrompt({
         onSubmit={(event) => {
           event.preventDefault();
           if (password) onSubmit(password);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            onCancel();
+            return;
+          }
+          trapFocusWithin(event);
         }}
       >
         <div id="bridge-auth-title" className="modal-title">Connect to Herdr</div>
