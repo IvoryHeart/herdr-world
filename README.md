@@ -103,25 +103,14 @@ herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
 herdr plugin uninstall ivoryheart.herdr-world
 ```
 
-The plugin keeps editable settings outside its managed checkout. Find the directory with
-`herdr plugin config-dir ivoryheart.herdr-world` and edit its `config.json`; for a two-host LAN
-setup, `host` is the bind address, `allowed_hosts` lists accepted bridge hostnames/IPs,
-`allowed_origins` lists the exact page origins that may call this bridge, and
-`allowed_connect_origins` lists bridge origins that the page served here may call. For example:
-
-```json
-{
-  "host": "0.0.0.0",
-  "port": 8787,
-  "allowed_hosts": ["bridge-a.example.test", "bridge-b.example.test"],
-  "allowed_origins": ["http://localhost:8787", "http://bridge-a.example.test:8787", "http://bridge-b.example.test:8787"],
-  "allowed_connect_origins": ["http://bridge-a.example.test:8787", "http://bridge-b.example.test:8787"]
-}
-```
-
-Use the actual page origin, including its port; `http://127.0.0.1:8787` does not authorize a page
-opened at a LAN address. Restart the plugin after changing the file:
-`herdr plugin action invoke restart --plugin ivoryheart.herdr-world`.
+Use Settings → Network → Connections to connect Herdr World to another Herdr. Adding a connection
+normally needs only its address; Herdr World asks for a password when the other Herdr requires one.
+Use Network → Allow connections to let Herdr World elsewhere connect to this Herdr. The basic flow
+provides an on/off control, a copyable address, and optional password protection. Exact host, page,
+and destination restrictions remain available under Advanced network permissions. Development or
+standalone launches show these settings as read-only when no controller-owned restart boundary is
+available. Direct connections are intended for a trusted LAN/VPN path; use TLS, a VPN, or SSH for
+untrusted networks.
 
 To run from source:
 

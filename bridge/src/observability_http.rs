@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Query, State};
+use axum::extract::{ConnectInfo, Query, State};
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
@@ -21,7 +21,7 @@ use crate::observability::{
     UnavailableObservabilityProvider,
 };
 use crate::observability_prometheus::{PrometheusConfig, PrometheusObservabilityProvider};
-use crate::web_bridge::{ensure_allowed_request, preflight_response, BridgeError, RequestPolicy};
+use crate::web_bridge::{preflight_response_from_peer, BridgeError, RequestPolicy};
 
 #[derive(Clone)]
 struct ObservabilityHttpState {
@@ -97,16 +97,15 @@ where
 
 async fn preflight_handler(
     State(state): State<ObservabilityHttpState>,
+    ConnectInfo(peer): ConnectInfo<std::net::SocketAddr>,
     headers: HeaderMap,
 ) -> Result<Response, BridgeError> {
-    preflight_response(&headers, &state.request_policy)
+    preflight_response_from_peer(&headers, &state.request_policy, Some(peer))
 }
 
 async fn descriptor_handler(
     State(state): State<ObservabilityHttpState>,
-    headers: HeaderMap,
 ) -> Result<Json<ObservabilityDescriptor>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let descriptor = state
         .observability
         .descriptor()
@@ -116,9 +115,7 @@ async fn descriptor_handler(
 
 async fn snapshot_handler(
     State(state): State<ObservabilityHttpState>,
-    headers: HeaderMap,
 ) -> Result<Json<ObservabilityExtensionResponse>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let snapshot = state
         .observability
         .snapshot()
@@ -128,18 +125,14 @@ async fn snapshot_handler(
 
 async fn configuration_handler(
     State(state): State<ObservabilityHttpState>,
-    headers: HeaderMap,
 ) -> Result<Json<ObservabilityConfiguration>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     Ok(Json(state.observability.configuration()))
 }
 
 async fn update_configuration_handler(
     State(state): State<ObservabilityHttpState>,
-    headers: HeaderMap,
     Json(body): Json<ObservabilityConfigurationRequest>,
 ) -> Result<Json<ObservabilityConfiguration>, BridgeError> {
-    ensure_allowed_request(&headers, &state.request_policy)?;
     let raw_endpoint = body
         .prometheus_url
         .as_deref()
@@ -179,11 +172,7 @@ async fn websocket_handler(
     ws: WebSocketUpgrade,
     State(state): State<ObservabilityHttpState>,
     Query(query): Query<ObservabilityEventsQuery>,
-    headers: HeaderMap,
 ) -> Response {
-    if let Err(error) = ensure_allowed_request(&headers, &state.request_policy) {
-        return error.into_response();
-    }
     ws.on_upgrade(move |socket| handle_socket(socket, state.observability, query.after_sequence))
         .into_response()
 }

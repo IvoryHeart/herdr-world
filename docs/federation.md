@@ -1,8 +1,9 @@
 # Operating federated Herdr World
 
 Herdr World uses one host-local bridge per Herdr runtime and direct browser federation. It has no
-central gateway, fleet controller, SSH manager, authentication layer, or RBAC. Every browser that a
-bridge admits has terminal-equivalent access to that Herdr runtime.
+central gateway, fleet controller, SSH manager, or RBAC. Each bridge can require its own optional
+password and issues bounded in-memory sessions. Every browser session that a bridge admits has
+terminal-equivalent access to that Herdr runtime.
 
 ## One host on loopback
 
@@ -37,7 +38,6 @@ Suppose the page is opened from `http://host-a:8787` and the browser must also c
 HOST=0.0.0.0 scripts/run-bridge.sh \
   --bridge-label "Host A" \
   --allow-host host-a \
-  --allow-origin http://host-a:8787 \
   --allow-connect-origin http://host-b:8787
 
 # host B: admits direct calls from the page served by host A
@@ -47,25 +47,26 @@ HOST=0.0.0.0 scripts/run-bridge.sh \
   --allow-origin http://host-a:8787
 ```
 
-Add `http://host-b:8787` in Settings → Bridge in the browser. `--allow-origin` on B authorizes the
-page origin to call B. `--allow-connect-origin` on A adds B's HTTP and WebSocket origins to the CSP
-of the page A serves. Neither option is authentication. Never expose this configuration to an
-untrusted network.
+Add `http://host-b:8787` in Settings → Network → Connections in the browser. `--allow-origin` on B
+authorizes the page origin to call B. `--allow-connect-origin` on A adds B's HTTP and WebSocket
+origins to the CSP of the page A serves. Neither option is authentication; configure password
+protection separately under Network → Allow connections. Never expose direct HTTP connections to
+an untrusted network.
 
-In Settings → Bridge, `Enable all` and `Disable all` are convenience actions for the saved browser
-profiles. They only change which directly reachable profiles are admitted to the current Office
-view; each bridge still has its own capability probe, connection state, origin policy, and failure
-boundary. This is a downstream coordination affordance, not a fleet gateway or authentication
-system.
+Settings → Network → Connections lists saved browser profiles. Each connection can be connected or
+disconnected independently and retains its own capability probe, connection state, origin policy,
+and failure boundary. This is a downstream coordination affordance, not a fleet gateway or
+authentication system.
 
 The Origin check is a browser cross-site-request guard, not a client identity check. Browsers send
 Origin for the cross-origin requests this policy is designed to constrain, while non-browser clients
-may omit the header and are admitted. Require authentication at an operator-managed VPN or reverse
-proxy if non-browser access must be restricted.
+may omit the header and are admitted. Enable the bridge password and use a trusted LAN or VPN;
+direct HTTP does not protect the password or session traffic from observation or modification.
+Use TLS, SSH, or an authenticated reverse proxy for an untrusted network.
 
-Non-loopback startup fails unless both an explicit `--allow-host` and `--allow-origin` are present.
-Add each exact hostname and origin that is required; avoid permissive DNS, wildcard proxy, or CSP
-configuration.
+Non-loopback startup requires an explicit `--allow-host`. A page served by that bridge at the exact
+accepted address is admitted as same-origin. Add `--allow-origin` only for browser pages served from
+another exact origin; avoid permissive DNS, wildcard proxy, or CSP configuration.
 
 ## Operator-managed SSH forwarding
 
@@ -119,8 +120,8 @@ asset service or central gateway.
 ## Verification checklist
 
 - Load two compatible host profiles in one browser and confirm both appear in All-host scope.
-- Use Settings → Bridge → Enable all and confirm every saved profile is admitted, then disable one
-  profile and confirm the remaining host stays navigable.
+- Use Settings → Network → Connections to connect the saved profiles, then disconnect one and
+  confirm the remaining Herdr stays navigable.
 - Type, send control input, resize/refit, and create/rename/move/close on each owning host.
 - Exercise desktop IME composition and cancellation, dismiss a menu/dialog to
   confirm focus returns to its actual trigger, and verify the optional

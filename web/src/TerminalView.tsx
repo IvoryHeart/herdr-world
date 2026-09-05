@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, RefObject } from "react";
 import { autosizeMobileCommandTextarea } from "./mobileCommandTextarea";
+import { authenticatedFetch, bridgeWebSocketProtocols } from "./bridgeApi";
 import { ConfirmDialog } from "./overlays";
 import { addNativeResumeHandler } from "./native";
 import { shellQuote } from "./shell";
@@ -855,14 +856,16 @@ export function TerminalView({
       reconnectScheduledForSocket.clear();
       const currentSocketGeneration = socketGeneration + 1;
       socketGeneration = currentSocketGeneration;
+      const nextSocketUrl = terminalSocketUrl(
+        wsUrlRef.current,
+        terminalId,
+        initialSize,
+        terminalOutputCoalesceMs,
+        terminalOutputGzipSupported(),
+      );
       const nextSocket = new WebSocket(
-        terminalSocketUrl(
-          wsUrlRef.current,
-          terminalId,
-          initialSize,
-          terminalOutputCoalesceMs,
-          terminalOutputGzipSupported(),
-        ),
+        nextSocketUrl,
+        bridgeWebSocketProtocols(nextSocketUrl),
       );
       let gzipOutputAcknowledged = false;
       const outputDecoder = createTerminalOutputFrameDecoder(
@@ -2083,7 +2086,7 @@ async function uploadFile(
   if (overwrite) {
     params.set("overwrite", "true");
   }
-  const response = await fetch(httpUrl("/api/uploads", params), {
+  const response = await authenticatedFetch(httpUrl("/api/uploads", params), {
     method: "POST",
     headers: file.blob.type ? { "content-type": file.blob.type } : undefined,
     body: file.blob,
