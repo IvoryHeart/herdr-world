@@ -40,7 +40,7 @@ export function BridgeDestinationSettings({
       setDestinations(next.remote_access.allowed_bridge_origins);
     }).catch((error: unknown) => {
       if (!cancelled) {
-        setMessage(error instanceof Error ? error.message : "Browser permissions unavailable");
+        setMessage(error instanceof Error ? error.message : "Network permissions unavailable");
       }
     });
     return () => { cancelled = true; };
@@ -53,13 +53,13 @@ export function BridgeDestinationSettings({
   const applyAndReload = async (nextDestinations: string[]) => {
     if (!status) return;
     setBusy(true);
-    setMessage("Saving browser permissions and restarting this bridge…");
+    setMessage("Applying network permissions…");
     try {
       const draft = remoteAccessDraft(status);
       draft.allowed_bridge_origins = nextDestinations;
       const apply = await applyRemoteAccess(httpUrl, draft, "keep");
       if (apply.state === "failed") {
-        throw new Error(apply.reason ?? "The bridge could not apply the browser permissions");
+        throw new Error(apply.reason ?? "This Herdr could not apply the network permissions");
       }
       await waitForRemoteAccessReady(
         httpUrl,
@@ -69,32 +69,32 @@ export function BridgeDestinationSettings({
           status.remote_access.password_configured,
         ),
       );
-      setMessage("Browser permissions applied. Reloading Herdr World…");
+      setMessage("Network permissions applied. Reloading Herdr World…");
       setBusy(false);
       reloadPage();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not apply browser permissions");
+      setMessage(error instanceof Error ? error.message : "Could not apply network permissions");
       setBusy(false);
     }
   };
 
   const allowSaved = async () => {
     setBusy(true);
-    setMessage("Allowing saved bridge URLs and restarting this bridge…");
+    setMessage("Allowing saved connections…");
     try {
       const result = await allowBridgeDestinations(httpUrl, savedOrigins);
       setStatus(result.status);
       setDestinations(result.status.remote_access.allowed_bridge_origins);
       if (result.changed) {
-        setMessage("Saved bridges allowed. Reloading Herdr World…");
+        setMessage("Saved connections allowed. Reloading Herdr World…");
         setBusy(false);
         reloadPage();
       } else {
-        setMessage("All saved bridge URLs are already allowed.");
+        setMessage("All saved connections are already allowed.");
         setBusy(false);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not allow saved bridge URLs");
+      setMessage(error instanceof Error ? error.message : "Could not allow saved connections");
       setBusy(false);
     }
   };
@@ -106,11 +106,11 @@ export function BridgeDestinationSettings({
       {missingOrigins.length > 0 ? (
         <div className="bridge-destination-notice" role="status">
           <div>
-            <strong>Browser permission needed</strong>
+            <strong>Connection permission needed</strong>
             <span>
               {missingOrigins.length === 1
-                ? "One saved bridge URL is not yet available to this page."
-                : `${missingOrigins.length} saved bridge URLs are not yet available to this page.`}
+                ? "One saved Herdr address is not yet available to this page."
+                : `${missingOrigins.length} saved Herdr addresses are not yet available to this page.`}
             </span>
           </div>
           <button
@@ -119,21 +119,21 @@ export function BridgeDestinationSettings({
             disabled={busy || status?.mutation_allowed !== true}
             onClick={() => void allowSaved()}
           >
-            {busy ? "Applying…" : "Allow saved bridges & reload"}
+            {busy ? "Applying…" : "Allow saved connections & reload"}
           </button>
         </div>
       ) : null}
 
       <details className="remote-access-advanced">
-        <summary>Advanced browser permissions</summary>
+        <summary>Advanced network permissions</summary>
         <div className="remote-access-advanced-content">
           <p className="settings-help">
-            Bridge destinations are the exact URLs this page may contact. Saving a new bridge adds
-            its URL automatically; changes require a page reload because browsers keep the policy
-            attached to the loaded document.
+            These are the exact Herdr addresses this page may contact. Adding a connection allows
+            its address automatically; changes require a reload because the browser keeps this
+            security policy with the loaded page.
           </p>
           <AccessOriginList
-            label="Bridge destinations for this page"
+            label="Herdrs this page may connect to"
             values={destinations}
             suggestions={savedOrigins}
             onChange={setDestinations}
@@ -157,7 +157,7 @@ export function BridgeDestinationSettings({
       {message ? <div className="modal-message">{message}</div> : null}
       {status && !status.mutation_allowed ? (
         <p className="backend-warning">
-          {status.mutation_reason ?? "This launch cannot update browser permissions."}
+          {status.mutation_reason ?? "This launch cannot update network permissions."}
         </p>
       ) : null}
     </div>

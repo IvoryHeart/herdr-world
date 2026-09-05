@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("BridgeDestinationSettings", () => {
-  it("allows saved bridge URLs and reloads after the local bridge is ready", async () => {
+  it("allows saved Herdr addresses and reloads after the local service is ready", async () => {
     const requests: RequestInit[] = [];
     const reloadPage = vi.fn();
     let allowedBridgeOrigins: string[] = [];
@@ -46,9 +46,9 @@ describe("BridgeDestinationSettings", () => {
     );
     await act(async () => Promise.resolve());
 
-    expect(container.textContent).toContain("Browser permission needed");
+    expect(container.textContent).toContain("Connection permission needed");
     const allow = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.includes("Allow saved bridges"),
+      (button) => button.textContent?.includes("Allow saved connections"),
     );
     await act(async () => {
       allow?.click();

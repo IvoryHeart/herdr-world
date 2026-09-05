@@ -12,7 +12,7 @@ const bridgeSessionStoragePrefix = "herdrWeb.bridgeSession.v1:";
 let passwordPromptHandler: PasswordPromptHandler | null = null;
 
 export class BridgeAuthenticationError extends Error {
-  constructor(message = "Bridge password required or rejected") {
+  constructor(message = "Password required or rejected by this Herdr") {
     super(message);
     this.name = "BridgeAuthenticationError";
   }
@@ -164,7 +164,7 @@ async function fetchWithSession(
 
 function abortError() {
   return typeof DOMException === "function"
-    ? new DOMException("Bridge request timed out", "AbortError")
+    ? new DOMException("Herdr connection timed out", "AbortError")
     : undefined;
 }
 
@@ -175,7 +175,7 @@ async function authenticateBridge(
   timeoutMs?: number,
 ) {
   if (new TextEncoder().encode(password).length > 1024) {
-    throw new BridgeAuthenticationError("Bridge password is too long");
+    throw new BridgeAuthenticationError("Password is too long");
   }
   let response: Response;
   try {
@@ -186,18 +186,18 @@ async function authenticateBridge(
       signal: callerSignal,
     }, null, timeoutMs ?? 5000);
   } catch {
-    throw new BridgeAuthenticationError("Bridge authentication is unavailable");
+    throw new BridgeAuthenticationError("Herdr authentication is unavailable");
   } finally {
     password = "";
   }
   if (!response.ok) {
     throw new BridgeAuthenticationError(
-      response.status === 429 ? "Too many bridge password attempts; retry shortly" : undefined,
+      response.status === 429 ? "Too many password attempts; retry shortly" : undefined,
     );
   }
   const payload = (await response.json().catch(() => null)) as { token?: unknown } | null;
   if (!payload || !isBridgeSessionToken(payload.token)) {
-    throw new BridgeAuthenticationError("Bridge authentication response is invalid");
+    throw new BridgeAuthenticationError("Herdr authentication response is invalid");
   }
   rememberBridgeSession(origin, payload.token);
 }

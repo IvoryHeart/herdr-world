@@ -3,21 +3,19 @@ import type { HsvaColor } from "@uiw/color-convert";
 import Wheel from "@uiw/react-color-wheel";
 import {
   Building2,
+  Network,
   Plus,
   RotateCcw,
-  Server,
   SlidersHorizontal,
   Smartphone,
   SquareTerminal,
   StickyNote,
-  Wifi,
   X,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent } from "react";
 import {
   duplicateBackend,
-  allAvailableBridgeIds,
   fallbackBackendColor,
   normalizeBridgeBaseUrl,
   normalizeBackendColor,
@@ -121,7 +119,8 @@ type FormState = {
 };
 
 type SelectionMode = "same-origin" | "new" | "backend";
-type SettingsArea = "bridge" | "remote" | "features" | "display" | "terminal" | "mobile";
+type SettingsArea = "network" | "features" | "display" | "terminal" | "mobile";
+type NetworkArea = "connections" | "allow";
 const relativeHttpUrl = (path: string) => path;
 
 export function BackendSettingsDialog({
@@ -180,7 +179,8 @@ export function BackendSettingsDialog({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<BridgeBackendProfile | null>(null);
-  const [activeArea, setActiveArea] = useState<SettingsArea>("bridge");
+  const [activeArea, setActiveArea] = useState<SettingsArea>("network");
+  const [networkArea, setNetworkArea] = useState<NetworkArea>("connections");
   useFocusReturn();
 
   const selectedBackend = useMemo(
@@ -254,7 +254,7 @@ export function BackendSettingsDialog({
         try {
           const access = await fetchRemoteAccess(localHttpUrl);
           if (!access.remote_access.allowed_bridge_origins.includes(new URL(baseUrl).origin)) {
-            setMessage("Save this bridge first. Herdr World will allow its URL and reload before connecting.");
+            setMessage("Connect first. Herdr World needs to allow this address and reload the page.");
             return;
           }
         } catch {
@@ -262,9 +262,9 @@ export function BackendSettingsDialog({
         }
       }
       await bridge.probeBackend(baseUrl);
-      setMessage(found ? `Reachable; same URL as ${found.name}.` : "Backend reachable.");
+      setMessage(found ? `Reachable; already saved as ${found.name}.` : "Connection successful.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Backend test failed");
+      setMessage(error instanceof Error ? error.message : "Connection test failed");
     } finally {
       setBusy(false);
     }
@@ -283,7 +283,7 @@ export function BackendSettingsDialog({
       }
       const profile = form.id
         ? await bridge.updateBackend(form.id, { name: form.name, baseUrl, color: form.color })
-        : await bridge.addBackend({ name: form.name, baseUrl, color: form.color }, false);
+        : await bridge.addBackend({ name: form.name, baseUrl, color: form.color }, true);
       setSelectionMode("backend");
       setForm(backendFormFromProfile(profile));
       let permissionChanged = false;
@@ -299,7 +299,7 @@ export function BackendSettingsDialog({
         }
       }
       if (permissionChanged) {
-        setMessage("Bridge saved and allowed. Reloading Herdr World to activate browser access…");
+        setMessage("Connection saved. Reloading Herdr World to connect…");
         window.setTimeout(() => window.location.reload(), 0);
         return;
       }
@@ -307,17 +307,17 @@ export function BackendSettingsDialog({
       try {
         await bridge.probeBackend(baseUrl);
       } catch (error) {
-        probeWarning = error instanceof Error ? error.message : "Backend could not be reached.";
+        probeWarning = error instanceof Error ? error.message : "The Herdr address could not be reached.";
       }
       setMessage(
         permissionWarning
-          ? `Bridge saved. ${permissionWarning}`
+          ? `Connection saved. ${permissionWarning}`
           : probeWarning
-            ? `Bridge saved. ${probeWarning}`
-            : "Bridge saved.",
+            ? `Connection saved. ${probeWarning}`
+            : "Connection saved.",
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save backend");
+      setMessage(error instanceof Error ? error.message : "Could not save connection");
     } finally {
       setBusy(false);
     }
@@ -336,14 +336,18 @@ export function BackendSettingsDialog({
   const sameOriginUrl = sameOriginDisplayUrl();
   const sameOriginLabel = sameOriginHostLabel();
   const showSameOrigin = bridge.sameOriginAvailable;
-  const availableBridgeIds = allAvailableBridgeIds(bridge.store.backends, showSameOrigin);
-  const enabledBridgeCount = availableBridgeIds.filter((id) =>
-    bridge.store.enabledBridgeIds.includes(id),
-  ).length;
-  const allBridgesEnabled = availableBridgeIds.length > 0 && enabledBridgeCount === availableBridgeIds.length;
-  const areas: { id: SettingsArea; label: string; icon: typeof Server }[] = [
-    { id: "bridge", label: "Bridges", icon: Server },
-    ...(showRemoteAccess ? [{ id: "remote" as const, label: "Share this machine", icon: Wifi }] : []),
+  const sameOriginStatus = connectionStatus(
+    sameOriginEnabled,
+    bridge.getRuntime(SAME_ORIGIN_BRIDGE_ID)?.capabilityState,
+  );
+  const selectedConnectionStatus = selectedBackend
+    ? connectionStatus(
+        bridge.store.enabledBridgeIds.includes(selectedBackend.id),
+        bridge.getRuntime(selectedBackend.id)?.capabilityState,
+      )
+    : null;
+  const areas: { id: SettingsArea; label: string; icon: typeof Network }[] = [
+    { id: "network", label: "Network", icon: Network },
     { id: "features", label: "Features", icon: StickyNote },
     { id: "display", label: "Display", icon: SlidersHorizontal },
     { id: "terminal", label: "Terminal", icon: SquareTerminal },
@@ -371,7 +375,7 @@ export function BackendSettingsDialog({
         }}
         onSubmit={(event) => {
           event.preventDefault();
-          if (activeArea !== "bridge" || !editingBackend) {
+          if (activeArea !== "network" || networkArea !== "connections" || !editingBackend) {
             return;
           }
           void saveBackend();
@@ -418,187 +422,207 @@ export function BackendSettingsDialog({
           </div>
 
           <div className="settings-panel" role="tabpanel">
-            {activeArea === "bridge" ? (
+            {activeArea === "network" ? (
               <>
-                <div className="settings-label">Connect to bridges</div>
+                <div className="settings-label">Network</div>
                 <p className="settings-help">
-                  Add machines this browser should connect to. This list is stored separately for
-                  each Herdr World page URL, so a list saved on port 8787 is not copied to port 8791.
+                  Connect this Herdr World to other Herdr instances, or allow connections to this
+                  one.
                 </p>
-                <div className="bridge-settings-grid">
-                  <div className="backend-list" role="list" aria-label="Saved bridges">
-                    <div className="backend-fleet-summary">
-                      <div>
-                        <strong>Bridge fleet</strong>
-                        <small>{enabledBridgeCount}/{availableBridgeIds.length} included in Office</small>
-                      </div>
-                      <div className="backend-fleet-actions">
-                        <button
-                          className="settings-inline-action"
-                          type="button"
-                          disabled={allBridgesEnabled}
-                          onClick={() => bridge.setAllBridgesEnabled(true)}
-                        >
-                          Enable all
-                        </button>
-                        <button
-                          className="settings-inline-action"
-                          type="button"
-                          disabled={enabledBridgeCount === 0}
-                          onClick={() => bridge.setAllBridgesEnabled(false)}
-                        >
-                          Disable all
-                        </button>
-                      </div>
-                    </div>
-                    {showSameOrigin ? (
-                      <BackendToggleRow
-                        active={selectionMode === "same-origin"}
-                        color={SAME_ORIGIN_BRIDGE_COLOR}
-                        enabled={sameOriginEnabled}
-                        title={sameOriginLabel}
-                        subtitle={sameOriginUrl}
-                        toggleLabel={`${sameOriginEnabled ? "Disable" : "Enable"} ${sameOriginLabel} bridge`}
-                        onSelect={selectSameOrigin}
-                        onToggle={() => bridge.setBridgeEnabled(SAME_ORIGIN_BRIDGE_ID, !sameOriginEnabled)}
-                      />
-                    ) : null}
-                    {bridge.store.backends.map((backend) => {
-                      const enabled = bridge.store.enabledBridgeIds.includes(backend.id);
-                      return (
-                        <BackendToggleRow
-                          key={backend.id}
-                          active={backend.id === form.id}
-                          color={backend.color ?? fallbackBackendColor(backend.id)}
-                          enabled={enabled}
-                          title={backend.name}
-                          subtitle={backend.baseUrl}
-                          toggleLabel={`${enabled ? "Disable" : "Enable"} ${backend.name}`}
-                          onSelect={() => editBackend(backend)}
-                          onToggle={() => bridge.setBridgeEnabled(backend.id, !enabled)}
-                        />
-                      );
-                    })}
+                {showRemoteAccess ? (
+                  <div
+                    className="segmented-control network-area-tabs"
+                    role="tablist"
+                    aria-label="Network settings"
+                  >
                     <button
-                      className="backend-row-action"
                       type="button"
-                      data-active={selectionMode === "new" ? "true" : undefined}
-                      onClick={startNew}
+                      role="tab"
+                      aria-selected={networkArea === "connections"}
+                      data-on={networkArea === "connections" ? "true" : undefined}
+                      onClick={() => setNetworkArea("connections")}
                     >
-                      <Plus size={14} />
-                      <span>
-                        <strong>Add bridge</strong>
-                        <small>Save another bridge URL</small>
-                      </span>
+                      Connections
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={networkArea === "allow"}
+                      data-on={networkArea === "allow" ? "true" : undefined}
+                      onClick={() => setNetworkArea("allow")}
+                    >
+                      Allow connections
                     </button>
                   </div>
-                  <div className="backend-form">
-                    {selectionMode === "same-origin" ? (
-                      <div className="backend-static">
-                        <strong>{sameOriginLabel}</strong>
-                        <span>
-                          {sameOriginEnabled ? "Enabled" : "Disabled"}; uses the server that
-                          delivered this web app.
-                        </span>
+                ) : null}
+
+                {networkArea === "connections" ? (
+                  <>
+                    <div className="settings-label">Connections</div>
+                    <p className="settings-help">
+                      Connect this Herdr World to another Herdr. Connections are saved in this browser.
+                    </p>
+                    <div className="bridge-settings-grid">
+                      <div className="backend-list" role="list" aria-label="Connections">
+                        {showSameOrigin ? (
+                          <BackendToggleRow
+                            active={selectionMode === "same-origin"}
+                            color={SAME_ORIGIN_BRIDGE_COLOR}
+                            enabled={sameOriginEnabled}
+                            title={sameOriginLabel}
+                            subtitle={sameOriginUrl}
+                            status={sameOriginStatus}
+                            toggleLabel={`${sameOriginEnabled ? "Disconnect from" : "Connect to"} ${sameOriginLabel}`}
+                            onSelect={selectSameOrigin}
+                            onToggle={() => bridge.setBridgeEnabled(SAME_ORIGIN_BRIDGE_ID, !sameOriginEnabled)}
+                          />
+                        ) : null}
+                        {bridge.store.backends.map((backend) => {
+                          const enabled = bridge.store.enabledBridgeIds.includes(backend.id);
+                          const status = connectionStatus(
+                            enabled,
+                            bridge.getRuntime(backend.id)?.capabilityState,
+                          );
+                          return (
+                            <BackendToggleRow
+                              key={backend.id}
+                              active={backend.id === form.id}
+                              color={backend.color ?? fallbackBackendColor(backend.id)}
+                              enabled={enabled}
+                              title={backend.name}
+                              subtitle={backend.baseUrl}
+                              status={status}
+                              toggleLabel={`${enabled ? "Disconnect from" : "Connect to"} ${backend.name}`}
+                              onSelect={() => editBackend(backend)}
+                              onToggle={() => bridge.setBridgeEnabled(backend.id, !enabled)}
+                            />
+                          );
+                        })}
+                        <button
+                          className="backend-row-action"
+                          type="button"
+                          data-active={selectionMode === "new" ? "true" : undefined}
+                          onClick={startNew}
+                        >
+                          <Plus size={14} />
+                          <span>
+                            <strong>Add connection</strong>
+                            <small>Connect to another Herdr</small>
+                          </span>
+                        </button>
                       </div>
-                    ) : (
-                      <>
-                        <label className="field-label">
-                          <span>Display name</span>
-                          <input
-                            className="field"
-                            value={form.name}
-                            placeholder="Home workstation"
-                            autoComplete="off"
-                            onChange={(event) =>
-                              setForm((current) => ({ ...current, name: event.target.value }))
-                            }
-                          />
-                        </label>
-                        <label className="field-label">
-                          <span>Bridge URL</span>
-                          <input
-                            className="field"
-                            value={form.baseUrl}
-                            placeholder="http://bridge-a.example.test:4000"
-                            autoComplete="off"
-                            spellCheck={false}
-                            onBlur={validateDuplicate}
-                            onChange={(event) =>
-                              setForm((current) => ({ ...current, baseUrl: event.target.value }))
-                            }
-                          />
-                        </label>
-                        <label className="field-label">
-                          <span>Bridge color</span>
-                          <BackendColorControl
-                            value={form.color}
-                            defaultValue={
-                              form.id
-                                ? fallbackBackendColor(form.id)
-                                : suggestBackendColor(bridge.store.backends)
-                            }
-                            onChange={(color) => setForm((current) => ({ ...current, color }))}
-                          />
-                        </label>
-                        {selectedBackend?.lastConnectedAt ? (
-                          <div className="backend-note">
-                            Last used {formatDate(selectedBackend.lastConnectedAt)}
+                      <div className="backend-form">
+                        {selectionMode === "same-origin" ? (
+                          <div className="backend-static">
+                            <strong>{sameOriginLabel}</strong>
+                            <span>{sameOriginStatus}. This Herdr served the page you are using.</span>
+                          </div>
+                        ) : (
+                          <>
+                            <label className="field-label">
+                              <span>Herdr address</span>
+                              <input
+                                className="field"
+                                value={form.baseUrl}
+                                placeholder="http://herdr.example:8787"
+                                autoComplete="off"
+                                spellCheck={false}
+                                onBlur={validateDuplicate}
+                                onChange={(event) =>
+                                  setForm((current) => ({ ...current, baseUrl: event.target.value }))
+                                }
+                              />
+                            </label>
+                            <details className="remote-access-advanced connection-customize">
+                              <summary>Customize connection</summary>
+                              <div className="remote-access-advanced-content connection-customize-content">
+                                <label className="field-label">
+                                  <span>Name</span>
+                                  <input
+                                    className="field"
+                                    value={form.name}
+                                    placeholder="Ubuntu VM"
+                                    autoComplete="off"
+                                    onChange={(event) =>
+                                      setForm((current) => ({ ...current, name: event.target.value }))
+                                    }
+                                  />
+                                </label>
+                                <label className="field-label">
+                                  <span>Color</span>
+                                  <BackendColorControl
+                                    value={form.color}
+                                    defaultValue={
+                                      form.id
+                                        ? fallbackBackendColor(form.id)
+                                        : suggestBackendColor(bridge.store.backends)
+                                    }
+                                    onChange={(color) => setForm((current) => ({ ...current, color }))}
+                                  />
+                                </label>
+                                {selectedBackend?.lastConnectedAt ? (
+                                  <div className="backend-note">
+                                    Last connected {formatDate(selectedBackend.lastConnectedAt)}
+                                  </div>
+                                ) : null}
+                              </div>
+                            </details>
+                          </>
+                        )}
+                        {selectedConnectionStatus ? (
+                          <div
+                            className="connection-state"
+                            data-state={selectedConnectionStatus.toLowerCase()}
+                          >
+                            {selectedConnectionStatus}
                           </div>
                         ) : null}
-                      </>
-                    )}
-                    {selectedBackend ? (
-                      <div className="backend-note">
-                        {bridge.store.enabledBridgeIds.includes(selectedBackend.id)
-                          ? "Enabled"
-                          : "Disabled"}
+                        {duplicate ? (
+                          <div className="backend-warning">
+                            This address is already saved as {duplicate.name}.
+                          </div>
+                        ) : null}
+                        {message ? <div className="modal-message">{message}</div> : null}
+                      </div>
+                    </div>
+                    {editingBackend ? (
+                      <div className="modal-actions">
+                        {canDelete ? (
+                          <button type="button" className="btn btn-danger" disabled={busy} onClick={deleteBackend}>
+                            Delete connection
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={busy || !form.baseUrl.trim()}
+                          onClick={testBackend}
+                        >
+                          Test connection
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy || !form.baseUrl.trim()}
+                          onClick={() => void saveBackend()}
+                        >
+                          {form.id ? "Save changes" : "Connect"}
+                        </button>
                       </div>
                     ) : null}
-                    {duplicate ? (
-                      <div className="backend-warning">
-                        This URL is already saved as {duplicate.name}.
-                      </div>
+                    {showRemoteAccess ? (
+                      <BridgeDestinationSettings
+                        httpUrl={localHttpUrl}
+                        backends={bridge.store.backends}
+                      />
                     ) : null}
-                    {message ? <div className="modal-message">{message}</div> : null}
-                  </div>
-                </div>
-                {editingBackend ? (
-                  <div className="modal-actions">
-                    {canDelete ? (
-                      <button type="button" className="btn btn-danger" disabled={busy} onClick={deleteBackend}>
-                        Delete
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={busy || !form.baseUrl.trim()}
-                      onClick={testBackend}
-                    >
-                      Test
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={busy || !form.baseUrl.trim()}
-                      onClick={() => void saveBackend()}
-                    >
-                      Save
-                    </button>
-                  </div>
+                  </>
                 ) : null}
-                {showRemoteAccess ? (
-                  <BridgeDestinationSettings
-                    httpUrl={localHttpUrl}
-                    backends={bridge.store.backends}
-                  />
+
+                {networkArea === "allow" && showRemoteAccess ? (
+                  <RemoteAccessSettings httpUrl={localHttpUrl} />
                 ) : null}
               </>
-            ) : null}
-
-            {activeArea === "remote" && showRemoteAccess ? (
-              <RemoteAccessSettings httpUrl={localHttpUrl} />
             ) : null}
 
             {activeArea === "features" ? (
@@ -1152,7 +1176,7 @@ function BackendColorControl({
         className="backend-color-swatch"
         ref={buttonRef}
         type="button"
-        aria-label="Bridge color"
+        aria-label="Connection color"
         aria-expanded={open}
         aria-controls={open ? popoverId : undefined}
         aria-haspopup="true"
@@ -1162,7 +1186,7 @@ function BackendColorControl({
       <input
         className="backend-color-value mono"
         value={draft}
-        aria-label="Bridge color hex value"
+        aria-label="Connection color hex value"
         spellCheck={false}
         autoCapitalize="none"
         onFocus={(event) => event.currentTarget.select()}
@@ -1195,10 +1219,10 @@ function BackendColorControl({
           className="backend-color-popover"
           id={popoverId}
           role="group"
-          aria-label="Bridge color picker"
+          aria-label="Connection color picker"
         >
           <Wheel
-            aria-label="Bridge color hue and saturation"
+            aria-label="Connection color hue and saturation"
             color={hsva}
             width={176}
             height={176}
@@ -1212,7 +1236,7 @@ function BackendColorControl({
             max={100}
             step={1}
             value={Math.round(hsva.v)}
-            aria-label="Bridge color brightness"
+            aria-label="Connection color brightness"
             style={{ "--shade-color": shadeColor } as CSSProperties}
             onChange={(event) => setHsvaColor({ ...hsva, v: event.currentTarget.valueAsNumber })}
           />
@@ -1221,7 +1245,7 @@ function BackendColorControl({
             <button
               className="settings-reset icon-btn"
               type="button"
-              aria-label="Reset bridge color"
+              aria-label="Reset connection color"
               title="Reset"
               disabled={color === fallbackColor}
               onClick={() => setColor(fallbackColor)}
@@ -1418,6 +1442,7 @@ function BackendToggleRow({
   active,
   color,
   enabled,
+  status,
   title,
   subtitle,
   toggleLabel,
@@ -1427,6 +1452,7 @@ function BackendToggleRow({
   active: boolean;
   color: string;
   enabled: boolean;
+  status: string;
   title: string;
   subtitle: string;
   toggleLabel: string;
@@ -1443,7 +1469,11 @@ function BackendToggleRow({
         />
         <span className="backend-row-text">
           <strong>{title}</strong>
-          <small>{subtitle}</small>
+          <small>
+            <span className="connection-status" data-state={status.toLowerCase()}>{status}</span>
+            <span aria-hidden="true"> · </span>
+            {subtitle}
+          </small>
         </span>
       </button>
       <button
@@ -1460,6 +1490,18 @@ function BackendToggleRow({
       </button>
     </div>
   );
+}
+
+function connectionStatus(
+  enabled: boolean,
+  capabilityState: "idle" | "probing" | "ready" | "error" | "offline" | "incompatible" | undefined,
+) {
+  if (!enabled) return "Off";
+  if (capabilityState === "ready") return "Connected";
+  if (!capabilityState || capabilityState === "idle" || capabilityState === "probing") {
+    return "Connecting";
+  }
+  return "Offline";
 }
 
 function newBackendForm(backends: readonly BridgeBackendProfile[]): FormState {

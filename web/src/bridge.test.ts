@@ -326,14 +326,14 @@ describe("capabilities", () => {
       blocked: true,
       state: "incompatible",
       capabilities: null,
-      error: "Bridge is not compatible with this web app",
+      error: "This Herdr is not compatible with this web app",
       retry: false,
     });
     expect(capabilityProbeFailure(new Error("network down"))).toEqual({
       blocked: true,
       state: "offline",
       capabilities: null,
-      error: "Bridge unavailable",
+      error: "Connection unavailable",
       retry: true,
     });
   });
@@ -509,7 +509,7 @@ describe("capabilities", () => {
     );
 
     await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
-      /Bridge terminal attach failed: terminal attach failed: terminal missing/iu,
+      /Connection terminal attach failed: terminal attach failed: terminal missing/iu,
     );
     fetchMock.mockRestore();
   });
@@ -526,7 +526,7 @@ describe("capabilities", () => {
     ));
 
     await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(
-      /add http:\/\/192\.0\.2\.30:8791 under Share this machine/iu,
+      /Network → Allow connections → Advanced network permissions/iu,
     );
     fetchMock.mockRestore();
   });

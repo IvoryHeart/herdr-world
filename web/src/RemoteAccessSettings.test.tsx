@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 
 describe("RemoteAccessSettings", () => {
-  it("turns detected host and standard client origins into a simple sharing draft", async () => {
+  it("turns a detected address into a simple allow-connections draft", async () => {
     const requests: { url: string; init?: RequestInit }[] = [];
     const reloadPage = vi.fn();
     let currentStatus = remoteAccessStatus(false, ["bridge.example.test"]);
@@ -44,14 +44,14 @@ describe("RemoteAccessSettings", () => {
       />,
     );
     await act(async () => Promise.resolve());
-    expect(container.textContent).toContain("Share this bridge");
-    expect(container.textContent).toContain("They are not addresses of allowed client devices");
+    expect(container.textContent).toContain("Allow connections");
+    expect(container.textContent).toContain("They are not a list of connecting devices");
     const suggestion = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
     expect(suggestion?.checked).toBe(false);
     const share = container.querySelector<HTMLButtonElement>('[role="switch"]');
     await act(async () => share?.click());
     const password = container.querySelector<HTMLInputElement>(
-      'input[aria-label="Set this bridge password"]',
+      'input[aria-label="Set connection password"]',
     );
     expect(password).not.toBeNull();
     await act(async () => {
@@ -95,7 +95,7 @@ describe("RemoteAccessSettings", () => {
       <RemoteAccessSettings httpUrl={(path) => path} reloadPage={() => {}} />,
     );
     await act(async () => Promise.resolve());
-    const password = container.querySelector<HTMLInputElement>('input[aria-label="Change this bridge password"]');
+    const password = container.querySelector<HTMLInputElement>('input[aria-label="Change connection password"]');
     expect(password).not.toBeNull();
     await act(async () => {
       if (password) {
@@ -143,13 +143,45 @@ describe("RemoteAccessSettings", () => {
     });
     expect(JSON.parse(String(requests[0]?.body))).not.toHaveProperty("password");
   });
+
+  it("allows the directly served page without requiring extra page origins", async () => {
+    const requests: RequestInit[] = [];
+    const status = remoteAccessStatus(false, ["bridge.example.test"], true);
+    status.remote_access.allowed_page_origins = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      if (init?.method === "POST") {
+        requests.push(init);
+        return new Response(JSON.stringify({ state: "applying", reason: "restarting", restored: null }), { status: 202 });
+      }
+      return new Response(JSON.stringify(status), { status: 200 });
+    });
+
+    const { container } = await render(
+      <RemoteAccessSettings httpUrl={(path) => path} reloadPage={() => {}} />,
+    );
+    await act(async () => Promise.resolve());
+    const apply = container.querySelector<HTMLButtonElement>('button[type="button"].btn-primary');
+    expect(apply?.disabled).toBe(false);
+    await act(async () => {
+      apply?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(JSON.parse(String(requests[0]?.body))).toMatchObject({
+      remote_access: { enabled: true, allowed_page_origins: [] },
+    });
+  });
 });
 
-function remoteAccessStatus(passwordConfigured: boolean, suggestions: string[] = []) {
+function remoteAccessStatus(
+  passwordConfigured: boolean,
+  suggestions: string[] = [],
+  enabled = passwordConfigured,
+) {
   return {
     remote_access: {
-      enabled: false,
-      accepted_hosts: [],
+      enabled,
+      accepted_hosts: enabled ? ["bridge.example.test"] : [],
       allowed_page_origins: ["http://world.example.test"],
       allowed_bridge_origins: [],
       password_configured: passwordConfigured,

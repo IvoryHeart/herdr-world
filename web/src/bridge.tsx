@@ -554,7 +554,7 @@ function BridgePasswordPrompt({
       <button
         className="overlay-scrim"
         type="button"
-        aria-label="Cancel bridge authentication"
+        aria-label="Cancel connection"
         onClick={onCancel}
       />
       <form
@@ -567,10 +567,10 @@ function BridgePasswordPrompt({
           if (password) onSubmit(password);
         }}
       >
-        <div id="bridge-auth-title" className="modal-title">Bridge password</div>
+        <div id="bridge-auth-title" className="modal-title">Connect to Herdr</div>
         <p className="backend-note">
-          Enter the password for {origin}. The password is not stored; authenticated access lasts
-          for this browser tab, including refreshes, until the session expires.
+          Enter the password for the Herdr at {origin}. The password is not stored. You may be asked
+          again if that Herdr restarts, the session expires, or this browser tab closes.
         </p>
         <label className="field-label">
           <span>Password</span>
@@ -1072,23 +1072,23 @@ function isNativeApp() {
 export function normalizeBridgeBaseUrl(input: string): string {
   const trimmed = input.trim();
   if (!trimmed) {
-    throw new Error("Enter a bridge URL");
+    throw new Error("Enter a Herdr address");
   }
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//iu.test(trimmed) ? trimmed : `http://${trimmed}`;
   let url: URL;
   try {
     url = new URL(withScheme);
   } catch {
-    throw new Error("Bridge URL is invalid");
+    throw new Error("Herdr address is invalid");
   }
   if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new Error("Bridge URL must use http or https");
+    throw new Error("Herdr address must use http or https");
   }
   if (url.username || url.password) {
-    throw new Error("Bridge URL must not include credentials");
+    throw new Error("Herdr address must not include credentials");
   }
   if ((url.pathname && url.pathname !== "/") || url.search || url.hash) {
-    throw new Error("Bridge URL must not include a path, query, or fragment");
+    throw new Error("Herdr address must not include a path, query, or fragment");
   }
   validateBridgeHost(url.hostname);
   return url.origin;
@@ -1097,7 +1097,7 @@ export function normalizeBridgeBaseUrl(input: string): string {
 function validateBridgeHost(hostname: string) {
   const host = stripIpv6Brackets(hostname).toLowerCase();
   if (!host) {
-    throw new Error("Bridge URL must include a host");
+    throw new Error("Herdr address must include a host");
   }
   if (parseIpv4(host)) {
     return;
@@ -1106,7 +1106,7 @@ function validateBridgeHost(hostname: string) {
     return;
   }
   if (!isValidHostname(host)) {
-    throw new Error("Bridge hostname is invalid");
+    throw new Error("Herdr hostname is invalid");
   }
 }
 
@@ -1252,7 +1252,7 @@ export async function probeBridgeBaseUrl(baseUrl: string): Promise<BridgeCapabil
     throw new BridgeDiagnosticError("Bridge snapshot response is malformed");
   }
 
-  await probeBridgeWebSocket(normalized, "/ws/events", "Bridge WebSocket upgrade");
+  await probeBridgeWebSocket(normalized, "/ws/events", "Connection WebSocket upgrade");
   const terminalId = firstTerminalId(snapshotValue);
   if (terminalId) {
     const query = new URLSearchParams({
@@ -1263,7 +1263,7 @@ export async function probeBridgeBaseUrl(baseUrl: string): Promise<BridgeCapabil
     await probeBridgeWebSocket(
       normalized,
       "/ws/terminal",
-      "Bridge terminal attach",
+      "Connection terminal attach",
       query,
       true,
     );
@@ -1295,7 +1295,7 @@ function probeBridgeWebSocket(
     const url = buildWsUrl(baseUrl, path, query);
     let settled = false;
     const timer = globalThis.setTimeout(() => finish(new BridgeDiagnosticError(
-      `${label} timed out; check the bridge's Host, Origin, and password settings`,
+      `${label} timed out; check the Herdr address, network permissions, and password`,
     )), 5000);
     const finish = (error?: Error) => {
       if (settled) return;
@@ -1311,7 +1311,7 @@ function probeBridgeWebSocket(
     try {
       socket = new WebSocket(url, bridgeWebSocketProtocols(url));
     } catch {
-      finish(new BridgeDiagnosticError(`${label} could not be opened; check the bridge address`));
+      finish(new BridgeDiagnosticError(`${label} could not be opened; check the Herdr address`));
       return;
     }
     socket.onopen = () => {
@@ -1332,7 +1332,7 @@ function probeBridgeWebSocket(
     };
     socket.onerror = () => {
       finish(new BridgeDiagnosticError(
-        `${label} failed; check the bridge's Host, Origin, and password settings`,
+        `${label} failed; check the Herdr address, network permissions, and password`,
       ));
     };
     socket.onclose = () => {
@@ -1366,15 +1366,15 @@ function terminalProbeMessageError(label: string, data: unknown): Error | null {
 }
 
 function capabilityHttpError(status: number) {
-  if (status === 401) return "Password required or rejected by the bridge";
+  if (status === 401) return "Password required or rejected by this Herdr";
   if (status === 403) {
     const pageOrigin = globalThis.location?.origin;
     return pageOrigin
-      ? `Bridge policy rejected this page. On the target machine, add ${pageOrigin} under Share this machine → Advanced browser permissions.`
-      : "Bridge policy rejected this page; check the target bridge's additional client page origins";
+      ? `This Herdr does not allow the current page. On the target Herdr, add ${pageOrigin} under Network → Allow connections → Advanced network permissions.`
+      : "This Herdr does not allow the current page; check its advanced network permissions";
   }
-  if (status === 404) return "Bridge API is unavailable at this address";
-  return `Bridge API request failed (${status})`;
+  if (status === 404) return "Herdr is unavailable at this address";
+  return `Herdr connection request failed (${status})`;
 }
 
 export type CapabilityProbeOutcome = {
@@ -1415,7 +1415,7 @@ export function capabilityProbeFailure(error: unknown): CapabilityProbeOutcome {
     blocked: true,
     state: contractFailure ? "incompatible" : "offline",
     capabilities: null,
-    error: contractFailure || authenticationFailure || diagnosticFailure ? error.message : "Bridge unavailable",
+    error: contractFailure || authenticationFailure || diagnosticFailure ? error.message : "Connection unavailable",
     retry: !contractFailure,
   };
 }
@@ -1515,7 +1515,7 @@ function compatibilityError(capabilities: BridgeCapabilities) {
     typeof capabilities.web_compat === "number" &&
     capabilities.web_compat < APP_MIN_WEB_COMPAT
   ) {
-    return "Bridge is not compatible with this web app";
+    return "This Herdr is not compatible with this web app";
   }
   return null;
 }

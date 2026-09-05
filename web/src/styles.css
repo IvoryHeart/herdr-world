@@ -4490,6 +4490,11 @@ button {
   min-width: 0;
 }
 
+.network-area-tabs {
+  max-width: 360px;
+  margin: 10px 0 16px;
+}
+
 .bridge-settings-grid {
   display: grid;
   grid-template-columns: minmax(260px, 1.05fr) minmax(320px, 0.95fr);
@@ -4503,60 +4508,6 @@ button {
   gap: 6px;
   overflow-y: auto;
   padding-right: 2px;
-}
-
-.backend-fleet-summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 9px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-sm);
-  color: var(--subtext0);
-  background: color-mix(in srgb, var(--surface0) 72%, transparent);
-}
-
-.backend-fleet-summary strong,
-.backend-fleet-summary small {
-  display: block;
-}
-
-.backend-fleet-summary strong {
-  color: var(--text);
-  font-size: 11.5px;
-}
-
-.backend-fleet-summary small {
-  margin-top: 2px;
-  font-family: var(--mono);
-  font-size: 10px;
-}
-
-.backend-fleet-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px;
-}
-
-.settings-inline-action {
-  padding: 4px 6px;
-  border: 1px solid var(--surface1);
-  border-radius: var(--r-sm);
-  color: var(--subtext0);
-  background: var(--surface0);
-  font-size: 10px;
-}
-
-.settings-inline-action:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.settings-inline-action:disabled {
-  cursor: default;
-  opacity: 0.45;
 }
 
 .backend-row {
@@ -4645,6 +4596,20 @@ button {
   font-size: 10.5px;
 }
 
+.connection-status {
+  color: var(--overlay1);
+  font-family: var(--ui);
+  font-weight: 600;
+}
+
+.connection-status[data-state="connected"] {
+  color: var(--green);
+}
+
+.connection-status[data-state="offline"] {
+  color: var(--red);
+}
+
 .backend-toggle {
   position: relative;
   width: 34px;
@@ -4695,6 +4660,34 @@ button {
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
+}
+
+.connection-customize {
+  margin-top: 2px;
+}
+
+.connection-customize-content {
+  gap: 12px;
+}
+
+.connection-state {
+  width: fit-content;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--overlay1);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.connection-state[data-state="connected"] {
+  border-color: color-mix(in srgb, var(--green) 45%, var(--line));
+  color: var(--green);
+}
+
+.connection-state[data-state="offline"] {
+  border-color: color-mix(in srgb, var(--red) 45%, var(--line));
+  color: var(--red);
 }
 
 .backend-note,

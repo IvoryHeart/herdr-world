@@ -103,13 +103,14 @@ herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
 herdr plugin uninstall ivoryheart.herdr-world
 ```
 
-Use Settings → Share this machine to let another device reach the bridge running on this machine.
-The basic flow detects this machine's address, provides a copyable Bridge URL, and offers an optional
-password. Inbound browser-origin rules remain under Advanced browser permissions. Use Settings →
-Bridges to add other machines; the local page's outbound destination permission is applied there and
-the page reloads when its browser policy changes. Development or standalone launches show these
-settings as read-only when no controller-owned restart boundary is available. Direct connections are
-intended for a trusted LAN/VPN path; use TLS, a VPN, or SSH for untrusted networks.
+Use Settings → Network → Connections to connect Herdr World to another Herdr. Adding a connection
+normally needs only its address; Herdr World asks for a password when the other Herdr requires one.
+Use Network → Allow connections to let Herdr World elsewhere connect to this Herdr. The basic flow
+provides an on/off control, a copyable address, and optional password protection. Exact host, page,
+and destination restrictions remain available under Advanced network permissions. Development or
+standalone launches show these settings as read-only when no controller-owned restart boundary is
+available. Direct connections are intended for a trusted LAN/VPN path; use TLS, a VPN, or SSH for
+untrusted networks.
 
 To run from source:
 

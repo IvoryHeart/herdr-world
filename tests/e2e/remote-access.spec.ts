@@ -8,40 +8,64 @@ test.beforeEach(async ({ page, request }) => {
   }, hostStore());
 });
 
-test("shares this machine with host settings separate from bridge destinations", async ({ page }) => {
+test("allows connections with advanced inbound permissions separate from destinations", async ({ page }) => {
   await page.goto("/spaces");
   await expect(page.getByRole("button", { name: "localhost, compatible" })).toBeVisible();
   await openSettings(page);
-  await page.getByRole("tab", { name: "Share this machine" }).click();
+  await page.getByRole("tab", { name: "Allow connections" }).click();
 
-  await expect(page.getByText("Share this bridge", { exact: true })).toBeVisible();
-  const switchButton = page.getByRole("switch", { name: "Allow other devices to connect" });
+  await expect(page.getByText("Allow connections", { exact: true }).last()).toBeVisible();
+  const switchButton = page.getByRole("switch", { name: "Allow connections to this Herdr" });
   await expect(switchButton).toHaveAttribute("aria-checked", "false");
   await switchButton.click();
   await expect(page.getByText("http://bridge.example.test:4173", { exact: true })).toBeVisible();
-  await page.getByLabel("Set this bridge password").fill("fixture-only-password");
-  await expect(page.getByText(/unencrypted HTTP and WebSocket connections/iu)).toBeVisible();
-  await page.getByText("Advanced browser permissions", { exact: true }).click();
-  await expect(page.getByText("Additional client page origins", { exact: true })).toBeVisible();
-  await expect(page.getByText("Bridge destinations for this page", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Set connection password").fill("fixture-only-password");
+  await expect(page.getByText(/Direct connections are not encrypted/iu)).toBeVisible();
+  await page.getByText("Advanced network permissions", { exact: true }).click();
+  await expect(page.getByText("Web pages allowed to connect", { exact: true })).toBeVisible();
+  await expect(page.getByText("Herdrs this page may connect to", { exact: true })).toHaveCount(0);
   await Promise.all([
     page.waitForEvent("load"),
-    page.getByRole("button", { name: "Apply", exact: true }).click(),
+    page.getByRole("button", { name: "Apply changes", exact: true }).click(),
   ]);
 
   await openSettings(page);
-  await page.getByRole("tab", { name: "Share this machine" }).click();
-  await expect(page.getByText("Protected", { exact: true })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText(/Bridge ready/iu);
+  await page.getByRole("tab", { name: "Allow connections" }).click();
+  await expect(page.getByText("Password protected", { exact: true })).toBeVisible();
+  await expect(page.getByRole("status")).toContainText(/Network ready/iu);
 });
 
-test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and terminal paths", async ({ page, request }) => {
+test("adds and enables a connection from its address", async ({ page }) => {
+  await page.goto("/spaces");
+  await openSettings(page);
+  await page.locator(".backend-row-main").filter({ hasText: "Remote B" }).click();
+  await page.getByRole("button", { name: "Delete connection" }).click();
+  await page.getByRole("button", { name: /Add connection/ }).click();
+  await page.getByLabel("Herdr address").fill("http://127.0.0.1:4174");
+  await Promise.all([
+    page.waitForEvent("load"),
+    page.getByRole("button", { name: "Connect", exact: true }).click(),
+  ]);
+
+  await openSettings(page);
+  const connection = page.locator(".backend-row-main").filter({ hasText: "127.0.0.1:4174" });
+  await expect(connection).toContainText("Connected");
+  await expect.poll(() => page.evaluate(() => {
+    const raw = localStorage.getItem("herdrWeb.bridgeBackends.v2");
+    if (!raw) return false;
+    const store = JSON.parse(raw) as { backends: { id: string; baseUrl: string }[]; enabledBridgeIds: string[] };
+    const saved = store.backends.find((backend) => backend.baseUrl === "http://127.0.0.1:4174");
+    return Boolean(saved && store.enabledBridgeIds.includes(saved.id));
+  })).toBe(true);
+});
+
+test("authenticates a cross-origin Herdr and diagnoses HTTP, WebSocket, and terminal paths", async ({ page, request }) => {
   await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-b", passwordConfigured: true },
   });
   await page.goto("/spaces");
 
-  const prompt = page.getByRole("dialog", { name: "Bridge password" });
+  const prompt = page.getByRole("dialog", { name: "Connect to Herdr" });
   await expect(prompt).toBeVisible();
   await prompt.getByLabel("Password").fill("fixture-only-password");
   await prompt.getByRole("button", { name: "Connect" }).click();
@@ -56,25 +80,23 @@ test("authenticates a cross-origin bridge and diagnoses HTTP, WebSocket, and ter
   await expect(prompt).toBeHidden();
 
   await openSettings(page);
-  await page.getByRole("tab", { name: "Bridges" }).click();
   await Promise.all([
     page.waitForEvent("load"),
-    page.getByRole("button", { name: "Allow saved bridges & reload" }).click(),
+    page.getByRole("button", { name: "Allow saved connections & reload" }).click(),
   ]);
 
   await expect(prompt).toBeHidden();
   await openSettings(page);
-  await page.getByRole("tab", { name: "Bridges" }).click();
   await page.locator(".backend-row-main").filter({ hasText: "Remote B" }).click();
-  await page.getByRole("button", { name: "Test", exact: true }).click();
+  await page.getByRole("button", { name: "Test connection", exact: true }).click();
 
-  await expect(page.getByText("Backend reachable.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Connection successful.", { exact: true })).toBeVisible();
 });
 
 function switcherSettings(page: Page) {
   return page
     .getByRole("complementary", { name: "Switcher" })
-    .locator('button[title^="Settings; bridge:"]');
+    .locator('button[title^="Settings; Herdr:"]');
 }
 
 async function openSettings(page: Page) {
