@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libgbm1 libasound2 \
     libpango-1.0-0 libcairo2 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
+RUN install -m755 /root/.cargo/bin/cargo-about /root/.cargo/bin/cargo-audit /usr/local/cargo/bin/
 ENV PATH="/opt/harness/bin:${PATH}"
 WORKDIR /workspace
 USER node
+RUN node --version && rustc --version && cargo-about --version && cargo audit --version && ralph --version && codex --version
