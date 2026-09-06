@@ -11,7 +11,8 @@ Web's own release history remains in its upstream changelog.
 ### Added
 
 - Added repository OpenSpec contracts, agent skills, shared worktree tooling, bounded Ralph
-  execution and agent evals for repeatable development and reviewed PR delivery.
+  execution and agent evals for repeatable development and reviewed PR delivery
+  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78)).
 
 - Added a simplified Network UI for connecting Herdr instances and allowing connections to the
   current Herdr, with connection status, detected and copyable addresses, an optional memory-hard
