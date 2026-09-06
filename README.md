@@ -117,6 +117,7 @@ To run from source:
 ```bash
 npm install
 npm install --prefix web
+npm ci --prefix harness
 npm run dev:local
 ```
 

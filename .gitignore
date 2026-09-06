@@ -8,6 +8,20 @@
 /vendor/herdr-compat/target/
 /dist-packages/
 /.herdr-world-plugin/
+/.agents/.worktrees/
+/.agents/runs/
+/.agents/state/
+/.agents/cache/
+/.ralph/
+/harness/node_modules/
+/harness/bin/
+/harness/.install-*/
+/evals/.venv/
+/evals/jobs/
+/evals/.prepared/
+# Harbor may copy transient Docker Compose directories into its invocation directory.
+/tmp*/
+__pycache__/
 /_site/
 .specs/
 .scratch/

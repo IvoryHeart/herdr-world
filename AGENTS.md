@@ -28,6 +28,21 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Start Here
 
+- Read [docs/agent-development.md](docs/agent-development.md) for OpenSpec, repository
+  skills, bounded Ralph runs, evaluation and PR delivery. Use
+  [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
+- Create task worktrees with `npm run agent:worktree -- create <slug>`. They live in
+  the primary checkout's ignored `.agents/.worktrees/`, including when invoked from
+  a linked worktree. Do not move or clean another agent's existing worktree.
+- Maintained capability specs live in `openspec/specs/`; active proposals live in
+  `openspec/changes/`. Numbered `docs/specs/` files are historical evidence.
+  Existing user authorization carries across planning and implementation.
+- Use the pinned OpenSpec CLI through `npm run spec -- ...`. Repository skills in
+  `.agents/skills/` adapt OpenSpec to these rules. Review tool-generated updates
+  before replacing those adaptations.
+- Ralph scratchpads, graphs and eval output are temporary or derived knowledge.
+  They never override current specs, source, tests or these delivery rules.
+
 - Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See
   [`docs/development.md`](docs/development.md) for the Herdr, bridge, Vite, and optional OTEL
@@ -51,7 +66,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Keep bridge command exposure narrow. Browser commands should stay allow-listed and parameter-validated in `web_bridge.rs`.
 - Keep generated outputs out of commits: `web/dist/`, `bridge/target/`, and
   `vendor/herdr-compat/target/`, `dist-packages/`, and Android build outputs.
-- The bridge is local-first and currently has no full browser authentication. Treat LAN binding and upload behavior as security-sensitive.
+- The bridge is local-first, with optional password authentication and bounded sessions.
+  It has no multi-user authorization model. Treat LAN binding and uploads as security-sensitive.
 
 ## Privacy And Local Data
 
@@ -65,6 +81,7 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Testing
 
+- Run `npm ci --prefix harness` to install the pinned development tools used by repository checks.
 - Run `npm install --prefix web` if dependencies are missing.
 - Run `npm run vendor:check` to verify the vendored layout.
 - Run `npm run lint:web` for ESLint.
@@ -129,4 +146,5 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - The release workflow builds and uploads the desktop, npm, plugin, and Homebrew outputs. Android
   remains separate until a signed public APK exists. Do not commit `dist-packages/`, APKs, or
   generated Android outputs.
-- Do not bump npm package versions until package publishing is defined.
+- Root and web development manifests remain private at `0.0.0`; public package versions
+  are derived from the reviewed release tag. Follow `docs/release.md`.

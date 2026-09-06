@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "command-navigation",
+      "kind": "json",
+      "instruction": "Trace workspace.rename from the browser to Herdr. Inspect source and write answer.json with keys frontend (path), route, bridge (path), validator (function), authority (runtime name), and crossHostFallback (boolean). Do not change application code.",
+      "expected": {
+        "frontend": "web/src/commands.ts",
+        "route": "/api/command",
+        "bridge": "bridge/src/web_bridge.rs",
+        "validator": "validate_web_command",
+        "authority": "Herdr",
+        "crossHostFallback": false
+      }
+    },
+    {
+      "id": "planning-boundary",
+      "kind": "json",
+      "instruction": "Read the repository development policy. Write answer.json with booleans fixNeedsProposal (a routine reconnect bug fix, no requested spec), newContractNeedsProposal (a new public cross-host authorization contract), and authorizationContinues (owner already authorized planning plus implementation). Do not implement either example.",
+      "expected": {
+        "fixNeedsProposal": false,
+        "newContractNeedsProposal": true,
+        "authorizationContinues": true
+      }
+    },
+    {
+      "id": "reconnect-regression",
+      "kind": "implementation",
+      "mutant": true,
+      "instruction": "Fix the regression in web/src/terminalReconnectPolicy.ts: ordinary retries must use exponential delay starting at 500 ms capped at 5000 ms; immediate retries have zero delay and do not advance the attempt. Preserve foreground timeout and fast-attempt accounting. Verify the fix and change only this helper and relevant tests."
+    },
+    {
+      "id": "review-regression",
+      "kind": "review",
+      "mutant": true,
+      "instruction": "Review web/src/terminalReconnectPolicy.ts against its documented bounded retry behavior and neighboring tests. Do not fix code. Write answer.json with findings, an array of objects containing path, severity and explanation. Report concrete correctness defects only.",
+      "expectedFinding": true
+    },
+    {
+      "id": "review-clean",
+      "kind": "review",
+      "instruction": "Review web/src/terminalReconnectPolicy.ts against its documented bounded retry behavior and neighboring tests. Do not fix code. Write answer.json with findings, an array of objects containing path, severity and explanation. Report concrete correctness defects only.",
+      "expectedFinding": false
+    },
+    {
+      "id": "knowledge-maintenance",
+      "kind": "knowledge",
+      "instruction": "docs/eval-knowledge.md contains a stale assertion about bridge authentication. Inspect the current implementation and network runbook, then correct that file. Preserve its unrelated runtime ownership statement and do not change application code.",
+      "oracle": "The bridge supports optional password authentication with bounded sessions.\\nHerdr owns runtime topology.\\n"
+    }
+  ]
+}

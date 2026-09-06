@@ -1,0 +1,84 @@
+# Runtime paths are resolved into an immutable per-run control copy by run.mjs.
+event_loop:
+  completion_promise: LOOP_COMPLETE
+  cancellation_promise: task.blocked
+  starting_event: plan.start
+  required_events: [review.passed, candidate.verified]
+  enforce_hat_scope: true
+  max_iterations: 12
+  max_runtime_seconds: 3600
+  max_consecutive_failures: 3
+  persistent: false
+cli:
+  backend: custom
+  command: node
+  args: [scripts/agent/backend.mjs, coordinator]
+  prompt_mode: stdin
+  default_mode: autonomous
+core:
+  specs_dir: openspec/specs
+  scratchpad:
+    enabled: true
+    path: .ralph/agent/scratchpad.md
+  guardrails:
+    - Follow AGENTS.md and the authorized task; current contracts live in openspec.
+    - Do not push, merge, publish, contact live Herdr, or alter verification controls.
+    - Return the structured response requested by the adapter; it owns event emission.
+memories:
+  enabled: false
+tasks:
+  enabled: false
+features:
+  parallel: false
+  auto_merge: false
+  preflight:
+    enabled: false
+hooks:
+  enabled: true
+  events:
+    pre.loop.complete:
+      - name: exact-candidate-gate
+        command: [node, scripts/agent/gate.mjs]
+        on_error: block
+        timeout_seconds: 30
+hats:
+  planner:
+    name: Planner
+    description: Ground the task in source and current knowledge.
+    triggers: [plan.start]
+    publishes: [plan.ready, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, planner]
+    max_activations: 2
+    instructions: Read harness/roles/planner.md.
+  implementer:
+    name: Implementer
+    description: Implement and verify the bounded task, including knowledge updates.
+    triggers: [plan.ready, review.rejected, verification.failed]
+    publishes: [candidate.ready, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, implementer]
+    max_activations: 4
+    instructions: Read harness/roles/implementer.md.
+  reviewer:
+    name: Reviewer
+    description: Inspect the exact candidate in a fresh read-only session.
+    triggers: [candidate.ready]
+    publishes: [review.passed, review.rejected, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, reviewer]
+    max_activations: 4
+    instructions: Read harness/roles/reviewer.md.
+  verifier:
+    name: Verifier
+    description: Execute deterministic checks outside the agent session.
+    triggers: [review.passed]
+    publishes: [candidate.verified, verification.failed, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, verifier]
+    max_activations: 4
+    instructions: The adapter runs the checks; no model call is needed.

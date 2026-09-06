@@ -1,0 +1,67 @@
+import { cp, mkdir, lstat, readlink, access } from 'node:fs/promises';
+import { join, resolve, dirname, relative, isAbsolute } from 'node:path';
+import { command, sourceFiles, git, assertSourceParents } from './lib.mjs';
+
+export async function copyCandidate(source, target) {
+  await mkdir(target, { recursive: true });
+  for (const file of await sourceFiles(source)) {
+    await assertSourceParents(source, file);
+    const full = join(source, file);
+    let stat;
+    try { stat = await lstat(full); } catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+    if (stat.isSymbolicLink()) {
+      const link = await readlink(full);
+      const rel = relative(source, resolve(dirname(full), link));
+      if (isAbsolute(link) || rel.startsWith('..')) throw new Error('Candidate symlink escapes workspace: ' + file);
+    }
+    await mkdir(dirname(join(target, file)), { recursive: true });
+    await cp(full, join(target, file), { dereference: false, verbatimSymlinks: true });
+  }
+  git(['init', '-b', 'candidate'], target);
+  git(['add', '.'], target);
+  git(['-c', 'user.name=Agent fixture', '-c', 'user.email=agent@example.invalid', 'commit', '-qm', 'Candidate baseline'], target);
+}
+export function dockerArgs(state, workspace, { readOnly = false, network = 'none', authFile, control, name } = {}) {
+  const args = ['docker', 'run', '--rm', '--init', '-i', '--name', name, '--user', String(process.getuid?.() ?? 1000) + ':' + String(process.getgid?.() ?? 1000),
+    '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit=512', '--memory=6g', '--cpus=4',
+    '--network', network, '--read-only', '--tmpfs', '/tmp:rw,exec,size=2g',
+    '--tmpfs', '/tmp/world-codex:rw,mode=1777,size=64m',
+    '--mount', 'type=bind,src=' + workspace + ',dst=/workspace' + (readOnly ? ',readonly' : ''),
+    '--mount', 'type=bind,src=' + join(workspace, '.git') + ',dst=/workspace/.git,readonly',
+    '--mount', 'type=bind,src=' + control + ',dst=/control,readonly',
+    '--workdir', '/workspace', '-e', 'OPENSPEC_TELEMETRY=0', '-e', 'DO_NOT_TRACK=1',
+    '-e', 'CODEX_HOME=/tmp/world-codex', '-e', 'npm_config_cache=/tmp/world-npm',
+    '-e', 'CARGO_HOME=/workspace/.agents/cache/cargo', '-e', 'PLAYWRIGHT_BROWSERS_PATH=/workspace/.agents/cache/browsers'];
+  if (authFile) args.push('--mount', 'type=bind,src=' + authFile + ',dst=/tmp/world-codex/auth.json,readonly');
+  args.push(state.image);
+  return args;
+}
+export async function inContainer(state, workspace, argv, options = {}) {
+  if (state.environment === 'harbor') {
+    // This driver is only used inside a Harbor-owned container. The local runner
+    // never selects it; external grading remains in a separate environment.
+    await access('/.dockerenv');
+    await access('/logs/agent');
+    const modelCall = argv[0].endsWith('/codex');
+    const args = [...argv];
+    if (modelCall && options.readOnly) args[args.indexOf('--sandbox') + 1] = 'read-only';
+    const env = { PATH: process.env.PATH, RUSTUP_HOME: process.env.RUSTUP_HOME,
+      CARGO_HOME: join(workspace, '.agents/cache/cargo'), npm_config_cache: '/tmp/world-npm',
+      OPENSPEC_TELEMETRY: '0', DO_NOT_TRACK: '1' };
+    if (modelCall) { env.CODEX_API_KEY = process.env.CODEX_API_KEY; env.CODEX_HOME = '/tmp/world-codex'; }
+    return command(args, { ...options, cwd: workspace, env });
+  }
+  const name = 'world-agent-' + state.id + '-' + Date.now();
+  try {
+    return await command([...dockerArgs(state, workspace, { ...options, name }), ...argv], options);
+  } finally {
+    // A killed docker client can leave its container alive. Remove only this invocation's name.
+    await command(['docker', 'rm', '-f', name], { stream: false, timeoutMs: 15000 }).catch(() => {});
+  }
+}
+export async function prepareDependencies(state, workspace, control) {
+  return inContainer(state, workspace, ['bash', '-c',
+    'npm ci && npm ci --prefix web && npm ci --prefix harness && cargo fetch --locked --manifest-path bridge/Cargo.toml && cargo fetch --locked --manifest-path vendor/herdr-compat/Cargo.toml' +
+    (state.profile === 'acceptance' ? ' && npx --no-install playwright install chromium' : '')],
+  { control, network: 'bridge', timeoutMs: 1200000, log: join(dirname(workspace), 'bootstrap.log') });
+}

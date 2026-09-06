@@ -59,7 +59,8 @@ never connects directly to a provider backend or receives its credentials.
 
 ## Security boundary
 
-This increment is trusted-single-user software. An admitted browser has terminal-equivalent control.
-Host, Origin, and CSP checks reduce DNS-rebinding, CSRF, and accidental cross-origin exposure; they
-are not authentication or authorization. Loopback is the default. Operators own SSH, VPN, firewall,
-TLS, and authenticated reverse-proxy policy outside this repository.
+This is trusted-single-user software. Optional bridge password authentication issues bounded
+sessions; admitted browsers have terminal-equivalent control. Host, Origin, and CSP checks reduce
+DNS-rebinding, CSRF, and accidental cross-origin exposure and remain separate from authentication.
+There is no multi-user authorization model. Loopback is the default. Operators own SSH, VPN,
+firewall, TLS and reverse-proxy policy. See [federation](federation.md) for network operation.

@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event",
+    "summary"
+  ],
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": [
+        "plan.ready",
+        "candidate.ready",
+        "review.passed",
+        "review.rejected",
+        "task.blocked"
+      ]
+    },
+    "summary": {
+      "type": "string"
+    }
+  }
+}

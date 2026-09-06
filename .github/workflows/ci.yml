@@ -14,6 +14,78 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  agent:
+    name: Agent harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: harness/package-lock.json
+      - run: npm ci --prefix harness
+      - run: npm run test:agent
+      - run: npm run spec:check
+      - run: npm run eval:check
+      - name: Select environment checks
+        id: scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          node --input-type=module <<'JS'
+          import { execFileSync } from 'node:child_process';
+          import { appendFileSync } from 'node:fs';
+          const base = process.env.BASE_SHA;
+          const files = /^[a-f0-9]{40}$/.test(base ?? '') && !/^0+$/.test(base)
+            ? execFileSync('git', ['diff', '--name-only', base, 'HEAD'], {encoding:'utf8'}).split('\n')
+            : ['harness/'];
+          const needed = files.some(file => /^(harness\/|scripts\/agent\/|evals\/|\.agents\/|AGENTS\.md$|\.github\/workflows\/ci\.yml$)/.test(file));
+          appendFileSync(process.env.GITHUB_OUTPUT, 'environment=' + needed + '\n');
+          JS
+      - name: Build isolated execution image
+        if: steps.scope.outputs.environment == 'true'
+        run: npm run agent:image
+      - name: Exercise the production supervisor without model calls
+        if: steps.scope.outputs.environment == 'true'
+        run: node --test scripts/agent/container.test.mjs
+      - uses: astral-sh/setup-uv@v6
+        if: steps.scope.outputs.environment == 'true'
+        with:
+          version: "0.12.1"
+      - name: Validate held-out Harbor graders
+        if: steps.scope.outputs.environment == 'true'
+        run: |
+          uv sync --project evals --locked
+          task_path=$(node evals/prepare.mjs)
+          npm run eval:harbor -- run -p "$task_path" -a oracle -n 1 --jobs-dir evals/jobs --job-name oracle
+          node evals/assert-result.mjs evals/jobs/oracle 1
+          npm run eval:harbor -- run -p "$task_path" -a nop -n 1 --jobs-dir evals/jobs --job-name negative
+          node evals/assert-result.mjs evals/jobs/negative 0
+      - name: Upload harness diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: agent-harness-diagnostics
+          path: evals/jobs
+          if-no-files-found: ignore
+
+  delivery:
+    name: Delivery checks
+    if: always()
+    needs: [launchd, check, browser, agent]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs=JSON.parse(process.env.RESULTS); if (!Object.values(jobs).every(job => job.result === "success")) process.exit(1)'
+
   launchd:
     name: macOS launchd plugin lifecycle (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -60,6 +132,8 @@ jobs:
           sudo apt-get install --yes ripgrep
       - name: Install root dependencies
         run: npm ci
+      - name: Install pinned harness dependencies
+        run: npm ci --prefix harness
       - name: Install web dependencies
         run: npm ci --prefix web
       - name: Run complete non-live checks

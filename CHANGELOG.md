@@ -10,6 +10,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
+- Added repository OpenSpec contracts, agent skills, shared worktree tooling, bounded Ralph
+  execution and agent evals for repeatable development and reviewed PR delivery.
+
 - Added a simplified Network UI for connecting Herdr instances and allowing connections to the
   current Herdr, with connection status, detected and copyable addresses, an optional memory-hard
   password, reload-safe tab-scoped client sessions, readiness/rollback status, and progressively

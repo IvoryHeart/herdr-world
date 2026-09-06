@@ -38,6 +38,7 @@ scripts/check-vendor.sh
 3. Run the full automated check:
 
 ```bash
+npm ci --prefix harness
 npm run check
 ```
 
