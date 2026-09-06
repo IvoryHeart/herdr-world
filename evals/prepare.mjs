@@ -32,7 +32,7 @@ for (const entry of manifest.cases) {
   await writeFile(join(dir, 'task.toml'), 'schema_version = "1.4"\n\n[metadata]\ncategory = "agent-development"\nsource_fingerprint = "' + fingerprintValue + '"\n\n[agent]\ntimeout_sec = 1200\n\n[environment]\ncpus = 4\nmemory_mb = 8192\nnetwork_mode = "public"\n\n[verifier]\ntimeout_sec = 60\nenvironment_mode = "separate"\nnetwork_mode = "no-network"\nuser = "root"\n\n[verifier.environment]\nnetwork_mode = "no-network"\n\n[[artifacts]]\nsource = "/workspace/' + artifact[0] + '"\ndestination = "' + artifact[1] + '"\n');
   await cp(join(repoRoot, 'evals/graders/grade.py'), join(dir, 'tests/grade.py'));
   await writeFile(join(dir, 'tests/case.json'), JSON.stringify(entry));
-  await writeFile(join(dir, 'tests/Dockerfile'), 'FROM node:22.14.0-bookworm\nCOPY . /tests\nRUN chmod 755 /tests/test.sh\n');
+  await writeFile(join(dir, 'tests/Dockerfile'), 'FROM node:22.23.2-bookworm\nCOPY . /tests\nRUN chmod 755 /tests/test.sh\n');
   await writeFile(join(dir, 'tests/test.sh'), '#!/bin/bash\nset -euo pipefail\nchmod 755 /logs/verifier\nmkdir -p /candidate\ncp -P /workspace/' + artifact[0] + ' /candidate/' + artifact[1] + ' 2>/dev/null || true\nchmod -R a+rX /candidate\npython3 /tests/grade.py /tests/case.json /candidate\n');
   let solve;
   if (entry.kind === 'implementation') solve = "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/workspace/web/src/terminalReconnectPolicy.ts')\np.write_text(p.read_text().replace('Math.max(', 'Math.min(', 1))\nPY\n";

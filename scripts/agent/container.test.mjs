@@ -25,6 +25,8 @@ else if(prompt.startsWith('Implement the authorized task')) {
   fs.writeFileSync('/workspace/source.mjs',prompt.includes('FIXTURE_FAIL')?'export const answer = 0;\\n':'export const answer = 42;\\n');
   try { fs.writeFileSync('/workspace/.git/config','tampered'); throw Error('Git metadata writable'); }
   catch(error) { if(error.message==='Git metadata writable') throw error; }
+  try { fs.writeFileSync('/workspace/.ralph/agent/scratchpad.md','tampered'); throw Error('Supervisor metadata writable'); }
+  catch(error) { if(error.message==='Supervisor metadata writable') throw error; }
   event='candidate.ready';
 } else if(prompt.startsWith('Use world-review-change')) {
   try { fs.writeFileSync('/workspace/source.mjs','tampered'); throw Error('Review writable'); }

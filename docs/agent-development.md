@@ -140,8 +140,8 @@ manifests stop for interactive development and review; the verification entry po
 for the run. Use interactive work plus evals for harness improvements.
 
 Worker containers have no host home directory, Herdr socket, SSH agent, Docker socket,
-Git remotes, publishing credentials or published ports. Only the selected model auth file
-is mounted read-only for model calls. Reviews mount the candidate read-only; verification
+Git remotes, publishing credentials or published ports. The selected model auth file, private Git metadata and Ralph event/progress directory
+are mounted read-only for model calls. The supervisor writes role notes after each call. Reviews mount the candidate read-only; verification
 runs on a fresh copy without model auth. Acceptance dependency audits have network access
 to advisory services; source, browser and independence checks run with networking disabled.
 Fixed browser fixture ports are private to each container.

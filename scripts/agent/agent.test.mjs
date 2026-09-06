@@ -116,6 +116,7 @@ test('container argv separates read-only review, authless checks and publishing 
   assert(!verifier.some(arg => arg.includes('docker.sock') || arg.includes('auth.json') || arg.includes('GH_TOKEN')));
   const worker = dockerArgs({ id: 'fixture', image: 'fixture-image' }, '/candidate', { ...common, authFile: '/private/model-auth', network: 'bridge' });
   assert(worker.some(arg => arg.endsWith('auth.json,readonly')));
+  assert(worker.includes('type=bind,src=/candidate/.ralph,dst=/workspace/.ralph,readonly'));
 });
 test('production Ralph config routes a complete loop using deterministic stand-ins', { timeout: 30000 }, async () => {
   const workspace = await fixture();

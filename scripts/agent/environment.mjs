@@ -32,7 +32,9 @@ export function dockerArgs(state, workspace, { readOnly = false, network = 'none
     '--workdir', '/workspace', '-e', 'OPENSPEC_TELEMETRY=0', '-e', 'DO_NOT_TRACK=1',
     '-e', 'CODEX_HOME=/tmp/world-codex', '-e', 'npm_config_cache=/tmp/world-npm',
     '-e', 'CARGO_HOME=/workspace/.agents/cache/cargo', '-e', 'PLAYWRIGHT_BROWSERS_PATH=/workspace/.agents/cache/browsers'];
-  if (authFile) args.push('--mount', 'type=bind,src=' + authFile + ',dst=/tmp/world-codex/auth.json,readonly');
+  if (authFile) args.push(
+    '--mount', 'type=bind,src=' + authFile + ',dst=/tmp/world-codex/auth.json,readonly',
+    '--mount', 'type=bind,src=' + join(workspace, '.ralph') + ',dst=/workspace/.ralph,readonly');
   args.push(state.image);
   return args;
 }
