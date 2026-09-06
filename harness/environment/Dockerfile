@@ -14,7 +14,9 @@ RUN rustup component add rustfmt \
     && cargo install cargo-audit --version 0.22.2 --locked
 COPY package.json package-lock.json install-ralph.mjs ralph-release.json /opt/harness/
 RUN npm ci --prefix /opt/harness
+RUN printf '%s\n' 'export PATH="/opt/harness/bin:/opt/harness/node_modules/.bin:/usr/local/cargo/bin:$PATH"' > /etc/profile.d/herdr-world-tools.sh
 ENV CARGO_HOME=/workspace/.agents/cache/cargo
 WORKDIR /workspace
 USER node
-RUN node --version && rustc --version && cargo fmt --version && cargo-about --version && cargo audit --version && ralph --version && codex --version
+RUN node --version && rustc --version && cargo fmt --version && cargo-about --version && cargo audit --version && ralph --version && codex --version \
+    && bash -lc 'cargo --version && cargo about --version && ralph --version && codex --version'

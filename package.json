@@ -44,11 +44,12 @@
     "agent:deliver": "node scripts/agent/deliver.mjs",
     "spec": "node scripts/agent/tool.mjs openspec",
     "spec:check": "node scripts/agent/tool.mjs openspec validate --all --strict --no-interactive",
-    "test:agent": "node --test scripts/agent/agent.test.mjs",
+    "test:agent": "node --test scripts/agent/agent.test.mjs scripts/agent/workflow.test.mjs",
     "eval:check": "python3 evals/check.py",
     "eval:prepare": "node evals/prepare.mjs",
     "eval:report": "node evals/report.mjs",
     "eval:harbor": "node evals/harbor.mjs",
+    "eval:live": "node evals/live.mjs",
     "agent:rules": "node scripts/agent/github-rules.mjs"
   },
   "devDependencies": {

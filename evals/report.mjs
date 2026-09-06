@@ -2,6 +2,28 @@ import { readFile, readdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 
 const directory = resolve(process.argv[2] ?? 'evals/jobs');
+let live;
+try { live = JSON.parse(await readFile(join(directory, 'report.json'), 'utf8')); }
+catch (error) { if (error.code !== 'ENOENT') throw error; }
+if (live?.kind === 'live-model-trials') {
+  for (const trial of live.trials) {
+    try { trial.regrade = JSON.parse(await readFile(join(directory, `${trial.case}-${trial.variant}-${trial.attempt}`, 'regrade.json'), 'utf8')); }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  const variants = live.variants.map(variant => {
+    const trials = live.trials.filter(t => t.variant === variant);
+    const usages = trials.flatMap(t => t.turns).map(t => t.usage).filter(Boolean);
+    return { variant, trials: trials.length, gradedPasses: trials.filter(t => t.reward === 1).length,
+      readyForReview: trials.filter(t => t.status === 'ready-for-review').length,
+      elapsedSeconds: trials.reduce((n, t) => n + t.elapsedMs / 1000, 0),
+      inputTokens: usages.reduce((n, u) => n + (u.input_tokens ?? 0), 0),
+      outputTokens: usages.reduce((n, u) => n + (u.output_tokens ?? 0), 0), costUsd: null };
+  });
+  console.log(JSON.stringify({ source: live.source, harnessFingerprint: live.harnessFingerprint,
+    models: live.models, variants, trials: live.trials.map(({ case: task, variant, reward, status, reason, oracleConsultations, regrade }) =>
+      ({ task, variant, reward, status, reason, oracleConsultations, regrade })) }, null, 2));
+  process.exit(0);
+}
 const job = JSON.parse(await readFile(join(directory, 'result.json'), 'utf8'));
 const lock = JSON.parse(await readFile(join(directory, 'lock.json'), 'utf8'));
 const elapsedSeconds = job.finished_at && job.started_at

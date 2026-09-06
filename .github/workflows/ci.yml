@@ -17,7 +17,7 @@ jobs:
   agent:
     name: Agent harness
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -62,9 +62,9 @@ jobs:
         run: |
           uv sync --project evals --locked
           task_path=$(node evals/prepare.mjs)
-          npm run eval:harbor -- run -p "$task_path" -a oracle -n 1 --jobs-dir evals/jobs --job-name oracle
+          npm run eval:harbor -- run -p "$task_path" -a oracle --n-attempts 1 --n-concurrent 2 --jobs-dir evals/jobs --job-name oracle
           node evals/assert-result.mjs evals/jobs/oracle 1
-          npm run eval:harbor -- run -p "$task_path" -a nop -n 1 --jobs-dir evals/jobs --job-name negative
+          npm run eval:harbor -- run -p "$task_path" -a nop --n-attempts 1 --n-concurrent 2 --jobs-dir evals/jobs --job-name negative
           node evals/assert-result.mjs evals/jobs/negative 0
       - name: Upload harness diagnostics
         if: failure()

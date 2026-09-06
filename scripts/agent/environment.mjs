@@ -65,5 +65,5 @@ export async function prepareDependencies(state, workspace, control) {
   return inContainer(state, workspace, ['bash', '-c',
     'npm ci && npm ci --prefix web && npm ci --prefix harness && cargo fetch --locked --manifest-path bridge/Cargo.toml && cargo fetch --locked --manifest-path vendor/herdr-compat/Cargo.toml' +
     (state.profile === 'acceptance' ? ' && npx --no-install playwright install chromium' : '')],
-  { control, network: 'bridge', timeoutMs: 1200000, log: join(dirname(workspace), 'bootstrap.log') });
+  { control, network: 'bridge', stream: false, timeoutMs: 1200000, log: join(dirname(workspace), 'bootstrap.log') });
 }

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { lstat, readFile, readlink, mkdir, writeFile, rename } from 'node:fs/promises';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -62,6 +63,25 @@ export const profiles = {
   'acceptance-offline': [['npm', 'run', 'check'], ['npm', 'run', 'test:e2e'], ['npm', 'run', 'test:independence']],
   harness: [['npm', 'run', 'test:agent'], ['npm', 'run', 'spec:check'], ['npm', 'run', 'eval:check']],
 };
+function processParents() {
+  if (process.platform === 'linux') {
+    // Read procfs directly: spawning `ps` during cancellation can stall until its own
+    // timeout under load, allowing detached descendants to run after our deadline.
+    const rows = [];
+    for (const name of readdirSync('/proc')) {
+      if (!/^\d+$/.test(name)) continue;
+      try {
+        const stat = readFileSync('/proc/' + name + '/stat', 'utf8');
+        // comm is parenthesized and can itself contain spaces or closing parentheses.
+        const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+        rows.push([Number(name), Number(fields[1])]);
+      } catch (error) { if (!['ENOENT', 'ESRCH', 'EACCES'].includes(error.code)) throw error; }
+    }
+    return rows;
+  }
+  return execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 2000 })
+    .trim().split('\n').map(line => line.trim().split(/\s+/).map(Number));
+}
 export async function command(argv, { cwd = process.cwd(), env = process.env, timeoutMs = 1200000, log, input, stream = true } = {}) {
   if (!Array.isArray(argv) || !argv.length) throw new Error('Command must be a nonempty argv array');
   const start = Date.now();
@@ -77,8 +97,7 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
     const descendants = new Set([child.pid]);
     if (process.platform !== 'win32') {
       try {
-        const rows = execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 2000 })
-          .trim().split('\n').map(line => line.trim().split(/\s+/).map(Number));
+        const rows = processParents();
         let added = true;
         while (added) {
           added = false;

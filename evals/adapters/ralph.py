@@ -33,7 +33,7 @@ class WorldRalph(BaseInstalledAgent):
         await self.exec_as_agent(
             environment,
             "node /control/scripts/agent/harbor-run.mjs " + shlex.quote(model),
-            env={"CODEX_API_KEY": key}, cwd="/workspace", timeout_sec=1200,
+            env={"CODEX_API_KEY": key}, cwd="/workspace", timeout_sec=2400,
         )
 
     def populate_context_post_run(self, context):

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { command, fingerprint, jsonFile, errorExit } from './lib.mjs';
 import { loadState, saveState, checkBudget, parseResponse, changedPaths, protectedPaths } from './run-state.mjs';
 import { inContainer, copyCandidate, prepareDependencies } from './environment.mjs';
+import { acceptResponse, evidenceCurrent, failureEvent, initialEvent, readOnlyRoles } from './workflow.mjs';
 
 async function inputPrompt() {
   const args = process.argv.slice(3);
@@ -35,12 +36,12 @@ async function main() {
   await saveState(runDir, state);
   if (role === 'coordinator') {
     if (state.status === 'ready-for-review') return emit(runDir, state, 'LOOP_COMPLETE', 'Candidate has current review and verification.');
-    return emit(runDir, state, state.lastEvent ?? 'plan.start', 'Continue the authorized task through the configured roles.');
+    return emit(runDir, state, state.lastEvent ?? initialEvent(state.taskProfile), 'Continue the authorized task through the configured roles.');
   }
   if (role === 'verifier') {
     const current = await fingerprint(workspace);
-    if (state.review?.fingerprint !== current || state.review?.event !== 'review.passed') {
-      return emit(runDir, state, 'verification.failed', 'Candidate changed since review; request another review.');
+    if (!evidenceCurrent(state, current)) {
+      return emit(runDir, state, 'verification.failed', 'Candidate acceptance, review or QA is missing or stale; request another review.');
     }
     const protectedChanges = changedPaths(workspace, state.workspaceBaseline).filter(p => protectedPaths.test(p));
     if (protectedChanges.length) return emit(runDir, state, 'task.blocked',
@@ -62,30 +63,40 @@ async function main() {
     if (result.code === 0) {
       const receipt = JSON.parse(await readFile(join(verificationDir, '.agents/state/verification.json'), 'utf8'));
       if (receipt.status === 'passed' && receipt.fingerprint === current && current === await fingerprint(workspace)) {
-        state.verification = { ...receipt, profile: state.profile, securityAudit };
+        state.verification = { ...receipt, profile: state.profile, securityAudit, requirementsHash: state.requirements.hash };
         state.status = 'ready-for-review';
         state.consecutiveFailures = 0;
         return emit(runDir, state, 'candidate.verified', 'Independent checks passed for the reviewed candidate.');
       }
     }
     state.verification = { status: 'failed', fingerprint: current };
-    state.consecutiveFailures += 1;
     await mkdir(join(workspace, '.ralph/agent'), { recursive: true });
     await writeFile(join(workspace, '.ralph/agent/verification.log'), result.output.slice(-64000));
-    return emit(runDir, state, 'verification.failed', 'Independent checks failed; inspect .ralph/agent/verification.log.');
+    const next = failureEvent(state, 'verification.failed', 'Independent checks failed; inspect .ralph/agent/verification.log.');
+    return emit(runDir, state, next.event, next.summary);
   }
   const before = await fingerprint(workspace);
   const instructions = await readFile(join(control, 'harness/roles', role + '.md'), 'utf8');
-  const responsePrompt = instructions + '\n\n' + prompt + '\n\nOriginal task:\n' + state.task +
+  const context = { taskProfile: state.taskProfile, acceptance: state.requirements?.criteria ?? [],
+    plan: state.plan?.summary ?? null, qaScenarios: state.qaPlan?.scenarios ?? [],
+    specialists: state.specialists ?? [], oracleQuestion: role === 'oracle' ? state.oracle?.pending : null,
+    oracleAdvice: state.oracle?.lastAdvice ?? null };
+  const specialistInstructions = role === 'reviewer' && state.specialists?.length
+    ? '\n\n' + await readFile(join(control, 'harness/roles/specialists.md'), 'utf8') : '';
+  const responsePrompt = instructions + specialistInstructions + '\n\n' + prompt + '\n\nOriginal task:\n' + state.task +
+    '\n\nSupervisor-owned context (acceptance criteria are fixed until owner clarification):\n' + JSON.stringify(context, null, 2) +
     '\n\nReturn only JSON with event and summary according to the provided schema. Do not run ralph emit; the adapter emits your validated event. ' +
+    'Include the structured role fields from the schema; use empty arrays when blocking or requesting Oracle advice. ' +
     'For a review inspect git diff ' + state.workspaceBaseline + ' and untracked source files. ' +
     'This container has no publishing credentials or Herdr socket. Do not connect to live deployments.';
+  const selected = state.models[role];
   const argv = ['/opt/harness/node_modules/.bin/codex', 'exec', '--json', '--ephemeral',
-    '--ignore-user-config', '--sandbox', 'danger-full-access', '--model', state.model,
-    '--output-schema', '/control/harness/response.schema.json', '-'];
+    '--ignore-user-config', '--sandbox', 'danger-full-access', '--model', selected.model,
+    '-c', 'model_reasoning_effort=' + JSON.stringify(selected.reasoningEffort),
+    '--output-schema', '/control/harness/schemas/' + role + '.json', '-'];
   const started = Date.now();
   const result = await inContainer(state, workspace, argv, {
-    control, authFile: state.authFile, network: 'bridge', readOnly: role === 'reviewer',
+    control, authFile: state.authFile, network: 'bridge', readOnly: readOnlyRoles.has(role),
     input: responsePrompt, stream: false, timeoutMs: Math.min(900000, Math.max(1, state.deadline - Date.now())),
     log: join(runDir, 'turn-' + state.activations + '.jsonl'),
   });
@@ -98,7 +109,7 @@ async function main() {
       if (event.type === 'turn.completed') usage = event.usage;
     } catch { /* stderr diagnostics are retained in the private log */ }
   }
-  state.turns.push({ role, elapsedMs: Date.now() - started, usage, costUsd: null, code: result.code });
+  state.turns.push({ role, ...selected, elapsedMs: Date.now() - started, usage, costUsd: null, code: result.code });
   if (result.code !== 0) {
     state.consecutiveFailures += 1;
     state.reason = 'Backend failed; see turn-' + state.activations + '.jsonl';
@@ -114,17 +125,16 @@ async function main() {
     throw error;
   }
   const after = await fingerprint(workspace);
-  if (role === 'reviewer') {
-    if (before !== after) throw new Error('Read-only review changed candidate contents');
-    state.review = { ...response, fingerprint: after };
-  } else {
-    state.review = null;
-    state.verification = null;
+  let next;
+  try { next = acceptResponse(state, role, response, before, after); }
+  catch (error) {
+    state.consecutiveFailures += 1; state.reason = error.message;
+    await saveState(runDir, state); throw error;
   }
-  if (response.event === 'review.rejected') state.consecutiveFailures += 1;
+  state.turns.at(-1).event = response.event;
   await mkdir(join(workspace, '.ralph/agent'), { recursive: true });
   await writeFile(join(workspace, '.ralph/agent', role + '.md'), response.summary + '\n');
   await appendFile(join(workspace, '.ralph/agent/scratchpad.md'), '\n## ' + role + ': ' + response.event + '\n' + response.summary + '\n');
-  return emit(runDir, state, response.event, response.summary);
+  return emit(runDir, state, next.event, next.summary);
 }
 main().catch(errorExit);

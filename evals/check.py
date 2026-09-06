@@ -24,7 +24,15 @@ for case in cases:
             path.write_text(original.replace("Math.min(", "Math.max(", 1))
             assert module.grade(case, artifacts) is False, case["id"] + " mutant accepted"
             path.write_text(original)
+        elif case["kind"] == "feature":
+            (artifacts / "candidate.ts").write_text("export const deploymentHealthLabel = () => 'Connected';\n")
+            assert module.grade(case, artifacts) is False, "Feature constant answer accepted"
+            (artifacts / "candidate.ts").write_text(case["oracleSource"])
         elif case["kind"] == "knowledge":
+            (artifacts / "knowledge.md").write_text("The bridge can optionally authenticate browsers with a password.\nHerdr owns runtime topology.\n")
+            assert module.grade(case, artifacts) is True, "Valid concise knowledge correction rejected"
+            (artifacts / "knowledge.md").write_text("The bridge cannot authenticate browsers.\nHerdr owns runtime topology.\n")
+            assert module.grade(case, artifacts) is False, "Stale knowledge assertion accepted"
             (artifacts / "knowledge.md").write_text(case["oracle"].replace("\\n", "\n"))
         else:
             answer = case.get("expected", {"findings": [
@@ -33,7 +41,7 @@ for case in cases:
             ] if case.get("expectedFinding") else []})
             (artifacts / "answer.json").write_text(json.dumps(answer))
         assert module.grade(case, artifacts) is True, case["id"] + " oracle rejected"
-        if case["kind"] != "implementation":
+        if case["kind"] not in ("implementation", "feature"):
             for p in artifacts.iterdir():
                 p.write_text("{}")
             try:

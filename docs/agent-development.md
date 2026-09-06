@@ -65,16 +65,66 @@ overwrites repository policy.
 
 | Role | Work | Boundary |
 | --- | --- | --- |
-| Planner | world-plan-change; inspect source and identify acceptance criteria | Plans within the task; no implementation in that activation |
+| Product manager | world-shape-work; user outcome, scope, non-goals and acceptance | Feature intake only; read-only; no invented research or roadmap authority |
+| Planner | world-plan-change; inspect source, plan and select specialist lenses | Read-only; preserves existing acceptance exactly |
+| QA planner | world-test-behavior; derive scenarios before implementation | Read-only; covers every acceptance criterion independently |
 | Implementer | Implement; world-verify-change and conditional world-maintain-knowledge | One worker, one candidate; no publishing authority |
-| Reviewer | world-review-change in fresh context | Candidate mounted read-only in local runs |
+| Reviewer | world-review-change plus selected world-review-specialist lenses | Fresh context; candidate mounted read-only in local runs |
+| Behavioral QA | world-test-behavior; exercise every planned scenario | Read-only source; evidence per scenario; no repairs |
+| Oracle / technical adviser | world-consult-oracle; investigate a concrete technical question | Read-only; at most two consultations across the run and resumes |
 | Verifier | Deterministic commands | No model call; separate candidate copy and no model credential |
 | Supervisor | Ralph plus the repository adapter | Limits, events, recovery and content-specific completion |
 | Publisher | world-deliver-pr outside the loop | Push task branch and open PR; never merge |
 
-Knowledge maintenance normally happens within the implementation pass. It is not a fourth
-mandatory model agent. Evaluating harness changes uses world-evaluate-harness.
-The loop's internal review does not replace independent PR review.
+Role instructions live in harness/roles; skills supply reusable procedures. Executable
+permissions, schemas and routing live in scripts/agent, not just prompts. Every model
+activation starts fresh. The loop's internal review does not replace independent PR review.
+
+Choose a task profile separately from the verification profile:
+
+| Task profile | Routing |
+| --- | --- |
+| routine (default) | Planner → QA planner → implementer → reviewer → QA → verifier |
+| feature | Product manager → routine delivery stages; product shaping happens once per outcome |
+| sensitive | Routine stages with mandatory security and protocol review lenses |
+
+The planner can activate security, protocol, ux-accessibility or performance review for a
+concrete risk in any profile. These lenses extend the reviewer activation; they do not
+create an always-on committee. Browser/runtime changes still need the acceptance verification
+profile. Routine fixes never acquire a mandatory OpenSpec proposal just by entering a loop.
+
+Product/planner acceptance criteria become supervisor-owned state. QA scenarios are derived
+before implementation and must cover every criterion. The QA result must include all scenario
+IDs, outcomes and execution/source evidence. Passing requires every scenario to pass.
+Read-only QA can use /tmp for generated output or a temporary test copy; it cannot repair the
+candidate. LLM-reported QA evidence is still fallible; the deterministic verifier and held-out
+eval grader provide additional independent checks.
+
+Planner, QA planner, implementer, reviewer and QA can request an Oracle consultation with a
+specific question. Two consecutive candidate failures automatically trigger a consultation
+before another repair. Advice returns to the requesting role and cannot change acceptance,
+reset the failure budget or override checks. An owner clarification on resume can revise scope;
+the runner invalidates the old acceptance and QA plan and starts shaping/planning again.
+
+Knowledge maintenance normally happens within implementation. A targeted drift audit can
+use world-maintain-knowledge separately. The eval/harness engineer uses world-evaluate-harness
+between runs to turn failures into cases and propose improvements through PRs. In-flight
+workers cannot change their control copy or grader. Coordinating multiple worktrees uses
+world-integrate-work interactively; autonomous parallel scheduling remains disabled until
+there is an authorized concurrent workload and evidence to justify it.
+
+## Models
+
+The committed policy in harness/models.json assigns **gpt-5.6-luna at xhigh** to implementation
+and QA execution. Product management, technical planning, QA design, review and Oracle advice
+use **gpt-5.6-sol at xhigh**. Supervisor and verifier do not call a model.
+
+This is an initial allocation to evaluate, not a measured claim that these are optimal models.
+Use --worker-model or --lead-model to override a tier; --model overrides every model role for
+controlled comparisons. --reasoning-effort overrides effort for every role. Resolved model
+IDs and effort are frozen in run state, recorded per turn, and preserved on resume. There is
+no silent model fallback. Compare accepted outcomes, defects, false positives, repair cycles,
+interventions, duration and reported tokens before changing defaults.
 
 ## Verification
 
@@ -107,14 +157,16 @@ Build the image once and start from a clean, committed task branch:
 
 ```bash
 npm run agent:image
-npm run agent:run -- start --task-file /tmp/world-task.md --model MODEL --profile acceptance
+npm run agent:run -- start --task-file /tmp/world-task.md --task-profile feature --profile acceptance
+# Optional uniform model override for a controlled comparison:
+npm run agent:run -- start --task-file /tmp/world-task.md --model gpt-5.6-luna
 npm run agent:run -- status RUN_ID
 npm run agent:run -- resume RUN_ID
 npm run agent:run -- resume RUN_ID --task-file /tmp/world-clarification.md
 ```
 
-The task file must describe an authorized outcome and acceptance criteria. `MODEL` must
-be an explicit model available to your account. Codex is the initial backend. The adapter
+The task file must describe an authorized outcome and its known constraints. The selected
+models must be available to your account. Codex is the initial backend. The adapter
 uses its pinned CLI and saved authentication; `--auth-file` selects an explicit auth file.
 Credentials are never copied into the repository or result bundle.
 
@@ -123,10 +175,15 @@ under the primary checkout's ignored `.agents/runs/<id>/workspace`. It freezes a
 control copy of the harness. Ralph owns routing and fresh activations. Repository code
 adds container execution, structured role events, verification and the final content gate.
 
-Default bounds are 12 activations/iterations, one hour and three consecutive failures.
+Default bounds are 24 activations/iterations, one hour and three consecutive failures.
 Each model invocation has a 15-minute ceiling. Use `--iterations` and `--seconds` to set
-an explicit task budget. Wall-clock bounds cover loop execution, including verification;
-initial dependency setup has its own 20-minute timeout. Limits persist across resume. Resume retains candidate and role notes while archiving the
+an explicit task budget. Wall-clock bounds cover loop execution, including verification.
+Ralph's custom-backend inactivity timeout is explicitly 16 minutes, so a buffered model
+call is governed by the adapter's 15-minute deadline rather than an inherited five-minute
+default. The pinned Ralph version reads that custom timeout from its `claude` adapter slot;
+the worker still runs the selected Codex model.
+Initial dependency setup has its own 20-minute timeout. Limits persist across resume.
+Resume retains candidate and role notes while archiving the
 previous Ralph event ledger, so old completion events cannot bypass fresh review.
 An optional clarification file adds the owner's missing decision without resetting those limits.
 An exhausted run requires a new authorized run; resume does not reset its failure budget.
@@ -134,14 +191,16 @@ SIGINT/SIGTERM preserves progress and cleans up invocation-owned containers. A h
 supervisor may leave a lock; verify its recorded PID is dead before removing that run's lock.
 
 Outcomes are `ready-for-review`, `blocked`, `failed`, `interrupted` and `exhausted`.
-Ready requires a fresh review and passing independent checks for identical source content.
+Ready requires acceptance coverage, fresh review, passing behavioral QA and independent
+checks for identical source content and the same acceptance revision.
 The completion event cannot supply that evidence. Changes to harness controls or package
 manifests stop for interactive development and review; the verification entry points remain fixed
 for the run. Use interactive work plus evals for harness improvements.
 
 Worker containers have no host home directory, Herdr socket, SSH agent, Docker socket,
 Git remotes, publishing credentials or published ports. The selected model auth file, private Git metadata and Ralph event/progress directory
-are mounted read-only for model calls. The supervisor writes role notes after each call. Reviews mount the candidate read-only; verification
+are mounted read-only for model calls. The supervisor writes role notes after each call.
+All model roles except the implementer mount the candidate read-only; verification
 runs on a fresh copy without model auth. Acceptance dependency audits have network access
 to advisory services; source, browser and independence checks run with networking disabled.
 Fixed browser fixture ports are private to each container.
@@ -183,6 +242,9 @@ See [evals/README.md](../evals/README.md) for oracle controls, baseline versus R
 version capture and result reporting. Do not infer model readiness from passing stand-ins
 or oracle tests. Start with a small authorized task set, inspect failures, then widen task
 scope based on measured reliability.
+
+The [live trial report](evidence/agent-development-live-trials.md) records authenticated
+model outcomes, control failures found and fixed, and the limits of the initial sample.
 
 Graphify remains optional. The [existing audit](analysis/agentic-development-capabilities-2026-09-01.md)
 found useful local relationships but missed a real TypeScript → HTTP → Rust path.

@@ -3,9 +3,9 @@ event_loop:
   completion_promise: LOOP_COMPLETE
   cancellation_promise: task.blocked
   starting_event: plan.start
-  required_events: [review.passed, candidate.verified]
+  required_events: [review.passed, qa.passed, candidate.verified]
   enforce_hat_scope: true
-  max_iterations: 12
+  max_iterations: 24
   max_runtime_seconds: 3600
   max_consecutive_failures: 3
   persistent: false
@@ -15,6 +15,12 @@ cli:
   args: [scripts/agent/backend.mjs, coordinator]
   prompt_mode: stdin
   default_mode: autonomous
+# Ralph 2.10.1 routes custom `node` backend settings through its `claude` fallback
+# slot. This selects an inactivity timeout, not a model/provider. The adapter's
+# 900-second model deadline and outer run deadline remain authoritative.
+adapters:
+  claude:
+    timeout: 960
 core:
   specs_dir: openspec/specs
   scratchpad:
@@ -42,21 +48,41 @@ hooks:
         on_error: block
         timeout_seconds: 30
 hats:
+  product:
+    name: Product manager
+    description: Shape an authorized feature into observable acceptance criteria.
+    triggers: [product.start]
+    publishes: [requirements.ready, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, product]
+    max_activations: 2
+    instructions: Read harness/roles/product.md.
   planner:
     name: Planner
     description: Ground the task in source and current knowledge.
-    triggers: [plan.start]
-    publishes: [plan.ready, task.blocked]
+    triggers: [plan.start, requirements.ready]
+    publishes: [plan.ready, oracle.requested, task.blocked]
     backend:
       command: node
       args: [scripts/agent/backend.mjs, planner]
-    max_activations: 2
+    max_activations: 4
     instructions: Read harness/roles/planner.md.
+  qa-planner:
+    name: QA planner
+    description: Derive independent behavioral scenarios before implementation.
+    triggers: [plan.ready, qa.plan]
+    publishes: [qa.planned, oracle.requested, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, qa-planner]
+    max_activations: 4
+    instructions: Read harness/roles/qa-planner.md.
   implementer:
     name: Implementer
     description: Implement and verify the bounded task, including knowledge updates.
-    triggers: [plan.ready, review.rejected, verification.failed]
-    publishes: [candidate.ready, task.blocked]
+    triggers: [qa.planned, implementation.start, review.rejected, qa.failed, verification.failed]
+    publishes: [candidate.ready, oracle.requested, task.blocked]
     backend:
       command: node
       args: [scripts/agent/backend.mjs, implementer]
@@ -66,17 +92,37 @@ hats:
     name: Reviewer
     description: Inspect the exact candidate in a fresh read-only session.
     triggers: [candidate.ready]
-    publishes: [review.passed, review.rejected, task.blocked]
+    publishes: [review.passed, review.rejected, oracle.requested, task.blocked]
     backend:
       command: node
       args: [scripts/agent/backend.mjs, reviewer]
     max_activations: 4
     instructions: Read harness/roles/reviewer.md.
+  qa:
+    name: Behavioral QA
+    description: Exercise every independent scenario against the reviewed candidate.
+    triggers: [review.passed, qa.start]
+    publishes: [qa.passed, qa.failed, oracle.requested, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, qa]
+    max_activations: 4
+    instructions: Read harness/roles/qa.md.
+  oracle:
+    name: Oracle technical adviser
+    description: Bounded read-only investigation of technical uncertainty or repeated failure.
+    triggers: [oracle.requested]
+    publishes: [plan.start, qa.plan, implementation.start, candidate.ready, qa.start, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, oracle]
+    max_activations: 2
+    instructions: Read harness/roles/oracle.md; the adapter owns the return event.
   verifier:
     name: Verifier
     description: Execute deterministic checks outside the agent session.
-    triggers: [review.passed]
-    publishes: [candidate.verified, verification.failed, task.blocked]
+    triggers: [qa.passed]
+    publishes: [candidate.verified, verification.failed, oracle.requested, task.blocked]
     backend:
       command: node
       args: [scripts/agent/backend.mjs, verifier]

@@ -8,7 +8,12 @@ import { parse, stringify } from '../../harness/node_modules/yaml/dist/index.js'
 import { command, repoRoot, primaryCheckout, git, fingerprint, errorExit } from './lib.mjs';
 import { loadState, saveState, checkBudget, candidateGate } from './run-state.mjs';
 import { copyCandidate, prepareDependencies } from './environment.mjs';
+import { roleEvents, responseSchema, resolveModels, initialEvent, taskProfiles, invalidateCandidate } from './workflow.mjs';
 
+export async function writeSchemas(control) {
+  await mkdir(join(control, 'harness/schemas'), { recursive: true });
+  for (const role of Object.keys(roleEvents)) await writeFile(join(control, 'harness/schemas', role + '.json'), JSON.stringify(responseSchema(role)));
+}
 export function materializeConfig(config, control) {
   config.cli.args[0] = join(control, config.cli.args[0]);
   for (const hat of Object.values(config.hats)) hat.backend.args[0] = join(control, hat.backend.args[0]);
@@ -32,6 +37,7 @@ async function main() {
     'task-file': { type: 'string' }, model: { type: 'string' }, profile: { type: 'string' },
     iterations: { type: 'string' }, seconds: { type: 'string' }, image: { type: 'string' },
     'auth-file': { type: 'string' },
+    'task-profile': { type: 'string' }, 'worker-model': { type: 'string' }, 'lead-model': { type: 'string' }, 'reasoning-effort': { type: 'string' },
   } });
   const action = positionals[0] ?? 'start';
   const runBase = join(primaryCheckout(), '.agents/runs');
@@ -42,29 +48,38 @@ async function main() {
     state = await loadState(runDir);
     if (action === 'status') {
       console.log(JSON.stringify({ id: state.id, status: state.status, reason: state.reason,
-        activations: state.activations, remainingMs: state.remainingMs, model: state.model, profile: state.profile }, null, 2));
+        activations: state.activations, remainingMs: state.remainingMs, models: state.models, profile: state.profile, taskProfile: state.taskProfile }, null, 2));
       return;
     }
     if (!['interrupted', 'failed', 'blocked'].includes(state.status)) throw new Error('This outcome cannot resume; start a new authorized run');
-    if (values.model || values.image || values.iterations || values.seconds || values.profile || values['auth-file']) {
+    if (values.model || values.image || values.iterations || values.seconds || values.profile || values['auth-file']
+      || values['worker-model'] || values['lead-model'] || values['reasoning-effort'] || values['task-profile']) {
       throw new Error('Resume preserves the original model, environment and limits; start a new run to change them');
     }
-    if (values['task-file']) state.task += '\n\nOwner clarification:\n' + await readFile(values['task-file'], 'utf8');
-    if (values['task-file'] || state.status === 'blocked') state.lastEvent = 'plan.start';
-    else if (['review.passed', 'candidate.verified', 'LOOP_COMPLETE'].includes(state.lastEvent)) state.lastEvent = 'candidate.ready';
+    if (state.schemaVersion !== 2) throw new Error('This run uses the previous workflow; start a new run with the updated harness');
+    if (values['task-file']) {
+      state.task += '\n\nOwner clarification:\n' + await readFile(values['task-file'], 'utf8');
+      state.requirements = null; state.qaPlan = null; state.plan = null;
+      state.lastEvent = initialEvent(state.taskProfile);
+    } else if (state.status === 'blocked') state.lastEvent = state.requirements ? 'plan.start' : initialEvent(state.taskProfile);
+    else if (['review.passed', 'qa.passed', 'candidate.verified', 'LOOP_COMPLETE', 'qa.start'].includes(state.lastEvent)) state.lastEvent = 'candidate.ready';
     state.deadline = Date.now() + state.remainingMs;
     checkBudget(state);
     state.status = 'running';
     state.reason = null;
-    state.review = null;
-    state.verification = null;
+    invalidateCandidate(state);
   } else if (action === 'start') {
-    if (!values['task-file'] || !values.model) throw new Error('Usage: agent:run -- start --task-file <file> --model <model> [--profile check|acceptance] [--iterations 12] [--seconds 3600]');
+    if (!values['task-file']) throw new Error('Usage: agent:run -- start --task-file <file> [--task-profile routine|feature|sensitive] [--model <all-role override>] [--profile check|acceptance] [--iterations 24] [--seconds 3600]');
     const branch = git(['branch', '--show-current']);
     if (!branch || branch === 'main') throw new Error('Start from a non-main task worktree');
     if (git(['status', '--porcelain'])) throw new Error('Commit the input first; runs require a clean source snapshot');
     const profile = values.profile ?? 'check';
     if (!['check', 'acceptance'].includes(profile)) throw new Error('Run profile must be check or acceptance');
+    const taskProfile = values['task-profile'] ?? 'routine';
+    if (!taskProfiles.includes(taskProfile)) throw new Error('Unknown task profile: ' + taskProfile);
+    const models = resolveModels(JSON.parse(await readFile(join(repoRoot, 'harness/models.json'))), {
+      model: values.model, workerModel: values['worker-model'], leadModel: values['lead-model'], reasoningEffort: values['reasoning-effort'],
+    });
     const id = randomUUID();
     runDir = join(runBase, id);
     await mkdir(runDir, { recursive: true, mode: 0o700 });
@@ -73,15 +88,16 @@ async function main() {
     if (inspect.code !== 0) throw new Error('Build the execution image first: npm run agent:image');
     const authFile = resolve(values['auth-file'] ?? join(homedir(), '.codex/auth.json'));
     await access(authFile);
-    const limits = { iterations: positive(values.iterations, 12, 50), seconds: positive(values.seconds, 3600, 86400), failures: 3 };
-    state = { schemaVersion: 1, id, status: 'preparing', sourceRevision: git(['rev-parse', 'HEAD']),
-      sourceFingerprint: await fingerprint(), model: values.model, image: inspect.output.trim(), profile, authFile,
+    const limits = { iterations: positive(values.iterations, 24, 64), seconds: positive(values.seconds, 3600, 86400), failures: 3 };
+    state = { schemaVersion: 2, id, status: 'preparing', sourceRevision: git(['rev-parse', 'HEAD']),
+      sourceFingerprint: await fingerprint(), model: values.model ?? null, models, taskProfile, lastEvent: initialEvent(taskProfile), image: inspect.output.trim(), profile, authFile,
       task: await readFile(values['task-file'], 'utf8'), limits, activations: 0, consecutiveFailures: 0,
       turns: [], costUsd: null, remainingMs: limits.seconds * 1000, startedAt: new Date().toISOString() };
     const control = join(runDir, 'control');
     await mkdir(join(control, 'scripts'), { recursive: true });
     await cp(join(repoRoot, 'harness'), join(control, 'harness'), { recursive: true, verbatimSymlinks: true });
     await cp(join(repoRoot, 'scripts/agent'), join(control, 'scripts/agent'), { recursive: true });
+    await writeSchemas(control);
     await copyCandidate(process.cwd(), join(runDir, 'workspace'));
     state.workspaceBaseline = git(['rev-parse', 'HEAD'], join(runDir, 'workspace'));
     await saveState(runDir, state);
@@ -107,6 +123,7 @@ async function main() {
     const config = materializeConfig(parse(await readFile(join(control, 'harness/ralph.yml'), 'utf8')), control);
     // Resume starts a new event ledger; our persisted activation budget remains authoritative.
     config.event_loop.max_iterations = state.limits.iterations - state.activations;
+    config.event_loop.starting_event = state.lastEvent ?? initialEvent(state.taskProfile);
     if (action === 'resume') {
       config.event_loop.starting_event = state.lastEvent ?? 'plan.start';
       const previous = join(runDir, 'ralph-history', randomUUID());

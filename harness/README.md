@@ -10,7 +10,8 @@ Install with `npm ci --prefix harness`; use repository wrappers, not unpinned gl
 - [Ralph Orchestrator 2.10.1](https://github.com/mikeyobrien/ralph-orchestrator/tree/v2.10.1),
   MIT. Owns event routing, bounded iterations, fresh contexts and continuation.
 - [Codex CLI](https://developers.openai.com/codex/noninteractive) is the initial backend.
-  Every live run records an explicit model.
+  Every live run records per-role model IDs and reasoning effort from models.json or
+  explicit overrides. Worker defaults are Luna xhigh; lead defaults are Sol xhigh.
 - [Harbor 0.22.0](https://github.com/laude-institute/harbor/tree/v0.22.0), Apache-2.0.
   Runs held-out tasks in isolated environments with independent grading.
 
@@ -18,6 +19,11 @@ Install with `npm ci --prefix harness`; use repository wrappers, not unpinned gl
 Local runs record the container image ID; Harbor additionally captures CLI versions
 in installation logs and its locked job inputs.
 See [agent development](../docs/agent-development.md).
+
+The role contract and output schemas are defined in scripts/agent/workflow.mjs. The runner
+generates schemas into its frozen control copy. Ralph owns routing; the adapter validates
+acceptance coverage, bounded Oracle returns and evidence for the exact candidate. The image
+also makes pinned tools available in login shells, which Codex uses for command execution.
 
 Ralph uses the official 2.10.1 standalone release with SHA-256 checksums in
 `ralph-release.json`. `npm ci --prefix harness` installs it through a small Node

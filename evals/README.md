@@ -1,7 +1,10 @@
 # Agent development evals
 
-The six initial tasks cover cross-language navigation, planning boundaries, a seeded
-reconnect regression, review of flawed and clean code, and knowledge maintenance.
+The eight tasks cover cross-language navigation, planning boundaries, a seeded
+reconnect regression, review of flawed and clean code, knowledge maintenance, feature
+shaping and explicit Oracle consultation. The feature is a helper added only inside the
+trial workspace. The Oracle case explicitly requests advice to test routing; it does not
+measure whether an agent independently chooses the right moment to consult.
 Deterministic supervisor tests separately cover time/failure budgets, stale evidence,
 role boundaries, isolation and worktree placement.
 
@@ -12,8 +15,8 @@ npm run eval:check
 npm run agent:image
 uv sync --project evals --locked
 npm run eval:prepare
-npm run eval:harbor -- run -p PATH_PRINTED_ABOVE -a oracle -n 1 --jobs-dir evals/jobs
-npm run eval:harbor -- run -p PATH_PRINTED_ABOVE -a nop -n 1 --jobs-dir evals/jobs
+npm run eval:harbor -- run -p PATH_PRINTED_ABOVE -a oracle --n-attempts 1 --n-concurrent 1 --jobs-dir evals/jobs
+npm run eval:harbor -- run -p PATH_PRINTED_ABOVE -a nop --n-attempts 1 --n-concurrent 1 --jobs-dir evals/jobs
 ```
 
 Oracle should score 1 on every task; nop should score 0. These are grader controls,
@@ -31,11 +34,46 @@ helper, not a claim to replay an exact historical bug.
 
 ## Authorized live trials
 
-Use the exact same prepared tasks, model and attempt count for both variants:
+Local trials can use saved Codex authentication through the production Docker boundary:
 
 ```bash
-npm run eval:harbor -- run -p PREPARED_TASKS -a codex -m MODEL --ak version=0.153.4 -n 1 --jobs-dir evals/jobs
-npm run eval:harbor -- run -p PREPARED_TASKS -a evals.adapters.ralph:WorldRalph -m MODEL -n 1 --jobs-dir evals/jobs
+npm run eval:prepare
+npm run eval:live -- --prepared PREPARED_TASKS --cases reconnect-regression,knowledge-maintenance --variants baseline,ralph --attempts 1 --seconds 1800
+npm run eval:live -- --prepared PREPARED_TASKS --cases deployment-health-feature,oracle-reconnect --variants ralph --attempts 1 --seconds 1800
+npm run eval:report -- evals/jobs/LIVE_JOB
+```
+
+`--cases` is required so a trial set is explicit. Each trial has the supplied model time
+budget (30–3600 seconds), with bounded dependency preparation separately. Start with one
+attempt before committing to repeated runs. `--auth-file` selects a saved auth file; it is
+mounted read-only, never copied into a task or artifact. Graders run in a separate container
+without network/model credentials and receive only the declared artifact. Source tasks and
+executable harness controls are frozen once per job. Outputs remain ignored/private.
+Completed trials discard generated dependency/build caches to bound disk growth while
+retaining source, patches, controls and logs. Use --keep-caches for a debugging run that
+needs them. Re-run a frozen task for another attempt; pruned trial workspaces need bootstrap
+before interactive reuse.
+
+The baseline is one Luna xhigh Codex session with the same repository skills. Ralph uses
+the committed worker/lead allocation, so this compares complete configurations, including
+model allocation. To isolate orchestration, pass `--model gpt-5.6-luna` for a uniform-model
+comparison. Tier overrides are --worker-model and --lead-model. Reports record model/effort
+per turn, task/source inputs, independent reward, delivery status, QA evidence, consultation
+count, durations and token usage. Cost remains null when unreported.
+
+A held-out artifact can be correct while the delivery loop fails its broader checks; both
+outcomes are reported separately. In particular, a review-only task containing intentionally
+broken source may earn its review grade while the general delivery verifier remains red.
+Use the implementation/feature/knowledge cases for end-to-end delivery readiness claims.
+
+For Harbor with scoped API-key authentication:
+
+Use the exact same prepared tasks, model and attempt count for both variants. Harbor uses
+--n-attempts (-k) for attempts and --n-concurrent (-n) for concurrency:
+
+```bash
+npm run eval:harbor -- run -p PREPARED_TASKS -a codex -m MODEL --ak version=0.153.4 --n-attempts 1 --n-concurrent 1 --jobs-dir evals/jobs
+npm run eval:harbor -- run -p PREPARED_TASKS -a evals.adapters.ralph:WorldRalph -m MODEL --n-attempts 1 --n-concurrent 1 --jobs-dir evals/jobs
 ```
 
 Use a scoped model key from secure local configuration. Do not put credentials in a command
@@ -69,5 +107,7 @@ unreported. Retain the exact prepared snapshot for a fair baseline comparison. U
 attempts before claiming a reliability improvement. Check clean-review false positives,
 blocked outcomes, and regressions as well as aggregate success.
 
-No live baseline is claimed until authenticated trials have actually run. Graphify should
-be evaluated as an additional navigation variant only after the core baseline exists.
+Inspect the [sanitized live trial findings](../docs/evidence/agent-development-live-trials.md);
+raw logs and generated candidates must not be committed. A small live smoke set
+proves execution paths and specific outcomes, not general reliability. Graphify should be
+evaluated as an additional navigation variant only after the core baseline exists.

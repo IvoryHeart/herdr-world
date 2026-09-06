@@ -42,6 +42,10 @@ This is a lightweight internal onboarding note for agents working in this repo.
   before replacing those adaptations.
 - Ralph scratchpads, graphs and eval output are temporary or derived knowledge.
   They never override current specs, source, tests or these delivery rules.
+- The Ralph task profiles are routine, feature and sensitive. Product shaping is conditional;
+  independent QA scenarios precede implementation. Acceptance and QA expectations are not
+  weakened during repairs. Model defaults live in harness/models.json: Luna xhigh for workers,
+  Sol xhigh for lead roles. See docs/agent-development.md for overrides and Oracle limits.
 
 - Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See

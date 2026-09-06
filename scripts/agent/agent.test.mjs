@@ -75,12 +75,16 @@ test('command timeout kills execution and records a failure', async () => {
   assert.equal(result.timedOut, true);
   assert.notEqual(result.code, 0);
 });
-test('candidate completion requires both evidence records for the current content', async () => {
+test('candidate completion requires acceptance, QA, review and verification for the current content', async () => {
   const runDir = await temporary('world-agent-gate-');
   const source = await fixture();
   await copyCandidate(source, join(runDir, 'workspace'));
   const hash = await fingerprint(join(runDir, 'workspace'));
-  const state = { status: 'ready-for-review', review: { event: 'review.passed', fingerprint: hash }, verification: { status: 'passed', fingerprint: hash } };
+  const state = { status: 'ready-for-review', requirements: { hash: 'requirements' },
+    qaPlan: { hash: 'qa-plan', requirementsHash: 'requirements' },
+    review: { event: 'review.passed', fingerprint: hash, requirementsHash: 'requirements' },
+    qa: { event: 'qa.passed', fingerprint: hash, requirementsHash: 'requirements', planHash: 'qa-plan' },
+    verification: { status: 'passed', fingerprint: hash, requirementsHash: 'requirements' } };
   await saveState(runDir, { ...state, verification: null });
   await assert.rejects(candidateGate(runDir), /missing/);
   await saveState(runDir, state);
@@ -91,7 +95,7 @@ test('candidate completion requires both evidence records for the current conten
 test('response routing cannot claim another role event or empty success', () => {
   assert.throws(() => parseResponse('{"event":"review.passed","summary":"done"}', 'implementer'), /Invalid/);
   assert.throws(() => parseResponse('{"event":"plan.ready","summary":""}', 'planner'), /Invalid/);
-  assert.equal(parseResponse('{"event":"task.blocked","summary":"Needs owner decision"}', 'planner').event, 'task.blocked');
+  assert.equal(parseResponse('{"event":"task.blocked","summary":"Needs owner decision","acceptance":[],"specialists":[]}', 'planner').event, 'task.blocked');
 });
 test('iteration, elapsed-time and repeated-failure budgets remain binding on resume', () => {
   const state = { limits: { iterations: 4, failures: 3 }, activations: 2, consecutiveFailures: 0, deadline: 200 };
@@ -127,7 +131,7 @@ test('production Ralph config routes a complete loop using deterministic stand-i
   // This stand-in uses the real pinned engine and production topology; it is not a model eval.
   const ralph = join(repoRoot, 'harness/bin/ralph');
   await writeFile(join(control, 'scripts/agent/backend.mjs'), `import {execFileSync} from 'node:child_process';
-const events={coordinator:'plan.start',planner:'plan.ready',implementer:'candidate.ready',reviewer:'review.passed',verifier:'candidate.verified'};
+const events={coordinator:'plan.start',product:'requirements.ready',planner:'plan.ready','qa-planner':'qa.planned',implementer:'candidate.ready',reviewer:'review.passed',qa:'qa.passed',verifier:'candidate.verified'};
 const role=process.argv[2];
 const fs=await import('node:fs');
 const completed=fs.existsSync('verified');
@@ -175,7 +179,9 @@ test('timeout also stops descendants that created a separate process group', asy
   const dir = await temporary('world-agent-descendants-');
   const detached = "setTimeout(() => require('fs').writeFileSync('escaped', 'bad'), 1000)";
   const parent = "require('child_process').spawn(process.execPath, ['-e', " + JSON.stringify(detached) + "], { detached: true, stdio: 'ignore' }); setInterval(() => {}, 1000)";
-  const result = await command([process.execPath, '-e', parent], { cwd: dir, stream: false, timeoutMs: 500 });
+  // Linux cancellation must work even when spawning ps would fail or stall.
+  const env = process.platform === 'linux' ? { ...process.env, PATH: '/unavailable-process-tools' } : process.env;
+  const result = await command([process.execPath, '-e', parent], { cwd: dir, env, stream: false, timeoutMs: 500 });
   assert.equal(result.timedOut, true);
   await new Promise(resolve => setTimeout(resolve, 800));
   await assert.rejects(access(join(dir, 'escaped')), { code: 'ENOENT' });
