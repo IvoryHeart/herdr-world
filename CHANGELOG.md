@@ -24,6 +24,10 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Compacted sidebar navigation into View and Hosts pickers with the list mode and space filter
+  together below. Added a direct Add Host shortcut to Network settings, while preserving the
+  Settings cog, host health visibility, keyboard navigation, and compact view return.
+
 ### Fixed
 
 - Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under

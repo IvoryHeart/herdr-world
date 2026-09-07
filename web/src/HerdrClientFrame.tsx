@@ -56,12 +56,14 @@ export function HerdrClientSidebar({ children }: { children: ReactNode }) {
 export function HerdrMainStage({
   label,
   children,
+  inert,
 }: {
   label: string;
   children: ReactNode;
+  inert?: boolean;
 }) {
   return (
-    <section className="stage" aria-label={label}>
+    <section className="stage" aria-label={label} inert={inert}>
       {children}
     </section>
   );

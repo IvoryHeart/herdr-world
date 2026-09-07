@@ -224,7 +224,16 @@ export class GhosttyRenderer implements TerminalRenderer {
     });
     const fitAddon = new FitAddon();
     terminal.loadAddon(fitAddon);
-    terminal.open(container);
+    // Ghostty 0.4 calls focus() from open(), including a deferred second focus.
+    // TerminalView owns activation focus; mounting must not steal it from a menu
+    // or scroll a compact stage that is still moving onscreen.
+    const focus = terminal.focus;
+    terminal.focus = () => {};
+    try {
+      terminal.open(container);
+    } finally {
+      terminal.focus = focus;
+    }
     terminal.attachCustomKeyEventHandler((event) => {
       if (isImeComposingKeyEvent(event)) {
         return false;
@@ -240,8 +249,6 @@ export class GhosttyRenderer implements TerminalRenderer {
       terminal.input(output, true);
       return true;
     });
-    terminal.textarea?.blur();
-    container.blur();
     container.removeAttribute("contenteditable");
     terminal.renderer?.getCanvas().style.setProperty("background-color", background);
     terminal.renderer?.getCanvas().style.setProperty("image-rendering", "auto");

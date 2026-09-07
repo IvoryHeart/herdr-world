@@ -1,3 +1,4 @@
+import { selectAllHosts } from "./sidebarControls";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
@@ -90,11 +91,7 @@ test("captures connected terminals with canned fixture output", async ({ page })
   });
 });
 
-async function selectAllHosts(page: Page) {
-  await page.getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
-}
+
 
 async function hideSwitcher(page: Page) {
   await page.getByRole("button", { name: "Toggle sidebar" }).click();

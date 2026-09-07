@@ -1,3 +1,4 @@
+import { expectHostState, selectAllHosts, selectHost } from "./sidebarControls";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -25,15 +26,10 @@ for (const viewport of [
       localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     }, hostStore());
     await page.goto("/spaces");
-    await page
-      .getByRole("group", { name: "Host" })
-      .getByRole("button", { name: "All", exact: true })
-      .click();
+    await selectAllHosts(page);
     await expect(page.getByRole("button", { name: /^Codex A / })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Codex B / })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Offline E, offline" }),
-    ).toBeVisible();
+    await expectHostState(page, "Offline E", "offline");
     await page.screenshot({
       path: resolve(
         evidenceDir,
@@ -50,15 +46,13 @@ test("captures the 375x812 switcher and usable terminal", async ({ page }) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
   }, hostStore());
   await page.goto("/spaces");
-  await expect(
-    page.getByRole("button", { name: "Offline E, offline" }),
-  ).toBeVisible();
+  await expectHostState(page, "Offline E", "offline");
   await page.screenshot({
     path: resolve(evidenceDir, "responsive-375x812-switcher.png"),
     fullPage: true,
   });
 
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await page.getByRole("button", { name: /^Codex B / }).click();
   await expect(
     page.getByRole("button", { name: "Back to switcher" }),
@@ -84,7 +78,7 @@ test("keeps the terminal responsive through rapid window resizing", async ({ pag
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
   }, hostStore());
   await page.goto("/spaces");
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await page.getByRole("button", { name: /^Codex B / }).click();
   await expect(page.getByRole("button", { name: "Refit terminal" })).toBeVisible();
 
