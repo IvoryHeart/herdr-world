@@ -1,8 +1,9 @@
 # Persistent agent session trials — 2026-09-07
 
 These are authenticated native Codex 0.153.4 calls through the production adapter,
-with a new Docker container for every turn and host-backed role histories. The source
-is a tiny synthetic retry helper; no live deployment or user working tree is exposed.
+with a new Docker container for every turn and host-backed role histories. The initial
+probes use a tiny synthetic retry helper; a real sidebar feature trial follows below.
+No live deployment or unrelated user working tree is exposed.
 
 ## Interview and review continuation
 
@@ -76,3 +77,66 @@ Final deterministic container suite: passed in 237.20 seconds. The 28 focused ha
 tests, strict OpenSpec validation and all eight positive/negative local grader controls
 also passed. Final checks include a regression ensuring fresh sessions still receive
 the full candidate delta after Ralph creates a local landing commit.
+
+## Sidebar feature trial with one Oracle consultation
+
+The owner requested a real sidebar redesign stacked on PR #78, with alternatives and
+an owner choice before implementation. One persistent feature run used the production
+`agent:goal` parent-PR path, a one-hour execution budget and a 24-activation ceiling.
+The source baseline was `c6efd9dda0a3a06448a9e22ad29835f74af1c17c`.
+
+The owner selected compact View/Hosts controls with the list mode and space filter on
+the next row, retained Settings, and added an Add Host shortcut to the existing
+Network settings form. The same lead history incorporated those refinements. Exactly
+one Oracle consultation completed during planning, assessing canonical navigation,
+qualified host state, responsive sizing and keyboard focus. Its advice informed the
+plan; the later Add Host command justified a custom Hosts menu while View and space
+scope remained native selects.
+
+| Step | Recorded outcome | Duration |
+| --- | --- | ---: |
+| Initial intake | Owner questions | 351.4 s |
+| Owner design answer | Intake ready, same lead | 102.1 s |
+| Planner | Oracle request | 68.8 s |
+| Oracle | Advice completed | 752.8 s |
+| Settings/Add Host refinement | Intake ready, same lead | 77.4 s |
+| Planner continuation | Plan ready | 183.5 s |
+| Independent QA planner | Invocation timed out | 900.0 s |
+| QA planner continuation | 14 scenarios, same review history | 120.0 s |
+| Builder | Invocation timed out with partial source | 900.0 s |
+| Builder continuation | Overall execution budget exhausted | Remaining budget |
+
+The authoritative result is **exhausted**, after 12 activations; the last completed
+workflow event was `qa.planned`. There was no completed candidate-ready event, internal
+code review, QA execution or deterministic acceptance verification in this bounded
+run. The budget was not reset, a second run was not silently started, and interactive
+completion is not counted as Ralph success. This is a product-task failure to finish
+within the configured budget, despite useful Oracle advice and a recovered QA plan.
+
+Completed calls reported 6,374,824 input tokens (including 5,537,664 cached input) and
+41,659 output tokens. These are **partial totals**: timed-out and supervisor-killed
+calls have missing usage records. Cached input is included in input, not additional.
+Total usage and monetary/subscription impact remain unknown.
+
+### Verification output correction kept in the parent PR
+
+Baseline browser verification reproduced a source-fingerprint failure: passing visual
+tests rewrote tracked evidence PNGs. Commit `f77eb5e` routes the four screenshot suites
+into ignored `.scratch/playwright/evidence/` paths. CI already captures that artifact
+tree. Historical evidence remains tracked, and an intentional evidence refresh now
+requires an explicit copy and review. No assertion or fingerprint check was weakened.
+
+All 14 tests in those four suites passed through the actual verifier with an unchanged
+source fingerprint, alongside the complete repository check, strict OpenSpec validation
+and all positive/negative local grader controls. The run was paused after QA planning
+and received only the four output-path edits before the builder resumed; frozen harness
+controls and acceptance were unchanged. The child branch incorporates this parent fix.
+
+### Interactive feature delivery
+
+After preserving the exhausted run, the authorized feature work continued interactively
+from its exported partial candidate. Navigation focus, menu overflow, duplicate-name
+identification and regression-selector migration required further work. The feature
+remains separate from harness code and trial reporting; its own validation and independent
+review are recorded in the child pull request linked from
+[PR #78](https://github.com/IvoryHeart/herdr-world/pull/78).
