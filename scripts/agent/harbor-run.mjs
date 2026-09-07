@@ -12,8 +12,10 @@ const runDir = '/tmp/world-harbor-run';
 await mkdir(runDir, { recursive: true });
 await symlink('/workspace', join(runDir, 'workspace'));
 await symlink('/control', join(runDir, 'control'));
+// Harbor isolates trials, not individual role mounts. Keep its fresh-session
+// baseline explicit; native role persistence is evaluated by the local Docker driver.
 const state = {
-  schemaVersion: 2, id: 'harbor', environment: 'harbor', status: 'preparing',
+  schemaVersion: 3, sessionMode: 'fresh', id: 'harbor', environment: 'harbor', status: 'preparing',
   sourceRevision: git(['rev-parse', 'HEAD']), sourceFingerprint: await fingerprint(),
   workspaceBaseline: git(['rev-parse', 'HEAD']), model: process.argv[2], profile: 'check', taskProfile: process.argv[3] ?? process.env.WORLD_TASK_PROFILE ?? 'routine',
   models: resolveModels(JSON.parse(await readFile('/control/harness/models.json')), { model: process.argv[2] }),

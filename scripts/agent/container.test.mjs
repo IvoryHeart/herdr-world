@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, mkdir, readFile, readdir, access, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, mkdir, readFile, readdir, access, rm, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { command, git, repoRoot } from './lib.mjs';
 
@@ -13,11 +13,23 @@ test('production supervisor enforces isolation, verification, blocked outcomes a
   await mkdir(build);
   await writeFile(join(build, 'fake-codex.mjs'), `#!/usr/bin/env node
 import fs from 'node:fs';
+import {randomUUID} from 'node:crypto';
+const home=process.env.CODEX_HOME, file=home+'/fixture-history.json';
+let history=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)): {id:randomUUID(),turns:0};
+const resume=process.argv.indexOf('resume');
+if(resume>=0 && process.argv[resume+1]!==history.id) throw Error('Wrong native thread');
+if(resume<0 && history.turns) throw Error('Existing history was not resumed');
+history.turns++; fs.writeFileSync(file,JSON.stringify(history));
+console.log(JSON.stringify({type:'thread.started',thread_id:history.id}));
 if(process.argv.includes('--version')) { console.log('codex-cli fixture (no model)'); process.exit(0); }
 let prompt=''; for await(const chunk of process.stdin) prompt+=chunk;
+const context=JSON.parse(prompt.split('Supervisor context updates:\\n')[1].split('\\n\\nCandidate changes')[0]);
+history.context={...history.context,...context}; fs.writeFileSync(file,JSON.stringify(history));
+prompt+='\\nSaved native fixture context: '+JSON.stringify(history.context);
 let event,fields={};
 const acceptance=[{id:'answer',criterion:'source.mjs exports answer equal to 42.'}];
-if(prompt.startsWith('Use world-shape-work')) {event='requirements.ready';fields={acceptance};}
+if(prompt.startsWith('Use world-start-task')) {event=prompt.includes('OWNER_ANSWER')?'intake.ready':'intake.questions';fields={acceptance:event==='intake.ready'?acceptance:[],questions:event==='intake.questions'?[{id:'value',question:'What value should answer have?'}]:[]};}
+else if(prompt.startsWith('Use world-shape-work')) {event='requirements.ready';fields={acceptance};}
 else if(prompt.startsWith('Read AGENTS.md and world-plan-change')) {event=prompt.includes('FIXTURE_BLOCKED')?'task.blocked':'plan.ready';fields={acceptance,specialists:[]};}
 else if(prompt.startsWith('Use world-test-behavior to derive')) {event='qa.planned';fields={scenarios:[{id:'value',acceptanceIds:['answer'],steps:'Read source.mjs.',expected:'answer is 42.'}]};}
 else if(prompt.startsWith('Implement the authorized task')) {
@@ -80,6 +92,9 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   let runs=await readdir(runBase);
   const success=JSON.parse(await readFile(join(runBase,runs[0],'run.json')));
   assert.equal(success.status,'ready-for-review');
+  assert.equal(success.turns.find(t=>t.role==='reviewer').sessionId,success.turns.find(t=>t.role==='qa-planner').sessionId);
+  assert(success.turns.find(t=>t.role==='qa').resumed);
+  assert.notEqual(success.sessions.builder.threadId,success.sessions.review.threadId);
   assert.equal(success.qa.event,'qa.passed');
   assert.equal(success.models.implementer.model,'fixture');
   assert.equal(success.turns.find(turn=>turn.role==='qa').reasoningEffort,'xhigh');
@@ -113,13 +128,42 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   assert.notEqual((await pending).code,0);
   const interrupted=JSON.parse(await readFile(join(runBase,resumeId,'run.json')));
   assert.equal(interrupted.status,'interrupted');
+  const builderBefore=JSON.parse(await readFile(join(runBase,resumeId,'sessions/builder/session.json')));
+  assert(builderBefore.threadId);
   result=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'resume',resumeId],
     {cwd:source,stream:false,timeoutMs:360000,log:join(dir,'resumed.log')});
   assert.equal(result.code,0,result.output);
   const resumed=JSON.parse(await readFile(join(runBase,resumeId,'run.json')));
   assert.equal(resumed.status,'ready-for-review');
+  assert.equal(resumed.sessions.builder.threadId,builderBefore.threadId);
   assert(resumed.activations>interrupted.activations);
   assert(resumed.remainingMs<interrupted.remainingMs);
+  runs=await readdir(runBase);
+  git(['clone','--bare',source,join(dir,'origin.git')],dir);
+  git(['remote','add','origin',join(dir,'origin.git')],source);
+  await mkdir(join(dir,'bin'));
+  const gh=join(dir,'bin/gh');
+  await writeFile(gh,'#!/usr/bin/env node\nconsole.log(JSON.stringify({headRefName:"agent/fixture",isCrossRepository:false,state:"OPEN"}));\n');
+  await chmod(gh,0o755);
+  result=await command([process.execPath,join(repoRoot,'scripts/agent/goal.mjs'),'Ask the owner what answer should be, then implement it.',
+    '--parent','78','--slug','interview-fixture','--profile','check','--image',image,'--auth-file',auth,'--model','fixture','--seconds','300'],
+    {cwd:source,stream:false,timeoutMs:360000,env:{...process.env,PATH:join(dir,'bin')+':'+process.env.PATH}});
+  assert.notEqual(result.code,0);
+  const intakeId=(await readdir(runBase)).find(id=>!runs.includes(id));
+  const intake=JSON.parse(await readFile(join(runBase,intakeId,'run.json')));
+  assert.equal(intake.status,'blocked'); assert.equal(intake.intake.questions.length,1);
+  assert.equal(intake.delivery.base,'agent/fixture'); assert.equal(intake.delivery.parent,'78');
+  assert.equal(intake.delivery.worktree,join(source,'.agents/.worktrees/interview-fixture'));
+  assert.equal(git(['branch','--show-current'],source),'agent/fixture');
+  const noAnswer=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'resume',intakeId],{cwd:source,stream:false});
+  assert.notEqual(noAnswer.code,0);
+  await writeFile(task,'OWNER_ANSWER: answer must equal 42.');
+  result=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'resume',intakeId,'--task-file',task],{cwd:source,stream:false,timeoutMs:360000});
+  assert.equal(result.code,0,result.output);
+  const answered=JSON.parse(await readFile(join(runBase,intakeId,'run.json')));
+  assert.equal(answered.status,'ready-for-review'); assert(answered.remainingMs<intake.remainingMs);
+  assert.equal(answered.turns.filter(t=>t.sessionGroup==='lead').length,3);
+  assert.equal(new Set(answered.turns.filter(t=>t.sessionGroup==='lead').map(t=>t.sessionId)).size,1);
   runs=await readdir(runBase);
   await writeFile(task,'FIXTURE_FAIL: Repeatedly claim success while the check fails.');
   result=await command(args,{cwd:source,stream:false,timeoutMs:360000,log:join(dir,'failed.log')});

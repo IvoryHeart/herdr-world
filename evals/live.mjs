@@ -15,7 +15,7 @@ async function main() {
   const { values } = parseArgs({ options: {
     prepared: { type: 'string' }, cases: { type: 'string' }, variants: { type: 'string', default: 'baseline,ralph' },
     attempts: { type: 'string', default: '1' }, seconds: { type: 'string', default: '1800' },
-    model: { type: 'string' }, 'worker-model': { type: 'string' }, 'lead-model': { type: 'string' },
+    sessions: { type: 'string', default: 'persistent' }, model: { type: 'string' }, 'worker-model': { type: 'string' }, 'lead-model': { type: 'string' },
     'auth-file': { type: 'string' }, 'jobs-dir': { type: 'string', default: 'evals/jobs' },
     'keep-caches': { type: 'boolean', default: false },
   } });
@@ -46,7 +46,7 @@ async function main() {
   await cp(join(repoRoot, 'harness'), join(harnessSource, 'harness'), { recursive: true, verbatimSymlinks: true });
   await cp(join(repoRoot, 'scripts/agent'), join(harnessSource, 'scripts/agent'), { recursive: true });
   const report = { schemaVersion: 1, kind: 'live-model-trials', source, harnessRevision: git(['rev-parse', 'HEAD'], repoRoot),
-    harnessFingerprint: await fingerprint(repoRoot), models, image: inspect.output.trim(), attempts, seconds,
+    harnessFingerprint: await fingerprint(repoRoot), sessions: values.sessions, models, image: inspect.output.trim(), attempts, seconds,
     variants, cases: ids, startedAt: new Date().toISOString(), costUsd: null, trials: [] };
   await jsonFile(join(job, 'report.json'), report);
   console.log('Live trial report: ' + join(job, 'report.json'));
@@ -73,7 +73,7 @@ async function main() {
     if (variant === 'ralph') {
       const args = [process.execPath, join(harnessSource, 'scripts/agent/run.mjs'), 'start', '--task-file', taskFile,
         '--task-profile', entry.taskProfile ?? 'routine', '--seconds', String(seconds), '--auth-file', authFile, '--image', report.image];
-      for (const option of ['model', 'worker-model', 'lead-model']) if (values[option]) args.push('--' + option, values[option]);
+      for (const option of ['model', 'worker-model', 'lead-model', 'sessions']) if (values[option]) args.push('--' + option, values[option]);
       result = await command(args, { cwd: workspace, stream: false, timeoutMs: (seconds + 1250) * 1000, log: join(trialDir, 'runner.log') });
       const runBase = join(workspace, '.agents/runs');
       try {

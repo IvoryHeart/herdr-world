@@ -57,7 +57,8 @@ before interactive reuse.
 The baseline is one Luna xhigh Codex session with the same repository skills. Ralph uses
 the committed worker/lead allocation, so this compares complete configurations, including
 model allocation. To isolate orchestration, pass `--model gpt-5.6-luna` for a uniform-model
-comparison. Tier overrides are --worker-model and --lead-model. Reports record model/effort
+comparison. Tier overrides are --worker-model and --lead-model. Use `--sessions fresh` versus
+`--sessions persistent` with otherwise identical Ralph inputs to compare context strategies. Reports record model/effort
 per turn, task/source inputs, independent reward, delivery status, QA evidence, consultation
 count, durations and token usage. Cost remains null when unreported.
 
@@ -83,7 +84,10 @@ A maximum trial timeout is not a financial cap; enforce spending limits with the
 
 The Ralph adapter reuses `harness/ralph.yml`, roles, response validation and candidate gate.
 Harbor supplies the outer container, so its execution driver runs commands within that
-container instead of nesting Docker. The local Docker boundary is tested separately.
+container instead of nesting Docker. Harbor keeps an explicit fresh-session baseline:
+it isolates the trial as a whole and does not provide the local driver's per-role mounts.
+Use local Ralph trials for persistent-versus-fresh comparisons. The local Docker
+boundary is tested separately.
 The configured loop also runs the repository check profile; the baseline agent is free
 to choose its own verification. Both receive the same independent final grader.
 
@@ -111,3 +115,23 @@ Inspect the [sanitized live trial findings](../docs/evidence/agent-development-l
 raw logs and generated candidates must not be committed. A small live smoke set
 proves execution paths and specific outcomes, not general reliability. Graphify should be
 evaluated as an additional navigation variant only after the core baseline exists.
+
+## Native session regression
+
+```bash
+npm run eval:sessions
+```
+
+This focused live test uses the production model adapter and Docker mounts against a
+tiny synthetic retry helper, with the pinned image and saved Codex authentication.
+It checks a missing-decision interview and exact native continuation after the answer,
+then a resumed reviewer rejecting a new defect after the first defect is repaired.
+The corrected helper must pass Sol review and Luna QA in the same independent history
+with the current role schema. All calls are sequential, bounded to 30 minutes total
+(15 minutes per call); raw evidence stays under ignored `.agents/state/session-evals/`.
+Reports include actual models, native IDs, token usage, source fingerprint and image ID.
+This is a persistence regression, not a measured reliability or token-savings benchmark.
+
+The credential-free `test:agent:containers` separately covers the production goal command,
+parent worktree selection, interview stop/resume, killed backend recovery, isolation,
+and verifier rejection of falsely claimed success. CI stand-ins do not prove model quality.

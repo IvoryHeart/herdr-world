@@ -21,7 +21,8 @@ export async function copyCandidate(source, target) {
   git(['add', '.'], target);
   git(['-c', 'user.name=Agent fixture', '-c', 'user.email=agent@example.invalid', 'commit', '-qm', 'Candidate baseline'], target);
 }
-export function dockerArgs(state, workspace, { readOnly = false, network = 'none', authFile, control, name } = {}) {
+export function dockerArgs(state, workspace, { readOnly = false, network = 'none', authFile, control, name, sessionHome, handovers } = {}) {
+  const codexHome = sessionHome ? '/agent-home' : '/tmp/world-codex';
   const args = ['docker', 'run', '--rm', '--init', '-i', '--name', name, '--user', String(process.getuid?.() ?? 1000) + ':' + String(process.getgid?.() ?? 1000),
     '--cap-drop=ALL', '--security-opt=no-new-privileges', '--pids-limit=512', '--memory=6g', '--cpus=4',
     '--network', network, '--read-only', '--tmpfs', '/tmp:rw,exec,size=2g',
@@ -30,10 +31,12 @@ export function dockerArgs(state, workspace, { readOnly = false, network = 'none
     '--mount', 'type=bind,src=' + join(workspace, '.git') + ',dst=/workspace/.git,readonly',
     '--mount', 'type=bind,src=' + control + ',dst=/control,readonly',
     '--workdir', '/workspace', '-e', 'OPENSPEC_TELEMETRY=0', '-e', 'DO_NOT_TRACK=1',
-    '-e', 'CODEX_HOME=/tmp/world-codex', '-e', 'npm_config_cache=/tmp/world-npm',
+    '-e', 'CODEX_HOME=' + codexHome, '-e', 'npm_config_cache=/tmp/world-npm',
     '-e', 'CARGO_HOME=/workspace/.agents/cache/cargo', '-e', 'PLAYWRIGHT_BROWSERS_PATH=/workspace/.agents/cache/browsers'];
+  if (sessionHome) args.push('--mount', 'type=bind,src=' + sessionHome + ',dst=' + codexHome);
+  if (handovers) args.push('--mount', 'type=bind,src=' + handovers + ',dst=/handover,readonly');
   if (authFile) args.push(
-    '--mount', 'type=bind,src=' + authFile + ',dst=/tmp/world-codex/auth.json,readonly',
+    '--mount', 'type=bind,src=' + authFile + ',dst=' + codexHome + '/auth.json,readonly',
     '--mount', 'type=bind,src=' + join(workspace, '.ralph') + ',dst=/workspace/.ralph,readonly');
   args.push(state.image);
   return args;
@@ -46,11 +49,15 @@ export async function inContainer(state, workspace, argv, options = {}) {
     await access('/logs/agent');
     const modelCall = argv[0].endsWith('/codex');
     const args = [...argv];
-    if (modelCall && options.readOnly) args[args.indexOf('--sandbox') + 1] = 'read-only';
+    if (modelCall && options.readOnly) {
+      const configured = args.findIndex(arg => arg.startsWith('sandbox_mode='));
+      if (configured >= 0) args[configured] = 'sandbox_mode="read-only"';
+      else args[args.indexOf('--sandbox') + 1] = 'read-only';
+    }
     const env = { PATH: process.env.PATH, RUSTUP_HOME: process.env.RUSTUP_HOME,
       CARGO_HOME: join(workspace, '.agents/cache/cargo'), npm_config_cache: '/tmp/world-npm',
       OPENSPEC_TELEMETRY: '0', DO_NOT_TRACK: '1' };
-    if (modelCall) { env.CODEX_API_KEY = process.env.CODEX_API_KEY; env.CODEX_HOME = '/tmp/world-codex'; }
+    if (modelCall) { env.CODEX_API_KEY = process.env.CODEX_API_KEY; env.CODEX_HOME = options.sessionHome ?? '/tmp/world-codex'; }
     return command(args, { ...options, cwd: workspace, env });
   }
   const name = 'world-agent-' + state.id + '-' + Date.now();

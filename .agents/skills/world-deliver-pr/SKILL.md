@@ -6,6 +6,7 @@ description: Deliver an authorized Herdr World branch as a reviewed pull request
 Follow AGENTS.md. Work on a branch and use npm run agent:verify -- check (or acceptance)
 before delivery. Use npm run agent:deliver -- --title "..." --body-file <file> to
 validate the receipt, push the current non-main branch and open a PR.
+For a stacked task pass --base <recorded-parent-branch>; otherwise the base is main.
 The helper never commits, merges or pushes main. It rejects dirty or stale candidates.
 Write the body around the problem, resulting behavior, checks and limitations.
 Review for private data before publishing. Add the PR reference to relevant changelog

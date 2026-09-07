@@ -6,11 +6,11 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-export function git(args, cwd = process.cwd()) {
+export function git(args, cwd = process.cwd(), extraEnv = {}) {
   const safeArgs = args[0] === 'diff' ? ['diff', '--no-ext-diff', '--no-textconv', ...args.slice(1)] : args;
   return execFileSync('git', ['-c', 'core.fsmonitor=false', ...safeArgs], {
     cwd, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
+    env: { ...process.env, ...extraEnv, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
   }).trimEnd();
 }
 export function primaryCheckout(cwd = process.cwd()) {
@@ -82,7 +82,7 @@ function processParents() {
   return execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 2000 })
     .trim().split('\n').map(line => line.trim().split(/\s+/).map(Number));
 }
-export async function command(argv, { cwd = process.cwd(), env = process.env, timeoutMs = 1200000, log, input, stream = true } = {}) {
+export async function command(argv, { cwd = process.cwd(), env = process.env, timeoutMs = 1200000, log, input, stream = true, onStdoutLine } = {}) {
   if (!Array.isArray(argv) || !argv.length) throw new Error('Command must be a nonempty argv array');
   const start = Date.now();
   const child = spawn(argv[0], argv.slice(1), { cwd, env, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
@@ -117,7 +117,17 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
   const interrupt = () => { interrupted = true; terminate(); };
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', interrupt);
-  child.stdout.on('data', chunk => { chunks.push(chunk); stdoutChunks.push(chunk); if (stream) process.stdout.write(chunk); });
+  let pendingLine = '';
+  child.stdout.on('data', chunk => {
+    chunks.push(chunk); stdoutChunks.push(chunk); if (stream) process.stdout.write(chunk);
+    if (onStdoutLine) {
+      pendingLine += chunk.toString();
+      let end;
+      while ((end = pendingLine.indexOf('\n')) >= 0) {
+        onStdoutLine(pendingLine.slice(0, end)); pendingLine = pendingLine.slice(end + 1);
+      }
+    }
+  });
   child.stderr.on('data', chunk => { chunks.push(chunk); stderrChunks.push(chunk); if (stream) process.stderr.write(chunk); });
   child.stdin.on('error', () => {});
   child.stdin.end(input);
@@ -133,6 +143,7 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
     process.removeListener('SIGTERM', interrupt);
   }
   const output = Buffer.concat(chunks).toString();
+  if (onStdoutLine && pendingLine) onStdoutLine(pendingLine);
   if (log) { await mkdir(dirname(log), { recursive: true }); await writeFile(log, output, { mode: 0o600 }); }
   return { ...result, output, stdout: Buffer.concat(stdoutChunks).toString(), stderr: Buffer.concat(stderrChunks).toString() };
 }

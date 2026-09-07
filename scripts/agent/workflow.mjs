@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 export const roleEvents = {
+  intake: ['intake.ready', 'intake.questions', 'task.blocked'],
   product: ['requirements.ready', 'task.blocked'],
   planner: ['plan.ready', 'oracle.requested', 'task.blocked'],
   'qa-planner': ['qa.planned', 'oracle.requested', 'task.blocked'],
@@ -25,7 +26,8 @@ const result = object({ scenarioId: text, status: { type: 'string', enum: ['pass
 export function responseSchema(role) {
   if (!roleEvents[role]) throw new Error('Unknown model role: ' + role);
   const properties = { event: { type: 'string', enum: roleEvents[role] }, summary: text };
-  if (['product', 'planner'].includes(role)) properties.acceptance = array(criterion);
+  if (['intake', 'product', 'planner'].includes(role)) properties.acceptance = array(criterion);
+  if (role === 'intake') properties.questions = array(object({ id: text, question: text }));
   if (role === 'planner') properties.specialists = array({ type: 'string', enum: specialistNames });
   if (role === 'qa-planner') properties.scenarios = array(scenario);
   if (role === 'qa') properties.results = array(result);
@@ -84,8 +86,16 @@ export function acceptResponse(state, role, response, before, after) {
   if (readOnlyRoles.has(role) && before !== after) throw new Error('Read-only ' + role + ' changed candidate contents');
   if (before !== after || role === 'implementer') invalidateCandidate(state);
   if (response.event === 'task.blocked') return response;
+  if (role === 'intake') {
+    const questions = response.questions;
+    if (!unique(questions, 'id') || questions.length > 3 || questions.some(q => !nonempty(q.id) || !nonempty(q.question))
+      || (response.event === 'intake.questions' ? !questions.length || response.acceptance.length : questions.length)) {
+      throw new Error('Intake needs one to three concrete questions or ready acceptance, never both');
+    }
+    if (response.event === 'intake.questions') return response;
+  }
   if (response.event === 'oracle.requested') return requestOracle(state, role, response.summary);
-  if (['product', 'planner'].includes(role)) {
+  if (['intake', 'product', 'planner'].includes(role)) {
     const criteria = response.acceptance;
     if (!criteria.length || !unique(criteria, 'id') || criteria.some(c => !nonempty(c.id) || !nonempty(c.criterion))) {
       throw new Error('Acceptance criteria must be nonempty and have unique IDs');

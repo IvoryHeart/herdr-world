@@ -82,3 +82,28 @@ Publishing SHALL be separate from worker execution and SHALL stop at an open PR.
 #### Scenario: Review pending
 - **WHEN** automated checks pass
 - **THEN** the PR remains subject to independent review under AGENTS.md
+
+### Requirement: Goal intake and retained role histories
+A short goal SHALL create a fresh task worktree and start source-grounded intake.
+Missing consequential owner decisions SHALL produce saved questions and a stopped run.
+Answers SHALL resume the lead history without charging human waiting time or resetting budgets.
+An open same-repository parent PR MAY select the task and delivery base.
+
+#### Scenario: Interview continuation
+- **WHEN** the owner supplies answers to a saved interview
+- **THEN** the lead resumes its native session, establishes acceptance and continues to planning without duplicate product shaping
+
+### Requirement: Durable state outside disposable containers
+The default session mode SHALL retain separate lead, builder and independent review
+histories, plus Oracle when consulted. QA execution SHALL retain its worker model.
+Native state SHALL live in ignored run storage and only the active group's home SHALL
+be writable in its container. Supervisor metadata and shared handovers SHALL be outside
+that writable mount. A fresh-session comparison mode SHALL remain available.
+
+#### Scenario: Interrupted native turn
+- **WHEN** a model reports its thread ID and the invocation is interrupted
+- **THEN** the next activation can resume that exact saved ID in a recreated container
+
+#### Scenario: Repair introduces a new defect
+- **WHEN** the candidate changes after review
+- **THEN** the same independent review history receives the candidate delta and changed decisions, checks affected behavior for new defects, and produces new evidence for the changed candidate

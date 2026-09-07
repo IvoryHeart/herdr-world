@@ -6,7 +6,32 @@ runs. Product architecture changes remain a separate concern.
 
 ## Start a task
 
-From any checkout:
+After the one-time `npm run agent:bootstrap` and `npm run agent:image` setup, a short
+goal is enough. In an agent conversation, world-start-task handles the same flow.
+
+```bash
+npm run agent:goal -- "Make saved connections easier to find"
+# Stack the experiment on an open same-repository PR:
+npm run agent:goal -- "Make saved connections easier to find" --parent 78
+```
+
+The command fetches the selected base, creates a fresh task worktree, and starts
+read-only research and intake. It defaults to the feature task profile and acceptance
+checks; use `--task-profile routine --profile check` for a source-only fix. If a
+consequential answer is missing, it prints saved questions and a run ID, then exits.
+Save the answers in an ignored/private file and run:
+
+```bash
+npm run agent:run -- resume RUN_ID --task-file /tmp/world-answers.md
+```
+
+The same lead session continues into planning once acceptance is clear; product shaping
+is not repeated. Waiting for the reply consumes no loop time or running container.
+A bare resume cannot bypass pending interview questions. The CLI ends with a candidate
+and evidence; the coordinating agent handles inspection and authorized PR delivery.
+
+For an already prepared task, create its worktree directly:
+
 
 ```bash
 npm run agent:worktree -- create fix-reconnect
@@ -34,7 +59,7 @@ than loading every skill. Agents without native skill discovery can read those s
 | Proposed coherent changes | openspec/changes |
 | Source ownership, operation and troubleshooting | docs/knowledge-map.md and linked runbooks |
 | Historical decisions and research | docs/specs and docs/analysis |
-| In-flight progress and recovery notes | ignored .ralph/agent inside a run |
+| In-flight progress, role histories and recovery notes | ignored .agents/runs/<id>; .ralph/agent inside its candidate |
 | Grading evidence and generated graphs | ignored eval/run output; never authoritative |
 
 Use a proposal for an owner-requested spec or a genuinely new contract. Routine fixes,
@@ -65,11 +90,12 @@ overwrites repository policy.
 
 | Role | Work | Boundary |
 | --- | --- | --- |
+| Intake | world-start-task; source research, consequential questions, acceptance | Lead history; read-only; owner supplies missing decisions |
 | Product manager | world-shape-work; user outcome, scope, non-goals and acceptance | Feature intake only; read-only; no invented research or roadmap authority |
 | Planner | world-plan-change; inspect source, plan and select specialist lenses | Read-only; preserves existing acceptance exactly |
 | QA planner | world-test-behavior; derive scenarios before implementation | Read-only; covers every acceptance criterion independently |
 | Implementer | Implement; world-verify-change and conditional world-maintain-knowledge | One worker, one candidate; no publishing authority |
-| Reviewer | world-review-change plus selected world-review-specialist lenses | Fresh context; candidate mounted read-only in local runs |
+| Reviewer | world-review-change plus selected world-review-specialist lenses | Independent review history; candidate mounted read-only in local runs |
 | Behavioral QA | world-test-behavior; exercise every planned scenario | Read-only source; evidence per scenario; no repairs |
 | Oracle / technical adviser | world-consult-oracle; investigate a concrete technical question | Read-only; at most two consultations across the run and resumes |
 | Verifier | Deterministic commands | No model call; separate candidate copy and no model credential |
@@ -77,8 +103,74 @@ overwrites repository policy.
 | Publisher | world-deliver-pr outside the loop | Push task branch and open PR; never merge |
 
 Role instructions live in harness/roles; skills supply reusable procedures. Executable
-permissions, schemas and routing live in scripts/agent, not just prompts. Every model
-activation starts fresh. The loop's internal review does not replace independent PR review.
+permissions, schemas and routing live in scripts/agent, not just prompts. A role is a
+procedure and permission set, not necessarily another agent instance. The loop's
+internal review does not replace independent PR review.
+
+```mermaid
+flowchart TD
+  Goal[Owner goal and answers] --> Lead[Lead history: intake / product / planner — Sol xhigh]
+  Lead --> ReviewPlan[Review history: QA planner — Sol xhigh]
+  ReviewPlan --> Builder[Builder history: implementation and repairs — Luna xhigh]
+  Builder --> Review[Review history: reviewer — Sol xhigh]
+  Review -->|findings| Builder
+  Review --> QA[Same review history: QA execution — Luna xhigh]
+  QA -->|failed scenarios| Builder
+  QA --> Verify[Deterministic verifier — no model]
+  Verify -->|failed checks| Builder
+  Verify --> Delivery[Coordinator: inspect / check / open PR]
+  Lead -. concrete uncertainty .-> Oracle[Separate Oracle history — Sol xhigh]
+  Builder -. repeated failure .-> Oracle
+  Review -. concrete uncertainty .-> Oracle
+```
+
+There are three normal native session histories, plus an Oracle history when needed.
+Only one model call runs at a time. A finished turn leaves a resumable session, not an
+idle model process. The next activation recreates a container and uses `codex exec
+resume <exact-id>`. QA planning, review and QA share factual task history while remaining
+independent of the builder. QA execution retains the Luna model policy even when
+resuming a history that used Sol; models and response schemas are selected per turn.
+
+## State, Docker and context reuse
+
+Docker supplies the pinned execution environment and mount boundaries. Durable state
+lives on the host under the primary checkout, outside the disposable containers:
+
+```text
+.agents/
+  .worktrees/<task>/                task branch and eventual PR
+  runs/<run-id>/
+    run.json                       acceptance, evidence, limits, delivery base
+    control/                       frozen harness and role schemas
+    workspace/                     isolated candidate, no publishing remotes
+    sessions/lead|builder|review|oracle/
+      session.json                 supervisor-owned native ID and checkpoint
+      home/                        that group's native Codex files
+    handovers/                     read-only structured turn results and deltas
+    candidate.patch                proposed source change
+```
+
+Only a group's own native home is mounted writable at `/agent-home`. Its metadata
+remains outside the mount; `/handover` is read-only. Other groups' transcripts are not
+exposed. Authentication is a separate read-only mount, never a copied credential.
+The native thread ID is saved as soon as Codex reports it, so interruption does not
+depend on receiving a final answer. Run schema 3 is required for resume; old runs
+remain inspectable and can export their patches but must not be resumed with new controls.
+
+The adapter sends changed supervisor fields, current role instructions and a Git delta
+since that history last observed the candidate. Source snapshots include new files and
+deletions without modifying the candidate index. Shared summaries retain decisions,
+evidence and source pointers. A returning reviewer checks affected behavior and new
+defects as well as old findings. Retained history is useful context, never valid approval
+for changed source. Native compaction may shorten long histories; factual handovers
+provide recovery when useful details are no longer present.
+
+For local Docker runs, `--sessions fresh` starts ephemeral sessions for comparison; persistent is the
+default and the choice is frozen on resume. Reuse avoids repeated exploration and
+allows native caching, but does not mean old context is free. No subscription-usage
+saving is claimed without a controlled comparison. State retention and container
+instance/space optimization are deferred; deleting a run deletes its native histories.
+
 
 Choose a task profile separately from the verification profile:
 
@@ -172,18 +264,18 @@ Credentials are never copied into the repository or result bundle.
 
 A run copies the candidate into a private repository without remotes or shared Git metadata,
 under the primary checkout's ignored `.agents/runs/<id>/workspace`. It freezes a separate
-control copy of the harness. Ralph owns routing and fresh activations. Repository code
+control copy of the harness. Ralph owns routing and process activations; the adapter owns native history continuation. Repository code
 adds container execution, structured role events, verification and the final content gate.
 
 Default bounds are 24 activations/iterations, one hour and three consecutive failures.
 Each model invocation has a 15-minute ceiling. Use `--iterations` and `--seconds` to set
-an explicit task budget. Wall-clock bounds cover loop execution, including verification.
+an explicit task budget. Wall-clock bounds cover active intake and loop execution, including verification; stopped interviews are excluded.
 Ralph's custom-backend inactivity timeout is explicitly 16 minutes, so a buffered model
 call is governed by the adapter's 15-minute deadline rather than an inherited five-minute
 default. The pinned Ralph version reads that custom timeout from its `claude` adapter slot;
 the worker still runs the selected Codex model.
 Initial dependency setup has its own 20-minute timeout. Limits persist across resume.
-Resume retains candidate and role notes while archiving the
+Resume retains candidate, native histories and structured handovers while archiving the
 previous Ralph event ledger, so old completion events cannot bypass fresh review.
 An optional clarification file adds the owner's missing decision without resetting those limits.
 An exhausted run requires a new authorized run; resume does not reset its failure budget.
@@ -226,6 +318,7 @@ git apply --index /path/to/run/candidate.patch
 npm run agent:verify -- acceptance
 git commit -m "Fix terminal recovery"
 npm run agent:deliver -- --title "Fix terminal recovery" --body-file /tmp/world-pr.md
+# For a stacked task, also pass --base <delivery.base from run.json>.
 ```
 
 Choose the relevant profile. The publishing helper rejects main, dirty worktrees, and
@@ -245,6 +338,14 @@ scope based on measured reliability.
 
 The [live trial report](evidence/agent-development-live-trials.md) records authenticated
 model outcomes, control failures found and fixed, and the limits of the initial sample.
+The [session trial report](evidence/agent-session-trials.md) records subsequent native
+continuation, repair review and model-switching evidence.
+
+Selected ECC retrieval and checkpoint practices are adapted into the existing skills;
+see [pinned provenance and scope](../harness/README.md#selected-ecc-practices). No ECC
+installation, automatic observer or additional control plane is needed for this workflow.
+`npm run eval:sessions` exercises real interview continuation, resumed review after a
+new defect, and Sol-to-Luna schema/model switching across recreated containers.
 
 Graphify remains optional. The [existing audit](analysis/agentic-development-capabilities-2026-09-01.md)
 found useful local relationships but missed a real TypeScript → HTTP → Rust path.

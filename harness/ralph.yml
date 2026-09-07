@@ -90,7 +90,7 @@ hats:
     instructions: Read harness/roles/implementer.md.
   reviewer:
     name: Reviewer
-    description: Inspect the exact candidate in a fresh read-only session.
+    description: Inspect the current candidate in an independent read-only history.
     triggers: [candidate.ready]
     publishes: [review.passed, review.rejected, oracle.requested, task.blocked]
     backend:

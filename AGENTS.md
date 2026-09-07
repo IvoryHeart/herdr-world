@@ -31,6 +31,10 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Read [docs/agent-development.md](docs/agent-development.md) for OpenSpec, repository
   skills, bounded Ralph runs, evaluation and PR delivery. Use
   [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
+- For a short development goal, use world-start-task and `npm run agent:goal -- "<goal>"`.
+  Intake asks only consequential questions; resume the saved run with the owner's answers.
+  Reuse lead, builder and independent review sessions within a task; do not reload
+  the full repository in newly spawned agents for each persona.
 - Create task worktrees with `npm run agent:worktree -- create <slug>`. They live in
   the primary checkout's ignored `.agents/.worktrees/`, including when invoked from
   a linked worktree. Do not move or clean another agent's existing worktree.

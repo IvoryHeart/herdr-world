@@ -8,7 +8,7 @@ Install with `npm ci --prefix harness`; use repository wrappers, not unpinned gl
   AGENTS.md; review and reapply adaptations when using `openspec update`.
   Its [MIT notice](OpenSpec-LICENSE) is retained with the adaptations.
 - [Ralph Orchestrator 2.10.1](https://github.com/mikeyobrien/ralph-orchestrator/tree/v2.10.1),
-  MIT. Owns event routing, bounded iterations, fresh contexts and continuation.
+  MIT. Owns event routing, bounded iterations and event-ledger continuation. The adapter resumes native role sessions.
 - [Codex CLI](https://developers.openai.com/codex/noninteractive) is the initial backend.
   Every live run records per-role model IDs and reasoning effort from models.json or
   explicit overrides. Worker defaults are Luna xhigh; lead defaults are Sol xhigh.
@@ -30,3 +30,23 @@ Ralph uses the official 2.10.1 standalone release with SHA-256 checksums in
 postinstall script. This avoids the npm wrapper's shrinkwrapped vulnerable installer
 dependencies; the upstream orchestration engine is unchanged. Update version and
 all four archive checksums together from the upstream GitHub release.
+
+## Selected ECC practices
+
+Reviewed [ECC at e04ea0b9cc8248686edf5ac751cadff550e162b8](https://github.com/affaan-m/ECC/tree/e04ea0b9cc8248686edf5ac751cadff550e162b8),
+MIT; its [licence](ECC-LICENSE) is retained. The repository adapts the ideas in
+`skills/iterative-retrieval`, `skills/search-first`, `skills/strategic-compact` and
+`skills/context-budget` into world-plan-change, world-review-change and task handovers.
+No ECC package, hooks, observer, memory service or second orchestrator is installed.
+
+Retrieval expands when a concrete gap remains. Existing solutions are investigated
+before building new ones. Session summaries preserve decisions and source pointers,
+while the supervisor sends only changed task context and candidate deltas on continuation.
+Native Codex compaction remains the CLI's responsibility; injecting `/compact` into an
+exec prompt is not a supported compaction control. Memory Vault and cross-harness
+handoffs can be evaluated later if a real second harness needs them. Native transcripts
+are Codex-specific; structured handovers are portable facts, not a universal agent image.
+
+Do not adopt ECC's automatic parallel delegation or continuous-learning observer as
+repository policy. They conflict with the current bounded, sequential workload and
+would add context and process overhead without evidence of improved outcomes.

@@ -78,3 +78,13 @@ test('model schemas and parser restrict roles without accepting completion or cr
   assert.throws(() => parseResponse(JSON.stringify({ event: 'LOOP_COMPLETE', summary: 'pass' }), 'implementer'), /Invalid/);
   assert.throws(() => parseResponse(JSON.stringify({ event: 'candidate.ready', summary: 'pass', approval: true }), 'implementer'), /Invalid/);
 });
+
+test('intake cannot mix unanswered questions with an acceptance contract or mutate source', () => {
+  const state = {};
+  const ask = { event: 'intake.questions', summary: 'Need a cap.', acceptance: [], questions: [{ id: 'cap', question: 'What cap?' }] };
+  assert.equal(acceptResponse(state, 'intake', ask, 'same', 'same').event, 'intake.questions');
+  assert.equal(state.requirements, undefined);
+  assert.throws(() => acceptResponse(state, 'intake', { ...ask, acceptance: [{ id: 'a', criterion: 'Assumed cap' }] }, 'same', 'same'), /never both/);
+  assert.throws(() => acceptResponse(state, 'intake', ask, 'before', 'after'), /Read-only/);
+  assert.throws(() => acceptResponse(state, 'intake', { ...ask, event: 'intake.ready', questions: [] }, 'same', 'same'), /Acceptance/);
+});

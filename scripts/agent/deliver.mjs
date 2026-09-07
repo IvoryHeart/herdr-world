@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { git, assertReceipt, command, errorExit } from './lib.mjs';
 try {
-  const { values } = parseArgs({ options: { title: { type: 'string' }, 'body-file': { type: 'string' } } });
+  const { values } = parseArgs({ options: { base: { type: 'string', default: 'main' }, title: { type: 'string' }, 'body-file': { type: 'string' } } });
   if (!values.title || !values['body-file']) throw new Error('Usage: agent:deliver -- --title <title> --body-file <path>');
   const branch = git(['branch', '--show-current']);
   if (!branch || branch === 'main') throw new Error('Delivery requires a non-main branch');
@@ -12,6 +12,6 @@ try {
   await readFile(values['body-file'], 'utf8');
   const push = await command(['git', 'push', '--set-upstream', 'origin', 'HEAD:refs/heads/' + branch]);
   if (push.code !== 0) throw new Error('Branch push failed');
-  const result = await command(['gh', 'pr', 'create', '--base', 'main', '--head', branch, '--title', values.title, '--body-file', values['body-file']]);
+  const result = await command(['gh', 'pr', 'create', '--base', values.base, '--head', branch, '--title', values.title, '--body-file', values['body-file']]);
   process.exitCode = result.code ?? 1;
 } catch (error) { errorExit(error); }

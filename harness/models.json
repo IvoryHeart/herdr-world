@@ -3,6 +3,7 @@
   "worker": { "model": "gpt-5.6-luna", "reasoningEffort": "xhigh" },
   "lead": { "model": "gpt-5.6-sol", "reasoningEffort": "xhigh" },
   "roles": {
+    "intake": "lead",
     "product": "lead",
     "planner": "lead",
     "qa-planner": "lead",
@@ -10,5 +11,15 @@
     "reviewer": "lead",
     "qa": "worker",
     "oracle": "lead"
+  },
+  "sessionGroups": {
+    "intake": "lead",
+    "product": "lead",
+    "planner": "lead",
+    "implementer": "builder",
+    "qa-planner": "review",
+    "reviewer": "review",
+    "qa": "review",
+    "oracle": "oracle"
   }
 }
