@@ -1,13 +1,11 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.0] - 2026-09-07
 
 ### Breaking Changes
 
 - Require Herdr v0.9.0 or newer with terminal protocol 22.
   [PR #88](https://github.com/kcosr/herdr-web/pull/88).
-
-### Added
 
 ### Changed
 
@@ -24,8 +22,6 @@
   [PR #88](https://github.com/kcosr/herdr-web/pull/88).
 - Subscribe to live agent activity before establishing the initial status snapshot.
   [PR #88](https://github.com/kcosr/herdr-web/pull/88).
-
-### Removed
 
 ## [0.5.2] - 2026-09-07
 
