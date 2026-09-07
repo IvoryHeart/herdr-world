@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
-const evidenceDir = resolve("docs/evidence/spec-010");
+const evidenceDir = resolve(".scratch/playwright/evidence/spec-010");
 
 test.beforeAll(async () => {
   await mkdir(evidenceDir, { recursive: true });

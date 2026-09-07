@@ -239,6 +239,13 @@ new source, executable bits and symlinks; generated state is excluded by Git ign
 Any source edit invalidates the receipt. A content-identical commit does not.
 Run `npm run check` before committing. Failed or unrun checks are reported as such.
 
+Browser screenshot captures go under ignored `.scratch/playwright/evidence/`, which
+is included in the normal Playwright CI artifact. Tests must not overwrite tracked
+historical evidence or public images: doing so changes the source fingerprint during
+verification. To refresh published screenshots intentionally, inspect the generated
+captures and copy the selected images into their documentation paths as a separate
+source change before verifying it.
+
 CI runs deterministic harness checks and spec validation on PRs without model credentials.
 The `Delivery checks` job requires all normal CI, browser, macOS and harness jobs.
 The GitHub rules helper prepares or checks the corresponding main-branch policy.

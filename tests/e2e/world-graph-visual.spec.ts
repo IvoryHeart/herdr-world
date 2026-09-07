@@ -8,7 +8,7 @@ import {
 } from "./graphConnector";
 import { hostStore } from "./hostStore";
 
-const evidenceDir = resolve("docs/evidence/spec-018");
+const evidenceDir = resolve(".scratch/playwright/evidence/spec-018");
 
 test.beforeAll(async () => {
   await mkdir(evidenceDir, { recursive: true });

@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
-const evidenceDir = resolve("docs/evidence/spec-010-extension-003");
-const conversationEvidenceDir = resolve("docs/evidence/spec-001-office-agent-conversation-bubble");
+const evidenceDir = resolve(".scratch/playwright/evidence/spec-010-extension-003");
+const conversationEvidenceDir = resolve(".scratch/playwright/evidence/spec-001-office-agent-conversation-bubble");
 
 test.use({ reducedMotion: "reduce" });
 test.describe.configure({ timeout: 90_000 });

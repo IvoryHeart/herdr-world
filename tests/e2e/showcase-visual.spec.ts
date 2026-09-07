@@ -2,7 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-const showcaseDir = resolve("docs/images");
+const showcaseDir = resolve(".scratch/playwright/evidence/showcase");
 const showcaseHostStore = {
   version: 2,
   enabledBridgeIds: ["same-origin", "demo-west"],
