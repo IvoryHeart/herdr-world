@@ -112,7 +112,9 @@ test('OTEL config is explicit and exports only allow-listed usage/lifecycle fiel
   assert(config.hostGateway); assert.match(config.workerEndpoint, /host.docker.internal/);
   assert(telemetryArguments(config).some(a => a.startsWith('otel.metrics_exporter={')));
   assert(telemetryArguments().includes('otel.exporter="none"'));
-  assert.throws(() => telemetryConfig('http://user:secret@example.invalid'), /credentials/);
+  const credentialEndpoint = new URL('http://example.invalid');
+  credentialEndpoint.username = 'fixture'; credentialEndpoint.password = 'fixture';
+  assert.throws(() => telemetryConfig(credentialEndpoint.href), /credentials/);
   recordEvent(dir, 'response.usage', { runId: 'fixture', responseId: 'response', usage: normalizeUsage(tokens), prompt: 'PRIVATE', home: '/PRIVATE' });
   assert.equal((await flushTelemetry(dir, config)).status, 'pending');
   fail = false; assert.equal((await flushTelemetry(dir, config)).sent, 1);
