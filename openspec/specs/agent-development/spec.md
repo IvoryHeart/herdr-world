@@ -56,8 +56,9 @@ be limited to two per run, without resetting execution or failure budgets.
 - **THEN** the adapter rejects it; explicit owner clarification can restart shaping with stale evidence invalidated
 
 ### Requirement: Recorded model allocation
-The default worker model SHALL be gpt-5.6-luna with xhigh effort. The default lead model
-SHALL be gpt-5.6-sol with xhigh effort. Resolved per-role models and effort SHALL be frozen
+The default lead and independent reviewer SHALL use gpt-5.6-sol with high effort; Oracle
+SHALL use gpt-5.6-sol with xhigh effort. The optional full workflow SHALL use gpt-5.6-luna
+with xhigh effort for bounded implementation and QA. Resolved models and effort SHALL be frozen
 for a run and recorded per turn. Explicit uniform and tier overrides SHALL be supported.
 
 #### Scenario: Resume
@@ -94,8 +95,9 @@ An open same-repository parent PR MAY select the task and delivery base.
 - **THEN** the lead resumes its native session, establishes acceptance and continues to planning without duplicate product shaping
 
 ### Requirement: Durable state outside disposable containers
-The default session mode SHALL retain separate lead, builder and independent review
-histories, plus Oracle when consulted. QA execution SHALL retain its worker model.
+The default workflow SHALL retain a lead history across intake, planning and implementation
+and a separate independent review history across scenarios, review and QA. Oracle SHALL
+retain a separate history when consulted. A full workflow MAY isolate a bounded builder.
 Native state SHALL live in ignored run storage and only the active group's home SHALL
 be writable in its container. Supervisor metadata and shared handovers SHALL be outside
 that writable mount. A fresh-session comparison mode SHALL remain available.
@@ -107,3 +109,36 @@ that writable mount. A fresh-session comparison mode SHALL remain available.
 #### Scenario: Repair introduces a new defect
 - **WHEN** the candidate changes after review
 - **THEN** the same independent review history receives the candidate delta and changed decisions, checks affected behavior for new defects, and produces new evidence for the changed candidate
+
+### Requirement: Reserved stage budgets and checkpoints
+New runs SHALL reserve cumulative time for preparation, advice, implementation, review/QA
+and deterministic verification. Attempts and resume SHALL NOT reset spent stage time.
+The supervisor SHALL save a source checkpoint before a deadline, allow bounded graceful
+shutdown and stop remaining descendants before recording the final outcome.
+
+#### Scenario: Preparation overrun
+- **WHEN** preparation exhausts its allocation
+- **THEN** the run stops explicitly without consuming the reserved implementation and verification allocations or claiming success
+
+### Requirement: Durable usage accounting
+The supervisor SHALL record attempt lifecycle and incremental native response usage outside
+worker-writable storage. Accounting SHALL deduplicate response IDs, include compaction and
+recover interrupted attempts, while labelling missing or potentially incomplete usage.
+An optional explicit OTEL exporter SHALL send only usage and lifecycle fields, without
+copying user configuration or exporting prompts/tool output for accounting.
+
+#### Scenario: Killed response stream
+- **WHEN** a worker is killed before turn completion
+- **THEN** its previously reported response usage remains attributable to run, role, attempt and model and is not replaced by zero usage
+
+#### Scenario: Export reconciliation
+- **WHEN** native ledger records are compared with stored OTEL usage
+- **THEN** missing responses and mismatched token fields are reported independently of collector acknowledgments
+
+### Requirement: Supervision without a monitoring model
+Background jobs SHALL run under deterministic process supervision and expose saved state
+and completion/question/failure outcomes without requiring an outer model to poll.
+
+#### Scenario: Waiting for delivery
+- **WHEN** a background worker is executing an authorized task
+- **THEN** it continues without another model activation merely to wait for it

@@ -1,17 +1,22 @@
 import { readFile } from 'node:fs/promises';
 import { join, basename } from 'node:path';
-import { fingerprint } from './lib.mjs';
+import { fingerprint, jsonFile } from './lib.mjs';
 import { inContainer } from './environment.mjs';
 import { readOnlyRoles } from './workflow.mjs';
 import { openSession, saveSession, observeSessionLine, snapshotTree, contextDelta, writeDelta } from './sessions.mjs';
+import { stageAllowance } from './budgets.mjs';
+import { readLedger, attemptsFromLedger, startUsage, recordEvent, normalizeUsage } from './usage.mjs';
+import { telemetryArguments, flushTelemetry } from './telemetry.mjs';
+import { changedPaths } from './run-state.mjs';
 
-export function modelArguments(role, selected, session) {
+export function modelArguments(role, selected, session, telemetry) {
   return ['/opt/harness/node_modules/.bin/codex', 'exec',
     ...(session.resumed ? ['resume', session.meta.threadId] : []),
-    ...(!session.persistent ? ['--ephemeral'] : []),
     '--json', '--ignore-user-config', '--model', selected.model,
     '-c', 'sandbox_mode="danger-full-access"',
     '-c', 'model_reasoning_effort=' + JSON.stringify(selected.reasoningEffort),
+    '-c', 'agents.enabled=false',
+    ...telemetryArguments(telemetry),
     '--output-schema', '/control/harness/schemas/' + role + '.json', '-'];
 }
 export async function invokeModel(runDir, state, role) {
@@ -19,6 +24,8 @@ export async function invokeModel(runDir, state, role) {
   const before = await fingerprint(workspace);
   const beforeTree = await snapshotTree(runDir, workspace);
   const session = await openSession(runDir, state, role);
+  const allowance = stageAllowance(state, role, attemptsFromLedger(await readLedger(runDir)));
+  if (allowance.timeoutMs < 1000) throw new Error(allowance.stage + ' stage budget exhausted; checkpoint retained for owner assessment');
   const delta = await writeDelta(runDir, workspace, session, beforeTree, state.activations, state.workspaceBaseline);
   const handoverRoot = state.environment === 'harbor' ? join(runDir, 'handovers') : '/handover';
   delta.patch = join(handoverRoot, basename(delta.patch));
@@ -31,15 +38,20 @@ export async function invokeModel(runDir, state, role) {
     feedback: state.feedback ?? null, previousFailure: state.reason ?? null,
     oracleQuestion: role === 'oracle' ? state.oracle?.pending : null,
     oracleAdvice: state.oracle?.lastAdvice ?? null,
+    verification: state.verification ? { status: state.verification.status, fingerprint: state.verification.fingerprint } : null,
   };
   const changes = contextDelta(session.resumed ? session.meta.context : null, packet);
   const specialistInstructions = role === 'reviewer' && state.specialists?.length
     ? '\n\n' + await readFile(join(control, 'harness/roles/specialists.md'), 'utf8') : '';
   const prompt = instructions + specialistInstructions + '\n\n' +
+    'Current phase: ' + role + '. Its permissions and output schema replace those of your previous phase. ' +
+    'Repository root: ' + (state.environment === 'harbor' ? workspace : '/workspace') + '. Do not append a repository name to this path.\n' +
+    'Phase budget: ' + Math.floor(allowance.timeoutMs / 1000) + ' seconds, including shutdown. Aim to finish by ' +
+    new Date(Date.now() + allowance.timeoutMs * .8).toISOString() + '. Keep the final summary concise with file references and concrete unfinished work if blocked.\n' +
     (session.resumed ? 'Continue your own saved session. Unchanged supervisor fields retain their previous values.\n' : 'Begin this role session.\n') +
     'Supervisor context updates:\n' + JSON.stringify(changes, null, 2) +
     '\n\nCandidate changes since your session last observed it:\n' + JSON.stringify(delta, null, 2) +
-    '\nThe patch and structured handovers are available at ' + handoverRoot + '. The supervisor owns these records. ' +
+    '\nThe patch is available at ' + delta.patch + '. Read a specific structured handover under ' + handoverRoot + ' only to resolve a concrete gap; do not read every handover. ' +
     'Inspect changed behavior and affected dependencies; earlier findings are not an exhaustive review checklist. ' +
     'Preserve useful source references in your summary. Retrieve additional context when a concrete gap remains; avoid repeating completed exploration. ' +
     'Return the JSON required by this role schema, using empty role arrays when asking questions, blocking or requesting advice. ' +
@@ -50,33 +62,73 @@ export async function invokeModel(runDir, state, role) {
   // fresh candidate delta and any failure/owner updates, without losing the thread ID.
   session.meta.context = packet;
   saveSession(session);
-  const result = await inContainer(state, workspace, modelArguments(role, selected, session), {
-    control, authFile: state.authFile, network: 'bridge', readOnly: readOnlyRoles.has(role),
-    sessionHome: session.persistent ? session.home : undefined, handovers: join(runDir, 'handovers'),
-    input: prompt, stream: false, timeoutMs: Math.min(900000, Math.max(1, state.deadline - Date.now())),
-    log: join(runDir, 'turn-' + state.activations + '.jsonl'),
-    onStdoutLine: line => observeSessionLine(session, line),
+  let firstPatch = (await readLedger(runDir)).some(r => r.type === 'candidate.changed'), lastSourceCheck = 0;
+  const tracker = await startUsage(runDir, state, role, session, allowance, () => {
+    if (role !== 'implementer' || firstPatch || Date.now() - lastSourceCheck < 5000) return;
+    lastSourceCheck = Date.now();
+    if (changedPaths(workspace, state.workspaceBaseline ?? 'HEAD').length) {
+      firstPatch = true;
+      recordEvent(runDir, 'candidate.changed', { runId: state.id, role, activation: state.activations });
+    }
   });
+  const checkpoint = async reason => {
+    const tree = await snapshotTree(runDir, workspace);
+    const observed = await writeDelta(runDir, workspace, session, tree, state.activations + '-checkpoint', state.workspaceBaseline);
+    await jsonFile(join(runDir, 'checkpoints', 'attempt-' + state.activations + '.json'), {
+      role, attemptId: tracker.attempt.attemptId, reason, timestamp: new Date().toISOString(), sessionId: session.meta.threadId,
+      candidateTree: tree, delta: observed, lastActivityAt: session.meta.lastActivityAt ?? null,
+      note: 'Supervisor snapshot, not successful review or verification. Resume supplies a fresh delta from the last completed turn.',
+    });
+    recordEvent(runDir, 'checkpoint', { runId: state.id, attemptId: tracker.attempt.attemptId, role, reason });
+  };
+  let result;
+  try { result = await inContainer(state, workspace, modelArguments(role, selected, session, state.telemetry), {
+    instanceId: tracker.attempt.instanceId,
+    control, authFile: state.authFile, network: 'bridge', readOnly: readOnlyRoles.has(role),
+    sessionHome: session.home, handovers: join(runDir, 'handovers'),
+    input: prompt, stream: false, timeoutMs: allowance.timeoutMs, graceMs: allowance.graceMs,
+    checkpointMs: Math.floor(allowance.timeoutMs * .8), onCheckpoint: checkpoint,
+    log: join(runDir, 'turn-' + state.activations + '.jsonl'),
+    onStdoutLine: line => {
+      observeSessionLine(session, line);
+      try {
+        const event = JSON.parse(line);
+        if (event.type === 'thread.started') recordEvent(runDir, 'session.started', { runId: state.id,
+          attemptId: tracker.attempt.attemptId, instanceId: tracker.attempt.instanceId, role, sessionId: session.meta.threadId });
+        if (['item.started', 'item.completed', 'turn.completed'].includes(event.type)) {
+          session.meta.lastActivityAt = new Date().toISOString(); saveSession(session);
+        }
+        const usage = event.type === 'turn.completed' && normalizeUsage(event.usage);
+        if (usage) recordEvent(runDir, 'turn.summary', { runId: state.id, attemptId: tracker.attempt.attemptId, usage });
+      } catch { /* Non-JSON diagnostics stay private. */ }
+    },
+  }); } catch (error) {
+    await tracker.finish({ code: null, interrupted: true });
+    throw error;
+  }
+  const accounted = await tracker.finish(result);
+  if (result.code !== 0) await checkpoint(result.timedOut ? 'timed-out' : 'interrupted');
+  await flushTelemetry(runDir, state.telemetry);
   const messages = [];
-  let usage = null;
   for (const line of result.stdout.split('\n')) {
     try {
       const event = JSON.parse(line);
       if (event.type === 'item.completed' && event.item?.type === 'agent_message') messages.push(event.item.text);
-      if (event.type === 'turn.completed') usage = event.usage;
     } catch { /* Diagnostics stay in the private log. */ }
   }
   const after = await fingerprint(workspace);
   const afterTree = await snapshotTree(runDir, workspace);
   session.meta.status = result.code === 0 ? 'idle' : 'interrupted';
-  session.meta.lastTree = afterTree; session.meta.turns += 1;
+  if (result.code === 0) session.meta.lastTree = afterTree;
+  session.meta.turns += 1;
   saveSession(session);
   state.sessions ??= {};
   state.sessions[session.group] = {
     threadId: session.persistent ? session.meta.threadId : null,
     turns: session.meta.turns, status: session.meta.status,
   };
-  state.turns.push({ role, ...selected, elapsedMs: result.elapsedMs, usage, costUsd: null, code: result.code,
+  state.turns.push({ role, ...selected, attemptId: tracker.attempt.attemptId, elapsedMs: result.elapsedMs,
+    usage: accounted.usage, usageCoverage: accounted.coverage, costUsd: null, code: result.code,
     sessionGroup: session.group, sessionId: session.persistent ? session.meta.threadId : null,
     resumed: session.resumed, candidateTree: afterTree });
   return { result, before, after, afterTree, output: messages.at(-1),

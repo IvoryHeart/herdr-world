@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "federated-navigation",
+      "taskProfile": "feature",
+      "brief": "Restore reliable host navigation in the Spaces UI. A browser may connect to several hosts with identical native workspace, pane and terminal IDs. Selecting a host must select that host's rows and terminal; typing and creating a workspace must reach only its owning host. Host-qualified keys must remain collision-safe, including names containing punctuation. Diagnose the regressions, repair the behavior and add focused regression tests. Preserve unrelated UI behavior and current product contracts. Use only the local browser fixtures, never a live deployment.",
+      "browser": "one browser federates colliding native IDs and routes only to the owning bridge",
+      "unit": "runtimeIdentity.test.ts",
+      "mutations": [
+        {
+          "path": "web/src/App.tsx",
+          "from": "              onSelectBridge(view.runtime.id);\n              onHostScope(\"selected\");",
+          "to": "              onSelectBridge(bridgeViews[0].runtime.id);\n              onHostScope(\"selected\");"
+        },
+        {
+          "path": "web/src/runtimeIdentity.ts",
+          "from": "[target.profileId, target.kind, target.nativeTargetId]",
+          "to": "[target.kind, target.nativeTargetId]"
+        }
+      ],
+      "browserFile": "tests/e2e/federation.spec.ts"
+    },
+    {
+      "id": "capability-controls",
+      "taskProfile": "sensitive",
+      "brief": "Repair capability enforcement across the Spaces UI and terminal. Attaching a read-only terminal must not enable typing, resizing, scrolling or uploads. A host that advertises only workspace.rename must not allow creating/closing workspaces or creating tabs through toolbar or menu entry points. Offline retained rows must not publish focus or selection mutations. Keep compatible hosts usable independently. Diagnose the regressions, restore the existing contract, and add focused tests using only local fixtures.",
+      "browser": "read-only terminal attach|partial structural command declarations|retained offline rows",
+      "unit": "runtimeClient.test.ts",
+      "mutations": [
+        {
+          "path": "web/src/runtimeClient.ts",
+          "from": "runtime?.capabilities?.features?.includes(feature) === true",
+          "to": "feature.length > 0"
+        },
+        {
+          "path": "web/src/runtimeClient.ts",
+          "from": "runtime?.capabilities?.commands?.includes(command) === true",
+          "to": "command.length > 0"
+        }
+      ],
+      "browserFile": "tests/e2e/federation.spec.ts"
+    },
+    {
+      "id": "keyboard-settings",
+      "taskProfile": "feature",
+      "brief": "Restore keyboard usability of the Settings flow. Keyboard focus must remain visible on controls. Opening Settings with Enter, moving through its controls, then dismissing it must return focus to the trigger. Focus must remain contained in open dialogs, with forward and reverse wrapping. Preserve reduced-motion behavior and accessible names. Diagnose the style and focus regressions, repair them, and add focused tests. Validate through the local browser fixture without contacting live deployments.",
+      "browser": "core controls are keyboard-visible",
+      "unit": "overlays.test.tsx",
+      "mutations": [
+        {
+          "path": "web/src/overlayFocus.ts",
+          "from": "target.focus();",
+          "to": "document.body.focus();",
+          "occurrence": 0
+        },
+        {
+          "path": "web/src/styles.css",
+          "from": ":where(button, input, textarea, select, [tabindex]):focus-visible {\n  outline: 2px solid var(--accent);",
+          "to": ":where(button, input, textarea, select, [tabindex]):focus-visible {\n  outline: none;"
+        }
+      ],
+      "browserFile": "tests/e2e/accessibility.spec.ts"
+    }
+  ]
+}

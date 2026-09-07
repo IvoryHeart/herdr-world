@@ -5,20 +5,26 @@ import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { parse, stringify } from '../../harness/node_modules/yaml/dist/index.js';
-import { command, repoRoot, primaryCheckout, git, fingerprint, errorExit } from './lib.mjs';
+import { command, repoRoot, primaryCheckout, git, fingerprint, errorExit, jsonFile } from './lib.mjs';
 import { loadState, saveState, checkBudget, candidateGate } from './run-state.mjs';
 import { copyCandidate, prepareDependencies } from './environment.mjs';
 import { roleEvents, responseSchema, resolveModels, initialEvent, taskProfiles, invalidateCandidate } from './workflow.mjs';
-import { validateSessionGroups } from './sessions.mjs';
+import { validateSessionGroups, fullSessionGroups } from './sessions.mjs';
+import { budgetPolicy } from './budgets.mjs';
+import { recoverUsage, recordEvent, readLedger, attemptsFromLedger } from './usage.mjs';
+import { telemetryConfig, flushTelemetry, localTelemetryEndpoint } from './telemetry.mjs';
+import { launchJob } from './job.mjs';
 
 export async function writeSchemas(control) {
   await mkdir(join(control, 'harness/schemas'), { recursive: true });
   for (const role of Object.keys(roleEvents)) await writeFile(join(control, 'harness/schemas', role + '.json'), JSON.stringify(responseSchema(role)));
 }
-export function materializeConfig(config, control) {
+export function materializeConfig(config, control, seconds) {
   config.cli.args[0] = join(control, config.cli.args[0]);
   for (const hat of Object.values(config.hats)) hat.backend.args[0] = join(control, hat.backend.args[0]);
   for (const hook of config.hooks.events['pre.loop.complete']) hook.command[1] = join(control, hook.command[1]);
+  // The backend owns stage deadlines; the custom adapter must not retain a 15-minute cap.
+  if (seconds) config.adapters.claude.timeout = seconds + 30;
   return config;
 }
 function positive(value, fallback, max) {
@@ -40,8 +46,16 @@ async function main() {
     'auth-file': { type: 'string' },
     'task-profile': { type: 'string' }, 'worker-model': { type: 'string' }, 'lead-model': { type: 'string' }, 'reasoning-effort': { type: 'string' },
     sessions: { type: 'string' }, interview: { type: 'boolean', default: false },
+    workflow: { type: 'string' }, 'oracle-model': { type: 'string' }, 'otel-endpoint': { type: 'string' },
+    background: { type: 'boolean', default: false },
   } });
   const action = positionals[0] ?? 'start';
+  if (values.background) {
+    if (!['start', 'resume'].includes(action)) throw new Error('Only start/resume can run in the background');
+    console.log(JSON.stringify(await launchJob([process.execPath, fileURLToPath(import.meta.url),
+      ...process.argv.slice(2).filter(arg => arg !== '--background')]), null, 2));
+    return;
+  }
   const runBase = join(primaryCheckout(), '.agents/runs');
   let runDir, state;
   if (['resume', 'status'].includes(action)) {
@@ -49,18 +63,32 @@ async function main() {
     runDir = join(runBase, positionals[1]);
     state = await loadState(runDir);
     if (action === 'status') {
+      const attempts = attemptsFromLedger(await readLedger(runDir));
+      const active = attempts.findLast(a => !a.finished);
+      let activity;
+      if (active?.sessionGroup) {
+        try { activity = JSON.parse(await readFile(join(runDir, 'sessions', active.sessionGroup, 'session.json'), 'utf8')).lastActivityAt; }
+        catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
       console.log(JSON.stringify({ id: state.id, status: state.status, reason: state.reason,
-        activations: state.activations, remainingMs: state.remainingMs, models: state.models, profile: state.profile, taskProfile: state.taskProfile,
-        sessions: state.sessions, sessionMode: state.sessionMode, lastEvent: state.lastEvent, intake: state.intake, delivery: state.delivery }, null, 2));
+        activations: state.activations, remainingMs: state.status === 'running' ? Math.max(0, state.deadline - Date.now()) : state.remainingMs,
+        active: active ? { role: active.role, elapsedMs: active.elapsedMs, lastActivityAt: activity ?? null,
+          quietForMs: activity ? Math.max(0, Date.now() - Date.parse(activity)) : null } : null,
+        stageSpentMs: Object.fromEntries([...new Set(attempts.map(a => a.stage))].map(stage =>
+          [stage, attempts.filter(a => a.stage === stage).reduce((n, a) => n + a.elapsedMs, 0)])),
+        models: state.models, profile: state.profile, taskProfile: state.taskProfile,
+        sessions: state.sessions, sessionMode: state.sessionMode, workflow: state.workflow, budgets: state.budgets,
+        lastEvent: state.lastEvent, intake: state.intake, delivery: state.delivery }, null, 2));
       return;
     }
     if (!['interrupted', 'failed', 'blocked'].includes(state.status)) throw new Error('This outcome cannot resume; start a new authorized run');
     if (values.model || values.image || values.iterations || values.seconds || values.profile || values['auth-file']
-      || values['worker-model'] || values['lead-model'] || values['reasoning-effort'] || values['task-profile'] || values.sessions || values.interview) {
+      || values['worker-model'] || values['lead-model'] || values['oracle-model'] || values.workflow || values['otel-endpoint']
+      || values['reasoning-effort'] || values['task-profile'] || values.sessions || values.interview) {
       throw new Error('Resume preserves the original model, environment and limits; start a new run to change them');
     }
     if (state.intake?.questions?.length && !values['task-file']) throw new Error('Answer the recorded questions with resume <id> --task-file <answers.md>');
-    if (state.schemaVersion !== 3) throw new Error('This run uses the previous workflow; start a new run with the updated harness');
+    if (![3, 4].includes(state.schemaVersion)) throw new Error('This run uses the previous workflow; start a new run with the updated harness');
     if (values['task-file']) {
       const clarification = await readFile(values['task-file'], 'utf8');
       if (!clarification.trim()) throw new Error('Owner clarification cannot be empty');
@@ -85,8 +113,10 @@ async function main() {
     const taskProfile = values['task-profile'] ?? 'routine';
     if (!taskProfiles.includes(taskProfile)) throw new Error('Unknown task profile: ' + taskProfile);
     const policy = JSON.parse(await readFile(join(repoRoot, 'harness/models.json')));
+    const workflow = values.workflow ?? 'two-history';
     const models = resolveModels(policy, {
-      model: values.model, workerModel: values['worker-model'], leadModel: values['lead-model'], reasoningEffort: values['reasoning-effort'],
+      model: values.model, workerModel: values['worker-model'], leadModel: values['lead-model'], oracleModel: values['oracle-model'],
+      reasoningEffort: values['reasoning-effort'], workflow,
     });
     const sessionMode = values.sessions ?? 'persistent';
     if (!['persistent', 'fresh'].includes(sessionMode)) throw new Error('Sessions must be persistent or fresh');
@@ -99,9 +129,11 @@ async function main() {
     const authFile = resolve(values['auth-file'] ?? join(homedir(), '.codex/auth.json'));
     await access(authFile);
     const limits = { iterations: positive(values.iterations, 24, 64), seconds: positive(values.seconds, 3600, 86400), failures: 3 };
-    state = { schemaVersion: 3, id, status: 'preparing', sourceRevision: git(['rev-parse', 'HEAD']),
+    state = { schemaVersion: 4, id, status: 'preparing', sourceRevision: git(['rev-parse', 'HEAD']),
       sourceFingerprint: await fingerprint(), model: values.model ?? null, models, taskProfile, lastEvent: initialEvent(taskProfile), image: inspect.output.trim(), profile, authFile,
-      sessionMode, sessionGroups: validateSessionGroups(policy.sessionGroups), sessions: {},
+      sessionMode, workflow, budgets: budgetPolicy(limits.seconds),
+      telemetry: telemetryConfig(values['otel-endpoint'] ?? process.env.WORLD_AGENT_OTEL_ENDPOINT ?? await localTelemetryEndpoint(primaryCheckout())),
+      sessionGroups: validateSessionGroups(workflow === 'full' ? fullSessionGroups : policy.sessionGroups), sessions: {},
       task: await readFile(values['task-file'], 'utf8'), intake: values.interview ? { ready: false } : null,
       delivery: { worktree: process.cwd(), base: process.env.WORLD_AGENT_BASE ?? 'main', parent: process.env.WORLD_AGENT_PARENT ?? null }, limits, activations: 0, consecutiveFailures: 0,
       turns: [], costUsd: null, remainingMs: limits.seconds * 1000, startedAt: new Date().toISOString() };
@@ -113,6 +145,10 @@ async function main() {
     await copyCandidate(process.cwd(), join(runDir, 'workspace'));
     state.workspaceBaseline = git(['rev-parse', 'HEAD'], join(runDir, 'workspace'));
     await saveState(runDir, state);
+    if (process.env.WORLD_AGENT_JOB_DIR) {
+      const path = join(process.env.WORLD_AGENT_JOB_DIR, 'job.json');
+      await jsonFile(path, { ...JSON.parse(await readFile(path, 'utf8')), runId: state.id });
+    }
     const prepared = await prepareDependencies(state, join(runDir, 'workspace'), control);
     if (prepared.code !== 0) {
       state.status = 'blocked'; state.reason = 'Dependency preparation failed; see bootstrap.log';
@@ -143,7 +179,7 @@ async function main() {
         return;
       }
     }
-    const config = materializeConfig(parse(await readFile(join(control, 'harness/ralph.yml'), 'utf8')), control);
+    const config = materializeConfig(parse(await readFile(join(control, 'harness/ralph.yml'), 'utf8')), control, state.limits.seconds);
     // Resume starts a new event ledger; our persisted activation budget remains authoritative.
     config.event_loop.max_iterations = state.limits.iterations - state.activations;
     config.event_loop.starting_event = state.lastEvent ?? initialEvent(state.taskProfile);
@@ -166,7 +202,7 @@ async function main() {
     const result = await command([join(control, 'harness/bin/ralph'), 'run',
       '-c', join(runDir, 'ralph.yml'), '-P', join(runDir, 'task.md'), '--autonomous', '--no-auto-merge'],
     { cwd: join(runDir, 'workspace'), env: { ...process.env, WORLD_AGENT_RUN: runDir },
-      timeoutMs: state.remainingMs, log: join(runDir, 'ralph.log') });
+      timeoutMs: state.remainingMs, graceMs: state.budgets ? 10000 : 0, log: join(runDir, 'ralph.log') });
     state = await loadState(runDir);
     state.remainingMs = Math.max(0, state.remainingMs - result.elapsedMs);
     if (result.interrupted) { state.status = 'interrupted'; state.reason = 'Supervisor interrupted'; }
@@ -189,6 +225,19 @@ async function main() {
     if (state.status !== 'ready-for-review') process.exitCode = 1;
   } finally {
     await cleanupContainers(state.id);
+    const usage = await recoverUsage(runDir, { interrupted: true });
+    // Include attempts whose adapter was killed before it could save a turn row.
+    state = await loadState(runDir);
+    for (const attempt of usage.attempts.filter(a => a.role !== 'verifier')) {
+      const turn = state.turns.find(t => t.attemptId === attempt.attemptId);
+      if (turn) { turn.usage = attempt.usage; turn.usageCoverage = attempt.coverage; }
+      else state.turns.push({ role: attempt.role, model: attempt.model, reasoningEffort: attempt.reasoningEffort,
+        attemptId: attempt.attemptId, elapsedMs: attempt.elapsedMs, code: attempt.code, usage: attempt.usage,
+        usageCoverage: attempt.coverage, recovered: true, costUsd: null, sessionGroup: attempt.sessionGroup });
+    }
+    await saveState(runDir, state);
+    recordEvent(runDir, 'run.stopped', { runId: state.id, status: state.status });
+    await flushTelemetry(runDir, state.telemetry);
     await unlink(lockPath);
   }
 }

@@ -1,25 +1,27 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "worker": { "model": "gpt-5.6-luna", "reasoningEffort": "xhigh" },
-  "lead": { "model": "gpt-5.6-sol", "reasoningEffort": "xhigh" },
+  "lead": { "model": "gpt-5.6-sol", "reasoningEffort": "high" },
+  "oracle": { "model": "gpt-5.6-sol", "reasoningEffort": "xhigh" },
   "roles": {
     "intake": "lead",
     "product": "lead",
     "planner": "lead",
     "qa-planner": "lead",
-    "implementer": "worker",
+    "implementer": "lead",
     "reviewer": "lead",
-    "qa": "worker",
-    "oracle": "lead"
+    "qa": "lead",
+    "oracle": "oracle"
   },
   "sessionGroups": {
     "intake": "lead",
     "product": "lead",
     "planner": "lead",
-    "implementer": "builder",
+    "implementer": "lead",
     "qa-planner": "review",
     "reviewer": "review",
     "qa": "review",
     "oracle": "oracle"
-  }
+  },
+  "fullRoles": { "implementer": "worker", "qa": "worker" }
 }

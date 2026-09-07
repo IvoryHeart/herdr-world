@@ -91,5 +91,6 @@ test('persistent invocation mounts only its own home and resumes the exact ID wi
   assert(!mounts.some(arg => arg.includes('/sessions/builder')));
   const fresh = await openSession(root, { ...state, sessionMode: 'fresh' }, 'qa');
   const freshArgs = modelArguments('qa', { model: 'fixture', reasoningEffort: 'xhigh' }, fresh);
-  assert(!freshArgs.includes('resume')); assert(freshArgs.includes('--ephemeral'));
+  assert(!freshArgs.includes('resume')); assert(!freshArgs.includes('--ephemeral'));
+  assert.notEqual(fresh.home, reviewer.home);
 });

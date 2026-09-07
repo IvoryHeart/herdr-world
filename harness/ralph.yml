@@ -17,10 +17,11 @@ cli:
   default_mode: autonomous
 # Ralph 2.10.1 routes custom `node` backend settings through its `claude` fallback
 # slot. This selects an inactivity timeout, not a model/provider. The adapter's
-# 900-second model deadline and outer run deadline remain authoritative.
+# cumulative stage budgets and outer run deadline remain authoritative. The runner
+# materializes this fallback above the run ceiling so it cannot cut off productive work.
 adapters:
   claude:
-    timeout: 960
+    timeout: 3630
 core:
   specs_dir: openspec/specs
   scratchpad:

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createWorktree } from './worktree.mjs';
 import { command, git, repoRoot, errorExit } from './lib.mjs';
+import { launchJob } from './job.mjs';
 
 try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
@@ -12,6 +13,8 @@ try {
     image: { type: 'string' }, 'auth-file': { type: 'string' },
     'worker-model': { type: 'string' }, 'lead-model': { type: 'string' }, 'reasoning-effort': { type: 'string' },
     model: { type: 'string' }, seconds: { type: 'string' }, iterations: { type: 'string' },
+    background: { type: 'boolean', default: false }, workflow: { type: 'string' },
+    'oracle-model': { type: 'string' }, 'otel-endpoint': { type: 'string' },
   } });
   const goal = positionals.join(' ').trim();
   if (!goal) throw new Error('Usage: npm run agent:goal -- "<goal>" [--parent <PR>] [--profile check|acceptance]');
@@ -32,8 +35,13 @@ try {
   await writeFile(task, goal + '\n', { mode: 0o600 });
   console.log('Task worktree: ' + worktree + '\nPR base: ' + base);
   const args = [process.execPath, join(repoRoot, 'scripts/agent/run.mjs'), 'start', '--interview', '--task-file', task];
-  for (const key of ['profile', 'task-profile', 'sessions', 'model', 'seconds', 'iterations', 'image', 'auth-file', 'worker-model', 'lead-model', 'reasoning-effort']) if (values[key]) args.push('--' + key, values[key]);
+  for (const key of ['profile', 'task-profile', 'sessions', 'model', 'seconds', 'iterations', 'image', 'auth-file', 'worker-model', 'lead-model', 'oracle-model', 'reasoning-effort', 'workflow', 'otel-endpoint']) if (values[key]) args.push('--' + key, values[key]);
+  const env = { ...process.env, WORLD_AGENT_BASE: base, WORLD_AGENT_PARENT: values.parent ?? '' };
+  if (values.background) {
+    console.log(JSON.stringify(await launchJob(args, { cwd: worktree, env }), null, 2));
+  } else {
   const result = await command(args, { cwd: worktree, timeoutMs: (Number(values.seconds ?? 3600) + 1300) * 1000,
-    env: { ...process.env, WORLD_AGENT_BASE: base, WORLD_AGENT_PARENT: values.parent ?? '' } });
+    env });
   process.exitCode = result.code ?? 1;
+  }
 } catch (error) { errorExit(error); }

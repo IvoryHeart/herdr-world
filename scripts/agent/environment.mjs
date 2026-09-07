@@ -2,9 +2,10 @@ import { cp, mkdir, lstat, readlink, access } from 'node:fs/promises';
 import { join, resolve, dirname, relative, isAbsolute } from 'node:path';
 import { command, sourceFiles, git, assertSourceParents } from './lib.mjs';
 
-export async function copyCandidate(source, target) {
+export async function copyCandidate(source, target, { exclude = [] } = {}) {
   await mkdir(target, { recursive: true });
   for (const file of await sourceFiles(source)) {
+    if (exclude.some(prefix => file.startsWith(prefix))) continue;
     await assertSourceParents(source, file);
     const full = join(source, file);
     let stat;
@@ -34,6 +35,7 @@ export function dockerArgs(state, workspace, { readOnly = false, network = 'none
     '-e', 'CODEX_HOME=' + codexHome, '-e', 'npm_config_cache=/tmp/world-npm',
     '-e', 'CARGO_HOME=/workspace/.agents/cache/cargo', '-e', 'PLAYWRIGHT_BROWSERS_PATH=/workspace/.agents/cache/browsers'];
   if (sessionHome) args.push('--mount', 'type=bind,src=' + sessionHome + ',dst=' + codexHome);
+  if (authFile && state.telemetry?.hostGateway && process.platform === 'linux') args.push('--add-host', 'host.docker.internal:host-gateway');
   if (handovers) args.push('--mount', 'type=bind,src=' + handovers + ',dst=/handover,readonly');
   if (authFile) args.push(
     '--mount', 'type=bind,src=' + authFile + ',dst=' + codexHome + '/auth.json,readonly',
@@ -60,7 +62,7 @@ export async function inContainer(state, workspace, argv, options = {}) {
     if (modelCall) { env.CODEX_API_KEY = process.env.CODEX_API_KEY; env.CODEX_HOME = options.sessionHome ?? '/tmp/world-codex'; }
     return command(args, { ...options, cwd: workspace, env });
   }
-  const name = 'world-agent-' + state.id + '-' + Date.now();
+  const name = 'world-agent-' + state.id + '-' + (options.instanceId ?? Date.now());
   try {
     return await command([...dockerArgs(state, workspace, { ...options, name }), ...argv], options);
   } finally {
@@ -68,9 +70,9 @@ export async function inContainer(state, workspace, argv, options = {}) {
     await command(['docker', 'rm', '-f', name], { stream: false, timeoutMs: 15000 }).catch(() => {});
   }
 }
-export async function prepareDependencies(state, workspace, control) {
+export async function prepareDependencies(state, workspace, control, { timeoutMs = 1200000 } = {}) {
   return inContainer(state, workspace, ['bash', '-c',
     'npm ci && npm ci --prefix web && npm ci --prefix harness && cargo fetch --locked --manifest-path bridge/Cargo.toml && cargo fetch --locked --manifest-path vendor/herdr-compat/Cargo.toml' +
     (state.profile === 'acceptance' ? ' && npx --no-install playwright install chromium' : '')],
-  { control, network: 'bridge', stream: false, timeoutMs: 1200000, log: join(dirname(workspace), 'bootstrap.log') });
+  { control, network: 'bridge', stream: false, timeoutMs, log: join(dirname(workspace), 'bootstrap.log') });
 }

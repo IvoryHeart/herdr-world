@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { lstat, readFile, readlink, mkdir, writeFile, rename } from 'node:fs/promises';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, appendFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -82,8 +82,10 @@ function processParents() {
   return execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 2000 })
     .trim().split('\n').map(line => line.trim().split(/\s+/).map(Number));
 }
-export async function command(argv, { cwd = process.cwd(), env = process.env, timeoutMs = 1200000, log, input, stream = true, onStdoutLine } = {}) {
+export async function command(argv, { cwd = process.cwd(), env = process.env, timeoutMs = 1200000, log, input, stream = true, onStdoutLine,
+  graceMs = 0, checkpointMs, onCheckpoint } = {}) {
   if (!Array.isArray(argv) || !argv.length) throw new Error('Command must be a nonempty argv array');
+  if (log) { await mkdir(dirname(log), { recursive: true }); await writeFile(log, '', { mode: 0o600 }); }
   const start = Date.now();
   const child = spawn(argv[0], argv.slice(1), { cwd, env, detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] });
   const chunks = [];
@@ -91,10 +93,11 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
   const stderrChunks = [];
   let timedOut = false;
   let interrupted = false;
-  const terminate = () => {
+  const terminationTargets = new Set([child.pid]);
+  const terminate = (signal = 'SIGKILL') => {
     // Ralph/backends can create their own process groups. Capture descendants before
     // killing their parent so a detached worker cannot keep running after a stop.
-    const descendants = new Set([child.pid]);
+    const descendants = terminationTargets;
     if (process.platform !== 'win32') {
       try {
         const rows = processParents();
@@ -106,19 +109,32 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
           }
         }
       } catch { /* Process-group cleanup still applies if the process table is unavailable. */ }
-      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already exited */ }
+      try { process.kill(-child.pid, signal); } catch { /* already exited */ }
     }
     for (const pid of [...descendants].reverse()) {
-      try { process.kill(pid, 'SIGKILL'); } catch { /* already exited */ }
+      try { process.kill(pid, signal); } catch { /* already exited */ }
     }
+  };
+  let checkpointWork = Promise.resolve();
+  let checkpointError;
+  const checkpoint = reason => {
+    checkpointWork = checkpointWork.then(() => onCheckpoint?.(reason)).catch(error => { checkpointError = error.message; });
   };
   const kill = () => { timedOut = true; terminate(); };
   const timer = setTimeout(kill, timeoutMs);
-  const interrupt = () => { interrupted = true; terminate(); };
+  const grace = Math.min(graceMs, Math.max(0, timeoutMs / 10));
+  const softTimer = grace ? setTimeout(() => { timedOut = true; checkpoint('deadline'); terminate('SIGINT'); }, timeoutMs - grace) : null;
+  const checkpointTimer = onCheckpoint && checkpointMs ? setTimeout(() => checkpoint('approaching-deadline'), checkpointMs) : null;
+  let interruptTimer;
+  const interrupt = () => {
+    interrupted = true; checkpoint('interrupted'); terminate(grace ? 'SIGINT' : 'SIGKILL');
+    if (grace) interruptTimer = setTimeout(() => terminate(), grace);
+  };
   process.once('SIGINT', interrupt);
   process.once('SIGTERM', interrupt);
   let pendingLine = '';
   child.stdout.on('data', chunk => {
+    if (log) appendFileSync(log, chunk);
     chunks.push(chunk); stdoutChunks.push(chunk); if (stream) process.stdout.write(chunk);
     if (onStdoutLine) {
       pendingLine += chunk.toString();
@@ -128,7 +144,7 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
       }
     }
   });
-  child.stderr.on('data', chunk => { chunks.push(chunk); stderrChunks.push(chunk); if (stream) process.stderr.write(chunk); });
+  child.stderr.on('data', chunk => { if (log) appendFileSync(log, chunk); chunks.push(chunk); stderrChunks.push(chunk); if (stream) process.stderr.write(chunk); });
   child.stdin.on('error', () => {});
   child.stdin.end(input);
   let result;
@@ -138,14 +154,18 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
       child.on('close', (code, signal) => resolveResult({ argv, code, signal, timedOut, interrupted, elapsedMs: Date.now() - start }));
     });
   } finally {
+    // A parent can exit before a detached backend finishes its signal handler.
+    // Stop the captured descendants before the caller writes the final run state.
+    if (timedOut || interrupted) terminate();
     clearTimeout(timer);
+    clearTimeout(softTimer); clearTimeout(checkpointTimer); clearTimeout(interruptTimer);
     process.removeListener('SIGINT', interrupt);
     process.removeListener('SIGTERM', interrupt);
   }
   const output = Buffer.concat(chunks).toString();
   if (onStdoutLine && pendingLine) onStdoutLine(pendingLine);
-  if (log) { await mkdir(dirname(log), { recursive: true }); await writeFile(log, output, { mode: 0o600 }); }
-  return { ...result, output, stdout: Buffer.concat(stdoutChunks).toString(), stderr: Buffer.concat(stderrChunks).toString() };
+  await checkpointWork;
+  return { ...result, checkpointError, output, stdout: Buffer.concat(stdoutChunks).toString(), stderr: Buffer.concat(stderrChunks).toString() };
 }
 export async function verify({ cwd = process.cwd(), profile = 'check', commands = profiles[profile], output = join(cwd, '.agents/state/verification.json'), timeoutMs = 1200000, stream = true } = {}) {
   if (!commands) throw new Error('Unknown verification profile: ' + profile);

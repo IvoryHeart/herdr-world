@@ -109,27 +109,29 @@ internal review does not replace independent PR review.
 
 ```mermaid
 flowchart TD
-  Goal[Owner goal and answers] --> Lead[Lead history: intake / product / planner — Sol xhigh]
-  Lead --> ReviewPlan[Review history: QA planner — Sol xhigh]
-  ReviewPlan --> Builder[Builder history: implementation and repairs — Luna xhigh]
-  Builder --> Review[Review history: reviewer — Sol xhigh]
-  Review -->|findings| Builder
-  Review --> QA[Same review history: QA execution — Luna xhigh]
-  QA -->|failed scenarios| Builder
-  QA --> Verify[Deterministic verifier — no model]
-  Verify -->|failed checks| Builder
-  Verify --> Delivery[Coordinator: inspect / check / open PR]
-  Lead -. concrete uncertainty .-> Oracle[Separate Oracle history — Sol xhigh]
-  Builder -. repeated failure .-> Oracle
-  Review -. concrete uncertainty .-> Oracle
+  Goal[Owner goal and answers] --> Lead[Lead history: intake and planning / Sol high]
+  Lead --> Scenarios[Review history: independent scenarios / Sol high]
+  Scenarios --> Build[Same lead history: implementation and repairs]
+  Build --> Review[Same review history: review and behavioral QA]
+  Review -->|findings| Build
+  Review --> Verify[Deterministic verifier / no model]
+  Verify -->|failed checks| Build
+  Verify --> Delivery[Inspect candidate and open PR]
+  Lead -. specific question .-> Oracle[Conditional Oracle history / Sol xhigh]
+  Build -. specific question or repeated failure .-> Oracle
+  Review -. specific question .-> Oracle
 ```
 
-There are three normal native session histories, plus an Oracle history when needed.
-Only one model call runs at a time. A finished turn leaves a resumable session, not an
-idle model process. The next activation recreates a container and uses `codex exec
-resume <exact-id>`. QA planning, review and QA share factual task history while remaining
-independent of the builder. QA execution retains the Luna model policy even when
-resuming a history that used Sol; models and response schemas are selected per turn.
+The default `--workflow two-history` keeps one lead history and one independent review
+history. Product, planning and QA are phases with skills, rather than mandatory new
+agents. Only one model call runs at a time; workers cannot spawn additional agents.
+A finished turn leaves a resumable native history, not an idle model process. The next
+phase recreates its container and resumes the exact ID with current permissions/schema.
+The lead's planning phase remains read-only; only implementation can write the candidate.
+
+Use `--workflow full` explicitly when a separate bounded builder is useful: it retains
+lead, builder and review histories and assigns implementation/QA to Luna xhigh. Oracle
+remains conditional in either workflow. Neither workflow replaces independent PR review.
 
 ## State, Docker and context reuse
 
@@ -143,19 +145,25 @@ lives on the host under the primary checkout, outside the disposable containers:
     run.json                       acceptance, evidence, limits, delivery base
     control/                       frozen harness and role schemas
     workspace/                     isolated candidate, no publishing remotes
-    sessions/lead|builder|review|oracle/
+    sessions/lead|review|oracle/     full workflow also has builder/
       session.json                 supervisor-owned native ID and checkpoint
       home/                        that group's native Codex files
     handovers/                     read-only structured turn results and deltas
+    checkpoints/                   candidate delta and activity near a deadline
+    usage.jsonl                    append-only response usage and lifecycle events
+    usage-summary.json             recovered totals and coverage limitations
+    telemetry-export.json          export cursor; retry without transcript export
     candidate.patch                proposed source change
+  jobs/<job-id>/                    optional background supervisor and private log
 ```
 
 Only a group's own native home is mounted writable at `/agent-home`. Its metadata
 remains outside the mount; `/handover` is read-only. Other groups' transcripts are not
 exposed. Authentication is a separate read-only mount, never a copied credential.
 The native thread ID is saved as soon as Codex reports it, so interruption does not
-depend on receiving a final answer. Run schema 3 is required for resume; old runs
-remain inspectable and can export their patches but must not be resumed with new controls.
+depend on receiving a final answer. New runs use schema 4. Schema 3 runs retain their original frozen controls and allocation
+on resume; starting a new run is required to adopt the new policy. Older schemas remain
+inspectable but cannot resume with new controls.
 
 The adapter sends changed supervisor fields, current role instructions and a Git delta
 since that history last observed the candidate. Source snapshots include new files and
@@ -165,7 +173,7 @@ defects as well as old findings. Retained history is useful context, never valid
 for changed source. Native compaction may shorten long histories; factual handovers
 provide recovery when useful details are no longer present.
 
-For local Docker runs, `--sessions fresh` starts ephemeral sessions for comparison; persistent is the
+For local Docker runs, `--sessions fresh` starts an isolated history per invocation for comparison; persistent is the
 default and the choice is frozen on resume. Reuse avoids repeated exploration and
 allows native caching, but does not mean old context is free. No subscription-usage
 saving is claimed without a controlled comparison. State retention and container
@@ -188,8 +196,12 @@ profile. Routine fixes never acquire a mandatory OpenSpec proposal just by enter
 Product/planner acceptance criteria become supervisor-owned state. QA scenarios are derived
 before implementation and must cover every criterion. The QA result must include all scenario
 IDs, outcomes and execution/source evidence. Passing requires every scenario to pass.
-Read-only QA can use /tmp for generated output or a temporary test copy; it cannot repair the
-candidate. LLM-reported QA evidence is still fallible; the deterministic verifier and held-out
+QA planning produces executable scenarios, without a general baseline test run. During
+QA execution, run `node /control/scripts/agent/fixture.mjs` from `/workspace` once to create
+a writable web test copy in `/tmp`. It copies prepared dependencies instead of symlinking
+them, including Vite's writable temporary configuration directory. Reuse the printed
+path for that invocation; browser binaries remain in the prepared cache. QA cannot repair
+the candidate. Complete repository/Rust verification runs in its separate writable copy. LLM-reported QA evidence is still fallible; the deterministic verifier and held-out
 eval grader provide additional independent checks.
 
 Planner, QA planner, implementer, reviewer and QA can request an Oracle consultation with a
@@ -207,16 +219,16 @@ there is an authorized concurrent workload and evidence to justify it.
 
 ## Models
 
-The committed policy in harness/models.json assigns **gpt-5.6-luna at xhigh** to implementation
-and QA execution. Product management, technical planning, QA design, review and Oracle advice
-use **gpt-5.6-sol at xhigh**. Supervisor and verifier do not call a model.
+The committed policy in harness/models.json uses **gpt-5.6-sol at high** for the default
+lead and reviewer, and **gpt-5.6-sol at xhigh** for focused Oracle advice. The optional
+full workflow uses **gpt-5.6-luna at xhigh** for bounded implementation and QA work.
+Supervisor and verifier do not call a model.
 
-This is an initial allocation to evaluate, not a measured claim that these are optimal models.
-Use --worker-model or --lead-model to override a tier; --model overrides every model role for
-controlled comparisons. --reasoning-effort overrides effort for every role. Resolved model
-IDs and effort are frozen in run state, recorded per turn, and preserved on resume. There is
-no silent model fallback. Compare accepted outcomes, defects, false positives, repair cycles,
-interventions, duration and reported tokens before changing defaults.
+This allocation is a trial policy, not a measured optimum. `--lead-model`, `--worker-model`
+and `--oracle-model` override their respective tiers; the worker tier is used in the full
+workflow. `--model` overrides all roles and `--reasoning-effort` overrides all effort levels
+for controlled comparisons. Astra is an explicit Oracle escalation for a concrete hard
+question, not the default outer monitor. Allocation is frozen on resume; no silent fallback.
 
 ## Verification
 
@@ -274,20 +286,81 @@ under the primary checkout's ignored `.agents/runs/<id>/workspace`. It freezes a
 control copy of the harness. Ralph owns routing and process activations; the adapter owns native history continuation. Repository code
 adds container execution, structured role events, verification and the final content gate.
 
-Default bounds are 24 activations/iterations, one hour and three consecutive failures.
-Each model invocation has a 15-minute ceiling. Use `--iterations` and `--seconds` to set
-an explicit task budget. Wall-clock bounds cover active intake and loop execution, including verification; stopped interviews are excluded.
-Ralph's custom-backend inactivity timeout is explicitly 16 minutes, so a buffered model
-call is governed by the adapter's 15-minute deadline rather than an inherited five-minute
-default. The pinned Ralph version reads that custom timeout from its `claude` adapter slot;
-the worker still runs the selected Codex model.
-Initial dependency setup has its own 20-minute timeout. Limits persist across resume.
-Resume retains candidate, native histories and structured handovers while archiving the
-previous Ralph event ledger, so old completion events cannot bypass fresh review.
-An optional clarification file adds the owner's missing decision without resetting those limits.
-An exhausted run requires a new authorized run; resume does not reset its failure budget.
-SIGINT/SIGTERM preserves progress and cleans up invocation-owned containers. A hard-killed
-supervisor may leave a lock; verify its recorded PID is dead before removing that run's lock.
+Default bounds remain 24 activations, one hour and three consecutive failures. `--seconds`
+scales cumulative stage ceilings, which survive retries and resume:
+
+| Stage | Share | Default ceiling |
+| --- | --- | --- |
+| Intake, product, planning, independent scenarios | 15% | 9 minutes total |
+| Oracle advice | 5% | 3 minutes total |
+| Implementation and repairs | 45% | 27 minutes total |
+| Review and behavioral QA | 20% | 12 minutes total |
+| Deterministic verification | 15% | 9 minutes total |
+
+Preparation also has per-turn caps: intake 180 seconds, product 90, planning 120,
+scenario design 90; Oracle is capped at 180. Unused stage allocations stay reserved;
+a preparation overrun cannot consume implementation or verification time. These are
+initial policies to evaluate, not guarantees that every feature fits an hour.
+
+The prompt supplies the root, current phase, compact changed context and soft deadline.
+At 80% of a turn's allowance the supervisor saves a source delta and last activity time;
+near the ceiling it sends SIGINT for a bounded flush, then kills remaining descendants
+and removes the invocation's container. A checkpoint is recovery evidence, not approval.
+Quiet periods are visible in activity timestamps; they are not automatically classified
+as a stuck model. There is no longer a blanket 15-minute implementation kill. Ralph's
+custom adapter timeout is materialized above the run limit, leaving deadlines to the supervisor.
+
+Initial dependency preparation has its own 20-minute cap. Human waiting is excluded from
+active budgets. Resume retains candidate, histories and handovers and archives the old
+Ralph ledger; stale completion events cannot bypass review. Clarification cannot reset
+limits. Exhausted runs require a new authorized run. A hard-killed supervisor can leave a
+lock: confirm its recorded process and owned containers have stopped before recovering it.
+
+### Background execution
+
+Add `--background` to `agent:goal` or `agent:run start/resume`. The command returns a job
+ID and private log location. `agent:job status JOB_ID` reads its state; `agent:job wait
+JOB_ID` waits on filesystem events for completion/questions/failure (up to 60 seconds).
+The background process continues with no outer model monitoring it. Use the host agent's
+completion notification when available; do not spend turns repeatedly running sleep or
+re-reading the task. Relay actual questions or failures, then resume the saved run.
+
+### Usage and OTEL
+
+Every invocation records lifecycle events before starting. The supervisor tails native
+`token_usage_record` response usage, deduplicates response IDs, and recovers after interrupted
+turns. It sums per-response usage, including compaction, never cumulative thread totals.
+Even fresh comparison histories persist privately for accounting. Missing native records
+are labelled; a turn summary fallback or killed in-flight response makes totals a lower bound.
+Reports keep cost null unless measured; token totals are not a subscription invoice.
+
+Configure the OTLP HTTP origin explicitly with `--otel-endpoint`,
+`WORLD_AGENT_OTEL_ENDPOINT`, or the primary checkout's ignored `.agents/state/telemetry.json`:
+
+```json
+{ "endpoint": "http://127.0.0.1:4318" }
+```
+
+Loopback is mapped to Docker's host gateway for worker metrics. No user Codex config is
+copied. Codex metrics use the explicit exporter; native log and trace exporters remain off
+because they can include tool output. The supervisor exports only allow-listed usage and
+lifecycle fields as OTLP logs under service `world_agent_harness`, with run, role, attempt,
+model and session attribution. Private transcripts never go through this exporter. Exports
+retry from a durable cursor; receivers deduplicate event/response IDs after ambiguous retries.
+A collector acknowledgment is not proof of downstream storage.
+
+```bash
+npm run agent:metrics -- RUN_ID
+npm run agent:metrics -- RUN_ID --loki http://127.0.0.1:3111
+```
+
+Run metrics recovery after the supervisor stops. The second command reconciles individual
+response IDs and token fields against Loki; a missing/mismatched record fails the comparison.
+Prometheus's aggregate Codex model metrics alone cannot attribute overlapping sessions.
+The native adapter is pinned to the recorded Codex CLI; its format regression and live
+OTEL reconciliation must be rerun when changing that version.
+
+Exporter configuration follows the official [Codex observability documentation](https://learn.chatgpt.com/docs/config-file/config-advanced#observability-and-telemetry).
 
 Outcomes are `ready-for-review`, `blocked`, `failed`, `interrupted` and `exhausted`.
 Ready requires acceptance coverage, fresh review, passing behavioral QA and independent
@@ -346,13 +419,14 @@ scope based on measured reliability.
 The [live trial report](evidence/agent-development-live-trials.md) records authenticated
 model outcomes, control failures found and fixed, and the limits of the initial sample.
 The [session trial report](evidence/agent-session-trials.md) records subsequent native
-continuation, repair review and model-switching evidence.
+continuation, repair review and model-switching evidence. The [efficiency trial record](evidence/agent-efficiency-trials.md)
+records the two-history phase trial, exact OTEL reconciliation and browser workload controls.
 
 Selected ECC retrieval and checkpoint practices are adapted into the existing skills;
 see [pinned provenance and scope](../harness/README.md#selected-ecc-practices). No ECC
 installation, automatic observer or additional control plane is needed for this workflow.
 `npm run eval:sessions` exercises real interview continuation, resumed review after a
-new defect, and Sol-to-Luna schema/model switching across recreated containers.
+new defect, lead implementation, focused Oracle advice and review/QA continuation across recreated containers.
 
 Graphify remains optional. The [existing audit](analysis/agentic-development-capabilities-2026-09-01.md)
 found useful local relationships but missed a real TypeScript → HTTP → Rust path.

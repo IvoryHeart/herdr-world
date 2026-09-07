@@ -45,10 +45,13 @@ export function parseResponse(output, role) {
 }
 function nonempty(value) { return typeof value === 'string' && value.trim().length > 0; }
 function unique(items, key) { return new Set(items.map(item => item[key])).size === items.length; }
-export function resolveModels(config, { model, workerModel, leadModel, reasoningEffort } = {}) {
+export function resolveModels(config, { model, workerModel, leadModel, oracleModel, reasoningEffort, workflow = 'two-history' } = {}) {
   const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
-  return Object.fromEntries(Object.entries(config.roles).map(([role, tier]) => {
-    const selected = { ...config[tier], model: model ?? (tier === 'worker' ? workerModel : leadModel) ?? config[tier]?.model };
+  if (!['two-history', 'full'].includes(workflow)) throw new Error('Workflow must be two-history or full');
+  const roles = { ...config.roles, ...(workflow === 'full' ? config.fullRoles : {}) };
+  return Object.fromEntries(Object.entries(roles).map(([role, tier]) => {
+    const override = tier === 'worker' ? workerModel : tier === 'oracle' ? oracleModel : leadModel;
+    const selected = { ...config[tier], model: model ?? override ?? config[tier]?.model };
     selected.reasoningEffort = reasoningEffort ?? selected.reasoningEffort;
     if (!nonempty(selected.model) || !efforts.includes(selected.reasoningEffort)) throw new Error('Invalid model policy for ' + role);
     return [role, selected];

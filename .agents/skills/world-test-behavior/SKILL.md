@@ -10,8 +10,12 @@ Read web/README.md for frontend tests and docs/development.md for fixture startu
 Never connect a test to a live Herdr/deployment unless that action was explicitly authorized.
 
 In qa-planner mode, return scenario IDs, acceptance IDs, executable steps and expected results.
+Do not execute a full baseline suite while planning. A focused experiment is justified only
+when a specific uncertainty changes the scenarios.
 In qa mode, execute them and report each result with commands and observations. Source is
 read-only; use /tmp for generated files or a temporary test copy where a tool needs writes.
+In the Docker boundary, run node /control/scripts/agent/fixture.mjs once from /workspace
+for a writable web test copy with copied dependencies; use its printed path throughout QA.
 A source cross-check is sufficient for a documentation assertion; changed runtime behavior
 needs behavioral evidence. Keep tests proportional to risk and avoid mirroring implementation.
 

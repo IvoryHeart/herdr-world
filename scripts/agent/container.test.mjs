@@ -34,8 +34,13 @@ else if(prompt.startsWith('Read AGENTS.md and world-plan-change')) {event=prompt
 else if(prompt.startsWith('Use world-test-behavior to derive')) {event='qa.planned';fields={scenarios:[{id:'value',acceptanceIds:['answer'],steps:'Read source.mjs.',expected:'answer is 42.'}]};}
 else if(prompt.startsWith('Implement the authorized task')) {
   if(prompt.includes('FIXTURE_RESUME') && !fs.existsSync('/workspace/.agents/fixture-pause')) {
+    fs.writeFileSync('/workspace/source.mjs','export const answer = 11;\\n');
     fs.writeFileSync('/workspace/.agents/fixture-pause','pause');
     await new Promise(resolve=>setTimeout(resolve,30000));
+  }
+  if(prompt.includes('FIXTURE_RESUME') && history.turns > 1) {
+    const delta=JSON.parse(prompt.split('Candidate changes since your session last observed it:\\n')[1].split('\\nThe patch')[0]);
+    if(!fs.readFileSync(delta.patch,'utf8').includes('answer = 11')) throw Error('Interrupted edits missing from resumed context');
   }
   fs.writeFileSync('/workspace/source.mjs',prompt.includes('FIXTURE_FAIL')?'export const answer = 0;\\n':'export const answer = 42;\\n');
   try { fs.writeFileSync('/workspace/.git/config','tampered'); throw Error('Git metadata writable'); }
@@ -94,10 +99,10 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   assert.equal(success.status,'ready-for-review');
   assert.equal(success.turns.find(t=>t.role==='reviewer').sessionId,success.turns.find(t=>t.role==='qa-planner').sessionId);
   assert(success.turns.find(t=>t.role==='qa').resumed);
-  assert.notEqual(success.sessions.builder.threadId,success.sessions.review.threadId);
+  assert.notEqual(success.sessions.lead.threadId,success.sessions.review.threadId);
   assert.equal(success.qa.event,'qa.passed');
   assert.equal(success.models.implementer.model,'fixture');
-  assert.equal(success.turns.find(turn=>turn.role==='qa').reasoningEffort,'xhigh');
+  assert.equal(success.turns.find(turn=>turn.role==='qa').reasoningEffort,'high');
   assert.match(await readFile(join(runBase,runs[0],'candidate.patch'),'utf8'),/answer = 42/);
   assert.equal(await readFile(join(source,'source.mjs'),'utf8'),'export const answer = 0;\n');
   await writeFile(task,'FIXTURE_BLOCKED: missing owner decision; stop.');
@@ -128,14 +133,14 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   assert.notEqual((await pending).code,0);
   const interrupted=JSON.parse(await readFile(join(runBase,resumeId,'run.json')));
   assert.equal(interrupted.status,'interrupted');
-  const builderBefore=JSON.parse(await readFile(join(runBase,resumeId,'sessions/builder/session.json')));
+  const builderBefore=JSON.parse(await readFile(join(runBase,resumeId,'sessions/lead/session.json')));
   assert(builderBefore.threadId);
   result=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'resume',resumeId],
     {cwd:source,stream:false,timeoutMs:360000,log:join(dir,'resumed.log')});
   assert.equal(result.code,0,result.output);
   const resumed=JSON.parse(await readFile(join(runBase,resumeId,'run.json')));
   assert.equal(resumed.status,'ready-for-review');
-  assert.equal(resumed.sessions.builder.threadId,builderBefore.threadId);
+  assert.equal(resumed.sessions.lead.threadId,builderBefore.threadId);
   assert(resumed.activations>interrupted.activations);
   assert(resumed.remainingMs<interrupted.remainingMs);
   runs=await readdir(runBase);
@@ -162,7 +167,7 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   assert.equal(result.code,0,result.output);
   const answered=JSON.parse(await readFile(join(runBase,intakeId,'run.json')));
   assert.equal(answered.status,'ready-for-review'); assert(answered.remainingMs<intake.remainingMs);
-  assert.equal(answered.turns.filter(t=>t.sessionGroup==='lead').length,3);
+  assert.equal(answered.turns.filter(t=>t.sessionGroup==='lead').length,4);
   assert.equal(new Set(answered.turns.filter(t=>t.sessionGroup==='lead').map(t=>t.sessionId)).size,1);
   runs=await readdir(runBase);
   await writeFile(task,'FIXTURE_FAIL: Repeatedly claim success while the check fails.');

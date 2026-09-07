@@ -33,8 +33,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
   [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
 - For a short development goal, use world-start-task and `npm run agent:goal -- "<goal>"`.
   Intake asks only consequential questions; resume the saved run with the owner's answers.
-  Reuse lead, builder and independent review sessions within a task; do not reload
-  the full repository in newly spawned agents for each persona.
+  Reuse a lead history for planning/implementation and an independent review history for QA/review;
+  do not reload the full repository in newly spawned agents for each persona.
 - Create task worktrees with `npm run agent:worktree -- create <slug>`. They live in
   the primary checkout's ignored `.agents/.worktrees/`, including when invoked from
   a linked worktree. Do not move or clean another agent's existing worktree.
@@ -48,8 +48,9 @@ This is a lightweight internal onboarding note for agents working in this repo.
   They never override current specs, source, tests or these delivery rules.
 - The Ralph task profiles are routine, feature and sensitive. Product shaping is conditional;
   independent QA scenarios precede implementation. Acceptance and QA expectations are not
-  weakened during repairs. Model defaults live in harness/models.json: Luna xhigh for workers,
-  Sol xhigh for lead roles. See docs/agent-development.md for overrides and Oracle limits.
+  weakened during repairs. Model defaults live in harness/models.json: Sol high for the default
+  lead/reviewer, Sol xhigh for Oracle; full mode uses Luna xhigh for bounded workers.
+  See docs/agent-development.md for overrides and Oracle limits.
 
 - Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See

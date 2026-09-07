@@ -10,6 +10,7 @@
 /.herdr-world-plugin/
 /.agents/.worktrees/
 /.agents/runs/
+/.agents/jobs/
 /.agents/state/
 /.agents/cache/
 /.ralph/

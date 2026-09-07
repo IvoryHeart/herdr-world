@@ -5,13 +5,15 @@ import { randomUUID } from 'node:crypto';
 import { git, jsonFile, assertSourceParents } from './lib.mjs';
 
 export const sessionGroups = {
-  intake: 'lead', product: 'lead', planner: 'lead', implementer: 'builder',
+  intake: 'lead', product: 'lead', planner: 'lead', implementer: 'lead',
   'qa-planner': 'review', reviewer: 'review', qa: 'review', oracle: 'oracle',
 };
+export const fullSessionGroups = { ...sessionGroups, implementer: 'builder' };
 export function validateSessionGroups(groups) {
   if (!groups || Object.keys(groups).length !== Object.keys(sessionGroups).length
-    || Object.entries(sessionGroups).some(([role, group]) => groups[role] !== group)) {
-    throw new Error('Session groups must preserve the lead, builder, independent review and Oracle boundaries');
+    || Object.entries(sessionGroups).some(([role, group]) => role === 'implementer'
+      ? !['lead', 'builder'].includes(groups[role]) : groups[role] !== group)) {
+    throw new Error('Session groups must preserve independent review and Oracle boundaries');
   }
   return { ...groups };
 }
@@ -43,7 +45,10 @@ export async function openSession(runDir, state, role) {
   const persistent = state.sessionMode !== 'fresh';
   const meta = saved ?? { group, runId: state.id, threadId: null, turns: 0, lastTree: null, context: null };
   if (meta.threadId && !/^[a-f0-9-]{36}$/.test(meta.threadId)) throw new Error('Invalid saved Codex session ID');
-  return { group, path, home: join(directory, 'home'), meta, persistent, resumed: persistent && Boolean(meta.threadId) };
+  // Fresh means a new history per invocation, still persisted for interrupted usage recovery.
+  const home = persistent ? join(directory, 'home') : join(directory, 'attempt-' + state.activations, 'home');
+  await mkdir(home, { recursive: true, mode: 0o700 });
+  return { group, path, home, meta, persistent, resumed: persistent && Boolean(meta.threadId) };
 }
 export function saveSession(session) {
   // The thread ID must reach disk before a killed backend loses its in-memory state.

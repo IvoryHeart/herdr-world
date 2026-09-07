@@ -7,6 +7,8 @@ import { saveState, loadState, candidateGate } from './run-state.mjs';
 import { materializeConfig } from './run.mjs';
 import { prepareDependencies } from './environment.mjs';
 import { resolveModels, initialEvent } from './workflow.mjs';
+import { budgetPolicy } from './budgets.mjs';
+import { recoverUsage } from './usage.mjs';
 
 const runDir = '/tmp/world-harbor-run';
 await mkdir(runDir, { recursive: true });
@@ -15,18 +17,20 @@ await symlink('/control', join(runDir, 'control'));
 // Harbor isolates trials, not individual role mounts. Keep its fresh-session
 // baseline explicit; native role persistence is evaluated by the local Docker driver.
 const state = {
-  schemaVersion: 3, sessionMode: 'fresh', id: 'harbor', environment: 'harbor', status: 'preparing',
+  schemaVersion: 4, sessionMode: 'fresh', workflow: 'two-history', id: 'harbor', environment: 'harbor', status: 'preparing',
   sourceRevision: git(['rev-parse', 'HEAD']), sourceFingerprint: await fingerprint(),
   workspaceBaseline: git(['rev-parse', 'HEAD']), model: process.argv[2], profile: 'check', taskProfile: process.argv[3] ?? process.env.WORLD_TASK_PROFILE ?? 'routine',
   models: resolveModels(JSON.parse(await readFile('/control/harness/models.json')), { model: process.argv[2] }),
   task: await readFile('/tmp/world-task.md', 'utf8'), limits: { iterations: 24, failures: 3, seconds: 2300 },
+  budgets: budgetPolicy(2300), remainingMs: 2300000, startedAt: new Date().toISOString(),
   deadline: Date.now() + 2300000, activations: 0, consecutiveFailures: 0, turns: [], costUsd: null,
 };
 state.lastEvent = initialEvent(state.taskProfile);
 await saveState(runDir, state);
 const prepared = await prepareDependencies(state, '/workspace', '/control');
 if (prepared.code !== 0) throw new Error('Harbor dependency preparation failed');
-const config = materializeConfig(parse(await readFile('/control/harness/ralph.yml','utf8')), '/control');
+state.deadline = Date.now() + state.remainingMs; state.status = 'running'; await saveState(runDir, state);
+const config = materializeConfig(parse(await readFile('/control/harness/ralph.yml','utf8')), '/control', state.limits.seconds);
 config.event_loop.starting_event = state.lastEvent;
 config.event_loop.max_runtime_seconds = Math.max(1, Math.floor((state.deadline - Date.now())/1000));
 await writeFile(join(runDir,'ralph.yml'), stringify(config));
@@ -36,8 +40,10 @@ const result = await command(['/opt/harness/bin/ralph', 'run', '-c', join(runDir
   '-P', '/tmp/world-task.md', '--autonomous', '--no-auto-merge'],
   { env: { ...process.env, WORLD_AGENT_RUN: runDir }, timeoutMs: Math.max(1, state.deadline-Date.now()), log:'/logs/agent/ralph.log' });
 const final = await loadState(runDir);
+const usage = await recoverUsage(runDir, { interrupted: true });
 if (final.status !== 'blocked') {
   try { await candidateGate(runDir); } catch { final.status = result.timedOut ? 'exhausted' : 'failed'; }
 }
 await writeFile('/logs/agent/world-run.json', JSON.stringify(final, null, 2));
+await writeFile('/logs/agent/world-usage.json', JSON.stringify(usage, null, 2));
 // Harbor's separate verifier determines task reward, including legitimate blocked outcomes.

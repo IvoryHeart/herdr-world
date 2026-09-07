@@ -5,6 +5,23 @@ const directory = resolve(process.argv[2] ?? 'evals/jobs');
 let live;
 try { live = JSON.parse(await readFile(join(directory, 'report.json'), 'utf8')); }
 catch (error) { if (error.code !== 'ENOENT') throw error; }
+if (live?.kind === 'product-regression-trials') {
+  const variants = [...new Set(live.trials.map(t => t.variant))].map(variant => {
+    const rows = live.trials.filter(t => t.variant === variant);
+    return { variant, trials: rows.length, autonomousSuccesses: rows.filter(t => t.autonomousSuccess).length,
+      gradedPasses: rows.filter(t => t.grade.status === 'passed').length,
+      meanExecutionSeconds: rows.reduce((n, t) => n + t.executionMs / 1000, 0) / rows.length,
+      firstPatchSeconds: rows.map(t => t.timeToFirstPatchMs === null ? null : t.timeToFirstPatchMs / 1000),
+      inputTokens: rows.reduce((n, t) => n + (t.usage?.input_tokens ?? 0), 0),
+      cachedInputTokens: rows.reduce((n, t) => n + (t.usage?.cached_input_tokens ?? 0), 0),
+      outputTokens: rows.reduce((n, t) => n + (t.usage?.output_tokens ?? 0), 0),
+      usageLowerBound: rows.some(t => t.usageLowerBound || t.usage === null),
+      timeouts: rows.map(t => t.timeouts), interventions: rows.reduce((n, t) => n + t.interventions, 0), costUsd: null };
+  });
+  console.log(JSON.stringify({ kind: live.kind, action: live.action, sourceFingerprint: live.sourceFingerprint,
+    model: live.model, reasoningEffort: live.reasoningEffort, seconds: live.seconds, variants, trials: live.trials }, null, 2));
+  process.exit(0);
+}
 if (live?.kind === 'live-model-trials') {
   for (const trial of live.trials) {
     try { trial.regrade = JSON.parse(await readFile(join(directory, `${trial.case}-${trial.variant}-${trial.attempt}`, 'regrade.json'), 'utf8')); }
@@ -17,6 +34,7 @@ if (live?.kind === 'live-model-trials') {
       readyForReview: trials.filter(t => t.status === 'ready-for-review').length,
       elapsedSeconds: trials.reduce((n, t) => n + t.elapsedMs / 1000, 0),
       inputTokens: usages.reduce((n, u) => n + (u.input_tokens ?? 0), 0),
+      cachedInputTokens: usages.reduce((n, u) => n + (u.cached_input_tokens ?? 0), 0),
       outputTokens: usages.reduce((n, u) => n + (u.output_tokens ?? 0), 0), costUsd: null };
   });
   console.log(JSON.stringify({ source: live.source, harnessFingerprint: live.harnessFingerprint,

@@ -10,6 +10,8 @@ import { inContainer, prepareDependencies } from '../scripts/agent/environment.m
 import { writeSchemas, cleanupContainers } from '../scripts/agent/run.mjs';
 import { resolveModels } from '../scripts/agent/workflow.mjs';
 import { artifactFor } from './task-artifacts.mjs';
+import { startUsage, recoverUsage, normalizeUsage, recordEvent } from '../scripts/agent/usage.mjs';
+import { telemetryConfig, telemetryArguments, flushTelemetry } from '../scripts/agent/telemetry.mjs';
 
 async function main() {
   const { values } = parseArgs({ options: {
@@ -18,6 +20,7 @@ async function main() {
     sessions: { type: 'string', default: 'persistent' }, model: { type: 'string' }, 'worker-model': { type: 'string' }, 'lead-model': { type: 'string' },
     'auth-file': { type: 'string' }, 'jobs-dir': { type: 'string', default: 'evals/jobs' },
     'keep-caches': { type: 'boolean', default: false },
+    workflow: { type: 'string', default: 'two-history' }, 'reasoning-effort': { type: 'string' }, 'otel-endpoint': { type: 'string' },
   } });
   if (!values.prepared || !values.cases) throw new Error('Usage: eval:live -- --prepared PREPARED_TASKS --cases ID,ID [--variants baseline,ralph] [--attempts 1] [--seconds 1800]');
   const attempts = Number(values.attempts), seconds = Number(values.seconds);
@@ -37,6 +40,7 @@ async function main() {
   if (inspect.code !== 0) throw new Error('Build the execution image with agent:image');
   const models = resolveModels(JSON.parse(await readFile(join(repoRoot, 'harness/models.json'))), {
     model: values.model, workerModel: values['worker-model'], leadModel: values['lead-model'],
+    workflow: values.workflow, reasoningEffort: values['reasoning-effort'],
   });
   const job = resolve(values['jobs-dir'], 'live-' + new Date().toISOString().replaceAll(':', '-') + '-' + randomUUID().slice(0, 8));
   await mkdir(job, { recursive: true, mode: 0o700 });
@@ -73,7 +77,7 @@ async function main() {
     if (variant === 'ralph') {
       const args = [process.execPath, join(harnessSource, 'scripts/agent/run.mjs'), 'start', '--task-file', taskFile,
         '--task-profile', entry.taskProfile ?? 'routine', '--seconds', String(seconds), '--auth-file', authFile, '--image', report.image];
-      for (const option of ['model', 'worker-model', 'lead-model', 'sessions']) if (values[option]) args.push('--' + option, values[option]);
+      for (const option of ['model', 'worker-model', 'lead-model', 'sessions', 'workflow', 'reasoning-effort', 'otel-endpoint']) if (values[option]) args.push('--' + option, values[option]);
       result = await command(args, { cwd: workspace, stream: false, timeoutMs: (seconds + 1250) * 1000, log: join(trialDir, 'runner.log') });
       const runBase = join(workspace, '.agents/runs');
       try {
@@ -89,15 +93,30 @@ async function main() {
       await cp(join(harnessSource, 'scripts/agent'), join(control, 'scripts/agent'), { recursive: true });
       await writeSchemas(control);
       await mkdir(join(workspace, '.ralph/agent'), { recursive: true });
-      const state = { id: 'eval-' + randomUUID(), image: report.image, profile: 'check' };
+      const state = { id: 'eval-' + randomUUID(), image: report.image, profile: 'check',
+        models: { baseline: models.implementer }, activations: 1, startedAt: new Date().toISOString(),
+        telemetry: telemetryConfig(values['otel-endpoint'] ?? process.env.WORLD_AGENT_OTEL_ENDPOINT) };
+      const session = { group: 'baseline', home: join(trialDir, 'sessions/baseline/home'), resumed: false };
+      await mkdir(session.home, { recursive: true });
       result = await prepareDependencies(state, workspace, control);
-      if (result.code === 0) result = await inContainer(state, workspace,
-        ['/opt/harness/node_modules/.bin/codex', 'exec', '--json', '--ephemeral', '--ignore-user-config',
+      if (result.code === 0) {
+      const tracker = await startUsage(trialDir, state, 'baseline', session, { stage: 'implementation', timeoutMs: seconds * 1000 });
+      let invoked;
+      try { result = invoked = await inContainer(state, workspace,
+        ['/opt/harness/node_modules/.bin/codex', 'exec', '--json', '--ignore-user-config',
           '--sandbox', 'danger-full-access', '--model', models.implementer.model,
-          '-c', 'model_reasoning_effort=' + JSON.stringify(models.implementer.reasoningEffort), '-'],
-        { control, authFile, network: 'bridge', input: instruction, stream: false, timeoutMs: seconds * 1000, log: join(trialDir, 'baseline.jsonl') });
-      for (const line of result.stdout.split('\n')) {
-        try { const item = JSON.parse(line); if (item.type === 'turn.completed') usage = item.usage; } catch { /* private diagnostics */ }
+          '-c', 'model_reasoning_effort=' + JSON.stringify(models.implementer.reasoningEffort), '-c', 'agents.enabled=false',
+          ...telemetryArguments(state.telemetry), '-'],
+        { control, authFile, instanceId: tracker.attempt.instanceId, sessionHome: session.home, network: 'bridge', input: instruction, stream: false,
+          timeoutMs: seconds * 1000, graceMs: 10000, log: join(trialDir, 'baseline.jsonl'),
+          onStdoutLine: line => {
+            try { const item = JSON.parse(line), u = item.type === 'turn.completed' && normalizeUsage(item.usage);
+              if (u) recordEvent(trialDir, 'turn.summary', { attemptId: tracker.attempt.attemptId, usage: u });
+            } catch { /* private diagnostics */ }
+          } });
+      } finally { await tracker.finish(invoked ?? { code: null, interrupted: true }); }
+      usage = (await recoverUsage(trialDir)).usage;
+      await flushTelemetry(trialDir, state.telemetry);
       }
     }
     const artifacts = join(trialDir, 'artifacts'); await mkdir(artifacts);

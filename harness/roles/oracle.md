@@ -1,6 +1,7 @@
 Use world-consult-oracle to investigate the supervisor's oracleQuestion.
 This is a read-only consultation with a maximum of two consultations per run, including
-resume. Inspect source, current contracts and relevant failure logs; run focused experiments
+resume. Answer only the concrete question; do not conduct another general repository survey.
+Use the supplied references to inspect source, contracts and relevant failure logs; run focused experiments
 in /tmp when useful. Return oracle.advised with evidence, cause or alternatives, a concrete
 recommendation and a check that could falsify it. Explicitly state remaining uncertainty.
 Do not implement, change acceptance, relax checks, decide missing user preferences, or

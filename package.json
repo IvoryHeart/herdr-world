@@ -46,13 +46,16 @@
     "agent:deliver": "node scripts/agent/deliver.mjs",
     "spec": "node scripts/agent/tool.mjs openspec",
     "spec:check": "node scripts/agent/tool.mjs openspec validate --all --strict --no-interactive",
-    "test:agent": "node --test scripts/agent/agent.test.mjs scripts/agent/workflow.test.mjs scripts/agent/sessions.test.mjs",
-    "eval:check": "python3 evals/check.py",
+    "test:agent": "node --test scripts/agent/agent.test.mjs scripts/agent/workflow.test.mjs scripts/agent/sessions.test.mjs scripts/agent/efficiency.test.mjs",
+    "eval:check": "python3 evals/check.py && node --test evals/product.test.mjs",
     "eval:prepare": "node evals/prepare.mjs",
     "eval:report": "node evals/report.mjs",
     "eval:harbor": "node evals/harbor.mjs",
     "eval:live": "node evals/live.mjs",
-    "agent:rules": "node scripts/agent/github-rules.mjs"
+    "agent:rules": "node scripts/agent/github-rules.mjs",
+    "agent:job": "node scripts/agent/job.mjs",
+    "agent:metrics": "node scripts/agent/metrics.mjs",
+    "eval:product": "node evals/product.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

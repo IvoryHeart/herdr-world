@@ -14,10 +14,12 @@ function reviewed(state) {
   acceptResponse(state, 'implementer', { event: 'candidate.ready', summary: 'Repaired.' }, 'base', 'fixed');
   acceptResponse(state, 'reviewer', { event: 'review.passed', summary: 'Inspected cap.' }, 'fixed', 'fixed');
 }
-test('default workers use Luna xhigh, leads use Sol xhigh, and explicit uniform overrides persist', async () => {
+test('two-history defaults use Sol high, bounded full workers use Luna xhigh, overrides stay explicit', async () => {
   const config = JSON.parse(await readFile(new URL('../../harness/models.json', import.meta.url)));
   const models = resolveModels(config);
-  assert.deepEqual(models.implementer, { model: 'gpt-5.6-luna', reasoningEffort: 'xhigh' });
+  assert.deepEqual(models.implementer, { model: 'gpt-5.6-sol', reasoningEffort: 'high' });
+  assert.deepEqual(resolveModels(config, { workflow: 'full' }).implementer, { model: 'gpt-5.6-luna', reasoningEffort: 'xhigh' });
+  assert.equal(models.oracle.reasoningEffort, 'xhigh');
   assert.equal(models.qa.model, models.implementer.model);
   assert.equal(models.oracle.model, 'gpt-5.6-sol');
   assert(Object.values(resolveModels(config, { model: 'comparison', reasoningEffort: 'high' })).every(m => m.model === 'comparison' && m.reasoningEffort === 'high'));

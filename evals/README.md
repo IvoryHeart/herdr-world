@@ -54,7 +54,7 @@ retaining source, patches, controls and logs. Use --keep-caches for a debugging 
 needs them. Re-run a frozen task for another attempt; pruned trial workspaces need bootstrap
 before interactive reuse.
 
-The baseline is one Luna xhigh Codex session with the same repository skills. Ralph uses
+The baseline is one Codex session using the selected implementer model (currently Sol high by default) and the same repository skills. Ralph uses
 the committed worker/lead allocation, so this compares complete configurations, including
 model allocation. To isolate orchestration, pass `--model gpt-5.6-luna` for a uniform-model
 comparison. Tier overrides are --worker-model and --lead-model. Use `--sessions fresh` versus
@@ -126,12 +126,54 @@ This focused live test uses the production model adapter and Docker mounts again
 tiny synthetic retry helper, with the pinned image and saved Codex authentication.
 It checks a missing-decision interview and exact native continuation after the answer,
 then a resumed reviewer rejecting a new defect after the first defect is repaired.
-The corrected helper must pass Sol review and Luna QA in the same independent history
-with the current role schema. All calls are sequential, bounded to 30 minutes total
-(15 minutes per call); raw evidence stays under ignored `.agents/state/session-evals/`.
+It also checks lead continuation into writable implementation and a focused separate Oracle
+consultation. The corrected helper must pass Sol high review and QA in the same independent
+history with the current role schema. Calls are sequential, bounded to 30 minutes total
+with the production stage budget policy; raw evidence stays under ignored `.agents/state/session-evals/`.
 Reports include actual models, native IDs, token usage, source fingerprint and image ID.
 This is a persistence regression, not a measured reliability or token-savings benchmark.
 
 The credential-free `test:agent:containers` separately covers the production goal command,
 parent worktree selection, interview stop/resume, killed backend recovery, isolation,
 and verifier rejection of falsely claimed success. CI stand-ins do not prove model quality.
+
+
+## Product regression comparisons
+
+Three medium regression workloads exercise federated host navigation, capability enforcement
+across UI/terminal entry points, and keyboard Settings/focus behavior. Each combines seeded
+defects with frozen unit and browser acceptance checks. These are regression workloads,
+not a claim that open-ended design work has been benchmarked.
+
+```bash
+npm run eval:product -- prepare
+npm run eval:product -- controls --prepared PREPARED_DIR
+npm run eval:product -- run --prepared PREPARED_DIR --model gpt-5.6-sol --reasoning-effort high --seconds 3600
+npm run eval:report -- evals/jobs/PRODUCT_JOB
+```
+
+Preparation freezes source, briefs, mutations, runner dependencies and acceptance tests.
+The worker receives no eval definitions, reference solution, Git history or the selected browser
+acceptance file. Other repository tests remain available, and live runs use the acceptance
+profile so prepared Chromium and normal browser checks are present. Grading restores frozen controls and executes unit/browser checks in an
+independent container without model authentication or network. Reference controls must pass;
+seeded negatives must fail. Controls use no model and do not measure autonomous success.
+
+Live comparisons require one explicit model and effort across both workflows. Compare
+`two-history,full` first; change model allocation only in a separately recorded experiment.
+Use `--cases ID,ID`, `--variants two-history`, and `--attempts 1` to bound a trial; the full
+matrix is three tasks and two workflows. A time ceiling is not a spending cap. No live
+matrix runs automatically in CI. Prepared artifacts and reports are private/ignored.
+
+Reports separate delivery readiness from the independent grade and record autonomous
+success, execution/grading time, first observed patch (sampled within five seconds),
+response/cache usage per model and role, timeout count and interventions. Background
+supervision has no monitoring model calls; any additional interactive assistance must be
+recorded separately and invalidates an unassisted comparison. Failed checks remain visible.
+Missing usage is labelled a lower bound and cost stays null. Reconcile native response IDs
+with OTEL using agent:metrics before relying on model usage totals. Generated trial caches
+are pruned after grading; source, native histories, checks and logs remain.
+
+Do not claim a percentage saving from historical PR #79 versus a different task, from
+reference controls, or from one short persistence trial. Repeated matched task results
+are needed to evaluate the new default.
