@@ -26,7 +26,8 @@ Web's own release history remains in its upstream changelog.
 
 - Compacted sidebar navigation into View and Hosts pickers with the list mode and space filter
   together below. Added a direct Add Host shortcut to Network settings, while preserving the
-  Settings cog, host health visibility, keyboard navigation, and compact view return.
+  Settings cog, host health visibility, keyboard navigation, and compact view return
+  ([#79](https://github.com/IvoryHeart/herdr-world/pull/79)).
 
 ### Fixed
 
