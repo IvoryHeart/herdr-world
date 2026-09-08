@@ -24,19 +24,19 @@
 .tree-legend > span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #69d6ac; }
 .tree-legend > [data-kind='terminal']::before { background: #65cee0; }
 .tree-content { display: grid; grid-template-columns: minmax(0, 1fr) 280px; min-height: 0; }
-.tree-viewport { position: relative; min-width: 0; overflow: hidden; touch-action: none; cursor: grab; }
+.tree-viewport { position: relative; min-width: 0; overflow: hidden; touch-action: none; cursor: grab; container: tree-viewport / inline-size; }
 .tree-viewport:active { cursor: grabbing; }
 .tree-map { display: flex; align-items: flex-start; gap: 40px; justify-content: center; width: max-content; padding: 20px; transform-origin: 0 0; transition: transform 140ms ease-out; }
 .tree-visual-host { display: grid; justify-items: center; gap: 48px; }
 /* Equal, bounded columns make the bus endpoints follow the card centers even for unequal leaf counts. */
 .tree-visual-spaces { position: relative; display: flex; align-items: flex-start; gap: 20px; }
-.tree-visual-space { position: relative; display: grid; justify-items: center; gap: 28px; width: 184px; }
+.tree-visual-space { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 28px; width: 184px; }
 .tree-visual-space::before { content: ''; position: absolute; top: -24px; left: 50%; height: 24px; border-left: 1px solid var(--tree-link); }
 .tree-visual-space:not(:last-child)::after { content: ''; position: absolute; top: -24px; left: 50%; width: calc(100% + 20px); border-top: 1px solid var(--tree-link); }
 .tree-visual-host[data-has-children='true'] > .tree-card-wrap::after { content: ''; position: absolute; bottom: -24px; left: 50%; height: 24px; border-left: 1px solid var(--tree-link); }
 .tree-visual-space[data-has-children='true'] > .tree-card-wrap::after { content: ''; position: absolute; bottom: -14px; left: 50%; height: 14px; border-left: 1px solid var(--tree-link); }
 /* Sibling leaves attach to one space trunk; there are no leaf-to-leaf relationships. */
-.tree-visual-leaves { position: relative; display: grid; gap: 12px; width: 100%; padding-left: 14px; }
+.tree-visual-leaves { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: 100%; padding-left: 14px; }
 .tree-visual-leaves::before { content: ''; position: absolute; top: -14px; bottom: 55px; left: 0; width: 50%; border-left: 1px solid var(--tree-link); border-top: 1px solid var(--tree-link); border-radius: 7px 0 0 0; }
 .tree-visual-leaves > .tree-card-wrap::before { content: ''; position: absolute; left: -14px; top: 50%; width: 14px; border-top: 1px solid var(--tree-link); }
 .tree-card-wrap { position: relative; width: 100%; --tree-kind: #e4b767; }
@@ -113,4 +113,7 @@
 .app[data-compact='true'] .tree-details-empty > svg, .app[data-compact='true'] .tree-details-empty > span { display: none; }
 .app[data-compact='true'] .tree-outline { overflow: visible; }
 .app[data-compact='true'] .tree-semantic-select strong { font-size: 13px; }
+.app[data-compact='true'] .tree-disclosure { width: 44px; }
+/* Preserve readable fitted text when both desktop panels leave less canvas width. */
+@container tree-viewport (max-width: 800px) { .tree-visual-space { width: 128px; } }
 @media (prefers-reduced-motion: reduce) { .tree-map, .tree-card-collapse svg, .tree-disclosure svg { transition: none !important; } }

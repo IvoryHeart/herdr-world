@@ -129,12 +129,25 @@ test("bounds and restores camera changes made through every viewport handler", a
 
   const box = await viewport.boundingBox();
   if (!box) throw new Error("Tree viewport has no pointer target");
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const dragStart = await viewport.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    for (let y = rect.top + 12; y < rect.bottom - 120; y += 24) {
+      for (let x = rect.left + 12; x < rect.right - 150; x += 24) {
+        const hit = document.elementFromPoint(x, y);
+        if (hit && element.contains(hit) && !hit.closest("button, input, .tree-card-wrap")) return { x, y };
+      }
+    }
+    throw new Error("Tree viewport has no blank drag target");
+  });
+  const beforeDrag = await treeCamera(page);
+  const selectionBeforeDrag = await page.locator('.tree-semantic-select[aria-pressed="true"]').allTextContents();
+  await page.mouse.move(dragStart.x, dragStart.y);
   await page.mouse.down();
-  await page.mouse.move(box.x + box.width / 2 + 140, box.y + box.height / 2 + 110);
+  await page.mouse.move(dragStart.x + 140, dragStart.y + 110);
   await page.mouse.up();
   const dragged = await treeCamera(page);
-  expect({ x: dragged.x, y: dragged.y }).not.toEqual({ x: afterWheel.x, y: afterWheel.y });
+  expect({ x: dragged.x, y: dragged.y }).not.toEqual({ x: beforeDrag.x, y: beforeDrag.y });
+  expect(await page.locator('.tree-semantic-select[aria-pressed="true"]').allTextContents()).toEqual(selectionBeforeDrag);
   await expectCameraInBounds(page);
   await page.setViewportSize({ width: 900, height: 700 });
   await page.waitForTimeout(50);
@@ -196,6 +209,22 @@ test("keeps dense unequal branches readable with attached connectors and a persi
     await page.getByRole("button", { name: "Fit tree" }).click();
     expect((await treeCamera(page)).zoom).toBeGreaterThanOrEqual(width === 1440 ? 0.9 : 0.65);
     await expectDenseCardsInsideViewport(page);
+    await expectAttachedTreeConnectors(page);
+    const columnsContainCards = await page.locator('.tree-visual-space').evaluateAll((spaces) => spaces.every((space) => {
+      const column = space.getBoundingClientRect();
+      return [...space.querySelectorAll('.tree-card')].every((card) => {
+        const rect = card.getBoundingClientRect();
+        return rect.left >= column.left - 0.1 && rect.right <= column.right + 0.1;
+      });
+    }));
+    expect(columnsContainCards).toBe(true);
+    const textSizes = await page.locator('.tree-map').evaluate((element) => {
+      const zoom = new DOMMatrixReadOnly(getComputedStyle(element).transform).a;
+      return [...element.querySelectorAll('.tree-card strong, .tree-card small')].map((label) => ({
+        title: label.tagName === 'STRONG', size: parseFloat(getComputedStyle(label).fontSize) * zoom,
+      }));
+    });
+    for (const label of textSizes) expect(label.size).toBeGreaterThanOrEqual(label.title ? 12 : 10);
     await captureTree(page, `desktop-selected-${width}.png`);
   }
 
@@ -218,6 +247,21 @@ test("keeps dense unequal branches readable with attached connectors and a persi
   const results = await new AxeBuilder({ page }).include(".tree-stage-shell").analyze();
   expect(results.violations).toEqual([]);
   await captureTree(page, "phone-selected-390.png");
+});
+
+test("gives compact hierarchy controls 44px targets in both dimensions", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?theme=tree");
+  await expect(page.locator('.tree-semantic-select').first()).toBeVisible();
+  const targets = await page.locator('.tree-disclosure, .tree-semantic-select, .tree-open, .tree-actions button').evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { name: element.getAttribute('aria-label') || element.textContent, width: rect.width, height: rect.height };
+    }));
+  for (const target of targets) {
+    expect(target.height, `${target.name} height`).toBeGreaterThanOrEqual(44);
+    expect(target.width, `${target.name} width`).toBeGreaterThanOrEqual(44);
+  }
 });
 
 test("shows empty host identity without dangling child links", async ({ page, request }) => {
