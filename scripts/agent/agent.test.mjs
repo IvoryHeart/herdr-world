@@ -33,7 +33,7 @@ test('worktrees resolve one shared primary directory from linked checkouts and p
   await writeFile(join(dir, 'source.txt'), 'private uncommitted work\n');
   const first = await createWorktree('first', 'HEAD', dir);
   const second = await createWorktree('second', 'HEAD', first);
-  assert.equal(second, join(dir, '.agents/.worktrees/second'));
+  assert.equal(second, join(dir, '.agents/worktrees/second'));
   assert.equal(await readFile(join(dir, 'source.txt'), 'utf8'), 'private uncommitted work\n');
   assert.equal(git(['branch', '--show-current'], second), 'agent/second');
   await assert.rejects(createWorktree('../escape', 'HEAD', dir), /slug/);

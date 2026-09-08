@@ -1,5 +1,14 @@
 # Agent development evals
 
+The opt-in [Superpowers/native Codex trial](../docs/superpowers-trial.md) uses
+`npm run eval:skills` after its local installation. This calls the actual native
+discovery API without model turns and checks the upstream bundle, effective agent
+settings and worktree scope. It is intentionally outside ordinary CI because the
+upstream skills and local profile are not installed there. A separate bounded live
+activation checks behavior; neither result establishes feature quality or savings.
+
+The remaining fixtures below exercise the retained Ralph workflow.
+
 The eight tasks cover cross-language navigation, planning boundaries, a seeded
 reconnect regression, review of flawed and clean code, knowledge maintenance, feature
 shaping and explicit Oracle consultation. The feature is a helper added only inside the

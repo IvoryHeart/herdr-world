@@ -28,10 +28,13 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Start Here
 
+- An owner-selected [Superpowers trial](docs/superpowers-trial.md) uses upstream skills
+  and native Codex in a fresh worktree. Its local profile replaces the Ralph start and
+  delivery procedures for that task only; existing Ralph runs retain their controls.
 - Read [docs/agent-development.md](docs/agent-development.md) for OpenSpec, repository
   skills, bounded Ralph runs, evaluation and PR delivery. Use
   [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
-- **Feature execution is through the harness.** Use world-start-task and `agent:goal`
+- **Outside the explicit Superpowers trial, feature execution is through the harness.** Read [world-start-task](harness/legacy-skills/world-start-task/SKILL.md) and use `agent:goal`
   before feature research, interview, planning or edits. A supervisor-assigned worker is
   already inside the run and must not start another loop. Do not bypass a stopped run or
   its delivery evidence with interactive implementation or direct publishing.
@@ -43,7 +46,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
   Skills provide task-specific judgment and reference those procedures; role prompts
   define response protocols. Avoid copying their policies into another entrypoint.
 - Use `agent:worktree create <slug>` for task worktrees under the primary checkout's
-  ignored `.agents/.worktrees/`. Do not move or clean another agent's worktree.
+  ignored `.agents/worktrees/`. Existing `.agents/.worktrees/` paths remain valid.
+  Do not move or clean another agent's worktree.
 - Current contracts are in `openspec/specs/`, active proposals in `openspec/changes/`,
   and historical numbered specs in `docs/specs/`. Use the pinned `npm run spec -- ...`.
   Scratchpads, graphs and eval outputs do not override contracts, source or these rules.

@@ -57,7 +57,8 @@
     "agent:rules": "node scripts/agent/github-rules.mjs",
     "agent:job": "node scripts/agent/job.mjs",
     "agent:metrics": "node scripts/agent/metrics.mjs",
-    "eval:product": "node evals/product.mjs"
+    "eval:product": "node evals/product.mjs",
+    "eval:skills": "node evals/skills.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

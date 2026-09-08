@@ -8,7 +8,7 @@ metadata:
   adaptation: Herdr World authorization and delivery policy
 ---
 
-Use world-plan-change to inspect source, tests and existing specs first.
+Inspect source, tests and existing specs before proposing a change.
 Use the pinned CLI via `npm run spec -- <arguments>`.
 Create the change with `new change <name>`; inspect `status --change <name> --json`
 and `instructions <artifact> --change <name> --json`. Use returned paths and

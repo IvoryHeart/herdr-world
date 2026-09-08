@@ -1,5 +1,9 @@
 # Harness dependencies and provenance
 
+The [Superpowers trial](../docs/superpowers-trial.md) installs the upstream 6.3.0
+skills locally, outside tracked source. Its native profile is in `superpowers/`.
+This package and the remaining procedures below support the existing Ralph workflow.
+
 This private npm package keeps development tooling out of application dependency graphs.
 Install with `npm ci --prefix harness`; use repository wrappers, not unpinned global tools.
 

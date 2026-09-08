@@ -1,0 +1,37 @@
+{
+  "repository": "https://github.com/obra/superpowers",
+  "version": "6.3.0",
+  "ref": "v6.3.0",
+  "commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+  "skillsSha256": "8f1a520f1d2a947df9deda45e6c4e66e0a1c1a3aafab97284090eb3cc4cd3a54",
+  "skills": [
+    "brainstorming",
+    "dispatching-parallel-agents",
+    "executing-plans",
+    "finishing-a-development-branch",
+    "receiving-code-review",
+    "requesting-code-review",
+    "subagent-driven-development",
+    "systematic-debugging",
+    "test-driven-development",
+    "using-git-worktrees",
+    "using-superpowers",
+    "verification-before-completion",
+    "writing-plans",
+    "writing-skills"
+  ],
+  "legacySkills": [
+    "world-start-task",
+    "world-shape-work",
+    "world-plan-change",
+    "world-test-behavior",
+    "world-review-change",
+    "world-review-specialist",
+    "world-verify-change",
+    "world-deliver-pr",
+    "world-lead-pair",
+    "world-recap-run",
+    "world-consult-oracle",
+    "world-integrate-work"
+  ]
+}

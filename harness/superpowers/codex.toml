@@ -1,0 +1,12 @@
+# Copy only into a fresh trial worktree's .codex/config.toml.
+# Preserve the main model, credentials, approvals and telemetry settings.
+[features]
+goals = true
+multi_agent = true
+
+[agents]
+enabled = true
+max_threads = 3
+max_depth = 1
+default_subagent_model = "gpt-5.6-sol"
+default_subagent_reasoning_effort = "high"

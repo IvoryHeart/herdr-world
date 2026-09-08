@@ -11,7 +11,7 @@ metadata:
 Use the pinned CLI to read status and `instructions apply --change <name> --json`.
 Read its context files, relevant source and tests. Complete authorized tasks, keeping
 checkboxes accurate and updating the same plan when implementation reveals new facts.
-Run world-verify-change and world-maintain-knowledge. Stop for an actual missing
+Run the relevant repository checks and update affected knowledge. Stop for an actual missing
 decision, permission or external dependency; routine failed checks are work to resolve.
-Do not claim completion from checked tasks alone. Deliver through world-deliver-pr
-when publishing is authorized; no automatic merge.
+Do not claim completion from checked tasks alone. Follow the selected workflow's
+delivery procedure when publishing is authorized; no automatic merge.
