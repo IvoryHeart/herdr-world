@@ -49,7 +49,7 @@ async function main() {
     await jsonFile(path, { ...job, status: 'running', pid: process.pid });
     try {
       const result = await command(argv, { cwd, env: { ...process.env, WORLD_AGENT_JOB_DIR: directory },
-        timeoutMs: 88000000, graceMs: 10000 }); // Run deadlines remain enforced inside run.mjs.
+        timeoutMs: 172800000, graceMs: 10000 }); // Run deadlines remain enforced inside run.mjs.
       const latest = JSON.parse(await readFile(path, 'utf8'));
       await jsonFile(path, { ...latest, status: result.code === 0 ? 'completed' : 'needs-attention',
         code: result.code, finishedAt: new Date().toISOString() });

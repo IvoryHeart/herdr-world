@@ -15,7 +15,7 @@ try {
     'worker-model': { type: 'string' }, 'lead-model': { type: 'string' }, 'reasoning-effort': { type: 'string' },
     model: { type: 'string' }, seconds: { type: 'string' }, iterations: { type: 'string' },
     background: { type: 'boolean', default: false }, workflow: { type: 'string' },
-    'oracle-model': { type: 'string' }, 'otel-endpoint': { type: 'string' },
+    'command-seconds': { type: 'string' }, 'oracle-model': { type: 'string' }, 'otel-endpoint': { type: 'string' },
     'reference-image': { type: 'string', multiple: true },
   } });
   const goal = positionals.join(' ').trim();
@@ -38,13 +38,13 @@ try {
   await recordTask(worktree, { mode: 'ralph', base, parent: values.parent ?? null });
   console.log('Task worktree: ' + worktree + '\nPR base: ' + base);
   const args = [process.execPath, join(repoRoot, 'scripts/agent/run.mjs'), 'start', '--interview', '--task-file', task];
-  for (const key of ['profile', 'task-profile', 'sessions', 'model', 'seconds', 'iterations', 'image', 'auth-file', 'worker-model', 'lead-model', 'oracle-model', 'reasoning-effort', 'workflow', 'otel-endpoint']) if (values[key]) args.push('--' + key, values[key]);
+  for (const key of ['profile', 'task-profile', 'sessions', 'model', 'seconds', 'iterations', 'image', 'auth-file', 'worker-model', 'lead-model', 'oracle-model', 'reasoning-effort', 'workflow', 'otel-endpoint', 'command-seconds']) if (values[key]) args.push('--' + key, values[key]);
   for (const path of values['reference-image'] ?? []) args.push('--reference-image', resolve(path));
   const env = { ...process.env, WORLD_AGENT_BASE: base, WORLD_AGENT_PARENT: values.parent ?? '' };
   if (values.background) {
     console.log(JSON.stringify(await launchJob(args, { cwd: worktree, env }), null, 2));
   } else {
-  const result = await command(args, { cwd: worktree, timeoutMs: (Number(values.seconds ?? 3600) + 1300) * 1000,
+  const result = await command(args, { cwd: worktree, timeoutMs: (Number(values.seconds ?? 3600) + (values.workflow && values.workflow !== 'pair' ? 1300 : Number(values['command-seconds'] ?? 2700) * 11)) * 1000,
     env });
   process.exitCode = result.code ?? 1;
   }

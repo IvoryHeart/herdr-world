@@ -35,6 +35,8 @@ Web's own release history remains in its upstream changelog.
   unavailable hosts visible, supports host and space collapse, and preserves validated repository
   names as optional space context. ([#80](https://github.com/IvoryHeart/herdr-world/pull/80))
 
+- Simplified the experimental agent harness to a shared-worktree pair with retained histories, lead acceptance, separate command deadlines, resumable check receipts and explicit stopped-task recovery. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+
 ### Fixed
 
 - Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under

@@ -9,7 +9,12 @@ repository's browser fixtures, direct helper checks or source-backed document ch
 Read web/README.md for frontend tests and docs/development.md for fixture startup.
 Never connect a test to a live Herdr/deployment unless that action was explicitly authorized.
 
-In qa-planner mode, return scenario IDs, acceptance IDs, executable steps and expected results.
+In pair mode, exercise focused behavior in the existing prepared task worktree and
+report evidence for every acceptance ID. Do not copy the repo, reinstall dependencies or
+run complete acceptance suites inside a model turn; the deterministic verifier owns those.
+If you correct source, return a handoff for the other partner to review.
+
+In legacy qa-planner mode, return scenario IDs, acceptance IDs, executable steps and expected results.
 Do not execute a full baseline suite while planning. A focused experiment is justified only
 when a specific uncertainty changes the scenarios.
 In qa mode, execute them and report each result with commands and observations. Source is

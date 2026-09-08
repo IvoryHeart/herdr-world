@@ -29,14 +29,15 @@ never supply their answers yourself. Save the reply in an ignored task-local fil
 use agent:run resume RUN_ID --task-file <answers.md> --background. Human waiting uses no model
 process or loop budget. Preserve the original constraints and existing authorization.
 
-Default to two persistent histories: lead for research/planning/implementation, independent
-review for scenarios/review/QA. Oracle is a focused conditional consultation. Use full mode
-only for a concrete need for a separate bounded builder. Do not redo the inner lead's work.
-The background job owns supervision; use completion notifications or agent:job wait JOB_ID
-instead of repeated sleep/poll model turns. Resume the existing run when a real event needs
-attention. Checkpoints and usage are under its private run directory, not a new knowledge store.
-Use a 60-second blocking agent:job wait (or host completion notification); do not repeatedly
-poll its process with one-second write_stdin calls. Return to the owner for a saved question.
+Default to the persistent pair workflow: lead for intake/guidance/acceptance, A and B
+for sequential implementation/review in one worktree, and conditional Oracle advice.
+Do not redo the inner lead's work or relay routine pair handoffs. Native context is
+retained independently; focused deltas do not mean free/shared model context.
+The background job owns supervision. Prefer host completion events. Never repeatedly
+spend model turns polling a healthy job, including 30/60-second write_stdin waits.
+If the host has no wake-up integration, report the running job once and return; it
+continues independently. Reopen status for a real completion, question or failure.
+Do not claim an unattended host callback exists merely because the job runs in background.
 
 If the owner attaches a reference image, save the supplied image to a private local file and
 pass --reference-image <absolute-path> to agent:goal. PNG/JPEG/WebP are copied into the frozen
@@ -52,8 +53,16 @@ An ordinary feature can use interactive mode only when the owner explicitly requ
 
 Read status and evidence. A blocked, exhausted or failed run is not a completed task.
 Never silently complete a failed/exhausted harness task yourself or relabel it a successful trial.
-For ready-for-review, inspect candidate.patch, apply it exactly to the recorded task worktree,
-run current required checks there and use world-deliver-pr for authorized delivery.
-agent:task report and agent:deliver require the run's passing review/QA/verification for those
-exact contents and an independent review history. Product repairs must return through the run.
-Use the recorded delivery.base for a stacked PR. Stop at the open PR; never merge.
+For ready-for-review in pair mode, the task worktree already contains the edits. Inspect
+the current delta and saved evidence; do not reapply candidate.patch or repeat passing
+whole suites. agent:task report and agent:deliver check exact source, different native
+histories for the latest proposal/review, and independent lead acceptance. Commit the
+verified contents and use the recorded delivery.base for a stacked PR.
+
+For changed harness controls, incorporate the updated branch into the existing task
+branch and use agent:run recover OLD_RUN_ID --prepare-only, inspect, then resume the
+new ID. Legacy pending patches and native histories are imported explicitly. Old run
+evidence remains intact; remaining time/activations carry forward unless an extension
+is explicitly authorized. Never restart research or create a new task merely to reset limits.
+Optional early drafts remain incomplete; final delivery gates still apply. Stop at the
+ready PR and never merge.

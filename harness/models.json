@@ -1,8 +1,17 @@
 {
   "schemaVersion": 2,
-  "worker": { "model": "gpt-5.6-luna", "reasoningEffort": "xhigh" },
-  "lead": { "model": "gpt-5.6-sol", "reasoningEffort": "high" },
-  "oracle": { "model": "gpt-5.6-sol", "reasoningEffort": "xhigh" },
+  "worker": {
+    "model": "gpt-5.6-luna",
+    "reasoningEffort": "xhigh"
+  },
+  "lead": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "high"
+  },
+  "oracle": {
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "xhigh"
+  },
   "roles": {
     "intake": "lead",
     "product": "lead",
@@ -23,5 +32,16 @@
     "qa": "review",
     "oracle": "oracle"
   },
-  "fullRoles": { "implementer": "worker", "qa": "worker" }
+  "fullRoles": {
+    "implementer": "worker",
+    "qa": "worker"
+  },
+  "pairRoles": {
+    "intake": "lead",
+    "planner": "lead",
+    "lead": "lead",
+    "pair-a": "lead",
+    "pair-b": "lead",
+    "oracle": "oracle"
+  }
 }

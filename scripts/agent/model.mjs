@@ -33,6 +33,8 @@ export async function invokeModel(runDir, state, role) {
   const instructions = await readFile(join(control, 'harness/roles', role + '.md'), 'utf8');
   const packet = {
     task: state.task, taskProfile: state.taskProfile,
+    pair: state.pair ?? null, recovery: state.recovery ?? null,
+    reviewBase: state.reviewBase ?? state.workspaceBaseline,
     referenceImages: (state.referenceImages ?? []).map(ref => ({ ...ref,
       file: join(state.environment === 'harbor' ? control : '/control', ref.file) })),
     acceptance: state.requirements?.criteria ?? [], plan: state.plan?.summary ?? null,
@@ -41,10 +43,11 @@ export async function invokeModel(runDir, state, role) {
     feedback: state.feedback ?? null, previousFailure: state.reason ?? null,
     oracleQuestion: role === 'oracle' ? state.oracle?.pending : null,
     oracleAdvice: state.oracle?.lastAdvice ?? null,
-    verification: state.verification ? { status: state.verification.status, fingerprint: state.verification.fingerprint } : null,
+    verification: state.verification ? { status: state.verification.status, fingerprint: state.verification.fingerprint,
+      checks: state.verification.checks?.map(({ argv, status, code, elapsedMs }) => ({ argv, status, code, elapsedMs })) } : null,
   };
   const changes = contextDelta(session.resumed ? session.meta.context : null, packet);
-  const specialistInstructions = role === 'reviewer' && state.specialists?.length
+  const specialistInstructions = ['reviewer', 'pair-a', 'pair-b', 'lead'].includes(role) && state.specialists?.length
     ? '\n\n' + await readFile(join(control, 'harness/roles/specialists.md'), 'utf8') : '';
   const prompt = instructions + specialistInstructions + '\n\n' +
     'Current phase: ' + role + '. Its permissions and output schema replace those of your previous phase. ' +
@@ -68,7 +71,7 @@ export async function invokeModel(runDir, state, role) {
   saveSession(session);
   let firstPatch = (await readLedger(runDir)).some(r => r.type === 'candidate.changed'), lastSourceCheck = 0;
   const tracker = await startUsage(runDir, state, role, session, allowance, () => {
-    if (role !== 'implementer' || firstPatch || Date.now() - lastSourceCheck < 5000) return;
+    if (!['implementer', 'pair-a', 'pair-b'].includes(role) || firstPatch || Date.now() - lastSourceCheck < 5000) return;
     lastSourceCheck = Date.now();
     if (changedPaths(workspace, state.workspaceBaseline ?? 'HEAD').length) {
       firstPatch = true;
@@ -111,6 +114,7 @@ export async function invokeModel(runDir, state, role) {
     await tracker.finish({ code: null, interrupted: true });
     throw error;
   }
+  if (state.workflow === 'pair') state.remainingMs = Math.max(0, state.remainingMs - result.elapsedMs);
   const accounted = await tracker.finish(result);
   if (result.code !== 0) await checkpoint(result.timedOut ? 'timed-out' : 'interrupted');
   await flushTelemetry(runDir, state.telemetry);
@@ -132,10 +136,10 @@ export async function invokeModel(runDir, state, role) {
     threadId: session.persistent ? session.meta.threadId : null,
     turns: session.meta.turns, status: session.meta.status,
   };
-  state.turns.push({ role, ...selected, attemptId: tracker.attempt.attemptId, elapsedMs: result.elapsedMs,
+  state.turns.push({ role, activation: state.activations, ...selected, attemptId: tracker.attempt.attemptId, elapsedMs: result.elapsedMs,
     usage: accounted.usage, usageCoverage: accounted.coverage, costUsd: null, code: result.code,
     sessionGroup: session.group, sessionId: session.persistent ? session.meta.threadId : null,
-    resumed: session.resumed, candidateTree: afterTree });
+    resumed: session.resumed, changed: before !== after, candidateTree: afterTree });
   return { result, before, after, afterTree, output: messages.at(-1),
     sessionError: session.error ?? (session.persistent && !session.meta.threadId ? 'Codex did not report a resumable thread ID' : null) };
 }

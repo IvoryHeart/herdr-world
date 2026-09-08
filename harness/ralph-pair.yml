@@ -1,0 +1,111 @@
+# Runtime paths are resolved into an immutable per-run control copy by run.mjs.
+event_loop:
+  completion_promise: LOOP_COMPLETE
+  cancellation_promise: task.blocked
+  starting_event: plan.start
+  required_events: [candidate.verified]
+  enforce_hat_scope: true
+  max_iterations: 24
+  max_runtime_seconds: 3600
+  max_consecutive_failures: 3
+  persistent: false
+cli:
+  backend: custom
+  command: node
+  args: [scripts/agent/backend.mjs, coordinator]
+  prompt_mode: stdin
+  default_mode: autonomous
+# Ralph 2.10.1 routes custom `node` backend settings through its `claude` fallback
+# slot. This selects an inactivity timeout, not a model/provider. The adapter's
+# cumulative stage budgets and outer run deadline remain authoritative. The runner
+# materializes this fallback above the run ceiling so it cannot cut off productive work.
+adapters:
+  claude:
+    timeout: 3630
+core:
+  specs_dir: openspec/specs
+  scratchpad:
+    enabled: true
+    path: .ralph/agent/scratchpad.md
+  guardrails:
+    - Follow AGENTS.md and the authorized task; current contracts live in openspec.
+    - Do not push, merge, publish, contact live Herdr, or alter verification controls.
+    - Return the structured response requested by the adapter; it owns event emission.
+memories:
+  enabled: false
+tasks:
+  enabled: false
+features:
+  parallel: false
+  auto_merge: false
+  preflight:
+    enabled: false
+hooks:
+  enabled: true
+  events:
+    pre.iteration.start:
+      - name: pair-health
+        command: [node, scripts/agent/pair-health.mjs]
+        on_error: suspend
+        timeout_seconds: 30
+    pre.loop.complete:
+      - name: exact-candidate-gate
+        command: [node, scripts/agent/gate.mjs]
+        on_error: block
+        timeout_seconds: 30
+hats:
+  planner:
+    name: Lead brief
+    description: Establish acceptance and a concrete plan; consult skills as needed.
+    triggers: [plan.start, requirements.ready]
+    publishes: [pair.a, oracle.requested, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, planner]
+    instructions: Read harness/roles/planner.md. Hand the brief directly to the pair.
+  pair-a:
+    name: Partner A
+    description: Implement or review the other partner's latest edits in the shared task worktree.
+    triggers: [pair.a]
+    publishes: [pair.b, pair.agreed, lead.start, oracle.requested, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, pair-a]
+    instructions: Read harness/roles/pair-a.md.
+  pair-b:
+    name: Partner B
+    description: Review, optionally correct, and hand edits back to Partner A.
+    triggers: [pair.b]
+    publishes: [pair.a, pair.agreed, lead.start, oracle.requested, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, pair-b]
+    instructions: Read harness/roles/pair-b.md.
+  lead:
+    name: Lead guidance and acceptance
+    description: Resolve consequential questions or assess the verified candidate.
+    triggers: [lead.start]
+    publishes: [pair.a, pair.b, candidate.verified, oracle.requested, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, lead]
+    instructions: Read harness/roles/lead.md.
+  oracle:
+    name: Oracle
+    description: Investigate a specific technical uncertainty on request.
+    triggers: [oracle.requested]
+    publishes: [plan.start, pair.a, pair.b, lead.start, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, oracle]
+    max_activations: 2
+    instructions: Read harness/roles/oracle.md.
+  verifier:
+    name: Acceptance checks
+    description: Run required checks once in the prepared task worktree, without a model.
+    triggers: [pair.agreed]
+    publishes: [pair.a, pair.b, lead.start, task.blocked]
+    backend:
+      command: node
+      args: [scripts/agent/backend.mjs, verifier]
+    instructions: Deterministic adapter; no model call.

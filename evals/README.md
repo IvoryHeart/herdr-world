@@ -193,3 +193,21 @@ are pruned after grading; source, native histories, checks and logs remain.
 Do not claim a percentage saving from historical PR #79 versus a different task, from
 reference controls, or from one short persistence trial. Repeated matched task results
 are needed to evaluate the new default.
+
+## Pair workflow regression and next trial
+
+`npm run test:agent` includes pair handoff/self-review, stall escalation, budget separation,
+command receipt reuse, infrastructure classification, worktree exclusion and legacy recovery
+regressions. `node --test scripts/agent/container.test.mjs` exercises both the legacy control
+and the real pair supervisor using a fake Codex executable: native continuation, alternating
+edits/review, delivery evidence and prepare-only recovery. No paid model is involved.
+These are mechanics tests, not evidence that a model follows the brief well or saves quota.
+
+For the next authorized live comparison, include the entire task lineage and host coordinator:
+accepted outcome and interventions, elapsed time excluding owner waiting, model invocations,
+per-model/per-role input (including cached input), output, repeated command counts, command
+wall time and disk growth. Do not count timed-out turns wholesale as waste: some retained
+useful edits or a usable final response. Label polling-only activity separately. Preserve
+unmeasured cost as null. Keep raw transcripts, local identifiers and environment data private.
+The two-history/full fixtures remain historical comparisons; do not describe their results
+as validation of the new default pair policy.

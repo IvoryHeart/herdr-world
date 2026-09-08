@@ -24,6 +24,7 @@ export function telemetryArguments(config) {
     '-c', 'otel.metrics_exporter=' + (config ? '{ otlp-http = { endpoint = ' + JSON.stringify(config.workerEndpoint + '/v1/metrics') + ', protocol = "binary" } }' : '"none"')];
 }
 const safeFields = ['eventId', 'runId', 'attemptId', 'instanceId', 'activation', 'role', 'sessionGroup', 'model', 'reasoningEffort',
+  'command', 'retry', 'elapsedMs', 'timeoutMs', 'workspaceBytes', 'runBytes', 'phase', 'diskKind', 'level', 'availableBytes', 'availableInodes',
   'sessionId', 'turnId', 'responseId', 'stage', 'code', 'timedOut', 'interrupted', 'recovered', 'resumed', 'status'];
 export function otlpLogs(rows) {
   const value = v => typeof v === 'boolean' ? { boolValue: v } : typeof v === 'number' ? { intValue: String(v) } : { stringValue: String(v) };

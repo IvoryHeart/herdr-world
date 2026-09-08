@@ -12,6 +12,8 @@ export function budgetPolicy(seconds) {
   };
 }
 export function stageAllowance(state, role, attempts = [], now = Date.now()) {
+  if (state.workflow === 'pair') return { stage: role === 'verifier' ? 'verification' : role,
+    timeoutMs: role === 'verifier' ? state.commandTimeoutMs : Math.max(0, state.remainingMs), graceMs: 10000 };
   const stage = stages[role];
   if (!stage) throw new Error('Unknown budget stage for ' + role);
   // Old frozen runs keep their original execution policy.

@@ -11,7 +11,8 @@ Install with `npm ci --prefix harness`; use repository wrappers, not unpinned gl
   MIT. Owns event routing, bounded iterations and event-ledger continuation. The adapter resumes native role sessions.
 - [Codex CLI](https://developers.openai.com/codex/noninteractive) is the initial backend.
   Every live run records per-role model IDs and reasoning effort from models.json or
-  explicit overrides. The two-history default uses Sol high for lead/review and Sol xhigh for Oracle.
+  explicit overrides. The pair default uses Sol high for the lead and both partners, and Sol xhigh for Oracle.
+  Ralph hooks inspect health; the pair shares one task worktree. The two-history mode remains an explicit comparison.
   The explicit full workflow uses Luna xhigh for bounded implementation/QA.
 - [Harbor 0.22.0](https://github.com/laude-institute/harbor/tree/v0.22.0), Apache-2.0.
   Runs held-out tasks in isolated environments with independent grading.

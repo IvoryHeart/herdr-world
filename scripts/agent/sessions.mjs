@@ -9,7 +9,9 @@ export const sessionGroups = {
   'qa-planner': 'review', reviewer: 'review', qa: 'review', oracle: 'oracle',
 };
 export const fullSessionGroups = { ...sessionGroups, implementer: 'builder' };
+export const pairSessionGroups = { intake: 'lead', planner: 'lead', lead: 'lead', 'pair-a': 'pair-a', 'pair-b': 'pair-b', oracle: 'oracle' };
 export function validateSessionGroups(groups) {
+  if (groups && JSON.stringify(Object.entries(groups).sort()) === JSON.stringify(Object.entries(pairSessionGroups).sort())) return { ...groups };
   if (!groups || Object.keys(groups).length !== Object.keys(sessionGroups).length
     || Object.entries(sessionGroups).some(([role, group]) => role === 'implementer'
       ? !['lead', 'builder'].includes(groups[role]) : groups[role] !== group)) {

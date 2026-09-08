@@ -6,6 +6,7 @@ import { loadState, saveState, checkBudget, parseResponse, changedPaths, protect
 import { inContainer, copyCandidate, prepareDependencies } from './environment.mjs';
 import { acceptResponse, evidenceCurrent, failureEvent, initialEvent } from './workflow.mjs';
 import { invokeModel } from './model.mjs';
+import { verifyPair } from './pair-checks.mjs';
 import { recordHandover } from './sessions.mjs';
 import { stageAllowance } from './budgets.mjs';
 import { readLedger, attemptsFromLedger, recordEvent } from './usage.mjs';
@@ -20,6 +21,7 @@ async function inputPrompt() {
   return input;
 }
 async function emit(runDir, state, event, summary) {
+  if (state.workflow === 'pair' && event === 'task.blocked') state.resumeEvent = state.activeEvent ?? 'pair.a';
   state.lastEvent = event;
   if (event === 'task.blocked') { state.status = 'blocked'; state.reason = summary; }
   await saveState(runDir, state);
@@ -36,12 +38,19 @@ async function main() {
   const workspace = join(runDir, 'workspace');
   const control = join(runDir, 'control');
   await inputPrompt(); // Ralph owns events; the adapter supplies the bounded role context.
+  if (role === 'coordinator' && state.status === 'ready-for-review') return emit(runDir, state, 'LOOP_COMPLETE', 'Candidate accepted; completion hook checks current evidence.');
   checkBudget(state);
+  state.activeEvent = state.lastEvent;
+  if (state.workflow === 'pair') state.resumeEvent = state.activeEvent;
   state.activations += 1;
   await saveState(runDir, state);
   if (role === 'coordinator') {
     if (state.status === 'ready-for-review') return emit(runDir, state, 'LOOP_COMPLETE', 'Candidate has current review and verification.');
     return emit(runDir, state, state.lastEvent ?? initialEvent(state.taskProfile), 'Continue the authorized task through the configured roles.');
+  }
+  if (state.workflow === 'pair' && role === 'verifier') {
+    const next = await verifyPair(runDir, state);
+    return emit(runDir, state, next.event, next.summary);
   }
   const allowance = stageAllowance(state, role, attemptsFromLedger(await readLedger(runDir)));
   if (allowance.timeoutMs < 1000) return emit(runDir, state, 'task.blocked', allowance.stage +
@@ -115,6 +124,7 @@ async function main() {
     await saveState(runDir, state); throw error;
   }
   state.reason = null;
+  if (state.workflow === 'pair') state.consecutiveFailures = 0;
   if (['review.rejected', 'qa.failed'].includes(response.event)) state.feedback = { role, ...response };
   state.turns.at(-1).event = response.event;
   await recordHandover(runDir, state, role, response, afterTree);

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { primaryCheckout, errorExit } from './lib.mjs';
-import { recoverUsage, readLedger } from './usage.mjs';
+import { recoverUsage, readLedger, summarizeUsage } from './usage.mjs';
 import { flushTelemetry } from './telemetry.mjs';
 
 export function groupUsage(attempts, key) {
@@ -54,7 +54,7 @@ export async function lokiResponses(endpoint, runId, start, end) {
   throw new Error('Loki pagination limit reached; report is incomplete');
 }
 async function main() {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { loki: { type: 'string' }, 'run-dir': { type: 'string' } } });
+  const { values, positionals } = parseArgs({ allowPositionals: true, options: { lineage: { type: 'boolean', default: false }, loki: { type: 'string' }, 'run-dir': { type: 'string' } } });
   if (!values['run-dir'] && !/^[a-f0-9-]{36}$/.test(positionals[0] ?? '')) throw new Error('Usage: agent:metrics RUN_ID [--loki HTTP_ORIGIN]');
   const directory = values['run-dir'] ?? join(primaryCheckout(), '.agents/runs', positionals[0]);
   try { await access(join(directory, 'supervisor.lock')); throw new Error('Wait for the supervisor to stop before recovery/export'); }
@@ -64,6 +64,21 @@ async function main() {
   const exported = await flushTelemetry(directory, state.telemetry);
   const report = { runId: state.id, status: state.status, usage: summary.attempts.length ? summary.usage : null, lowerBound: summary.lowerBound,
     byModel: groupUsage(summary.attempts, 'model'), byRole: groupUsage(summary.attempts, 'role'), export: exported, costUsd: null };
+  const ledger = await readLedger(directory);
+  report.checks = ledger.filter(row => row.type === 'check.finished').map(({ command, status, elapsedMs, timedOut }) => ({ command, status, elapsedMs, timedOut }));
+  report.storage = ledger.filter(row => row.type === 'storage.measured').map(({ phase, workspaceBytes, runBytes }) => ({ phase, workspaceBytes, runBytes }));
+  if (values.lineage) {
+    report.lineage = [];
+    for (const id of [...new Set(state.recovery?.lineage ?? [])]) {
+      if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid recorded lineage ID');
+      const prior = await readLedger(join(directory, '..', id));
+      const measured = summarizeUsage(prior);
+      report.lineage.push({ runId: id, usage: prior.length ? measured.usage : null, lowerBound: !prior.length || measured.lowerBound });
+    }
+    const measured = [report.usage, ...report.lineage.map(row => row.usage)].filter(Boolean);
+    report.recordedLineageUsage = Object.fromEntries(Object.keys(report.usage ?? {}).map(key => [key, measured.reduce((n, row) => n + (row[key] ?? 0), 0)]));
+    report.lineageNote = 'Includes recorded predecessor runs only, not unlinked earlier attempts or the host coordinator. Missing records remain unavailable.';
+  }
   if (values.loki) {
     const local = (await readLedger(directory)).filter(r => r.type === 'response.usage');
     report.reconciliation = reconcileResponses(local, await lokiResponses(values.loki, state.id, state.startedAt, new Date().toISOString()));
