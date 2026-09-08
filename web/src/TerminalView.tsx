@@ -1535,7 +1535,7 @@ function MobileSelectionActions({
 }
 
 const DIRECT_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
-  ["arrow-left", "arrow-up", "arrow-down", "arrow-right", "backspace"].includes(key.id),
+  ["tab", "backspace", "arrow-left", "arrow-up", "arrow-down", "arrow-right"].includes(key.id),
 );
 const MORE_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
   ["home", "end", "delete", "page-up", "page-down"].includes(key.id),
@@ -1860,10 +1860,9 @@ export function TerminalCommandControls({
         </div>
       </div>
 
-      {mobileControls ? (
+      {mobileControls && moreKeysOpen ? (
         <div className="term-key-direct-row" role="group" aria-label="Direct terminal keys">
-          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, true))}
-
+          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, key.id !== "tab"))}
         </div>
       ) : null}
 
@@ -2035,7 +2034,7 @@ const QUICK_TERMINAL_KEYS: {
   modifiers: MobileTerminalModifier[];
   label: string;
 }[] = [
-  ...MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) => ["escape", "tab"].includes(key.id))
+  ...MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) => key.id === "escape")
     .map((key) => ({ key, modifiers: [], label: key.label })),
   ...["c", "d"].map((value) => ({
     key: mobileTerminalPrintableKey(value), modifiers: ["ctrl" as const], label: `C-${value}`,

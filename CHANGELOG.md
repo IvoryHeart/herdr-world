@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Keep mobile arrows and Backspace inside the expanded keyboard, with Tab beside Backspace
+  instead of in the always-visible quick-key row.
+
 - Use the neutral toolbar keyboard icon to expand More keys, with the highlighted Compose
   toggle inside; collapsing the expanded keys cancels any pending shortcut.
 

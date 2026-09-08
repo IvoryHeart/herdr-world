@@ -2113,6 +2113,10 @@ button {
   gap: var(--mobile-control-gap);
 }
 
+.term-key-direct-row {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .term-key-more-row {
   grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
 }

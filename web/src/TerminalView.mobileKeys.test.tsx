@@ -68,6 +68,7 @@ it("keeps Backspace repeating while screen-reader output rerenders the terminal"
   ));
   const socket = TestSocket.instances.at(-1)!;
   await act(async () => socket.dispatchEvent(new Event("open")));
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Show more keys"]')!.click());
   const button = container.querySelector<HTMLButtonElement>('[aria-label="Send Backspace"]')!;
   expect(button.disabled).toBe(false);
   button.setPointerCapture = vi.fn();
