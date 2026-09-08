@@ -66,6 +66,7 @@ import { trapFocusWithin, useFocusReturn } from "./overlayFocus";
 type Props = {
   showMobileTerminalSettings: boolean;
   showRemoteAccess: boolean;
+  initialConnectionCreation?: boolean;
   onOpenWorldSettings: () => void;
   notesEnabled: boolean;
   onNotesEnabled: (enabled: boolean) => void;
@@ -126,6 +127,7 @@ const relativeHttpUrl = (path: string) => path;
 export function BackendSettingsDialog({
   showMobileTerminalSettings,
   showRemoteAccess,
+  initialConnectionCreation = false,
   onOpenWorldSettings,
   notesEnabled,
   onNotesEnabled,
@@ -172,9 +174,12 @@ export function BackendSettingsDialog({
   const localHttpUrl = bridge.getRuntime(SAME_ORIGIN_BRIDGE_ID)?.httpUrl ?? relativeHttpUrl;
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<FormState>(() => newBackendForm(bridge.store.backends));
   const [selectionMode, setSelectionMode] = useState<SelectionMode>(
-    initialSelectionMode(bridge.lastSelectedBridgeId, bridge.sameOriginAvailable),
+    initialConnectionCreation
+      ? "new"
+      : initialSelectionMode(bridge.lastSelectedBridgeId, bridge.sameOriginAvailable),
   );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -190,8 +195,8 @@ export function BackendSettingsDialog({
   const sameOriginEnabled = bridge.store.enabledBridgeIds.includes(SAME_ORIGIN_BRIDGE_ID);
 
   useEffect(() => {
-    closeButtonRef.current?.focus();
-  }, []);
+    (initialConnectionCreation ? addressInputRef.current : closeButtonRef.current)?.focus();
+  }, [initialConnectionCreation]);
 
   useEffect(() => {
     if (activeArea === "mobile" && !showMobileTerminalSettings) {
@@ -522,6 +527,7 @@ export function BackendSettingsDialog({
                             <label className="field-label">
                               <span>Herdr address</span>
                               <input
+                                ref={addressInputRef}
                                 className="field"
                                 value={form.baseUrl}
                                 placeholder="http://herdr.example:8787"

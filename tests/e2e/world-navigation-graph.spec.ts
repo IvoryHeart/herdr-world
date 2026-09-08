@@ -6,6 +6,7 @@ import {
   waitForStableConversationRect,
 } from "./graphConnector";
 import { hostStore } from "./hostStore";
+import { openView, selectView, viewSelect } from "./sidebarControls";
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -25,14 +26,9 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await page.goto("/");
   await waitForOffice(page);
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("group", { name: "Primary navigation" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByRole("button", { name: "Choose World theme" })).toHaveAttribute(
-    "aria-expanded", "false",
-  );
+  await expect(page.locator("[data-toolbar-row='view-hosts']")).toBeVisible();
+  await expect(viewSelect(page)).toHaveValue("office");
+  await expect(viewSelect(page).locator("option")).toHaveCount(3);
   const initialCoreSockets = coreSockets(sockets).length;
 
   await selectTheme(page, "Graph");
@@ -41,7 +37,7 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await expect(page.getByRole("complementary", { name: "Graph semantic view" })).toBeVisible();
   expect(coreSockets(sockets)).toHaveLength(initialCoreSockets);
 
-  await page.getByRole("button", { name: "Spaces", exact: true }).click();
+  await selectView(page, "Spaces");
   await expect(page).toHaveURL(/\/spaces$/);
   await expect(page.locator("canvas[data-graph-canvas='true']")).toHaveCount(0);
   expect(coreSockets(sockets)).toHaveLength(initialCoreSockets);
@@ -71,10 +67,7 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await expect(page.locator("canvas[data-office-canvas='true']")).toHaveCount(0);
   await page.reload();
   await expect(page).toHaveURL(/\/spaces$/);
-  await expect(page.getByRole("button", { name: "Spaces", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(viewSelect(page)).toHaveValue("spaces");
 });
 
 test("keeps a compact theme change to one traversable history entry", async ({ page }) => {
@@ -96,10 +89,7 @@ test("keeps a compact theme change to one traversable history entry", async ({ p
     await waitForOffice(page);
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator(".app")).toHaveAttribute("data-detail", "false");
-    await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(viewSelect(page)).toHaveValue("office");
     expect(await page.evaluate(() => window.history.length)).toBe(beforeThemeChange + 1);
 
     await page.goForward();
@@ -321,7 +311,7 @@ test("fully disposes each Graph renderer and remains usable at compact width", a
   }
 
   await page.getByRole("button", { name: "Back to Herdr sidebar" }).click();
-  await page.getByRole("button", { name: "Spaces", exact: true }).click();
+  await selectView(page, "Spaces");
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.activeRenderers ?? -1,
   )).toBe(0);
@@ -423,11 +413,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
 });
 
 async function selectTheme(page: Page, label: "Office" | "Graph") {
-  const trigger = page.locator(".world-theme-menu-trigger");
-  await trigger.click();
-  await page.getByRole("menu", { name: "World themes" })
-    .getByRole("menuitemradio", { name: label, exact: true })
-    .click();
+  await openView(page, label);
 }
 
 async function waitForOffice(page: Page) {

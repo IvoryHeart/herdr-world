@@ -1,3 +1,4 @@
+import { selectAllHosts } from "./sidebarControls";
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { hostStore } from "./hostStore";
@@ -26,7 +27,7 @@ test("sustains the bounded 129-room fixture within the frame and memory budgets"
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/world");
   await waitForOffice(page);
-  await page.getByRole("group", { name: "Host" }).getByRole("button", { name: "All", exact: true }).click();
+  await selectAllHosts(page);
   await expect(page.locator(".space-row")).toHaveCount(0);
   await expect(page.getByText("No spaces yet", { exact: true })).toBeVisible();
 

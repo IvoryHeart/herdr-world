@@ -40,6 +40,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MutableRefObject,
   PointerEvent as ReactPointerEvent,
+  RefObject,
   ReactNode,
   SetStateAction,
 } from "react";
@@ -169,7 +170,7 @@ import {
 import { terminalSessionDescriptor } from "./terminalSessions";
 import { coreSurfaceRegistry } from "./surfaceRegistry";
 import { SurfaceSlotBoundary } from "./SurfaceSlotBoundary";
-import { WorldThemeSelector } from "./WorldThemeSelector";
+import { SidebarToolbar } from "./SidebarToolbar";
 import {
   officeAgentHandoffRequest,
   officeRoomHandoffRequest,
@@ -202,7 +203,6 @@ import {
   admitCurrentWorldTerminal,
 } from "./world/worldNodeAdmission";
 import type { WorldThemeContext } from "./world/worldThemeContext";
-import { worldThemeRegistry } from "./world/worldThemeRegistry";
 import type { WorldThemeDefinition } from "./world/worldThemeRegistry";
 import {
   DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
@@ -1171,21 +1171,29 @@ export function App() {
   const [noteDeleteTarget, setNoteDeleteTarget] = useState<ScopedNoteEntry | null>(null);
   const [deletingNote, setDeletingNote] = useState(false);
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
+  const [backendSettingsInitialConnection, setBackendSettingsInitialConnection] = useState(false);
   const backendSettingsReturnFocusRef = useRef<HTMLElement | null>(null);
-  const openBackendSettings = useCallback(() => {
-    backendSettingsReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const viewSelectRef = useRef<HTMLSelectElement | null>(null);
+  const compactViewFocusRef = useRef(false);
+  const openBackendSettings = useCallback((
+    returnFocusTarget?: HTMLElement | null,
+    initialConnection = false,
+  ) => {
+    backendSettingsReturnFocusRef.current = returnFocusTarget ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setBackendSettingsInitialConnection(initialConnection);
     setBackendSettingsOpen(true);
   }, []);
   const closeBackendSettings = useCallback(() => {
     setBackendSettingsOpen(false);
-    window.requestAnimationFrame(() => {
-      const target = backendSettingsReturnFocusRef.current;
-      backendSettingsReturnFocusRef.current = null;
-      if (target?.isConnected) {
-        target.focus();
-      }
-    });
+    setBackendSettingsInitialConnection(false);
+    const target = backendSettingsReturnFocusRef.current;
+    backendSettingsReturnFocusRef.current = null;
+    if (target?.isConnected && !target.closest("[inert]")) {
+      target.focus({ preventScroll: true });
+    } else {
+      document.querySelector<HTMLElement>('.stage:not([inert]) [aria-label="Back to Herdr sidebar"]')?.focus({ preventScroll: true });
+    }
   }, []);
   const prepareWorldSettingsOpen = useCallback(() => {
     setBackendSettingsOpen(false);
@@ -1243,6 +1251,8 @@ export function App() {
   const [refitToken, setRefitToken] = useState(0);
   const [terminalFocusToken, setTerminalFocusToken] = useState(0);
   const isCompactLayout = useIsCompactLayout();
+  const previousSidebarNavigationRef = useRef({ compact: isCompactLayout, detail: showDetail,
+    surface: activeSurface.id, theme: activeWorldTheme.id });
   const isTouchInput = useIsTouchInput();
   const showMobileKeyboardHideRefit = isNativeAndroid();
   const spacesSnapshotCacheRef = useRef<
@@ -2473,6 +2483,34 @@ export function App() {
   }, [showDetail]);
 
   useEffect(() => {
+    const previous = previousSidebarNavigationRef.current;
+    previousSidebarNavigationRef.current = { compact: isCompactLayout, detail: showDetail,
+      surface: activeSurface.id, theme: activeWorldTheme.id };
+    if (!isCompactLayout || document.querySelector('[aria-modal="true"]')) return;
+    if (!showDetail && (previous.detail || !previous.compact)) {
+      viewSelectRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!showDetail || activeSurface.id !== "world" ||
+      (previous.compact && (!compactViewFocusRef.current ||
+        (previous.detail && previous.surface === activeSurface.id && previous.theme === activeWorldTheme.id)))) return;
+    const stage = document.querySelector(".stage");
+    if (!stage) return;
+    // A newly selected lazy surface may mount after the navigation render.
+    const observer = new MutationObserver(focusBack);
+    function focusBack() {
+      const target = stage?.querySelector<HTMLElement>('[aria-label="Back to Herdr sidebar"]');
+      if (target && !target.closest("[inert]") && !document.querySelector('[aria-modal="true"]')) {
+        target.focus({ preventScroll: true });
+        if (!target.closest(".surface-loading")) observer.disconnect();
+      }
+    }
+    observer.observe(stage, { childList: true, subtree: true });
+    focusBack();
+    return () => observer.disconnect();
+  }, [activeSurface.id, activeWorldTheme.id, isCompactLayout, showDetail]);
+
+  useEffect(() => {
     if (!selectedRuntime) {
       setSelectedPaneRefState(null);
       setActiveWorkspaceRefState(null);
@@ -3207,6 +3245,7 @@ export function App() {
   };
 
   const openPane = (bridgeId: BridgeId, pane: PaneInfo) => {
+    compactViewFocusRef.current = false;
     const runtime = bridge.getRuntime(bridgeId);
     if (!runtime) {
       return;
@@ -4779,11 +4818,15 @@ export function App() {
     onCloseRoom: worldRoomActions.openRoomClose,
   };
   const worldStage = WorldSurface ? (
-    <SurfaceSlotBoundary label="World" resetKey={`${activeSurface.id}:${activeWorldTheme.id}`}>
+    <SurfaceSlotBoundary label="World" resetKey={`${activeSurface.id}:${activeWorldTheme.id}`}
+      recoveryLabel={isCompactLayout ? "Back to Herdr sidebar" : undefined}
+      onRecover={isCompactLayout ? closeMobileDetail : undefined}>
       <Suspense
         fallback={
           <div className="surface-loading surface-loading-stage" role="status">
             Loading {activeWorldTheme.label}…
+            {isCompactLayout ? <button className="btn" type="button" aria-label="Back to Herdr sidebar"
+              onClick={closeMobileDetail}>Back to Herdr sidebar</button> : null}
           </div>
         }
       >
@@ -4828,6 +4871,7 @@ export function App() {
       <aside
         className="sidebar"
         aria-label="Switcher"
+        inert={isCompactLayout && showDetail ? true : undefined}
         data-space-reorder={spaceReorderMode ? "true" : undefined}
         onClickCapture={(event) => {
           if (
@@ -4874,23 +4918,20 @@ export function App() {
           bridgeViews={bridgeViews}
           primaryView={activeSurface.id}
           activeWorldTheme={activeWorldTheme}
-          worldThemes={worldThemeRegistry.list()}
-          onPrimaryView={(surfaceId) => {
-            worldSelectionSeedPendingRef.current = surfaceId === "world";
-            navigatePrimaryView(
-              surfaceId,
-              surfaceId === "world" && isCompactLayout
-                ? withMobileDetailHistoryState(window.history.state)
-                : undefined,
-            );
-            if (surfaceId === "world" && isCompactLayout) {
-              openMobileDetail();
+          onView={(view) => {
+            const currentView = activeSurface.id === "spaces" ? "spaces" : activeWorldTheme.id;
+            if (view === currentView) {
+              return;
             }
-          }}
-          onWorldTheme={(themeId) => {
+            compactViewFocusRef.current = true;
+            if (view === "spaces") {
+              worldSelectionSeedPendingRef.current = false;
+              navigatePrimaryView("spaces");
+              return;
+            }
             worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
             navigateWorldTheme(
-              themeId,
+              view,
               isCompactLayout
                 ? withMobileDetailHistoryState(window.history.state)
                 : undefined,
@@ -4899,6 +4940,11 @@ export function App() {
               openMobileDetail();
             }
           }}
+          onOpenCurrentView={isCompactLayout && activeSurface.id === "world" ? () => {
+            compactViewFocusRef.current = true;
+            openMobileDetail();
+          } : undefined}
+          viewRef={viewSelectRef}
           selectedBridgeId={selectedRuntime?.id ?? null}
           hostScope={hostScope}
           snapshot={snapshot}
@@ -4967,7 +5013,8 @@ export function App() {
               void refreshBridgeSnapshot(runtime, true);
             }
           }}
-          onBackendSettings={openBackendSettings}
+          onBackendSettings={() => openBackendSettings()}
+          onAddHost={(target) => openBackendSettings(target, true)}
           createSpaceEnabled={createSpaceSupported}
           createTabEnabled={createTabSupported}
           onCreateSpace={() =>
@@ -5053,7 +5100,10 @@ export function App() {
         />
       </aside>
 
-      <HerdrMainStage label={activeSurface.id === "world" ? `World ${activeWorldTheme.label}` : "Terminal"}>
+      <HerdrMainStage
+        label={activeSurface.id === "world" ? `World ${activeWorldTheme.label}` : "Terminal"}
+        inert={isCompactLayout && !showDetail ? true : undefined}
+      >
         {activeSurface.id === "world" ? worldStage : (
           <>
         <TabBar
@@ -5464,6 +5514,7 @@ export function App() {
         <BackendSettingsDialog
           showMobileTerminalSettings={isTouchInput}
           showRemoteAccess={!isNativeAndroid()}
+          initialConnectionCreation={backendSettingsInitialConnection}
           onOpenWorldSettings={worldSettingsController.open}
           notesEnabled={notesEnabled}
           onNotesEnabled={setNotesEnabled}
@@ -6821,9 +6872,9 @@ function Switcher({
   bridgeViews,
   primaryView,
   activeWorldTheme,
-  worldThemes,
-  onPrimaryView,
-  onWorldTheme,
+  onView,
+  viewRef,
+  onOpenCurrentView,
   selectedBridgeId,
   hostScope,
   snapshot,
@@ -6879,6 +6930,7 @@ function Switcher({
   onRefresh,
   onRefreshBridge,
   onBackendSettings,
+  onAddHost,
   createSpaceEnabled,
   createTabEnabled,
   onCreateSpace,
@@ -6888,9 +6940,9 @@ function Switcher({
   bridgeViews: BridgeConnectionView[];
   primaryView: string;
   activeWorldTheme: WorldThemeDefinition;
-  worldThemes: readonly WorldThemeDefinition[];
-  onPrimaryView: (surfaceId: string) => void;
-  onWorldTheme: (themeId: string) => void;
+  onView: (view: "spaces" | "office" | "tree" | "graph") => void;
+  viewRef: RefObject<HTMLSelectElement | null>;
+  onOpenCurrentView?: () => void;
   selectedBridgeId: BridgeId | null;
   hostScope: HostScope;
   snapshot: Snapshot | null;
@@ -6951,6 +7003,7 @@ function Switcher({
   onRefresh: () => void;
   onRefreshBridge: (bridgeId: BridgeId) => void;
   onBackendSettings: () => void;
+  onAddHost: (trigger: HTMLElement) => void;
   createSpaceEnabled: boolean;
   createTabEnabled: boolean;
   onCreateSpace: () => void;
@@ -8034,106 +8087,24 @@ function Switcher({
         </button>
       </header>
 
-      <div className="primary-view-switch" role="group" aria-label="Primary navigation">
-        <button
-          type="button"
-          data-on={primaryView === "spaces"}
-          aria-pressed={primaryView === "spaces"}
-          onClick={() => onPrimaryView("spaces")}
-        >
-          <SquareTerminal size={14} aria-hidden="true" />
-          Spaces
-        </button>
-        <WorldThemeSelector
-          themes={worldThemes}
-          activeTheme={activeWorldTheme}
-          worldActive={primaryView === "world"}
-          onActivate={() => onPrimaryView("world")}
-          onSelect={onWorldTheme}
-        />
-      </div>
-
-      <div className="sidebar-scope host-scope" role="group" aria-label="Host">
-        {bridgeViews.map((view) => (
-          <button
-            key={view.runtime.id}
-            className="bridge-chip"
-            type="button"
-            style={{ "--bridge-color": view.runtime.color } as CSSProperties}
-            data-on={hostScope === "selected" && selectedBridgeId === view.runtime.id}
-            data-connection={view.connectionState}
-            aria-pressed={hostScope === "selected" && selectedBridgeId === view.runtime.id}
-            aria-label={`${view.runtime.label}, ${view.connectionState}`}
-            title={`${view.runtime.label}: ${view.connectionState}`}
-            onClick={() => {
-              onSelectBridge(view.runtime.id);
-              onHostScope("selected");
-            }}
-          >
-            <span className="bridge-chip-dot" aria-hidden="true" />
-            <span className="bridge-chip-label">{view.runtime.label}</span>
-          </button>
-        ))}
-        {bridgeViews.length > 1 ? (
-          <button
-            className="bridge-chip"
-            type="button"
-            data-on={hostScope === "all"}
-            aria-pressed={hostScope === "all"}
-            onClick={() => onHostScope("all")}
-          >
-            <span className="bridge-chip-label">All</span>
-          </button>
-        ) : null}
-      </div>
-
-      <>
-      <div className="sidebar-mode" role="group" aria-label="Sidebar view">
-        <button
-          type="button"
-          data-on={sidebarView === "agents"}
-          aria-pressed={sidebarView === "agents"}
-          onClick={() => onSidebarView("agents")}
-        >
-          Agents
-        </button>
-        <button
-          type="button"
-          data-on={sidebarView === "tabs"}
-          aria-pressed={sidebarView === "tabs"}
-          onClick={() => onSidebarView("tabs")}
-        >
-          Tabs
-        </button>
-        {notesEnabled ? (
-          <button
-            type="button"
-            data-on={sidebarView === "notes"}
-            aria-pressed={sidebarView === "notes"}
-            onClick={() => onSidebarView("notes")}
-          >
-            Notes
-          </button>
-        ) : null}
-      </div>
-      <div className="sidebar-scope" role="group" aria-label="Sidebar scope">
-        <button
-          type="button"
-          data-on={scope === "space"}
-          aria-pressed={scope === "space"}
-          onClick={() => onScope("space")}
-        >
-          Space
-        </button>
-        <button
-          type="button"
-          data-on={scope === "all"}
-          aria-pressed={scope === "all"}
-          onClick={() => onScope("all")}
-        >
-          All
-        </button>
-      </div>
+      <SidebarToolbar
+        bridgeViews={bridgeViews}
+        primaryView={primaryView}
+        activeWorldTheme={activeWorldTheme}
+        scope={scope}
+        sidebarView={sidebarView}
+        notesEnabled={notesEnabled}
+        selectedBridgeId={selectedBridgeId}
+        hostScope={hostScope}
+        onPrimaryView={onView}
+        onHostScope={onHostScope}
+        onScope={onScope}
+        onSidebarView={onSidebarView}
+        onSelectBridge={onSelectBridge}
+        onAddHost={onAddHost}
+        viewRef={viewRef}
+        onOpenCurrentView={onOpenCurrentView}
+      />
 
       <div className="list" ref={spaceListRef}>
         {!hasListSnapshot ? (
@@ -8444,7 +8415,6 @@ function Switcher({
           onClose={() => setSpaceOptionsMenu(null)}
         />
       ) : null}
-      </>
     </>
   );
 }

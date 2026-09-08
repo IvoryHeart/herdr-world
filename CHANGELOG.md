@@ -43,6 +43,11 @@ Web's own release history remains in its upstream changelog.
 
 - Simplified the experimental agent harness to a shared-worktree pair with retained histories, lead acceptance, separate command deadlines, resumable check receipts and explicit stopped-task recovery, five-minute deterministic progress recaps, consolidated guidance and checksum-verified cached tool downloads with bounded transient retries. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
 
+- Compacted sidebar navigation into View and Hosts pickers with the list mode and space filter
+  together below. Added a direct Add Host shortcut to Network settings, while preserving the
+  Settings cog, host health visibility, keyboard navigation, and compact view return
+  ([#79](https://github.com/IvoryHeart/herdr-world/pull/79)).
+
 ### Fixed
 
 - Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under

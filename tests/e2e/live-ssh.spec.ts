@@ -1,3 +1,4 @@
+import { expectHostState } from "./sidebarControls";
 import { expect, test } from "@playwright/test";
 
 const bridgeA = process.env.HERDR_WEB_LIVE_SSH_BRIDGE_A;
@@ -29,9 +30,7 @@ test("one browser controls two operator-forwarded Herdr bridges", async ({
   );
 
   await page.goto(new URL("/spaces", bridgeA).toString());
-  await expect(
-    page.getByRole("button", { name: "localhost, compatible" }),
-  ).toBeVisible();
+  await expectHostState(page, "localhost", "compatible");
   await expect(
     page.getByRole("button", { name: "SSH Host B, compatible" }),
   ).toBeVisible();

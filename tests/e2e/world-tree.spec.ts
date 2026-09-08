@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { hostStore } from "./hostStore";
+import { selectView } from "./sidebarControls";
 
 test.beforeEach(async ({ page, request }) => {
   await request.post("http://127.0.0.1:4173/__fixture/reset");
@@ -10,6 +11,22 @@ test.beforeEach(async ({ page, request }) => {
   }, hostStore());
 });
 
+test("keeps all shared views and Tree in canonical browser history", async ({ page }) => {
+  await page.goto("/?theme=tree");
+  const viewPicker = page.getByRole("combobox", { name: "View", exact: true });
+  await expect(viewPicker).toHaveValue("tree");
+  await expect(viewPicker.locator("option")).toHaveCount(4);
+  await expect(viewPicker.locator("option").allTextContents()).resolves.toEqual([
+    "Office", "Tree", "Graph", "Spaces",
+  ]);
+
+  await viewPicker.selectOption("graph");
+  await expect(page).toHaveURL(/\/?theme=graph$/);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/?theme=tree$/);
+  await expect(viewPicker).toHaveValue("tree");
+});
+
 test("routes to the accessible Tree and keeps selection separate from activation", async ({ page }) => {
   const terminalSockets: string[] = [];
   page.on("websocket", (socket) => {
@@ -17,11 +34,7 @@ test("routes to the accessible Tree and keeps selection separate from activation
   });
   await page.goto("/?theme=tree");
   await expect(page).toHaveURL(/\/?theme=tree$/);
-  await expect(page.getByRole("button", { name: "Tree", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Choose World theme" }).click();
-  await expect(page.getByRole("menuitemradio")).toHaveCount(3);
-  await expect(page.getByRole("menuitemradio", { name: "Tree", exact: true })).toHaveCount(1);
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("combobox", { name: "View", exact: true })).toHaveValue("tree");
 
   const search = page.getByRole("searchbox", { name: "Search Tree" });
   await expect(page.locator(".tree-map")).toHaveAttribute("aria-hidden", "true");
@@ -39,22 +52,16 @@ test("routes to the accessible Tree and keeps selection separate from activation
   const conversation = page.locator("[data-world-conversation='open']").filter({ hasText: "Codex A" });
   await expect(conversation).toBeVisible();
   await expect.poll(() => terminalSockets.length).toBe(1);
-  await selectTheme(page, "Graph");
+  await selectView(page, "Graph");
   await expect(page.locator("canvas[data-graph-canvas='true']")).toHaveCount(1);
   await expect(conversation).toBeVisible();
-  await selectTheme(page, "Tree");
+  await selectView(page, "Tree");
   await expect(conversation).toBeVisible();
   expect(terminalSockets).toHaveLength(1);
 
   await search.fill("not present anywhere");
   await expect(semantic.getByText("No Tree matches", { exact: true })).toBeVisible();
 });
-
-async function selectTheme(page: import("@playwright/test").Page, label: "Tree" | "Graph") {
-  await page.getByRole("button", { name: "Choose World theme" }).click();
-  await page.getByRole("menu", { name: "World themes" })
-    .getByRole("menuitemradio", { name: label, exact: true }).click();
-}
 
 test("keeps Tree camera/collapse isolated and exposes the semantic hierarchy at compact width", async ({ page }) => {
   await page.addInitScript(() => {
@@ -145,8 +152,8 @@ test("bounds and restores camera changes made through every viewport handler", a
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("herdr.world.graph-view.v2") ?? "null")))
     .toEqual({ marker: "unchanged" });
 
-  await selectTheme(page, "Graph");
-  await selectTheme(page, "Tree");
+  await selectView(page, "Graph");
+  await selectView(page, "Tree");
   expect(await treeCamera(page)).toEqual(finalCamera);
   const restoredPage = await page.context().newPage();
   await restoredPage.setViewportSize({ width: 1_200, height: 800 });
