@@ -394,7 +394,7 @@ describe("TerminalCommandControls", () => {
       "Compose terminal key",
       "Focus terminal keyboard",
     ]);
-    expect(actions.textContent?.trim()).toBe("Compose");
+    expect(actions.textContent?.trim()).toBe("");
     expect(container.querySelector("form")?.querySelectorAll("button")).toHaveLength(1);
     const shortcuts = container.querySelector('[aria-label="Terminal quick keys"]');
     if (!(shortcuts instanceof HTMLElement)) {

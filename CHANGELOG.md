@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Keep the mobile Compose action icon-only, with an active outline and a visible
+  composing-mode indicator in the shortcut panel.
+
 - Share mobile terminal keys between direct input and Compose mode, with explicit Send and
   Cancel actions; rename Nav to More keys and remove the duplicate composer key grid.
 

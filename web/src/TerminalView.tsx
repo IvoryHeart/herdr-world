@@ -6,6 +6,7 @@ import {
   Keyboard,
   Link,
   Paperclip,
+  Plus,
   Send,
   SquareTerminal,
   TextCursorInput,
@@ -1829,7 +1830,7 @@ export function TerminalCommandControls({
           </button>
           {stageCommandButton}
           <button
-            className="term-key term-key-compose-action"
+            className="term-key term-key-icon term-key-compose-action"
             type="button"
             aria-label={composerOpen ? "Close terminal key composer" : "Compose terminal key"}
             aria-expanded={composerOpen}
@@ -1838,8 +1839,10 @@ export function TerminalCommandControls({
             disabled={disabled && !composerOpen}
             onClick={toggleMobileTerminalComposer}
           >
-            <Keyboard size={15} aria-hidden="true" />
-            Compose
+            <span className="term-key-compose-icon" aria-hidden="true">
+              <Keyboard size={15} />
+              <Plus className="term-key-compose-plus" size={8} />
+            </span>
           </button>
           <button
             className="term-key term-key-icon"
