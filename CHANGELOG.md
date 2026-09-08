@@ -61,6 +61,10 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Updated transitive XML parsers and the development YAML parser to patched
+  versions, restoring the dependency security audit.
+  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+
 - Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under
   advanced client-origin settings, while retaining explicit policy for pages served elsewhere.
   [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
