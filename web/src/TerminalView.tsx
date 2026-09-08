@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import type { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, RefObject } from "react";
+import type { ChangeEvent, ClipboardEvent, DragEvent, KeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { autosizeMobileCommandTextarea } from "./mobileCommandTextarea";
 import {
   encodeMobileTerminalChord,
@@ -1683,7 +1683,8 @@ export function TerminalCommandControls({
     <button key={key.id} className="term-key" type="button"
       aria-label={`Use ${key.name} key`} aria-pressed={composerKey?.id === key.id}
       data-active={composerKey?.id === key.id ? "true" : "false"}
-      disabled={disabled} onClick={() => chooseComposerKey(key)}>
+      disabled={disabled} onPointerDown={preserveTouchInputFocus}
+      onClick={() => chooseComposerKey(key)}>
       {key.label}
     </button>
   ) : (
@@ -1811,6 +1812,7 @@ export function TerminalCommandControls({
               aria-label={composerOpen ? `Use ${label} key` : undefined}
               aria-pressed={composerOpen ? composerKey?.id === key.id : undefined}
               data-active={composerOpen && composerKey?.id === key.id ? "true" : "false"}
+              onPointerDown={preserveTouchInputFocus}
               onClick={() => composerOpen
                 ? chooseComposerKey(key, modifiers)
                 : onInput(encodeMobileTerminalChord(key, modifiers))}>
@@ -1923,6 +1925,7 @@ export function TerminalCommandControls({
                   aria-pressed={active}
                   aria-label={`${active ? "Remove" : "Add"} ${modifier.label} modifier`}
                   disabled={disabled}
+                  onPointerDown={preserveTouchInputFocus}
                   onClick={() => toggleComposerModifier(modifier.id)}
                 >
                   {modifier.label}
@@ -2032,6 +2035,14 @@ export function isCommandComposerSubmitShortcut(
   return platform.startsWith("Mac")
     ? event.metaKey && !event.ctrlKey
     : event.ctrlKey && !event.metaKey;
+}
+
+// Touch keys act on the focused terminal/input without dismissing its soft keyboard.
+// Keep mouse and keyboard activation native, and send/select only through onClick.
+function preserveTouchInputFocus(event: ReactPointerEvent<HTMLButtonElement>) {
+  if (event.pointerType === "touch" || event.pointerType === "pen") {
+    event.preventDefault();
+  }
 }
 
 const QUICK_TERMINAL_KEYS: {

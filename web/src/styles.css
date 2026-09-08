@@ -1995,6 +1995,10 @@ button {
   background: color-mix(in srgb, var(--mantle) 94%, black);
 }
 
+.terminal-command-controls[data-composing="true"] {
+  border-top-color: var(--accent);
+}
+
 .terminal-command-controls[data-mobile-controls="false"] {
   --mobile-controls-scale: 1;
 }
@@ -2102,13 +2106,13 @@ button {
   stroke-width: 3;
 }
 
+.term-key-compose-action {
+  color: var(--blue);
+}
+
 .term-key-compose-action[data-active="true"] {
   outline: 1px solid var(--accent);
   outline-offset: 1px;
-}
-
-.term-key-compose-action {
-  color: var(--blue);
 }
 
 .term-send svg {
@@ -2159,6 +2163,13 @@ button {
   background: var(--crust);
 }
 
+.term-key-chord-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
 .term-key-composer-preview {
   display: flex;
   min-width: 0;
@@ -2168,6 +2179,7 @@ button {
 }
 
 .term-key-composer-preview-label {
+  flex: 1;
   display: grid;
   min-width: 0;
   gap: calc(3px * var(--mobile-controls-scale));
@@ -2178,6 +2190,10 @@ button {
 .term-key-composer > p {
   color: var(--muted);
   font-size: clamp(9px, calc(10px * var(--mobile-controls-scale)), 14px);
+}
+
+.term-key-composer-preview-label > span {
+  color: var(--accent);
 }
 
 .term-key-composer-preview strong {
@@ -3516,25 +3532,4 @@ button {
 .app[data-touch="true"] .terminal-stage:has(.terminal-command-controls) .terminal-upload-status,
 .app[data-touch="true"] .terminal-stage:has(.terminal-command-controls) .terminal-selection-sheet {
   bottom: calc(var(--terminal-command-controls-height) + 8px * var(--mobile-controls-scale));
-}
-
-.terminal-command-controls[data-composing="true"] {
-  border-top-color: var(--accent);
-}
-
-.term-key-chord-send {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-
-
-.term-key-composer-preview-label {
-  flex: 1;
-}
-
-.term-key-composer-preview-label > span {
-  color: var(--accent);
 }

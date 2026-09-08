@@ -594,6 +594,32 @@ describe("TerminalCommandControls", () => {
     expect(composerPanel(container).textContent).toContain("Choose a key");
   });
 
+  it.each(["touch", "pen", "mouse"])("preserves input focus for %s quick-key and shortcut taps", async (pointerType) => {
+    const { container, onInput } = await renderControls(false);
+    const tap = async (button: HTMLButtonElement, field: HTMLInputElement | HTMLTextAreaElement) => {
+      field.focus();
+      const down = new PointerEvent("pointerdown", { bubbles: true, cancelable: true, pointerType, button: 0 });
+      await act(async () => {
+        button.dispatchEvent(down);
+        // jsdom does not implement pointerdown's default focus action.
+        if (!down.defaultPrevented) button.focus();
+        button.click();
+      });
+      expect(down.defaultPrevented).toBe(pointerType !== "mouse");
+      expect(document.activeElement).toBe(pointerType === "mouse" ? button : field);
+    };
+    const tab = [...container.querySelectorAll<HTMLButtonElement>(".term-key-group button")]
+      .find((button) => button.textContent === "Tab")!;
+    await tap(tab, commandField(container));
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("\t");
+    await openComposer(container);
+    const printable = printableKeyField(container);
+    await tap(container.querySelector<HTMLButtonElement>('[aria-label="Add Alt modifier"]')!, printable);
+    await tap(container.querySelector<HTMLButtonElement>('[aria-label="Use Up key"]')!, printable);
+    expect(composerPanel(container).textContent).toContain("Alt + ↑");
+    expect(onInput).toHaveBeenCalledTimes(1);
+  });
+
   it("captures a printable key for Alt chords", async () => {
     const { container, onInput } = await renderControls(false);
     await openComposer(container);

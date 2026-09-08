@@ -20,6 +20,9 @@
 
 ### Fixed
 
+- Preserve terminal or command-field focus when tapping mobile quick keys, shortcut keys,
+  or modifier toggles so the soft keyboard can stay open.
+
 - Keep held mobile terminal keys repeating through UI updates, and send conventional
   modified Backspace, Tab, and Escape input without requiring an extended keyboard protocol.
 
