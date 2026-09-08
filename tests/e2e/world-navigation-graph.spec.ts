@@ -6,7 +6,7 @@ import {
   waitForStableConversationRect,
 } from "./graphConnector";
 import { hostStore } from "./hostStore";
-import { openView, selectView, viewSelect } from "./sidebarControls";
+import { openView, selectAllHosts, selectView, viewSelect } from "./sidebarControls";
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -28,7 +28,12 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("[data-toolbar-row='view-hosts']")).toBeVisible();
   await expect(viewSelect(page)).toHaveValue("office");
-  await expect(viewSelect(page).locator("option")).toHaveCount(3);
+  const viewOptions = viewSelect(page).locator("option");
+  await expect(viewOptions).toHaveCount(4);
+  await expect(viewOptions).toHaveText(["Office", "Tree", "Graph", "Spaces"]);
+  expect(await viewOptions.evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )).toEqual(["office", "tree", "graph", "spaces"]);
   const initialCoreSockets = coreSockets(sockets).length;
 
   await selectTheme(page, "Graph");
@@ -103,9 +108,7 @@ test("keeps a compact theme change to one traversable history entry", async ({ p
 test("presents every configured host as a root in all-host scope", async ({ page }) => {
   await page.goto("/?theme=graph");
   await waitForGraph(page);
-  await page.getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
+  await selectAllHosts(page);
 
   const semantic = page.getByRole("complementary", { name: "Graph semantic view" });
   await expect(semantic.locator(".graph-tree > .graph-tree-space")).toHaveCount(5);

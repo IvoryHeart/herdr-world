@@ -925,7 +925,7 @@ test("coalesces rapid refresh signals and keeps Office responsive during activit
   await expect(page).toHaveURL(/\/spaces$/);
   await selectView(page, "Office");
   await waitForOffice(page);
-  await expect(page.locator("[role='menu'][aria-label='World themes']")).toHaveCount(0);
+  await expect(viewSelect(page)).toHaveValue("office");
 });
 
 test("does not rebuild the Pixi scene for an unchanged periodic snapshot", async ({
