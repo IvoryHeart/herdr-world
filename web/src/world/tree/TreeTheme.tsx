@@ -300,7 +300,9 @@ function SemanticSpace({ space, ...props }: { space: WorldGraphSpace } & TreeBra
       {shownChildren(space, props.matches, props.queryActive).map((child) => <li key={child.id}>
         <button className="tree-semantic-select" type="button"
           aria-pressed={props.selectedKey === child.selectionKey}
-          aria-label={`${accessibleNodeName(child, space.node.label)}, ${nodeSummary(child)}. Double-click to open terminal.`}
+          aria-label={`${accessibleNodeName(child, space.node.label)}, ${nodeSummary(child)}${
+            child.actionable ? ". Double-click to open terminal." : ""
+          }`}
           onClick={() => props.onSelect(child.selectionKey, child.hostKey)}
           onDoubleClick={() => child.actionable && props.onActivate(child)}>
           <NodeIcon node={child} /><span><strong>{child.label}</strong><small>{nodeSummary(child)}</small></span>

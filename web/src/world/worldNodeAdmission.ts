@@ -3,6 +3,7 @@ import { runtimeAdmissionReady } from "../runtimeClient";
 import type { RuntimeLoadState } from "../runtimeClient";
 import type { PaneInfo, Snapshot } from "../types";
 import type { HerdrGraphProjection, WorldGraphNode } from "./graph/herdrGraphProjection";
+import type { OfficeHandoffRequest } from "./herdrOfficeHandoff";
 
 export type WorldNodeAdmissionState = {
   connectionKey: string;
@@ -15,6 +16,30 @@ export type AdmittedWorldTerminal = {
   runtime: BridgeRuntime;
   pane: PaneInfo;
 };
+
+export type AdmittedWorldSpace = {
+  node: WorldGraphNode;
+  handoff: OfficeHandoffRequest;
+};
+
+/** Revalidates a rendered Graph/Tree space before using its current Spaces handoff. */
+export function admitCurrentWorldSpace(
+  rendered: WorldGraphNode,
+  projection: HerdrGraphProjection,
+): AdmittedWorldSpace | null {
+  if (rendered.kind !== "space" || !rendered.actionable || !rendered.handoff) return null;
+  const latest = projection.nodes.find(({ id }) => id === rendered.id);
+  if (
+    latest?.kind !== "space" ||
+    !latest.actionable ||
+    !latest.handoff ||
+    latest.parentId !== rendered.parentId ||
+    latest.hostKey !== rendered.hostKey ||
+    latest.selectionKey !== rendered.selectionKey ||
+    latest.observedGeneration !== rendered.observedGeneration
+  ) return null;
+  return { node: latest, handoff: latest.handoff };
+}
 
 /** Revalidates a rendered Graph/Tree leaf against current qualified runtime state. */
 export function admitCurrentWorldTerminal(

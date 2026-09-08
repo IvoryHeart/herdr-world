@@ -2,7 +2,26 @@ import { describe, expect, it } from "vitest";
 import type { BridgeRuntime } from "../bridge";
 import type { Snapshot } from "../types";
 import type { HerdrGraphProjection, WorldGraphNode } from "./graph/herdrGraphProjection";
-import { admitCurrentWorldTerminal } from "./worldNodeAdmission";
+import type { OfficeHandoffRequest } from "./herdrOfficeHandoff";
+import { admitCurrentWorldSpace, admitCurrentWorldTerminal } from "./worldNodeAdmission";
+
+describe("World Graph/Tree space admission", () => {
+  it("rejects a rendered space after replacement or identity drift", () => {
+    const rendered = spaceNode();
+    expect(admitCurrentWorldSpace(rendered, projectionWith(rendered))).toEqual({
+      node: rendered,
+      handoff: rendered.handoff,
+    });
+    expect(admitCurrentWorldSpace(rendered, projectionWith({
+      ...rendered,
+      observedGeneration: "replacement-generation",
+      handoff: spaceHandoff("replacement-generation"),
+    }))).toBeNull();
+    expect(admitCurrentWorldSpace(rendered, projectionWith({ ...rendered, hostKey: "collision" }))).toBeNull();
+    expect(admitCurrentWorldSpace(rendered, projectionWith({ ...rendered, parentId: "replacement-host" }))).toBeNull();
+    expect(admitCurrentWorldSpace(rendered, projectionWith({ ...rendered, actionable: false, handoff: null }))).toBeNull();
+  });
+});
 
 describe("World Graph/Tree terminal admission", () => {
   it("admits only the exact current host, generation, identity, capability, and pane", () => {
@@ -37,6 +56,27 @@ function node(): WorldGraphNode {
     selectionKey: "qualified-terminal", omittedChildCount: 0, searchText: "codex",
     handoff: null, paneId: "pane", observedGeneration: "generation", agentKind: "codex",
   };
+}
+
+function spaceNode(): WorldGraphNode {
+  return {
+    id: "qualified-space", kind: "space", parentId: "host-node", hostKey: "host",
+    hostLabel: "Host", label: "Space", status: "working", focused: true, stale: false,
+    disconnected: false, connectionState: "compatible", actionable: true,
+    selectionKey: "qualified-space", omittedChildCount: 0, searchText: "space",
+    handoff: spaceHandoff("generation"), paneId: null, observedGeneration: "generation", agentKind: null,
+  };
+}
+
+function spaceHandoff(observedGeneration: string): OfficeHandoffRequest {
+  return {
+    kind: "room", key: "qualified-space", profileId: "host", observedGeneration,
+    workspaceRef: { profileId: "host", kind: "workspace", nativeTargetId: "space" },
+  };
+}
+
+function projectionWith(node: WorldGraphNode): HerdrGraphProjection {
+  return { nodes: [node] } as HerdrGraphProjection;
 }
 
 function runtimeFixture(): BridgeRuntime {

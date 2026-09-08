@@ -27,6 +27,7 @@ describe("Tree theme", () => {
     const agent = [...container.querySelectorAll<HTMLButtonElement>(".tree-semantic-select")]
       .find((button) => button.textContent?.includes("Codex"));
     expect(agent?.getAttribute("aria-label")).toContain("Agent in Platform on host Forge (host), working");
+    expect(agent?.getAttribute("aria-label")).toContain("Double-click to open terminal");
     await act(async () => agent?.click());
     expect(value.onGraphSelect).toHaveBeenCalledWith("terminal", "host");
     expect(value.onGraphOpenTerminal).not.toHaveBeenCalled();
@@ -185,6 +186,9 @@ describe("Tree theme", () => {
     expect(container.querySelector(".tree-details-actions")).toBeNull();
     expect(container.querySelector(".tree-action-unavailable")?.textContent).toContain("unavailable");
     expect(container.querySelectorAll(".tree-actions button")).toHaveLength(0);
+    const agent = [...container.querySelectorAll<HTMLButtonElement>(".tree-semantic-select")]
+      .find((button) => button.textContent?.includes("Codex"));
+    expect(agent?.getAttribute("aria-label")).not.toContain("Double-click to open terminal");
   });
 });
 

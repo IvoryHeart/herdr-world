@@ -197,7 +197,10 @@ import {
 } from "./world/completionSeenState";
 import { buildWorldModel } from "./world/worldModel";
 import { worldSourcesFromRuntime } from "./world/worldRuntime";
-import { admitCurrentWorldTerminal } from "./world/worldNodeAdmission";
+import {
+  admitCurrentWorldSpace,
+  admitCurrentWorldTerminal,
+} from "./world/worldNodeAdmission";
 import type { WorldThemeContext } from "./world/worldThemeContext";
 import { worldThemeRegistry } from "./world/worldThemeRegistry";
 import type { WorldThemeDefinition } from "./world/worldThemeRegistry";
@@ -2081,9 +2084,9 @@ export function App() {
   };
   const openGraphNodeInSpaces = (node: WorldGraphNode) => {
     if (node.kind === "space") {
-      const latest = graphProjection.nodes.find(({ id }) => id === node.id);
-      if (latest?.kind === "space" && latest.handoff) {
-        openWorldTargetInSpaces(latest.handoff);
+      const current = admitCurrentWorldSpace(node, graphProjection);
+      if (current) {
+        openWorldTargetInSpaces(current.handoff);
       } else {
         setWorldHandoffStatus(`That space is no longer available. ${activeWorldTheme.label} remains open.`);
       }

@@ -657,7 +657,7 @@ test("moves and resizes the Office conversation bubble without losing its live a
   await page.mouse.move(
     (resizeBox?.x ?? 0) + 52,
     (resizeBox?.y ?? 0) + 20,
-    { steps: 30 },
+    { steps: 4 },
   );
   await page.mouse.up();
 
@@ -1340,44 +1340,39 @@ type Rectangle = {
 
 async function moveConversationUntilClear(page: Page, conversation: Locator, target: Locator) {
   const header = conversation.locator(".world-conversation-header");
-  const moves = [
-    "Shift+ArrowRight",
-    "Shift+ArrowLeft",
-    "Shift+ArrowDown",
-    "Shift+ArrowUp",
-  ] as const;
-
-  for (let attempt = 0; attempt < 48; attempt += 1) {
+  const layer = page.locator(".world-theme-layer");
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     const rectangles = await conversationAndTargetRectangles(conversation, target);
     if (!rectanglesIntersect(rectangles.conversation, rectangles.target)) {
       return;
     }
-
-    const horizontalMove = rectangles.target.x + rectangles.target.width / 2
-      >= rectangles.conversation.x + rectangles.conversation.width / 2
-      ? "Shift+ArrowLeft"
-      : "Shift+ArrowRight";
-    const verticalMove = rectangles.target.y + rectangles.target.height / 2
-      >= rectangles.conversation.y + rectangles.conversation.height / 2
-      ? "Shift+ArrowUp"
-      : "Shift+ArrowDown";
-    const candidates = [horizontalMove, verticalMove, ...moves] as const;
-    let moved = false;
-
-    for (const move of candidates) {
-      const before = await conversation.boundingBox();
-      await header.focus();
-      await page.keyboard.press(move);
-      const after = await conversation.boundingBox();
-      if (before && after && (before.x !== after.x || before.y !== after.y)) {
-        moved = true;
-        break;
-      }
-    }
-
-    if (!moved) {
-      throw new Error("Could not move the Office conversation away from the New seat control");
-    }
+    const [headerBox, layerBox] = await Promise.all([header.boundingBox(), layer.boundingBox()]);
+    if (!headerBox || !layerBox) throw new Error("Could not measure the Office conversation layer");
+    const inset = 8;
+    const left = layerBox.x + inset;
+    const top = layerBox.y + inset;
+    const right = layerBox.x + layerBox.width - rectangles.conversation.width - inset;
+    const bottom = layerBox.y + layerBox.height - rectangles.conversation.height - inset;
+    const candidates = [
+      { x: left, y: top },
+      { x: right, y: top },
+      { x: left, y: bottom },
+      { x: right, y: bottom },
+    ].filter(({ x, y }) => !rectanglesIntersect(
+      { ...rectangles.conversation, x, y },
+      rectangles.target,
+    ));
+    const destination = candidates[0];
+    if (!destination) throw new Error("No clear Office conversation position is available");
+    const startX = headerBox.x + Math.min(32, headerBox.width / 2);
+    const startY = headerBox.y + Math.min(24, headerBox.height / 2);
+    await page.mouse.move(startX, startY);
+    await page.mouse.down();
+    await page.mouse.move(
+      startX + destination.x - rectangles.conversation.x,
+      startY + destination.y - rectangles.conversation.y,
+    );
+    await page.mouse.up();
   }
 
   throw new Error("Office conversation still intersects the New seat control after repositioning");
