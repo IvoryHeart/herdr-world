@@ -22,6 +22,11 @@ if(resume<0 && history.turns) throw Error('Existing history was not resumed');
 history.turns++; fs.writeFileSync(file,JSON.stringify(history));
 console.log(JSON.stringify({type:'thread.started',thread_id:history.id}));
 if(process.argv.includes('--version')) { console.log('codex-cli fixture (no model)'); process.exit(0); }
+for(let i=0;i<process.argv.length;i++) if(process.argv[i]==='--image') {
+  const path=process.argv[i+1]; if(!fs.readFileSync(path).length) throw Error('Empty reference image');
+  try {fs.writeFileSync(path,'tampered');throw Error('Reference image writable');}
+  catch(error) {if(error.message==='Reference image writable') throw error;}
+}
 let prompt=''; for await(const chunk of process.stdin) prompt+=chunk;
 const context=JSON.parse(prompt.split('Supervisor context updates:\\n')[1].split('\\n\\nCandidate changes')[0]);
 history.context={...history.context,...context}; fs.writeFileSync(file,JSON.stringify(history));
@@ -150,8 +155,9 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   const gh=join(dir,'bin/gh');
   await writeFile(gh,'#!/usr/bin/env node\nconsole.log(JSON.stringify({headRefName:"agent/fixture",isCrossRepository:false,state:"OPEN"}));\n');
   await chmod(gh,0o755);
+  const reference=join(dir,'reference.png'); await writeFile(reference,Buffer.from([137,80,78,71,13,10,26,10]));
   result=await command([process.execPath,join(repoRoot,'scripts/agent/goal.mjs'),'Ask the owner what answer should be, then implement it.',
-    '--parent','78','--slug','interview-fixture','--profile','check','--image',image,'--auth-file',auth,'--model','fixture','--seconds','300'],
+    '--parent','78','--slug','interview-fixture','--profile','check','--image',image,'--auth-file',auth,'--model','fixture','--seconds','300','--reference-image',reference],
     {cwd:source,stream:false,timeoutMs:360000,env:{...process.env,PATH:join(dir,'bin')+':'+process.env.PATH}});
   assert.notEqual(result.code,0);
   const intakeId=(await readdir(runBase)).find(id=>!runs.includes(id));
@@ -159,6 +165,8 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   assert.equal(intake.status,'blocked'); assert.equal(intake.intake.questions.length,1);
   assert.equal(intake.delivery.base,'agent/fixture'); assert.equal(intake.delivery.parent,'78');
   assert.equal(intake.delivery.worktree,join(source,'.agents/.worktrees/interview-fixture'));
+  assert.equal(intake.referenceImages.length,1);
+  assert.equal(JSON.parse(await readFile(join(intake.delivery.worktree,'.agents/state/task.json'))).runId,intakeId);
   assert.equal(git(['branch','--show-current'],source),'agent/fixture');
   const noAnswer=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'resume',intakeId],{cwd:source,stream:false});
   assert.notEqual(noAnswer.code,0);

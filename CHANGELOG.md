@@ -14,7 +14,8 @@ Web's own release history remains in its upstream changelog.
   execution from a short goal with resumable interviews, persistent role histories and
   handovers across Docker invocations, independent QA and Oracle consultation, recorded
   model allocation, two-history delivery, reserved stage budgets, durable usage/OTEL accounting,
-  background supervision, and agent evals for repeatable development and reviewed PR delivery
+  background supervision, recorded execution checks at delivery, private visual references,
+  and agent evals for repeatable development and reviewed PR delivery
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78)).
 
 - Added a simplified Network UI for connecting Herdr instances and allowing connections to the

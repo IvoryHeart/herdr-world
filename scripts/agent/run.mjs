@@ -14,6 +14,8 @@ import { budgetPolicy } from './budgets.mjs';
 import { recoverUsage, recordEvent, readLedger, attemptsFromLedger } from './usage.mjs';
 import { telemetryConfig, flushTelemetry, localTelemetryEndpoint } from './telemetry.mjs';
 import { launchJob } from './job.mjs';
+import { recordTask } from './task.mjs';
+import { copyReferenceImages } from './references.mjs';
 
 export async function writeSchemas(control) {
   await mkdir(join(control, 'harness/schemas'), { recursive: true });
@@ -48,6 +50,7 @@ async function main() {
     sessions: { type: 'string' }, interview: { type: 'boolean', default: false },
     workflow: { type: 'string' }, 'oracle-model': { type: 'string' }, 'otel-endpoint': { type: 'string' },
     background: { type: 'boolean', default: false },
+    'reference-image': { type: 'string', multiple: true },
   } });
   const action = positionals[0] ?? 'start';
   if (values.background) {
@@ -101,6 +104,7 @@ async function main() {
     state.deadline = Date.now() + state.remainingMs;
     checkBudget(state);
     state.status = 'running';
+    if (values['reference-image']?.length && !values['task-file']) throw new Error('Add reference images with the owner clarification --task-file');
     // Preserve the last failure as context until a successful role turn clears it.
     invalidateCandidate(state);
   } else if (action === 'start') {
@@ -142,9 +146,12 @@ async function main() {
     await cp(join(repoRoot, 'harness'), join(control, 'harness'), { recursive: true, verbatimSymlinks: true });
     await cp(join(repoRoot, 'scripts/agent'), join(control, 'scripts/agent'), { recursive: true });
     await writeSchemas(control);
+    state.referenceImages = await copyReferenceImages(values['reference-image'] ?? [], control);
     await copyCandidate(process.cwd(), join(runDir, 'workspace'));
     state.workspaceBaseline = git(['rev-parse', 'HEAD'], join(runDir, 'workspace'));
     await saveState(runDir, state);
+    await recordTask(process.cwd(), { mode: 'ralph', runId: id, base: state.delivery.base, parent: state.delivery.parent });
+    console.log('Execution: Ralph\nRun ID: ' + id + '\nWorkflow: ' + workflow);
     if (process.env.WORLD_AGENT_JOB_DIR) {
       const path = join(process.env.WORLD_AGENT_JOB_DIR, 'job.json');
       await jsonFile(path, { ...JSON.parse(await readFile(path, 'utf8')), runId: state.id });
@@ -166,7 +173,11 @@ async function main() {
   await lock.writeFile(String(process.pid));
   await lock.close();
   try {
-    if (action === 'resume') await saveState(runDir, state);
+    if (action === 'resume') {
+      // Owner input may extend the control packet only while this supervisor owns the run.
+      if (values['reference-image']?.length) state.referenceImages = await copyReferenceImages(values['reference-image'], join(runDir, 'control'), state.referenceImages);
+      await saveState(runDir, state);
+    }
     const control = join(runDir, 'control');
     await mkdir(join(runDir, 'workspace/.ralph/agent'), { recursive: true });
     if (state.intake && !state.intake.ready) {

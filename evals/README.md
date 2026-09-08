@@ -34,6 +34,22 @@ helper, not a claim to replay an exact historical bug.
 
 ## Authorized live trials
 
+Check conversational activation after changing onboarding or task-start skills:
+
+```bash
+npm run eval:activation
+```
+
+One actual Sol high coordinator receives a short Tree-theme request based on PR #80. Its
+isolated repository contains the current AGENTS.md/skills and real goal/worktree/job/task
+commands. The parent PR lookup and nested run are fixtures; intake stops with an owner
+question. Publishing is denied. The evaluator checks the recorded run/parent and unchanged
+source before intake, rather than matching instruction wording. Negative grader controls
+run in `eval:check`. `--seconds` defaults to 180 (maximum 600); `--model` supports an explicit
+comparison. Native usage, source/image fingerprints and outcomes are saved under ignored
+`.agents/state/activation-evals/`. This measures routing, not full Ralph execution or Tree
+design quality. Run the production Docker test for real supervisor routing and delivery gates.
+
 Local trials can use saved Codex authentication through the production Docker boundary:
 
 ```bash
