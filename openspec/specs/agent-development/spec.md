@@ -17,11 +17,29 @@ and linked docs for source maps and runbooks. Runtime notes SHALL NOT override t
 
 ### Requirement: Shared worktree location
 New agent worktrees SHALL use non-main branches under the primary checkout's
-.agents/.worktrees directory. Existing dirty checkouts SHALL remain untouched.
+.agents/worktrees directory. Existing .agents/.worktrees locations SHALL remain
+valid, and existing dirty checkouts SHALL remain untouched.
 
 #### Scenario: Creation from a linked worktree
 - **WHEN** an agent creates another task worktree
 - **THEN** it resolves the same central directory without recursive nesting
+
+### Requirement: Explicit upstream workflow trial
+An owner-selected Superpowers trial SHALL use pinned, unmodified upstream skills
+installed locally to a fresh task worktree. OpenSpec SHALL remain the repository's
+requirements and knowledge authority. The trial SHALL use native coding-agent
+execution, with no nested Ralph launcher or second continuation mechanism.
+Repository policy and the selected task's authorization SHALL remain applicable.
+The Ralph-specific execution requirements below SHALL apply to Ralph runs, not to
+an explicitly selected native trial.
+
+#### Scenario: Trial isolation
+- **WHEN** an owner selects the native trial
+- **THEN** its local profile changes no user-wide skills or settings, and an existing Ralph task is not converted or restarted
+
+#### Scenario: Trial delivery
+- **WHEN** native execution reaches an implementation candidate
+- **THEN** review and relevant checks establish readiness, the PR identifies the actual workflow, and no Ralph success or cost improvement is inferred
 
 ### Requirement: Bounded execution
 Unattended workers SHALL receive no live Herdr socket or host publishing credentials.

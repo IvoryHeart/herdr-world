@@ -1,5 +1,9 @@
 # Agent development
 
+The owner-selected [Superpowers trial](superpowers-trial.md) evaluates an upstream
+skills bundle with native Codex. It is local to a fresh task worktree; it does not
+replace or restart existing Ralph runs. The procedures below describe Ralph.
+
 OpenSpec holds current contracts, repository skills describe useful practices, and Ralph
 Orchestrator runs a sequential pair. The default is **one task worktree, one prepared
 environment, two persistent partners, and a lead**. Oracle is consulted for a concrete
@@ -20,8 +24,10 @@ npm run agent:goal -- "Make saved connections easier to find" --parent 78 --back
 ```
 
 Use the requested parent PR; omit `--parent` for main. world-start-task launches this
-entrypoint before feature research or editing. It creates a non-main task worktree under
-the primary checkout's ignored `.agents/.worktrees/`. Managed intake inspects source and
+entrypoint before feature research or editing. It creates a non-main task worktree
+under the primary checkout's ignored `.agents/worktrees/`. Existing `.agents/.worktrees/`
+locations remain valid. Legacy World workflow skills live in `harness/legacy-skills/`
+and are read on demand for a Ralph task. Managed intake inspects source and
 asks only consequential questions. Relay the owner's answer with:
 
 ```bash

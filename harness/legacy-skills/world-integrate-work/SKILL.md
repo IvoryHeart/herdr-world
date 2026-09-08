@@ -4,7 +4,7 @@ description: Assemble authorized dependent Herdr World changes from multiple wor
 ---
 
 Identify the coherent outcome, input branches/commits, dependencies and current contracts.
-Use a dedicated non-main worktree under the primary .agents/.worktrees directory. Preserve
+Use a dedicated non-main worktree under the primary .agents/worktrees directory. Preserve
 other workers' dirty trees. Integrate only the authorized changes; resolve conflicts against
 the intended behavior, including semantic conflicts where Git reports a clean application.
 

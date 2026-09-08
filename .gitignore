@@ -9,6 +9,11 @@
 /dist-packages/
 /.herdr-world-plugin/
 /.agents/.worktrees/
+/.agents/worktrees/
+# Opt-in worktree-local Superpowers installation and native Codex profile.
+/.agents/skills/superpowers
+/AGENTS.override.md
+/.codex/config.toml
 /.agents/runs/
 /.agents/jobs/
 /.agents/state/

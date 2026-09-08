@@ -178,7 +178,7 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   const intake=JSON.parse(await readFile(join(runBase,intakeId,'run.json')));
   assert.equal(intake.status,'blocked'); assert.equal(intake.intake.questions.length,1);
   assert.equal(intake.delivery.base,'agent/fixture'); assert.equal(intake.delivery.parent,'78');
-  assert.equal(intake.delivery.worktree,join(source,'.agents/.worktrees/interview-fixture'));
+  assert.equal(intake.delivery.worktree,join(source,'.agents/worktrees/interview-fixture'));
   assert.equal(intake.referenceImages.length,1);
   assert.equal(JSON.parse(await readFile(join(intake.delivery.worktree,'.agents/state/task.json'))).runId,intakeId);
   assert.equal(git(['branch','--show-current'],source),'agent/fixture');

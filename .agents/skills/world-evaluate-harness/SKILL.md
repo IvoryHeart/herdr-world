@@ -4,7 +4,11 @@ description: Evaluate changes to Herdr World's agent rules, skills, Ralph config
 ---
 
 Run npm run test:agent and npm run eval:check for deterministic regressions.
-For changes to conversational onboarding or world-start-task, run the bounded eval:activation
+For the opt-in Superpowers/native trial, follow docs/superpowers-trial.md and run
+eval:skills in its prepared worktree. Keep native discovery, live skill activation,
+full delivery quality and usage comparisons separate. The Ralph activation fixture
+does not grade a native workflow.
+For changes to Ralph conversational onboarding or world-start-task, run the bounded eval:activation
 trial. It uses an actual coordinator with the owner's short request, real goal/worktree/job
 commands and a stopped fixture for nested intake. Record its routing result separately from
 full supervisor/model-quality trials; a passing wording check cannot establish activation.
