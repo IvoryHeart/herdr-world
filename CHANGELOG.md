@@ -6,29 +6,17 @@
 
 ### Added
 
-- Add mobile direct terminal keys with hold-repeat, a persistent navigation pad, and a chord
-  composer for Ctrl, Shift, and Alt combinations with special or printable keys.
-  [PR #63](https://github.com/kcosr/herdr-web/pull/63).
+- Add mobile terminal keys with hold-repeat and a shortcut builder for Ctrl, Shift, and Alt
+  combinations with special or printable keys. [PR #63](https://github.com/kcosr/herdr-web/pull/63).
 
 ### Changed
 
-- Let a second tap deselect the selected mobile shortcut key while retaining modifiers
-  and the command draft.
-
-- Restore Tab to the mobile quick-key row and use a keyboard-plus icon for the expanded
-  shortcut builder, retaining its active outline and a Building shortcut indicator.
-
-- Keep mobile arrows and Backspace inside the expanded keyboard, with Tab beside Backspace
-  instead of in the always-visible quick-key row.
-
-- Use the neutral toolbar keyboard icon to expand More keys, with the highlighted Compose
-  toggle inside; collapsing the expanded keys cancels any pending shortcut.
-
-- Keep the mobile Compose action icon-only, with an active outline and a visible
-  composing-mode indicator in the shortcut panel.
-
-- Share mobile terminal keys between direct input and Compose mode, with explicit Send and
-  Cancel actions; rename Nav to More keys and remove the duplicate composer key grid.
+- Keep Esc, Tab, C-c, C-d, and 1/2/3 in the mobile quick-key row. The neutral keyboard icon
+  expands Backspace, arrows, and navigation keys, with a keyboard-plus shortcut toggle inside.
+- Share the same keys between direct input and shortcut building. Show the selected chord with
+  Send and Cancel actions; tapping the selected key again clears it while retaining modifiers.
+  Sending, cancelling, or collapsing the keyboard exits shortcut mode without changing the
+  command draft.
 
 ### Fixed
 
