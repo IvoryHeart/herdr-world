@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorldThemeContext } from "../worldThemeContext";
 import type { HerdrGraphProjection, WorldGraphNode } from "../graph/herdrGraphProjection";
 import TreeTheme from "./TreeTheme";
-import { TREE_VIEW_PREFS_KEY } from "./treeViewPrefs";
+import { boundTreeCamera, TREE_VIEW_PREFS_KEY } from "./treeViewPrefs";
 
 const roots: Root[] = [];
 
@@ -135,6 +135,44 @@ describe("Tree theme", () => {
     const { container } = await render(context());
     expect(container.querySelector<HTMLElement>(".tree-map")?.style.transform)
       .toBe("translate(12px, -8px) scale(1.4)");
+  });
+
+  it("reconciles an extreme persisted camera when compact layout becomes desktop", async () => {
+    const geometry = {
+      viewportWidth: 600,
+      viewportHeight: 400,
+      mapWidth: 1_000,
+      mapHeight: 800,
+    };
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tree-viewport") ? geometry.viewportWidth : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tree-viewport") ? geometry.viewportHeight : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tree-map") ? geometry.mapWidth : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains("tree-map") ? geometry.mapHeight : 0;
+    });
+    const persistedCamera = { x: 1_000_000, y: 1_000_000, zoom: 1 };
+    window.localStorage.setItem(TREE_VIEW_PREFS_KEY, JSON.stringify({
+      camera: persistedCamera,
+      collapsedIds: [],
+    }));
+    const value = context();
+    value.compact = true;
+    const { container, root } = await render(value);
+    expect(container.querySelector(".tree-viewport")).toBeNull();
+    expect(container.querySelector(".tree-map")).toBeNull();
+
+    value.compact = false;
+    await act(async () => root.render(<TreeTheme context={value} />));
+
+    const expected = boundTreeCamera(persistedCamera, geometry);
+    expect(container.querySelector<HTMLElement>(".tree-map")?.style.transform)
+      .toBe(`translate(${expected.x}px, ${expected.y}px) scale(${expected.zoom})`);
   });
 
   it("does not expose actions for stale entities", async () => {

@@ -135,7 +135,7 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
     observer.observe(viewport);
     observer.observe(map);
     return () => observer.disconnect();
-  }, [projection, queryActive, updateCamera]);
+  }, [context.compact, projection, queryActive, updateCamera]);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if ((event.target as Element).closest("button, input, .tree-card-wrap")) return;
