@@ -139,6 +139,13 @@ test('background supervisor completes without a model observer and wait returns 
   const state = await waitJob(job.directory, { timeoutMs: 5000 });
   assert.equal(state.status, 'completed'); assert.equal(state.code, 0);
   assert.match(await readFile(join(job.directory, 'supervisor.log'), 'utf8'), /done/);
+  // waitJob observes command completion; the supervisor still flushes its final
+  // recap. Keep the fixture alive until that atomic write finishes.
+  for (let i = 0; i < 100; i++) {
+    try { await readFile(join(job.directory, 'recap.json')); break; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; await new Promise(resolve => setTimeout(resolve, 10)); }
+  }
+  assert.equal(JSON.parse(await readFile(join(job.directory, 'recap.json'))).jobStatus, 'completed');
 });
 test('usage summaries disclose missing attempts instead of replacing them with zero measured cost', () => {
   const summary = summarizeUsage([{ type: 'attempt.started', timestamp: new Date().toISOString(), attemptId: 'killed', role: 'implementer' }]);

@@ -138,6 +138,9 @@ Completed-turn usage was 192,253 input tokens, including 156,416 cached input, a
 Full repository checks passed: 62 harness tests, 524 web tests, 297 Rust tests,
 the remaining repository suites, lint and builds. All five strict OpenSpec
 validations, eval grader controls and edited-skill validation passed.
+CI exposed an existing background-job fixture cleanup race: command completion
+precedes the final recap write. The test now waits for that write before deleting
+its fixture, and passed ten consecutive focused runs.
 Browser acceptance and the Docker supervisor suite were not rerun for this
 setup-only change. Native child completion, Goals continuation, interruption
 recovery, feature quality and comparative economy remain untested by this smoke.
