@@ -4,6 +4,10 @@ description: Evaluate changes to Herdr World's agent rules, skills, Ralph config
 ---
 
 Run npm run test:agent and npm run eval:check for deterministic regressions.
+For changes to conversational onboarding or world-start-task, run the bounded eval:activation
+trial. It uses an actual coordinator with the owner's short request, real goal/worktree/job
+commands and a stopped fixture for nested intake. Record its routing result separately from
+full supervisor/model-quality trials; a passing wording check cannot establish activation.
 Use the Harbor tasks and commands in evals/README.md for real model trials only
 within the authorized model/time/cost budget. Compare baseline and configured
 harness on identical frozen tasks, with the verifier outside the agent workspace.

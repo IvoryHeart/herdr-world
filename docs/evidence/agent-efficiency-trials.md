@@ -90,3 +90,42 @@ source, checks, model and effort. The live three-task comparison has **not** bee
 Claims such as “50% less time/cost” remain unmeasured. Its reports retain autonomous
 success separately from artifact grades, first-patch time, per-role usage, timeouts and
 interventions. See [the eval commands](../../evals/README.md#product-regression-comparisons).
+
+## Short-goal activation regression
+
+PR #80's feature was completed in an interactive history without a recorded Ralph run.
+It therefore did not test the revised supervisor. Feature onboarding now explicitly
+starts the managed entrypoint before research or design discussion. Delivery requires
+the recorded run's exact candidate and independent native review/QA evidence; declared
+interactive maintenance is reported separately.
+
+On 2026-09-08 UTC, a real Sol high coordinator received a short Tree-theme design goal
+based on PR #80. It invoked the real goal/worktree/job commands, retained parent #80,
+recorded a run and returned the saved design question without editing product source
+or attempting publication. The routing trial passed in **127.74 seconds**, with
+**8 native responses**, **182,969 input tokens** (including **160,384 cached input**)
+and **2,306 output tokens**. Native usage was complete; monetary/subscription cost was
+not measured. An initial invocation omitted Docker stdin forwarding and failed before
+any model response; the corrected invocation is the measured trial.
+
+Live input fingerprint:
+`f0fe808966296b30dc39f7d69de2ec62c566db0b461dd9a839c3678237baae8c`.
+Execution image:
+`sha256:0f4a93fcdd2705cc31137bd0a711f53e1fb438a42f2cdc116801466ff33bb698`.
+The trial preceded final documentation, test placement and resume-lock refinements.
+Raw native histories and local paths remain in ignored storage.
+
+This is an activation test: a local parent-PR fixture replaces GitHub lookup, and the
+nested supervisor is a stopped intake fixture with an owner question. It does not
+establish complete Tree-theme delivery or production design quality. Run
+`npm run eval:activation` to repeat it. Its negative controls reject an unrecorded
+entrypoint, the wrong parent, premature source edits and attempted publication.
+
+The production Docker supervisor regression also passed with private image references
+attached through the model CLI and mounted read-only, alongside its existing success,
+interruption, owner-answer and failed-verification scenarios. Six additional harness
+tests cover execution records, exact candidate/parent matching, independent native
+review, explicit interactive exceptions, delivery provenance and image handoff.
+Complete repository checks, the security audit, strict OpenSpec validation and edited
+skill validation passed. These controls support the next real feature trial; they do
+not turn a local execution receipt into tamper-proof server attestation.

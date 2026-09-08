@@ -1,10 +1,11 @@
 import { parseArgs } from 'node:util';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createWorktree } from './worktree.mjs';
 import { command, git, repoRoot, errorExit } from './lib.mjs';
 import { launchJob } from './job.mjs';
+import { recordTask } from './task.mjs';
 
 try {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: {
@@ -15,6 +16,7 @@ try {
     model: { type: 'string' }, seconds: { type: 'string' }, iterations: { type: 'string' },
     background: { type: 'boolean', default: false }, workflow: { type: 'string' },
     'oracle-model': { type: 'string' }, 'otel-endpoint': { type: 'string' },
+    'reference-image': { type: 'string', multiple: true },
   } });
   const goal = positionals.join(' ').trim();
   if (!goal) throw new Error('Usage: npm run agent:goal -- "<goal>" [--parent <PR>] [--profile check|acceptance]');
@@ -33,9 +35,11 @@ try {
   const task = join(worktree, '.agents/state/goal.md');
   await mkdir(join(worktree, '.agents/state'), { recursive: true });
   await writeFile(task, goal + '\n', { mode: 0o600 });
+  await recordTask(worktree, { mode: 'ralph', base, parent: values.parent ?? null });
   console.log('Task worktree: ' + worktree + '\nPR base: ' + base);
   const args = [process.execPath, join(repoRoot, 'scripts/agent/run.mjs'), 'start', '--interview', '--task-file', task];
   for (const key of ['profile', 'task-profile', 'sessions', 'model', 'seconds', 'iterations', 'image', 'auth-file', 'worker-model', 'lead-model', 'oracle-model', 'reasoning-effort', 'workflow', 'otel-endpoint']) if (values[key]) args.push('--' + key, values[key]);
+  for (const path of values['reference-image'] ?? []) args.push('--reference-image', resolve(path));
   const env = { ...process.env, WORLD_AGENT_BASE: base, WORLD_AGENT_PARENT: values.parent ?? '' };
   if (values.background) {
     console.log(JSON.stringify(await launchJob(args, { cwd: worktree, env }), null, 2));

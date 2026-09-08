@@ -86,9 +86,28 @@ Publishing SHALL be separate from worker execution and SHALL stop at an open PR.
 
 ### Requirement: Goal intake and retained role histories
 A short goal SHALL create a fresh task worktree and start source-grounded intake.
+The coordinating agent SHALL launch the recorded entrypoint before feature research,
+interview, planning or edits, and report its worktree, job and run identifiers. Reading
+workflow documentation or using OpenSpec/check commands alone SHALL NOT count as execution.
 Missing consequential owner decisions SHALL produce saved questions and a stopped run.
 Answers SHALL resume the lead history without charging human waiting time or resetting budgets.
 An open same-repository parent PR MAY select the task and delivery base.
+
+#### Scenario: Conversational feature start
+- **WHEN** the owner provides a short feature goal and an optional parent PR
+- **THEN** managed intake begins in a recorded run without requiring a larger prompt, and a supervisor-assigned worker does not recursively launch another run
+
+#### Scenario: Delivery bypass
+- **WHEN** a feature has passing tests but no successful recorded harness run or independent review/QA history
+- **THEN** checked delivery rejects it before pushing or creating a PR and does not silently fall back to interactive implementation
+
+#### Scenario: Declared interactive exception
+- **WHEN** the authorized task changes harness controls or the owner explicitly requests interactive development
+- **THEN** a separate task records that exception and delivery identifies interactive execution without claiming Ralph success
+
+#### Scenario: Visual reference
+- **WHEN** the owner supplies a supported reference image with the goal or an interview answer
+- **THEN** model phases receive a private read-only copy, and the image is not added to candidate source merely to transport it
 
 #### Scenario: Interview continuation
 - **WHEN** the owner supplies answers to a saved interview

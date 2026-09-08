@@ -1,19 +1,35 @@
 # Agent development
 
 The development harness combines OpenSpec, focused repository skills, Ralph Orchestrator
-and Harbor evals. It supports ordinary interactive work and explicitly started bounded
-runs. Product architecture changes remain a separate concern.
+and Harbor evals. Feature goals use a recorded bounded run. Harness maintenance and
+explicit owner requests may use a declared interactive exception. Read-only analysis
+and reviews need no execution record. Product architecture changes remain a separate concern.
 
 ## Start a task
 
 After the one-time `npm run agent:bootstrap` and `npm run agent:image` setup, a short
-goal is enough. In an agent conversation, world-start-task handles the same flow.
+goal is enough. In an agent conversation, world-start-task must launch the same flow
+before feature research or edits. The coordinator relays the managed interview; it does
+not carry out a parallel implementation. A failed run remains failed until properly resumed;
+it cannot silently become a single-session delivery.
 
 ```bash
 npm run agent:goal -- "Make saved connections easier to find"
 # Stack the experiment on an open same-repository PR:
 npm run agent:goal -- "Make saved connections easier to find" --parent 78
 ```
+
+Use the actual requested parent number, such as 80 for a Tree theme based on that PR's
+shared World model. Add `--background` in coordinating agent sessions and report the worktree,
+job ID and run ID. `agent:task status` in the task worktree recovers its run and questions;
+`agent:job wait JOB_ID` waits up to 60 seconds for completion. Use host completion events
+where supported, and avoid one-second model-driven polling.
+
+An attached reference image can be passed with `--reference-image /absolute/path/tree.png`.
+The runner copies up to four PNG/JPEG/WebP files (20 MiB each) into private, read-only control
+storage and attaches them to model phases. Original filenames and images do not enter the
+candidate or commits. A later image can accompany `agent:run resume RUN_ID --task-file ...
+--reference-image ...`; it is new owner input and restarts shaping with stale evidence cleared.
 
 The command fetches the selected base, creates a fresh task worktree, and starts
 read-only research and intake. It defaults to the feature task profile and acceptance
@@ -30,7 +46,7 @@ is not repeated. Waiting for the reply consumes no loop time or running containe
 A bare resume cannot bypass pending interview questions. The CLI ends with a candidate
 and evidence; the coordinating agent handles inspection and authorized PR delivery.
 
-For an already prepared task, create its worktree directly:
+For an already prepared task, create its worktree and start its recorded run directly:
 
 
 ```bash
@@ -38,6 +54,7 @@ npm run agent:worktree -- create fix-reconnect
 # Enter the path printed by the command.
 npm run agent:bootstrap
 npm run agent:doctor
+npm run agent:run -- start --task-file /tmp/authorized-task.md --background
 ```
 
 Worktrees share the primary checkout's ignored `.agents/.worktrees/`. Creation fetches
@@ -402,9 +419,22 @@ npm run agent:deliver -- --title "Fix terminal recovery" --body-file /tmp/world-
 ```
 
 Choose the relevant profile. The publishing helper rejects main, dirty worktrees, and
-missing, insufficient or stale receipts. It pushes only the current branch and opens a PR.
-Add the PR reference to applicable changelog entries, revalidate and push that branch update.
+missing, insufficient or stale receipts. It also requires the task's saved execution record.
+For Ralph, the local candidate must exactly match its successful run, parent and worktree,
+with review/QA native histories independent of implementation. `agent:task report` checks
+that evidence and writes `.agents/state/execution.json`. The publishing helper appends run ID,
+workflow, review/QA results, model/effort and usage by role to the PR body. Missing usage remains
+unavailable or a labelled lower bound. It pushes only the current branch and opens a PR.
+Add the PR reference to applicable changelog entries, revalidate and push that attribution-only
+bookkeeping update. Product repairs require fresh run evidence, not just another test receipt.
 Stop at the PR. Independent review remains required.
+
+Control maintenance must declare `npm run agent:task -- interactive --reason harness-maintenance
+--note "<authorized change>"` before editing. Other interactive work needs the owner's explicit
+request and reason `owner-request`. Its PR is labelled interactive and is not counted as a Ralph
+trial. A recorded Ralph task cannot be silently converted to this exception. For existing PRs,
+check `agent:task report` and current verification before pushing an update, and include its
+execution report in the body. Direct git/gh commands must not bypass a rejected evidence check.
 
 Receipts are local operational evidence, not cryptographic attestations against their owner.
 CI and GitHub branch rules provide the independent delivery boundary.
@@ -421,6 +451,10 @@ model outcomes, control failures found and fixed, and the limits of the initial 
 The [session trial report](evidence/agent-session-trials.md) records subsequent native
 continuation, repair review and model-switching evidence. The [efficiency trial record](evidence/agent-efficiency-trials.md)
 records the two-history phase trial, exact OTEL reconciliation and browser workload controls.
+`npm run eval:activation` tests the short conversational entrypoint with an actual Sol high
+coordinator and real goal/worktree/job commands; the nested intake is a stopped fixture.
+It catches a missing run, the wrong parent, premature source edits or publication attempts.
+This routing eval complements the production supervisor tests; it is not a full feature trial.
 
 Selected ECC retrieval and checkpoint practices are adapted into the existing skills;
 see [pinned provenance and scope](../harness/README.md#selected-ecc-practices). No ECC

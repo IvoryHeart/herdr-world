@@ -35,6 +35,19 @@ This is a lightweight internal onboarding note for agents working in this repo.
   Intake asks only consequential questions; resume the saved run with the owner's answers.
   Reuse a lead history for planning/implementation and an independent review history for QA/review;
   do not reload the full repository in newly spawned agents for each persona.
+- **Feature execution is through the harness.** In the coordinating conversation, start
+  `npm run agent:goal -- "<goal>" --parent <PR> --background` (omit `--parent` for main)
+  before doing feature research, interviewing, planning or editing. Report the task worktree,
+  job ID and run ID. Relay the managed intake's questions and continue that recorded run.
+  Reading these instructions or using OpenSpec/test commands alone does not execute the harness.
+  Do not replace a blocked/exhausted run with single-session implementation or bypass the
+  delivery evidence check with direct `git push` / `gh pr create`.
+- A worker receiving a supervisor phase is already inside the harness: follow that phase,
+  never launch another loop. Harness/control maintenance is interactive because workers cannot
+  edit their controls; record `agent:task interactive --reason harness-maintenance --note "..."`.
+  Other interactive feature work requires an explicit owner request, recorded with reason
+  `owner-request`. This exception does not apply merely because the feature is small or the
+  coordinator prefers to implement it. Read-only reviews and analysis need no task/run record.
 - Create task worktrees with `npm run agent:worktree -- create <slug>`. They live in
   the primary checkout's ignored `.agents/.worktrees/`, including when invoked from
   a linked worktree. Do not move or clean another agent's existing worktree.

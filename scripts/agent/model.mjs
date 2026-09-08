@@ -9,7 +9,7 @@ import { readLedger, attemptsFromLedger, startUsage, recordEvent, normalizeUsage
 import { telemetryArguments, flushTelemetry } from './telemetry.mjs';
 import { changedPaths } from './run-state.mjs';
 
-export function modelArguments(role, selected, session, telemetry) {
+export function modelArguments(role, selected, session, telemetry, referenceImages = []) {
   return ['/opt/harness/node_modules/.bin/codex', 'exec',
     ...(session.resumed ? ['resume', session.meta.threadId] : []),
     '--json', '--ignore-user-config', '--model', selected.model,
@@ -17,6 +17,7 @@ export function modelArguments(role, selected, session, telemetry) {
     '-c', 'model_reasoning_effort=' + JSON.stringify(selected.reasoningEffort),
     '-c', 'agents.enabled=false',
     ...telemetryArguments(telemetry),
+    ...referenceImages.flatMap(path => ['--image', path]),
     '--output-schema', '/control/harness/schemas/' + role + '.json', '-'];
 }
 export async function invokeModel(runDir, state, role) {
@@ -32,6 +33,8 @@ export async function invokeModel(runDir, state, role) {
   const instructions = await readFile(join(control, 'harness/roles', role + '.md'), 'utf8');
   const packet = {
     task: state.task, taskProfile: state.taskProfile,
+    referenceImages: (state.referenceImages ?? []).map(ref => ({ ...ref,
+      file: join(state.environment === 'harbor' ? control : '/control', ref.file) })),
     acceptance: state.requirements?.criteria ?? [], plan: state.plan?.summary ?? null,
     qaScenarios: state.qaPlan?.scenarios ?? [], specialists: state.specialists ?? [],
     intake: state.intake?.summary ?? null,
@@ -45,6 +48,7 @@ export async function invokeModel(runDir, state, role) {
     ? '\n\n' + await readFile(join(control, 'harness/roles/specialists.md'), 'utf8') : '';
   const prompt = instructions + specialistInstructions + '\n\n' +
     'Current phase: ' + role + '. Its permissions and output schema replace those of your previous phase. ' +
+    'You are already inside the recorded harness run. Do not start agent:goal, agent:run, another worktree or another orchestrator; follow this phase and return its schema. ' +
     'Repository root: ' + (state.environment === 'harbor' ? workspace : '/workspace') + '. Do not append a repository name to this path.\n' +
     'Phase budget: ' + Math.floor(allowance.timeoutMs / 1000) + ' seconds, including shutdown. Aim to finish by ' +
     new Date(Date.now() + allowance.timeoutMs * .8).toISOString() + '. Keep the final summary concise with file references and concrete unfinished work if blocked.\n' +
@@ -82,7 +86,8 @@ export async function invokeModel(runDir, state, role) {
     recordEvent(runDir, 'checkpoint', { runId: state.id, attemptId: tracker.attempt.attemptId, role, reason });
   };
   let result;
-  try { result = await inContainer(state, workspace, modelArguments(role, selected, session, state.telemetry), {
+  try { result = await inContainer(state, workspace, modelArguments(role, selected, session, state.telemetry,
+    packet.referenceImages.map(ref => ref.file)), {
     instanceId: tracker.attempt.instanceId,
     control, authFile: state.authFile, network: 'bridge', readOnly: readOnlyRoles.has(role),
     sessionHome: session.home, handovers: join(runDir, 'handovers'),
