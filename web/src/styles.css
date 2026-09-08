@@ -2002,7 +2002,6 @@ button {
 .term-key-strip,
 .term-key-group,
 .term-key-actions,
-.term-key-panel,
 .term-input-row {
   display: flex;
   min-width: 0;
@@ -2054,11 +2053,6 @@ button {
   border-left: 1px solid var(--line);
 }
 
-.term-key-panel {
-  display: grid;
-  grid-template-columns: repeat(10, minmax(0, 1fr));
-}
-
 .term-key,
 .term-send {
   display: inline-grid;
@@ -2096,30 +2090,9 @@ button {
   color: var(--blue);
 }
 
-.term-key-compose-icon {
-  position: relative;
-  display: inline-flex;
-}
-
-.term-key-compose-icon .term-key-compose-plus {
-  position: absolute;
-  right: calc(-3px * var(--mobile-controls-scale));
-  bottom: calc(-2px * var(--mobile-controls-scale));
-  width: calc(8px * var(--mobile-controls-scale));
-  height: calc(8px * var(--mobile-controls-scale));
-  border-radius: 2px;
-  background: var(--surface0);
-  stroke-width: 3;
-}
-
 .term-send svg {
   width: calc(16px * var(--mobile-controls-scale));
   height: calc(16px * var(--mobile-controls-scale));
-}
-
-.term-key-panel .term-key {
-  width: 100%;
-  padding: 0 var(--mobile-key-panel-padding-x);
 }
 
 .term-key[data-active="true"] {
@@ -2129,18 +2102,18 @@ button {
 }
 
 .term-key-direct-row,
-.term-key-navigation {
+.term-key-more-row {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--mobile-control-gap);
 }
 
-.term-key-navigation {
+.term-key-more-row {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .term-key-direct-row .term-key,
-.term-key-navigation .term-key {
+.term-key-more-row .term-key {
   min-width: 0;
   padding: 0 var(--mobile-key-panel-padding-x);
 }
@@ -2202,17 +2175,6 @@ button {
 
 .term-key-composer-modifiers .term-key {
   flex: 1 1 0;
-}
-
-.term-key-composer-keys {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--mobile-control-gap);
-}
-
-.term-key-composer-keys .term-key {
-  width: 100%;
-  padding: 0 var(--mobile-key-panel-padding-x);
 }
 
 .term-key-composer-capture {
@@ -3533,4 +3495,30 @@ button {
 .app[data-touch="true"] .terminal-stage:has(.terminal-command-controls) .terminal-upload-status,
 .app[data-touch="true"] .terminal-stage:has(.terminal-command-controls) .terminal-selection-sheet {
   bottom: calc(var(--terminal-command-controls-height) + 8px * var(--mobile-controls-scale));
+}
+
+.terminal-command-controls[data-composing="true"] {
+  border-top-color: var(--accent);
+}
+
+.term-key-compose-action,
+.term-key-chord-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.term-key-more {
+  white-space: normal;
+  line-height: 1.1;
+  font-size: clamp(9px, calc(10px * var(--mobile-controls-scale)), 14px);
+}
+
+.term-key-composer-preview-label {
+  flex: 1;
+}
+
+.term-key-composer-preview-label > span {
+  color: var(--accent);
 }

@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Share mobile terminal keys between direct input and Compose mode, with explicit Send and
+  Cancel actions; rename Nav to More keys and remove the duplicate composer key grid.
+
 ### Fixed
 
 - Keep held mobile terminal keys repeating through UI updates, and send conventional

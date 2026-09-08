@@ -6,7 +6,6 @@ import {
   Keyboard,
   Link,
   Paperclip,
-  Plus,
   Send,
   SquareTerminal,
   TextCursorInput,
@@ -1538,7 +1537,7 @@ function MobileSelectionActions({
 const DIRECT_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
   ["arrow-left", "arrow-up", "arrow-down", "arrow-right", "backspace"].includes(key.id),
 );
-const NAVIGATION_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
+const MORE_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
   ["home", "end", "delete", "page-up", "page-down"].includes(key.id),
 );
 type MobileTerminalModifier = (typeof MOBILE_TERMINAL_MODIFIERS)[number]["id"];
@@ -1605,7 +1604,7 @@ export function TerminalCommandControls({
   };
   const [fieldKey, setFieldKey] = useState(0);
   const focusAfterSubmitRef = useRef(false);
-  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [moreKeysOpen, setMoreKeysOpen] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerModifiers, setComposerModifiers] = useState<MobileTerminalModifier[]>([]);
   const [composerKey, setComposerKey] = useState<MobileTerminalChordKey | null>(null);
@@ -1641,7 +1640,6 @@ export function TerminalCommandControls({
       onTerminalFocus();
     }
   };
-  const sendKey = (key: TerminalKey) => onInput(key.data);
   const resetMobileTerminalComposer = () => {
     setComposerOpen(false);
     setComposerModifiers([]);
@@ -1672,6 +1670,24 @@ export function TerminalCommandControls({
     onInput(encodeMobileTerminalChord(composerKey, composerModifiers));
     resetMobileTerminalComposer();
   };
+  const chooseComposerKey = (key: MobileTerminalChordKey, modifiers: MobileTerminalModifier[] = []) => {
+    setComposerKey(key);
+    setPrintableKey("");
+    if (modifiers.length > 0) {
+      setComposerModifiers((current) => [...new Set([...current, ...modifiers])]);
+    }
+  };
+  const renderSharedKey = (key: MobileTerminalChordKey, repeat: boolean) => composerOpen ? (
+    <button key={key.id} className="term-key" type="button"
+      aria-label={`Use ${key.name} key`} aria-pressed={composerKey?.id === key.id}
+      data-active={composerKey?.id === key.id ? "true" : "false"}
+      disabled={disabled} onClick={() => chooseComposerKey(key)}>
+      {key.label}
+    </button>
+  ) : (
+    <MobileTerminalKeyButton key={key.id} terminalKey={key} disabled={disabled}
+      repeat={repeat} onInput={onInput} />
+  );
   const attachQuickKeyScrollHints = useCallback((node: HTMLDivElement | null) => {
     if (!node) {
       return;
@@ -1777,8 +1793,9 @@ export function TerminalCommandControls({
     <div
       ref={rootRef}
       className="terminal-command-controls"
-      data-expanded={mobileControls && (composerOpen || navigationOpen) ? "true" : "false"}
+      data-expanded={mobileControls && (composerOpen || moreKeysOpen) ? "true" : "false"}
       data-mobile-controls={mobileControls ? "true" : "false"}
+      data-composing={mobileControls && composerOpen ? "true" : "false"}
     >
       <div className="term-key-strip" aria-label="Common terminal keys" hidden={!mobileControls}>
         <div
@@ -1787,34 +1804,15 @@ export function TerminalCommandControls({
           role="group"
           aria-label="Terminal quick keys"
         >
-          <button
-            className="term-key"
-            type="button"
-            disabled={disabled}
-            onClick={() => sendKey(ESC_KEY)}
-          >
-            {ESC_KEY.label}
-          </button>
-          {COMMON_KEYS.map((key) => (
-            <button
-              key={key.label}
-              className="term-key"
-              type="button"
-              disabled={disabled}
-              onClick={() => sendKey(key)}
-            >
-              {key.label}
-            </button>
-          ))}
-          {QUICK_NUMBER_KEYS.map((key) => (
-            <button
-              key={key.label}
-              className="term-key"
-              type="button"
-              disabled={disabled}
-              onClick={() => sendKey(key)}
-            >
-              {key.label}
+          {QUICK_TERMINAL_KEYS.map(({ key, modifiers, label }) => (
+            <button key={key.id} className="term-key" type="button" disabled={disabled}
+              aria-label={composerOpen ? `Use ${label} key` : undefined}
+              aria-pressed={composerOpen ? composerKey?.id === key.id : undefined}
+              data-active={composerOpen && composerKey?.id === key.id ? "true" : "false"}
+              onClick={() => composerOpen
+                ? chooseComposerKey(key, modifiers)
+                : onInput(encodeMobileTerminalChord(key, modifiers))}>
+              {label}
             </button>
           ))}
         </div>
@@ -1831,7 +1829,7 @@ export function TerminalCommandControls({
           </button>
           {stageCommandButton}
           <button
-            className="term-key term-key-icon term-key-compose-action"
+            className="term-key term-key-compose-action"
             type="button"
             aria-label={composerOpen ? "Close terminal key composer" : "Compose terminal key"}
             aria-expanded={composerOpen}
@@ -1840,10 +1838,8 @@ export function TerminalCommandControls({
             disabled={disabled && !composerOpen}
             onClick={toggleMobileTerminalComposer}
           >
-            <span className="term-key-compose-icon" aria-hidden="true">
-              <Keyboard size={15} />
-              <Plus className="term-key-compose-plus" size={8} />
-            </span>
+            <Keyboard size={15} aria-hidden="true" />
+            Compose
           </button>
           <button
             className="term-key term-key-icon"
@@ -1866,39 +1862,24 @@ export function TerminalCommandControls({
 
       {mobileControls ? (
         <div className="term-key-direct-row" role="group" aria-label="Direct terminal keys">
-          {DIRECT_TERMINAL_KEYS.map((key) => (
-            <MobileTerminalKeyButton
-              key={key.id}
-              terminalKey={key}
-              disabled={disabled}
-              repeat
-              onInput={onInput}
-            />
-          ))}
+          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, true))}
           <button
-            className="term-key"
+            className="term-key term-key-more"
             type="button"
-            aria-label={navigationOpen ? "Hide navigation keys" : "Show navigation keys"}
-            aria-expanded={navigationOpen}
-            data-active={navigationOpen ? "true" : "false"}
-            onClick={() => setNavigationOpen((open) => !open)}
+            aria-label={moreKeysOpen ? "Hide more keys" : "Show more keys"}
+            aria-expanded={moreKeysOpen}
+            data-active={moreKeysOpen ? "true" : "false"}
+            onClick={() => setMoreKeysOpen((open) => !open)}
           >
-            Nav
+            More keys
           </button>
         </div>
       ) : null}
 
-      {mobileControls && navigationOpen ? (
-        <div className="term-key-navigation" role="group" aria-label="Navigation keys">
-          {NAVIGATION_TERMINAL_KEYS.map((key) => (
-            <MobileTerminalKeyButton
-              key={key.id}
-              terminalKey={key}
-              disabled={disabled}
-              repeat={key.id !== "home" && key.id !== "end"}
-              onInput={onInput}
-            />
-          ))}
+      {mobileControls && moreKeysOpen ? (
+        <div className="term-key-more-row" role="group" aria-label="More terminal keys">
+          {MORE_TERMINAL_KEYS.map((key) =>
+            renderSharedKey(key, key.id !== "home" && key.id !== "end"))}
         </div>
       ) : null}
 
@@ -1906,18 +1887,20 @@ export function TerminalCommandControls({
         <div className="term-key-composer" aria-label="Terminal key composer">
           <div className="term-key-composer-preview">
             <div className="term-key-composer-preview-label" aria-live="polite">
-              <span>Composed key</span>
+              <span>Composing shortcut</span>
               <strong>{composerChordLabel ?? "Choose a key"}</strong>
             </div>
+            <button className="term-key" type="button" aria-label="Cancel shortcut"
+              onClick={resetMobileTerminalComposer}>Cancel</button>
             <button
-              className="term-send"
+              className="term-key term-key-chord-send"
               type="button"
               aria-label={composerChordLabel ? `Send ${composerChordLabel}` : "Send composed key"}
               title="Send composed key"
               disabled={disabled || !composerKey}
               onClick={sendMobileTerminalChord}
             >
-              <Send size={16} />
+              <Send size={16} aria-hidden="true" /> Send
             </button>
           </div>
           <div className="term-key-composer-modifiers" aria-label="Chord modifiers">
@@ -1929,6 +1912,7 @@ export function TerminalCommandControls({
                   className="term-key"
                   type="button"
                   data-active={active ? "true" : "false"}
+                  aria-pressed={active}
                   aria-label={`${active ? "Remove" : "Add"} ${modifier.label} modifier`}
                   disabled={disabled}
                   onClick={() => toggleComposerModifier(modifier.id)}
@@ -1937,24 +1921,6 @@ export function TerminalCommandControls({
                 </button>
               );
             })}
-          </div>
-          <div className="term-key-composer-keys" aria-label="Special terminal keys">
-            {MOBILE_TERMINAL_SPECIAL_KEYS.map((key) => (
-              <button
-                key={key.id}
-                className="term-key"
-                type="button"
-                data-active={composerKey?.id === key.id ? "true" : "false"}
-                aria-label={`Use ${key.name} key`}
-                disabled={disabled}
-                onClick={() => {
-                  setComposerKey(key);
-                  setPrintableKey("");
-                }}
-              >
-                {key.label}
-              </button>
-            ))}
           </div>
           <div className="term-key-composer-capture">
             <label>
@@ -1981,7 +1947,7 @@ export function TerminalCommandControls({
               />
             </label>
           </div>
-          <p>Send the composed key, or tap Compose again to close and discard.</p>
+          <p>Tap a key above or enter a printable key, then Send. Cancel returns to direct keys.</p>
         </div>
       ) : null}
 
@@ -2060,23 +2026,19 @@ export function isCommandComposerSubmitShortcut(
     : event.ctrlKey && !event.metaKey;
 }
 
-type TerminalKey = {
+const QUICK_TERMINAL_KEYS: {
+  key: MobileTerminalChordKey;
+  modifiers: MobileTerminalModifier[];
   label: string;
-  data: string;
-};
-
-const COMMON_KEYS: TerminalKey[] = [
-  { label: "Tab", data: "\t" },
-  { label: "C-c", data: "\x03" },
-  { label: "C-d", data: "\x04" },
-];
-
-const ESC_KEY: TerminalKey = { label: "Esc", data: "\x1B" };
-
-const QUICK_NUMBER_KEYS: TerminalKey[] = [
-  { label: "1", data: "1" },
-  { label: "2", data: "2" },
-  { label: "3", data: "3" },
+}[] = [
+  ...MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) => ["escape", "tab"].includes(key.id))
+    .map((key) => ({ key, modifiers: [], label: key.label })),
+  ...["c", "d"].map((value) => ({
+    key: mobileTerminalPrintableKey(value), modifiers: ["ctrl" as const], label: `C-${value}`,
+  })),
+  ...["1", "2", "3"].map((value) => ({
+    key: mobileTerminalPrintableKey(value), modifiers: [], label: value,
+  })),
 ];
 
 function terminalSocketUrl(

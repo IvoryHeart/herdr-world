@@ -394,7 +394,7 @@ describe("TerminalCommandControls", () => {
       "Compose terminal key",
       "Focus terminal keyboard",
     ]);
-    expect(actions.textContent?.trim()).toBe("");
+    expect(actions.textContent?.trim()).toBe("Compose");
     expect(container.querySelector("form")?.querySelectorAll("button")).toHaveLength(1);
     const shortcuts = container.querySelector('[aria-label="Terminal quick keys"]');
     if (!(shortcuts instanceof HTMLElement)) {
@@ -455,22 +455,47 @@ describe("TerminalCommandControls", () => {
     expect(shortcuts.dataset.scrollRight).toBe("false");
   });
 
-  it("sends direct keys while preserving a pending composed chord", async () => {
+  it("uses one shared key set to select a chord without sending or repeating", async () => {
+    const { container, onInput } = await renderControls(false);
+    await setCommandValue(commandField(container), "keep draft");
+    await clickButton(container, "Show more keys");
+    const keyCount = container.querySelectorAll(".term-key-direct-row button, .term-key-more-row button").length;
+    await clickButton(container, "Compose terminal key");
+    await clickButton(container, "Add Alt modifier");
+    vi.useFakeTimers();
+    await clickButton(container, "Use Left key");
+    await clickButton(container, "Use Home key");
+    await act(async () => vi.advanceTimersByTime(1000));
+    expect(onInput).not.toHaveBeenCalled();
+    expect(container.querySelectorAll(".term-key-direct-row button, .term-key-more-row button")).toHaveLength(keyCount);
+    expect(container.querySelectorAll('[aria-label="Use Home key"]')).toHaveLength(1);
+    expect(container.querySelector('[aria-label="Use Home key"]')?.getAttribute("aria-pressed")).toBe("true");
+    expect(composerPanel(container).textContent).toContain("Composing shortcut");
+    await clickButton(container, "Send Alt + Home");
+    await clickButton(container, "Send Left");
+    expect(onInput.mock.calls).toEqual([["\x1B[1;3H"], ["\x1B[D"]]);
+    expect(commandField(container).value).toBe("keep draft");
+  });
+
+  it("selects quick keys in Compose mode and cancels without sending", async () => {
     const { container, onInput } = await renderControls(false);
     await clickButton(container, "Compose terminal key");
-    await clickButton(container, "Add Ctrl modifier");
-    await clickButton(container, "Add Shift modifier");
-    await clickButton(container, "Use Up key");
-    await clickButton(container, "Send Left");
-    await clickButton(container, "Send Backspace");
-    await clickButton(container, "Send Ctrl + Shift + ↑");
-
-    expect(onInput.mock.calls).toEqual([["\x1B[D"], ["\x7F"], ["\x1B[1;6A"]]);
+    for (const key of ["Esc", "Tab", "C-c", "C-d", "1", "2", "3"]) {
+      await clickButton(container, `Use ${key} key`);
+    }
+    expect(onInput).not.toHaveBeenCalled();
+    await clickButton(container, "Cancel shortcut");
+    expect(container.querySelector(".term-key-composer")).toBeNull();
+    await clickButton(container, "Compose terminal key");
+    expect(composerPanel(container).textContent).toContain("Choose a key");
+    await clickButton(container, "Use C-c key");
+    await clickButton(container, "Send Ctrl + c");
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("\x03");
   });
 
   it("keeps the navigation pad open across direct keys and Compose sends", async () => {
     const { container, onInput } = await renderControls(false);
-    await clickButton(container, "Show navigation keys");
+    await clickButton(container, "Show more keys");
     for (const name of ["Home", "End", "Delete", "Page Up", "Page Down"]) {
       await clickButton(container, `Send ${name}`);
     }
@@ -489,7 +514,7 @@ describe("TerminalCommandControls", () => {
       ["\x1B[Z"],
       ["\x1B[H"],
     ]);
-    await clickButton(container, "Hide navigation keys");
+    await clickButton(container, "Hide more keys");
     expect(container.querySelector('[aria-label="Send Home"]')).toBeNull();
   });
 
