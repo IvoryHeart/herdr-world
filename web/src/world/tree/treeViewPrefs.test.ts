@@ -2,7 +2,11 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  boundTreeCamera,
   DEFAULT_TREE_VIEW_PREFS,
+  fitTreeCamera,
+  TREE_MAX_ZOOM,
+  TREE_MIN_ZOOM,
   TREE_VIEW_PREFS_KEY,
   parseTreeViewPrefs,
   readTreeViewPrefs,
@@ -32,5 +36,28 @@ describe("Tree view preferences", () => {
     expect(parsed.camera).toEqual(DEFAULT_TREE_VIEW_PREFS.camera);
     expect(parsed.collapsedIds[0]).toBe("ok");
     expect(parsed.collapsedIds).toHaveLength(2304);
+  });
+
+  it("bounds runtime cameras to scaled map geometry", () => {
+    const geometry = { viewportWidth: 600, viewportHeight: 400, mapWidth: 1_000, mapHeight: 800 };
+    expect(boundTreeCamera({ x: 50_000, y: -50_000, zoom: 8 }, geometry)).toEqual({
+      x: 16,
+      y: -1_616,
+      zoom: TREE_MAX_ZOOM,
+    });
+    expect(boundTreeCamera({ x: -50_000, y: 50_000, zoom: 0.01 }, geometry)).toEqual({
+      x: 100,
+      y: 40,
+      zoom: TREE_MIN_ZOOM,
+    });
+  });
+
+  it("fits a map within the padded viewport and zoom bounds", () => {
+    expect(fitTreeCamera({
+      viewportWidth: 600,
+      viewportHeight: 400,
+      mapWidth: 1_000,
+      mapHeight: 800,
+    })).toEqual({ x: 70, y: 16, zoom: 0.46 });
   });
 });

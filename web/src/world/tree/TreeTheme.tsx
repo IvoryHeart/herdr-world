@@ -11,7 +11,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import { AgentIcon } from "../../AgentIcon";
@@ -25,13 +25,12 @@ import type {
 import { isWorldThemeContext } from "../worldThemeContext";
 import type { WorldThemeContext } from "../worldThemeContext";
 import {
+  boundTreeCamera,
+  fitTreeCamera,
   readTreeViewPrefs,
   writeTreeViewPrefs,
 } from "./treeViewPrefs";
 import type { TreeCamera } from "./treeViewPrefs";
-
-const MIN_ZOOM = 0.4;
-const MAX_ZOOM = 2.5;
 
 export default function TreeTheme({ context: value }: SurfaceComponentProps) {
   if (!isWorldThemeContext(value)) {
@@ -88,38 +87,69 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
     });
   }, []);
 
-  const zoomBy = (factor: number) => setCamera((current) => ({
+  const cameraGeometry = useCallback(() => {
+    const viewport = viewportRef.current;
+    const map = mapRef.current;
+    if (!viewport || !map) return null;
+    return {
+      viewportWidth: viewport.clientWidth,
+      viewportHeight: viewport.clientHeight,
+      mapWidth: map.scrollWidth,
+      mapHeight: map.scrollHeight,
+    };
+  }, []);
+
+  const updateCamera = useCallback((update: (current: TreeCamera) => TreeCamera) => {
+    setCamera((current) => {
+      const next = update(current);
+      const geometry = cameraGeometry();
+      return geometry ? boundTreeCamera(next, geometry) : next;
+    });
+  }, [cameraGeometry]);
+
+  const zoomBy = (factor: number) => updateCamera((current) => ({
     ...current,
-    zoom: clampZoom(current.zoom * factor),
+    zoom: current.zoom * factor,
   }));
 
   const fit = useCallback(() => {
     const viewport = viewportRef.current;
     const map = mapRef.current;
     if (!viewport || !map) return;
-    const width = Math.max(map.scrollWidth, 1);
-    const height = Math.max(map.scrollHeight, 1);
-    const zoom = clampZoom(Math.min(
-      (viewport.clientWidth - 32) / width,
-      (viewport.clientHeight - 32) / height,
-      1,
-    ));
-    setCamera({ x: 16, y: 16, zoom });
+    setCamera(fitTreeCamera({
+      viewportWidth: viewport.clientWidth,
+      viewportHeight: viewport.clientHeight,
+      mapWidth: map.scrollWidth,
+      mapHeight: map.scrollHeight,
+    }));
   }, []);
 
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const map = mapRef.current;
+    if (!viewport || !map) return;
+    const constrain = () => updateCamera((current) => current);
+    constrain();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(constrain);
+    observer.observe(viewport);
+    observer.observe(map);
+    return () => observer.disconnect();
+  }, [projection, queryActive, updateCamera]);
+
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as Element).closest("button, input")) return;
+    if ((event.target as Element).closest("button, input, .tree-card-wrap")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, camera };
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    setCamera({
+    updateCamera(() => ({
       ...drag.camera,
       x: drag.camera.x + event.clientX - drag.x,
       y: drag.camera.y + event.clientY - drag.y,
-    });
+    }));
   };
   const endPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
@@ -154,10 +184,12 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
           onPointerDown={onPointerDown} onPointerMove={onPointerMove}
           onPointerUp={endPointer} onPointerCancel={endPointer}
           onWheel={(event) => {
+            event.preventDefault();
             if (event.ctrlKey || event.metaKey) zoomBy(event.deltaY > 0 ? 0.9 : 1.1);
-            else setCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
+            else updateCamera((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
           }}>
-          <div ref={mapRef} className="tree-map" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
+          <div ref={mapRef} className="tree-map" aria-hidden="true"
+            style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
             {visibleHosts.map((host) => (
               <VisualHost key={host.node.id} host={host} matches={matches}
                 queryActive={queryActive} collapsedIds={collapsedIds} selectedKey={context.selectedKey}
@@ -211,13 +243,15 @@ function VisualHost({ host, ...props }: { host: WorldGraphHost } & TreeBranchPro
   const spaces = shownSpaces(host, props.matches, props.queryActive);
   return <section className="tree-visual-host">
     <VisualCard node={host.node} selectedKey={props.selectedKey} onSelect={props.onSelect}
-      collapsible collapsed={collapsed} onToggle={() => props.onToggle(host.node.id)} />
+      collapsible collapsed={collapsed}
+      onToggle={props.queryActive ? undefined : () => props.onToggle(host.node.id)} />
     {!collapsed ? <div className="tree-visual-spaces">{spaces.map((space) => {
       const spaceCollapsed = props.collapsedIds.has(space.node.id) && !props.queryActive;
       const children = shownChildren(space, props.matches, props.queryActive);
       return <section className="tree-visual-space" key={space.node.id}>
         <VisualCard node={space.node} selectedKey={props.selectedKey} onSelect={props.onSelect}
-          collapsible collapsed={spaceCollapsed} onToggle={() => props.onToggle(space.node.id)} />
+          collapsible collapsed={spaceCollapsed}
+          onToggle={props.queryActive ? undefined : () => props.onToggle(space.node.id)} />
         {!spaceCollapsed ? <div className="tree-visual-leaves">{children.map((child) =>
           <VisualCard key={child.id} node={child} selectedKey={props.selectedKey}
             onSelect={props.onSelect} onActivate={props.onActivate} />)}</div> : null}
@@ -233,15 +267,13 @@ function VisualCard({ node, selectedKey, onSelect, onActivate, collapsible, coll
   collapsible?: boolean; collapsed?: boolean; onToggle?: () => void;
 }) {
   return <div className="tree-card-wrap" data-kind={node.kind} data-state={displayStatus(node)}>
-    <button className="tree-card" type="button" aria-pressed={selectedKey === node.selectionKey}
-      aria-label={`${node.label}, ${kindLabel(node)}, ${nodeSummary(node)}`}
+    <div className="tree-card" data-selected={selectedKey === node.selectionKey}
       onClick={() => onSelect(node.selectionKey, node.hostKey)}
       onDoubleClick={() => node.actionable && onActivate?.(node)}>
       <NodeIcon node={node} /><span><strong>{node.label}</strong><small>{nodeSummary(node)}</small></span>
-    </button>
-    {collapsible ? <button className="tree-card-collapse" type="button"
-      aria-label={`${collapsed ? "Expand" : "Collapse"} ${node.label}`} aria-expanded={!collapsed}
-      onClick={onToggle}><ChevronRight size={14} /></button> : null}
+    </div>
+    {collapsible ? <div className="tree-card-collapse" data-expanded={!collapsed}
+      onClick={onToggle}><ChevronRight size={14} /></div> : null}
   </div>;
 }
 
@@ -268,7 +300,7 @@ function SemanticSpace({ space, ...props }: { space: WorldGraphSpace } & TreeBra
       {shownChildren(space, props.matches, props.queryActive).map((child) => <li key={child.id}>
         <button className="tree-semantic-select" type="button"
           aria-pressed={props.selectedKey === child.selectionKey}
-          aria-label={`${child.label}, ${kindLabel(child)}, ${nodeSummary(child)}. Double-click to open terminal.`}
+          aria-label={`${accessibleNodeName(child, space.node.label)}, ${nodeSummary(child)}. Double-click to open terminal.`}
           onClick={() => props.onSelect(child.selectionKey, child.hostKey)}
           onDoubleClick={() => child.actionable && props.onActivate(child)}>
           <NodeIcon node={child} /><span><strong>{child.label}</strong><small>{nodeSummary(child)}</small></span>
@@ -284,16 +316,20 @@ function SemanticSpace({ space, ...props }: { space: WorldGraphSpace } & TreeBra
   </li>;
 }
 
-function SemanticParent({ node, collapsed, onToggle, onSelect, onOpenInSpaces, selectedKey }: {
+function SemanticParent({ node, collapsed, queryActive, onToggle, onSelect, onOpenInSpaces, selectedKey }: {
   node: WorldGraphNode; collapsed: boolean; onToggle: (id: string) => void;
   onSelect: (selectionKey: string, hostKey: string) => void;
-  onOpenInSpaces: (node: WorldGraphNode) => void; selectedKey: string | null;
+  onOpenInSpaces: (node: WorldGraphNode) => void; selectedKey: string | null; queryActive: boolean;
 }) {
   return <div className="tree-semantic-row">
-    <button className="tree-disclosure" type="button" aria-label={`${collapsed ? "Expand" : "Collapse"} ${node.label}`}
-      aria-expanded={!collapsed} onClick={() => onToggle(node.id)}><ChevronRight size={14} /></button>
+    <button className="tree-disclosure" type="button"
+      aria-label={queryActive
+        ? `${accessibleNodeName(node)} expanded for search`
+        : `${collapsed ? "Expand" : "Collapse"} ${accessibleNodeName(node)}`}
+      aria-expanded={queryActive || !collapsed} disabled={queryActive}
+      onClick={() => onToggle(node.id)}><ChevronRight size={14} /></button>
     <button className="tree-semantic-select" type="button" aria-pressed={selectedKey === node.selectionKey}
-      aria-label={`${node.label}, ${kindLabel(node)}, ${nodeSummary(node)}`}
+      aria-label={`${accessibleNodeName(node)}, ${nodeSummary(node)}`}
       onClick={() => onSelect(node.selectionKey, node.hostKey)}><NodeIcon node={node} />
       <span><strong>{node.label}</strong><small>{nodeSummary(node)}</small></span></button>
     {node.kind === "space" && node.actionable ? <button type="button" className="tree-open"
@@ -366,6 +402,12 @@ function ancestryLabels(node: WorldGraphNode, projection: HerdrGraphProjection) 
   const parent = projection.nodes.find(({ id }) => id === node.parentId);
   return [node.hostLabel, parent?.label ?? "Space", node.label];
 }
+function accessibleNodeName(node: WorldGraphNode, spaceLabel?: string) {
+  const host = `${node.hostLabel} (${node.hostKey})`;
+  if (node.kind === "host") return `${node.label}, Host ${node.hostKey}`;
+  if (node.kind === "space") return `${node.label}, Space on host ${host}`;
+  return `${node.label}, ${kindLabel(node)} in ${spaceLabel ?? "space"} on host ${host}`;
+}
 function displayStatus(node: WorldGraphNode) { return node.disconnected ? "disconnected" : node.status; }
 function kindLabel(node: WorldGraphNode) { return node.kind[0]?.toUpperCase() + node.kind.slice(1); }
 function nodeSummary(node: WorldGraphNode) {
@@ -380,4 +422,3 @@ function NodeIcon({ node }: { node: WorldGraphNode }) {
   if (node.agentKind) return <span aria-hidden="true"><AgentIcon kind={node.agentKind} /></span>;
   return node.kind === "agent" ? <Bot size={17} aria-hidden="true" /> : <SquareTerminal size={17} aria-hidden="true" />;
 }
-function clampZoom(value: number) { return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value)); }
