@@ -74,8 +74,9 @@ try {
   assert(current, 'No discovery result for the trial worktree');
   assert.deepEqual(current.errors, [], 'Native skill loading errors');
   const enabled = current.skills.filter(skill => skill.enabled);
+  const upstreamNames = name => [name, `superpowers:${name}`];
   for (const name of release.skills) {
-    const matches = enabled.filter(skill => skill.name === name);
+    const matches = enabled.filter(skill => upstreamNames(name).includes(skill.name));
     assert.equal(matches.length, 1, 'Missing or duplicated upstream skill: ' + name);
   }
   assert.equal(enabled.filter(skill => skill.name.startsWith('openspec-')).length, 6, 'OpenSpec skill visibility');
@@ -90,7 +91,8 @@ try {
   if (primary !== repoRoot) {
     const outside = discovery.data.find(row => row.cwd === primary);
     assert(outside, 'Missing primary checkout scope comparison');
-    assert(!outside.skills.some(skill => skill.enabled && release.skills.includes(skill.name)),
+    assert(!outside.skills.some(skill => skill.enabled
+      && release.skills.some(name => upstreamNames(name).includes(skill.name))),
       'Trial skills leaked into the primary checkout');
   }
   console.log(JSON.stringify({ status: 'passed', superpowers: release.version,
