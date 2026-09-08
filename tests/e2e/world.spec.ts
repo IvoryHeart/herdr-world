@@ -864,6 +864,19 @@ test("coalesces rapid refresh signals and keeps Office responsive during activit
   await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-a", snapshotVariant: "large" },
   });
+  const snapshotResponse = await request.get("http://127.0.0.1:4173/api/snapshot");
+  expect(snapshotResponse.ok()).toBe(true);
+  const fixtureSnapshot = await snapshotResponse.json() as {
+    panes: { pane_id: string; workspace_id: string; display_agent: string }[];
+  };
+  expect(fixtureSnapshot.panes.some((pane) => pane.pane_id === "large-pane-0")).toBe(false);
+  const activityPane = fixtureSnapshot.panes.find((pane) => pane.pane_id === "large-pane-1");
+  expect(activityPane).toMatchObject({
+    pane_id: "large-pane-1",
+    workspace_id: "workspace-1",
+    display_agent: "Agent 01",
+  });
+  if (!activityPane) throw new Error("Large fixture activity pane is missing");
   await page.goto("/world");
   await waitForOffice(page);
   await waitForOfficeRendererIdle(page);
@@ -878,12 +891,12 @@ test("coalesces rapid refresh signals and keeps Office responsive during activit
           path: "/ws/activity",
           event: {
             type: "pane.agent_status_changed",
-            pane_id: "large-pane-0",
-            workspace_id: "workspace-1",
+            pane_id: activityPane.pane_id,
+            workspace_id: activityPane.workspace_id,
             agent_status: index % 2 === 0 ? "working" : "idle",
             agent: "codex",
             title: null,
-            display_agent: "Agent 01",
+            display_agent: activityPane.display_agent,
             state_labels: {},
           },
         },
