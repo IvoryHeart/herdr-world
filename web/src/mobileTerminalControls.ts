@@ -94,6 +94,12 @@ export const MOBILE_TERMINAL_SPECIAL_KEYS: readonly MobileTerminalChordKey[] = [
     encoding: { kind: "csi-final", data: "\x1B[C", finalByte: "C" },
   },
   {
+    id: "enter",
+    name: "Enter",
+    label: "Enter",
+    encoding: { kind: "literal", data: "\r" },
+  },
+  {
     id: "home",
     name: "Home",
     label: "Home",
@@ -162,7 +168,7 @@ export function encodeMobileTerminalChord(
   }
   if (encoding.kind === "literal") {
     // The composer sends legacy VT input; it does not negotiate modifyOtherKeys.
-    // Ctrl+Tab/Escape and Shift+Backspace/Escape have no distinct legacy encoding.
+    // Ctrl+Tab/Enter/Escape and Shift+Backspace/Enter/Escape have no distinct legacy encoding.
     let data = uniqueModifiers.has("shift") && encoding.shiftedData
       ? encoding.shiftedData
       : encoding.data;

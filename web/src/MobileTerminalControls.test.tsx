@@ -531,7 +531,7 @@ describe("TerminalCommandControls", () => {
     expect(container.querySelector(".term-key-more-row")).toBeNull();
     expect(container.querySelector(".term-key-direct-row")).toBeNull();
     await clickButton(container, "Show more keys");
-    expect(container.querySelectorAll(".term-key-direct-row button")).toHaveLength(5);
+    expect(container.querySelectorAll(".term-key-direct-row button")).toHaveLength(6);
     await clickButton(container, "Send Up");
     expect(onInput).toHaveBeenCalledExactlyOnceWith("\x1B[A");
     await openComposer(container);
@@ -547,7 +547,7 @@ describe("TerminalCommandControls", () => {
     expect(onInput).toHaveBeenCalledExactlyOnceWith("\t");
     await clickButton(container, "Show more keys");
     expect([...container.querySelectorAll(".term-key-direct-row button")].map((button) => button.textContent))
-      .toEqual(["Bksp", "←", "↑", "↓", "→"]);
+      .toEqual(["Bksp", "←", "↑", "↓", "→", "Enter"]);
     const compose = container.querySelector('[aria-label="Compose terminal key"]')!;
     expect(compose.textContent?.trim()).toBe("");
     expect(compose.querySelector("svg")).not.toBeNull();
@@ -618,6 +618,33 @@ describe("TerminalCommandControls", () => {
     await tap(container.querySelector<HTMLButtonElement>('[aria-label="Use Up key"]')!, printable);
     expect(composerPanel(container).textContent).toContain("Alt + ↑");
     expect(onInput).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends Enter once when held and composes Alt+Enter without changing the draft", async () => {
+    const { container, onInput, onSubmitCommand } = await renderControls(false);
+    await setCommandValue(commandField(container), "keep draft");
+    expect(container.querySelector('[aria-label="Send Enter"]')).toBeNull();
+    await clickButton(container, "Show more keys");
+    const enter = container.querySelector<HTMLButtonElement>('[aria-label="Send Enter"]')!;
+    enter.setPointerCapture = vi.fn();
+    vi.useFakeTimers();
+    await act(async () => {
+      enter.dispatchEvent(new PointerEvent("pointerdown", {
+        bubbles: true, cancelable: true, pointerId: 1, isPrimary: true, button: 0, pointerType: "touch",
+      }));
+      vi.advanceTimersByTime(1500);
+      enter.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));
+      enter.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("\r");
+    await openComposer(container);
+    await clickButton(container, "Add Alt modifier");
+    await clickButton(container, "Use Enter key");
+    expect(onInput).toHaveBeenCalledTimes(1);
+    await clickButton(container, "Send Alt + Enter");
+    expect(onInput.mock.calls).toEqual([["\r"], ["\x1B\r"]]);
+    expect(commandField(container).value).toBe("keep draft");
+    expect(onSubmitCommand).not.toHaveBeenCalled();
   });
 
   it("captures a printable key for Alt chords", async () => {

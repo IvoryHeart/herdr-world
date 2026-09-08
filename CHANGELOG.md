@@ -6,6 +6,9 @@
 
 ### Added
 
+- Add a non-repeating Enter key at the end of the expanded mobile arrow row, also selectable
+  for shortcuts such as Alt+Enter. [PR #89](https://github.com/kcosr/herdr-web/pull/89).
+
 - Add mobile terminal keys with hold-repeat and a shortcut builder for Ctrl, Shift, and Alt
   combinations with special or printable keys. [PR #63](https://github.com/kcosr/herdr-web/pull/63).
 

@@ -1536,7 +1536,7 @@ function MobileSelectionActions({
 }
 
 const DIRECT_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
-  ["backspace", "arrow-left", "arrow-up", "arrow-down", "arrow-right"].includes(key.id),
+  ["backspace", "arrow-left", "arrow-up", "arrow-down", "arrow-right", "enter"].includes(key.id),
 );
 const MORE_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
   ["home", "end", "delete", "page-up", "page-down"].includes(key.id),
@@ -1866,7 +1866,7 @@ export function TerminalCommandControls({
 
       {mobileControls && moreKeysOpen ? (
         <div className="term-key-direct-row" role="group" aria-label="Direct terminal keys">
-          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, true))}
+          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, key.id !== "enter"))}
         </div>
       ) : null}
 

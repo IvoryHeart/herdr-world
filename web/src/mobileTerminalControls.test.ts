@@ -32,6 +32,8 @@ describe("encodeMobileTerminalChord", () => {
   });
 
   it.each([
+    ["enter", [], "\r"],
+    ["enter", ["alt"], "\x1B\r"],
     ["backspace", ["alt"], "\x1B\x7F"],
     ["backspace", ["ctrl"], "\x08"],
     ["backspace", ["ctrl", "alt"], "\x1B\x08"],
