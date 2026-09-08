@@ -9,9 +9,9 @@
       "unit": "runtimeIdentity.test.ts",
       "mutations": [
         {
-          "path": "web/src/App.tsx",
-          "from": "              onSelectBridge(view.runtime.id);\n              onHostScope(\"selected\");",
-          "to": "              onSelectBridge(bridgeViews[0].runtime.id);\n              onHostScope(\"selected\");"
+          "path": "web/src/SidebarToolbar.tsx",
+          "from": "onSelectBridge(view.runtime.id); onHostScope(\"selected\"); dismiss();",
+          "to": "onSelectBridge(bridgeViews[0].runtime.id); onHostScope(\"selected\"); dismiss();"
         },
         {
           "path": "web/src/runtimeIdentity.ts",
