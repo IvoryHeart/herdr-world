@@ -401,11 +401,11 @@ describe("TerminalCommandControls", () => {
       throw new Error("Missing scrollable quick keys");
     }
     const keys = [...shortcuts.querySelectorAll("button")];
-    expect(keys.map((key) => key.textContent)).toEqual(["Esc", "C-c", "C-d", "1", "2", "3"]);
+    expect(keys.map((key) => key.textContent)).toEqual(["Esc", "Tab", "C-c", "C-d", "1", "2", "3"]);
     for (const key of keys) {
       await act(async () => key.click());
     }
-    expect(onInput.mock.calls).toEqual([["\x1B"], ["\x03"], ["\x04"], ["1"], ["2"], ["3"]]);
+    expect(onInput.mock.calls).toEqual([["\x1B"], ["\t"], ["\x03"], ["\x04"], ["1"], ["2"], ["3"]]);
     await clickButton(actions, "Upload file");
     await clickButton(actions, "Focus terminal keyboard");
     expect(onUpload).toHaveBeenCalledOnce();
@@ -470,7 +470,7 @@ describe("TerminalCommandControls", () => {
     expect(container.querySelectorAll(".term-key-direct-row button, .term-key-more-row button")).toHaveLength(keyCount);
     expect(container.querySelectorAll('[aria-label="Use Home key"]')).toHaveLength(1);
     expect(container.querySelector('[aria-label="Use Home key"]')?.getAttribute("aria-pressed")).toBe("true");
-    expect(composerPanel(container).textContent).toContain("Composing shortcut");
+    expect(composerPanel(container).textContent).toContain("Building shortcut");
     await clickButton(container, "Send Alt + Home");
     await clickButton(container, "Send Left");
     expect(onInput.mock.calls).toEqual([["\x1B[1;3H"], ["\x1B[D"]]);
@@ -480,7 +480,7 @@ describe("TerminalCommandControls", () => {
   it("selects quick keys in Compose mode and cancels without sending", async () => {
     const { container, onInput } = await renderControls(false);
     await openComposer(container);
-    for (const key of ["Esc", "C-c", "C-d", "1", "2", "3"]) {
+    for (const key of ["Esc", "Tab", "C-c", "C-d", "1", "2", "3"]) {
       await clickButton(container, `Use ${key} key`);
     }
     expect(onInput).not.toHaveBeenCalled();
@@ -531,7 +531,7 @@ describe("TerminalCommandControls", () => {
     expect(container.querySelector(".term-key-more-row")).toBeNull();
     expect(container.querySelector(".term-key-direct-row")).toBeNull();
     await clickButton(container, "Show more keys");
-    expect(container.querySelectorAll(".term-key-direct-row button")).toHaveLength(6);
+    expect(container.querySelectorAll(".term-key-direct-row button")).toHaveLength(5);
     await clickButton(container, "Send Up");
     expect(onInput).toHaveBeenCalledExactlyOnceWith("\x1B[A");
     await openComposer(container);
@@ -539,15 +539,18 @@ describe("TerminalCommandControls", () => {
     expect(composerPanel(container).querySelectorAll('[aria-pressed="true"]')).toHaveLength(0);
   });
 
-  it("places Tab beside Backspace only in the expanded keyboard", async () => {
+  it("keeps Tab in the top row and uses the expanded icon for shortcut building", async () => {
     const { container, onInput } = await renderControls(false);
-    expect(container.querySelector('[aria-label="Send Tab"]')).toBeNull();
-    await clickButton(container, "Show more keys");
-    const row = container.querySelector(".term-key-direct-row")!;
-    expect([...row.querySelectorAll("button")].map((button) => button.textContent))
-      .toEqual(["Tab", "Bksp", "←", "↑", "↓", "→"]);
-    await clickButton(container, "Send Tab");
+    const tab = [...container.querySelectorAll<HTMLButtonElement>('.term-key-group button')]
+      .find((button) => button.textContent === "Tab")!;
+    await act(async () => tab.click());
     expect(onInput).toHaveBeenCalledExactlyOnceWith("\t");
+    await clickButton(container, "Show more keys");
+    expect([...container.querySelectorAll(".term-key-direct-row button")].map((button) => button.textContent))
+      .toEqual(["Bksp", "←", "↑", "↓", "→"]);
+    const compose = container.querySelector('[aria-label="Compose terminal key"]')!;
+    expect(compose.textContent?.trim()).toBe("");
+    expect(compose.querySelector("svg")).not.toBeNull();
     await openComposer(container);
     await clickButton(container, "Add Shift modifier");
     await clickButton(container, "Use Tab key");

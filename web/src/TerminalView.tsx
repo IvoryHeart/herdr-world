@@ -6,6 +6,7 @@ import {
   Keyboard,
   Link,
   Paperclip,
+  Plus,
   Send,
   SquareTerminal,
   TextCursorInput,
@@ -1535,7 +1536,7 @@ function MobileSelectionActions({
 }
 
 const DIRECT_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
-  ["tab", "backspace", "arrow-left", "arrow-up", "arrow-down", "arrow-right"].includes(key.id),
+  ["backspace", "arrow-left", "arrow-up", "arrow-down", "arrow-right"].includes(key.id),
 );
 const MORE_TERMINAL_KEYS = MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) =>
   ["home", "end", "delete", "page-up", "page-down"].includes(key.id),
@@ -1862,7 +1863,7 @@ export function TerminalCommandControls({
 
       {mobileControls && moreKeysOpen ? (
         <div className="term-key-direct-row" role="group" aria-label="Direct terminal keys">
-          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, key.id !== "tab"))}
+          {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, true))}
         </div>
       ) : null}
 
@@ -1871,7 +1872,7 @@ export function TerminalCommandControls({
           {MORE_TERMINAL_KEYS.map((key) =>
             renderSharedKey(key, key.id !== "home" && key.id !== "end"))}
           <button
-            className="term-key term-key-compose-action"
+            className="term-key term-key-icon term-key-compose-action"
             type="button"
             aria-label={composerOpen ? "Close terminal key composer" : "Compose terminal key"}
             aria-expanded={composerOpen}
@@ -1881,7 +1882,10 @@ export function TerminalCommandControls({
             disabled={disabled && !composerOpen}
             onClick={toggleMobileTerminalComposer}
           >
-            Compose
+            <span className="term-key-compose-icon" aria-hidden="true">
+              <Keyboard size={15} />
+              <Plus className="term-key-compose-plus" size={8} />
+            </span>
           </button>
         </div>
       ) : null}
@@ -1890,7 +1894,7 @@ export function TerminalCommandControls({
         <div className="term-key-composer" aria-label="Terminal key composer">
           <div className="term-key-composer-preview">
             <div className="term-key-composer-preview-label" aria-live="polite">
-              <span>Composing shortcut</span>
+              <span>Building shortcut</span>
               <strong>{composerChordLabel ?? "Choose a key"}</strong>
             </div>
             <button className="term-key" type="button" aria-label="Cancel shortcut"
@@ -2034,7 +2038,7 @@ const QUICK_TERMINAL_KEYS: {
   modifiers: MobileTerminalModifier[];
   label: string;
 }[] = [
-  ...MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) => key.id === "escape")
+  ...MOBILE_TERMINAL_SPECIAL_KEYS.filter((key) => ["escape", "tab"].includes(key.id))
     .map((key) => ({ key, modifiers: [], label: key.label })),
   ...["c", "d"].map((value) => ({
     key: mobileTerminalPrintableKey(value), modifiers: ["ctrl" as const], label: `C-${value}`,

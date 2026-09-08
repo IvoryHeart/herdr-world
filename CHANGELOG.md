@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Restore Tab to the mobile quick-key row and use a keyboard-plus icon for the expanded
+  shortcut builder, retaining its active outline and a Building shortcut indicator.
+
 - Keep mobile arrows and Backspace inside the expanded keyboard, with Tab beside Backspace
   instead of in the always-visible quick-key row.
 
