@@ -41,6 +41,14 @@ an explicitly selected native trial.
 - **WHEN** native execution reaches an implementation candidate
 - **THEN** review and relevant checks establish readiness, the PR identifies the actual workflow, and no Ralph success or cost improvement is inferred
 
+#### Scenario: Native usage attribution
+- **WHEN** a native lead thread is evaluated
+- **THEN** completed response IDs are deduplicated across that lead and descendants identified by native parent metadata, actual model allocations are reported, and unfinished or missing evidence is labelled provisional
+
+#### Scenario: Scoped verification
+- **WHEN** a worker or reviewer changes a candidate
+- **THEN** it exercises relevant behavior and the lead owns complete final acceptance; unchanged evidence is reused, and representative visual workloads prevent a small fixture from establishing universal readability
+
 ### Requirement: Bounded execution
 Unattended workers SHALL receive no live Herdr socket or host publishing credentials.
 The runner SHALL enforce activation and cumulative model-time bounds, separate deterministic

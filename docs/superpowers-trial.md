@@ -40,7 +40,8 @@ The cache, symlink, local profile and local config are ignored. None changes
 user-wide Codex settings, another worktree or installed user plugins. Existing
 config/profile files must be inspected and composed deliberately, not overwritten.
 
-Start Codex in this worktree, using the same main model/effort as the comparison.
+Start Codex in this worktree. The next trial pins the lead and every child to
+Sol/high; keep this allocation fixed when assessing the model change.
 Trust the project through the normal Codex UI if required. Use /skills or $ to
 inspect the skills; restart the session if its catalog is stale. The native
 discovery check must pass before a live trial. A profile file on disk does not
@@ -50,10 +51,10 @@ The local profile keeps repository rules and overrides only the legacy Ralph
 start/delivery requirement for the selected task. Twelve overlapping World workflow
 skills now live under harness/legacy-skills/ and stay outside native discovery.
 OpenSpec, knowledge maintenance and harness evaluation remain discoverable.
-The profile bounds native concurrency; the main model remains the user's selection.
-Native subagent model/effort defaults are Sol/high; record actual
-overrides made by upstream skills. Do not credit an unrecorded model change as a
-workflow improvement.
+The profile bounds native concurrency and selects Sol/high for the lead and children.
+The owner's selected allocation takes precedence over upstream model-selection
+examples. Record any owner-requested override as a changed experimental input.
+Do not credit an unrecorded model change as a workflow improvement.
 
 Start with a normal short request. When persistent continuation is wanted:
 
@@ -80,6 +81,41 @@ final review for the first trial so this actually evaluates the standard tool.
 Classify redundant rounds from observed evidence before changing the workflow.
 Ordinary fixes do not gain a mandatory specification or unrelated specialist team.
 Use the actual available tool schema where upstream tool examples differ.
+
+## Verification and handoff
+
+Workers own focused tests for their changes. The lead owns complete acceptance
+before delivery, including the repository check and relevant browser/security
+checks. A reviewer reads the recorded evidence and independently exercises the
+behavior needed to resolve a concrete risk; it need not repeat every worker check.
+After a correction, rerun the affected tests and then finish acceptance on the
+final candidate. Keep the source revision, exact commands, results and significant
+environment inputs beside the task ledger. Reuse unchanged evidence; a report,
+task checkbox or PR attribution edit does not invalidate unrelated code checks.
+
+For visual work, choose synthetic workload shapes that represent intended use,
+including uneven branches and long labels. Tree layout changes should cover a
+larger multi-space shape as well as the compact showcase; for example, 8–12 spaces
+with uneven leaf counts. Inspect effective text sizes after scaling, control
+targets, containment and the rendered result. A fitting bounding box alone does
+not establish readability. State a known scale limitation instead of treating
+small-fixture success as universal acceptance. Never copy live identities into
+fixtures or public images.
+
+Before a session handoff, preserve the approved decisions, source revision,
+parent PR/branch, native lead thread ID and exact paths of any required private
+references in the ignored task ledger. Check that those files are readable from
+the next session's worktree. Reuse that prepared worktree for sequential writers
+and read-only reviewers. Recover a known file through direct inspection before
+assigning a model a search task; reserve additional agents for substantive work.
+Resume the existing native histories when supported and send the changed facts
+and scoped diff, rather than repeating complete reports or re-running discovery.
+
+Use native completion events. When no independent work remains, wait through the
+client's lifecycle tool rather than repeatedly checking logs or asking a working
+agent for status. Status updates should communicate a new finding, result or
+blocker. Recurring lack of progress warrants a decision; it does not warrant
+another monitoring agent.
 
 ## Evaluation
 
@@ -117,9 +153,34 @@ responses; token totals are not an invoice or a subscription-allowance percentag
 Keep real session identifiers, prompts, environment data and raw metrics in private
 ignored storage; only publish sanitized aggregate evidence.
 
+After a native turn finishes, collect its lead and descendants without a model call:
+
+~~~bash
+npm run agent:usage -- --thread LEAD_THREAD_ID --output .agents/state/native-usage.json
+~~~
+
+The command reads native session metadata and deduplicated response usage. It
+reports actual model/effort, role, task intervals, coverage and cached-token subsets.
+It does not inspect credentials or modify native sessions. CODEX_THREAD_ID supplies
+the default lead ID when available; --sessions selects a different native session
+directory. For a reused lead thread, use --since/--until ISO timestamps to state
+the measured interval. Preserve the cutoff with the report.
+
+An in-session report is provisional: it cannot include that session's later final
+response. Refresh it from outside after completion. Missing histories, malformed
+records and unfinished turns remain visible; zero measured tokens do not mean
+zero cost. A native parent relationship determines inclusion, not a shared cwd.
+Prometheus child counters can corroborate the parent-labelled model groups, while
+generic CLI counters do not independently identify one lead conversation.
+
 The Tree work behind PR81 is a historical failure/recovery case, not a matched
 feature benchmark. Its successful final recovery reused implemented code and
 retained context. Do not compare only that final run against a new feature.
+
+PR82 demonstrated native task delivery and retained review histories, with its
+usage recoverable from journals and child totals corroborated by OTEL. The next
+Sol feature is a validation exercise on a new task. Repeat a frozen task with the
+same requirements, acceptance and environment before claiming a model cost saving.
 
 ## Initial setup evidence — 2026-09-08
 

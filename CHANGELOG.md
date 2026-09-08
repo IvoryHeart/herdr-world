@@ -31,6 +31,11 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Consolidated the development and World UI work for final review in PR #78, and
+  prepared a Sol/high native trial with scoped verification, reference handoffs
+  and deduplicated lead/subagent usage reporting.
+  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+
 - Adopted the common sidebar for Office, Tree, Graph and Spaces. Tree now uses a compact dark
   Operations Console with bounded space columns, stacked agent/terminal siblings, attached
   connectors, visible kind/status/focus cues, configured and observed coverage, and a persistent

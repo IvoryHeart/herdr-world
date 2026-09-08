@@ -6,6 +6,11 @@ discovery API without model turns and checks the upstream bundle, effective agen
 settings and worktree scope. It is intentionally outside ordinary CI because the
 upstream skills and local profile are not installed there. A separate bounded live
 activation checks behavior; neither result establishes feature quality or savings.
+Use npm run agent:usage -- --thread LEAD_THREAD_ID for native lead/descendant
+accounting; save raw output only in ignored state. Synthetic regressions cover
+ancestry, duplicate/copied responses, model changes, scoped intervals and missing
+or incomplete evidence. The reporter was also checked against PR82's independently
+reconciled response totals. The next native trial fixes all models at Sol/high.
 
 The remaining fixtures below exercise the retained Ralph workflow.
 

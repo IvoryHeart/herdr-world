@@ -97,7 +97,11 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Run `npm run test:web` for Vitest.
 - Run `npm run build:web` for the frontend production build.
 - Run `npm run bridge:test` for bridge unit tests when a Rust toolchain (cargo) is available.
-- Run `npm run check` before committing or releasing.
+- Run `npm run check` for the final implementation candidate before PR delivery or
+  release. Within an authorized task, use focused checks for intermediate commits;
+  the lead owns complete acceptance. Reuse successful checks when their relevant
+  source and command inputs are unchanged; reports and PR attribution alone do not
+  require repeating unrelated suites.
 - Install pinned `cargo-about` 0.9.2 and run `npm run notices:generate` whenever
   a production dependency graph changes. `npm run notices:check` is part of the
   normal repository check and must remain byte-clean.

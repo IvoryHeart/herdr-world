@@ -14,8 +14,9 @@ Ordinary fixes retain AGENTS.md's specification policy.
 Use the current Codex conversation and native subagent tools. Keep upstream
 skills unmodified. Follow their task batching, scoped review and implementer
 resumption practices. Trust the actual tool schema when upstream examples differ.
-The supplied local Codex config bounds concurrency and gives subagents a
-deliberate model default; it does not change the main conversation's chosen model.
+For the next trial, use Sol/high for the lead and subagents. The local config
+records that allocation. Upstream model-selection examples do not override this
+owner-selected experiment; record any owner-requested allocation change separately.
 Do not start agent:goal, a Ralph process, an additional model supervisor or a
 Stop-hook continuation loop. Use native Goals only when explicitly requested.
 
@@ -32,7 +33,9 @@ npm run agent:task -- interactive --reason owner-request --note "Owner selected 
 Read-only discussion needs no task record. This is an execution label, not a
 launcher or evidence of autonomous completion.
 
-Follow the upstream development/review workflow and the repository checks, then
+Workers run focused checks for their changes; the lead owns complete acceptance.
+Reuse recorded checks when the relevant source and command inputs are unchanged.
+Follow the verification and handoff guidance in docs/superpowers-trial.md, then
 publish through normal Git/GitHub tools when authorized. State that execution
 used Superpowers and native Codex. Do not claim Ralph acceptance or use its
 delivery gate for this trial. Stop at a ready PR; do not merge.
@@ -43,4 +46,6 @@ Use native child completion events while continuing useful work. Reuse the
 current threads for follow-up work when supported. A saved report is not a user
 notification. Report recurring lack of progress with its cause and next action;
 do not restart a task to conceal retries or increase its allowance.
-Record validation and run facts once; follow the evaluation guide for economy.
+Keep follow-ups to the changed facts; avoid re-reading full skills or reports
+without a concrete gap. Record validation and run facts once. Use agent:usage
+for native accounting, with incomplete turns labelled provisional.

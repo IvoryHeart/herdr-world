@@ -8,6 +8,10 @@ For the opt-in Superpowers/native trial, follow docs/superpowers-trial.md and ru
 eval:skills in its prepared worktree. Keep native discovery, live skill activation,
 full delivery quality and usage comparisons separate. The Ralph activation fixture
 does not grade a native workflow.
+Use agent:usage with the native lead thread ID to summarize completed responses
+across its descendants. Read actual model allocations, include the lead, and label
+unfinished turns or missing histories as provisional. An in-session report cannot
+include that session's later final response. See the trial guide for scope and handoff.
 For changes to Ralph conversational onboarding or world-start-task, run the bounded eval:activation
 trial. It uses an actual coordinator with the owner's short request, real goal/worktree/job
 commands and a stopped fixture for nested intake. Record its routing result separately from

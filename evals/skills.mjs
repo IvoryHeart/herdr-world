@@ -84,6 +84,8 @@ try {
     assert(!enabled.some(skill => skill.name === name), 'Legacy workflow unexpectedly discovered: ' + name);
   }
   assert.equal(settings.config.agents?.enabled, true, 'Native agents disabled');
+  assert.equal(settings.config.model, 'gpt-5.6-sol', 'Sol lead profile not loaded');
+  assert.equal(settings.config.model_reasoning_effort, 'high', 'Sol lead effort profile not loaded');
   assert.equal(settings.config.agents?.max_concurrent_threads_per_session, 3, 'Native concurrency profile not loaded');
   assert.equal(settings.config.agents?.default_subagent_model, 'gpt-5.6-sol', 'Native worker model profile not loaded');
   assert.equal(settings.config.agents?.default_subagent_reasoning_effort, 'high', 'Native effort profile not loaded');
