@@ -20,7 +20,7 @@ an interactive overview.
 
 | Graph overview | Connected terminals |
 |:--:|:--:|
-| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing six synthetic example workspaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
+| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing synthetic example spaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
 
 ## Quick Start
 

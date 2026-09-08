@@ -2,14 +2,13 @@ import type { BridgeRuntime } from "../bridge";
 import type { HostProfile } from "../hostProfile";
 import { hostConnectionState } from "../runtimeClient";
 import type { BridgeConnectionState } from "../runtimeConnection";
-import type { HerdrOfficeSourceHost } from "./herdrOfficeProjection";
-import type { OfficeHostLocation } from "./herdrOfficeProjection";
+import type { WorldHostLocation, WorldRuntimeSource } from "./worldModel";
 
-export function herdrOfficeSourcesFromRuntime(
+export function worldSourcesFromRuntime(
   profiles: readonly HostProfile[],
   runtimes: readonly BridgeRuntime[],
   connectionStates: Readonly<Record<string, BridgeConnectionState>>,
-): HerdrOfficeSourceHost[] {
+): WorldRuntimeSource[] {
   const runtimeByProfile = new Map(runtimes.map((runtime) => [runtime.id, runtime]));
 
   return profiles.map((profile) => {
@@ -42,7 +41,7 @@ export function herdrOfficeSourcesFromRuntime(
   });
 }
 
-function hostLocation(baseUrl: string, mode: BridgeRuntime["mode"] | undefined): OfficeHostLocation {
+function hostLocation(baseUrl: string, mode: BridgeRuntime["mode"] | undefined): WorldHostLocation {
   if (mode === "same-origin") {
     return "local";
   }

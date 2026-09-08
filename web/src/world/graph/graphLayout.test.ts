@@ -28,8 +28,13 @@ describe("Graph layout reconciliation", () => {
     const first = reconcileGraphLayout(null, firstProjection, new Set());
     const reordered = {
       ...firstProjection,
-      nodes: [firstProjection.nodes[0]!, firstProjection.nodes[2]!, firstProjection.nodes[1]!],
-      edges: [firstProjection.edges[1]!, firstProjection.edges[0]!],
+      nodes: [
+        firstProjection.nodes[0]!,
+        firstProjection.nodes[1]!,
+        firstProjection.nodes[3]!,
+        firstProjection.nodes[2]!,
+      ],
+      edges: [firstProjection.edges[0]!, firstProjection.edges[2]!, firstProjection.edges[1]!],
     };
 
     const changed = reconcileGraphLayout(first.state, reordered, new Set());
@@ -49,17 +54,25 @@ describe("Graph layout reconciliation", () => {
 
     const collapsed = reconcileGraphLayout(withSecond.state, projection("working", true), new Set(["space"]));
     expect(collapsed.topologyChanged).toBe(true);
-    expect([...collapsed.state.nodes.keys()]).toEqual(["space"]);
-    expect(collapsed.state.edges).toHaveLength(0);
+    expect([...collapsed.state.nodes.keys()]).toEqual(["host", "space"]);
+    expect(collapsed.state.edges).toHaveLength(1);
+
+    const collapsedHost = reconcileGraphLayout(
+      withSecond.state,
+      projection("working", true),
+      new Set(["host"]),
+    );
+    expect([...collapsedHost.state.nodes.keys()]).toEqual(["host"]);
+    expect(collapsedHost.state.edges).toHaveLength(0);
   });
 
-  it("repels movable spaces away from pinned spaces without moving the pin", () => {
-    const pinnedSource = node({ id: "pinned", kind: "space", parentId: null, selectionKey: "pinned" });
-    const movableSource = node({ id: "movable", kind: "space", parentId: null, selectionKey: "movable" });
+  it("repels movable hosts away from pinned hosts without moving the pin", () => {
+    const pinnedSource = node({ id: "pinned", kind: "host", parentId: null, selectionKey: "pinned" });
+    const movableSource = node({ id: "movable", kind: "host", parentId: null, selectionKey: "movable" });
     const pinned = {
       id: "pinned",
       source: pinnedSource,
-      kind: "space" as const,
+      kind: "host" as const,
       parentId: null,
       x: 0,
       y: 0,
@@ -70,7 +83,7 @@ describe("Graph layout reconciliation", () => {
     const movable = {
       id: "movable",
       source: movableSource,
-      kind: "space" as const,
+      kind: "host" as const,
       parentId: null,
       x: 40,
       y: 0,
@@ -91,33 +104,48 @@ describe("Graph layout reconciliation", () => {
 });
 
 function projection(status: WorldGraphNode["status"], includeSecond = false): HerdrGraphProjection {
-  const space = node({ id: "space", kind: "space", parentId: null, selectionKey: "space" });
-  const agent = node({ id: "agent", kind: "terminal", parentId: "space", selectionKey: "terminal", status });
-  const terminals = includeSecond
-    ? [agent, node({ id: "agent-2", kind: "terminal", parentId: "space", selectionKey: "terminal-2" })]
+  const host = node({ id: "host", kind: "host", parentId: null, selectionKey: "host" });
+  const space = node({ id: "space", kind: "space", parentId: "host", selectionKey: "space" });
+  const agent = node({ id: "agent", kind: "agent", parentId: "space", selectionKey: "terminal", status });
+  const children = includeSecond
+    ? [agent, node({ id: "agent-2", kind: "agent", parentId: "space", selectionKey: "terminal-2" })]
     : [agent];
   return {
     version: 1,
-    nodes: [space, ...terminals],
-    edges: terminals.map(({ id }) => ({ sourceId: "space", targetId: id, kind: "contains" })),
-    spaces: [{ node: space, terminals, observedTerminalCount: terminals.length, omittedTerminalCount: 0 }],
+    nodes: [host, space, ...children],
+    edges: [
+      { sourceId: "host", targetId: "space", kind: "contains" },
+      ...children.map(({ id }) => ({ sourceId: "space", targetId: id, kind: "contains" as const })),
+    ],
+    hosts: [{
+      node: host,
+      spaces: [{ node: space, children, observedChildCount: children.length, omittedChildCount: 0 }],
+      observedSpaceCount: 1,
+      omittedSpaceCount: 0,
+    }],
+    spaces: [{ node: space, children, observedChildCount: children.length, omittedChildCount: 0 }],
+    omittedHostCount: 0,
     omittedSpaceCount: 0,
     coverage: {
+      configuredHosts: 1,
+      observedHosts: 1,
+      presentedHosts: 1,
+      omittedHosts: 0,
       observedSpaces: 1,
       presentedSpaces: 1,
-      observedAgents: terminals.length,
-      presentedAgents: terminals.length,
+      observedAgents: children.length,
+      presentedAgents: children.length,
       omittedAgents: 0,
       omittedAgentsInPresentedSpaces: 0,
       omittedAgentsInOmittedSpaces: 0,
-      observedTerminals: terminals.length,
-      presentedTerminals: terminals.length,
+      observedTerminals: children.length,
+      presentedTerminals: children.length,
       omittedTerminals: 0,
       observedShells: 0,
       presentedShells: 0,
       status: { idle: 0, working: 1, blocked: 0, done: 0, unknown: 0 },
     },
-    presentationBounds: { spaces: 128, terminalsPerSpace: 16 },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
 }
 
@@ -136,9 +164,10 @@ function node(overrides: Partial<WorldGraphNode> & Pick<WorldGraphNode, "id" | "
     searchText: overrides.id,
     handoff: null,
     ...overrides,
-    paneId: overrides.paneId ?? (overrides.kind === "terminal" ? overrides.id : null),
+    paneId: overrides.paneId ?? (
+      overrides.kind === "terminal" || overrides.kind === "agent" ? overrides.id : null
+    ),
     observedGeneration: overrides.observedGeneration ?? "generation",
-    agentRunning: overrides.agentRunning ?? overrides.kind === "terminal",
     agentKind: overrides.agentKind ?? null,
   };
 }

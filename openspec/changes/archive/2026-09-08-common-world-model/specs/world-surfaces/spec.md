@@ -1,11 +1,4 @@
-# World surfaces
-
-## Purpose
-
-Keep Spaces, Office and Graph as presentations over shared runtime state and terminal ownership.
-See [knowledge map](../../../docs/knowledge-map.md) for source and historical rationale.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Shared presentation
 The application SHALL derive one host-qualified World hierarchy from configured host profiles and
@@ -51,18 +44,3 @@ parentage from labels, paths, processes, or timing.
 - **WHEN** a theme places an agent in a status-specific area such as Office reception or the agent
   bar
 - **THEN** the shared hierarchy still records that agent beneath its authoritative owning space
-
-### Requirement: Optional observations
-Observability providers SHALL remain optional. The bridge SHALL mediate bounded transport
-and the browser SHALL NOT receive provider credentials.
-
-#### Scenario: Provider absent
-- **WHEN** no optional provider is available
-- **THEN** core topology and terminals remain available without invented agent activity
-
-### Requirement: Accessible navigation
-World SHALL expose semantic entity navigation for compact layouts and reduced-motion use.
-
-#### Scenario: Scene navigation without pointer precision
-- **WHEN** the user selects an entity through semantic navigation
-- **THEN** the same qualified entity is selected as through the visual scene

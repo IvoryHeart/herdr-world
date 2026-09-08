@@ -25,6 +25,11 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Made hosts the primary Graph nodes and derived both Graph and Office from one host-qualified
+  World hierarchy of spaces with sibling agent and terminal children. Graph now keeps configured
+  unavailable hosts visible, supports host and space collapse, and preserves validated repository
+  names as optional space context.
+
 ### Fixed
 
 - Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under

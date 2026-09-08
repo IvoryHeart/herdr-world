@@ -19,6 +19,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     localStorage.removeItem("herdr.world.graph-view.v1");
+    localStorage.removeItem("herdr.world.graph-view.v2");
     localStorage.removeItem("herdrWeb.worldView.v1");
   }, hostStore());
 });

@@ -2,15 +2,15 @@ import { describe, expect, it } from "vitest";
 import type { BridgeRuntime } from "../bridge";
 import { hostProfile } from "../hostProfile";
 import type { Snapshot } from "../types";
-import { herdrOfficeSourcesFromRuntime } from "./worldRuntime";
+import { worldSourcesFromRuntime } from "./worldRuntime";
 
 const EMPTY_SNAPSHOT: Snapshot = { workspaces: [], tabs: [], panes: [], layouts: [] };
 
-describe("Herdr Office runtime source adapter", () => {
+describe("World runtime source adapter", () => {
   it("uses only current-generation admitted state and preserves stale snapshots", () => {
     const current = runtime("current", "ready", ["snapshot", "terminal_attach"]);
     const stale = runtime("stale", "offline", null);
-    const sources = herdrOfficeSourcesFromRuntime(
+    const sources = worldSourcesFromRuntime(
       [
         hostProfile("current", "Host", "http://current.example", true, 0),
         hostProfile("stale", "Host", "http://stale.example", true, 1),
@@ -45,7 +45,7 @@ describe("Herdr Office runtime source adapter", () => {
   it("rejects prior-generation state and retains disabled profiles as structural hosts", () => {
     const enabled = runtime("enabled", "ready", ["snapshot"]);
     const disabled = runtime("disabled", "ready", ["snapshot", "terminal_attach"]);
-    const sources = herdrOfficeSourcesFromRuntime(
+    const sources = worldSourcesFromRuntime(
       [
         hostProfile("enabled", "Enabled", "http://enabled.example", true, 0),
         hostProfile("disabled", "Disabled", "http://disabled.example", false, 1),

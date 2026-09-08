@@ -194,7 +194,8 @@ import {
   readWorldCompletionSeenKeys,
   writeWorldCompletionSeenKeys,
 } from "./world/completionSeenState";
-import { herdrOfficeSourcesFromRuntime } from "./world/worldRuntime";
+import { buildWorldModel } from "./world/worldModel";
+import { worldSourcesFromRuntime } from "./world/worldRuntime";
 import type { WorldThemeContext } from "./world/worldThemeContext";
 import { worldThemeRegistry } from "./world/worldThemeRegistry";
 import type { WorldThemeDefinition } from "./world/worldThemeRegistry";
@@ -250,7 +251,7 @@ import {
 import type { WorkspaceReorderDirection } from "./workspaceReorder";
 
 const NoteMarkdownPreview = lazy(() => import("./NoteMarkdownPreview"));
-const EMPTY_GRAPH_PROJECTION = projectHerdrGraph([]);
+const EMPTY_GRAPH_PROJECTION = projectHerdrGraph(buildWorldModel([]));
 
 type LoadState = "loading" | "ready" | "error";
 type Scope = "space" | "all";
@@ -1487,7 +1488,7 @@ export function App() {
   );
   const worldSources = useMemo(
     () =>
-      herdrOfficeSourcesFromRuntime(
+      worldSourcesFromRuntime(
         bridge.profiles,
         bridge.availableRuntimes,
         connectionStates,
@@ -1500,15 +1501,19 @@ export function App() {
       : worldSources,
     [hostScope, selectedBridgeId, worldSources],
   );
-  const worldProjection = useMemo(
-    () => projectHerdrOffice(worldSourcesInScope, Date.now()),
+  const worldModel = useMemo(
+    () => buildWorldModel(worldSourcesInScope),
     [worldSourcesInScope],
+  );
+  const worldProjection = useMemo(
+    () => projectHerdrOffice(worldModel, Date.now()),
+    [worldModel],
   );
   const graphProjection = useMemo(
     () => activeSurface.id === "world" && activeWorldTheme.id === "graph"
-      ? projectHerdrGraph(worldSourcesInScope)
+      ? projectHerdrGraph(worldModel)
       : EMPTY_GRAPH_PROJECTION,
-    [activeSurface.id, activeWorldTheme.id, worldSourcesInScope],
+    [activeSurface.id, activeWorldTheme.id, worldModel],
   );
   useEffect(() => {
     officeDebug("world:projection", {
@@ -2043,7 +2048,7 @@ export function App() {
     terminalOutputCoalesceMs,
   });
   const currentGraphTerminal = (node: WorldGraphNode) => {
-    if (node.kind !== "terminal" || !node.paneId) return null;
+    if ((node.kind !== "terminal" && node.kind !== "agent") || !node.paneId) return null;
     const latest = graphProjection.nodes.find(({ id }) => id === node.id);
     const runtime = bridge.getRuntime(node.hostKey);
     const state = runtime && connectionStates[runtime.id]?.connectionKey === runtime.generationKey
@@ -2051,7 +2056,7 @@ export function App() {
       : null;
     const pane = state?.snapshot?.panes.find(({ pane_id }) => pane_id === node.paneId) ?? null;
     if (
-      latest?.kind !== "terminal" ||
+      (latest?.kind !== "terminal" && latest?.kind !== "agent") ||
       latest.paneId !== node.paneId ||
       latest.selectionKey !== node.selectionKey ||
       latest.observedGeneration !== node.observedGeneration ||
@@ -2076,7 +2081,7 @@ export function App() {
         agent.currentPaneRef.nativeTargetId === current.pane.pane_id,
     )?.agent.key ?? null;
     worldConversationController.open({
-      kind: current.node.agentRunning ? "agent" : "pane",
+      kind: current.node.kind === "agent" ? "agent" : "pane",
       targetKey: current.node.selectionKey,
       agentKey,
       bridgeId: current.runtime.id,
@@ -2092,6 +2097,10 @@ export function App() {
       } else {
         setWorldHandoffStatus("That space is no longer available. Graph remains open.");
       }
+      return;
+    }
+    if (node.kind === "host") {
+      setWorldHandoffStatus("Select a space, agent, or terminal to open it in Spaces.");
       return;
     }
     const current = currentGraphTerminal(node);

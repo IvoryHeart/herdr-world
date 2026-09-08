@@ -14,6 +14,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     localStorage.removeItem("herdr.world.graph-view.v1");
+    localStorage.removeItem("herdr.world.graph-view.v2");
     localStorage.removeItem("herdrWeb.worldView.v1");
   }, hostStore());
 });
@@ -109,6 +110,22 @@ test("keeps a compact theme change to one traversable history entry", async ({ p
   }
 });
 
+test("presents every configured host as a root in all-host scope", async ({ page }) => {
+  await page.goto("/?theme=graph");
+  await waitForGraph(page);
+  await page.getByRole("group", { name: "Host" })
+    .getByRole("button", { name: "All", exact: true })
+    .click();
+
+  const semantic = page.getByRole("complementary", { name: "Graph semantic view" });
+  await expect(semantic.locator(".graph-tree > .graph-tree-space")).toHaveCount(5);
+  await expect(semantic.locator(".graph-tree-space[data-status='disconnected']"))
+    .toContainText("Offline E");
+  await page.getByRole("searchbox", { name: "Search Graph" }).fill("Offline E");
+  await expect(semantic.getByText("1 matching host", { exact: true })).toBeVisible();
+  await expect(semantic.locator(".graph-tree > .graph-tree-space")).toHaveCount(1);
+});
+
 test("fits the settled Graph by default while retaining explicit manual cameras", async ({ page }) => {
   await page.goto("/spaces");
   await page.evaluate(() => {
@@ -151,10 +168,10 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
 
   const search = page.getByRole("searchbox", { name: "Search Graph" });
   await search.fill("Codex A");
-  await expect(page.getByText("1 matching spaces", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 matching host", { exact: true })).toBeVisible();
   const agent = page.locator(".graph-tree-terminal").filter({ hasText: "Codex A" });
   await expect(agent).toHaveAccessibleName(
-    /Codex A, agent terminal: working · focused · agent running · Running · codex/i,
+    /Codex A, Agent: working · focused · agent · Running · codex/i,
   );
   await agent.click();
   await expect(page.getByRole("region", { name: "Selected Graph entity" })).toContainText("Codex A");
@@ -273,7 +290,7 @@ test("identifies an attached empty shell and opens it with a node connector", as
 
   const shell = page.locator(".graph-tree-terminal").filter({ hasText: "Shell" });
   await expect(shell.locator(".graph-terminal-identity")).toHaveAttribute("data-agent-kind", "shell");
-  await expect(shell).toContainText("empty shell");
+  await expect(shell).toContainText("empty terminal");
   await shell.dblclick();
 
   const conversation = page.locator("[data-world-conversation='open']").filter({ hasText: "Shell" });
@@ -356,7 +373,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
   });
   await page.goto("/?theme=graph");
   await waitForGraph(page);
-  await expect(page.locator(".graph-tree-space")).toHaveCount(128);
+  await expect(page.locator(".graph-tree-space")).toHaveCount(129);
   await expect(page.locator(".graph-tree-terminal")).toHaveCount(16);
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.activeAnimationFrames ?? -1,
@@ -369,19 +386,19 @@ test("keeps bounded topology and ownership stable through a live revision soak",
     await publishSnapshotChanged(request);
     await expect.poll(() => page.evaluate(
       () => window.__HERDR_GRAPH_RENDERER__?.nodes ?? -1,
-    )).toBe(144);
+    )).toBe(145);
 
     if (revision % 6 === 5) {
       await setSnapshotVariant(request, "empty");
       await publishSnapshotChanged(request);
       await expect.poll(() => page.evaluate(
         () => window.__HERDR_GRAPH_RENDERER__?.nodes ?? -1,
-      )).toBe(0);
+      )).toBe(1);
       await setSnapshotVariant(request, "large");
       await publishSnapshotChanged(request);
       await expect.poll(() => page.evaluate(
         () => window.__HERDR_GRAPH_RENDERER__?.nodes ?? -1,
-      )).toBe(144);
+      )).toBe(145);
     }
   }
 
@@ -396,8 +413,8 @@ test("keeps bounded topology and ownership stable through a live revision soak",
     activeObservers: 1,
     activeListeners: 7,
     canvases: 1,
-    nodes: 144,
-    links: 16,
+    nodes: 145,
+    links: 144,
     ready: true,
   });
   expect(coreSockets(sockets)).toHaveLength(initialCoreSockets);
@@ -436,7 +453,7 @@ async function waitForSettledGraph(page: Page) {
 
 async function savedGraphView(page: Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("herdr.world.graph-view.v1");
+    const raw = localStorage.getItem("herdr.world.graph-view.v2");
     if (!raw) return null;
     return JSON.parse(raw) as {
       camera: { x: number; y: number; zoom: number };
@@ -449,7 +466,7 @@ async function savedGraphView(page: Page) {
 
 async function savedGraphZoom(page: Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("herdr.world.graph-view.v1");
+    const raw = localStorage.getItem("herdr.world.graph-view.v2");
     if (!raw) return null;
     const value = JSON.parse(raw) as { camera?: { zoom?: unknown } };
     return typeof value.camera?.zoom === "number" ? value.camera.zoom : null;

@@ -1196,6 +1196,10 @@ button {
   font-size: 9px;
 }
 
+.graph-details-slot {
+  min-height: 190px;
+}
+
 .graph-details,
 .graph-details-empty {
   margin: 0;
