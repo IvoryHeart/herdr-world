@@ -25,7 +25,9 @@ New agent worktrees SHALL use non-main branches under the primary checkout's
 
 ### Requirement: Bounded execution
 Unattended workers SHALL receive no live Herdr socket or host publishing credentials.
-The runner SHALL enforce iteration and wall-clock bounds and record explicit outcomes.
+The runner SHALL enforce activation and cumulative model-time bounds, separate deterministic
+command safety deadlines, and explicit outcomes. Waiting for the owner and managed checks
+SHALL NOT consume the pair model-time allowance.
 
 #### Scenario: Missing decision or repeated failure
 - **WHEN** progress needs an unavailable decision or permission, or the budget is exhausted
@@ -33,8 +35,10 @@ The runner SHALL enforce iteration and wall-clock bounds and record explicit out
 
 ### Requirement: Candidate-specific evidence
 Readiness SHALL require independent checks, fresh review and behavioral QA for the exact
-candidate contents and acceptance revision. QA planning SHALL cover every acceptance criterion
-before implementation; QA completion SHALL report an outcome and evidence for every scenario.
+candidate contents and acceptance revision. The pair SHALL report behavioral evidence for
+every acceptance criterion. The other partner SHALL accept the latest proposal, and a lead
+independent of both partner histories SHALL accept the verified result. A partner MAY review
+the other partner's later edits even if it previously implemented part of the task.
 A model's completion event SHALL NOT itself prove readiness.
 
 #### Scenario: Changed candidate
@@ -47,16 +51,16 @@ without a mandatory product phase or new proposal. Sensitive tasks SHALL receive
 and protocol review. Technical consultations SHALL be read-only, return to the caller and
 be limited to two per run, without resetting execution or failure budgets.
 
-#### Scenario: Repeated candidate failure
-- **WHEN** two consecutive review, QA or verification failures occur and a consultation remains
-- **THEN** the supervisor requests Oracle investigation before another repair
+#### Scenario: Repeated unresolved handoffs
+- **WHEN** the pair repeatedly returns the same unresolved finding or fails to converge
+- **THEN** the supervisor requests lead guidance and pauses if that guidance fails to resolve recurrence; optional Oracle advice does not reset authorization
 
 #### Scenario: Acceptance changes
 - **WHEN** a delivery role attempts to redefine established acceptance criteria
 - **THEN** the adapter rejects it; explicit owner clarification can restart shaping with stale evidence invalidated
 
 ### Requirement: Recorded model allocation
-The default lead and independent reviewer SHALL use gpt-5.6-sol with high effort; Oracle
+The default lead and both persistent partners SHALL use gpt-5.6-sol with high effort; Oracle
 SHALL use gpt-5.6-sol with xhigh effort. The optional full workflow SHALL use gpt-5.6-luna
 with xhigh effort for bounded implementation and QA. Resolved models and effort SHALL be frozen
 for a run and recorded per turn. Explicit uniform and tier overrides SHALL be supported.
@@ -78,7 +82,9 @@ task, source, harness, CLI and model inputs, independent grades and explicit unm
 - **THEN** the change is evaluated outside the active worker run and delivered through the repository's reviewed PR workflow
 
 ### Requirement: PR delivery boundary
-Publishing SHALL be separate from worker execution and SHALL stop at an open PR.
+Publishing SHALL be separate from worker execution and SHALL stop at an open ready PR.
+An optional draft MAY expose an explicitly incomplete coherent checkpoint. Marking it ready
+SHALL require the same final evidence as ordinary delivery.
 
 #### Scenario: Review pending
 - **WHEN** automated checks pass
@@ -114,8 +120,10 @@ An open same-repository parent PR MAY select the task and delivery base.
 - **THEN** the lead resumes its native session, establishes acceptance and continues to planning without duplicate product shaping
 
 ### Requirement: Durable state outside disposable containers
-The default workflow SHALL retain a lead history across intake, planning and implementation
-and a separate independent review history across scenarios, review and QA. Oracle SHALL
+The default workflow SHALL retain a lead history for intake, guidance and acceptance, and
+two separate partner histories across sequential implementation/review turns. Partners and
+checks SHALL share one prepared task worktree under a single supervisor writer lock. A
+clean independent review SHALL NOT require another role swap or polishing lap. Oracle SHALL
 retain a separate history when consulted. A full workflow MAY isolate a bounded builder.
 Native state SHALL live in ignored run storage and only the active group's home SHALL
 be writable in its container. Supervisor metadata and shared handovers SHALL be outside
@@ -129,15 +137,33 @@ that writable mount. A fresh-session comparison mode SHALL remain available.
 - **WHEN** the candidate changes after review
 - **THEN** the same independent review history receives the candidate delta and changed decisions, checks affected behavior for new defects, and produces new evidence for the changed candidate
 
-### Requirement: Reserved stage budgets and checkpoints
-New runs SHALL reserve cumulative time for preparation, advice, implementation, review/QA
-and deterministic verification. Attempts and resume SHALL NOT reset spent stage time.
-The supervisor SHALL save a source checkpoint before a deadline, allow bounded graceful
-shutdown and stop remaining descendants before recording the final outcome.
+### Requirement: Separate command deadlines and recoverable progress
+Pair model turns SHALL share a cumulative model-time allowance without fixed phase shares.
+Managed commands SHALL have independent safety deadlines and expected-duration observations.
+The supervisor SHALL retain checkpoints and stop descendants before recording interruption.
+Successful command results MAY be reused only for the same source, image and command.
 
-#### Scenario: Preparation overrun
-- **WHEN** preparation exhausts its allocation
-- **THEN** the run stops explicitly without consuming the reserved implementation and verification allocations or claiming success
+#### Scenario: Slow browser suite
+- **WHEN** a suite takes longer than the old verification phase allocation but remains within its command deadline
+- **THEN** the suite continues without consuming model-time allowance or launching a repair agent merely for its duration
+
+#### Scenario: Infrastructure failure
+- **WHEN** a recognized transient infrastructure failure occurs
+- **THEN** at most one automatic command retry occurs without a model, and persistent failure or a safety deadline saves a resumable step instead of inventing a code defect
+
+### Requirement: Explicit control upgrade
+Ordinary resume SHALL use frozen controls, retained histories and remaining authorization.
+Recovery to updated controls SHALL preserve old evidence, the task worktree and accepted
+requirements, retain native histories where available, and record lineage. Additional model
+time or activations SHALL require explicit allocation; stale approvals SHALL NOT carry over.
+
+#### Scenario: Legacy candidate recovery
+- **WHEN** an interrupted copied-workspace run upgrades to the pair workflow
+- **THEN** its pending patch is checked before import, author/review histories map to separate partners, and work resumes from the retained candidate rather than repeating intake
+
+#### Scenario: Disk pressure
+- **WHEN** available bytes or inodes approach the configured reserve
+- **THEN** lifecycle health checks warn, suspend at the critical reserve and preserve source and old evidence without deleting another task's worktree
 
 ### Requirement: Durable usage accounting
 The supervisor SHALL record attempt lifecycle and incremental native response usage outside
@@ -160,4 +186,4 @@ and completion/question/failure outcomes without requiring an outer model to pol
 
 #### Scenario: Waiting for delivery
 - **WHEN** a background worker is executing an authorized task
-- **THEN** it continues without another model activation merely to wait for it
+- **THEN** it continues without model polling; a host lacking automatic wake-up reports the running job and returns rather than claiming an unimplemented callback

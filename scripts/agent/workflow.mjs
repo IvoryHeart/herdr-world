@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { acceptPairResponse, pairCurrent } from './pair.mjs';
 
 export const roleEvents = {
   intake: ['intake.ready', 'intake.questions', 'task.blocked'],
@@ -9,12 +10,15 @@ export const roleEvents = {
   reviewer: ['review.passed', 'review.rejected', 'oracle.requested', 'task.blocked'],
   qa: ['qa.passed', 'qa.failed', 'oracle.requested', 'task.blocked'],
   oracle: ['oracle.advised', 'task.blocked'],
+  'pair-a': ['pair.handoff', 'pair.accepted', 'lead.requested', 'oracle.requested', 'task.blocked'],
+  'pair-b': ['pair.handoff', 'pair.accepted', 'lead.requested', 'oracle.requested', 'task.blocked'],
+  lead: ['lead.resume', 'lead.accepted', 'oracle.requested', 'task.blocked'],
 };
 export const taskProfiles = ['routine', 'feature', 'sensitive'];
 export const specialistNames = ['security', 'protocol', 'ux-accessibility', 'performance'];
-export const readOnlyRoles = new Set(Object.keys(roleEvents).filter(role => role !== 'implementer'));
+export const readOnlyRoles = new Set(Object.keys(roleEvents).filter(role => !['implementer', 'pair-a', 'pair-b'].includes(role)));
 export const initialEvent = profile => profile === 'feature' ? 'product.start' : 'plan.start';
-const returnEvents = { planner: 'plan.start', 'qa-planner': 'qa.plan', implementer: 'implementation.start', reviewer: 'candidate.ready', qa: 'qa.start' };
+const returnEvents = { planner: 'plan.start', 'qa-planner': 'qa.plan', implementer: 'implementation.start', reviewer: 'candidate.ready', qa: 'qa.start', 'pair-a': 'pair.a', 'pair-b': 'pair.b', lead: 'lead.start' };
 const digest = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const text = { type: 'string' };
 const array = items => ({ type: 'array', items });
@@ -31,6 +35,10 @@ export function responseSchema(role) {
   if (role === 'planner') properties.specialists = array({ type: 'string', enum: specialistNames });
   if (role === 'qa-planner') properties.scenarios = array(scenario);
   if (role === 'qa') properties.results = array(result);
+  if (role.startsWith('pair-')) {
+    properties.findings = array(object({ id: text, detail: text }));
+    properties.evidence = array(object({ acceptanceId: text, evidence: text }));
+  }
   return object(properties);
 }
 export function parseResponse(output, role) {
@@ -47,8 +55,8 @@ function nonempty(value) { return typeof value === 'string' && value.trim().leng
 function unique(items, key) { return new Set(items.map(item => item[key])).size === items.length; }
 export function resolveModels(config, { model, workerModel, leadModel, oracleModel, reasoningEffort, workflow = 'two-history' } = {}) {
   const efforts = ['low', 'medium', 'high', 'xhigh', 'max'];
-  if (!['two-history', 'full'].includes(workflow)) throw new Error('Workflow must be two-history or full');
-  const roles = { ...config.roles, ...(workflow === 'full' ? config.fullRoles : {}) };
+  if (!['pair', 'two-history', 'full'].includes(workflow)) throw new Error('Workflow must be pair, two-history or full');
+  const roles = workflow === 'pair' ? config.pairRoles : { ...config.roles, ...(workflow === 'full' ? config.fullRoles : {}) };
   return Object.fromEntries(Object.entries(roles).map(([role, tier]) => {
     const override = tier === 'worker' ? workerModel : tier === 'oracle' ? oracleModel : leadModel;
     const selected = { ...config[tier], model: model ?? override ?? config[tier]?.model };
@@ -59,8 +67,10 @@ export function resolveModels(config, { model, workerModel, leadModel, oracleMod
 }
 export function invalidateCandidate(state) {
   state.review = null; state.qa = null; state.verification = null;
+  if (state.pair) { state.pair.approval = null; state.pair.leadApproval = null; }
 }
 export function evidenceCurrent(state, current) {
+  if (state.workflow === 'pair') return pairCurrent(state, current);
   const requirements = state.requirements?.hash;
   return Boolean(requirements && state.qaPlan?.requirementsHash === requirements
     && state.review?.event === 'review.passed' && state.review.fingerprint === current
@@ -87,7 +97,11 @@ export function failureEvent(state, event, summary) {
 // All durable evidence is written by the adapter, outside model-controlled files.
 export function acceptResponse(state, role, response, before, after) {
   if (readOnlyRoles.has(role) && before !== after) throw new Error('Read-only ' + role + ' changed candidate contents');
-  if (before !== after || role === 'implementer') invalidateCandidate(state);
+  if (before !== after) invalidateCandidate(state);
+  if (state.workflow === 'pair' && (role.startsWith('pair-') || role === 'lead')) {
+    const next = acceptPairResponse(state, role, response, before, after);
+    return next.event === 'oracle.requested' ? requestOracle(state, role, next.summary) : next;
+  }
   if (response.event === 'task.blocked') return response;
   if (role === 'intake') {
     const questions = response.questions;
@@ -146,6 +160,7 @@ export function acceptResponse(state, role, response, before, after) {
     state.oracle.pending = null;
     return { event, summary: response.summary };
   }
+  if (state.workflow === 'pair' && response.event === 'plan.ready') return { event: 'pair.a', summary: response.summary };
   if (['review.rejected', 'qa.failed'].includes(response.event)) return failureEvent(state, response.event, response.summary);
   return response;
 }

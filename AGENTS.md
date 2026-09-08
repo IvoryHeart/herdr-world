@@ -8,7 +8,7 @@ minimal effort.
 # Repository delivery workflow
 
 - Never commit or push directly to `main`. Make all repository changes, including release preparation and fixes, on a branch and deliver them through a pull request. Do not run automation that pushes `main` directly; stop and use a PR-based workflow or ask for direction if the automation cannot do that.
-- Treat opening the pull request as the delivery stopping point. Do not merge it unless the repository owner explicitly asks you to merge. Pull requests require independent review before merging unless the repository owner explicitly states that review is not required.
+- Treat opening a ready pull request as the delivery stopping point. An optional early draft may expose a coherent checkpoint; it must remain explicitly incomplete until the same delivery evidence passes. Do not merge it unless the repository owner explicitly asks you to merge. Pull requests require independent review before merging unless the repository owner explicitly states that review is not required.
 
 Specifications are decision aids, not a gate on ordinary engineering work.
 Use one only when the repository owner asks for one or when a genuinely new
@@ -33,15 +33,17 @@ This is a lightweight internal onboarding note for agents working in this repo.
   [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
 - For a short development goal, use world-start-task and `npm run agent:goal -- "<goal>"`.
   Intake asks only consequential questions; resume the saved run with the owner's answers.
-  Reuse a lead history for planning/implementation and an independent review history for QA/review;
-  do not reload the full repository in newly spawned agents for each persona.
+  Use a lead history for intake/acceptance and two persistent partners sharing one task worktree;
+  do not reload the full repository in newly spawned agents for each persona. The lead owns analysis
+  and governor judgment as skills; lifecycle hooks observe health. Do not model-poll a healthy job.
 - **Feature execution is through the harness.** In the coordinating conversation, start
   `npm run agent:goal -- "<goal>" --parent <PR> --background` (omit `--parent` for main)
   before doing feature research, interviewing, planning or editing. Report the task worktree,
   job ID and run ID. Relay the managed intake's questions and continue that recorded run.
   Reading these instructions or using OpenSpec/test commands alone does not execute the harness.
   Do not replace a blocked/exhausted run with single-session implementation or bypass the
-  delivery evidence check with direct `git push` / `gh pr create`.
+  final delivery evidence check with direct `git push` / `gh pr create`. Use explicit `agent:run recover`
+  to upgrade frozen controls on a stopped task, retaining its work and remaining allowance.
 - A worker receiving a supervisor phase is already inside the harness: follow that phase,
   never launch another loop. Harness/control maintenance is interactive because workers cannot
   edit their controls; record `agent:task interactive --reason harness-maintenance --note "..."`.
@@ -60,8 +62,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Ralph scratchpads, graphs and eval output are temporary or derived knowledge.
   They never override current specs, source, tests or these delivery rules.
 - The Ralph task profiles are routine, feature and sensitive. Product shaping is conditional;
-  independent QA scenarios precede implementation. Acceptance and QA expectations are not
-  weakened during repairs. Model defaults live in harness/models.json: Sol high for the default
+  the pair independently checks behavioral evidence against the brief. Acceptance expectations are
+  not weakened during repairs. The latest editor needs review by the other partner; role swaps are optional. Model defaults live in harness/models.json: Sol high for the default
   lead/reviewer, Sol xhigh for Oracle; full mode uses Luna xhigh for bounded workers.
   See docs/agent-development.md for overrides and Oracle limits.
 

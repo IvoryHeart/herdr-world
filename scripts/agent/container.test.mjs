@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, mkdir, readFile, readdir, access, rm, chmod } from 
 import { join } from 'node:path';
 import { command, git, repoRoot } from './lib.mjs';
 
-test('production supervisor enforces isolation, verification, blocked outcomes and interrupted recovery', { timeout: 900000 }, async (t) => {
+test(process.env.WORLD_AGENT_CONTAINER_PAIR_ONLY ? 'production pair shares preparation and completes at its activation ceiling' : 'production supervisor enforces isolation, verification, blocked outcomes and interrupted recovery', { timeout: 900000 }, async (t) => {
   const parent = join(repoRoot, '.agents/state/container-tests');
   await mkdir(parent, { recursive: true });
   const dir = await mkdtemp(join(parent, 'fixture-'));
@@ -14,6 +14,7 @@ test('production supervisor enforces isolation, verification, blocked outcomes a
   await writeFile(join(build, 'fake-codex.mjs'), `#!/usr/bin/env node
 import fs from 'node:fs';
 import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
 const home=process.env.CODEX_HOME, file=home+'/fixture-history.json';
 let history=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)): {id:randomUUID(),turns:0};
 const resume=process.argv.indexOf('resume');
@@ -34,6 +35,17 @@ prompt+='\\nSaved native fixture context: '+JSON.stringify(history.context);
 let event,fields={};
 const acceptance=[{id:'answer',criterion:'source.mjs exports answer equal to 42.'}];
 if(prompt.startsWith('Use world-start-task')) {event=prompt.includes('OWNER_ANSWER')?'intake.ready':'intake.questions';fields={acceptance:event==='intake.ready'?acceptance:[],questions:event==='intake.questions'?[{id:'value',question:'What value should answer have?'}]:[]};}
+else if(prompt.startsWith('You are Partner')) {
+  if(execFileSync('git',['rev-parse','--show-toplevel'],{encoding:'utf8'}).trim()!=='/workspace') throw Error('Linked Git worktree is not usable');
+  const partner=prompt.startsWith('You are Partner A')?'pair-a':'pair-b';
+  const pair=history.context.pair;
+  fields={findings:[],evidence:[{acceptanceId:'answer',evidence:'Read and checked answer = 42.'}]};
+  if(partner==='pair-a' && pair?.proposal?.role==='pair-b') event='pair.accepted';
+  else {
+    fs.writeFileSync('/workspace/source.mjs','export const answer = 42;\\n'+(partner==='pair-b'?'// Reviewed correction.\\n':''));
+    event='pair.handoff';
+  }
+} else if(prompt.startsWith('Use world-lead-pair')) event='lead.accepted';
 else if(prompt.startsWith('Use world-shape-work')) {event='requirements.ready';fields={acceptance};}
 else if(prompt.startsWith('Read AGENTS.md and world-plan-change')) {event=prompt.includes('FIXTURE_BLOCKED')?'task.blocked':'plan.ready';fields={acceptance,specialists:[]};}
 else if(prompt.startsWith('Use world-test-behavior to derive')) {event='qa.planned';fields={scenarios:[{id:'value',acceptanceIds:['answer'],steps:'Read source.mjs.',expected:'answer is 42.'}]};}
@@ -95,12 +107,14 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   const auth=join(dir,'auth.json'); await writeFile(auth,'{}');
   const task=join(dir,'task.md'); await writeFile(task,'Make answer equal 42; this is a deterministic fixture.');
   const args=[process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'start','--task-file',task,
-    '--model','fixture','--image',image,'--auth-file',auth,'--seconds','300'];
+    '--workflow','two-history','--model','fixture','--image',image,'--auth-file',auth,'--seconds','300'];
+  let runs=[], success;
+  if (!process.env.WORLD_AGENT_CONTAINER_PAIR_ONLY) {
   result=await command(args,{cwd:source,stream:false,timeoutMs:360000,log:join(dir,'success.log')});
   assert.equal(result.code,0,result.output);
   const runBase=join(source,'.agents/runs');
-  let runs=await readdir(runBase);
-  const success=JSON.parse(await readFile(join(runBase,runs[0],'run.json')));
+  runs=await readdir(runBase);
+  success=JSON.parse(await readFile(join(runBase,runs[0],'run.json')));
   assert.equal(success.status,'ready-for-review');
   assert.equal(success.turns.find(t=>t.role==='reviewer').sessionId,success.turns.find(t=>t.role==='qa-planner').sessionId);
   assert(success.turns.find(t=>t.role==='qa').resumed);
@@ -157,7 +171,7 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   await chmod(gh,0o755);
   const reference=join(dir,'reference.png'); await writeFile(reference,Buffer.from([137,80,78,71,13,10,26,10]));
   result=await command([process.execPath,join(repoRoot,'scripts/agent/goal.mjs'),'Ask the owner what answer should be, then implement it.',
-    '--parent','78','--slug','interview-fixture','--profile','check','--image',image,'--auth-file',auth,'--model','fixture','--seconds','300','--reference-image',reference],
+    '--workflow','two-history','--parent','78','--slug','interview-fixture','--profile','check','--image',image,'--auth-file',auth,'--model','fixture','--seconds','300','--reference-image',reference],
     {cwd:source,stream:false,timeoutMs:360000,env:{...process.env,PATH:join(dir,'bin')+':'+process.env.PATH}});
   assert.notEqual(result.code,0);
   const intakeId=(await readdir(runBase)).find(id=>!runs.includes(id));
@@ -186,4 +200,49 @@ console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:0,output_t
   assert.equal(failed.status,'exhausted');
   assert.equal(failed.verification?.status,'failed',JSON.stringify(failed));
   assert.equal(failed.oracle.consultations,1);
+  }
+  const runBase=join(source,'.agents/runs');
+  const pairTree=join(source,'.agents/.worktrees/pair-fixture');
+  git(['worktree','add','-b','agent/pair-fixture',pairTree],source);
+  await writeFile(task,'Pair fixture: answer must equal 42.');
+  runs=await readdir(runBase).catch(error=>{if(error.code==='ENOENT') return []; throw error;});
+  result=await command([...args.map(arg=>arg==='two-history'?'pair':arg),'--iterations','6'],{cwd:pairTree,stream:false,timeoutMs:360000,log:join(dir,'pair.log')});
+  assert.equal(result.code,0,result.output);
+  const pairId=(await readdir(runBase)).find(id=>!runs.includes(id));
+  const pair=JSON.parse(await readFile(join(runBase,pairId,'run.json')));
+  assert.equal(pair.status,'ready-for-review');
+  assert.deepEqual(pair.turns.map(t=>t.role),['planner','pair-a','pair-b','pair-a','lead']);
+  assert.equal(pair.turns[1].sessionId,pair.turns[3].sessionId);
+  assert.notEqual(pair.turns[2].sessionId,pair.turns[3].sessionId);
+  assert.equal(pair.pair.approval.role,'pair-a');
+  assert.equal(pair.pair.proposal.role,'pair-b');
+  assert.match(await readFile(join(pairTree,'source.mjs'),'utf8'),/Reviewed correction/);
+  assert(!(await readdir(join(runBase,pairId))).some(name=>name.startsWith('verification-')));
+  assert.equal(pair.checks.check.status,'passed');
+  const pairLedger=(await readFile(join(runBase,pairId,'usage.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line));
+  assert.equal(pairLedger.filter(row=>row.type==='preparation.started').length,1,'Dependencies should be prepared once for the pair and verifier');
+  const report=await command([process.execPath,join(repoRoot,'scripts/agent/task.mjs'),'report'],{cwd:pairTree,stream:false});
+  assert.equal(report.code,0,report.output);
+  assert.match(report.output,/Pair review/);
+  assert.equal(pair.activations,6,'Completion routing must not consume another authorized activation');
+  if (success) {
+  // Upgrade a synthetic stopped legacy run into another linked task worktree.
+  const recoveryTree=join(source,'.agents/.worktrees/recovery-fixture');
+  git(['worktree','add','-b','agent/recovery-fixture',recoveryTree],source);
+  success.status='interrupted'; success.delivery.worktree=recoveryTree;
+  await writeFile(join(runBase,success.id,'run.json'),JSON.stringify(success));
+  const recovered=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'recover',success.id,'--model','fixture','--seconds','300','--iterations','12','--prepare-only'],{cwd:recoveryTree,stream:false,timeoutMs:60000});
+  assert.equal(recovered.code,0,recovered.output);
+  const record=JSON.parse(await readFile(join(recoveryTree,'.agents/state/task.json')));
+  const nextDir=join(runBase,record.runId);
+  const recoveredState=JSON.parse(await readFile(join(nextDir,'run.json')));
+  assert.equal(recoveredState.recovery.fromRunId,success.id);
+  assert.match(await readFile(join(recoveryTree,'source.mjs'),'utf8'),/42/);
+  result=await command([process.execPath,join(repoRoot,'scripts/agent/run.mjs'),'resume',record.runId],{cwd:recoveryTree,stream:false,timeoutMs:360000});
+  assert.equal(result.code,0,result.output);
+  const recoveredFinal=JSON.parse(await readFile(join(nextDir,'run.json')));
+  assert.equal(recoveredFinal.turns[0].role,'pair-a');
+  assert(recoveredFinal.turns[0].resumed);
+  assert.equal(recoveredFinal.status,'ready-for-review');
+  }
 });

@@ -9,3 +9,7 @@ Otherwise establish observable criteria within the authorized request. Do not cr
 second requirements store or implement during this role. Use oracle.requested for a
 specific technical question, task.blocked for a missing decision or permission.
 Existing authorization remains valid; ordinary fixes need no new proposal.
+
+In the pair workflow this is the lead brief. Use world-shape-work for a feature's
+product questions and acceptance; keep that work in this history rather than creating
+a product committee. The pair can challenge consequential gaps before editing.

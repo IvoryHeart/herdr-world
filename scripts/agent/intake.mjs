@@ -28,7 +28,7 @@ export async function conductIntake(runDir, state) {
     state.consecutiveFailures += 1;
     state.status = 'failed'; state.reason = error.message;
   } finally {
-    state.remainingMs = Math.max(0, state.remainingMs - (Date.now() - started));
+    if (state.workflow !== 'pair') state.remainingMs = Math.max(0, state.remainingMs - (Date.now() - started));
     if (!state.remainingMs || state.activations >= state.limits.iterations || state.consecutiveFailures >= state.limits.failures) {
       state.status = 'exhausted'; state.reason = 'Execution budget exhausted';
     }

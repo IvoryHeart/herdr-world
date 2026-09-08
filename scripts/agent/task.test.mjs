@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { git, fingerprint, jsonFile, command, repoRoot, verify } from './lib.mjs';
 import { copyCandidate } from './environment.mjs';
-import { recordTask, recordInteractive, readTask, deliveryEvidence, executionMarkdown } from './task.mjs';
+import { recordTask, recordInteractive, readTask, deliveryEvidence, draftEvidence, executionMarkdown } from './task.mjs';
 import { copyReferenceImages } from './references.mjs';
 import { modelArguments } from './model.mjs';
 import { acceptResponse } from './workflow.mjs';
@@ -108,4 +108,14 @@ test('private image references survive continuation without entering source or e
   await assert.rejects(copyReferenceImages([join(root, '.agents/text')], control), /PNG, JPEG or WebP/);
   await symlink(file, join(root, '.agents/link'));
   await assert.rejects(copyReferenceImages([join(root, '.agents/link')], control));
+});
+
+test('draft visibility cannot claim accepted delivery or publish a moving worktree', async t => {
+  const { root, runDir, state } = await accepted(t);
+  state.status = 'interrupted'; state.verification = null; await saveState(runDir, state);
+  const draft = await draftEvidence(root, 'main');
+  assert(draft.draft); assert.match(executionMarkdown(draft), /incomplete draft/);
+  await assert.rejects(deliveryEvidence(root), /missing, failed, or stale/);
+  state.status = 'running'; await saveState(runDir, state);
+  await assert.rejects(draftEvidence(root), /Pause at a coherent checkpoint/);
 });

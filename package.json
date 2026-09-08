@@ -48,7 +48,7 @@
     "agent:deliver": "node scripts/agent/deliver.mjs",
     "spec": "node scripts/agent/tool.mjs openspec",
     "spec:check": "node scripts/agent/tool.mjs openspec validate --all --strict --no-interactive",
-    "test:agent": "node --test scripts/agent/agent.test.mjs scripts/agent/workflow.test.mjs scripts/agent/sessions.test.mjs scripts/agent/efficiency.test.mjs scripts/agent/task.test.mjs",
+    "test:agent": "node --test scripts/agent/agent.test.mjs scripts/agent/workflow.test.mjs scripts/agent/sessions.test.mjs scripts/agent/efficiency.test.mjs scripts/agent/task.test.mjs scripts/agent/pair.test.mjs",
     "eval:check": "python3 evals/check.py && node --test evals/product.test.mjs evals/activation.test.mjs",
     "eval:prepare": "node evals/prepare.mjs",
     "eval:report": "node evals/report.mjs",
