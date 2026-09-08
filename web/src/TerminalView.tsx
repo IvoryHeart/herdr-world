@@ -1219,9 +1219,6 @@ export function TerminalView({
     };
   }, [mobileControls, pane?.terminal_id, resizeTerminal]);
 
-  const sendTerminalInput = (data: string) => {
-    sendTerminalInputData(data);
-  };
   const uploadDisabled = !pane || uploading;
 
   const closeMobileSelectionActions = () => {
@@ -1455,7 +1452,7 @@ export function TerminalView({
           mobileFocusAfterSubmit={mobileCommandFocusAfterSubmit}
           controlsScalePercent={mobileControls ? mobileControlsScalePercent : 100}
           onControlsHeightChange={setCommandControlsHeight}
-          onInput={sendTerminalInput}
+          onInput={sendTerminalInputData}
           onTerminalFocus={() => rendererRef.current?.focusTextInput()}
           onUpload={openFilePicker}
           onStageCommand={(command) => enqueueTerminalInput([command])}

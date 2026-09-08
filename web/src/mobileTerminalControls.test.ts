@@ -31,9 +31,18 @@ describe("encodeMobileTerminalChord", () => {
     expect(encodeMobileTerminalChord(specialKey("tab"), ["shift"])).toBe("\x1B[Z");
   });
 
-  it("uses modifyOtherKeys when literal keys need other modifiers", () => {
-    expect(encodeMobileTerminalChord(specialKey("tab"), ["ctrl"])).toBe("\x1B[27;5;9~");
-    expect(encodeMobileTerminalChord(specialKey("escape"), ["shift"])).toBe("\x1B[27;2;27~");
+  it.each([
+    ["backspace", ["alt"], "\x1B\x7F"],
+    ["backspace", ["ctrl"], "\x08"],
+    ["backspace", ["ctrl", "alt"], "\x1B\x08"],
+    ["backspace", ["shift", "alt"], "\x1B\x7F"],
+    ["tab", ["alt"], "\x1B\t"],
+    ["tab", ["ctrl"], "\t"],
+    ["tab", ["shift", "alt"], "\x1B\x1B[Z"],
+    ["escape", ["alt"], "\x1B\x1B"],
+    ["escape", ["shift"], "\x1B"],
+  ] as const)("encodes %s with %s as legacy terminal input", (id, modifiers, expected) => {
+    expect(encodeMobileTerminalChord(specialKey(id), modifiers)).toBe(expected);
   });
 
   it("applies Shift to printable punctuation and digits", () => {

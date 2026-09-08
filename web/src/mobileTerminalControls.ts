@@ -15,7 +15,6 @@ export const MOBILE_TERMINAL_MODIFIERS: readonly MobileTerminalModifierOption[] 
 interface MobileTerminalLiteralEncoding {
   kind: "literal";
   data: string;
-  codepoint: number;
   shiftedData?: string;
 }
 
@@ -56,19 +55,19 @@ export const MOBILE_TERMINAL_SPECIAL_KEYS: readonly MobileTerminalChordKey[] = [
     id: "escape",
     name: "Escape",
     label: "Esc",
-    encoding: { kind: "literal", data: "\x1B", codepoint: 27 },
+    encoding: { kind: "literal", data: "\x1B" },
   },
   {
     id: "tab",
     name: "Tab",
     label: "Tab",
-    encoding: { kind: "literal", data: "\t", codepoint: 9, shiftedData: "\x1B[Z" },
+    encoding: { kind: "literal", data: "\t", shiftedData: "\x1B[Z" },
   },
   {
     id: "backspace",
     name: "Backspace",
     label: "Bksp",
-    encoding: { kind: "literal", data: "\x7F", codepoint: 127 },
+    encoding: { kind: "literal", data: "\x7F" },
   },
   {
     id: "arrow-left",
@@ -162,13 +161,15 @@ export function encodeMobileTerminalChord(
     return encodePrintableTerminalChord(encoding.value, uniqueModifiers);
   }
   if (encoding.kind === "literal") {
-    if (uniqueModifiers.size === 0) {
-      return encoding.data;
+    // The composer sends legacy VT input; it does not negotiate modifyOtherKeys.
+    // Ctrl+Tab/Escape and Shift+Backspace/Escape have no distinct legacy encoding.
+    let data = uniqueModifiers.has("shift") && encoding.shiftedData
+      ? encoding.shiftedData
+      : encoding.data;
+    if (uniqueModifiers.has("ctrl") && encoding.data === "\x7F") {
+      data = "\x08";
     }
-    if (uniqueModifiers.size === 1 && uniqueModifiers.has("shift") && encoding.shiftedData) {
-      return encoding.shiftedData;
-    }
-    return `\x1B[27;${xtermModifierParameter(uniqueModifiers)};${encoding.codepoint}~`;
+    return uniqueModifiers.has("alt") ? `\x1B${data}` : data;
   }
   if (uniqueModifiers.size === 0) {
     return encoding.data;

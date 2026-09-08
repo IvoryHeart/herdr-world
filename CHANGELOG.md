@@ -14,6 +14,9 @@
 
 ### Fixed
 
+- Keep held mobile terminal keys repeating through UI updates, and send conventional
+  modified Backspace, Tab, and Escape input without requiring an extended keyboard protocol.
+
 ### Removed
 
 ## [0.6.0] - 2026-09-07
