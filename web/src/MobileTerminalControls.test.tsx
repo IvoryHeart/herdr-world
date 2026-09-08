@@ -559,6 +559,41 @@ describe("TerminalCommandControls", () => {
     expect(onInput.mock.calls).toEqual([["\t"], ["\x1B[Z"]]);
   });
 
+  it.each(["Up", "Home", "Tab", "C-c", "1"])(
+    "deselects %s on a second tap while preserving modifiers and the command draft",
+    async (key) => {
+      const { container, onInput } = await renderControls(false);
+      await setCommandValue(commandField(container), "keep draft");
+      await openComposer(container);
+      await clickButton(container, "Add Alt modifier");
+      await clickButton(container, `Use ${key} key`);
+      const modifiersBefore = [...composerPanel(container).querySelectorAll('[aria-pressed="true"]')]
+        .map((button) => button.textContent);
+      await clickButton(container, `Use ${key} key`);
+      expect(container.querySelector(`[aria-label="Use ${key} key"]`)?.getAttribute("aria-pressed")).toBe("false");
+      expect(composerPanel(container).textContent).toContain("Choose a key");
+      expect(composerPanel(container).querySelector<HTMLButtonElement>('[aria-label="Send composed key"]')?.disabled).toBe(true);
+      expect([...composerPanel(container).querySelectorAll('[aria-pressed="true"]')]
+        .map((button) => button.textContent)).toEqual(modifiersBefore);
+      expect(commandField(container).value).toBe("keep draft");
+      expect(onInput).not.toHaveBeenCalled();
+      await clickButton(container, "Use Up key");
+      await clickButton(container, "Use Down key");
+      expect(container.querySelector('[aria-label="Use Up key"]')?.getAttribute("aria-pressed")).toBe("false");
+      expect(container.querySelector('[aria-label="Use Down key"]')?.getAttribute("aria-pressed")).toBe("true");
+    },
+  );
+
+  it("does not re-enable Ctrl when deselecting its quick key", async () => {
+    const { container } = await renderControls(false);
+    await openComposer(container);
+    await clickButton(container, "Use C-c key");
+    await clickButton(container, "Remove Ctrl modifier");
+    await clickButton(container, "Use C-c key");
+    expect(composerPanel(container).querySelectorAll('[aria-pressed="true"]')).toHaveLength(0);
+    expect(composerPanel(container).textContent).toContain("Choose a key");
+  });
+
   it("captures a printable key for Alt chords", async () => {
     const { container, onInput } = await renderControls(false);
     await openComposer(container);

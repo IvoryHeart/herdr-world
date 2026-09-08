@@ -1672,9 +1672,10 @@ export function TerminalCommandControls({
     resetMobileTerminalComposer();
   };
   const chooseComposerKey = (key: MobileTerminalChordKey, modifiers: MobileTerminalModifier[] = []) => {
-    setComposerKey(key);
+    const deselect = composerKey?.id === key.id;
+    setComposerKey(deselect ? null : key);
     setPrintableKey("");
-    if (modifiers.length > 0) {
+    if (!deselect && modifiers.length > 0) {
       setComposerModifiers((current) => [...new Set([...current, ...modifiers])]);
     }
   };

@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Let a second tap deselect the selected mobile shortcut key while retaining modifiers
+  and the command draft.
+
 - Restore Tab to the mobile quick-key row and use a keyboard-plus icon for the expanded
   shortcut builder, retaining its active outline and a Building shortcut indicator.
 
