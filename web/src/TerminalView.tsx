@@ -6,7 +6,6 @@ import {
   Keyboard,
   Link,
   Paperclip,
-  Plus,
   Send,
   SquareTerminal,
   TextCursorInput,
@@ -1830,19 +1829,17 @@ export function TerminalCommandControls({
           </button>
           {stageCommandButton}
           <button
-            className="term-key term-key-icon term-key-compose-action"
+            className="term-key term-key-icon"
             type="button"
-            aria-label={composerOpen ? "Close terminal key composer" : "Compose terminal key"}
-            aria-expanded={composerOpen}
-            title={composerOpen ? "Close and discard chord" : "Compose key"}
-            data-active={composerOpen ? "true" : "false"}
-            disabled={disabled && !composerOpen}
-            onClick={toggleMobileTerminalComposer}
+            aria-label={moreKeysOpen ? "Hide more keys" : "Show more keys"}
+            aria-expanded={moreKeysOpen}
+            title={moreKeysOpen ? "Hide more keys" : "More keys"}
+            onClick={() => {
+              if (moreKeysOpen) resetMobileTerminalComposer();
+              setMoreKeysOpen((open) => !open);
+            }}
           >
-            <span className="term-key-compose-icon" aria-hidden="true">
-              <Keyboard size={15} />
-              <Plus className="term-key-compose-plus" size={8} />
-            </span>
+            <Keyboard size={15} aria-hidden="true" />
           </button>
           <button
             className="term-key term-key-icon"
@@ -1866,16 +1863,7 @@ export function TerminalCommandControls({
       {mobileControls ? (
         <div className="term-key-direct-row" role="group" aria-label="Direct terminal keys">
           {DIRECT_TERMINAL_KEYS.map((key) => renderSharedKey(key, true))}
-          <button
-            className="term-key term-key-more"
-            type="button"
-            aria-label={moreKeysOpen ? "Hide more keys" : "Show more keys"}
-            aria-expanded={moreKeysOpen}
-            data-active={moreKeysOpen ? "true" : "false"}
-            onClick={() => setMoreKeysOpen((open) => !open)}
-          >
-            More keys
-          </button>
+
         </div>
       ) : null}
 
@@ -1883,6 +1871,19 @@ export function TerminalCommandControls({
         <div className="term-key-more-row" role="group" aria-label="More terminal keys">
           {MORE_TERMINAL_KEYS.map((key) =>
             renderSharedKey(key, key.id !== "home" && key.id !== "end"))}
+          <button
+            className="term-key term-key-compose-action"
+            type="button"
+            aria-label={composerOpen ? "Close terminal key composer" : "Compose terminal key"}
+            aria-expanded={composerOpen}
+            aria-pressed={composerOpen}
+            title={composerOpen ? "Close and discard chord" : "Compose key"}
+            data-active={composerOpen ? "true" : "false"}
+            disabled={disabled && !composerOpen}
+            onClick={toggleMobileTerminalComposer}
+          >
+            Compose
+          </button>
         </div>
       ) : null}
 

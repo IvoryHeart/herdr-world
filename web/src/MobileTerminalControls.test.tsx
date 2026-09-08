@@ -341,7 +341,7 @@ describe("TerminalCommandControls", () => {
   it("composes Ctrl+Shift+Up and sends it without changing the command draft", async () => {
     const { container, onInput, onSubmitCommand } = await renderControls(false);
     await setCommandValue(commandField(container), "keep this draft");
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     await clickButton(container, "Add Ctrl modifier");
     await clickButton(container, "Add Shift modifier");
     await clickButton(container, "Use Up key");
@@ -359,7 +359,7 @@ describe("TerminalCommandControls", () => {
     it(`closes Compose and discards the ${selection} chord without sending`, async () => {
       const { container, onInput } = await renderControls(false);
       await setCommandValue(commandField(container), "keep this draft");
-      await clickButton(container, "Compose terminal key");
+      await openComposer(container);
       if (selection === "special") {
         await clickButton(container, "Add Ctrl modifier");
         await clickButton(container, "Use Up key");
@@ -372,7 +372,7 @@ describe("TerminalCommandControls", () => {
       expect(container.querySelector(".term-key-composer")).toBeNull();
       expect(onInput).not.toHaveBeenCalled();
       expect(commandField(container).value).toBe("keep this draft");
-      await clickButton(container, "Compose terminal key");
+      await openComposer(container);
       expect(printableKeyField(container).value).toBe("");
       expect(composerPanel(container).textContent).toContain("Choose a key");
       expect(composerPanel(container).querySelectorAll('[data-active="true"]')).toHaveLength(0);
@@ -391,7 +391,7 @@ describe("TerminalCommandControls", () => {
     ).toEqual([
       "Upload file",
       "Stage command in terminal",
-      "Compose terminal key",
+      "Show more keys",
       "Focus terminal keyboard",
     ]);
     expect(actions.textContent?.trim()).toBe("");
@@ -418,7 +418,7 @@ describe("TerminalCommandControls", () => {
   it("allows closing Compose while disconnected but blocks sending and staging", async () => {
     const { container, onInput, onStageCommand, setDisabled } = await renderControls(false);
     await setCommandValue(commandField(container), "pending command");
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     await clickButton(container, "Use Up key");
     await setDisabled(true);
 
@@ -460,7 +460,7 @@ describe("TerminalCommandControls", () => {
     await setCommandValue(commandField(container), "keep draft");
     await clickButton(container, "Show more keys");
     const keyCount = container.querySelectorAll(".term-key-direct-row button, .term-key-more-row button").length;
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     await clickButton(container, "Add Alt modifier");
     vi.useFakeTimers();
     await clickButton(container, "Use Left key");
@@ -479,14 +479,14 @@ describe("TerminalCommandControls", () => {
 
   it("selects quick keys in Compose mode and cancels without sending", async () => {
     const { container, onInput } = await renderControls(false);
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     for (const key of ["Esc", "Tab", "C-c", "C-d", "1", "2", "3"]) {
       await clickButton(container, `Use ${key} key`);
     }
     expect(onInput).not.toHaveBeenCalled();
     await clickButton(container, "Cancel shortcut");
     expect(container.querySelector(".term-key-composer")).toBeNull();
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     expect(composerPanel(container).textContent).toContain("Choose a key");
     await clickButton(container, "Use C-c key");
     await clickButton(container, "Send Ctrl + c");
@@ -499,7 +499,7 @@ describe("TerminalCommandControls", () => {
     for (const name of ["Home", "End", "Delete", "Page Up", "Page Down"]) {
       await clickButton(container, `Send ${name}`);
     }
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     await clickButton(container, "Add Shift modifier");
     await clickButton(container, "Use Tab key");
     await clickButton(container, "Send Shift + Tab");
@@ -518,9 +518,27 @@ describe("TerminalCommandControls", () => {
     expect(container.querySelector('[aria-label="Send Home"]')).toBeNull();
   });
 
+  it("keeps Compose inside More keys and cancels the chord when collapsed", async () => {
+    const { container, onInput } = await renderControls(false);
+    expect(container.querySelector('[aria-label="Compose terminal key"]')).toBeNull();
+    expect(container.querySelectorAll(".term-key-direct-row button")).toHaveLength(5);
+    await openComposer(container);
+    await clickButton(container, "Add Alt modifier");
+    await clickButton(container, "Use Up key");
+    await clickButton(container, "Hide more keys");
+    expect(onInput).not.toHaveBeenCalled();
+    expect(container.querySelector(".term-key-composer")).toBeNull();
+    expect(container.querySelector(".term-key-more-row")).toBeNull();
+    await clickButton(container, "Send Up");
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("\x1B[A");
+    await openComposer(container);
+    expect(composerPanel(container).textContent).toContain("Choose a key");
+    expect(composerPanel(container).querySelectorAll('[aria-pressed="true"]')).toHaveLength(0);
+  });
+
   it("captures a printable key for Alt chords", async () => {
     const { container, onInput } = await renderControls(false);
-    await clickButton(container, "Compose terminal key");
+    await openComposer(container);
     await clickButton(container, "Add Alt modifier");
     await setCommandValue(printableKeyField(container), "p");
 
@@ -652,6 +670,13 @@ async function clickStage(container: HTMLElement) {
   await act(async () => {
     stageButton(container).click();
   });
+}
+
+async function openComposer(container: HTMLElement) {
+  if (container.querySelector('[aria-label="Show more keys"]')) {
+    await clickButton(container, "Show more keys");
+  }
+  await clickButton(container, "Compose terminal key");
 }
 
 function composerPanel(container: HTMLElement) {

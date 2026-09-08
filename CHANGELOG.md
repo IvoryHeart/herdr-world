@@ -12,6 +12,9 @@
 
 ### Changed
 
+- Use the neutral toolbar keyboard icon to expand More keys, with the highlighted Compose
+  toggle inside; collapsing the expanded keys cancels any pending shortcut.
+
 - Keep the mobile Compose action icon-only, with an active outline and a visible
   composing-mode indicator in the shortcut panel.
 

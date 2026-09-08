@@ -2086,22 +2086,6 @@ button {
   height: calc(15px * var(--mobile-controls-scale));
 }
 
-.term-key-compose-icon {
-  position: relative;
-  display: inline-flex;
-}
-
-.term-key-compose-icon .term-key-compose-plus {
-  position: absolute;
-  right: calc(-3px * var(--mobile-controls-scale));
-  bottom: calc(-2px * var(--mobile-controls-scale));
-  width: calc(8px * var(--mobile-controls-scale));
-  height: calc(8px * var(--mobile-controls-scale));
-  border-radius: 2px;
-  background: var(--surface0);
-  stroke-width: 3;
-}
-
 .term-key-compose-action[data-active="true"] {
   outline: 1px solid var(--accent);
   outline-offset: 1px;
@@ -2125,12 +2109,12 @@ button {
 .term-key-direct-row,
 .term-key-more-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--mobile-control-gap);
 }
 
 .term-key-more-row {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
 }
 
 .term-key-direct-row .term-key,
@@ -3529,11 +3513,7 @@ button {
   gap: 4px;
 }
 
-.term-key-more {
-  white-space: normal;
-  line-height: 1.1;
-  font-size: clamp(9px, calc(10px * var(--mobile-controls-scale)), 14px);
-}
+
 
 .term-key-composer-preview-label {
   flex: 1;
