@@ -26,7 +26,7 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
-- Simplified the experimental agent harness to a shared-worktree pair with retained histories, lead acceptance, separate command deadlines, resumable check receipts and explicit stopped-task recovery. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+- Simplified the experimental agent harness to a shared-worktree pair with retained histories, lead acceptance, separate command deadlines, resumable check receipts and explicit stopped-task recovery, five-minute deterministic progress recaps, consolidated guidance and checksum-verified cached tool downloads with bounded transient retries. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
 
 ### Fixed
 

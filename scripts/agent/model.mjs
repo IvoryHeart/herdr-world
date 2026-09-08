@@ -8,6 +8,13 @@ import { stageAllowance } from './budgets.mjs';
 import { readLedger, attemptsFromLedger, startUsage, recordEvent, normalizeUsage } from './usage.mjs';
 import { telemetryArguments, flushTelemetry } from './telemetry.mjs';
 import { changedPaths } from './run-state.mjs';
+import { readRunRecap } from './progress.mjs';
+
+export async function roleInstructions(control, role) {
+  const own = await readFile(join(control, 'harness/roles', role + '.md'), 'utf8');
+  return ['pair-a', 'pair-b'].includes(role)
+    ? own + '\n' + await readFile(join(control, 'harness/roles/pair.md'), 'utf8') : own;
+}
 
 export function modelArguments(role, selected, session, telemetry, referenceImages = []) {
   return ['/opt/harness/node_modules/.bin/codex', 'exec',
@@ -30,10 +37,12 @@ export async function invokeModel(runDir, state, role) {
   const delta = await writeDelta(runDir, workspace, session, beforeTree, state.activations, state.workspaceBaseline);
   const handoverRoot = state.environment === 'harbor' ? join(runDir, 'handovers') : '/handover';
   delta.patch = join(handoverRoot, basename(delta.patch));
-  const instructions = await readFile(join(control, 'harness/roles', role + '.md'), 'utf8');
+  const instructions = await roleInstructions(control, role);
   const packet = {
     task: state.task, taskProfile: state.taskProfile,
     pair: state.pair ?? null, recovery: state.recovery ?? null,
+    // Only handoff/checkpoint facts belong in model context, not a growing metrics ledger.
+    recap: await readRunRecap(runDir).then(({ completed, findings, blockedReason, nextEvent }) => ({ completed, findings, blockedReason, nextEvent })),
     reviewBase: state.reviewBase ?? state.workspaceBaseline,
     referenceImages: (state.referenceImages ?? []).map(ref => ({ ...ref,
       file: join(state.environment === 'harbor' ? control : '/control', ref.file) })),

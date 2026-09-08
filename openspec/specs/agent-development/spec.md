@@ -183,6 +183,12 @@ copying user configuration or exporting prompts/tool output for accounting.
 ### Requirement: Supervision without a monitoring model
 Background jobs SHALL run under deterministic process supervision and expose saved state
 and completion/question/failure outcomes without requiring an outer model to poll.
+The supervisor SHALL persist a factual recap every five minutes and at job exit without
+invoking a model observer. Recaps SHALL distinguish observations from acceptance and
+include timestamp, active work, last completed handoff, unresolved findings and recorded
+usage coverage. Host notification support SHALL be reported separately from local recap
+production. Resumed model turns SHALL receive the relevant handoff facts without loading
+all prior reports. Active runs SHALL NOT be restarted just to install recap support.
 
 #### Scenario: Waiting for delivery
 - **WHEN** a background worker is executing an authorized task
