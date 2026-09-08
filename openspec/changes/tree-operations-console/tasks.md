@@ -68,10 +68,10 @@ const selectedNode = projection.nodes.find(node => node.selectionKey === context
 
 - [x] 2.3 Extend synthetic browser acceptance to unequal branches, collapsed/empty topology, selection/actions, wide desktop and phone/reduced-motion layouts; verify with `npx playwright test tests/e2e/world-tree.spec.ts`. Capture the rendered result and inspect it against the original reference, correcting any concrete mismatch before delivery.
 
-- [ ] 2.4 Synchronize implemented World requirements and changelog, run `npm run check` and `npm run spec:check`, self-review the diff, commit and obtain task-scoped review. Address findings using the same implementer thread.
+- [x] 2.4 Synchronize implemented World requirements and changelog, run `npm run check` and `npm run spec:check`, self-review the diff, commit and obtain task-scoped review. Address findings using the same implementer thread.
 
 ## 3. Integration acceptance and delivery
 
-- [ ] 3.1 Controller obtains final independent whole-change source and visual review, resolves findings, and records the result once in a sanitized delivery note.
-- [ ] 3.2 Controller runs `npm run check:acceptance` and `npm run spec:check` on the final candidate, records exact results and any opt-in skips, and checks published screenshots contain only synthetic data.
+- [x] 3.1 Controller obtains final independent whole-change source and visual review, resolves findings, and records the result once in a sanitized delivery note.
+- [x] 3.2 Controller runs `npm run check:acceptance` and `npm run spec:check` on the final candidate, records exact results and any opt-in skips, and checks published screenshots contain only synthetic data.
 - [ ] 3.3 Controller opens a ready PR against PR #81's actual branch, identifies the explicitly adopted PR #79 dependency, adds the PR number to the changelog, verifies remote status, and stops before merge. Record Superpowers/native Codex execution without claiming Ralph acceptance or comparative cost savings.
