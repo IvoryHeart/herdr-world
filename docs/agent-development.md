@@ -5,6 +5,12 @@ Orchestrator runs a sequential pair. The default is **one task worktree, one pre
 environment, two persistent partners, and a lead**. Oracle is consulted for a concrete
 technical question. A different persona does not need another repository copy.
 
+This guide owns orchestration procedures. AGENTS.md owns repository-wide authorization
+and delivery rules; skills provide task-specific judgment. The shared partner response
+protocol lives in `harness/roles/pair.md` and is injected for A and B; their individual
+prompts state only their starting responsibility. Model allocations remain in
+`harness/models.json`. Update the owner of a rule instead of copying it into each skill.
+
 ## Start and continue
 
 After `npm run agent:bootstrap` and `npm run agent:image`, a short goal is enough:
@@ -101,6 +107,13 @@ There is no per-review copy, per-verification copy or QA copy helper in pair mod
 controls retain the scripts and Ralph binary without duplicating the entire host harness
 node_modules tree. Existing stopped runs are not automatically deleted.
 
+The pinned Ralph archive is cached under the npm cache's `world-ralph/` directory
+(`.agents/cache/npm/world-ralph/` when installing directly). Every cache read checks its
+manifest SHA-256 before extraction. Missing/corrupt cache entries download again;
+incomplete or mismatched downloads cannot replace a verified entry. Recognized transient
+HTTP/network failures receive at most two retries with short backoff, without a model
+turn. Permanent errors and checksum mismatches stop preparation with their cause.
+
 Containers retain the existing restrictions: no host home, Herdr/SSH/Docker sockets or
 published ports. Git metadata, controls, handoffs and Ralph state are read-only in model
 turns; only the active native home is mounted. Linked Git metadata is mounted read-only
@@ -186,15 +199,32 @@ resume: it also preserves valid check receipts.
 
 Use `--background` from an agent conversation. A deterministic process owns the job.
 `agent:job status JOB_ID` reads it; `agent:job wait JOB_ID` waits on filesystem events for
-up to 60 seconds. Use host completion notifications where the host supports them.
-**Do not repeatedly spend model turns polling a healthy job**, even at 30/60-second intervals.
+up to 60 seconds. **Do not repeatedly spend model turns polling a healthy job.**
 
-If the host cannot automatically wake the coordinating session, report the running job once
-and return; the run keeps working. Reopen status when completion or a real question is
-reported. This repository does not manufacture a native host callback or a new control plane.
-The lead inside Ralph already handles guidance and final acceptance; the host coordinator
-only needs to deliver the accepted candidate. Fully unattended host wake-up/publishing must
-be validated in the actual host integration, not inferred from a background PID.
+The background supervisor writes `.agents/jobs/JOB_ID/recap.json` and a structured line
+in its private `supervisor.log` every **five minutes**, plus a final recap at exit.
+This needs no model call. `npm run agent:job -- recap JOB_ID` produces a current read-only
+snapshot on demand, including for older runs. Recaps show the last completed handoff,
+active role/command and elapsed time, unresolved findings, command results, remaining
+model allowance, recorded usage and last known disk health. They label observation time
+and incomplete usage coverage; cached input is included in input. No raw terminal output,
+credentials or transcripts are copied. A long check or silence is not proof of a stall.
+
+Use world-recap-run to summarize these facts for the owner or regain orientation after
+compaction. Each model activation also receives the last completed handoff and unresolved
+findings as a small context delta. A recap never approves source, replaces the brief or
+resets allowance. Read specific handoffs/source when the recap leaves a concrete gap.
+
+Where the host supports notifications, relay periodic progress about five minutes apart
+and completion/material blockers promptly. Producing a recap file is not a chat callback:
+without host integration, report the job and recap location once and return. The run
+continues independently. Do not add a polling model to simulate wake-up. Fully unattended
+host wake-up/publishing must be validated in the actual integration. The inner lead handles
+governor decisions; the host coordinator delivers the accepted candidate.
+
+These changes affect newly launched jobs/updated controls. Do not modify or restart an
+active trial to install a reporting improvement; inspect an older run with the read-only
+recap command and apply controls through the stopped-task recovery procedure when needed.
 
 ## Models and comparisons
 
@@ -226,6 +256,14 @@ latest proposal and approval must come from different native histories; lead acc
 be independent of both partners. Prior authorship does not permanently disqualify a partner
 from reviewing the other's later edits. A content-identical commit keeps receipts current.
 CI remains an independent check. Stop at the open ready PR; never merge without owner direction.
+
+For a stacked task, pass `--base <recorded-parent-branch>`. The delivery helper requires
+a matching task record and appends execution mode, run ID and role/model evidence to the
+PR body. For interactive work or stale/missing receipts, use `agent:verify -- <profile>`;
+this does not substitute for a missing harness run. For an existing PR, inspect the task
+report and current verification before pushing its update and retain the execution report.
+Use `agent:deliver --draft` for an early checkpoint and `agent:deliver --ready <PR>` only
+when final evidence passes.
 
 An early draft is optional for a coherent checkpoint when visibility helps. The host may
 publish it explicitly as incomplete under the recorded task; it is not accepted delivery.

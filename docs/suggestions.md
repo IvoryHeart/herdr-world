@@ -1,12 +1,12 @@
 # Suggestions and idea register
 
 This is a lightweight, non-binding list of possible improvements, experiments,
-and product ideas for the Herdr Office project and its packages.
+and product ideas for Herdr World and its related packages.
 
 Suggestions are deliberately not specifications. They capture useful
 possibilities without committing the project to a design, implementation, or
-timeline. Once an idea is selected for implementation, it MUST be clarified in
-an approved specification when it is non-trivial.
+timeline. When selected, clarify any new product/API contract as required by AGENTS.md;
+ordinary engineering work does not need a new specification.
 
 ## How to use this list
 
@@ -414,7 +414,11 @@ of hidden requirements.
 - **Idea:** Once observability integration is available, show the cost spent
   or currently accumulating for each agent, aggregate costs for each room, and
   provide a CEO-office board with overall totals and useful time-window
-  comparisons.
+  comparisons. Attribute coordinator, worker, reviewer and advisor usage separately;
+  include retries, recovery lineage and deterministic execution time. Keep recorded
+  tokens, cached-input portions, estimated money and subscription allowance distinct;
+  missing pricing or identity remains unknown. Link aggregates to agent profiles
+  (SUG-030) and orchestration runs (SUG-029).
 - **Dependencies:** Provider cost data, agent/session attribution, room and
   host aggregation, currency and time-window settings, estimated-versus-final
   status, privacy rules, and bounded board presentation.
@@ -467,6 +471,9 @@ of hidden requirements.
   redacts credential-shaped text, and triggers live snapshot refresh through
   `pane.updated`. Automatic harness-specific integrations and richer structured
   progress remain deferred; the current slice needs no new upstream schema.
+  Consider consuming harness-generated five-minute factual recaps and immediate
+  completion/blocker events, with source/freshness labels and no polling model.
+  Distinguish writing a local recap from delivering a notification to a user.
 - **Related:** [`008-office-productivity-ux-spec.md`](specs/008-office-productivity-ux-spec.md)
 - **Related:** [`002-herdr-observability-extension-contract-spec.md`](specs/002-herdr-observability-extension-contract-spec.md)
 
@@ -578,6 +585,52 @@ of hidden requirements.
   the inner canvas aligned with the outer Office window without allowing resize
   traffic and terminal output to stall the page.
 - **Related:** [`008-office-productivity-ux-spec.md`](specs/008-office-productivity-ux-spec.md)
+
+### SUG-029 — Observe orchestration runs and non-terminal agents
+
+- **Status:** open
+- **Scope:** `herdr-server`, `bridge`, `herdr-web`, `observability`
+- **Value:** Make spawned workers, advisors and general-purpose agents visible even
+  when they have no dedicated terminal or run under a different harness.
+- **Idea:** Represent an orchestration run, its agent invocations, parent/child and
+  handoff relationships, active phase, progress, waiting/blockage and recovery history.
+  Show a sequential pair as alternating work on shared resources, without implying
+  each role requires its own host, terminal or worktree. Offer a run timeline and
+  collapsed/expanded agent groups across World representations. Keep hosting topology
+  separate from logical delegation; non-coding agents belong in the same model.
+- **Integration direction:** Start with one observed Ralph run and a small normalized
+  lifecycle/identity contract; add adapters for other harnesses as their real signals
+  warrant. Preserve native IDs, provider/harness namespace, parent provenance and
+  freshness. Skills may be configuration or invocation metadata rather than agents.
+  Show unknown relationships/coverage explicitly; do not infer parents from screen text,
+  shared directories, model names or coincident activity.
+- **Dependencies:** Authoritative lifecycle events, cross-host identity, reconnect and
+  expiry behavior, resumable run lineage, capability discovery and privacy boundaries.
+- **Related:** SUG-006, SUG-021, SUG-023, SUG-030
+- **Owner:** Open
+- **Added:** 2026-09-08
+
+### SUG-030 — Agent profiles with capabilities and economy
+
+- **Status:** open
+- **Scope:** `herdr-server`, `herdr-web`, `observability`
+- **Value:** Give users an employee-style view of what an agent can do, its current
+  assignments, and the resources and outcomes associated with its work.
+- **Idea:** A profile links a durable configured agent identity to its sessions and
+  invocations. Show role/model configuration, configured skills and their versions,
+  observed skill use when available, permitted tools, current assignment, recent
+  deliveries and review outcomes. Summarize tokens, cache use, elapsed/command time,
+  retries and attributable cost with a selectable period and run drill-down.
+- **Boundaries:** Distinguish a reusable profile, a temporary persona, a native session
+  and an individual activation. Do not combine agents merely because their names match.
+  Separate declared capability from observed behavior; do not invent skill use or
+  treat low spend as evidence of quality. Display unavailable/estimated economy data
+  honestly and preserve source attribution. Avoid storing prompts or secrets in profiles.
+- **Dependencies:** SUG-029 identity/adapters, SUG-021 cost attribution, explicit skill
+  metadata and privacy controls. Begin with recorded run evidence before designing a
+  universal employee registry or cross-harness skill taxonomy.
+- **Owner:** Open
+- **Added:** 2026-09-08
 
 ## Parked or declined
 

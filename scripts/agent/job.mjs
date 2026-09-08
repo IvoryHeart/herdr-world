@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { command, jsonFile, primaryCheckout, errorExit } from './lib.mjs';
+import { startRecaps, readJobRecap } from './progress.mjs';
 
 // A process supervises Ralph. No extra model turn is needed to keep a job alive.
 export async function launchJob(argv, { cwd = process.cwd(), env = process.env, root = primaryCheckout(cwd) } = {}) {
@@ -47,6 +48,7 @@ async function main() {
     const job = JSON.parse(await readFile(path, 'utf8'));
     const { argv, cwd } = JSON.parse(await readFile(join(directory, 'command.json'), 'utf8'));
     await jsonFile(path, { ...job, status: 'running', pid: process.pid });
+    const stopRecaps = startRecaps(directory);
     try {
       const result = await command(argv, { cwd, env: { ...process.env, WORLD_AGENT_JOB_DIR: directory },
         timeoutMs: 172800000, graceMs: 10000 }); // Run deadlines remain enforced inside run.mjs.
@@ -57,11 +59,12 @@ async function main() {
       const latest = JSON.parse(await readFile(path, 'utf8'));
       await jsonFile(path, { ...latest, status: 'failed', reason: error.message, finishedAt: new Date().toISOString() });
       throw error;
-    }
+    } finally { await stopRecaps(); }
     return;
   }
-  if (!['status', 'wait'].includes(action) || !/^[a-f0-9-]{36}$/.test(id ?? '')) throw new Error('Usage: agent:job status|wait JOB_ID');
+  if (!['status', 'wait', 'recap'].includes(action) || !/^[a-f0-9-]{36}$/.test(id ?? '')) throw new Error('Usage: agent:job status|wait|recap JOB_ID');
   const directory = join(primaryCheckout(), '.agents/jobs', id);
+  if (action === 'recap') { console.log(JSON.stringify(await readJobRecap(directory), null, 2)); return; }
   const state = action === 'wait' ? await waitJob(directory) : JSON.parse(await readFile(join(directory, 'job.json'), 'utf8'));
   console.log(JSON.stringify(state, null, 2));
 }

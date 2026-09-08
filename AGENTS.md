@@ -31,41 +31,22 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Read [docs/agent-development.md](docs/agent-development.md) for OpenSpec, repository
   skills, bounded Ralph runs, evaluation and PR delivery. Use
   [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
-- For a short development goal, use world-start-task and `npm run agent:goal -- "<goal>"`.
-  Intake asks only consequential questions; resume the saved run with the owner's answers.
-  Use a lead history for intake/acceptance and two persistent partners sharing one task worktree;
-  do not reload the full repository in newly spawned agents for each persona. The lead owns analysis
-  and governor judgment as skills; lifecycle hooks observe health. Do not model-poll a healthy job.
-- **Feature execution is through the harness.** In the coordinating conversation, start
-  `npm run agent:goal -- "<goal>" --parent <PR> --background` (omit `--parent` for main)
-  before doing feature research, interviewing, planning or editing. Report the task worktree,
-  job ID and run ID. Relay the managed intake's questions and continue that recorded run.
-  Reading these instructions or using OpenSpec/test commands alone does not execute the harness.
-  Do not replace a blocked/exhausted run with single-session implementation or bypass the
-  final delivery evidence check with direct `git push` / `gh pr create`. Use explicit `agent:run recover`
-  to upgrade frozen controls on a stopped task, retaining its work and remaining allowance.
-- A worker receiving a supervisor phase is already inside the harness: follow that phase,
-  never launch another loop. Harness/control maintenance is interactive because workers cannot
-  edit their controls; record `agent:task interactive --reason harness-maintenance --note "..."`.
-  Other interactive feature work requires an explicit owner request, recorded with reason
-  `owner-request`. This exception does not apply merely because the feature is small or the
-  coordinator prefers to implement it. Read-only reviews and analysis need no task/run record.
-- Create task worktrees with `npm run agent:worktree -- create <slug>`. They live in
-  the primary checkout's ignored `.agents/.worktrees/`, including when invoked from
-  a linked worktree. Do not move or clean another agent's existing worktree.
-- Maintained capability specs live in `openspec/specs/`; active proposals live in
-  `openspec/changes/`. Numbered `docs/specs/` files are historical evidence.
-  Existing user authorization carries across planning and implementation.
-- Use the pinned OpenSpec CLI through `npm run spec -- ...`. Repository skills in
-  `.agents/skills/` adapt OpenSpec to these rules. Review tool-generated updates
-  before replacing those adaptations.
-- Ralph scratchpads, graphs and eval output are temporary or derived knowledge.
-  They never override current specs, source, tests or these delivery rules.
-- The Ralph task profiles are routine, feature and sensitive. Product shaping is conditional;
-  the pair independently checks behavioral evidence against the brief. Acceptance expectations are
-  not weakened during repairs. The latest editor needs review by the other partner; role swaps are optional. Model defaults live in harness/models.json: Sol high for the default
-  lead/reviewer, Sol xhigh for Oracle; full mode uses Luna xhigh for bounded workers.
-  See docs/agent-development.md for overrides and Oracle limits.
+- **Feature execution is through the harness.** Use world-start-task and `agent:goal`
+  before feature research, interview, planning or edits. A supervisor-assigned worker is
+  already inside the run and must not start another loop. Do not bypass a stopped run or
+  its delivery evidence with interactive implementation or direct publishing.
+- Harness/control maintenance is interactive: record `agent:task interactive --reason
+  harness-maintenance --note "..."`. Other interactive feature work requires an explicit
+  owner request, recorded with reason `owner-request`. Read-only analysis needs no run.
+- [docs/agent-development.md](docs/agent-development.md) owns orchestration procedures:
+  start/resume/recovery, workspace, deadlines, recaps, models and delivery evidence.
+  Skills provide task-specific judgment and reference those procedures; role prompts
+  define response protocols. Avoid copying their policies into another entrypoint.
+- Use `agent:worktree create <slug>` for task worktrees under the primary checkout's
+  ignored `.agents/.worktrees/`. Do not move or clean another agent's worktree.
+- Current contracts are in `openspec/specs/`, active proposals in `openspec/changes/`,
+  and historical numbered specs in `docs/specs/`. Use the pinned `npm run spec -- ...`.
+  Scratchpads, graphs and eval outputs do not override contracts, source or these rules.
 
 - Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See
