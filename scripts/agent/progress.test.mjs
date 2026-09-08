@@ -54,15 +54,25 @@ test('recaps distinguish long checks from model time, deduplicate usage and neve
   assert.equal(buildRecap({ ...state, status: 'interrupted' }, rows).active, null);
 });
 test('scheduled recaps use no model, flush on stop and report a lost observation without failing the job', async t => {
-  const dir = await temporary(t), messages = []; let reads = 0, observed;
-  const emitted = new Promise(resolve => { observed = resolve; });
+  const dir = await temporary(t), messages = []; let reads = 0, firstObserved, secondObserved;
+  const first = new Promise(resolve => { firstObserved = resolve; });
+  const second = new Promise(resolve => { secondObserved = resolve; });
+  // Production has a child process to keep Node alive. Drive the unreferenced
+  // recap timer explicitly here instead of depending on incidental test-runner I/O.
+  t.mock.timers.enable({ apis: ['setInterval'] });
   assert.equal(recapIntervalMs, 300000);
-  const stop = startRecaps(dir, { intervalMs: 10, read: async () => { reads++; if (reads === 1) throw new Error('temporary read failure'); return { status: 'running', sequence: reads }; },
-    emit: text => { messages.push(text); if (messages.length === 2) observed(); } });
-  await emitted; await stop();
+  const stop = startRecaps(dir, { read: async () => { reads++; if (reads === 1) throw new Error('temporary read failure'); return { status: 'running', sequence: reads }; },
+    emit: text => { messages.push(text); if (messages.length === 1) firstObserved(); if (messages.length === 2) secondObserved(); } });
+  try {
+    t.mock.timers.tick(recapIntervalMs - 1); assert.equal(reads, 0);
+    t.mock.timers.tick(1); await first;
+    await new Promise(resolve => setImmediate(resolve)); // Drain the first publication's cleanup.
+    t.mock.timers.tick(recapIntervalMs); await second;
+  } finally { await stop(); }
   assert.match(messages[0], /unavailable/);
   assert.equal(JSON.parse(await readFile(join(dir, 'recap.json'))).sequence, reads);
-  const count = reads; await new Promise(resolve => setTimeout(resolve, 30)); assert.equal(reads, count);
+  assert.equal(reads, 3); // Failed observation, successful observation, final flush.
+  t.mock.timers.tick(recapIntervalMs); assert.equal(reads, 3);
 });
 test('background completion persists a final recap and manual recap reads a linked run without mutation', async t => {
   const root = await temporary(t);
