@@ -26,7 +26,7 @@
 
 **Interfaces:** `ToolbarPrimaryView` must include `"tree"`; View values map to the existing canonical navigation helpers. `WorldThemeContext` and Tree callbacks retain their current signatures.
 
-- [ ] 1.1 Add behavioral coverage for all four View options, Tree URL/history, current-view reopen and mobile Back focus. Verify a focused test fails against the pre-integration implementation because the common View/Tree behavior is absent.
+- [x] 1.1 Add behavioral coverage for all four View options, Tree URL/history, current-view reopen and mobile Back focus. Verify a focused test fails against the pre-integration implementation because the common View/Tree behavior is absent.
 
 ```ts
 await page.goto('/?theme=tree');
@@ -37,7 +37,7 @@ await page.goBack();
 await expect(page).toHaveURL(/\/?theme=tree$/);
 ```
 
-- [ ] 1.2 Merge the pinned sibling branch, resolve conflicts deliberately and include Tree in its type, picker option, canonical handler and mobile accessible label. Preserve PR #79's host setup and focus fixes. Verify `git diff --check`, focused sidebar/Tree Vitest tests and `npx playwright test tests/e2e/sidebar-toolbar.spec.ts tests/e2e/world-tree.spec.ts` after `npm run build:web`.
+- [x] 1.2 Merge the pinned sibling branch, resolve conflicts deliberately and include Tree in its type, picker option, canonical handler and mobile accessible label. Preserve PR #79's host setup and focus fixes. Verify `git diff --check`, focused sidebar/Tree Vitest tests and `npx playwright test tests/e2e/sidebar-toolbar.spec.ts tests/e2e/world-tree.spec.ts` after `npm run build:web`.
 
 ```tsx
 export type ToolbarPrimaryView = 'spaces' | 'office' | 'tree' | 'graph';
@@ -45,7 +45,7 @@ export type ToolbarPrimaryView = 'spaces' | 'office' | 'tree' | 'graph';
 <option value="tree">Tree</option>
 ```
 
-- [ ] 1.3 Run `npm run check`, self-review the privacy-safe diff, commit the adoption and report exact tests/results for task-scoped independent review. Address its findings before Task 2.
+- [x] 1.3 Run `npm run check`, self-review the privacy-safe diff, commit the adoption and report exact tests/results for task-scoped independent review. Address its findings before Task 2.
 
 ## 2. Tree presentation
 
@@ -55,7 +55,7 @@ export type ToolbarPrimaryView = 'spaces' | 'office' | 'tree' | 'graph';
 
 **Interfaces:** Consume unchanged `WorldThemeContext`, `WorldGraphNode`, `WorldGraphHost`, `WorldGraphSpace`; parent selection and activation callbacks stay authoritative. Existing `.tree-map` transform and viewport geometry remain compatible with camera checks. Task 1 provides the common sidebar and four-view picker.
 
-- [ ] 2.1 Add focused failing behavioral coverage for empty/collapsed connector presentation and persistent operational overview/selection. Keep existing tests for stale actions, search/collapse and camera. Run `npm run test:web -- TreeTheme` and record expected failures. Pure styling is verified through rendered inspection rather than implementation-mirroring tests.
+- [x] 2.1 Add focused failing behavioral coverage for empty/collapsed connector presentation and persistent operational overview/selection. Keep existing tests for stale actions, search/collapse and camera. Run `npm run test:web -- TreeTheme` and record expected failures. Pure styling is verified through rendered inspection rather than implementation-mirroring tests.
 
 ```tsx
 // Only branches that actually render children advertise a child connector.
@@ -64,9 +64,9 @@ const expandedWithChildren = !collapsed && spaces.length > 0;
 const selectedNode = projection.nodes.find(node => node.selectionKey === context.selectedKey) ?? null;
 ```
 
-- [ ] 2.2 Implement the dark compact dashboard defined in design.md: clear type/status cards, orthogonal attached connectors, persistent overview/inspector, compact semantic navigation and suitable desktop/phone spacing. Keep search, selection and guarded action handlers intact. Verify focused Vitest, lint and build.
+- [x] 2.2 Implement the dark compact dashboard defined in design.md: clear type/status cards, orthogonal attached connectors, persistent overview/inspector, compact semantic navigation and suitable desktop/phone spacing. Keep search, selection and guarded action handlers intact. Verify focused Vitest, lint and build.
 
-- [ ] 2.3 Extend synthetic browser acceptance to unequal branches, collapsed/empty topology, selection/actions, wide desktop and phone/reduced-motion layouts; verify with `npx playwright test tests/e2e/world-tree.spec.ts`. Capture the rendered result and inspect it against the original reference, correcting any concrete mismatch before delivery.
+- [x] 2.3 Extend synthetic browser acceptance to unequal branches, collapsed/empty topology, selection/actions, wide desktop and phone/reduced-motion layouts; verify with `npx playwright test tests/e2e/world-tree.spec.ts`. Capture the rendered result and inspect it against the original reference, correcting any concrete mismatch before delivery.
 
 - [ ] 2.4 Synchronize implemented World requirements and changelog, run `npm run check` and `npm run spec:check`, self-review the diff, commit and obtain task-scoped review. Address findings using the same implementer thread.
 

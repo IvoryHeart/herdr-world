@@ -31,6 +31,7 @@ import {
   writeTreeViewPrefs,
 } from "./treeViewPrefs";
 import type { TreeCamera } from "./treeViewPrefs";
+import "./TreeTheme.css";
 
 export default function TreeTheme({ context: value }: SurfaceComponentProps) {
   if (!isWorldThemeContext(value)) {
@@ -179,6 +180,13 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
         </div>
         <button className="btn tree-fit" type="button" onClick={fit}><Maximize2 size={14} />Fit tree</button>
       </header>
+      <section className="tree-overview" aria-label="Tree operational overview">
+        <span><strong>{projection.coverage.presentedHosts}</strong> of {projection.coverage.configuredHosts} configured hosts</span>
+        <span><strong>{projection.coverage.presentedSpaces}</strong> of {projection.coverage.observedSpaces} observed spaces</span>
+        <span><strong>{projection.coverage.presentedTerminals}</strong> of {projection.coverage.observedTerminals} observed leaves</span>
+        <span className="tree-legend"><span data-kind="agent">{projection.coverage.presentedAgents} agents</span>
+          <span data-kind="terminal">{projection.coverage.presentedShells} terminals</span></span>
+      </section>
       <div className="tree-content">
         {!context.compact ? <div ref={viewportRef} className="tree-viewport" aria-label="Interactive World tree"
           onPointerDown={onPointerDown} onPointerMove={onPointerMove}
@@ -200,18 +208,24 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
           {overflowCount > 0 ? <div className="tree-overflow-badge">+{overflowCount} entities omitted by presentation limits</div> : null}
         </div> : null}
         <aside className="tree-panel" aria-label="Tree details and semantic hierarchy">
-          <div className="tree-results" aria-live="polite">
-            {queryActive ? visibleHosts.length ? `${visibleHosts.length} matching host branches` : "No Tree matches" : `${visibleHosts.length} presented hosts`}
-          </div>
           <div className="sr-only" aria-live="polite">
             {selectedNode
               ? `Selected ${kindLabel(selectedNode)} ${selectedNode.label}, ${nodeSummary(selectedNode)}`
               : "No Tree entity selected"}
           </div>
+          <section className="tree-inspector" aria-label="Tree inspector">
+          <h2>Inspector</h2>
           {selectedNode ? <TreeDetails node={selectedNode} projection={projection}
             onOpenTerminal={() => context.onGraphOpenTerminal(selectedNode)}
             onOpenInSpaces={() => context.onGraphOpenInSpaces(selectedNode)} />
-            : <p className="tree-details-empty">Select a host, space, agent, or terminal to inspect it.</p>}
+            : <div className="tree-details-empty"><Server size={24} aria-hidden="true" />
+              <strong>Your World at a glance</strong><p>Select a host, space, agent, or terminal to inspect it.</p>
+              <span>Explore the connected hierarchy or use the outline below.</span></div>}
+          </section>
+          <div className="tree-outline">
+          <div className="tree-outline-heading"><h2>Outline</h2><div className="tree-results" aria-live="polite">
+            {queryActive ? visibleHosts.length ? `${visibleHosts.length} matching host branches` : "No Tree matches" : `${visibleHosts.length} presented hosts`}
+          </div></div>
           <ul className="tree-semantic" aria-label="Presented hosts, spaces, agents, and terminals">
             {visibleHosts.map((host) => <SemanticHost key={host.node.id} host={host}
               matches={matches} queryActive={queryActive} collapsedIds={collapsedIds}
@@ -221,6 +235,7 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
           </ul>
           {projection.omittedHostCount > 0 ? <p className="tree-omitted">{projection.omittedHostCount} hosts omitted by the 128-host limit.</p> : null}
           {projection.omittedSpaceCount > 0 ? <p className="tree-omitted">{projection.omittedSpaceCount} spaces omitted by the 128-space limit.</p> : null}
+          </div>
           {context.handoffStatus ? <p className="world-handoff-status" role="status">{context.handoffStatus}</p> : null}
         </aside>
       </div>
@@ -241,18 +256,20 @@ type TreeBranchProps = {
 function VisualHost({ host, ...props }: { host: WorldGraphHost } & TreeBranchProps) {
   const collapsed = props.collapsedIds.has(host.node.id) && !props.queryActive;
   const spaces = shownSpaces(host, props.matches, props.queryActive);
-  return <section className="tree-visual-host">
+  const expandedWithChildren = !collapsed && spaces.length > 0;
+  return <section className="tree-visual-host" data-has-children={expandedWithChildren}>
     <VisualCard node={host.node} selectedKey={props.selectedKey} onSelect={props.onSelect}
       collapsible collapsed={collapsed}
       onToggle={props.queryActive ? undefined : () => props.onToggle(host.node.id)} />
-    {!collapsed ? <div className="tree-visual-spaces">{spaces.map((space) => {
+    {expandedWithChildren ? <div className="tree-visual-spaces">{spaces.map((space) => {
       const spaceCollapsed = props.collapsedIds.has(space.node.id) && !props.queryActive;
       const children = shownChildren(space, props.matches, props.queryActive);
-      return <section className="tree-visual-space" key={space.node.id}>
+      const expandedWithChildren = !spaceCollapsed && children.length > 0;
+      return <section className="tree-visual-space" key={space.node.id} data-has-children={expandedWithChildren}>
         <VisualCard node={space.node} selectedKey={props.selectedKey} onSelect={props.onSelect}
           collapsible collapsed={spaceCollapsed}
           onToggle={props.queryActive ? undefined : () => props.onToggle(space.node.id)} />
-        {!spaceCollapsed ? <div className="tree-visual-leaves">{children.map((child) =>
+        {expandedWithChildren ? <div className="tree-visual-leaves">{children.map((child) =>
           <VisualCard key={child.id} node={child} selectedKey={props.selectedKey}
             onSelect={props.onSelect} onActivate={props.onActivate} />)}</div> : null}
       </section>;
@@ -266,11 +283,17 @@ function VisualCard({ node, selectedKey, onSelect, onActivate, collapsible, coll
   onActivate?: (node: WorldGraphNode) => void;
   collapsible?: boolean; collapsed?: boolean; onToggle?: () => void;
 }) {
-  return <div className="tree-card-wrap" data-kind={node.kind} data-state={displayStatus(node)}>
+  return <div className="tree-card-wrap" data-kind={node.kind} data-state={displayStatus(node)} data-focused={node.focused}>
     <div className="tree-card" data-selected={selectedKey === node.selectionKey}
       onClick={() => onSelect(node.selectionKey, node.hostKey)}
       onDoubleClick={() => node.actionable && onActivate?.(node)}>
-      <NodeIcon node={node} /><span><strong>{node.label}</strong><small>{nodeSummary(node)}</small></span>
+      <div className="tree-card-kind"><NodeIcon node={node} /><span>{kindLabel(node)}</span>
+        {node.focused ? <span className="tree-focus">Focused</span> : null}</div>
+      <strong title={node.label}>{node.label}</strong>
+      <small title={nodeSummary(node)}>{node.taskSummary || node.stateLabel ||
+        (node.kind === "host" ? node.connectionState : node.kind === "space" ? "Agent / terminal workspace" : node.modelLabel || "Terminal session")}</small>
+      <div className="tree-card-state"><span className="tree-status" data-state={displayStatus(node)}>{displayStatus(node)}</span>
+        {node.stale ? <span>stale</span> : null}</div>
     </div>
     {collapsible ? <div className="tree-card-collapse" data-expanded={!collapsed}
       onClick={onToggle}><ChevronRight size={14} /></div> : null}

@@ -116,7 +116,7 @@ test("bounds and restores camera changes made through every viewport handler", a
   expect((await treeCamera(page)).zoom).toBe(2.5);
   for (let index = 0; index < 60; index += 1) await page.getByRole("button", { name: "Zoom out" }).click();
   expect((await treeCamera(page)).zoom).toBe(0.4);
-  for (let index = 0; index < 8; index += 1) await page.getByRole("button", { name: "Zoom in" }).click();
+  for (let index = 0; index < 12; index += 1) await page.getByRole("button", { name: "Zoom in" }).click();
 
   await viewport.hover();
   const beforeWheel = await treeCamera(page);
@@ -165,6 +165,121 @@ test("bounds and restores camera changes made through every viewport handler", a
   await page.emulateMedia({ reducedMotion: "reduce" });
   await expect(map).toHaveCSS("transition-duration", "0s");
 });
+
+test("keeps dense unequal branches readable with attached connectors and a persistent inspector", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-a", snapshotVariant: "showcase" },
+  });
+  await page.addInitScript(() => localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify({
+    version: 2, enabledBridgeIds: ["same-origin"], lastSelectedBridgeId: "same-origin", backends: [],
+  })));
+  await page.setViewportSize({ width: 1536, height: 1024 });
+  await page.goto("/?theme=tree");
+  await expect(page.locator(".tree-visual-leaves .tree-card")).toHaveCount(11);
+  await expect(page.getByRole("combobox", { name: "View", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Tree inspector", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Fit tree" }).click();
+  expect((await treeCamera(page)).zoom).toBeGreaterThanOrEqual(0.9);
+  await expectDenseCardsInsideViewport(page);
+  await expectAttachedTreeConnectors(page);
+  await captureTree(page, "desktop-overview-1536.png");
+
+  const card = page.locator(".tree-card").filter({ has: page.getByText("Codex Build", { exact: true }) });
+  await card.click();
+  await expect(card).toHaveAttribute("data-selected", "true");
+  await expect(page.getByRole("region", { name: "Selected Tree entity" })).toContainText("Codex Build");
+  await expect(page.getByRole("region", { name: "Tree operational overview" })).toContainText("11 of 11 observed leaves");
+  await expect(page.locator("[data-world-conversation='open']")).toHaveCount(0);
+  await captureTree(page, "desktop-selected-1536.png");
+  for (const [width, height] of [[1440, 900], [1200, 800]]) {
+    await page.setViewportSize({ width, height });
+    await page.getByRole("button", { name: "Fit tree" }).click();
+    expect((await treeCamera(page)).zoom).toBeGreaterThanOrEqual(width === 1440 ? 0.9 : 0.65);
+    await expectDenseCardsInsideViewport(page);
+    await captureTree(page, `desktop-selected-${width}.png`);
+  }
+
+  const collapse = page.getByRole("button", { name: /^Collapse Launch Control, Space/ });
+  await collapse.click();
+  await expect(page.locator(".tree-visual-space").first()).toHaveAttribute("data-has-children", "false");
+  await expect(page.locator(".tree-visual-space").first().locator(".tree-visual-leaves")).toHaveCount(0);
+  expect(await page.locator(".tree-visual-space").first().locator(":scope > .tree-card-wrap")
+    .evaluate((element) => getComputedStyle(element, "::after").content)).toBe("none");
+  await page.getByRole("searchbox", { name: "Search Tree" }).fill("Codex Build");
+  await expect(page.locator(".tree-visual-leaves .tree-card")).toHaveCount(1);
+  await page.getByRole("searchbox", { name: "Search Tree" }).fill("");
+  await expect(page.getByRole("button", { name: /^Expand Launch Control, Space/ })).toHaveAttribute("aria-expanded", "false");
+  await captureTree(page, "desktop-collapsed-1200.png");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.getByRole("region", { name: "Selected Tree entity" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const results = await new AxeBuilder({ page }).include(".tree-stage-shell").analyze();
+  expect(results.violations).toEqual([]);
+  await captureTree(page, "phone-selected-390.png");
+});
+
+test("shows empty host identity without dangling child links", async ({ page, request }) => {
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-a", snapshotVariant: "empty" },
+  });
+  await page.goto("/?theme=tree");
+  const host = page.locator(".tree-visual-host").first();
+  await expect(host).toHaveAttribute("data-has-children", "false");
+  await expect(host.locator(".tree-visual-spaces")).toHaveCount(0);
+  expect(await host.locator(":scope > .tree-card-wrap").evaluate((element) => getComputedStyle(element, "::after").content)).toBe("none");
+  await expect(page.getByText("No observed spaces").first()).toBeVisible();
+  await page.getByRole("button", { name: /^Hosts:/ }).click();
+  await page.getByRole("menuitemradio", { name: /Offline E/ }).click();
+  await expect(page.locator('.tree-card-wrap[data-state="disconnected"]').first()).toBeVisible();
+});
+
+async function captureTree(page: import("@playwright/test").Page, name: string) {
+  if (process.env.TREE_CAPTURE_EVIDENCE === "1") {
+    await page.screenshot({ path: `docs/evidence/tree-operations-console/${name}` });
+  }
+}
+
+async function expectDenseCardsInsideViewport(page: import("@playwright/test").Page) {
+  await expect.poll(async () => page.locator(".tree-viewport").evaluate((element) => {
+    const viewport = element.getBoundingClientRect();
+    return [...element.querySelectorAll(".tree-card")].map((card) => {
+      const box = card.getBoundingClientRect();
+      return box.left >= viewport.left && box.right <= viewport.right && box.top >= viewport.top && box.bottom <= viewport.bottom;
+    });
+  })).toEqual(Array(16).fill(true));
+}
+
+async function expectAttachedTreeConnectors(page: import("@playwright/test").Page) {
+  const endpoints = await page.locator(".tree-visual-host").evaluate((host) => {
+    const root = host.querySelector<HTMLElement>(":scope > .tree-card-wrap")!;
+    const spaces = [...host.querySelectorAll<HTMLElement>(".tree-visual-space")];
+    const hostCenter = root.offsetLeft + root.offsetWidth / 2;
+    const first = spaces[0];
+    const last = spaces.at(-1)!;
+    const group = host.querySelector<HTMLElement>(".tree-visual-spaces")!;
+    const centers = spaces.map((space) => space.offsetLeft + space.offsetWidth / 2);
+    const busEnds = spaces.slice(0, -1).map((space) => {
+      const bus = getComputedStyle(space, "::after");
+      return space.offsetLeft + parseFloat(bus.left) + parseFloat(bus.width);
+    });
+    return {
+      hostCenter, branchCenter: group.offsetLeft + (first.offsetLeft + first.offsetWidth / 2 + last.offsetLeft + last.offsetWidth / 2) / 2,
+      centers: centers.slice(1), busEnds,
+      leafConnections: spaces.flatMap((space) => [...space.querySelectorAll<HTMLElement>(".tree-visual-leaves > .tree-card-wrap")].map((leaf) => {
+        const link = getComputedStyle(leaf, "::before");
+        return { end: parseFloat(link.left) + parseFloat(link.width), center: parseFloat(link.top), height: leaf.offsetHeight };
+      })),
+    };
+  });
+  expect(endpoints.hostCenter).toBeCloseTo(endpoints.branchCenter, 0);
+  expect(endpoints.busEnds).toEqual(endpoints.centers);
+  for (const leaf of endpoints.leafConnections) {
+    expect(leaf.end).toBe(0);
+    expect(leaf.center).toBeCloseTo(leaf.height / 2, 0);
+  }
+}
 
 async function treeCamera(page: import("@playwright/test").Page) {
   return page.locator(".tree-map").evaluate((element) => {

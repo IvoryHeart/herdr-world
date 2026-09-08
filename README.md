@@ -8,6 +8,10 @@ Herdr World is a browser and mobile workspace for [Herdr](https://github.com/her
 It combines live terminal Spaces with visual Pixel Office, Tree, and Graph themes, multi-host viewing,
 shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
 
+Tree presents a compact Operations Console: host and space cards connect to stacked agent or
+terminal siblings, with observed coverage and persistent selection details. The shared sidebar
+switches all four views; phones use the searchable, keyboard-accessible hierarchy.
+
 The current public preview is
 [`v0.1.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
 It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer

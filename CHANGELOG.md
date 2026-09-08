@@ -31,6 +31,11 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Adopted the common sidebar for Office, Tree, Graph and Spaces. Tree now uses a compact dark
+  Operations Console with bounded space columns, stacked agent/terminal siblings, attached
+  connectors, visible kind/status/focus cues, configured and observed coverage, and a persistent
+  inspector beside a compact accessible outline. Empty and collapsed branches omit child links.
+
 - Made hosts the primary Graph nodes and derived both Graph and Office from one host-qualified
   World hierarchy of spaces with sibling agent and terminal children. Graph now keeps configured
   unavailable hosts visible, supports host and space collapse, and preserves validated repository

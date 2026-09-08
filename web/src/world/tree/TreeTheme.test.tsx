@@ -21,6 +21,56 @@ afterEach(async () => {
 });
 
 describe("Tree theme", () => {
+  it("draws child connections only for expanded branches with presented children", async () => {
+    const value = context();
+    const { container, root } = await render(value);
+    expect(container.querySelector('.tree-visual-host')?.getAttribute('data-has-children')).toBe('true');
+    expect(container.querySelector('.tree-visual-space')?.getAttribute('data-has-children')).toBe('true');
+    const disclosures = container.querySelectorAll<HTMLButtonElement>('.tree-disclosure');
+    await act(async () => disclosures[1]?.click());
+    expect(container.querySelector('.tree-visual-space')?.getAttribute('data-has-children')).toBe('false');
+    expect(container.querySelector('.tree-visual-leaves')).toBeNull();
+    await act(async () => disclosures[0]?.click());
+    expect(container.querySelector('.tree-visual-host')?.getAttribute('data-has-children')).toBe('false');
+    expect(container.querySelector('.tree-visual-spaces')).toBeNull();
+    await act(async () => disclosures[0]?.click());
+    value.graphProjection.hosts[0]!.spaces = [];
+    await act(async () => root.render(<TreeTheme context={value} />));
+    expect(container.querySelector('.tree-visual-host')?.getAttribute('data-has-children')).toBe('false');
+    expect(container.querySelector('.tree-visual-spaces')).toBeNull();
+  });
+
+  it("keeps observed coverage visible through search, selection and empty topology", async () => {
+    const value = context();
+    value.graphProjection.coverage.observedTerminals = 4;
+    value.graphProjection.coverage.omittedTerminals = 3;
+    const { container, root } = await render(value);
+    const overview = () => container.querySelector('[aria-label="Tree operational overview"]');
+    expect(overview()?.textContent).toContain('1 of 4 observed leaves');
+    expect(overview()?.textContent).toContain('1 agents');
+    expect(container.querySelector('[aria-label="Tree inspector"]')?.textContent).toContain('Select');
+    await act(async () => setInput(container.querySelector('input'), 'missing'));
+    expect(overview()?.textContent).toContain('1 of 4 observed leaves');
+    value.selectedKey = 'terminal';
+    await act(async () => root.render(<TreeTheme context={value} />));
+    expect(container.querySelector('[aria-label="Tree inspector"]')?.textContent).toContain('Codex');
+    expect(overview()).not.toBeNull();
+    value.graphProjection = { ...projection(), nodes: [], hosts: [], spaces: [] };
+    value.selectedKey = null;
+    await act(async () => root.render(<TreeTheme context={value} />));
+    expect(container.querySelector('[aria-label="Tree inspector"]')?.textContent).toContain('Select');
+  });
+
+  it("counts presented host roots against configured hosts, including hosts without snapshots", async () => {
+    const value = context();
+    value.graphProjection.coverage.configuredHosts = 5;
+    value.graphProjection.coverage.presentedHosts = 5;
+    value.graphProjection.coverage.observedHosts = 2;
+    const { container } = await render(value);
+    expect(container.querySelector('[aria-label="Tree operational overview"]')?.textContent)
+      .toContain("5 of 5 configured hosts");
+  });
+
   it("keeps selection side-effect-free and exposes guarded details and actions", async () => {
     const value = context();
     const { container, root } = await render(value);
