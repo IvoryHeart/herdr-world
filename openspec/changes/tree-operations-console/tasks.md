@@ -74,4 +74,4 @@ const selectedNode = projection.nodes.find(node => node.selectionKey === context
 
 - [x] 3.1 Controller obtains final independent whole-change source and visual review, resolves findings, and records the result once in a sanitized delivery note.
 - [x] 3.2 Controller runs `npm run check:acceptance` and `npm run spec:check` on the final candidate, records exact results and any opt-in skips, and checks published screenshots contain only synthetic data.
-- [ ] 3.3 Controller opens a ready PR against PR #81's actual branch, identifies the explicitly adopted PR #79 dependency, adds the PR number to the changelog, verifies remote status, and stops before merge. Record Superpowers/native Codex execution without claiming Ralph acceptance or comparative cost savings.
+- [x] 3.3 Controller opens a ready PR against PR #81's actual branch, identifies the explicitly adopted PR #79 dependency, adds the PR number to the changelog, verifies remote status, and stops before merge. Record Superpowers/native Codex execution without claiming Ralph acceptance or comparative cost savings.

@@ -1,5 +1,8 @@
 # Tree Operations Console delivery evidence
 
+Delivered through [PR #82](https://github.com/IvoryHeart/herdr-world/pull/82), stacked on PR #81
+with the explicitly approved PR #79 sidebar adoption.
+
 The approved Operations Console direction is implemented over the existing host → space →
 agent/terminal hierarchy. Bounded space columns and stacked leaves keep the dense fixture readable,
 with attached orthogonal connectors, type/status cues and a persistent inspector. The common
