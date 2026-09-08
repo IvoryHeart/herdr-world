@@ -1,4 +1,4 @@
-import { Building2, ChevronDown, Network } from "lucide-react";
+import { Building2, ChevronDown, GitFork, Network } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
@@ -89,7 +89,7 @@ export function WorldThemeSelector({
     }
   };
 
-  const Icon = activeTheme.id === "graph" ? Network : Building2;
+  const Icon = themeIcon(activeTheme.id);
   return (
     <div
       ref={selectorRef}
@@ -139,7 +139,7 @@ export function WorldThemeSelector({
           onKeyDown={onMenuKeyDown}
         >
           {themes.map((theme) => {
-            const ThemeIcon = theme.id === "graph" ? Network : Building2;
+            const ThemeIcon = themeIcon(theme.id);
             return (
               <button
                 key={theme.id}
@@ -161,4 +161,8 @@ export function WorldThemeSelector({
       ) : null}
     </div>
   );
+}
+
+function themeIcon(themeId: string) {
+  return themeId === "graph" ? Network : themeId === "tree" ? GitFork : Building2;
 }

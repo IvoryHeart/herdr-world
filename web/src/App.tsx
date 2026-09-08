@@ -180,6 +180,7 @@ import { projectHerdrOffice } from "./world/herdrOfficeProjection";
 import type { OfficeAgent } from "./world/herdrOfficeProjection";
 import { projectHerdrGraph } from "./world/graph/herdrGraphProjection";
 import type { WorldGraphNode } from "./world/graph/herdrGraphProjection";
+import { projectHerdrTree } from "./world/tree/treeProjection";
 import {
   useWorldConversationController,
   worldConversationAdmissionPending,
@@ -196,6 +197,7 @@ import {
 } from "./world/completionSeenState";
 import { buildWorldModel } from "./world/worldModel";
 import { worldSourcesFromRuntime } from "./world/worldRuntime";
+import { admitCurrentWorldTerminal } from "./world/worldNodeAdmission";
 import type { WorldThemeContext } from "./world/worldThemeContext";
 import { worldThemeRegistry } from "./world/worldThemeRegistry";
 import type { WorldThemeDefinition } from "./world/worldThemeRegistry";
@@ -1510,8 +1512,11 @@ export function App() {
     [worldModel],
   );
   const graphProjection = useMemo(
-    () => activeSurface.id === "world" && activeWorldTheme.id === "graph"
-      ? projectHerdrGraph(worldModel)
+    () => activeSurface.id === "world" &&
+      (activeWorldTheme.id === "graph" || activeWorldTheme.id === "tree")
+      ? activeWorldTheme.id === "tree"
+        ? projectHerdrTree(worldModel)
+        : projectHerdrGraph(worldModel)
       : EMPTY_GRAPH_PROJECTION,
     [activeSurface.id, activeWorldTheme.id, worldModel],
   );
@@ -2048,31 +2053,16 @@ export function App() {
     terminalOutputCoalesceMs,
   });
   const currentGraphTerminal = (node: WorldGraphNode) => {
-    if ((node.kind !== "terminal" && node.kind !== "agent") || !node.paneId) return null;
-    const latest = graphProjection.nodes.find(({ id }) => id === node.id);
     const runtime = bridge.getRuntime(node.hostKey);
     const state = runtime && connectionStates[runtime.id]?.connectionKey === runtime.generationKey
       ? connectionStates[runtime.id]
       : null;
-    const pane = state?.snapshot?.panes.find(({ pane_id }) => pane_id === node.paneId) ?? null;
-    if (
-      (latest?.kind !== "terminal" && latest?.kind !== "agent") ||
-      latest.paneId !== node.paneId ||
-      latest.selectionKey !== node.selectionKey ||
-      latest.observedGeneration !== node.observedGeneration ||
-      !runtime ||
-      runtime.generationKey !== node.observedGeneration ||
-      !pane ||
-      !runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"])
-    ) {
-      return null;
-    }
-    return { node: latest, runtime, pane };
+    return admitCurrentWorldTerminal(node, graphProjection, runtime, state);
   };
   const openGraphTerminal = (node: WorldGraphNode) => {
     const current = currentGraphTerminal(node);
     if (!current) {
-      setWorldHandoffStatus("That terminal is no longer available. Graph remains open.");
+      setWorldHandoffStatus(`That terminal is no longer available. ${activeWorldTheme.label} remains open.`);
       return;
     }
     const agentKey = worldProjection.roster.find(
@@ -2095,7 +2085,7 @@ export function App() {
       if (latest?.kind === "space" && latest.handoff) {
         openWorldTargetInSpaces(latest.handoff);
       } else {
-        setWorldHandoffStatus("That space is no longer available. Graph remains open.");
+        setWorldHandoffStatus(`That space is no longer available. ${activeWorldTheme.label} remains open.`);
       }
       return;
     }
@@ -2105,7 +2095,7 @@ export function App() {
     }
     const current = currentGraphTerminal(node);
     if (!current) {
-      setWorldHandoffStatus("That terminal is no longer available. Graph remains open.");
+      setWorldHandoffStatus(`That terminal is no longer available. ${activeWorldTheme.label} remains open.`);
       return;
     }
     setWorldHandoffStatus(null);

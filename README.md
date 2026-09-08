@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Herdr World is a browser and mobile workspace for [Herdr](https://github.com/herdrdev/herdr).
-It combines live terminal Spaces with visual Pixel Office and Graph themes, multi-host viewing,
+It combines live terminal Spaces with visual Pixel Office, Tree, and Graph themes, multi-host viewing,
 shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
 
 The current public preview is

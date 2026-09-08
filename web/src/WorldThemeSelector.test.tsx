@@ -61,7 +61,13 @@ describe("World theme selector", () => {
       trigger?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
     const items = [...container.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']")];
-    expect(items.map((item) => item.textContent)).toEqual([expect.stringContaining("Office"), expect.stringContaining("Graph")]);
+    expect(items.map((item) => item.textContent)).toEqual([
+      expect.stringContaining("Office"),
+      expect.stringContaining("Tree"),
+      expect.stringContaining("Graph"),
+    ]);
+    expect(items[1]?.querySelector("svg")?.getAttribute("class")).toContain("lucide-git-fork");
+    expect(items[2]?.querySelector("svg")?.getAttribute("class")).toContain("lucide-network");
     expect(container.textContent).not.toContain("Mindcraft");
     expect(document.activeElement).toBe(items[0]);
 
@@ -69,7 +75,7 @@ describe("World theme selector", () => {
       items[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
       items[1]?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
-    expect(onSelect).toHaveBeenCalledWith("graph");
+    expect(onSelect).toHaveBeenCalledWith("tree");
     await act(async () => new Promise((resolve) => window.setTimeout(resolve, 0)));
     expect(document.activeElement).toBe(trigger);
     expect(container.querySelector("[role='menu']")).toBeNull();

@@ -3,7 +3,7 @@ import type { ComponentType, LazyExoticComponent } from "react";
 
 import type { SurfaceComponentProps } from "../surfaceRegistry";
 
-export type WorldThemeId = "office" | "graph" | "mindcraft";
+export type WorldThemeId = "office" | "tree" | "graph" | "mindcraft";
 
 export type WorldThemeComponent = ComponentType<SurfaceComponentProps>;
 
@@ -61,6 +61,12 @@ export const worldThemeRegistry = new WorldThemeRegistry([
     label: "Office",
     semanticIcon: "pixel-office",
     load: () => import("./WorldSurface"),
+  },
+  {
+    id: "tree",
+    label: "Tree",
+    semanticIcon: "hierarchy-tree",
+    load: () => import("./tree/TreeTheme"),
   },
   {
     id: "graph",
