@@ -26,6 +26,7 @@ afterEach(async () => {
   });
   document.body.innerHTML = "";
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
 describe("TerminalCommandControls", () => {
@@ -337,6 +338,171 @@ describe("TerminalCommandControls", () => {
     expect(commandField(container).value).toBe("");
   });
 
+  it("composes Ctrl+Shift+Up and sends it without changing the command draft", async () => {
+    const { container, onInput, onSubmitCommand } = await renderControls(false);
+    await setCommandValue(commandField(container), "keep this draft");
+    await clickButton(container, "Compose terminal key");
+    await clickButton(container, "Add Ctrl modifier");
+    await clickButton(container, "Add Shift modifier");
+    await clickButton(container, "Use Up key");
+
+    expect(composerPanel(container).textContent).toContain("Ctrl + Shift + ↑");
+    await clickButton(composerPanel(container), "Send Ctrl + Shift + ↑");
+
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("\x1B[1;6A");
+    expect(container.querySelector(".term-key-composer")).toBeNull();
+    expect(commandField(container).value).toBe("keep this draft");
+    expect(onSubmitCommand).not.toHaveBeenCalled();
+  });
+
+  for (const selection of ["empty", "special", "printable"]) {
+    it(`closes Compose and discards the ${selection} chord without sending`, async () => {
+      const { container, onInput } = await renderControls(false);
+      await setCommandValue(commandField(container), "keep this draft");
+      await clickButton(container, "Compose terminal key");
+      if (selection === "special") {
+        await clickButton(container, "Add Ctrl modifier");
+        await clickButton(container, "Use Up key");
+      } else if (selection === "printable") {
+        await clickButton(container, "Add Alt modifier");
+        await setCommandValue(printableKeyField(container), "p");
+      }
+      await clickButton(container, "Close terminal key composer");
+
+      expect(container.querySelector(".term-key-composer")).toBeNull();
+      expect(onInput).not.toHaveBeenCalled();
+      expect(commandField(container).value).toBe("keep this draft");
+      await clickButton(container, "Compose terminal key");
+      expect(printableKeyField(container).value).toBe("");
+      expect(composerPanel(container).textContent).toContain("Choose a key");
+      expect(composerPanel(container).querySelectorAll('[data-active="true"]')).toHaveLength(0);
+    });
+  }
+
+  it("keeps fixed icon actions above the command field and preserves quick keys", async () => {
+    const { container, onInput, onUpload, onTerminalFocus, onStageCommand } =
+      await renderControls(false);
+    const actions = container.querySelector('[aria-label="Terminal actions"]');
+    if (!(actions instanceof HTMLElement)) {
+      throw new Error("Missing fixed terminal actions");
+    }
+    expect(
+      [...actions.querySelectorAll("button")].map((button) => button.getAttribute("aria-label")),
+    ).toEqual([
+      "Upload file",
+      "Stage command in terminal",
+      "Compose terminal key",
+      "Focus terminal keyboard",
+    ]);
+    expect(actions.textContent?.trim()).toBe("");
+    expect(container.querySelector("form")?.querySelectorAll("button")).toHaveLength(1);
+    const shortcuts = container.querySelector('[aria-label="Terminal quick keys"]');
+    if (!(shortcuts instanceof HTMLElement)) {
+      throw new Error("Missing scrollable quick keys");
+    }
+    const keys = [...shortcuts.querySelectorAll("button")];
+    expect(keys.map((key) => key.textContent)).toEqual(["Esc", "Tab", "C-c", "C-d", "1", "2", "3"]);
+    for (const key of keys) {
+      await act(async () => key.click());
+    }
+    expect(onInput.mock.calls).toEqual([["\x1B"], ["\t"], ["\x03"], ["\x04"], ["1"], ["2"], ["3"]]);
+    await clickButton(actions, "Upload file");
+    await clickButton(actions, "Focus terminal keyboard");
+    expect(onUpload).toHaveBeenCalledOnce();
+    expect(onTerminalFocus).toHaveBeenCalledOnce();
+    await setCommandValue(commandField(container), "stage me");
+    await clickButton(actions, "Stage command in terminal");
+    expect(onStageCommand).toHaveBeenCalledWith("stage me");
+  });
+
+  it("allows closing Compose while disconnected but blocks sending and staging", async () => {
+    const { container, onInput, onStageCommand, setDisabled } = await renderControls(false);
+    await setCommandValue(commandField(container), "pending command");
+    await clickButton(container, "Compose terminal key");
+    await clickButton(container, "Use Up key");
+    await setDisabled(true);
+
+    expect(composerPanel(container).querySelector<HTMLButtonElement>('[aria-label="Send ↑"]')?.disabled).toBe(true);
+    expect(printableKeyField(container).disabled).toBe(true);
+    expect(stageButton(container).disabled).toBe(true);
+    await clickButton(container, "Send ↑");
+    await clickStage(container);
+    await clickButton(container, "Close terminal key composer");
+    expect(onInput).not.toHaveBeenCalled();
+    expect(onStageCommand).not.toHaveBeenCalled();
+    expect(container.querySelector(".term-key-composer")).toBeNull();
+  });
+
+  it("updates shortcut edge hints as the strip scrolls and resizes", async () => {
+    const { container } = await renderControls(false);
+    const shortcuts = container.querySelector<HTMLElement>('[aria-label="Terminal quick keys"]');
+    if (!shortcuts) {
+      throw new Error("Missing scrollable quick keys");
+    }
+    Object.defineProperties(shortcuts, {
+      clientWidth: { configurable: true, value: 100 },
+      scrollWidth: { configurable: true, value: 300 },
+    });
+    window.dispatchEvent(new Event("resize"));
+    expect(shortcuts.dataset.scrollLeft).toBe("false");
+    expect(shortcuts.dataset.scrollRight).toBe("true");
+    shortcuts.scrollLeft = 50;
+    shortcuts.dispatchEvent(new Event("scroll"));
+    expect(shortcuts.dataset.scrollLeft).toBe("true");
+    expect(shortcuts.dataset.scrollRight).toBe("true");
+    shortcuts.scrollLeft = 200;
+    shortcuts.dispatchEvent(new Event("scroll"));
+    expect(shortcuts.dataset.scrollRight).toBe("false");
+  });
+
+  it("sends direct keys while preserving a pending composed chord", async () => {
+    const { container, onInput } = await renderControls(false);
+    await clickButton(container, "Compose terminal key");
+    await clickButton(container, "Add Ctrl modifier");
+    await clickButton(container, "Add Shift modifier");
+    await clickButton(container, "Use Up key");
+    await clickButton(container, "Send Left");
+    await clickButton(container, "Send Backspace");
+    await clickButton(container, "Send Ctrl + Shift + ↑");
+
+    expect(onInput.mock.calls).toEqual([["\x1B[D"], ["\x7F"], ["\x1B[1;6A"]]);
+  });
+
+  it("keeps the navigation pad open across direct keys and Compose sends", async () => {
+    const { container, onInput } = await renderControls(false);
+    await clickButton(container, "Show navigation keys");
+    for (const name of ["Home", "End", "Delete", "Page Up", "Page Down"]) {
+      await clickButton(container, `Send ${name}`);
+    }
+    await clickButton(container, "Compose terminal key");
+    await clickButton(container, "Add Shift modifier");
+    await clickButton(container, "Use Tab key");
+    await clickButton(container, "Send Shift + Tab");
+    await clickButton(container, "Send Home");
+
+    expect(onInput.mock.calls).toEqual([
+      ["\x1B[H"],
+      ["\x1B[F"],
+      ["\x1B[3~"],
+      ["\x1B[5~"],
+      ["\x1B[6~"],
+      ["\x1B[Z"],
+      ["\x1B[H"],
+    ]);
+    await clickButton(container, "Hide navigation keys");
+    expect(container.querySelector('[aria-label="Send Home"]')).toBeNull();
+  });
+
+  it("captures a printable key for Alt chords", async () => {
+    const { container, onInput } = await renderControls(false);
+    await clickButton(container, "Compose terminal key");
+    await clickButton(container, "Add Alt modifier");
+    await setCommandValue(printableKeyField(container), "p");
+
+    expect(composerPanel(container).textContent).toContain("Alt + p");
+    await clickButton(container, "Send Alt + p");
+    expect(onInput).toHaveBeenCalledExactlyOnceWith("\x1Bp");
+  });
 });
 
 async function renderControls(
@@ -351,6 +517,8 @@ async function renderControls(
   const onSubmitCommand = vi.fn();
   const onStageCommand = vi.fn();
   const onTerminalFocus = vi.fn();
+  const onInput = vi.fn();
+  const onUpload = vi.fn();
 
   const drafts = createCommandDraftStore();
   const renderPane = async (bridgeId = "bridge-a", paneId = "pane-a", visible = true, disabled = false) => {
@@ -363,16 +531,16 @@ async function renderControls(
             paneId={paneId}
             commandInputRef={commandInputRef}
             disabled={disabled}
-            uploadDisabled={false}
+            uploadDisabled={disabled}
             expandingInput={expandingInput}
             enterNewline={options.enterNewline ?? false}
             mobileControls={options.mobileControls ?? true}
             mobileFocusAfterSubmit={options.mobileFocusAfterSubmit}
             controlsScalePercent={100}
             onControlsHeightChange={vi.fn()}
-            onInput={vi.fn()}
+            onInput={onInput}
             onTerminalFocus={onTerminalFocus}
-            onUpload={vi.fn()}
+            onUpload={onUpload}
             onStageCommand={onStageCommand}
             onSubmitCommand={onSubmitCommand}
           /> : null}
@@ -381,15 +549,21 @@ async function renderControls(
     });
   };
   await renderPane();
+  const setDisabled = async (disabled: boolean) => {
+    await renderPane("bridge-a", "pane-a", true, disabled);
+  };
 
   return {
     drafts,
     renderPane,
+    setDisabled,
     commandInputRef,
     container,
+    onInput,
     onStageCommand,
     onSubmitCommand,
     onTerminalFocus,
+    onUpload,
   };
 }
 
@@ -453,6 +627,30 @@ async function clickStage(container: HTMLElement) {
   await act(async () => {
     stageButton(container).click();
   });
+}
+
+function composerPanel(container: HTMLElement) {
+  const panel = container.querySelector<HTMLElement>(".term-key-composer");
+  if (!panel) {
+    throw new Error("Missing terminal key composer");
+  }
+  return panel;
+}
+
+function printableKeyField(container: HTMLElement) {
+  const field = container.querySelector<HTMLInputElement>('input[aria-label="Printable key"]');
+  if (!field) {
+    throw new Error("Missing printable key field");
+  }
+  return field;
+}
+
+async function clickButton(container: HTMLElement, ariaLabel: string) {
+  const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${ariaLabel}"]`);
+  if (!button) {
+    throw new Error(`Missing button: ${ariaLabel}`);
+  }
+  await act(async () => button.click());
 }
 
 async function setCommandInput(

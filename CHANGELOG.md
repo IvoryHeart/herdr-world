@@ -6,6 +6,10 @@
 
 ### Added
 
+- Add mobile direct terminal keys with hold-repeat, a persistent navigation pad, and a chord
+  composer for Ctrl, Shift, and Alt combinations with special or printable keys.
+  [PR #63](https://github.com/kcosr/herdr-web/pull/63).
+
 ### Changed
 
 ### Fixed
