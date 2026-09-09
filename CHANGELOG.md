@@ -24,7 +24,7 @@ Web's own release history remains in its upstream changelog.
   shared worktree tooling, deduplicated lead/subagent usage reporting and deterministic
   agent evals for reviewed PR delivery. Added opt-in OpenWiki and Skillgrade pilot setup
   and a reusable stack guide for other repositories.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 - Added a simplified Network UI for connecting Herdr instances and allowing connections to the
   current Herdr, with connection status, detected and copyable addresses, an optional memory-hard
@@ -39,7 +39,7 @@ Web's own release history remains in its upstream changelog.
 
 - Made native coding-agent execution the development default, with same-session worktree
   setup, retained review histories, scoped verification and explicit model allocation.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 - Adopted the common sidebar for Office, Tree, Graph and Spaces. Tree now uses a compact dark
   Operations Console with bounded space columns, stacked agent/terminal siblings, attached
@@ -76,7 +76,7 @@ Web's own release history remains in its upstream changelog.
 - Retired the experimental Ralph runtime, custom supervisor and model containers,
   legacy role skills, unused Harbor execution path and Graphify tool pin. Retained
   historical evidence and reusable behavioral graders.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 ## [0.1.1] - 2026-09-01
 
