@@ -71,7 +71,7 @@ use crate::notes::{
     NotesListResponse, NotesManager, RevisionRequest, UpdateNoteRequest,
 };
 use crate::observability::{ObservabilityContractVersion, ObservabilityHealth, ObservabilityState};
-use crate::store_util::LockFile;
+use crate::store_util::{stable_hash, LockFile};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 8787;
@@ -1832,7 +1832,7 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
 
 fn acquire_runtime_bridge_lock(client_socket_path: &Path) -> io::Result<LockFile> {
     let lock_path = runtime_bridge_lock_path(client_socket_path);
-    LockFile::try_exclusive_in_existing_dir(&lock_path).map_err(|error| {
+    LockFile::try_exclusive(&lock_path).map_err(|error| {
         if error.kind() == ErrorKind::WouldBlock {
             io::Error::new(
                 ErrorKind::AddrInUse,
@@ -1847,14 +1847,20 @@ fn acquire_runtime_bridge_lock(client_socket_path: &Path) -> io::Result<LockFile
 fn runtime_bridge_lock_path(client_socket_path: &Path) -> PathBuf {
     let canonical = std::fs::canonicalize(client_socket_path)
         .unwrap_or_else(|_| client_socket_path.to_path_buf());
-    let mut lock_name = std::ffi::OsString::from(".");
-    lock_name.push(
-        canonical
-            .file_name()
-            .unwrap_or_else(|| std::ffi::OsStr::new("herdr-client.sock")),
-    );
-    lock_name.push(".herdr-world-bridge.lock");
-    canonical.with_file_name(lock_name)
+    runtime_bridge_lock_root().join(format!(
+        "runtime-{:016x}.lock",
+        stable_hash(canonical.to_string_lossy().as_ref())
+    ))
+}
+
+#[cfg(unix)]
+fn runtime_bridge_lock_root() -> PathBuf {
+    PathBuf::from("/tmp").join(format!("herdr-world-bridge-{}", unsafe { libc::geteuid() }))
+}
+
+#[cfg(not(unix))]
+fn runtime_bridge_lock_root() -> PathBuf {
+    std::env::temp_dir().join("herdr-world-bridge")
 }
 
 fn bridge_router(state: BridgeState, static_dir: PathBuf) -> Router {
@@ -6089,16 +6095,52 @@ mod tests {
     }
 
     #[test]
-    fn runtime_bridge_lock_path_is_socket_local_and_deterministic() {
+    fn runtime_bridge_lock_path_avoids_the_socket_directory_and_is_deterministic() {
         let socket = std::env::temp_dir()
             .join(format!("herdr-world-lock-path-{}", std::process::id()))
             .join("herdr-client.sock");
         let other_socket = socket.with_file_name("other-client.sock");
 
         let first = runtime_bridge_lock_path(&socket);
+        let lock_root = runtime_bridge_lock_root();
         assert_eq!(first, runtime_bridge_lock_path(&socket));
-        assert_eq!(first.parent(), socket.parent());
+        assert_ne!(first.parent(), socket.parent());
+        assert_eq!(first.parent(), Some(lock_root.as_path()));
         assert_ne!(first, runtime_bridge_lock_path(&other_socket));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_bridge_lock_allows_an_accessible_socket_in_a_readonly_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let socket_dir = std::env::temp_dir().join(format!(
+            "herdr-world-readonly-socket-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&socket_dir).unwrap();
+        let socket = socket_dir.join("herdr-client.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        std::fs::set_permissions(&socket_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let client = std::os::unix::net::UnixStream::connect(&socket).unwrap();
+        let lock_path = runtime_bridge_lock_path(&socket);
+        let _ = std::fs::remove_file(&lock_path);
+        let lock = acquire_runtime_bridge_lock(&socket).unwrap();
+
+        assert_ne!(lock_path.parent(), socket.parent());
+
+        drop(lock);
+        std::fs::remove_file(lock_path).unwrap();
+        drop(client);
+        drop(listener);
+        std::fs::set_permissions(&socket_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::remove_file(socket).unwrap();
+        std::fs::remove_dir(socket_dir).unwrap();
     }
 
     #[tokio::test]

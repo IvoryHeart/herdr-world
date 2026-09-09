@@ -125,8 +125,8 @@ impl LockFile {
         Self::open_and_lock(path, true, lock_file)
     }
 
-    pub(crate) fn try_exclusive_in_existing_dir(path: &Path) -> io::Result<Self> {
-        Self::open_and_lock(path, false, try_lock_file)
+    pub(crate) fn try_exclusive(path: &Path) -> io::Result<Self> {
+        Self::open_and_lock(path, true, try_lock_file)
     }
 
     fn open_and_lock(
@@ -172,8 +172,8 @@ mod lock_tests {
         ));
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("runtime.lock");
-        let first = LockFile::try_exclusive_in_existing_dir(&path).unwrap();
-        let second = match LockFile::try_exclusive_in_existing_dir(&path) {
+        let first = LockFile::try_exclusive(&path).unwrap();
+        let second = match LockFile::try_exclusive(&path) {
             Ok(_) => panic!("second nonblocking lock unexpectedly succeeded"),
             Err(error) => error,
         };
