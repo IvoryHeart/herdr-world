@@ -10,24 +10,30 @@
   for shortcuts such as Alt+Enter. [PR #89](https://github.com/kcosr/herdr-web/pull/89).
 
 - Add mobile terminal keys with hold-repeat and a shortcut builder for Ctrl, Shift, and Alt
-  combinations with special or printable keys. [PR #63](https://github.com/kcosr/herdr-web/pull/63).
+  combinations with special or printable keys. [PR #89](https://github.com/kcosr/herdr-web/pull/89),
+  building on [PR #63](https://github.com/kcosr/herdr-web/pull/63) by
+  [Will Hampson (@Whamp)](https://github.com/Whamp).
 
 ### Changed
 
 - Keep Esc, Tab, C-c, C-d, and 1/2/3 in the mobile quick-key row. The neutral keyboard icon
   expands Backspace, arrows, and navigation keys, with a keyboard-plus shortcut toggle inside.
+  [PR #89](https://github.com/kcosr/herdr-web/pull/89).
 - Share the same keys between direct input and shortcut building. Show the selected chord with
   Send and Cancel actions; tapping the selected key again clears it while retaining modifiers.
   Sending, cancelling, or collapsing the keyboard exits shortcut mode without changing the
   command draft.
+  [PR #89](https://github.com/kcosr/herdr-web/pull/89).
 
 ### Fixed
 
 - Preserve terminal or command-field focus when tapping mobile quick keys, shortcut keys,
   or modifier toggles so the soft keyboard can stay open.
+  [PR #89](https://github.com/kcosr/herdr-web/pull/89).
 
 - Keep held mobile terminal keys repeating through UI updates, and send conventional
   modified Backspace, Tab, and Escape input without requiring an extended keyboard protocol.
+  [PR #89](https://github.com/kcosr/herdr-web/pull/89).
 
 ### Removed
 
