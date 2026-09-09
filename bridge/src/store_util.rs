@@ -97,6 +97,66 @@ pub(crate) fn ensure_private_dir(path: &Path) -> io::Result<()> {
 }
 
 #[cfg(unix)]
+pub(crate) fn effective_user_id() -> libc::uid_t {
+    // SAFETY: geteuid has no arguments or caller-side safety requirements.
+    unsafe { libc::geteuid() }
+}
+
+#[cfg(unix)]
+fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+
+    match fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let mut builder = fs::DirBuilder::new();
+            builder.mode(0o700);
+            if let Err(error) = builder.create(path) {
+                if error.kind() != io::ErrorKind::AlreadyExists {
+                    return Err(error);
+                }
+            }
+        }
+        Err(error) => return Err(error),
+    }
+
+    let validate = || -> io::Result<fs::Metadata> {
+        let metadata = fs::symlink_metadata(path)?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "private lock directory must be a real directory",
+            ));
+        }
+        if metadata.uid() != effective_user_id() {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "private lock directory must be owned by the effective user",
+            ));
+        }
+        Ok(metadata)
+    };
+
+    let metadata = validate()?;
+    if metadata.permissions().mode() & 0o077 != 0 {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+        let metadata = validate()?;
+        if metadata.permissions().mode() & 0o077 != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "private lock directory permissions could not be restricted",
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
+    ensure_private_dir(path)
+}
+
+#[cfg(unix)]
 pub(crate) fn set_private_dir_permissions(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;
     fs::set_permissions(path, fs::Permissions::from_mode(0o700))
@@ -126,7 +186,10 @@ impl LockFile {
     }
 
     pub(crate) fn try_exclusive(path: &Path) -> io::Result<Self> {
-        Self::open_and_lock(path, true, try_lock_file)
+        if let Some(parent) = path.parent() {
+            ensure_private_owned_dir(parent)?;
+        }
+        Self::open_and_lock(path, false, try_lock_file)
     }
 
     fn open_and_lock(
@@ -162,6 +225,7 @@ impl Drop for LockFile {
 #[cfg(all(test, unix))]
 mod lock_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
 
     #[test]
     fn nonblocking_exclusive_lock_rejects_a_second_bridge_owner() {
@@ -173,6 +237,10 @@ mod lock_tests {
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("runtime.lock");
         let first = LockFile::try_exclusive(&path).unwrap();
+        assert_eq!(
+            std::fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
         let second = match LockFile::try_exclusive(&path) {
             Ok(_) => panic!("second nonblocking lock unexpectedly succeeded"),
             Err(error) => error,
@@ -182,6 +250,42 @@ mod lock_tests {
 
         drop(first);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn nonblocking_lock_rejects_a_symlinked_private_directory_without_chmod() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let container = std::env::temp_dir().join(format!(
+            "herdr-world-hostile-lock-{}-{unique}",
+            std::process::id()
+        ));
+        let target = container.join("target");
+        let redirected = container.join("herdr-world-bridge-owner");
+        std::fs::create_dir_all(&target).unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink(&target, &redirected).unwrap();
+
+        let result = LockFile::try_exclusive(&redirected.join("runtime.lock"));
+        let rejected = match result {
+            Ok(lock) => {
+                drop(lock);
+                false
+            }
+            Err(_) => true,
+        };
+        let target_mode = std::fs::metadata(&target).unwrap().permissions().mode() & 0o777;
+
+        let _ = std::fs::remove_file(target.join("runtime.lock"));
+        std::fs::remove_file(redirected).unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::remove_dir(target).unwrap();
+        std::fs::remove_dir(container).unwrap();
+
+        assert!(rejected);
+        assert_eq!(target_mode, 0o755);
     }
 }
 

@@ -71,6 +71,8 @@ use crate::notes::{
     NotesListResponse, NotesManager, RevisionRequest, UpdateNoteRequest,
 };
 use crate::observability::{ObservabilityContractVersion, ObservabilityHealth, ObservabilityState};
+#[cfg(unix)]
+use crate::store_util::effective_user_id;
 use crate::store_util::{stable_hash, LockFile};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
@@ -1855,7 +1857,7 @@ fn runtime_bridge_lock_path(client_socket_path: &Path) -> PathBuf {
 
 #[cfg(unix)]
 fn runtime_bridge_lock_root() -> PathBuf {
-    PathBuf::from("/tmp").join(format!("herdr-world-bridge-{}", unsafe { libc::geteuid() }))
+    PathBuf::from("/tmp").join(format!("herdr-world-bridge-{}", effective_user_id()))
 }
 
 #[cfg(not(unix))]
