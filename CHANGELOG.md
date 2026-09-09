@@ -62,6 +62,7 @@ Web's own release history remains in its upstream changelog.
 - Preserved exact shell terminal selection across Spaces, Office, Graph and Tree, kept split-pane
   handoffs on the pane the user chose, and rejected a second bridge targeting the same Herdr
   runtime before it could cause partial `Attached elsewhere` terminal failures.
+  ([#86](https://github.com/IvoryHeart/herdr-world/pull/86))
 
 - Updated transitive XML parsers and the development YAML parser to patched
   versions, restoring the dependency security audit.
