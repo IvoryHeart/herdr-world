@@ -163,8 +163,9 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
       <header className="tree-stage-bar">
         <button className="icon-btn" type="button"
           aria-label={context.compact ? "Back to Herdr sidebar" : "Toggle sidebar"}
+          title={context.compact ? "Back" : "Toggle sidebar"}
           onClick={context.compact ? context.onBackToSidebar : context.onToggleSidebar}>
-          {context.compact ? <ChevronLeft size={20} /> : <PanelLeft size={18} />}
+          {context.compact ? <ChevronLeft size={20} aria-hidden="true" /> : <PanelLeft size={18} aria-hidden="true" />}
         </button>
         <div className="tree-stage-heading"><strong>World Tree</strong><span>
           {projection.coverage.presentedHosts} hosts · {projection.coverage.presentedSpaces} spaces · {projection.coverage.presentedTerminals} leaves
@@ -175,10 +176,11 @@ function TreeStage({ context }: { context: WorldThemeContext }) {
             onChange={(event) => setQuery(event.currentTarget.value)} />
         </label>
         <div className="tree-zoom-controls" role="group" aria-label="Tree zoom controls">
-          <button className="icon-btn" type="button" aria-label="Zoom out" onClick={() => zoomBy(0.85)}><ZoomOut size={16} /></button>
-          <button className="icon-btn" type="button" aria-label="Zoom in" onClick={() => zoomBy(1.15)}><ZoomIn size={16} /></button>
+          <button className="icon-btn tree-zoom-button" type="button" aria-label="Zoom out" title="Zoom out" onClick={() => zoomBy(0.85)}><ZoomOut size={16} aria-hidden="true" /></button>
+          <output className="tree-zoom-readout" aria-label="Current zoom">{Math.round(camera.zoom * 100)}%</output>
+          <button className="icon-btn tree-zoom-button" type="button" aria-label="Zoom in" title="Zoom in" onClick={() => zoomBy(1.15)}><ZoomIn size={16} aria-hidden="true" /></button>
         </div>
-        <button className="btn tree-fit" type="button" onClick={fit}><Maximize2 size={14} />Fit tree</button>
+        <button className="btn tree-fit" type="button" onClick={fit}><Maximize2 size={14} aria-hidden="true" />Fit tree</button>
       </header>
       <section className="tree-overview" aria-label="Tree operational overview">
         <span><strong>{projection.coverage.presentedHosts}</strong> of {projection.coverage.configuredHosts} configured hosts</span>
