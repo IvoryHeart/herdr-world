@@ -9,15 +9,17 @@
   color: #e7edf5;
   background: radial-gradient(ellipse at 48% 30%, #10202b66, transparent 65%), #090f16;
 }
-.tree-stage-bar { z-index: 3; display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 9px 14px; border-bottom: 1px solid var(--tree-line); background: #0c131c; }
-.tree-stage-heading { display: grid; min-width: 150px; }
-.tree-stage-heading strong { font-size: 14px; }
-.tree-stage-heading span { color: var(--tree-muted); font-size: 11px; }
-.tree-search { display: flex; align-items: center; gap: 7px; width: min(340px, 36vw); margin-left: auto; padding: 0 10px; border: 1px solid var(--tree-line); border-radius: 7px; background: #090f16; }
+.tree-stage-bar { position: relative; z-index: 3; display: flex; min-width: 0; min-height: 54px; flex: 0 0 auto; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid var(--tree-line); background: #0c131c; }
+.tree-stage-heading { display: grid; min-width: 130px; gap: 2px; }
+.tree-stage-heading strong { font-size: 13px; }
+.tree-stage-heading span { color: var(--tree-muted); font-size: 9px; }
+.tree-search { display: flex; min-width: 150px; max-width: 420px; height: 34px; flex: 1 1 260px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--tree-line); border-radius: 7px; background: #090f16; }
 .tree-search:focus-within { border-color: #74c4ff; }
-.tree-search input { width: 100%; height: 34px; border: 0; outline: 0; color: #e7edf5; background: transparent; }
-.tree-zoom-controls { display: flex; gap: 4px; }
-.tree-fit { gap: 6px; white-space: nowrap; }
+.tree-search input { min-width: 0; flex: 1 1 auto; border: 0; outline: 0; color: #e7edf5; background: transparent; font: inherit; font-size: 11px; }
+.tree-zoom-controls { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 3px; }
+.tree-zoom-button { width: 34px; min-width: 34px; min-height: 34px; }
+.tree-zoom-readout { display: inline-flex; min-width: 38px; min-height: 34px; align-items: center; justify-content: center; color: var(--tree-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tree-fit { display: inline-flex; min-height: 34px; align-items: center; gap: 6px; white-space: nowrap; }
 .tree-overview { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 22px; padding: 11px 18px; border-bottom: 1px solid var(--tree-line); color: var(--tree-muted); font-size: 11px; }
 .tree-overview strong { color: #e7edf5; font-size: 13px; }
 .tree-legend { display: flex; gap: 15px; margin-left: auto; }

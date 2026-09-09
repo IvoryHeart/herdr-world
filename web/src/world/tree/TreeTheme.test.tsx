@@ -132,6 +132,18 @@ describe("Tree theme", () => {
     expect(new Set(codexNames).size).toBe(2);
   });
 
+  it("shows the current zoom and updates it after zooming in", async () => {
+    const { container } = await render(context());
+    const zoom = () => container.querySelector<HTMLOutputElement>("output[aria-label='Current zoom']");
+
+    expect(zoom()?.textContent).toBe("100%");
+
+    const zoomIn = container.querySelector<HTMLButtonElement>("button[aria-label='Zoom in']");
+    await act(async () => zoomIn?.click());
+
+    expect(zoom()?.textContent).toBe("115%");
+  });
+
   it("exercises Fit, zoom, wheel, and pointer handlers within camera bounds and persists them", async () => {
     const { container } = await render(context());
     const viewport = container.querySelector<HTMLDivElement>(".tree-viewport");

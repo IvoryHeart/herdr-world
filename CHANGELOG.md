@@ -11,9 +11,11 @@ Web's own release history remains in its upstream changelog.
 ### Added
 
 - Added a statically bundled Tree World theme with a bounded host-to-space-to-agent/terminal
-  hierarchy, searchable ancestor context, branch collapse, pan/zoom/fit controls, operational
+  hierarchy, searchable ancestor context, branch collapse, pan/zoom/fit controls with a current
+  zoom percentage, operational
   details and guarded terminal/Spaces actions, plus an accessible compact semantic presentation.
-  ([#81](https://github.com/IvoryHeart/herdr-world/pull/81))
+  ([#81](https://github.com/IvoryHeart/herdr-world/pull/81),
+  [#83](https://github.com/IvoryHeart/herdr-world/pull/83))
 
 - Added repository OpenSpec contracts, agent skills, shared worktree tooling, bounded Ralph
   execution from a short goal with resumable interviews, persistent role histories and
