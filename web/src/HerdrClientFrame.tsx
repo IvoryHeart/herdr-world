@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import type { ToolbarPrimaryView } from "./SidebarToolbar";
 import { StageThemeSwitcher } from "./StageThemeSwitcher";
 
 type FrameLayout = {
@@ -69,15 +70,21 @@ export function HerdrMainStage({
   label,
   children,
   inert,
+  activeView,
+  onView,
 }: {
   label: string;
   children: ReactNode;
   inert?: boolean;
+  activeView: string;
+  onView: (view: ToolbarPrimaryView) => void;
 }) {
   const { sidebarOpen, compact } = useContext(FrameLayoutContext);
   return (
     <section className="stage" aria-label={label} inert={inert}>
-      {!sidebarOpen && !compact ? <StageThemeSwitcher /> : null}
+      {!sidebarOpen && !compact
+        ? <StageThemeSwitcher activeView={activeView} onView={onView} />
+        : null}
       {children}
     </section>
   );

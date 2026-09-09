@@ -1,6 +1,6 @@
 import { Building2, GitBranch, Network, SquareTerminal } from "lucide-react";
 
-import { useCoreNavigation } from "./CoreNavigation";
+import type { ToolbarPrimaryView } from "./SidebarToolbar";
 
 const DESTINATIONS = [
   { id: "spaces", label: "Spaces", Icon: SquareTerminal },
@@ -9,14 +9,17 @@ const DESTINATIONS = [
   { id: "tree", label: "Tree", Icon: GitBranch },
 ] as const;
 
-export function StageThemeSwitcher() {
-  const { activeSurface, activeWorldTheme, navigate, navigateWorldTheme } = useCoreNavigation();
-  const activeDestination = activeSurface.id === "spaces" ? "spaces" : activeWorldTheme.id;
-
+export function StageThemeSwitcher({
+  activeView,
+  onView,
+}: {
+  activeView: string;
+  onView: (view: ToolbarPrimaryView) => void;
+}) {
   return (
     <nav className="stage-theme-switcher" aria-label="Theme switcher">
       {DESTINATIONS.map(({ id, label, Icon }) => {
-        const active = id === activeDestination;
+        const active = id === activeView;
         return (
           <button
             key={id}
@@ -24,7 +27,7 @@ export function StageThemeSwitcher() {
             aria-label={`Switch to ${label}`}
             aria-pressed={active}
             title={label}
-            onClick={() => id === "spaces" ? navigate("spaces") : navigateWorldTheme(id)}
+            onClick={() => onView(id)}
           >
             <Icon size={16} aria-hidden="true" />
           </button>

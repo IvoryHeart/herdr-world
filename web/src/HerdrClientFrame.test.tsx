@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CoreNavigationProvider } from "./CoreNavigation";
+import { CoreNavigationProvider, useCoreNavigation } from "./CoreNavigation";
 import { HerdrClientFrame, HerdrMainStage } from "./HerdrClientFrame";
 import { coreSurfaceRegistry } from "./surfaceRegistry";
 
@@ -106,28 +106,40 @@ async function renderFrame({ sidebarOpen, compact }: { sidebarOpen: boolean; com
     await act(async () => {
       root.render(
         <CoreNavigationProvider registry={coreSurfaceRegistry}>
-          <HerdrClientFrame
-            style={{}}
-            sidebarOpen={next.sidebarOpen}
-            notesOpen={false}
-            resizingSidebar={false}
-            resizingNotes={false}
-            resizingNotesList={false}
-            compact={next.compact}
-            touch={false}
-            detail={false}
-            primaryView="world"
-          >
-            <HerdrMainStage label="World Graph">
-              <header className="graph-stage-bar">Graph controls</header>
-            </HerdrMainStage>
-          </HerdrClientFrame>
+          <StageNavigationHarness {...next} />
         </CoreNavigationProvider>,
       );
     });
   };
   await render({ sidebarOpen, compact });
   return { container, rerender: render };
+}
+
+function StageNavigationHarness({ sidebarOpen, compact }: { sidebarOpen: boolean; compact: boolean }) {
+  const { activeSurface, activeWorldTheme, navigate, navigateWorldTheme } = useCoreNavigation();
+  const activeView = activeSurface.id === "spaces" ? "spaces" : activeWorldTheme.id;
+  return (
+    <HerdrClientFrame
+      style={{}}
+      sidebarOpen={sidebarOpen}
+      notesOpen={false}
+      resizingSidebar={false}
+      resizingNotes={false}
+      resizingNotesList={false}
+      compact={compact}
+      touch={false}
+      detail={false}
+      primaryView={activeSurface.id}
+    >
+      <HerdrMainStage
+        label="World Graph"
+        activeView={activeView}
+        onView={(view) => view === "spaces" ? navigate("spaces") : navigateWorldTheme(view)}
+      >
+        <header className="graph-stage-bar">Graph controls</header>
+      </HerdrMainStage>
+    </HerdrClientFrame>
+  );
 }
 
 function themeSwitcher(container: HTMLElement) {
