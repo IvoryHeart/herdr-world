@@ -1,5 +1,5 @@
-/node_modules/
-/web/node_modules/
+/node_modules
+/web/node_modules
 /web/dist/
 /web/.vite/
 /web/.next/
@@ -14,12 +14,15 @@
 /.agents/skills/superpowers
 /AGENTS.override.md
 /.codex/config.toml
+/.cargo/config.toml
+# Upstream Superpowers review packages and private task scratch.
+/.superpowers/
 /.agents/runs/
 /.agents/jobs/
 /.agents/state/
 /.agents/cache/
 /.ralph/
-/harness/node_modules/
+/harness/node_modules
 /harness/bin/
 /harness/.install-*/
 /evals/.venv/

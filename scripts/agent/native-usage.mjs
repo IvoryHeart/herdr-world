@@ -38,8 +38,11 @@ function roleOf(meta) {
   return meta.source?.subagent?.thread_spawn?.agent_path ?? 'lead';
 }
 
-export async function summarizeNativeUsage({ sessions, thread, since, until = new Date().toISOString() }) {
+export async function summarizeNativeUsage({ sessions, thread, since, until = new Date().toISOString(), expectModel, expectEffort }) {
   if (!thread || typeof thread !== 'string') throw new Error('A native lead thread ID is required');
+  for (const value of [expectModel, expectEffort]) {
+    if (value !== undefined && (typeof value !== 'string' || !value.trim())) throw new Error('Allocation expectations must be nonempty strings');
+  }
   const start = since === undefined ? -Infinity : Date.parse(since);
   const end = Date.parse(until);
   if ((since !== undefined && !Number.isFinite(start)) || !Number.isFinite(end) || start > end) {
@@ -145,6 +148,7 @@ export async function summarizeNativeUsage({ sessions, thread, since, until = ne
     const active = selectedTurns.some(t => t.end === null);
     agents.push({
       thread: id, parent: parentOf(entry.meta), role: roleOf(entry.meta),
+      startupCwd: entry.meta.cwd ?? null,
       models: [...models], efforts: [...efforts], turns: selectedTurns.length,
       activeSeconds: selectedTurns.reduce((n, t) => n + (Math.min(t.end ?? end, end) - Math.max(t.start, start)) / 1000, 0),
       elapsedSeconds: selectedTurns.length ? (Math.min(Math.max(...selectedTurns.map(t => t.end ?? end)), end)
@@ -167,10 +171,30 @@ export async function summarizeNativeUsage({ sessions, thread, since, until = ne
   }
   for (const agent of agents) if (!agent.responses) warnings.push('No measured responses in the selected interval for ' + agent.thread);
   if (Object.keys(byModel).some(key => key.startsWith('unknown/'))) warnings.push('Some response model allocation is unknown');
+  const coverage = warnings.length || agents.some(a => a.status !== 'completed') ? 'provisional' : 'recorded-completed-responses';
+  const requested = expectModel !== undefined || expectEffort !== undefined;
+  const mismatches = new Map();
+  let unknownAllocation = false;
+  for (const response of responses.values()) {
+    if ((expectModel && response.model === 'unknown') || (expectEffort && response.effort === 'unknown')) unknownAllocation = true;
+    if ((expectModel && response.model !== 'unknown' && response.model !== expectModel)
+      || (expectEffort && response.effort !== 'unknown' && response.effort !== expectEffort)) {
+      const key = JSON.stringify([response.thread, response.model, response.effort]);
+      const mismatch = mismatches.get(key) ?? { thread: response.thread,
+        role: agents.find(a => a.thread === response.thread).role, model: response.model, effort: response.effort, responses: 0 };
+      mismatch.responses++; mismatches.set(key, mismatch);
+    }
+  }
   return {
     schemaVersion: 1, workflow: 'native-codex', leadThread: thread,
     observedAt: new Date().toISOString(), since: since ?? null, until,
-    coverage: warnings.length || agents.some(a => a.status !== 'completed') ? 'provisional' : 'recorded-completed-responses',
+    coverage,
+    allocation: {
+      status: !requested ? 'not-requested' : mismatches.size ? 'mismatch'
+        : coverage === 'provisional' || unknownAllocation || !responses.size ? 'unverified' : 'matched',
+      expected: { model: expectModel ?? null, effort: expectEffort ?? null },
+      mismatches: [...mismatches.values()],
+    },
     responses: responses.size, usage: totals, byModel, agents, warnings: [...new Set(warnings)], costUsd: null,
     notes: [
       'Includes the selected lead and descendants identified by native parent metadata; other sessions are excluded.',
@@ -178,6 +202,7 @@ export async function summarizeNativeUsage({ sessions, thread, since, until = ne
       'Active thread intervals include command/wait time and may overlap; do not add them as wall time.',
       'Unreported responses and histories absent from storage cannot be reconstructed. This is not an invoice.',
       'A report generated within its own active thread excludes that thread’s later responses; refresh after completion.',
+      'Allocation compares recorded responses only; it does not enforce model routing or prove which instructions the session loaded.',
     ],
   };
 }
@@ -186,10 +211,10 @@ async function main() {
   const options = {};
   for (let i = 2; i < process.argv.length; i += 2) {
     const key = process.argv[i]?.replace(/^--/, '');
-    if (!['thread', 'sessions', 'since', 'until', 'output'].includes(key) || !process.argv[i + 1]) {
-      throw new Error('Usage: agent:usage -- --thread ID [--sessions DIR] [--since ISO] [--until ISO] [--output FILE]');
+    if (!['thread', 'sessions', 'since', 'until', 'output', 'expect-model', 'expect-effort'].includes(key) || !process.argv[i + 1]) {
+      throw new Error('Usage: agent:usage -- --thread ID [--sessions DIR] [--since ISO] [--until ISO] [--output FILE] [--expect-model MODEL] [--expect-effort EFFORT]');
     }
-    options[key] = process.argv[i + 1];
+    options[{ 'expect-model': 'expectModel', 'expect-effort': 'expectEffort' }[key] ?? key] = process.argv[i + 1];
   }
   options.thread ??= process.env.CODEX_THREAD_ID;
   options.sessions ??= join(process.env.CODEX_HOME || join(homedir(), '.codex'), 'sessions');

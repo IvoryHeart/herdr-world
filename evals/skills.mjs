@@ -97,7 +97,8 @@ try {
       && release.skills.some(name => upstreamNames(name).includes(skill.name))),
       'Trial skills leaked into the primary checkout');
   }
-  console.log(JSON.stringify({ status: 'passed', superpowers: release.version,
+  console.log(JSON.stringify({ status: 'passed', scope: 'fresh-app-server-discovery',
+    activeSessionVerified: false, superpowers: release.version,
     upstreamSkills: release.skills.length, openspecSkills: 6,
     legacySkillsOutsideDiscovery: release.legacySkills.length,
     primaryScopeChecked: primary !== repoRoot, modelCalls: 0 }, null, 2));

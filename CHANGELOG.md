@@ -31,6 +31,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Reduced native development friction with explicit task parents, measured model-allocation
+  comparisons, and consolidated startup, cache and verification guidance. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
+
 - Consolidated the development and World UI work for final review in PR #78, and
   prepared a Sol/high native trial with scoped verification, reference handoffs
   and deduplicated lead/subagent usage reporting.

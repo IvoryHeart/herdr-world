@@ -39,7 +39,7 @@ This is a lightweight internal onboarding note for agents working in this repo.
   already inside the run and must not start another loop. Do not bypass a stopped run or
   its delivery evidence with interactive implementation or direct publishing.
 - Harness/control maintenance is interactive: record `agent:task interactive --reason
-  harness-maintenance --note "..."`. Other interactive feature work requires an explicit
+  harness-maintenance --note "..." --base <parent-ref>`. Other interactive feature work requires an explicit
   owner request, recorded with reason `owner-request`. Read-only analysis needs no run.
 - [docs/agent-development.md](docs/agent-development.md) owns orchestration procedures:
   start/resume/recovery, workspace, deadlines, recaps, models and delivery evidence.
@@ -91,7 +91,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
 ## Testing
 
 - Run `npm ci --prefix harness` to install the pinned development tools used by repository checks.
-- Run `npm install --prefix web` if dependencies are missing.
+- Reuse prepared dependencies. If web dependencies are missing, run `npm ci --prefix web`
+  to preserve the lockfile; dependency updates are a separate intentional change.
 - Run `npm run vendor:check` to verify the vendored layout.
 - Run `npm run lint:web` for ESLint.
 - Run `npm run test:web` for Vitest.

@@ -13,16 +13,20 @@ installation. No custom launcher, agent protocol or scheduler is added.
 Codex 0.153.4 is the locally tested CLI; other clients require their own discovery
 and lifecycle checks. Skills are portable; native transcripts and events are not.
 
-## Install in a fresh task worktree
+## Prepare once, then start the session
 
-Start from the intended parent PR and a non-main branch. Do not change another
-task's worktree. The existing command creates a centrally located worktree:
+First inspect `git worktree list` and the handoff for an already prepared task
+worktree. Reuse it when its branch, parent and task match. Start from the intended
+parent PR and a non-main branch; do not change another task's worktree. Only when
+no matching worktree exists, create one with the existing command:
 
 ~~~bash
 npm run agent:worktree -- create <slug> <parent-ref>
 ~~~
 
-From that worktree, install the upstream release and expose its skills:
+Resolve the parent's actual branch and revision before creation; a sibling PR is
+not implicitly included. From the selected worktree, install the upstream release
+and expose its skills if they are missing:
 
 ~~~bash
 git clone --depth 1 --branch v6.3.0 https://github.com/obra/superpowers.git .agents/cache/superpowers-6.3.0
@@ -40,12 +44,25 @@ The cache, symlink, local profile and local config are ignored. None changes
 user-wide Codex settings, another worktree or installed user plugins. Existing
 config/profile files must be inspected and composed deliberately, not overwritten.
 
-Start Codex in this worktree. The next trial pins the lead and every child to
-Sol/high; keep this allocation fixed when assessing the model change.
+Complete preparation before starting the feature session. Launch Codex directly
+in the selected worktree, for example `codex --cd /path/to/prepared-worktree`.
+If a session in an older checkout prepares a newer task worktree, hand off to a
+fresh session there before feature execution. Changing tool command directories
+or copying config files does not establish that the existing session loaded the
+new instructions. Codex builds its instruction chain at startup; see
+[official AGENTS.md guidance](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
+The selected feature trial pins the lead and every child to Sol/high; keep this
+allocation fixed when assessing the model change. Before the first spawn, read
+this selected worktree's profile and use both `model: gpt-5.6-sol` and
+`reasoning_effort: high` in the available native tool. Check the live session's
+model, not only the config file. Harness maintenance is recorded separately from
+that feature trial.
 Trust the project through the normal Codex UI if required. Use /skills or $ to
 inspect the skills; restart the session if its catalog is stale. The native
-discovery check must pass before a live trial. A profile file on disk does not
-prove that the client loaded it.
+discovery check must pass before a live trial. It starts a separate App Server;
+its result explicitly says `activeSessionVerified: false`. It cannot certify the
+running lead's loaded instructions or later model overrides.
 
 The local profile keeps repository rules and overrides only the legacy Ralph
 start/delivery requirement for the selected task. Twelve overlapping World workflow
@@ -55,6 +72,47 @@ The profile bounds native concurrency and selects Sol/high for the lead and chil
 The owner's selected allocation takes precedence over upstream model-selection
 examples. Record any owner-requested override as a changed experimental input.
 Do not credit an unrecorded model change as a workflow improvement.
+
+The lead records the authorized task once, with the actual parent reference:
+
+~~~bash
+npm run agent:task -- interactive --reason owner-request --note "Owner selected the Superpowers/native Codex trial" --base <parent-ref>
+~~~
+
+The record stores the parent commit. Subsequent updates retain it even if the
+parent branch advances, and reject a different parent. An intentional reparent
+needs a preserved prior task record and a new record. A first record without a
+resolvable parent is rejected instead of assuming `main`. Workers reuse the lead's record. Keep the task brief,
+decisions, check results, native lead ID and private references in
+`.agents/state/`; upstream review packages can stay in ignored `.superpowers/`.
+Neither directory is delivery authority or a second specification system.
+
+### Dependencies and storage
+
+Reuse the prepared worktree's dependencies and build outputs before installing
+again. When an install is needed, use `npm ci` for the missing root, web or harness
+dependency tree; do not use `npm install` for routine preparation. Prefer sharing
+the package manager's download cache while keeping each task's `node_modules`
+local. A whole-directory web dependency symlink produced an invalid runtime graph
+in `npm ls`; the same dependency tree passed when copied locally. A copy or
+filesystem reflink of a prepared tree with matching manifests and lockfiles can
+avoid another install without that resolution problem. Verify dependency notices
+after changing the layout. Do not run a mutating install through a `node_modules`
+symlink or alter a prepared dependency tree used by another task. Package-manager
+download caches remain managed by their own tools.
+
+Cargo checks can reuse a compatible target directory through `CARGO_TARGET_DIR`
+or an ignored local `.cargo/config.toml`. Keep scripts that expect a specific
+binary path consistent with that setting. Concurrent builds sharing a mutable
+target may wait for Cargo's lock; use a separate target when that contention is
+actually observed. Do not add a separate checkout or dependency install for a
+read-only reviewer.
+
+Before a new heavy install/build, inspect available space on the workspace and
+temporary filesystem (`df -h . /tmp`) and use the observed build size. On ENOSPC,
+diagnose the affected filesystem and reclaim only authorized, inactive generated
+outputs. Preserve source and evidence. Report outside assistance in the trial
+results rather than claiming independent recovery.
 
 Start with a normal short request. When persistent continuation is wanted:
 
@@ -92,6 +150,36 @@ After a correction, rerun the affected tests and then finish acceptance on the
 final candidate. Keep the source revision, exact commands, results and significant
 environment inputs beside the task ledger. Reuse unchanged evidence; a report,
 task checkbox or PR attribution edit does not invalidate unrelated code checks.
+This repository policy takes precedence over an upstream example that repeats
+all tests before every commit or completion message. For a changelog-only PR
+attribution edit, inspect the diff and run the relevant changelog/privacy checks;
+reuse product acceptance. A fingerprint change is a reason to inspect the diff,
+not an instruction to restart all reviews. A review of a child PR against its
+parent does not cover the parent's entire integration against `main`.
+
+Keep full passing command output in a private log and return the command, exit
+status and concise results to the lead. Inspect the log for failures, warnings
+and evidence needed for the claim. For example, this shell pattern preserves
+the original exit status instead of hiding a failure behind a successful `tail`:
+
+~~~bash
+umask 077
+mkdir -p .agents/state
+npm run check > .agents/state/check.log 2>&1
+check_status=$?
+printf 'check exit=%s; log=.agents/state/check.log\n' "$check_status"
+if [ "$check_status" -ne 0 ]; then
+  tail -60 .agents/state/check.log
+fi
+exit "$check_status"
+~~~
+
+Allow slow commands the time supported by observed runtimes. A tool yielding a
+process/session ID is not a failed test. Continue that process through its native
+completion/wait facility; do not relaunch the command. If an infrastructure failure
+recurs without new evidence, diagnose its cause before another full sweep. Preserve
+the failed result and run the affected check after repair; do not relax acceptance
+or add a retrying model supervisor to obtain a pass.
 
 For visual work, choose synthetic workload shapes that represent intended use,
 including uneven branches and long labels. Tree layout changes should cover a
@@ -115,7 +203,11 @@ Use native completion events. When no independent work remains, wait through the
 client's lifecycle tool rather than repeatedly checking logs or asking a working
 agent for status. Status updates should communicate a new finding, result or
 blocker. Recurring lack of progress warrants a decision; it does not warrant
-another monitoring agent.
+another monitoring agent. For CI, use one `gh pr checks <number> --watch --interval 30`
+process with output logged privately, and consume its exit status and final result.
+Avoid a new model response for each unchanged poll or success line. Choose wait
+durations within the client's responsiveness limits and communicate meaningful
+progress while commands continue. Do not launch a second watcher for the same job.
 
 ## Evaluation
 
@@ -156,14 +248,21 @@ ignored storage; only publish sanitized aggregate evidence.
 After a native turn finishes, collect its lead and descendants without a model call:
 
 ~~~bash
-npm run agent:usage -- --thread LEAD_THREAD_ID --output .agents/state/native-usage.json
+npm run agent:usage -- --thread LEAD_THREAD_ID --expect-model gpt-5.6-sol --expect-effort high --output .agents/state/native-usage.json
 ~~~
 
 The command reads native session metadata and deduplicated response usage. It
 reports actual model/effort, role, task intervals, coverage and cached-token subsets.
 It does not inspect credentials or modify native sessions. CODEX_THREAD_ID supplies
 the default lead ID when available; --sessions selects a different native session
-directory. For a reused lead thread, use --since/--until ISO timestamps to state
+directory. `startupCwd` records where each native thread was created; it is not
+proof of the cwd of every later command. `--expect-model` and `--expect-effort`
+compare actual responses with the selected allocation. `allocation.status` is
+`matched`, `mismatch`, `unverified` (incomplete evidence), or `not-requested`.
+Mismatch details identify the roles and response counts; token coverage remains
+separate. This read-only report does not enforce routing, restart a run, or turn
+a failed model-allocation condition into a failed product delivery.
+For a reused lead thread, use --since/--until ISO timestamps to state
 the measured interval. Preserve the cutoff with the report.
 
 An in-session report is provisional: it cannot include that session's later final
@@ -181,6 +280,12 @@ PR82 demonstrated native task delivery and retained review histories, with its
 usage recoverable from journals and child totals corroborated by OTEL. The next
 Sol feature is a validation exercise on a new task. Repeat a frozen task with the
 same requirements, acceptance and environment before claiming a model cost saving.
+
+PR83 also delivered through native execution, but its lead started in the older
+PR82 worktree. The new worktree passed discovery while actual child launches used
+Terra and Astra rather than the selected Sol allocation. It also repeated a full
+check after attribution-only edits. These observations motivate the startup,
+allocation and evidence-reuse procedures above; they are not a matched benchmark.
 
 ## Initial setup evidence — 2026-09-08
 

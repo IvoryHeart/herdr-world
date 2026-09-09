@@ -24,7 +24,18 @@ export async function recordInteractive(cwd, reason, note, base) {
   }
   const previous = await readTask(cwd);
   if (previous?.mode === 'ralph') throw new Error('Cannot silently replace a Ralph task with interactive work; preserve this run and use a separate explicitly authorized task');
-  return recordTask(cwd, { mode: 'interactive', reason, note: note.trim(), base: base ?? previous?.base ?? 'main' });
+  if (previous && (previous.worktree !== await realpath(cwd) || previous.branch !== git(['branch', '--show-current'], cwd))) {
+    throw new Error('Task execution record belongs to a different worktree or branch');
+  }
+  if (previous?.base && base !== undefined && base !== previous.base) {
+    throw new Error('Resuming with a different parent is not allowed; preserve the existing task record before recording a new task');
+  }
+  const parent = base ?? previous?.base;
+  if (!parent?.trim()) throw new Error('First interactive task needs --base <parent-ref>; use the actual PR parent, not an assumed main');
+  // A moving parent branch must not rewrite the recorded starting revision on resume.
+  const baseRevision = parent === previous?.base && previous.baseRevision
+    ? previous.baseRevision : git(['rev-parse', '--verify', '--end-of-options', parent + '^{commit}'], cwd);
+  return recordTask(cwd, { mode: 'interactive', reason, note: note.trim(), base: parent, baseRevision });
 }
 
 export async function draftEvidence(cwd = process.cwd(), base) {
@@ -118,6 +129,6 @@ async function main() {
     if (!task) throw new Error('No task execution record; use agent:goal for a feature');
     const state = task.runId ? await loadState(join(primaryCheckout(), '.agents/runs', task.runId)) : null;
     console.log(JSON.stringify({ ...task, outcome: state?.status, questions: state?.intake?.questions }, null, 2));
-  } else throw new Error('Usage: agent:task status|report|interactive --reason <reason> --note <authorization>');
+  } else throw new Error('Usage: agent:task status|report|interactive --reason <reason> --note <authorization> [--base <parent-ref>]');
 }
 if (process.argv[1] === fileURLToPath(import.meta.url)) main().catch(errorExit);

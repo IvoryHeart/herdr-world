@@ -71,11 +71,35 @@ test('blocked runs and copied task markers cannot authorize another candidate', 
 test('interactive exceptions are explicit and cannot replace a recorded Ralph task', async t => {
   const root = await fixture(t);
   await assert.rejects(recordInteractive(root, 'convenience', 'Small change'), /Interactive work needs/);
+  git(['branch', 'agent/parent'], root);
   await recordInteractive(root, 'harness-maintenance', 'Owner requested harness changes', 'agent/parent');
   assert.equal((await readTask(root)).base, 'agent/parent');
   assert.match(executionMarkdown(await deliveryEvidence(root)), /not an autonomous harness trial/);
   await recordTask(root, { mode: 'ralph', runId: randomUUID() });
   await assert.rejects(recordInteractive(root, 'owner-request', 'Switch mode'), /Cannot silently replace/);
+});
+
+test('interactive tasks require a real parent and retain its revision when that branch advances', async t => {
+  const root = await fixture(t);
+  await assert.rejects(recordInteractive(root, 'owner-request', 'Native task'), /--base/);
+  assert.equal(await readTask(root), null);
+  await assert.rejects(recordInteractive(root, 'owner-request', 'Native task', 'missing-parent'));
+  assert.equal(await readTask(root), null);
+  git(['branch', 'agent/parent'], root);
+  const parent = git(['rev-parse', 'HEAD'], root);
+  const first = await recordInteractive(root, 'owner-request', 'Native task', 'agent/parent');
+  assert.equal(first.baseRevision, parent);
+  await writeFile(join(root, 'source.mjs'), 'export const answer = 43;\n');
+  git(['add', 'source.mjs'], root);
+  git(['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'Change'], root);
+  git(['branch', '-f', 'agent/parent', 'HEAD'], root);
+  const resumed = await recordInteractive(root, 'owner-request', 'Continue task');
+  assert.equal(resumed.base, 'agent/parent');
+  assert.equal(resumed.baseRevision, parent);
+  await assert.rejects(recordInteractive(root, 'owner-request', 'Continue with another parent', 'HEAD'), /different parent/);
+  assert.equal((await readTask(root)).baseRevision, parent);
+  git(['checkout', '-b', 'agent/different-task'], root);
+  await assert.rejects(recordInteractive(root, 'owner-request', 'Different task'), /different worktree or branch/);
 });
 test('checked delivery appends provenance before publishing to a fixture remote', async t => {
   const { root } = await accepted(t);

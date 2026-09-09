@@ -45,6 +45,14 @@ an explicitly selected native trial.
 - **WHEN** a native lead thread is evaluated
 - **THEN** completed response IDs are deduplicated across that lead and descendants identified by native parent metadata, actual model allocations are reported, and unfinished or missing evidence is labelled provisional
 
+#### Scenario: Allocation differs from the selected trial
+- **WHEN** recorded model or effort differs from an explicitly supplied expectation
+- **THEN** the usage report identifies the mismatch separately from token coverage; incomplete evidence cannot certify an allocation match, and discovery alone does not certify the running session
+
+#### Scenario: Native task parent
+- **WHEN** a native task is first recorded
+- **THEN** its explicit parent reference resolves to a commit, and subsequent recording preserves that starting revision while the parent branch advances
+
 #### Scenario: Scoped verification
 - **WHEN** a worker or reviewer changes a candidate
 - **THEN** it exercises relevant behavior and the lead owns complete final acceptance; unchanged evidence is reused, and representative visual workloads prevent a small fixture from establishing universal readability

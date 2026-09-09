@@ -42,7 +42,7 @@ For an existing clean linked task worktree, use `agent:run start --task-file <fi
 Do not create a fresh run merely because a check failed. A blocked or interrupted run
 resumes its current step, histories and allowance. Changes to frozen controls use explicit
 recovery, below. Harness maintenance is interactive: record
-`agent:task interactive --reason harness-maintenance --note "<authorized change>"`.
+`agent:task interactive --reason harness-maintenance --note "<authorized change>" --base <parent-ref>`.
 An ordinary feature needs an explicit owner request to use the interactive exception.
 
 An owner image can accompany a goal or answer with `--reference-image <absolute-path>`.

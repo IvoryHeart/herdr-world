@@ -126,3 +126,32 @@ test('corrupt/conflicting records and unmeasured histories remain visible; inval
   await assert.rejects(summarizeNativeUsage({ sessions: dir, thread: 'absent' }), /not found/);
   await assert.rejects(summarizeNativeUsage({ sessions: dir, thread: 'lead', since: at(8), until: at(2) }), /ordered ISO/);
 });
+
+test('allocation comparison catches worker overrides without invalidating complete token accounting', async t => {
+  const dir = await fixture(t);
+  await journal(dir, 'lead', 'lead', null, [start('turn', 1), model('sol', 1), usage('lead', 'one', 2), done('turn', 3)]);
+  await journal(dir, 'worker', 'worker', 'lead', [start('turn', 3), model('terra', 3), usage('worker', 'two', 4), done('turn', 5)]);
+  const result = await summarizeNativeUsage({ sessions: dir, thread: 'lead', until: at(6), expectModel: 'sol', expectEffort: 'high' });
+  assert.equal(result.allocation?.status, 'mismatch');
+  assert.deepEqual(result.allocation.mismatches, [{ thread: 'worker', role: '/root/worker', model: 'terra', effort: 'high', responses: 1 }]);
+  assert.equal(result.coverage, 'recorded-completed-responses');
+  assert.equal(result.usage.input_tokens, 200);
+  assert.equal(result.agents[0].startupCwd, '/synthetic/worktree');
+  const effortOnly = await summarizeNativeUsage({ sessions: dir, thread: 'lead', until: at(6), expectEffort: 'high' });
+  assert.equal(effortOnly.allocation.status, 'matched');
+  const wrongEffort = await summarizeNativeUsage({ sessions: dir, thread: 'lead', until: at(6), expectEffort: 'low' });
+  assert.equal(wrongEffort.allocation.status, 'mismatch');
+});
+
+test('allocation matching respects the measured time window and cannot certify incomplete evidence', async t => {
+  const dir = await fixture(t);
+  await journal(dir, 'lead', 'lead', null, [start('old', 1), model('terra', 1), usage('lead', 'old', 2, 100, 'old'), done('old', 3),
+    start('turn', 4), model('sol', 4), usage('lead', 'new', 5), done('turn', 6)]);
+  const options = { sessions: dir, thread: 'lead', since: at(4), until: at(7), expectModel: 'sol', expectEffort: 'high' };
+  assert.equal((await summarizeNativeUsage(options)).allocation?.status, 'matched');
+  assert.equal((await summarizeNativeUsage({ ...options, until: at(5) })).allocation.status, 'unverified');
+  await journal(dir, 'child', 'child', 'lead', [start('turn', 4), usage('child', 'unknown-model', 5), done('turn', 6)]);
+  assert.equal((await summarizeNativeUsage(options)).allocation.status, 'unverified');
+  assert.equal((await summarizeNativeUsage({ sessions: dir, thread: 'lead', until: at(7) })).allocation.status, 'not-requested');
+  await assert.rejects(summarizeNativeUsage({ ...options, expectModel: ' ' }), /nonempty/);
+});
