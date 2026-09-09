@@ -2994,6 +2994,7 @@ button {
   flex-direction: column;
   overflow: hidden;
   background: var(--term-bg);
+  container: main-stage / inline-size;
 }
 
 .stage-theme-switcher {
@@ -3062,8 +3063,27 @@ button {
   padding-right: 150px;
 }
 
-.app[data-primary-view="spaces"] .stage-theme-switcher {
+.app[data-primary-view="spaces"] .stage:has(> .tabbar) > .stage-theme-switcher {
   top: 50px;
+}
+
+@container main-stage (max-width: 520px) {
+  .stage-theme-switcher {
+    position: static;
+    align-self: flex-end;
+    margin: 6px 12px;
+  }
+
+  .app[data-sidebar="closed"][data-compact="false"] .stage > .stage-bar {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    padding: 8px 10px;
+  }
+
+  .app[data-sidebar="closed"][data-compact="false"] .stage > .stage-bar .stage-id {
+    flex-basis: calc(100% - 44px);
+  }
 }
 
 .stage-bar {
