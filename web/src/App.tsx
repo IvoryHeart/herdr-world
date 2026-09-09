@@ -171,6 +171,7 @@ import { terminalSessionDescriptor } from "./terminalSessions";
 import { coreSurfaceRegistry } from "./surfaceRegistry";
 import { SurfaceSlotBoundary } from "./SurfaceSlotBoundary";
 import { SidebarToolbar } from "./SidebarToolbar";
+import type { ToolbarPrimaryView } from "./SidebarToolbar";
 import {
   officeAgentHandoffRequest,
   officeRoomHandoffRequest,
@@ -3244,6 +3245,29 @@ export function App() {
     setShowDetail(false);
   };
 
+  const currentPrimaryView = activeSurface.id === "spaces" ? "spaces" : activeWorldTheme.id;
+  const selectPrimaryView = (view: ToolbarPrimaryView) => {
+    if (view === currentPrimaryView) {
+      return;
+    }
+    compactViewFocusRef.current = true;
+    if (view === "spaces") {
+      worldSelectionSeedPendingRef.current = false;
+      navigatePrimaryView("spaces");
+      return;
+    }
+    worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
+    navigateWorldTheme(
+      view,
+      isCompactLayout
+        ? withMobileDetailHistoryState(window.history.state)
+        : undefined,
+    );
+    if (isCompactLayout) {
+      openMobileDetail();
+    }
+  };
+
   const openPane = (bridgeId: BridgeId, pane: PaneInfo) => {
     compactViewFocusRef.current = false;
     const runtime = bridge.getRuntime(bridgeId);
@@ -4918,28 +4942,7 @@ export function App() {
           bridgeViews={bridgeViews}
           primaryView={activeSurface.id}
           activeWorldTheme={activeWorldTheme}
-          onView={(view) => {
-            const currentView = activeSurface.id === "spaces" ? "spaces" : activeWorldTheme.id;
-            if (view === currentView) {
-              return;
-            }
-            compactViewFocusRef.current = true;
-            if (view === "spaces") {
-              worldSelectionSeedPendingRef.current = false;
-              navigatePrimaryView("spaces");
-              return;
-            }
-            worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
-            navigateWorldTheme(
-              view,
-              isCompactLayout
-                ? withMobileDetailHistoryState(window.history.state)
-                : undefined,
-            );
-            if (isCompactLayout) {
-              openMobileDetail();
-            }
-          }}
+          onView={selectPrimaryView}
           onOpenCurrentView={isCompactLayout && activeSurface.id === "world" ? () => {
             compactViewFocusRef.current = true;
             openMobileDetail();
@@ -5103,6 +5106,8 @@ export function App() {
       <HerdrMainStage
         label={activeSurface.id === "world" ? `World ${activeWorldTheme.label}` : "Terminal"}
         inert={isCompactLayout && !showDetail ? true : undefined}
+        activeView={currentPrimaryView}
+        onView={selectPrimaryView}
       >
         {activeSurface.id === "world" ? worldStage : (
           <>
