@@ -86,10 +86,12 @@ beforeEach(() => {
     loadState: "ready",
   };
   const connectionRef: BridgeConnectionRef = {
+    profileConnectionKey: runtime.connectionKey,
     connectionKey: runtime.generationKey,
     snapshot,
     activityGeneration: 0,
     resyncBarrierGeneration: 0,
+    activityLog: [],
     sharedSelectionOverride: null,
     recoveryRequired: false,
     awaitingCapabilityHandshake: false,
