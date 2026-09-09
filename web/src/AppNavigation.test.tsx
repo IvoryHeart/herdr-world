@@ -26,7 +26,11 @@ vi.mock("./federatedRuntime", () => ({
 }));
 
 vi.mock("./TerminalView", () => ({
-  TerminalView: () => <div>Selected Spaces terminal</div>,
+  TerminalView: ({ pane, selected }: { pane?: { pane_id?: string } | null; selected?: boolean }) => (
+    <output data-testid="spaces-terminal" data-selected={selected ? "true" : undefined}>
+      {pane?.pane_id ?? "none"}
+    </output>
+  ),
 }));
 
 vi.mock("./world/WorldSurface", () => ({
@@ -163,7 +167,73 @@ describe("App view navigation", () => {
       '["host-a","terminal","terminal-a"]',
     );
   });
+
+  it("preserves an empty shell's terminal identity when Spaces opens World", async () => {
+    replaceSnapshot(emptyShellSnapshot());
+    const container = await renderApp();
+
+    const office = container.querySelector<HTMLButtonElement>("[aria-label='Switch to Office']");
+    await act(async () => {
+      office?.click();
+      await Promise.resolve();
+    });
+    await waitForWorldSurface(container);
+
+    expect(container.querySelector("[data-testid='world-selection']")?.textContent).toBe(
+      '["host-a","terminal","terminal-a"]',
+    );
+  });
+
+  it("opens the exact empty shell selected from a split tab in World", async () => {
+    replaceSnapshot(splitShellSnapshot());
+    window.history.replaceState({}, "", "/");
+    window.localStorage.setItem(
+      "herdr.mobileWeb.displayPrefs.v2",
+      JSON.stringify({ sidebarOpen: true, sidebarView: "tabs", notesEnabled: false }),
+    );
+    window.localStorage.setItem("herdrWeb.navigationSyncMode.v1", "independent");
+    const container = await renderApp();
+
+    await waitForWorldSurface(container);
+
+    const requested = Array.from(container.querySelectorAll<HTMLButtonElement>(".pane-row"))
+      .find((button) => button.textContent?.includes("Requested shell"));
+    expect(requested).not.toBeUndefined();
+    await act(async () => {
+      requested?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const selectedTerminal = await waitForSelectedTerminal(container, "pane-requested");
+    expect(window.location.pathname).toBe("/spaces");
+    expect(selectedTerminal?.textContent).toBe("pane-requested");
+  });
 });
+
+async function renderApp() {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => {
+    root.render(
+      <CoreNavigationProvider registry={coreSurfaceRegistry}>
+        <App />
+      </CoreNavigationProvider>,
+    );
+  });
+  return container;
+}
+
+function replaceSnapshot(snapshot: Snapshot) {
+  const runtime = bridgeRuntime();
+  const federatedRuntime = testState.federatedRuntime as {
+    connectionStates: Record<string, BridgeConnectionState>;
+    connectionRefs: { current: Record<string, BridgeConnectionRef> };
+  };
+  federatedRuntime.connectionStates[runtime.id].snapshot = snapshot;
+  federatedRuntime.connectionRefs.current[runtime.id].snapshot = snapshot;
+}
 
 async function waitForWorldSurface(container: HTMLElement) {
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -175,6 +245,21 @@ async function waitForWorldSurface(container: HTMLElement) {
     });
   }
   throw new Error("World surface did not render");
+}
+
+async function waitForSelectedTerminal(container: HTMLElement, paneId: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const terminal = container.querySelector(
+      "[data-testid='spaces-terminal'][data-selected='true']",
+    );
+    if (terminal?.textContent === paneId) {
+      return terminal;
+    }
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+  }
+  return container.querySelector("[data-testid='spaces-terminal'][data-selected='true']");
 }
 
 function bridgeRuntime(): BridgeRuntime {
@@ -232,6 +317,38 @@ function selectedSpacesSnapshot(): Snapshot {
       revision: 1,
     }],
     layouts: [],
+    selected_pane_id: "pane-a",
+  };
+}
+
+function emptyShellSnapshot(): Snapshot {
+  const snapshot = selectedSpacesSnapshot();
+  return {
+    ...snapshot,
+    panes: snapshot.panes.map((pane) => ({
+      ...pane,
+      label: "Empty shell",
+      display_agent: undefined,
+      agent_status: "unknown",
+    })),
+  };
+}
+
+function splitShellSnapshot(): Snapshot {
+  const snapshot = emptyShellSnapshot();
+  return {
+    ...snapshot,
+    tabs: snapshot.tabs.map((tab) => ({ ...tab, pane_count: 2 })),
+    panes: [
+      { ...snapshot.panes[0], label: "First shell", focused: true },
+      {
+        ...snapshot.panes[0],
+        pane_id: "pane-requested",
+        terminal_id: "terminal-requested",
+        label: "Requested shell",
+        focused: false,
+      },
+    ],
     selected_pane_id: "pane-a",
   };
 }

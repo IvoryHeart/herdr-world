@@ -45,6 +45,11 @@ This command:
 4. Starts the Vite frontend and points its `/api` and `/ws` proxy at the
    bridge.
 
+A current bridge also takes a nonblocking lock for its selected Herdr client
+socket. Starting another bridge against that same runtime fails with guidance
+to reuse the existing endpoint or choose a different named session. Multiple
+browsers should share the one bridge so its terminal fanout remains coherent.
+
 Open the bridge URL for the complete app, including the production-rendered
 Office surface:
 
@@ -196,6 +201,11 @@ curl -fsS http://127.0.0.1:8787/api/snapshot
 - Protocol/version incompatibility: check `curl -fsS http://127.0.0.1:8787/api/capabilities`; use Herdr `v0.8.2` or newer with terminal protocol `20`.
 - Bridge `502` from Vite: the bridge is not running on port `8787`.
 - Empty snapshot: the bridge is connected to the wrong Herdr socket/session.
+- `Attached elsewhere` on only some otherwise healthy terminals: check for an
+  older or independently launched bridge targeting the same Herdr runtime.
+  Close its browser clients and stop that duplicate bridge, or point it at a
+  distinct named session. Current bridges reject this duplicate topology at
+  startup; they do not take terminals away from another owner automatically.
 - Sessions visible but Office blank in Vite: use the bridge URL and inspect
   the browser console; the Office E2E coverage asserts that the renderer
   produces a live canvas.

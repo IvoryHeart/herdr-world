@@ -122,8 +122,22 @@ pub(crate) struct LockFile {
 
 impl LockFile {
     pub(crate) fn exclusive(path: &Path) -> io::Result<Self> {
-        if let Some(parent) = path.parent() {
-            ensure_private_dir(parent)?;
+        Self::open_and_lock(path, true, lock_file)
+    }
+
+    pub(crate) fn try_exclusive_in_existing_dir(path: &Path) -> io::Result<Self> {
+        Self::open_and_lock(path, false, try_lock_file)
+    }
+
+    fn open_and_lock(
+        path: &Path,
+        ensure_parent: bool,
+        acquire: impl FnOnce(&File) -> io::Result<()>,
+    ) -> io::Result<Self> {
+        if ensure_parent {
+            if let Some(parent) = path.parent() {
+                ensure_private_dir(parent)?;
+            }
         }
         // Lock files are flock-only coordination points; existing contents are
         // never read, so keep them as-is instead of truncating.
@@ -134,7 +148,7 @@ impl LockFile {
             .truncate(false)
             .open(path)?;
         set_private_file_permissions(path)?;
-        lock_file(&file)?;
+        acquire(&file)?;
         Ok(Self { file })
     }
 }
@@ -145,10 +159,47 @@ impl Drop for LockFile {
     }
 }
 
+#[cfg(all(test, unix))]
+mod lock_tests {
+    use super::*;
+
+    #[test]
+    fn nonblocking_exclusive_lock_rejects_a_second_bridge_owner() {
+        let root = std::env::temp_dir().join(format!(
+            "herdr-world-runtime-lock-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("runtime.lock");
+        let first = LockFile::try_exclusive_in_existing_dir(&path).unwrap();
+        let second = match LockFile::try_exclusive_in_existing_dir(&path) {
+            Ok(_) => panic!("second nonblocking lock unexpectedly succeeded"),
+            Err(error) => error,
+        };
+
+        assert_eq!(second.kind(), io::ErrorKind::WouldBlock);
+
+        drop(first);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+}
+
 #[cfg(unix)]
 pub(crate) fn lock_file(file: &File) -> io::Result<()> {
     use std::os::fd::AsRawFd;
     let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(io::Error::last_os_error())
+    }
+}
+
+#[cfg(unix)]
+pub(crate) fn try_lock_file(file: &File) -> io::Result<()> {
+    use std::os::fd::AsRawFd;
+    let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
     if result == 0 {
         Ok(())
     } else {
@@ -169,6 +220,11 @@ pub(crate) fn unlock_file(file: &File) -> io::Result<()> {
 
 #[cfg(not(unix))]
 pub(crate) fn lock_file(_file: &File) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn try_lock_file(_file: &File) -> io::Result<()> {
     Ok(())
 }
 

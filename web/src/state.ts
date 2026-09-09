@@ -186,8 +186,11 @@ export function choosePaneForWorkspace(snapshot: Snapshot, workspaceId: string) 
   return snapshot.panes.find((pane) => pane.workspace_id === workspaceId)?.pane_id ?? null;
 }
 
-export function choosePaneForTab(snapshot: Snapshot, tabId: string) {
+export function choosePaneForTab(snapshot: Snapshot, tabId: string, preferredPaneId?: string) {
   const tabPanes = snapshot.panes.filter((pane) => pane.tab_id === tabId);
+  if (preferredPaneId !== undefined) {
+    return tabPanes.find((pane) => pane.pane_id === preferredPaneId)?.pane_id ?? null;
+  }
   return tabPanes.find((pane) => pane.focused)?.pane_id ?? tabPanes[0]?.pane_id ?? null;
 }
 
