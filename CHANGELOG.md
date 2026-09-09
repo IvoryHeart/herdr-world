@@ -10,6 +10,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Added
 
+- Added a compact in-stage switcher for Spaces, Office, Graph and Tree when the common desktop
+  sidebar is collapsed.
+
 - Added a statically bundled Tree World theme with a bounded host-to-space-to-agent/terminal
   hierarchy, searchable ancestor context, branch collapse, pan/zoom/fit controls with a current
   zoom percentage, operational

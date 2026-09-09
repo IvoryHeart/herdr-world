@@ -2996,6 +2996,76 @@ button {
   background: var(--term-bg);
 }
 
+.stage-theme-switcher {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--surface1) 72%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mantle) 94%, transparent);
+  box-shadow: 0 4px 14px #0005;
+}
+
+.stage-theme-switcher button {
+  position: relative;
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--overlay1);
+  background: transparent;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.stage-theme-switcher button:hover,
+.stage-theme-switcher button:focus-visible {
+  border-color: var(--surface1);
+  color: var(--text);
+  background: var(--surface0);
+}
+
+.stage-theme-switcher button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.stage-theme-switcher button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface0));
+}
+
+.stage-theme-switcher button[aria-pressed="true"]::after {
+  position: absolute;
+  right: 7px;
+  bottom: 1px;
+  left: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--accent);
+  content: "";
+}
+
+.app[data-sidebar="closed"][data-compact="false"] .stage > .stage-bar,
+.app[data-sidebar="closed"][data-compact="false"] .world-stage-bar,
+.app[data-sidebar="closed"][data-compact="false"] .graph-stage-bar,
+.app[data-sidebar="closed"][data-compact="false"] .tree-stage-bar {
+  padding-right: 150px;
+}
+
+.app[data-primary-view="spaces"] .stage-theme-switcher {
+  top: 50px;
+}
+
 .stage-bar {
   display: flex;
   align-items: center;
