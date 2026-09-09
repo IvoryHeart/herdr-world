@@ -1,4 +1,4 @@
-"""Held-out grading. Runs as root in Harbor's separate, networkless verifier."""
+"""Deterministic grading controls for the reusable evaluation artifacts."""
 import json
 import os
 from pathlib import Path
@@ -85,12 +85,15 @@ console.log(JSON.stringify(JSON.parse(text).map(terminalReconnectPolicy)));
 
 
 if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        raise SystemExit("Usage: python3 evals/graders/grade.py CASE_JSON ARTIFACT_DIRECTORY")
     reward = 0
+    artifacts = Path(sys.argv[2])
     try:
-        reward = int(grade(json.loads(Path(sys.argv[1]).read_text()), Path(sys.argv[2])))
+        reward = int(grade(json.loads(Path(sys.argv[1]).read_text()), artifacts))
     except Exception as error:
         print(type(error).__name__ + ": " + str(error))
-    target = Path("/logs/verifier/reward.txt")
+    target = artifacts / "reward.txt"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(str(reward))
     print("reward=" + str(reward))

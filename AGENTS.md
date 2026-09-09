@@ -28,26 +28,28 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Start Here
 
-- An owner-selected [Superpowers trial](docs/superpowers-trial.md) uses upstream skills
-  and native Codex in a fresh worktree. Its local profile replaces the Ralph start and
-  delivery procedures for that task only; existing Ralph runs retain their controls.
-- Read [docs/agent-development.md](docs/agent-development.md) for OpenSpec, repository
-  skills, bounded Ralph runs, evaluation and PR delivery. Use
-  [docs/knowledge-map.md](docs/knowledge-map.md) to find current contracts and source.
-- **Outside the explicit Superpowers trial, feature execution is through the harness.** Read [world-start-task](harness/legacy-skills/world-start-task/SKILL.md) and use `agent:goal`
-  before feature research, interview, planning or edits. A supervisor-assigned worker is
-  already inside the run and must not start another loop. Do not bypass a stopped run or
-  its delivery evidence with interactive implementation or direct publishing.
-- Harness/control maintenance is interactive: record `agent:task interactive --reason
-  harness-maintenance --note "..." --base <parent-ref>`. Other interactive feature work requires an explicit
-  owner request, recorded with reason `owner-request`. Read-only analysis needs no run.
-- [docs/agent-development.md](docs/agent-development.md) owns orchestration procedures:
-  start/resume/recovery, workspace, deadlines, recaps, models and delivery evidence.
-  Skills provide task-specific judgment and reference those procedures; role prompts
-  define response protocols. Avoid copying their policies into another entrypoint.
-- Use `agent:worktree create <slug>` for task worktrees under the primary checkout's
-  ignored `.agents/worktrees/`. Existing `.agents/.worktrees/` paths remain valid.
-  Do not move or clean another agent's worktree.
+- Read [docs/agent-development.md](docs/agent-development.md) for the native coding
+  workflow, model allocation, worktrees, evidence reuse and usage reporting. Use
+  [docs/knowledge-map.md](docs/knowledge-map.md) to locate contracts and source.
+- Use native coding-agent conversations and pinned Superpowers skills. Start from
+  the owner's short goal, inspect the relevant source, clarify consequential gaps,
+  and continue authorized work in the same session. OpenSpec supplies decisions and
+  tasks when needed; routine fixes do not need a proposal.
+- Create or reuse a task worktree under the primary checkout's `.agents/worktrees/`
+  with `agent:worktree create <slug> <parent-ref>`. Resolve the requested parent PR's
+  actual branch first. Keep sequential writers and read-only reviewers in that
+  worktree; do not move or clean another agent's worktree.
+- Use native subagents for bounded implementation or independent review when useful.
+  Reuse their histories for scoped corrections and wait for native completion.
+  A small task can stay with the lead until independent review. No additional
+  supervisor, launcher or mandatory sequence of specialist agents is required.
+- Repository rules apply immediately when read. Missing live skill discovery can be
+  handled by reading the installed SKILL.md directly; do not require a new session
+  solely because the agent created a worktree. Report when a new MCP connection or
+  client setting actually requires reload; a setup check cannot certify this session.
+- Keep procedures in docs/agent-development.md, task-specific judgment in skills,
+  and transient task facts in ignored .agents/state/. Do not duplicate policy in
+  local overrides, role prompts or generated wiki pages.
 - Current contracts are in `openspec/specs/`, active proposals in `openspec/changes/`,
   and historical numbered specs in `docs/specs/`. Use the pinned `npm run spec -- ...`.
   Scratchpads, graphs and eval outputs do not override contracts, source or these rules.

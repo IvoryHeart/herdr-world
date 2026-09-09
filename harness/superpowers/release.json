@@ -33,5 +33,7 @@
     "world-recap-run",
     "world-consult-oracle",
     "world-integrate-work"
-  ]
+  ],
+  "retiredOverrideSha256": "583d77b130e699b9350ccb2e88cfe43149eef4535c3477ab4ab95bfdbd38c5ab",
+  "retiredConfigSha256": "798695074e41025bb14d57a4c102f715403c726bf2e845e62b7f4757794ad615"
 }

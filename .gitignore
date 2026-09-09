@@ -10,8 +10,9 @@
 /.herdr-world-plugin/
 /.agents/.worktrees/
 /.agents/worktrees/
-# Opt-in worktree-local Superpowers installation and native Codex profile.
+# Repository-local upstream skills and native Codex configuration.
 /.agents/skills/superpowers
+/.agents/skills/openwiki
 /AGENTS.override.md
 /.codex/config.toml
 /.cargo/config.toml
@@ -28,6 +29,10 @@
 /evals/.venv/
 /evals/jobs/
 /evals/.prepared/
+/evals/pilots/node_modules/
+# Pilot-generated knowledge stays private until source claims are reviewed.
+/openwiki/
+/.openwikiignore
 # Harbor may copy transient Docker Compose directories into its invocation directory.
 /tmp*/
 __pycache__/
