@@ -141,7 +141,7 @@ The optional `HERDR_SRC` mode parses every `[[files]]` manifest entry, requires 
 reviewed 23-entry source-to-destination set, and verifies each source hash against the clean
 upstream checkout as well as each destination hash. It also exact-compares every copied source file
 and the protocol-22 markers. The default mode verifies the manifest's destination hashes, required
-protocol-20 wire shapes, and crate layout. Locally adapted files are intentionally excluded from
+protocol-22 wire shapes, and crate layout. Locally adapted files are intentionally excluded from
 exact byte comparison, but their upstream source hashes and manifest presence are still verified;
 review their local adaptations manually during refresh. `PopupSize` is compared with only the
 documented visibility adaptation allowed. Frozen protocol frames live in `vendor/herdr-compat/tests/`
