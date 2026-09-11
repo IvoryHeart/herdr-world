@@ -1077,14 +1077,16 @@ test("creates and manages rooms through capability-gated workspace actions", asy
   });
 
   await page.getByRole("button", { name: "Close room main", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("This closes the Herdr workspace");
-  await page.getByRole("button", { name: "Close room", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "This closes the space and every tab and pane inside it.",
+  );
+  await page.getByRole("button", { name: "Close space", exact: true }).click();
   await expect.poll(async () => {
     const logs = await (await request.get("http://127.0.0.1:4173/__fixture/requests")).json();
     return logs["host-a"].commands;
   }).toContainEqual({
     method: "workspace.close",
-    params: { workspace_id: "main" },
+    params: { workspace_id: "main", close_group: false },
   });
 });
 
