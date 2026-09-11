@@ -42,7 +42,7 @@ fi
 
 copy_test_tree "$TEST_ROOT/metadata"
 metadata_manifest="$TEST_ROOT/metadata/vendor/herdr-compat/VENDOR-MANIFEST.toml"
-sed -i 's/^release_tag = "v0\.9\.0"$/release_tag = "v0.8.2"/' "$metadata_manifest"
+sed -i 's/^release_tag = "v0\.9\.0"$/release_tag = "v0x9y0"/' "$metadata_manifest"
 metadata_evidence="$TEST_ROOT/metadata/check.log"
 if HERDR_SRC="$HERDR_SOURCE" "$TEST_ROOT/metadata/scripts/check-vendor.sh" >"$metadata_evidence" 2>&1; then
   echo "vendor provenance regression failed: bad release metadata was accepted" >&2

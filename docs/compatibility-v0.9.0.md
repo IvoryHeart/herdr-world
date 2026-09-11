@@ -2,12 +2,6 @@
 
 ## Scope
 
-The compatibility update began on `compat/herdr-v0.9.0`, based on main, and is
-committed on `feat/workspace-launch-context` with the launch-context follow-up.
-The stable-endpoint experiment is
-preserved separately as a named stash and `refs/archives/stable-endpoint-proof`
-(`6cb2baeb2905f6178e73d610830ce7c786dd2407`). It is not part of this update.
-
 The bridge retains its per-terminal ANSI attach transport, Ghostty Web renderer,
 existing browser input/clipboard behavior, shared terminal fanout, and last-resize
 ownership. It does not use whole-tab endpoint surfaces or automatically zoom tabs.
@@ -34,30 +28,13 @@ upstream subscribe/snapshot/buffered-event ordering, not a new transactional API
   Vite production build, bridge build, and whitespace checks passed.
 - Fresh-eyes review verified the direct-terminal contract and group-close intent,
   and added a fake-socket subscription-order/membership regression test.
-- Isolated official Linux Herdr v0.9.0 daemon, with release SHA256 verified.
-- Headless Chromium at `http://127.0.0.1:18880` rendered without page errors.
-  Real keyboard typing, Ctrl+C selection copy, Ctrl+C interrupt, clipboard paste,
-  Shell split creation, desktop split rendering, and compact/mobile pane viewing
-  passed. Desktop split widths no longer exhibit the endpoint prototype's double
-  division; mobile shows one pane using the available terminal area.
-- Direct WebSocket tests passed initial output, two-viewer fanout, input/Enter,
-  scroll up/down, and resize confirmed by `stty size` reporting `40 120`.
+- Browser and direct WebSocket smoke coverage passed initial output, two-viewer
+  fanout, input, scrolling, resizing, clipboard behavior, and desktop/mobile pane
+  rendering.
 
 Frontend output was built outside the production-served directory. No installed
 service, binary, or production assets were replaced or restarted. This is local
 validation, not a cross-platform release or a full agent-provider/device test.
-
-Temporary local scripts and screenshots (not release artifacts):
-
-- `/tmp/herdr-compat09-fixture.0alAmJ/browser-smoke.cjs`
-- `/tmp/herdr-compat09-fixture.0alAmJ/mobile-smoke.cjs`
-- `/tmp/herdr-compat09-fixture.0alAmJ/transport-smoke.cjs`
-- `/tmp/herdr-compat09-fixture.0alAmJ/desktop-split.png`
-- `/tmp/herdr-compat09-fixture.0alAmJ/mobile-pane.png`
-
-Browser tests used the terminal input textarea, word selection and clipboard
-permissions, the Shell/Create split dialog, and the Tabs sidebar pane row. No
-authentication was needed on the isolated loopback fixture.
 
 ## Implemented follow-up: explicit workspace launch context
 

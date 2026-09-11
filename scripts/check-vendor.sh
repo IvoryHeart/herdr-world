@@ -222,7 +222,7 @@ verify_manifest_metadata() {
   local expected_line="$1"
   local matches
 
-  matches="$(rg -Nxc "^${expected_line}$" "$COMPAT/VENDOR-MANIFEST.toml" || true)"
+  matches="$(rg -NxcF "$expected_line" "$COMPAT/VENDOR-MANIFEST.toml" || true)"
   if [[ "$matches" != "1" ]]; then
     echo "vendor manifest must contain exactly one $expected_line" >&2
     return 1
