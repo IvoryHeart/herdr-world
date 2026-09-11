@@ -75,6 +75,7 @@ export type OfficeDesk = {
   hostKey: string;
   roomKey: string;
   tabRef: QualifiedTarget;
+  terminalSelectionKeys: string[];
   observedGeneration: string;
   displayLabel: string;
   order: number;
@@ -451,7 +452,17 @@ function projectRooms({ modelHost, host }: ProjectedHost): ProjectedRoom[] {
       source.connectionState === "compatible" &&
       Boolean(source.generationKey);
     const desks = space.tabs
-      .map((tab) => projectDesk(modelHost, host, roomKey, tab, canOpenInSpaces))
+      .map((tab) => projectDesk(
+        modelHost,
+        host,
+        roomKey,
+        tab,
+        space.children
+          .filter(({ tabRef }) => tabRef.nativeTargetId === tab.tab.tab_id)
+          .map(({ terminalRef }) => qualifiedRuntimeKey(terminalRef))
+          .sort(),
+        canOpenInSpaces,
+      ))
       .sort(compareOfficeDesks);
     const deskKeys = new Set(desks.map(({ key }) => key));
     const agents = space.children
@@ -502,6 +513,7 @@ function projectDesk(
   host: OfficeHost,
   roomKey: string,
   worldTab: WorldTab,
+  terminalSelectionKeys: string[],
   canOpenInSpaces: boolean,
 ): OfficeDesk {
   const { tab, tabRef } = worldTab;
@@ -510,6 +522,7 @@ function projectDesk(
     hostKey: host.key,
     roomKey,
     tabRef,
+    terminalSelectionKeys,
     observedGeneration: modelHost.source.generationKey ?? "",
     displayLabel: boundedLabel(tab.label, `Tab ${tab.number}`),
     order: tab.number,

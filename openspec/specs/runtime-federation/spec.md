@@ -16,6 +16,11 @@ SHALL target exactly one selected Herdr runtime; federation SHALL occur in the b
 - **THEN** other hosts remain usable and cached topology from the failed host is stale
   without admitting control
 
+#### Scenario: A second bridge targets the same runtime
+- **WHEN** a bridge starts while another Herdr World bridge owns the same Herdr client socket
+- **THEN** startup fails with bounded guidance to reuse the existing bridge or select a different
+  Herdr session, before the processes can compete for terminal attachment ownership
+
 ### Requirement: Qualified admission
 The client SHALL qualify actions and terminal sessions by host and connection generation,
 and require compatible capabilities before dispatch.

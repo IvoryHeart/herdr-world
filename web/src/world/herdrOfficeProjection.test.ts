@@ -83,6 +83,10 @@ describe("Herdr Office projection", () => {
       });
     expect(projection.roster.find(({ agent }) => agent.semanticStatus === "unknown")?.agent.displayLabel)
       .toBe("Agent");
+    expect(projection.deskRoster.find(({ desk }) => desk.displayLabel === "shell")?.desk)
+      .toMatchObject({
+        terminalSelectionKeys: ['["profile-a","terminal","terminal-shell"]'],
+      });
   });
 
   it("projects one qualified deterministic desk per admitted tab including empty colliding labels", () => {

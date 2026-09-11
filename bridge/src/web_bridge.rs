@@ -71,6 +71,9 @@ use crate::notes::{
     NotesListResponse, NotesManager, RevisionRequest, UpdateNoteRequest,
 };
 use crate::observability::{ObservabilityContractVersion, ObservabilityHealth, ObservabilityState};
+#[cfg(unix)]
+use crate::store_util::effective_user_id;
+use crate::store_util::{stable_hash, LockFile};
 
 const DEFAULT_HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 8787;
@@ -1765,9 +1768,11 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
         protocol = daemon_protocol,
         "Herdr World bridge connected to compatible Herdr daemon"
     );
+    let client_socket_path = crate::session::active_client_socket_path();
+    let _runtime_bridge_lock = acquire_runtime_bridge_lock(&client_socket_path)?;
     let state = BridgeState {
         api,
-        client_socket_path: crate::session::active_client_socket_path(),
+        client_socket_path,
         request_policy: request_policy.clone(),
         auth,
         management: management_state_from_environment(),
@@ -1825,6 +1830,39 @@ async fn run_server(options: BridgeOptions) -> io::Result<()> {
     } else {
         primary.await
     }
+}
+
+fn acquire_runtime_bridge_lock(client_socket_path: &Path) -> io::Result<LockFile> {
+    let lock_path = runtime_bridge_lock_path(client_socket_path);
+    LockFile::try_exclusive(&lock_path).map_err(|error| {
+        if error.kind() == ErrorKind::WouldBlock {
+            io::Error::new(
+                ErrorKind::AddrInUse,
+                "another Herdr World bridge already serves this Herdr runtime; reuse it or select a different Herdr session",
+            )
+        } else {
+            error
+        }
+    })
+}
+
+fn runtime_bridge_lock_path(client_socket_path: &Path) -> PathBuf {
+    let canonical = std::fs::canonicalize(client_socket_path)
+        .unwrap_or_else(|_| client_socket_path.to_path_buf());
+    runtime_bridge_lock_root().join(format!(
+        "runtime-{:016x}.lock",
+        stable_hash(canonical.to_string_lossy().as_ref())
+    ))
+}
+
+#[cfg(unix)]
+fn runtime_bridge_lock_root() -> PathBuf {
+    PathBuf::from("/tmp").join(format!("herdr-world-bridge-{}", effective_user_id()))
+}
+
+#[cfg(not(unix))]
+fn runtime_bridge_lock_root() -> PathBuf {
+    std::env::temp_dir().join("herdr-world-bridge")
 }
 
 fn bridge_router(state: BridgeState, static_dir: PathBuf) -> Router {
@@ -6030,6 +6068,82 @@ mod tests {
     use std::future::IntoFuture;
     use std::io::Read;
     use tower::ServiceExt;
+
+    #[test]
+    fn runtime_bridge_lock_rejects_a_second_owner_for_the_same_daemon() {
+        let suffix = format!("{}-runtime-bridge", std::process::id());
+        let first_socket = std::env::temp_dir().join(format!("{suffix}-first.sock"));
+        let other_socket = std::env::temp_dir().join(format!("{suffix}-other.sock"));
+        let first_lock_path = runtime_bridge_lock_path(&first_socket);
+        let other_lock_path = runtime_bridge_lock_path(&other_socket);
+        let _ = std::fs::remove_file(&first_lock_path);
+        let _ = std::fs::remove_file(&other_lock_path);
+
+        let first = acquire_runtime_bridge_lock(&first_socket).unwrap();
+        let duplicate = match acquire_runtime_bridge_lock(&first_socket) {
+            Ok(_) => panic!("duplicate runtime bridge unexpectedly acquired the lock"),
+            Err(error) => error,
+        };
+        let other = acquire_runtime_bridge_lock(&other_socket).unwrap();
+
+        assert_eq!(duplicate.kind(), ErrorKind::AddrInUse);
+        assert!(duplicate.to_string().contains("another Herdr World bridge"));
+        assert_ne!(first_lock_path, other_lock_path);
+
+        drop(other);
+        drop(first);
+        std::fs::remove_file(first_lock_path).unwrap();
+        std::fs::remove_file(other_lock_path).unwrap();
+    }
+
+    #[test]
+    fn runtime_bridge_lock_path_avoids_the_socket_directory_and_is_deterministic() {
+        let socket = std::env::temp_dir()
+            .join(format!("herdr-world-lock-path-{}", std::process::id()))
+            .join("herdr-client.sock");
+        let other_socket = socket.with_file_name("other-client.sock");
+
+        let first = runtime_bridge_lock_path(&socket);
+        let lock_root = runtime_bridge_lock_root();
+        assert_eq!(first, runtime_bridge_lock_path(&socket));
+        assert_ne!(first.parent(), socket.parent());
+        assert_eq!(first.parent(), Some(lock_root.as_path()));
+        assert_ne!(first, runtime_bridge_lock_path(&other_socket));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn runtime_bridge_lock_allows_an_accessible_socket_in_a_readonly_directory() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let socket_dir = std::env::temp_dir().join(format!(
+            "herdr-world-readonly-socket-{}-{unique}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&socket_dir).unwrap();
+        let socket = socket_dir.join("herdr-client.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).unwrap();
+        std::fs::set_permissions(&socket_dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+
+        let client = std::os::unix::net::UnixStream::connect(&socket).unwrap();
+        let lock_path = runtime_bridge_lock_path(&socket);
+        let _ = std::fs::remove_file(&lock_path);
+        let lock = acquire_runtime_bridge_lock(&socket).unwrap();
+
+        assert_ne!(lock_path.parent(), socket.parent());
+
+        drop(lock);
+        std::fs::remove_file(lock_path).unwrap();
+        drop(client);
+        drop(listener);
+        std::fs::set_permissions(&socket_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        std::fs::remove_file(socket).unwrap();
+        std::fs::remove_dir(socket_dir).unwrap();
+    }
 
     #[tokio::test]
     async fn static_world_entry_routes_receive_revalidation_cache_policy() {

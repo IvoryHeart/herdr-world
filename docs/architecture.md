@@ -13,8 +13,10 @@ browser
   └─ host profile N ─HTTP/WebSocket─> bridge N ─local socket─> Herdr N
 ```
 
-Every bridge is host-local to exactly one selected Herdr runtime. Federation happens in the
-browser. A bridge never discovers, proxies, routes to, or controls another bridge.
+Every bridge is host-local to exactly one selected Herdr runtime, and one live bridge process owns
+that runtime's client socket. A second current bridge targeting the same socket fails startup; use
+the existing bridge for additional browsers or select a different Herdr session. Federation happens
+in the browser. A bridge never discovers, proxies, routes to, or controls another bridge.
 
 ## Browser boundaries
 

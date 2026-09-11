@@ -59,6 +59,11 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Preserved exact shell terminal selection across Spaces, Office, Graph and Tree, kept split-pane
+  handoffs on the pane the user chose, and rejected a second bridge targeting the same Herdr
+  runtime before it could cause partial `Attached elsewhere` terminal failures.
+  ([#86](https://github.com/IvoryHeart/herdr-world/pull/86))
+
 - Restored native command cancellation cleanup for detached process groups and froze
   both grader inputs in prepared pilot workspaces. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 

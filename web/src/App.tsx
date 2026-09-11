@@ -1557,6 +1557,7 @@ export function App() {
       target: {
         kind: agent.kind,
         targetKey: agent.targetKey,
+        selectionKey: agent.selectionKey,
         agentKey: agent.agentKey,
         bridgeId: agent.bridgeId,
         paneId: agent.paneId,
@@ -1629,6 +1630,7 @@ export function App() {
     selectWorldAgent({
       kind: "agent",
       targetKey: agent.key,
+      selectionKey: agent.key,
       agentKey: agent.key,
       bridgeId: agent.hostKey,
       paneId: pane.pane_id,
@@ -1643,7 +1645,7 @@ export function App() {
     stale: boolean;
     occupantAgentKey?: string;
     completionAgentKeys?: readonly string[];
-  }) => {
+  }, preferredPaneId?: string) => {
     cancelWorldCanvasSelection();
     const runtime = bridge.getRuntime(desk.hostKey);
     const source = worldSourcesInScope.find(
@@ -1660,9 +1662,33 @@ export function App() {
     const panes = source?.snapshot?.panes.filter(
       ({ tab_id }) => tab_id === desk.tabRef.nativeTargetId,
     ) ?? [];
-    const pane = occupant
-      ? panes.find(({ pane_id }) => pane_id === occupant.currentPaneRef.nativeTargetId) ?? null
-      : panes.find(({ focused }) => focused) ?? panes[0] ?? null;
+    const preferredPane = preferredPaneId !== undefined && source?.snapshot
+      ? choosePaneForTab(source.snapshot, desk.tabRef.nativeTargetId, preferredPaneId)
+      : null;
+    const pane = preferredPaneId !== undefined
+      ? panes.find(({ pane_id }) => pane_id === preferredPane) ?? null
+      : occupant
+        ? panes.find(({ pane_id }) => pane_id === occupant.currentPaneRef.nativeTargetId) ?? null
+        : panes.find(({ focused }) => focused) ?? panes[0] ?? null;
+    if (preferredPaneId !== undefined && !pane) {
+      setSelectedBridgeId(desk.hostKey);
+      setWorldHandoffStatus(
+        `That terminal is no longer available. ${activeWorldTheme.label} remains open.`,
+      );
+      return;
+    }
+    const selectedAgent = pane
+      ? worldProjection.roster.find(
+          ({ agent }) =>
+            agent.hostKey === desk.hostKey &&
+            agent.currentPaneRef.nativeTargetId === pane.pane_id,
+        )?.agent ?? null
+      : null;
+    const selectionKey = pane
+      ? selectedAgent?.key ?? qualifiedRuntimeKey(
+          qualifyRuntimeTarget(desk.hostKey, "terminal", pane.terminal_id),
+        )
+      : desk.key;
     const admissionReady = runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"]);
     const admissionPending = worldConversationAdmissionPending(
       runtime,
@@ -1683,7 +1709,7 @@ export function App() {
       admissionPending,
     });
     setSelectedBridgeId(desk.hostKey);
-    setWorldSelectedKey(occupant?.key ?? desk.key);
+    setWorldSelectedKey(selectionKey);
     setWorldHandoffStatus(null);
     if (
       desk.stale ||
@@ -1694,13 +1720,14 @@ export function App() {
     ) {
       return;
     }
-    if (occupant?.semanticStatus === "done") {
-      markWorldCompletionSeen(occupant.key);
+    if (selectedAgent?.semanticStatus === "done") {
+      markWorldCompletionSeen(selectedAgent.key);
     }
     selectWorldAgent({
       kind: "desk",
       targetKey: desk.key,
-      agentKey: occupant?.key ?? null,
+      selectionKey,
+      agentKey: selectedAgent?.key ?? null,
       bridgeId: desk.hostKey,
       paneId: pane.pane_id,
       generationKey: runtime.generationKey,
@@ -1782,9 +1809,11 @@ export function App() {
       return true;
     }
     setSelectedBridgeId(selectedRef.bridgeId);
-    setWorldSelectedKey(
-      agentEntry?.agent.key ?? deskEntry?.desk.occupantAgentKey ?? deskEntry?.desk.key ?? null,
-    );
+    setWorldSelectedKey(agentEntry?.agent.key ?? (selectedPane
+      ? qualifiedRuntimeKey(
+          qualifyRuntimeTarget(selectedRef.bridgeId, "terminal", selectedPane.terminal_id),
+        )
+      : deskEntry?.desk.key ?? null));
     setWorldHandoffStatus(null);
     return true;
   }, [selectedPaneRefState, worldProjection, worldSourcesInScope]);
@@ -1846,7 +1875,7 @@ export function App() {
       return;
     }
     if (deskEntry) {
-      selectWorldProjectedDesk(deskEntry.desk);
+      selectWorldProjectedDesk(deskEntry.desk, pane.pane_id);
       return;
     }
     pendingWorldPaneSelectionRef.current = {
@@ -1885,7 +1914,7 @@ export function App() {
     );
     if (deskEntry) {
       pendingWorldPaneSelectionRef.current = null;
-      selectWorldProjectedDesk(deskEntry.desk);
+      selectWorldProjectedDesk(deskEntry.desk, pending.paneId);
     }
   }, [
     activeSurface.id,
@@ -1986,7 +2015,28 @@ export function App() {
       openWorldTargetInSpaces(officeAgentHandoffRequest(agentEntry.agent));
       return;
     }
-    openWorldTabInSpaces(bridgeId, pane.tab_id);
+    const runtime = bridge.getRuntime(bridgeId);
+    const state = runtime && connectionStates[runtime.id]?.connectionKey === runtime.generationKey
+      ? connectionStates[runtime.id]
+      : null;
+    const currentPane = state?.snapshot?.panes.find(
+      ({ pane_id }) => pane_id === pane.pane_id,
+    ) ?? null;
+    if (
+      !runtime ||
+      !currentPane ||
+      !runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"])
+    ) {
+      setWorldHandoffStatus(
+        `That terminal is no longer available. ${activeWorldTheme.label} remains open.`,
+      );
+      return;
+    }
+    setWorldHandoffStatus(null);
+    clearWorldConversations();
+    navigatePrimaryView("spaces");
+    openPane(bridgeId, currentPane);
+    requestTerminalFocus();
   };
   const openWorldConversationInSpaces = (windowId: string, bridgeId: BridgeId, pane: PaneInfo) => {
     cancelWorldCanvasSelection();
@@ -2087,6 +2137,7 @@ export function App() {
     worldConversationController.open({
       kind: current.node.kind === "agent" ? "agent" : "pane",
       targetKey: current.node.selectionKey,
+      selectionKey: current.node.selectionKey,
       agentKey,
       bridgeId: current.runtime.id,
       paneId: current.pane.pane_id,
