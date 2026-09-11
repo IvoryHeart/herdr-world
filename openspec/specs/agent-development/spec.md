@@ -49,6 +49,10 @@ policy SHALL continue to apply. Local installation SHALL preserve unrelated sett
 - **WHEN** a native task is recorded with the optional task helper
 - **THEN** its explicit parent resolves to a commit, and subsequent records preserve the starting revision while that branch advances
 
+#### Scenario: Command cancellation
+- **WHEN** a native command is interrupted or reaches its explicit deadline
+- **THEN** its detached process group and captured descendants are terminated before the command reports completion
+
 ### Requirement: Proportionate delegation and recovery
 The lead SHALL select roles for concrete work, reuse native histories for scoped
 follow-ups and consume native completion events. Small tasks SHALL NOT require a
@@ -104,6 +108,10 @@ are used. A local eval workspace SHALL NOT be described as an isolated security 
 #### Scenario: Combined knowledge and skill pilot
 - **WHEN** OpenWiki and Skillgrade are tried on the same debugging task
 - **THEN** knowledge generation and maintenance are measured separately from debugging and grading, and a combined result does not establish either tool's individual benefit
+
+#### Scenario: Prepared pilot inputs
+- **WHEN** a pilot workspace is prepared
+- **THEN** every grader used by its generated evaluation is copied into that workspace and the evaluation invokes the copied snapshot rather than a live checkout file
 
 ### Requirement: PR delivery boundary
 Delivery SHALL stop at an open ready PR under AGENTS.md. An optional draft SHALL remain

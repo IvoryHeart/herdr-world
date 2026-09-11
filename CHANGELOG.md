@@ -59,6 +59,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Restored native command cancellation cleanup for detached process groups and froze
+  both grader inputs in prepared pilot workspaces. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
+
 - Updated transitive XML parsers and the development YAML parser to patched
   versions, restoring the dependency security audit.
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))

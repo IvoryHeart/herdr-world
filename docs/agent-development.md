@@ -140,8 +140,9 @@ A small happy-path fixture cannot establish readability or behavior at every sca
 
 Observe command duration. A slow but progressing check is not a code defect, and a
 suite must have enough time to finish on the actual machine. Diagnose an infrastructure
-failure before changing code or test expectations. Native process cancellation and
-any explicit task budget still apply; this repo adds no phase or fingerprint timeout.
+failure before changing code or test expectations. Native process cancellation
+terminates the command's detached process group and captured descendants; any
+explicit task budget still applies. This repo adds no phase or fingerprint timeout.
 
 Independent review and relevant checks establish delivery readiness. Resolve concrete
 findings and preserve remaining limitations. Use ordinary Git/GitHub tools to open a

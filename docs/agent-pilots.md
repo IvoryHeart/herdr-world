@@ -84,7 +84,9 @@ node evals/pilots/prepare.mjs
 ```
 
 The command prints an ignored prepared directory containing eval.yaml, source hashes,
-allocation and a separate controls directory. From that directory invoke the pinned
+allocation, immutable snapshots of both grader files and a separate controls directory.
+The generated grader command points at those snapshots, so later checkout edits cannot
+change an already-prepared run. From that directory invoke the pinned
 Skillgrade CLI by its absolute path:
 
 ```bash
