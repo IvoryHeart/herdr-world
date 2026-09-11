@@ -98,15 +98,18 @@ export function createdWorkspaceId(result: CommandResult): string | null {
 
 export function createCommands(httpUrl: BridgeHttpUrl = sameOriginHttpUrl) {
   const api = {
-    createWorkspace: (label?: string) =>
-      runCommand(httpUrl, "workspace.create", {
+    createWorkspace: (options: { label?: string; sourceWorkspaceId?: string } | string = {}) => {
+      const normalized = typeof options === "string" ? { sourceWorkspaceId: options } : options;
+      return runCommand(httpUrl, "workspace.create", {
         focus: true,
-        ...(label?.trim() ? { label: label.trim() } : {}),
-      }),
+        ...(normalized.label?.trim() ? { label: normalized.label.trim() } : {}),
+        ...(normalized.sourceWorkspaceId ? { source_workspace_id: normalized.sourceWorkspaceId } : {}),
+      });
+    },
     renameWorkspace: (workspaceId: string, label: string | null) =>
       runCommand(httpUrl, "workspace.rename", { workspace_id: workspaceId, label }),
-    closeWorkspace: (workspaceId: string) =>
-      runCommand(httpUrl, "workspace.close", { workspace_id: workspaceId }),
+    closeWorkspace: (workspaceId: string, closeGroup: boolean = false) =>
+      runCommand(httpUrl, "workspace.close", { workspace_id: workspaceId, close_group: closeGroup }),
     focusWorkspace: (workspaceId: string) =>
       runCommand(httpUrl, "workspace.focus", { workspace_id: workspaceId }),
     moveWorkspaceBlock: (workspaceIds: string[], beforeWorkspaceId: string | null) =>

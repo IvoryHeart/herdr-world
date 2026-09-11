@@ -1,3 +1,5 @@
+import { CommandDraftContext, createCommandDraftStore } from "./commandDrafts";
+import { linkedWorkspaceLabels } from "./workspaceClose";
 import {
   Activity,
   Archive,
@@ -93,12 +95,14 @@ import { fetchLauncherPresets, supportsLauncherPresets } from "./launcherPresets
 import type { LauncherPresetsResponse } from "./launcherPresets";
 import {
   DEFAULT_MOBILE_COMMAND_ENTER_NEWLINE,
+  DEFAULT_MOBILE_COMMAND_FOCUS_AFTER_SUBMIT,
   DEFAULT_MOBILE_COMMAND_EXPANDING_INPUT,
   DEFAULT_MOBILE_KEYBOARD_HIDE_REFIT,
   DEFAULT_MOBILE_LONG_PRESS_BEHAVIOR,
   DEFAULT_MOBILE_TOUCH_SELECTION_ENDPOINT_TIMEOUT_MS,
   DEFAULT_MOBILE_TERMINAL_TAP_TARGET,
   parseMobileCommandEnterNewline,
+  parseMobileCommandFocusAfterSubmit,
   parseMobileCommandExpandingInput,
   parseMobileKeyboardHideRefit,
   parseMobileLongPressBehavior,
@@ -217,9 +221,19 @@ import {
   parseTerminalOutputCoalesceMs,
 } from "./terminalOutputCoalescing";
 import {
+  DEFAULT_DESKTOP_COMMAND_COMPOSER,
+  DEFAULT_DESKTOP_COMMAND_ENTER_NEWLINE,
   DEFAULT_TERMINAL_FONT_SIZE_PX,
+  defaultTerminalCursorBlink,
+  parseDesktopCommandComposer,
+  parseDesktopCommandEnterNewline,
+  parseTerminalCursorBlink,
   parseTerminalFontSizePx,
 } from "./terminalPrefs";
+import {
+  DEFAULT_AUTO_RENAME_UPLOAD_CONFLICTS,
+  parseAutoRenameUploadConflicts,
+} from "./uploadPrefs";
 import {
   aggregateStatus,
   basename,
@@ -474,6 +488,8 @@ type DialogState = {
   label: string;
   clearable?: boolean;
   noun?: "room";
+  sourceWorkspaceId?: string;
+  linkedWorkspaceLabels?: string[];
 };
 type DisplayPrefs = {
   hostScope: HostScope;
@@ -496,7 +512,11 @@ type DisplayPrefs = {
   notesPanelOpen: boolean;
   sidebarOpen: boolean;
   terminalFontSizePx: number;
+  terminalCursorBlink: boolean;
+  desktopCommandComposer: boolean;
+  desktopCommandEnterNewline: boolean;
   terminalScreenReaderText: boolean;
+  autoRenameUploadConflicts: boolean;
   terminalInputTransport: TerminalInputTransport;
   terminalInputBatchDelayMs: number;
   terminalOutputCoalesceMs: number;
@@ -509,6 +529,7 @@ type DisplayPrefs = {
   mobileKeyboardHideRefit: boolean;
   mobileCommandExpandingInput: boolean;
   mobileCommandEnterNewline: boolean;
+  mobileCommandFocusAfterSubmit: boolean;
 };
 type SharedNavigationPrefs = {
   selectedBridgeId: BridgeId | null;
@@ -560,7 +581,11 @@ function readDisplayPrefs(): DisplayPrefs {
     notesPanelOpen: false,
     sidebarOpen: true,
     terminalFontSizePx: DEFAULT_TERMINAL_FONT_SIZE_PX,
+    terminalCursorBlink: defaultTerminalCursorBlink(),
+    desktopCommandComposer: DEFAULT_DESKTOP_COMMAND_COMPOSER,
+    desktopCommandEnterNewline: DEFAULT_DESKTOP_COMMAND_ENTER_NEWLINE,
     terminalScreenReaderText: DEFAULT_TERMINAL_SCREEN_READER_TEXT,
+    autoRenameUploadConflicts: DEFAULT_AUTO_RENAME_UPLOAD_CONFLICTS,
     terminalInputTransport: DEFAULT_TERMINAL_INPUT_TRANSPORT,
     terminalInputBatchDelayMs: DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
     terminalOutputCoalesceMs: DEFAULT_TERMINAL_OUTPUT_COALESCE_MS,
@@ -573,6 +598,7 @@ function readDisplayPrefs(): DisplayPrefs {
     mobileKeyboardHideRefit: DEFAULT_MOBILE_KEYBOARD_HIDE_REFIT,
     mobileCommandExpandingInput: DEFAULT_MOBILE_COMMAND_EXPANDING_INPUT,
     mobileCommandEnterNewline: DEFAULT_MOBILE_COMMAND_ENTER_NEWLINE,
+    mobileCommandFocusAfterSubmit: DEFAULT_MOBILE_COMMAND_FOCUS_AFTER_SUBMIT,
   };
   try {
     const raw = window.localStorage.getItem(DISPLAY_PREFS_KEY);
@@ -756,9 +782,25 @@ function parseDisplayPrefsValue(
       typeof parsed.notesPanelOpen === "boolean" ? parsed.notesPanelOpen : fallback.notesPanelOpen,
     sidebarOpen,
     terminalFontSizePx: parseTerminalFontSizePx(parsed.terminalFontSizePx),
+    terminalCursorBlink: parseTerminalCursorBlink(
+      parsed.terminalCursorBlink,
+      fallback.terminalCursorBlink,
+    ),
+    desktopCommandComposer: parseDesktopCommandComposer(
+      parsed.desktopCommandComposer,
+      fallback.desktopCommandComposer,
+    ),
+    desktopCommandEnterNewline: parseDesktopCommandEnterNewline(
+      parsed.desktopCommandEnterNewline,
+      fallback.desktopCommandEnterNewline,
+    ),
     terminalScreenReaderText: parseTerminalScreenReaderText(
       parsed.terminalScreenReaderText,
       fallback.terminalScreenReaderText,
+    ),
+    autoRenameUploadConflicts: parseAutoRenameUploadConflicts(
+      parsed.autoRenameUploadConflicts,
+      fallback.autoRenameUploadConflicts,
     ),
     terminalInputTransport: parseTerminalInputTransport(parsed.terminalInputTransport),
     terminalInputBatchDelayMs: parseTerminalInputBatchDelayMs(parsed.terminalInputBatchDelayMs),
@@ -781,6 +823,9 @@ function parseDisplayPrefsValue(
     ),
     mobileCommandEnterNewline: parseMobileCommandEnterNewline(
       parsed.mobileCommandEnterNewline,
+    ),
+    mobileCommandFocusAfterSubmit: parseMobileCommandFocusAfterSubmit(
+      parsed.mobileCommandFocusAfterSubmit,
     ),
   };
 }
@@ -1011,6 +1056,15 @@ function usePointerDragResize(
 }
 
 export function App() {
+  const [commandDrafts] = useState(createCommandDraftStore);
+  return (
+    <CommandDraftContext.Provider value={commandDrafts}>
+      <AppContent commandDrafts={commandDrafts} />
+    </CommandDraftContext.Provider>
+  );
+}
+
+function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof createCommandDraftStore> }) {
   const bridge = useHostRegistry();
   const {
     activeSurface,
@@ -1208,8 +1262,20 @@ export function App() {
   const [terminalFontSizePx, setTerminalFontSizePx] = useState(
     initialPrefs.terminalFontSizePx,
   );
+  const [terminalCursorBlink, setTerminalCursorBlink] = useState(
+    initialPrefs.terminalCursorBlink,
+  );
+  const [desktopCommandComposer, setDesktopCommandComposer] = useState(
+    initialPrefs.desktopCommandComposer,
+  );
+  const [desktopCommandEnterNewline, setDesktopCommandEnterNewline] = useState(
+    initialPrefs.desktopCommandEnterNewline,
+  );
   const [terminalScreenReaderText, setTerminalScreenReaderText] = useState(
     initialPrefs.terminalScreenReaderText,
+  );
+  const [autoRenameUploadConflicts, setAutoRenameUploadConflicts] = useState(
+    initialPrefs.autoRenameUploadConflicts,
   );
   const [terminalInputTransport, setTerminalInputTransport] = useState(
     initialPrefs.terminalInputTransport,
@@ -1245,6 +1311,9 @@ export function App() {
   );
   const [mobileCommandEnterNewline, setMobileCommandEnterNewline] = useState(
     initialPrefs.mobileCommandEnterNewline,
+  );
+  const [mobileCommandFocusAfterSubmit, setMobileCommandFocusAfterSubmit] = useState(
+    initialPrefs.mobileCommandFocusAfterSubmit,
   );
   const [launchTarget, setLaunchTarget] = useState<ScopedLaunchTarget | null>(null);
   const [busy, setBusy] = useState(false);
@@ -1342,7 +1411,11 @@ export function App() {
       setSelectedPanesByBridgeId(sharedNavigationPrefs.selectedPanesByBridgeId);
       setActiveWorkspacesByBridgeId(sharedNavigationPrefs.activeWorkspacesByBridgeId);
       setTerminalFontSizePx(prefs.terminalFontSizePx);
+      setTerminalCursorBlink(prefs.terminalCursorBlink);
+      setDesktopCommandComposer(prefs.desktopCommandComposer);
+      setDesktopCommandEnterNewline(prefs.desktopCommandEnterNewline);
       setTerminalScreenReaderText(prefs.terminalScreenReaderText);
+      setAutoRenameUploadConflicts(prefs.autoRenameUploadConflicts);
       setTerminalInputTransport(prefs.terminalInputTransport);
       setTerminalInputBatchDelayMs(prefs.terminalInputBatchDelayMs);
       setTerminalOutputCoalesceMs(prefs.terminalOutputCoalesceMs);
@@ -1355,6 +1428,7 @@ export function App() {
       setMobileKeyboardHideRefit(prefs.mobileKeyboardHideRefit);
       setMobileCommandExpandingInput(prefs.mobileCommandExpandingInput);
       setMobileCommandEnterNewline(prefs.mobileCommandEnterNewline);
+      setMobileCommandFocusAfterSubmit(prefs.mobileCommandFocusAfterSubmit);
       setDisplayPrefsLoaded(true);
       },
     );
@@ -2084,6 +2158,14 @@ export function App() {
       ),
     [bridge, runtimeIsAdmitted],
   );
+  useEffect(() => {
+    for (const { runtime, snapshot, loadState } of bridgeViews) {
+      if (runtime.canConnect && loadState === "ready" && snapshot) {
+        commandDrafts.retainPanes(runtime.id, snapshot.panes.map((pane) => pane.pane_id));
+      }
+    }
+  }, [bridgeViews, commandDrafts]);
+
   const pinnedAgentKeys = useMemo(
     () => buildAgentPinKeySet(bridgeViews, agentPinsStates),
     [agentPinsStates, bridgeViews],
@@ -2678,7 +2760,11 @@ export function App() {
       notesPanelOpen,
       sidebarOpen,
       terminalFontSizePx,
+      terminalCursorBlink,
+      desktopCommandComposer,
+      desktopCommandEnterNewline,
       terminalScreenReaderText,
+      autoRenameUploadConflicts,
       terminalInputTransport,
       terminalInputBatchDelayMs,
       terminalOutputCoalesceMs,
@@ -2691,6 +2777,7 @@ export function App() {
       mobileKeyboardHideRefit,
       mobileCommandExpandingInput,
       mobileCommandEnterNewline,
+      mobileCommandFocusAfterSubmit,
     });
   }, [
     displayPrefsLoaded,
@@ -2714,7 +2801,11 @@ export function App() {
     notesPanelOpen,
     sidebarOpen,
     terminalFontSizePx,
+    terminalCursorBlink,
+    desktopCommandComposer,
+    desktopCommandEnterNewline,
     terminalScreenReaderText,
+    autoRenameUploadConflicts,
     terminalInputTransport,
     terminalInputBatchDelayMs,
     terminalOutputCoalesceMs,
@@ -2727,6 +2818,7 @@ export function App() {
     mobileKeyboardHideRefit,
     mobileCommandExpandingInput,
     mobileCommandEnterNewline,
+    mobileCommandFocusAfterSubmit,
   ]);
 
   useEffect(() => {
@@ -4596,7 +4688,10 @@ export function App() {
     if (key === "rename") {
       setDialog({ mode: "rename", kind, bridgeId, id, label, clearable });
     } else if (key === "close") {
-      setDialog({ mode: "close", kind, bridgeId, id, label });
+      const linkedLabels = kind === "space"
+        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], id)
+        : [];
+      setDialog({ mode: "close", kind, bridgeId, id, label, linkedWorkspaceLabels: linkedLabels });
     } else if (key === "newtab") {
       setSelectedBridgeId(bridgeId);
       setActiveWorkspaceRefState({ bridgeId, workspaceId: id });
@@ -4678,7 +4773,8 @@ export function App() {
     void exec(
       runtime,
       { kind: "workspace", id: "new", command: "workspace.create" },
-      (routedCommands) => routedCommands.createWorkspace(value),
+      (routedCommands) =>
+        routedCommands.createWorkspace({ label: value, sourceWorkspaceId: dialog.sourceWorkspaceId }),
       false,
       (result) => {
         const workspaceId = createdWorkspaceId(result);
@@ -4736,7 +4832,7 @@ export function App() {
     const action =
       kind === "space"
         ? (routedCommands: ReturnType<typeof createCommands>) =>
-            routedCommands.closeWorkspace(id)
+            routedCommands.closeWorkspace(id, Boolean(dialog.linkedWorkspaceLabels?.length))
         : kind === "tab"
           ? (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closeTab(id)
           : (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closePane(id);
@@ -4851,14 +4947,19 @@ export function App() {
     onOpenSeatLauncher: ({ bridgeId, workspaceId }) => {
       setLaunchTarget({ mode: "tab", workspaceId, bridgeId });
     },
-    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, label }) => {
+    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, sourceWorkspaceId, label }) => {
+      const linkedLabels = mode === "close"
+        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], workspaceId)
+        : [];
       setDialog({
         mode,
         kind: "space",
         bridgeId,
         id: workspaceId,
+        sourceWorkspaceId,
         label,
         noun: "room",
+        linkedWorkspaceLabels: linkedLabels,
       });
     },
   });
@@ -5076,7 +5177,7 @@ export function App() {
               ? void exec(
                   selectedRuntime,
                   { kind: "workspace", id: "new", command: "workspace.create" },
-                  (commands) => commands.createWorkspace(),
+                  (commands) => commands.createWorkspace({ sourceWorkspaceId: activeSpace?.workspace_id }),
                   true,
                 )
               : setError("Connection is not ready")
@@ -5284,6 +5385,7 @@ export function App() {
         </header>
         {showSplit && splitCells && selectedRuntime && selectedConnectionState ? (
           <SplitGrid
+            bridgeId={selectedRuntime?.id ?? ""}
             cells={splitCells}
             selectedPaneId={selectedPane?.pane_id ?? null}
             onSelectPane={(pane) => {
@@ -5297,14 +5399,19 @@ export function App() {
             refitToken={refitToken}
             focusToken={terminalFocusToken}
             touchInput={isTouchInput}
+            desktopCommandComposer={desktopCommandComposer}
+            desktopCommandEnterNewline={desktopCommandEnterNewline}
+            terminalCursorBlink={terminalCursorBlink}
             terminalFontSizePx={terminalFontSizePx}
             terminalScreenReaderText={terminalScreenReaderText}
+            autoRenameUploadConflicts={autoRenameUploadConflicts}
             mobileControlsScalePercent={mobileControlsScalePercent}
             mobileTapTarget={mobileTerminalTapTarget}
             mobileLongPressBehavior={mobileLongPressBehavior}
             mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
             mobileCommandExpandingInput={mobileCommandExpandingInput}
             mobileCommandEnterNewline={mobileCommandEnterNewline}
+            mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
             terminalInputTransport={terminalInputTransport}
             terminalInputBatchDelayMs={terminalInputBatchDelayMs}
             terminalOutputCoalesceMs={terminalOutputCoalesceMs}
@@ -5317,6 +5424,7 @@ export function App() {
           />
         ) : renderTerminal ? (
           <TerminalView
+            bridgeId={selectedRuntime?.id ?? ""}
             pane={selectedTerminalSession?.attachEnabled ? selectedPane : null}
             connectionKey={selectedTerminalSession?.sessionKey ?? "disconnected"}
             resumeToken={selectedRuntime?.resumeToken ?? 0}
@@ -5329,15 +5437,19 @@ export function App() {
             autoFocus={!isTouchInput}
             scrollSensitivity={isTouchInput ? 2 : 0.4}
             mobileControls={isTouchInput}
-            cursorBlink={!isTouchInput}
+            desktopCommandComposer={desktopCommandComposer}
+            desktopCommandEnterNewline={desktopCommandEnterNewline}
+            cursorBlink={!isTouchInput && terminalCursorBlink}
             terminalFontSizePx={terminalFontSizePx}
             terminalScreenReaderText={terminalScreenReaderText}
+            autoRenameUploadConflicts={autoRenameUploadConflicts}
             mobileControlsScalePercent={mobileControlsScalePercent}
             mobileTapTarget={mobileTerminalTapTarget}
             mobileLongPressBehavior={mobileLongPressBehavior}
             mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
             mobileCommandExpandingInput={mobileCommandExpandingInput}
             mobileCommandEnterNewline={mobileCommandEnterNewline}
+            mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
             terminalInputTransport={terminalInputTransport}
             terminalInputBatchDelayMs={terminalInputBatchDelayMs}
             terminalOutputCoalesceMs={terminalOutputCoalesceMs}
@@ -5518,9 +5630,9 @@ export function App() {
 
       {dialog?.mode === "close" ? (
         <ConfirmDialog
-          title={closeCopy(dialog.kind, dialog.noun).title}
-          message={closeCopy(dialog.kind, dialog.noun).message}
-          confirmLabel={closeCopy(dialog.kind, dialog.noun).confirm}
+          title={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).title}
+          message={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).message}
+          confirmLabel={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).confirm}
           busy={busy}
           onCancel={() => setDialog(null)}
           onConfirm={confirmClose}
@@ -5584,8 +5696,16 @@ export function App() {
           onMultiHostSpaceSelection={setMultiHostSpaceSelection}
           terminalFontSizePx={terminalFontSizePx}
           onTerminalFontSizePx={setTerminalFontSizePx}
+          terminalCursorBlink={terminalCursorBlink}
+          onTerminalCursorBlink={setTerminalCursorBlink}
+          desktopCommandComposer={desktopCommandComposer}
+          onDesktopCommandComposer={setDesktopCommandComposer}
+          desktopCommandEnterNewline={desktopCommandEnterNewline}
+          onDesktopCommandEnterNewline={setDesktopCommandEnterNewline}
           terminalScreenReaderText={terminalScreenReaderText}
           onTerminalScreenReaderText={setTerminalScreenReaderText}
+          autoRenameUploadConflicts={autoRenameUploadConflicts}
+          onAutoRenameUploadConflicts={setAutoRenameUploadConflicts}
           terminalInputTransport={terminalInputTransport}
           onTerminalInputTransport={setTerminalInputTransport}
           terminalInputBatchDelayMs={terminalInputBatchDelayMs}
@@ -5609,7 +5729,9 @@ export function App() {
           mobileCommandExpandingInput={mobileCommandExpandingInput}
           onMobileCommandExpandingInput={setMobileCommandExpandingInput}
           mobileCommandEnterNewline={mobileCommandEnterNewline}
+          mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
           onMobileCommandEnterNewline={setMobileCommandEnterNewline}
+          onMobileCommandFocusAfterSubmit={setMobileCommandFocusAfterSubmit}
           showMobileKeyboardHideRefit={showMobileKeyboardHideRefit}
           mobileKeyboardHideRefit={mobileKeyboardHideRefit}
           onMobileKeyboardHideRefit={setMobileKeyboardHideRefit}
@@ -6725,20 +6847,26 @@ function hasOpenModal() {
 }
 
 function SplitGrid({
+  bridgeId,
   cells,
   selectedPaneId,
   onSelectPane,
   refitToken,
   focusToken,
   touchInput,
+  desktopCommandComposer,
+  desktopCommandEnterNewline,
+  terminalCursorBlink,
   terminalFontSizePx,
   terminalScreenReaderText,
+  autoRenameUploadConflicts,
   mobileControlsScalePercent,
   mobileTapTarget,
   mobileLongPressBehavior,
   mobileTouchSelectionEndpointTimeoutMs,
   mobileCommandExpandingInput,
   mobileCommandEnterNewline,
+  mobileCommandFocusAfterSubmit,
   terminalInputTransport,
   terminalInputBatchDelayMs,
   terminalOutputCoalesceMs,
@@ -6749,20 +6877,26 @@ function SplitGrid({
   httpUrl,
   wsUrl,
 }: {
+  bridgeId: string;
   cells: { pane: PaneInfo; style: CSSProperties }[];
   selectedPaneId: string | null;
   onSelectPane: (pane: PaneInfo) => void;
   refitToken: number;
   focusToken: number;
   touchInput: boolean;
+  desktopCommandComposer: boolean;
+  desktopCommandEnterNewline: boolean;
+  terminalCursorBlink: boolean;
   terminalFontSizePx: number;
   terminalScreenReaderText: boolean;
+  autoRenameUploadConflicts: boolean;
   mobileControlsScalePercent: number;
   mobileTapTarget: MobileTerminalTapTarget;
   mobileLongPressBehavior: MobileLongPressBehavior;
   mobileTouchSelectionEndpointTimeoutMs: MobileTouchSelectionEndpointTimeoutMs;
   mobileCommandExpandingInput: boolean;
   mobileCommandEnterNewline: boolean;
+  mobileCommandFocusAfterSubmit: boolean;
   terminalInputTransport: TerminalInputTransport;
   terminalInputBatchDelayMs: number;
   terminalOutputCoalesceMs: number;
@@ -6793,6 +6927,7 @@ function SplitGrid({
             onPointerDown={() => onSelectPane(pane)}
           >
             <TerminalView
+              bridgeId={bridgeId}
               pane={terminalSession?.attachEnabled ? pane : null}
               connectionKey={terminalSession?.sessionKey ?? "disconnected"}
               resumeToken={resumeToken}
@@ -6805,15 +6940,19 @@ function SplitGrid({
               autoFocus={selected && !touchInput}
               scrollSensitivity={touchInput ? 2 : 0.4}
               mobileControls={selected && touchInput}
-              cursorBlink={!touchInput}
+              desktopCommandComposer={selected && !touchInput && desktopCommandComposer}
+              desktopCommandEnterNewline={desktopCommandEnterNewline}
+              cursorBlink={!touchInput && terminalCursorBlink}
               terminalFontSizePx={terminalFontSizePx}
               terminalScreenReaderText={terminalScreenReaderText}
+              autoRenameUploadConflicts={autoRenameUploadConflicts}
               mobileControlsScalePercent={mobileControlsScalePercent}
               mobileTapTarget={mobileTapTarget}
               mobileLongPressBehavior={mobileLongPressBehavior}
               mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
               mobileCommandExpandingInput={mobileCommandExpandingInput}
               mobileCommandEnterNewline={mobileCommandEnterNewline}
+              mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
               terminalInputTransport={terminalInputTransport}
               terminalInputBatchDelayMs={terminalInputBatchDelayMs}
               terminalOutputCoalesceMs={terminalOutputCoalesceMs}
@@ -10374,15 +10513,20 @@ export function menuItems(
   return paneItems;
 }
 
-function closeCopy(kind: MenuKind, noun?: "room") {
+export function closeCopy(kind: MenuKind, linkedLabels: readonly string[] = []) {
+  if (kind === "space" && linkedLabels.length > 0) {
+    return {
+      title: "Close workspace group?",
+      message: `This closes this space and all linked worktree spaces (${linkedLabels.join(", ")}), including every tab and pane in the group.`,
+      confirm: "Close entire group",
+    };
+  }
   switch (kind) {
     case "space":
       return {
-        title: noun === "room" ? "Close room?" : "Close space?",
-        message: noun === "room"
-          ? "This closes the Herdr workspace and every desk, tab, and pane inside it."
-          : "This closes the space and every tab and pane inside it.",
-        confirm: noun === "room" ? "Close room" : "Close space",
+        title: "Close space?",
+        message: "This closes the space and every tab and pane inside it.",
+        confirm: "Close space",
       };
     case "tab":
       return {

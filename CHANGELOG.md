@@ -34,6 +34,10 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Updated the Herdr World compatibility layer to Herdr `v0.9.0` and terminal
+  protocol `22`, including refreshed vendored protocol/schema provenance.
+  [Herdr World PR #87](https://github.com/IvoryHeart/herdr-world/pull/87)
+
 - Reduced native development friction with explicit task parents, measured model-allocation
   comparisons, and consolidated startup, cache and verification guidance. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
 

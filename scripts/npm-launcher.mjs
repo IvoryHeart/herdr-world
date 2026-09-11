@@ -64,7 +64,7 @@ Options are forwarded to the bridge:
   --no-herdr-setup            Disable interactive Herdr setup
   -h, --help                  Show this help without starting Herdr or a bridge
 
-The bridge requires Herdr 0.8.2 or newer with terminal protocol 20.
+The bridge requires Herdr 0.9.0 or newer with terminal protocol 22.
 `;
 }
 

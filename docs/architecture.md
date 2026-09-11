@@ -38,8 +38,8 @@ in the browser. A bridge never discovers, proxies, routes to, or controls anothe
 
 ## Compatibility and failure state
 
-Before snapshot or control traffic, a host must advertise bridge API `1`, terminal protocol `20`,
-Herdr `0.8.2` or newer, and the required web compatibility/feature surface. Unsupported or malformed
+Before snapshot or control traffic, a host must advertise bridge API `1`, terminal protocol `22`,
+Herdr `0.9.0` or newer, and the required web compatibility/feature surface. Unsupported or malformed
 capabilities are `incompatible`; network failure is `offline`; a lost host with an admitted snapshot
 may be displayed as stale/degraded. These states are local to that profile. There is no fallback to
 another host for a qualified action.

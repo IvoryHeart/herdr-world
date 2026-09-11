@@ -17,8 +17,8 @@ herdr session list
 herdr
 ```
 
-The active bridge baseline is Herdr `v0.8.2` or newer reporting terminal protocol
-`20` exactly. Protocol 19, protocol 21, missing protocol, and invalid Herdr
+The active bridge baseline is Herdr `v0.9.0` or newer reporting terminal protocol
+`22` exactly. Protocol 21, protocol 23, missing protocol, and invalid Herdr
 versions are rejected before terminal attach; the error is intentionally bounded
 and does not echo untrusted version text.
 
@@ -198,7 +198,7 @@ curl -fsS http://127.0.0.1:8787/api/snapshot
 ```
 
 - No Herdr socket: start or attach to Herdr first.
-- Protocol/version incompatibility: check `curl -fsS http://127.0.0.1:8787/api/capabilities`; use Herdr `v0.8.2` or newer with terminal protocol `20`.
+- Protocol/version incompatibility: check `curl -fsS http://127.0.0.1:8787/api/capabilities`; use Herdr `v0.9.0` or newer with terminal protocol `22`.
 - Bridge `502` from Vite: the bridge is not running on port `8787`.
 - Empty snapshot: the bridge is connected to the wrong Herdr socket/session.
 - `Attached elsewhere` on only some otherwise healthy terminals: check for an

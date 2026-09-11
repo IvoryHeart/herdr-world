@@ -63,7 +63,13 @@ describe("World room actions", () => {
     actions.openRoomClose("room-a");
 
     expect(callbacks.onOpenRoomDialog.mock.calls).toEqual([
-      [{ mode: "create", bridgeId: "host-a", workspaceId: "new", label: "" }],
+      [{
+        mode: "create",
+        bridgeId: "host-a",
+        workspaceId: "new",
+        sourceWorkspaceId: "workspace-a",
+        label: "",
+      }],
       [{
         mode: "rename",
         bridgeId: "host-a",

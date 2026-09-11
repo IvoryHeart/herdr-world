@@ -54,9 +54,8 @@ use herdr_compat::api::schema::{
     SubscriptionEventKind, TabCreateParams, TabInfo, TabListParams, TabTarget, WorkspaceInfo,
 };
 use herdr_compat::protocol::{
-    self, AttachScrollDirection, AttachScrollSource, ClientKeybindings, ClientLaunchMode,
-    ClientMessage, RenderEncoding, ServerMessage, MAX_FRAME_SIZE, MAX_GRAPHICS_FRAME_SIZE,
-    PROTOCOL_VERSION,
+    self, AttachScrollDirection, AttachScrollSource, ClientMessage, RenderEncoding, ServerMessage,
+    MAX_FRAME_SIZE, MAX_GRAPHICS_FRAME_SIZE, PROTOCOL_VERSION,
 };
 
 use crate::agent_activity::{AgentActivityListResponse, AgentActivityManager};
@@ -80,8 +79,8 @@ const DEFAULT_PORT: u16 = 8787;
 const DEFAULT_COLS: u16 = 80;
 const DEFAULT_ROWS: u16 = 24;
 const DEFAULT_STATIC_DIR: &str = "web/dist";
-const MIN_HERDR_VERSION: (u64, u64, u64) = (0, 8, 2);
-const MIN_HERDR_VERSION_LABEL: &str = "0.8.2";
+const MIN_HERDR_VERSION: (u64, u64, u64) = (0, 9, 0);
+const MIN_HERDR_VERSION_LABEL: &str = "0.9.0";
 const BRIDGE_API_VERSION: u32 = 1;
 const WEB_COMPAT_VERSION: u32 = 1;
 const MAX_CONFIGURED_LABEL_CHARS: usize = 80;
@@ -1437,6 +1436,8 @@ pub(crate) enum BridgeError {
 enum UploadError {
     BadRequest(String),
     Conflict { name: String, path: String },
+    NameExhausted(String),
+    Forbidden(String),
     TooLarge,
     Io(io::Error),
 }
@@ -1516,6 +1517,19 @@ impl IntoResponse for UploadError {
                     "name": name,
                     "path": path,
                 }),
+            ),
+            Self::NameExhausted(name) => (
+                StatusCode::CONFLICT,
+                serde_json::json!({
+                    "error": format!(
+                        "no available filename for {name} after {MAX_UPLOAD_NAME_ATTEMPTS} attempts"
+                    ),
+                    "name": name,
+                }),
+            ),
+            Self::Forbidden(message) => (
+                StatusCode::FORBIDDEN,
+                serde_json::json!({ "error": message }),
             ),
             Self::TooLarge => (
                 StatusCode::PAYLOAD_TOO_LARGE,
@@ -2733,6 +2747,94 @@ fn finalize_upload_file_name(name: String) -> Option<String> {
     }
 }
 
+/// How many `name-N.ext` variants to try before giving up on de-duplicating an
+/// upload. Deep enough for real usage, bounded so a pathological upload
+/// directory cannot spin the handler forever.
+const MAX_UPLOAD_NAME_ATTEMPTS: u32 = 1000;
+
+/// Split a sanitized upload name into stem and extension. `sanitize_upload_file_name`
+/// strips leading and trailing dots, so a dotfile (`.bashrc`) never reaches
+/// here with an empty stem.
+fn split_upload_name_extension(name: &str) -> Option<(&str, &str)> {
+    let (stem, extension) = name.rsplit_once('.')?;
+    if stem.is_empty() || extension.is_empty() {
+        return None;
+    }
+    Some((stem, extension))
+}
+
+/// The `attempt`-th candidate for `name`: attempt 0 is the original filename,
+/// later attempts suffix the stem (`notes.txt` -> `notes-1.txt`). The suffix
+/// never introduces a path separator, so a candidate stays a direct child of
+/// the upload directory whenever `name` was.
+fn upload_name_candidate(name: &str, attempt: u32) -> String {
+    if attempt == 0 {
+        return name.to_string();
+    }
+    match split_upload_name_extension(name) {
+        Some((stem, extension)) => format!("{stem}-{attempt}.{extension}"),
+        None => format!("{name}-{attempt}"),
+    }
+}
+
+/// Atomically reserve and write a new upload. When rename conflicts is enabled,
+/// an occupied candidate advances to the next suffix without a separate
+/// filesystem scan, so concurrent uploads cannot select the same free name.
+async fn create_new_upload(
+    upload_dir: &Path,
+    requested_name: &str,
+    body: &[u8],
+    rename_conflicts: bool,
+) -> Result<(String, PathBuf), UploadError> {
+    let attempts = if rename_conflicts {
+        MAX_UPLOAD_NAME_ATTEMPTS
+    } else {
+        1
+    };
+    for attempt in 0..attempts {
+        let name = upload_name_candidate(requested_name, attempt);
+        let destination = upload_dir.join(&name);
+        if !is_direct_child(upload_dir, &destination) {
+            return Err(UploadError::BadRequest("invalid file name".to_string()));
+        }
+        match tokio::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&destination)
+            .await
+        {
+            Ok(mut file) => {
+                use tokio::io::AsyncWriteExt;
+
+                if let Err(err) = async {
+                    file.write_all(body).await?;
+                    file.flush().await
+                }
+                .await
+                {
+                    drop(file);
+                    let _ = tokio::fs::remove_file(&destination).await;
+                    return Err(UploadError::Io(err));
+                }
+                return Ok((name, destination));
+            }
+            Err(err) if err.kind() == ErrorKind::AlreadyExists && rename_conflicts => continue,
+            Err(err) if err.kind() == ErrorKind::AlreadyExists => {
+                info!(
+                    name = %name,
+                    "herdr-web-bridge upload conflict"
+                );
+                return Err(UploadError::Conflict {
+                    name,
+                    path: destination.display().to_string(),
+                });
+            }
+            Err(err) => return Err(UploadError::Io(err)),
+        }
+    }
+    Err(UploadError::NameExhausted(requested_name.to_string()))
+}
+
 fn generated_upload_name(mime: Option<&str>) -> String {
     let extension = upload_extension_for_mime(mime).unwrap_or("bin");
     let millis = std::time::SystemTime::now()
@@ -3306,6 +3408,8 @@ struct UploadQuery {
     name: Option<String>,
     #[serde(default)]
     overwrite: bool,
+    #[serde(default)]
+    rename_conflicts: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -4275,57 +4379,35 @@ async fn upload_handler(
         bytes = body.len(),
         mime = ?mime,
         overwrite = query.overwrite,
+        rename_conflicts = query.rename_conflicts,
         "Herdr World bridge upload request"
     );
-    let name = match query.name.as_deref().and_then(sanitize_upload_file_name) {
+    let requested_name = match query.name.as_deref().and_then(sanitize_upload_file_name) {
         Some(name) => name,
         None => generated_upload_name(mime.as_deref()),
     };
-    let destination = state.upload_dir.join(&name);
-    if !is_direct_child(&state.upload_dir, &destination) {
-        return Err(UploadError::BadRequest("invalid file name".to_string()));
-    }
-
     tokio::fs::create_dir_all(&state.upload_dir).await?;
-    let existing = tokio::fs::symlink_metadata(&destination).await.ok();
-    if let Some(existing) = existing {
-        if !query.overwrite {
-            info!(
-                name = %name,
-                "Herdr World bridge upload conflict"
-            );
-            return Err(UploadError::Conflict {
-                name,
-                path: destination.display().to_string(),
-            });
-        }
-        if existing.file_type().is_symlink() || existing.is_dir() {
-            return Err(UploadError::BadRequest(
-                "refusing to overwrite non-file path".to_string(),
-            ));
-        }
-    }
-
-    if !query.overwrite {
-        match tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&destination)
-            .await
-        {
-            Ok(mut file) => {
-                tokio::io::AsyncWriteExt::write_all(&mut file, &body).await?;
-                tokio::io::AsyncWriteExt::flush(&mut file).await?;
-            }
-            Err(err) if err.kind() == ErrorKind::AlreadyExists => {
-                return Err(UploadError::Conflict {
-                    name,
-                    path: destination.display().to_string(),
-                });
-            }
-            Err(err) => return Err(UploadError::Io(err)),
-        }
+    let (name, destination) = if !query.overwrite {
+        create_new_upload(
+            &state.upload_dir,
+            &requested_name,
+            &body,
+            query.rename_conflicts,
+        )
+        .await?
     } else {
+        let name = requested_name;
+        let destination = state.upload_dir.join(&name);
+        if !is_direct_child(&state.upload_dir, &destination) {
+            return Err(UploadError::BadRequest("invalid file name".to_string()));
+        }
+        if let Ok(existing) = tokio::fs::symlink_metadata(&destination).await {
+            if existing.file_type().is_symlink() || existing.is_dir() {
+                return Err(UploadError::BadRequest(
+                    "refusing to overwrite non-file path".to_string(),
+                ));
+            }
+        }
         let temp_path = state.upload_dir.join(format!(
             ".herdr-web-upload-{}-{}.tmp",
             std::process::id(),
@@ -4342,7 +4424,8 @@ async fn upload_handler(
                 return Err(UploadError::Io(err));
             }
         }
-    }
+        (name, destination)
+    };
 
     let response = UploadResponse {
         file: UploadEntry {
@@ -4953,6 +5036,7 @@ async fn handle_terminal_socket(socket: WebSocket, state: BridgeState, query: Te
         rows,
         cell_width_px: 0,
         cell_height_px: 0,
+        pixel_mouse: false,
     });
 
     loop {
@@ -5504,28 +5588,17 @@ fn run_agent_activity_subscription(
     resubscribe_rx: &mpsc::Receiver<()>,
 ) -> Result<(), BridgeError> {
     drain_resubscribe_signals(resubscribe_rx);
+    // Discover targets first; this is not the authoritative activity baseline.
     let panes = current_panes(&state.api)?;
-    observe_agent_activity_snapshot(state, &panes);
     let pane_ids = sorted_pane_ids(&panes);
     if pane_ids.is_empty() {
         wait_for_resubscribe_signal(resubscribe_rx)?;
         return Ok(());
     }
-    let request = Request {
-        id: "herdr-web:activity".to_string(),
-        method: Method::EventsSubscribe(EventsSubscribeParams {
-            subscriptions: activity_subscriptions(&pane_ids),
-        }),
+    let Some((baseline, mut stream)) = open_activity_subscription(&state.api, &pane_ids)? else {
+        return Ok(());
     };
-    let (ack, mut stream) = state.api.subscribe_value(&request, None)?;
-    let response = herdr_compat::api::client::parse_response_value(ack)?;
-    if !matches!(response.result, ResponseResult::SubscriptionStarted {}) {
-        return Err(BridgeError::Protocol(format!(
-            "unexpected subscription response: {:?}",
-            response.result
-        )));
-    }
-    stream.set_read_timeout(ACTIVITY_READ_TIMEOUT)?;
+    observe_agent_activity_snapshot(state, &baseline);
 
     loop {
         if drain_resubscribe_signals(resubscribe_rx) {
@@ -5564,6 +5637,36 @@ fn run_agent_activity_subscription(
             Err(err) => return Err(err.into()),
         }
     }
+}
+
+fn open_activity_subscription(
+    api: &ApiClient,
+    pane_ids: &[String],
+) -> Result<Option<(Vec<PaneInfo>, herdr_compat::api::client::EventStream)>, BridgeError> {
+    let request = Request {
+        id: "herdr-web:activity".to_string(),
+        method: Method::EventsSubscribe(EventsSubscribeParams {
+            subscriptions: activity_subscriptions(pane_ids),
+        }),
+    };
+    let (ack, stream) = api.subscribe_value(&request, None)?;
+    let response = herdr_compat::api::client::parse_response_value(ack)?;
+    if !matches!(response.result, ResponseResult::SubscriptionStarted {}) {
+        return Err(BridgeError::Protocol(format!(
+            "unexpected subscription response: {:?}",
+            response.result
+        )));
+    }
+    stream.set_read_timeout(ACTIVITY_READ_TIMEOUT)?;
+
+    // v0.9 subscriptions are live-only. Snapshot only after the subscription is
+    // acknowledged, then consume the buffered stream in order. If membership
+    // changed while subscribing, restart with the new targets before publishing.
+    let baseline = current_panes(api)?;
+    if activity_resubscribe_needed(pane_ids, &baseline) {
+        return Ok(None);
+    }
+    Ok(Some((baseline, stream)))
 }
 
 fn sorted_pane_ids(panes: &[PaneInfo]) -> Vec<String> {
@@ -5777,6 +5880,7 @@ fn handle_terminal_text_frame(write_tx: &TerminalWriter, text: &str) -> Result<(
                 rows,
                 cell_width_px,
                 cell_height_px,
+                pixel_mouse: false,
             })
             .map(|_| ())
             .map_err(|_| "terminal writer closed".to_string()),
@@ -5818,15 +5922,13 @@ fn open_terminal_attach(
     let mut stream = herdr_compat::ipc::connect_local_stream(&client_socket_path)?;
     protocol::write_message(
         &mut stream,
-        &ClientMessage::Hello {
+        &ClientMessage::TerminalHello {
             version: protocol_version,
             cols,
             rows,
             cell_width_px: 0,
             cell_height_px: 0,
-            requested_encoding: RenderEncoding::TerminalAnsi,
-            keybindings: ClientKeybindings::Server,
-            launch_mode: ClientLaunchMode::TerminalAttach,
+            pixel_mouse: false,
         },
     )
     .map_err(|err| BridgeError::Protocol(err.to_string()))?;
@@ -5834,7 +5936,11 @@ fn open_terminal_attach(
     let welcome: ServerMessage = protocol::read_message(&mut stream, MAX_FRAME_SIZE)
         .map_err(|err| BridgeError::Protocol(err.to_string()))?;
     match welcome {
-        ServerMessage::Welcome { error: None, .. } => {}
+        ServerMessage::Welcome {
+            version,
+            encoding: RenderEncoding::TerminalAnsi,
+            error: None,
+        } if version == protocol_version => {}
         ServerMessage::Welcome {
             error: Some(error), ..
         } => return Err(BridgeError::Protocol(error)),
@@ -5929,9 +6035,15 @@ fn open_terminal_attach(
                 | ServerMessage::WindowTitle { .. }
                 | ServerMessage::ReloadSoundConfig
                 | ServerMessage::MouseCapture { .. }
-                | ServerMessage::KittyKeyboardReportAll { .. }
-                | ServerMessage::PrefixInputSource { .. }
-                | ServerMessage::Frame(_)
+                | ServerMessage::DirectTerminalKeyboardProtocol { .. }
+                | ServerMessage::ClientShellKeyboardReportAll { .. }
+                | ServerMessage::ClientShellSnapshot(_)
+                | ServerMessage::PaneSurface(_)
+                | ServerMessage::PaneSurfacePatch(_)
+                | ServerMessage::SemanticNotification(_)
+                | ServerMessage::ClientShellError { .. }
+                | ServerMessage::ClientShellEndpointResponseChunk { .. }
+                | ServerMessage::EndpointControl { .. }
                 | ServerMessage::Graphics { .. }
                 | ServerMessage::GraphicsFile { .. }
                 | ServerMessage::GraphicsTransmissionRetired { .. } => {}
@@ -6054,7 +6166,7 @@ fn startup_daemon_error(err: BridgeError) -> io::Error {
     io::Error::new(
         ErrorKind::ConnectionRefused,
         format!(
-            "unable to start Herdr World bridge: {err}. Install, update, or start Herdr v0.8.2 or newer, then retry. Packaged users can run bin/herdr-world for consent-based setup; custom sessions must use --session NAME or HERDR_SOCKET_PATH."
+            "unable to start Herdr World bridge: {err}. Install, update, or start Herdr v0.9.0 or newer, then retry. Packaged users can run bin/herdr-world for consent-based setup; custom sessions must use --session NAME or HERDR_SOCKET_PATH."
         ),
     )
 }
@@ -6366,6 +6478,7 @@ mod tests {
             transfer_id: 8,
             leading: b"secret-leading".to_vec(),
             control: "secret-control".into(),
+            surface_asset: None,
         };
         let retired = ServerMessage::GraphicsTransmissionRetired {
             transfer_id: 8,
@@ -6856,7 +6969,7 @@ mod tests {
             let (mut sock, _) = listener.accept().unwrap();
             sock.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
             let hello: ClientMessage = protocol::read_message(&mut sock, MAX_FRAME_SIZE).unwrap();
-            assert!(matches!(hello, ClientMessage::Hello { .. }));
+            assert!(matches!(hello, ClientMessage::TerminalHello { .. }));
             protocol::write_message(
                 &mut sock,
                 &ServerMessage::Welcome {
@@ -6921,7 +7034,7 @@ mod tests {
         let daemon = thread::spawn(move || {
             let (mut sock, _) = listener.accept().unwrap();
             let hello: ClientMessage = protocol::read_message(&mut sock, MAX_FRAME_SIZE).unwrap();
-            assert!(matches!(hello, ClientMessage::Hello { .. }));
+            assert!(matches!(hello, ClientMessage::TerminalHello { .. }));
             protocol::write_message(
                 &mut sock,
                 &ServerMessage::Welcome {
@@ -6941,6 +7054,7 @@ mod tests {
                 transfer_id: 2,
                 leading: b"private-leading".to_vec(),
                 control: "private-control".into(),
+                surface_asset: None,
             };
             for message in [
                 graphics_file.clone(),
@@ -7142,6 +7256,102 @@ mod tests {
         assert!(activity_resubscribe_needed(&current, &[]));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn activity_bootstrap_subscribes_before_baseline_and_rechecks_membership() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::os::unix::net::{UnixListener, UnixStream};
+
+        for membership_changed in [false, true] {
+            let socket_path = PathBuf::from(format!(
+                "/tmp/herdr-activity-{}-{}.sock",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            let listener = UnixListener::bind(&socket_path).unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let daemon = thread::spawn(move || {
+                let accept_request = || {
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    let socket = loop {
+                        match listener.accept() {
+                            Ok((socket, _)) => break socket,
+                            Err(err) if err.kind() == ErrorKind::WouldBlock => {
+                                assert!(Instant::now() < deadline, "API request timed out");
+                                thread::sleep(Duration::from_millis(5));
+                            }
+                            Err(err) => panic!("accept failed: {err}"),
+                        }
+                    };
+                    socket
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let mut line = String::new();
+                    BufReader::new(socket.try_clone().unwrap())
+                        .read_line(&mut line)
+                        .unwrap();
+                    let request: serde_json::Value = serde_json::from_str(&line).unwrap();
+                    (socket, request)
+                };
+                let respond = |socket: &mut UnixStream, request: &serde_json::Value, result| {
+                    writeln!(
+                        socket,
+                        "{}",
+                        serde_json::json!({
+                            "id": request["id"], "result": result,
+                        })
+                    )
+                    .unwrap();
+                };
+                let (mut subscription, request) = accept_request();
+                assert_eq!(request["method"], "events.subscribe");
+                respond(
+                    &mut subscription,
+                    &request,
+                    serde_json::json!({"type": "subscription_started"}),
+                );
+                // An event arriving during the snapshot must remain readable.
+                writeln!(subscription, "{}", serde_json::json!({
+                    "event": "pane.agent_status_changed",
+                    "data": {"pane_id": "pane-1", "workspace_id": "workspace-1", "agent_status": "working"}
+                })).unwrap();
+                let (mut snapshot, request) = accept_request();
+                assert_eq!(request["method"], "pane.list");
+                let mut pane = test_pane(if membership_changed {
+                    "pane-2"
+                } else {
+                    "pane-1"
+                });
+                pane.agent_status = AgentStatus::Working;
+                respond(
+                    &mut snapshot,
+                    &request,
+                    serde_json::to_value(ResponseResult::PaneList { panes: vec![pane] }).unwrap(),
+                );
+            });
+
+            let api = ApiClient::for_socket_path(socket_path.clone());
+            let result = open_activity_subscription(&api, &["pane-1".to_string()]);
+            daemon.join().unwrap();
+            std::fs::remove_file(socket_path).unwrap();
+            let result = result.unwrap();
+            if membership_changed {
+                assert!(
+                    result.is_none(),
+                    "changed targets must trigger resubscription"
+                );
+            } else {
+                let (baseline, mut stream) = result.unwrap();
+                assert_eq!(baseline[0].agent_status, AgentStatus::Working);
+                let event = stream.next_value().unwrap().unwrap();
+                assert_eq!(event["event"], "pane.agent_status_changed");
+            }
+        }
+    }
+
     #[test]
     fn web_snapshot_adapter_preserves_web_shape_and_clear_name_flags() {
         let mut session_snapshot = test_session_snapshot();
@@ -7308,7 +7518,7 @@ mod tests {
 
     fn test_session_snapshot() -> SessionSnapshot {
         SessionSnapshot {
-            version: "0.8.2".to_string(),
+            version: "0.9.0".to_string(),
             protocol: PROTOCOL_VERSION,
             focused_workspace_id: Some("workspace-1".to_string()),
             focused_tab_id: Some("tab-1".to_string()),
@@ -7757,7 +7967,7 @@ mod tests {
             ui_event_tx,
             activity_tx,
             upload_dir,
-            herdr_version: "0.8.2".into(),
+            herdr_version: "0.9.0".into(),
             terminal_protocol: PROTOCOL_VERSION,
             configured_label: None,
         };
@@ -7805,7 +8015,7 @@ mod tests {
         assert!(marker.is_file(), "controller did not receive the handoff");
         let request_path = std::fs::read_to_string(&marker).unwrap();
         let request = serde_json::from_str::<serde_json::Value>(
-            &std::fs::read_to_string(request_path).unwrap(),
+            &std::fs::read_to_string(request_path.trim()).unwrap(),
         )
         .unwrap();
         assert_eq!(request["remote_access"]["enabled"], true);
@@ -8071,6 +8281,23 @@ mod tests {
         assert!(value.contains("connect-src 'self' data: http://srv:8787 ws://srv:8787;"));
         assert!(value.contains("img-src 'self' data: blob:;"));
         assert!(value.contains("frame-ancestors 'none'"));
+    }
+
+    #[test]
+    fn workspace_create_preserves_explicit_source_without_widening_launch_permissions() {
+        let request: Request = serde_json::from_value(serde_json::json!({
+            "id": "test",
+            "method": "workspace.create",
+            "params": { "focus": true, "source_workspace_id": "ws_selected" }
+        }))
+        .unwrap();
+        assert!(validate_web_command(&request.method).is_ok());
+        let Method::WorkspaceCreate(mut params) = request.method else {
+            panic!("expected workspace.create");
+        };
+        assert_eq!(params.source_workspace_id.as_deref(), Some("ws_selected"));
+        params.cwd = Some("/tmp".into());
+        assert!(validate_web_command(&Method::WorkspaceCreate(params)).is_err());
     }
 
     #[test]
@@ -8420,7 +8647,7 @@ mod tests {
     #[test]
     fn daemon_status_accepts_minimum_version_and_exact_protocol() {
         assert_eq!(
-            validated_daemon_protocol(runtime_status("0.8.2", PROTOCOL_VERSION)).unwrap(),
+            validated_daemon_protocol(runtime_status("0.9.0", PROTOCOL_VERSION)).unwrap(),
             PROTOCOL_VERSION
         );
         assert_eq!(
@@ -8466,7 +8693,7 @@ mod tests {
 
     #[test]
     fn daemon_status_accepts_version_prefix_and_build_metadata() {
-        for version in ["v0.8.2", "0.8.2+linux-x86-64"] {
+        for version in ["v0.9.0", "0.9.0+linux-x86-64"] {
             assert_eq!(
                 validated_daemon_protocol(runtime_status(version, PROTOCOL_VERSION)).unwrap(),
                 PROTOCOL_VERSION
@@ -8475,12 +8702,17 @@ mod tests {
     }
 
     #[test]
-    fn daemon_status_rejects_version_before_0_8_2() {
-        let error = validated_daemon_protocol(runtime_status("0.8.1", PROTOCOL_VERSION))
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("too old"));
-        assert!(error.contains(MIN_HERDR_VERSION_LABEL));
+    fn daemon_status_rejects_version_before_0_9_0() {
+        for version in ["0.7.5", "0.8.0", "0.8.1", "0.8.2"] {
+            let error = validated_daemon_protocol(runtime_status(version, PROTOCOL_VERSION))
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains("too old"), "{version:?}: {error}");
+            assert!(
+                error.contains(MIN_HERDR_VERSION_LABEL),
+                "{version:?}: {error}"
+            );
+        }
     }
 
     #[test]
@@ -8498,39 +8730,18 @@ mod tests {
 
     #[test]
     fn daemon_status_rejects_any_other_protocol() {
-        let older = validated_daemon_protocol(runtime_status("0.8.2", 19))
+        let older = validated_daemon_protocol(runtime_status("0.9.0", PROTOCOL_VERSION - 1))
             .unwrap_err()
             .to_string();
         assert!(older.contains("incompatible"));
         assert!(older.contains(&PROTOCOL_VERSION.to_string()));
 
-        assert!(validated_daemon_protocol(runtime_status("0.8.2", 21))
-            .unwrap_err()
-            .to_string()
-            .contains("incompatible"));
-    }
-
-    #[test]
-    fn daemon_admission_diagnostics_are_bounded_and_name_the_supported_baseline() {
-        let invalid_version = "v".to_string() + &"9".repeat(10_000);
-        let error = validated_daemon_protocol(runtime_status(&invalid_version, 20))
-            .unwrap_err()
-            .to_string();
-        assert!(error.len() < 256);
-        assert!(error.contains("Herdr 0.8.2 or newer"));
-        assert!(error.contains("protocol 20"));
-        assert!(!error.contains(&invalid_version));
-
-        let missing_protocol = herdr_compat::api::RuntimeStatus {
-            version: Some("0.8.2".into()),
-            protocol: None,
-            capabilities: None,
-        };
-        let error = validated_daemon_protocol(missing_protocol)
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("Herdr 0.8.2 or newer"));
-        assert!(error.contains("protocol 20"));
+        assert!(
+            validated_daemon_protocol(runtime_status("0.9.0", PROTOCOL_VERSION + 1))
+                .unwrap_err()
+                .to_string()
+                .contains("incompatible")
+        );
     }
 
     #[test]
@@ -8939,7 +9150,7 @@ mod tests {
         let message = io_err.to_string();
         assert!(message.contains("unable to start Herdr World bridge"));
         assert!(message.contains("unexpected api result"));
-        assert!(message.contains("Install, update, or start Herdr v0.8.2 or newer"));
+        assert!(message.contains("Install, update, or start Herdr v0.9.0 or newer"));
         assert!(message.contains("consent-based setup"));
         assert!(message.contains("--session NAME or HERDR_SOCKET_PATH"));
     }
@@ -9062,6 +9273,164 @@ mod tests {
             upload_extension_for_mime(Some("application/octet-stream")),
             None
         );
+    }
+
+    #[test]
+    fn upload_name_candidates_preserve_extensions() {
+        assert_eq!(
+            upload_name_candidate("screen shot.png", 0),
+            "screen shot.png"
+        );
+        assert_eq!(upload_name_candidate("image.png", 2), "image-2.png");
+        assert_eq!(upload_name_candidate("notes", 1), "notes-1");
+        assert_eq!(
+            upload_name_candidate("archive.tar.gz", 1),
+            "archive.tar-1.gz"
+        );
+    }
+
+    #[test]
+    fn upload_file_name_sanitization_rejects_traversal_segments() {
+        for hostile in [
+            "../secret.txt",
+            "../../../etc/passwd",
+            r"..\..\windows\system.ini",
+            "uploads/../../secret.txt",
+            "/etc/passwd",
+            r"C:\Windows\win.ini",
+            "nested/dir/report.pdf",
+            "trailing/dots/../evil.txt.",
+        ] {
+            let sanitized =
+                sanitize_upload_file_name(hostile).unwrap_or_else(|| panic!("{hostile} sanitized"));
+            assert!(
+                !sanitized.contains('/') && !sanitized.contains('\\'),
+                "{hostile} -> {sanitized} kept a separator"
+            );
+            assert_ne!(sanitized, "..", "{hostile} stayed a traversal segment");
+        }
+    }
+
+    #[test]
+    fn upload_file_name_sanitization_rejects_pure_traversal_names() {
+        for hostile in ["..", "../", "../..", r"..\", "...", "/", "", "   "] {
+            assert_eq!(
+                sanitize_upload_file_name(hostile),
+                None,
+                "{hostile} should have no usable file name"
+            );
+        }
+    }
+
+    #[test]
+    fn upload_name_candidates_keep_sanitized_names_inside_upload_dir() {
+        let upload_dir = PathBuf::from("/tmp/herdr-web/uploads");
+        for hostile in [
+            "../secret.txt",
+            "../../../etc/passwd",
+            r"..\..\windows\system.ini",
+            "uploads/../../secret.txt",
+            "/etc/passwd",
+        ] {
+            let sanitized =
+                sanitize_upload_file_name(hostile).unwrap_or_else(|| panic!("{hostile} sanitized"));
+            let unique = upload_name_candidate(&sanitized, 1);
+            assert_ne!(
+                unique, sanitized,
+                "{hostile} should have been de-duplicated"
+            );
+            let destination = upload_dir.join(&unique);
+            assert!(
+                is_direct_child(&upload_dir, &destination),
+                "{hostile} -> {} escaped the upload directory",
+                destination.display()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn create_new_upload_preserves_existing_files_and_renames_conflicts() {
+        let dir = upload_test_dir("rename");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+
+        let (first, _) = create_new_upload(&dir, "image.png", b"first", true)
+            .await
+            .unwrap();
+        let (second, _) = create_new_upload(&dir, "image.png", b"second", true)
+            .await
+            .unwrap();
+        let (third, _) = create_new_upload(&dir, "image.png", b"third", true)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            [first, second, third],
+            ["image.png", "image-1.png", "image-2.png"]
+        );
+        assert_eq!(
+            tokio::fs::read(dir.join("image.png")).await.unwrap(),
+            b"first"
+        );
+        assert_eq!(
+            tokio::fs::read(dir.join("image-1.png")).await.unwrap(),
+            b"second"
+        );
+        assert_eq!(
+            tokio::fs::read(dir.join("image-2.png")).await.unwrap(),
+            b"third"
+        );
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn create_new_upload_returns_conflict_when_renaming_is_disabled() {
+        let dir = upload_test_dir("prompt");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        tokio::fs::write(dir.join("image.png"), b"first")
+            .await
+            .unwrap();
+
+        let err = create_new_upload(&dir, "image.png", b"second", false)
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UploadError::Conflict { ref name, .. } if name == "image.png"
+        ));
+        assert_eq!(
+            tokio::fs::read(dir.join("image.png")).await.unwrap(),
+            b"first"
+        );
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn concurrent_uploads_atomically_reserve_distinct_names() {
+        let dir = upload_test_dir("concurrent");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+
+        let first = create_new_upload(&dir, "image.png", b"first", true);
+        let second = create_new_upload(&dir, "image.png", b"second", true);
+        let (first, second) = tokio::join!(first, second);
+        let mut names = [first.unwrap().0, second.unwrap().0];
+        names.sort();
+
+        assert_eq!(names, ["image-1.png", "image.png"]);
+        let mut contents = [
+            tokio::fs::read(dir.join("image.png")).await.unwrap(),
+            tokio::fs::read(dir.join("image-1.png")).await.unwrap(),
+        ];
+        contents.sort();
+        assert_eq!(contents, [b"first".to_vec(), b"second".to_vec()]);
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    fn upload_test_dir(label: &str) -> PathBuf {
+        let suffix = UPLOAD_TEMP_COUNTER.fetch_add(1, Ordering::AcqRel);
+        std::env::temp_dir().join(format!(
+            "herdr-web-upload-{label}-{}-{suffix}",
+            std::process::id()
+        ))
     }
 
     #[test]

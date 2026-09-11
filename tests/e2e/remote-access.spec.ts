@@ -116,7 +116,7 @@ test("clears a password before showing the next queued connection prompt", async
       data: {
         hostId,
         passwordConfigured: true,
-        ...(hostId === "host-c" ? { terminalProtocol: 20 } : {}),
+        ...(hostId === "host-c" ? { terminalProtocol: 22 } : {}),
       },
     });
   }

@@ -44,12 +44,7 @@ for (const viewport of [
       path: resolve(evidenceDir, `world-live-${viewport.width}x${viewport.height}.png`),
       animations: "disabled",
     });
-    await page.locator(".world-stage-scroll").evaluate((element) =>
-      element.scrollTo({ top: element.scrollHeight, behavior: "auto" }));
-    await page.screenshot({
-      path: resolve(evidenceDir, `world-agent-bar-${viewport.width}x${viewport.height}.png`),
-      animations: "disabled",
-    });
+    await expect(page.getByRole("region", { name: "Agent Bar" })).toContainText(/visible/);
   });
 }
 

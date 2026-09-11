@@ -14,8 +14,8 @@ License, Copyright (c) 2026 Kevin. The retained MIT terms are in the repository
 ## Herdr compatibility source
 
 `vendor/herdr-compat` contains copied or adapted source from
-[`herdrdev/herdr`](https://github.com/herdrdev/herdr) v0.8.2 at commit
-`9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c`, licensed under Apache-2.0.
+[`herdrdev/herdr`](https://github.com/herdrdev/herdr) v0.9.0 at commit
+`b99002ac99b09e00b4ca692436cb15a6b0d676f1`, licensed under Apache-2.0.
 The exact source paths, hashes, and local dispositions are recorded in
 [`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml).
 The license text is retained in

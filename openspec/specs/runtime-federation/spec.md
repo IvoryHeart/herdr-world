@@ -30,6 +30,6 @@ and require compatible capabilities before dispatch.
 - **THEN** an action for one host is sent only to that host and never retried on the other
 
 #### Scenario: Unsupported protocol
-- **WHEN** a host reports a terminal protocol other than 20, a malformed protocol, or
+- **WHEN** a host reports a terminal protocol other than 22, a malformed protocol, or
   missing required capabilities
 - **THEN** the client rejects terminal attach and control for that host
