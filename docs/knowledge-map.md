@@ -10,7 +10,7 @@ Historical delivery notes are evidence, not current rules.
 | Browser commands and bridge access | [Bridge access](../openspec/specs/bridge-access/spec.md) | `web/src/commands.ts`, `bridgeApi.ts`, `remoteAccess.ts`; `bridge/src/web_bridge.rs`; [development](development.md) |
 | Office, Tree, Graph, Spaces and optional observations | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `web/src/world/worldModel.ts`, `worldRuntime.ts`, `herdrOfficeProjection.ts`, `tree/TreeTheme.tsx`, `tree/TreeTheme.css`, `graph/`; `web/src/AppShell.tsx`, `surfaceRegistry.ts`; [observability](observability.md), [assets](world-assets.md) |
 | Upstream, vendoring and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [UPSTREAM](../UPSTREAM.md), [vendoring](vendoring.md), [packaging](packaging.md), [release](release.md) |
-| Agent development and evals | [Development harness](../openspec/specs/agent-development/spec.md) | [Agent development](agent-development.md), [Superpowers trial](superpowers-trial.md), `harness/`, `scripts/agent/`, `evals/` |
+| Agent development and evals | [Agent development](../openspec/specs/agent-development/spec.md) | [Agent development](agent-development.md), [Pilot guide](agent-pilots.md), `harness/`, `scripts/agent/`, `evals/` |
 
 ## Cross-language command path
 
@@ -36,6 +36,6 @@ evidence; their immutable/extension/summary ceremony is retired. Unmapped areas 
 documented by source, tests and relevant runbooks. This map is not exhaustive API coverage.
 
 Change a contract when behavior changes, a runbook when operation changes, and this map
-when ownership changes. Unresolved proposals belong in `openspec/changes/`. Ralph
+when ownership changes. Unresolved proposals belong in `openspec/changes/`. Private
 scratchpads, eval output, generated graphs and dated research are not authority.
 Use synthetic examples only.

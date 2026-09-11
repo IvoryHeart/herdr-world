@@ -598,7 +598,7 @@ of hidden requirements.
   each role requires its own host, terminal or worktree. Offer a run timeline and
   collapsed/expanded agent groups across World representations. Keep hosting topology
   separate from logical delegation; non-coding agents belong in the same model.
-- **Integration direction:** Start with one observed Ralph run and a small normalized
+- **Integration direction:** Start with one observed native Codex task and a small normalized
   lifecycle/identity contract; add adapters for other harnesses as their real signals
   warrant. Preserve native IDs, provider/harness namespace, parent provenance and
   freshness. Skills may be configuration or invocation metadata rather than agents.

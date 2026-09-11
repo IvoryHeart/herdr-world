@@ -59,6 +59,10 @@ Checksum-verified standalone archives are available on the
 The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
 may need approval in **System Settings → Privacy & Security**.
 
+For agent-assisted development, start with [the native workflow](docs/agent-development.md).
+The [stack extraction guide](docs/agent-stack.md) lists reusable packages, skills and lessons;
+[OpenWiki and Skillgrade](docs/agent-pilots.md) remain opt-in experiments.
+
 ## Advanced Usage
 
 Select a session, socket, or alternate port with normal launcher options:

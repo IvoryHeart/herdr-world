@@ -4,6 +4,12 @@
   "ref": "v6.3.0",
   "commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
   "skillsSha256": "8f1a520f1d2a947df9deda45e6c4e66e0a1c1a3aafab97284090eb3cc4cd3a54",
+  "selectedSkills": [
+    "brainstorming",
+    "systematic-debugging",
+    "test-driven-development"
+  ],
+  "selectedSkillsSha256": "342f6e0c50d5de930dc7c75a12be9b6081a8a16b1ab69dcaf619fd808b63761b",
   "skills": [
     "brainstorming",
     "dispatching-parallel-agents",
@@ -33,5 +39,7 @@
     "world-recap-run",
     "world-consult-oracle",
     "world-integrate-work"
-  ]
+  ],
+  "retiredOverrideSha256": "583d77b130e699b9350ccb2e88cfe43149eef4535c3477ab4ab95bfdbd38c5ab",
+  "retiredConfigSha256": "798695074e41025bb14d57a4c102f715403c726bf2e845e62b7f4757794ad615"
 }
