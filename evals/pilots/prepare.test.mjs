@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { codexSmokeCommand } from './prepare.mjs';
+import { fileURLToPath } from 'node:url';
+import { codexSmokeCommand, prepareSmoke } from './prepare.mjs';
+
+const directory = fileURLToPath(new URL('.', import.meta.url));
 
 test('failed sandbox preflight prevents a model invocation, including executable paths with spaces and quotes', async t => {
   const directory = await mkdtemp(join(tmpdir(), "pilot's command "));
@@ -15,4 +18,24 @@ test('failed sandbox preflight prevents a model invocation, including executable
   assert.equal(result.status, 23);
   assert.match(result.stderr, /synthetic-sandbox-failure/);
   assert.doesNotMatch(result.stdout, /MODEL_STARTED/);
+});
+
+test('prepared pilots snapshot both grader files and reference the snapshots', async t => {
+  const parent = await mkdtemp(join(tmpdir(), 'world-pilot-snapshot-'));
+  t.after(() => rm(parent, { recursive: true, force: true }));
+  const prepared = await prepareSmoke(join(parent, 'prepared'));
+  const spec = JSON.parse(await readFile(join(prepared, 'eval.yaml'), 'utf8'));
+  const graderRun = spec.tasks[0].graders[0].run;
+  assert.match(graderRun, new RegExp(`${prepared}/pilots/grade-reconnect\\.py`));
+  assert.doesNotMatch(graderRun, /evals\/pilots\/grade-reconnect\.py/);
+  assert.equal(await readFile(join(prepared, 'pilots/grade-reconnect.py'), 'utf8'),
+    await readFile(join(directory, 'grade-reconnect.py'), 'utf8'));
+  assert.equal(await readFile(join(prepared, 'graders/grade.py'), 'utf8'),
+    await readFile(join(directory, '../graders/grade.py'), 'utf8'));
+  const inputs = JSON.parse(await readFile(join(prepared, 'inputs.json'), 'utf8'));
+  assert.deepEqual(Object.keys(inputs.graderFiles).sort(), [
+    'evals/graders/grade.py', 'evals/pilots/grade-reconnect.py',
+  ]);
+  assert.equal(inputs.graderFiles['evals/graders/grade.py'].snapshot, 'graders/grade.py');
+  assert.equal(inputs.graderFiles['evals/pilots/grade-reconnect.py'].snapshot, 'pilots/grade-reconnect.py');
 });

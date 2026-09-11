@@ -1,8 +1,9 @@
 # Agent development
 
 Native Codex owns execution, conversations, subagents and completion. Pinned
-[Superpowers 6.3.0](https://github.com/obra/superpowers/tree/v6.3.0) supplies reusable
-engineering skills. OpenSpec holds current contracts and deliberate changes.
+[Superpowers 6.3.0](https://github.com/obra/superpowers/tree/v6.3.0) supplies three
+selected skills: brainstorming, systematic-debugging and test-driven-development.
+OpenSpec holds current contracts and deliberate changes.
 AGENTS.md owns authorization, privacy and PR policy; this guide owns procedures.
 Other coding clients may use the same skills and contracts, but their discovery,
 configuration and accounting need their own validation.
@@ -18,6 +19,14 @@ ask only consequential questions, and record acceptance before implementation.
 Use Superpowers brainstorming for unresolved product/design choices and systematic
 debugging for a failure. Use the existing OpenSpec change as the plan when one
 applies; do not duplicate it with another specification or mandatory plan file.
+
+Use those skills for their focused engineering techniques. Their upstream references
+to removed planning, review or verification skills do not require installing or
+invoking those skills. Continue through this native workflow: clarify consequential
+decisions, implement authorized work, test relevant behavior and obtain independent
+review before merging. Do not recreate the removed per-task agent/review sequence.
+Five OpenSpec skills remain: explore, update, apply, sync and archive. New contracts
+can still use the pinned OpenSpec CLI when needed; there is no separate propose skill.
 
 Inspect `git worktree list` and any handoff before creating another worktree. Resolve
 the requested parent's actual branch and revision; sibling PRs are not implicitly
@@ -37,16 +46,21 @@ node scripts/agent/skills.mjs
 npm run eval:skills
 ```
 
-The installer verifies unchanged upstream skills against the pinned digest, shares
-one cache under the primary checkout, and creates a local skill link. It creates
-local Codex defaults only when absent; it can migrate the byte-identical old trial
+The installer verifies the full upstream cache and the selected files against pinned
+digests, then copies only the three selected skill directories into local discovery.
+New downloads use the primary checkout's cache. An existing verified full-bundle
+symlink is migrated without changing its cache or another worktree. Repeated setup
+preserves the selection; it does not reinstall excluded skills or edit user-wide
+skill settings. Modified local skill files are preserved with an error.
+It creates local Codex defaults only when absent; it can migrate the byte-identical old trial
 profile. Custom configuration is preserved. Only the exact obsolete trial instruction
 override is removed; reconcile a custom override deliberately. No user-wide install
 or configuration is changed. Explicit skill reads allow current work to continue;
 only a client capability that actually needs reload justifies a session handoff.
 
 `eval:skills` queries a fresh Codex App Server without a model turn. It verifies
-installed skills and reports effective configuration; `activeSessionVerified: false`
+the three selected Superpowers skills, five OpenSpec skills, two repository skills and excluded-skill absence,
+and reports effective configuration; `activeSessionVerified: false`
 is intentional. It does not certify the lead's model or successful skill use.
 
 Keep a short task record in ignored `.agents/state/`: parent revision, accepted
@@ -126,8 +140,9 @@ A small happy-path fixture cannot establish readability or behavior at every sca
 
 Observe command duration. A slow but progressing check is not a code defect, and a
 suite must have enough time to finish on the actual machine. Diagnose an infrastructure
-failure before changing code or test expectations. Native process cancellation and
-any explicit task budget still apply; this repo adds no phase or fingerprint timeout.
+failure before changing code or test expectations. Native process cancellation
+terminates the command's detached process group and captured descendants; any
+explicit task budget still applies. This repo adds no phase or fingerprint timeout.
 
 Independent review and relevant checks establish delivery readiness. Resolve concrete
 findings and preserve remaining limitations. Use ordinary Git/GitHub tools to open a

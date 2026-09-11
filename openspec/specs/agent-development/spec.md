@@ -27,10 +27,15 @@ worktree, coordinating ownership to avoid concurrent edits to the same files.
 - **THEN** it resolves the primary checkout's central directory without recursive nesting
 
 ### Requirement: Native execution and portable skills
-The default workflow SHALL use native coding-agent conversations and pinned, unchanged
-Superpowers skills with OpenSpec. It SHALL NOT start Ralph, a second model supervisor
-or a repository Stop-hook continuation loop. User authorization and repository delivery
+The default workflow SHALL use native coding-agent conversations and a repository-selected
+subset of pinned, unchanged Superpowers skills with OpenSpec. Local setup SHALL expose
+only that selection and preserve it on repeated installation. It SHALL NOT start Ralph,
+a second model supervisor or a repository Stop-hook continuation loop. User authorization and repository delivery
 policy SHALL continue to apply. Local installation SHALL preserve unrelated settings.
+
+#### Scenario: Full-bundle installation migration
+- **WHEN** local setup encounters the verified old full-bundle skill link
+- **THEN** it installs only the selected skills without modifying the shared cache or another worktree, and repeated setup does not restore excluded skills
 
 #### Scenario: Conversational task start
 - **WHEN** the owner provides a short request and optional parent PR
@@ -43,6 +48,10 @@ policy SHALL continue to apply. Local installation SHALL preserve unrelated sett
 #### Scenario: Retained task parent
 - **WHEN** a native task is recorded with the optional task helper
 - **THEN** its explicit parent resolves to a commit, and subsequent records preserve the starting revision while that branch advances
+
+#### Scenario: Command cancellation
+- **WHEN** a native command is interrupted or reaches its explicit deadline
+- **THEN** its detached process group and captured descendants are terminated before the command reports completion
 
 ### Requirement: Proportionate delegation and recovery
 The lead SHALL select roles for concrete work, reuse native histories for scoped
@@ -99,6 +108,10 @@ are used. A local eval workspace SHALL NOT be described as an isolated security 
 #### Scenario: Combined knowledge and skill pilot
 - **WHEN** OpenWiki and Skillgrade are tried on the same debugging task
 - **THEN** knowledge generation and maintenance are measured separately from debugging and grading, and a combined result does not establish either tool's individual benefit
+
+#### Scenario: Prepared pilot inputs
+- **WHEN** a pilot workspace is prepared
+- **THEN** every grader used by its generated evaluation is copied into that workspace and the evaluation invokes the copied snapshot rather than a live checkout file
 
 ### Requirement: PR delivery boundary
 Delivery SHALL stop at an open ready PR under AGENTS.md. An optional draft SHALL remain

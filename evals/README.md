@@ -24,6 +24,12 @@ npm run agent:bootstrap
 npm run eval:skills
 ```
 
+Discovery verifies the exact names and local paths of three selected Superpowers
+skills, five OpenSpec skills and two repository skills, and
+rejects the eleven excluded Superpowers skills and `openspec-propose`. The installer
+tests cover fresh setup, migration from the full bundle, repeat setup, tampered files
+and preservation of a cache shared by another worktree. These checks make no model calls.
+
 Optional OpenWiki and Skillgrade pilot setup and checks are exposed through
 `npm run eval:pilots:setup` and `npm run eval:pilots:check`. See
 [`docs/agent-pilots.md`](../docs/agent-pilots.md) for their scope and preparation.

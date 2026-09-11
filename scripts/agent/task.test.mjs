@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { command, git, repoRoot } from './lib.mjs';
@@ -73,4 +75,29 @@ test('task CLI can report a durable native record without invoking a runner', as
   });
   assert.equal(result.code, 0, result.output);
   assert.equal(JSON.parse(result.stdout).mode, 'native');
+});
+
+test('command cancellation stops a detached child process group', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'world-command-cancel-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const marker = join(root, 'marker.txt');
+  const helper = join(root, 'helper.mjs');
+  const child = `import { appendFile } from 'node:fs/promises';
+await appendFile(${JSON.stringify(marker)}, 'started\\n');
+setTimeout(() => appendFile(${JSON.stringify(marker)}, 'alive\\n'), 250);
+setInterval(() => {}, 1000);`;
+  await writeFile(helper, `import { command } from ${JSON.stringify(join(repoRoot, 'scripts/agent/lib.mjs'))};
+await command([process.execPath, '--input-type=module', '-e', ${JSON.stringify(child)}], { stream: false });
+`);
+  const runner = spawn(process.execPath, [helper], { cwd: root, stdio: 'ignore' });
+  let started = false;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try { await access(marker); started = true; break; }
+    catch { await new Promise(resolve => setTimeout(resolve, 20)); }
+  }
+  assert.equal(started, true, 'detached child did not start');
+  runner.kill('SIGTERM');
+  await once(runner, 'exit');
+  await new Promise(resolve => setTimeout(resolve, 450));
+  assert.doesNotMatch(await readFile(marker, 'utf8'), /alive/);
 });

@@ -1,6 +1,6 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdir, writeFile, rename } from 'node:fs/promises';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +19,26 @@ export function primaryCheckout(cwd = process.cwd()) {
   const first = git(['worktree', 'list', '--porcelain'], cwd).split('\n')[0];
   if (!first.startsWith('worktree ')) throw new Error('Cannot resolve primary checkout');
   return first.slice('worktree '.length);
+}
+
+function processParents() {
+  if (process.platform === 'linux') {
+    const rows = [];
+    for (const name of readdirSync('/proc')) {
+      if (!/^\d+$/.test(name)) continue;
+      try {
+        const stat = readFileSync('/proc/' + name + '/stat', 'utf8');
+        // comm is parenthesized and can contain spaces or closing parentheses.
+        const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+        rows.push([Number(name), Number(fields[1])]);
+      } catch (error) {
+        if (!['ENOENT', 'ESRCH', 'EACCES'].includes(error.code)) throw error;
+      }
+    }
+    return rows;
+  }
+  return execFileSync('ps', ['-axo', 'pid=,ppid='], { encoding: 'utf8', timeout: 2000 })
+    .trim().split('\n').filter(Boolean).map(line => line.trim().split(/\s+/).map(Number));
 }
 
 export function slug(value) {
@@ -47,14 +67,34 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
   });
   const chunks = [], stdoutChunks = [], stderrChunks = [];
   let timedOut = false;
+  let interrupted = false;
   const append = chunk => { if (log) appendFileSync(log, chunk); chunks.push(chunk); };
+  const terminationTargets = new Set([child.pid]);
   const terminate = () => {
     if (process.platform !== 'win32') {
-      try { process.kill(-child.pid, 'SIGTERM'); } catch { /* already exited */ }
+      try {
+        const rows = processParents();
+        let added = true;
+        while (added) {
+          added = false;
+          for (const [pid, parent] of rows) {
+            if (terminationTargets.has(parent) && !terminationTargets.has(pid)) {
+              terminationTargets.add(pid);
+              added = true;
+            }
+          }
+        }
+      } catch { /* Process-group cleanup still applies if procfs is unavailable. */ }
+      try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already exited */ }
     }
-    try { child.kill('SIGTERM'); } catch { /* already exited */ }
+    for (const pid of [...terminationTargets].reverse()) {
+      try { process.kill(pid, 'SIGKILL'); } catch { /* already exited */ }
+    }
   };
   const timer = setTimeout(() => { timedOut = true; terminate(); }, timeoutMs);
+  const interrupt = () => { interrupted = true; terminate(); };
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', interrupt);
   child.stdout.on('data', chunk => {
     append(chunk); stdoutChunks.push(chunk); if (stream) process.stdout.write(chunk);
   });
@@ -67,11 +107,13 @@ export async function command(argv, { cwd = process.cwd(), env = process.env, ti
   try {
     result = await new Promise((resolveResult, reject) => {
       child.once('error', reject);
-      child.once('close', (code, signal) => resolveResult({ argv, code, signal, timedOut, elapsedMs: Date.now() - startedAt }));
+      child.once('close', (code, signal) => resolveResult({ argv, code, signal, timedOut, interrupted, elapsedMs: Date.now() - startedAt }));
     });
   } finally {
     clearTimeout(timer);
-    if (timedOut) terminate();
+    if (timedOut || interrupted) terminate();
+    process.removeListener('SIGINT', interrupt);
+    process.removeListener('SIGTERM', interrupt);
   }
   return {
     ...result,

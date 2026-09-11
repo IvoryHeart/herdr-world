@@ -11,7 +11,7 @@ product contracts/checks, rather than copying Herdr World implementation details
 | --- | --- | --- | --- |
 | Native Codex CLI | @openai/codex 0.153.4 | Conversations, implementation, native subagents/completion, journals | harness/package.json |
 | OpenSpec CLI | @fission-ai/openspec 1.12.0 | Deliberate contracts, active changes, archived decisions | harness/package.json |
-| Superpowers | 6.3.0; commit/digest in harness/superpowers/release.json | Upstream development skills | Shared local cache, repository skill symlink |
+| Superpowers | 6.3.0; commit/digests and selection in harness/superpowers/release.json | Three focused engineering skills | Verified cache; only selected directories copied into worktree discovery |
 | OpenWiki | 0.5.0, pilot | Source-backed wiki pages, Claims and freshness workflow | Optional evals/pilots package; local Codex MCP/skill |
 | Skillgrade | 0.3.0, pilot | Repeatable tasks and behavioral grading | Optional evals/pilots package |
 
@@ -23,18 +23,24 @@ ordinary developer installs do not depend on them.
 
 ## Skills
 
-Fourteen Superpowers skills are installed unchanged:
+Three Superpowers skills are installed unchanged:
 
-- Design/planning: brainstorming, writing-plans, executing-plans.
-- Implementation: subagent-driven-development, systematic-debugging, test-driven-development.
-- Review/delivery: requesting-code-review, receiving-code-review, verification-before-completion, finishing-a-development-branch.
-- Supporting workflows: using-superpowers, using-git-worktrees, dispatching-parallel-agents, writing-skills.
+- brainstorming
+- systematic-debugging
+- test-driven-development
 
-Six repository-adapted OpenSpec skills expose explore, propose, update-change,
+The other eleven upstream skills are excluded from discovery, including the umbrella
+workflow and per-task subagent/review loop. The installer migrates an old full-bundle
+link and keeps the selection on repeated runs. Retained skills' upstream references
+to excluded skills do not reinstate them; follow docs/agent-development.md for delivery.
+
+Five repository-adapted OpenSpec skills expose explore, update-change,
 apply-change, sync-specs and archive-change. Two small World skills cover knowledge
 maintenance and harness evaluation. Rename/adapt those two for a new repository;
 keep them short and point to the canonical runbooks instead of repeating policy.
-The optional OpenWiki integration installs one additional upstream openwiki skill.
+This gives ten project skills. The optional OpenWiki integration installs one
+additional upstream openwiki skill, for eleven when enabled. OpenWiki remains an
+opt-in local skill and MCP integration, with generated pages kept outside Git.
 Skillgrade is an evaluator, not another required development skill or lead agent.
 
 ## Files to adapt

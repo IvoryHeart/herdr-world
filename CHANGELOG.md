@@ -64,6 +64,9 @@ Web's own release history remains in its upstream changelog.
   runtime before it could cause partial `Attached elsewhere` terminal failures.
   ([#86](https://github.com/IvoryHeart/herdr-world/pull/86))
 
+- Restored native command cancellation cleanup for detached process groups and froze
+  both grader inputs in prepared pilot workspaces. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
+
 - Updated transitive XML parsers and the development YAML parser to patched
   versions, restoring the dependency security audit.
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
@@ -77,6 +80,10 @@ Web's own release history remains in its upstream changelog.
   [Herdr World PR #75](https://github.com/IvoryHeart/herdr-world/pull/75)
 
 ### Removed
+
+- Removed eleven Superpowers workflow skills and the OpenSpec propose skill from
+  project discovery. Setup now preserves a three-skill Superpowers selection;
+  OpenWiki remains an optional local integration. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 - Retired the experimental Ralph runtime, custom supervisor and model containers,
   legacy role skills, unused Harbor execution path and Graphify tool pin. Retained

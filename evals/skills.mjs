@@ -9,7 +9,7 @@ import { bundleDigest } from '../scripts/agent/skills.mjs';
 
 const release = JSON.parse(await readFile(join(repoRoot, 'harness/superpowers/release.json'), 'utf8'));
 const bundle = join(repoRoot, '.agents/skills/superpowers');
-assert.equal(await bundleDigest(bundle), release.skillsSha256,
+assert.equal(await bundleDigest(bundle), release.selectedSkillsSha256,
   'Upstream skill files differ from the pinned bundle');
 
 const child = spawn(join(repoRoot, 'harness/node_modules/.bin/codex'), ['--cd', repoRoot, 'app-server'], {
@@ -58,11 +58,24 @@ try {
   assert.deepEqual(current.errors, [], 'Native skill loading errors');
   const enabled = current.skills.filter(skill => skill.enabled);
   const upstreamNames = name => [name, `superpowers:${name}`];
-  for (const name of release.skills) {
+  for (const name of release.selectedSkills) {
     const matches = enabled.filter(skill => upstreamNames(name).includes(skill.name));
     assert.equal(matches.length, 1, 'Missing or duplicated upstream skill: ' + name);
+    assert.equal(matches[0].path, join(bundle, name, 'SKILL.md'), 'Upstream skill is not from this worktree: ' + name);
   }
-  assert.equal(enabled.filter(skill => skill.name.startsWith('openspec-')).length, 6, 'OpenSpec skill visibility');
+  const excludedSkills = release.skills.filter(name => !release.selectedSkills.includes(name));
+  for (const name of [...excludedSkills, 'openspec-propose']) {
+    assert(!enabled.some(skill => upstreamNames(name).includes(skill.name)), 'Excluded skill unexpectedly discovered: ' + name);
+  }
+  const openspecSkills = ['openspec-explore', 'openspec-update-change', 'openspec-apply-change',
+    'openspec-sync-specs', 'openspec-archive-change'];
+  const repositorySkills = ['world-maintain-knowledge', 'world-evaluate-harness'];
+  for (const name of [...openspecSkills, ...repositorySkills]) {
+    const matches = enabled.filter(skill => skill.name === name);
+    assert.equal(matches.length, 1, 'Missing or duplicated project skill: ' + name);
+    assert.equal(matches[0].path, join(repoRoot, '.agents/skills', name, 'SKILL.md'),
+      'Project skill is not from this worktree: ' + name);
+  }
   for (const name of release.legacySkills) {
     assert(!enabled.some(skill => skill.name === name), 'Legacy workflow unexpectedly discovered: ' + name);
   }
@@ -71,7 +84,8 @@ try {
   // journals establish which models actually ran.
   console.log(JSON.stringify({ status: 'passed', scope: 'fresh-app-server-discovery',
     activeSessionVerified: false, superpowers: release.version,
-    upstreamSkills: release.skills.length, openspecSkills: 6,
+    upstreamSkills: release.selectedSkills.length, excludedUpstreamSkills: excludedSkills.length,
+    openspecSkills: openspecSkills.length, repositorySkills: repositorySkills.length,
     legacySkillsOutsideDiscovery: release.legacySkills.length,
     model: settings.config.model,
     effort: settings.config.model_reasoning_effort,
