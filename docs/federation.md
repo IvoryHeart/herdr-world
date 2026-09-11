@@ -102,8 +102,8 @@ page-serving CSP for every bridge origin. The proxy must preserve WebSocket upgr
 ## Failure and compatibility behavior
 
 Each profile is probed independently. An incompatible bridge API, missing feature declarations, or
-malformed capability data blocks that host without blocking compatible hosts. A Herdr `v0.8.2` or
-newer daemon is admitted only when its capabilities report terminal protocol `20` exactly; protocol
+malformed capability data blocks that host without blocking compatible hosts. A Herdr `v0.9.0` or
+newer daemon is admitted only when its capabilities report terminal protocol `22` exactly; protocol
 `19`, protocol `21`, a missing protocol, and malformed protocol values are rejected before terminal
 attach. A network failure marks only that profile offline.
 Stale topology may remain visible for orientation, but structural commands and terminal input,
