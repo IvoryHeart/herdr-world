@@ -75,7 +75,7 @@ type GraphCanvasProps = {
   fitOnMount?: boolean;
   onSelect: (selectionKey: string, hostKey: string) => void;
   onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void;
-  onToggleCollapse: (spaceId: string) => void;
+  onToggleCollapse: (nodeId: string) => void;
   onViewChange: (
     camera: GraphCamera,
     positions: Record<string, SavedGraphPosition>,
@@ -216,10 +216,11 @@ class GraphRenderer {
   #onSelect: (selectionKey: string, hostKey: string) => void = () => {};
   #onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void = () => {};
   #conversationTargets: readonly GraphConversationTarget[] = [];
-  #conversationParentNodeIds = new Map<string, string>();
+  #conversationNodeIds = new Map<string, string>();
+  #nodeParentIds = new Map<string, string>();
   #connectorPaths = new Map<string, { path: SVGPathElement; dot: SVGCircleElement }>();
   #revealedConversationTargetSignatures = new Map<string, string>();
-  #onToggleCollapse: (spaceId: string) => void = () => {};
+  #onToggleCollapse: (nodeId: string) => void = () => {};
   #onViewChange: (
     camera: GraphCamera,
     positions: Record<string, SavedGraphPosition>,
@@ -281,7 +282,7 @@ class GraphRenderer {
   setCallbacks(
     onSelect: (selectionKey: string, hostKey: string) => void,
     onActivate: (node: import("./herdrGraphProjection").WorldGraphNode) => void,
-    onToggleCollapse: (spaceId: string) => void,
+    onToggleCollapse: (nodeId: string) => void,
     onViewChange: (
       camera: GraphCamera,
       positions: Record<string, SavedGraphPosition>,
@@ -326,10 +327,11 @@ class GraphRenderer {
     matchedIds: ReadonlySet<string> | null,
   ) {
     this.#projectionNodeIds = new Set(projection.nodes.map(({ id }) => id));
-    this.#conversationParentNodeIds = new Map(projection.nodes.flatMap((node) =>
-      node.kind === "terminal" && node.parentId
-        ? [[node.selectionKey, node.parentId] as const]
-        : []
+    this.#conversationNodeIds = new Map(
+      projection.nodes.map((node) => [node.selectionKey, node.id]),
+    );
+    this.#nodeParentIds = new Map(projection.nodes.flatMap((node) =>
+      node.parentId ? [[node.id, node.parentId] as const] : []
     ));
     this.#savedPositions = retainedGraphPositions(
       this.#savedPositions,
@@ -496,7 +498,7 @@ class GraphRenderer {
       context.stroke();
     }
     const nodes = [...layout.nodes.values()].sort((left, right) =>
-      Number(left.kind === "space") - Number(right.kind === "space"),
+      graphNodeRank(left.kind) - graphNodeRank(right.kind),
     );
     for (const node of nodes) this.#drawNode(context, node);
     context.restore();
@@ -505,14 +507,18 @@ class GraphRenderer {
 
   #drawNode(context: CanvasRenderingContext2D, node: GraphLayoutNode) {
     const source = node.source;
-    const radius = source.kind === "space" ? 47 : 22;
+    const radius = graphNodeRadius(source.kind);
     const matched = !this.#matchedIds || this.#matchedIds.has(source.id);
     context.save();
     context.globalAlpha = matched ? 1 : 0.2;
     context.translate(node.x, node.y);
     context.beginPath();
     context.arc(0, 0, radius, 0, Math.PI * 2);
-    context.fillStyle = source.kind === "space" ? "#181825" : statusFill(source.status);
+    context.fillStyle = source.kind === "host"
+      ? "#11111b"
+      : source.kind === "space"
+        ? "#181825"
+        : statusFill(source.status);
     context.fill();
     context.setLineDash(source.stale ? [5, 4] : []);
     context.lineWidth = source.selectionKey === this.#selectedKey ? 4 : source.focused ? 3 : 1.5;
@@ -526,23 +532,42 @@ class GraphRenderer {
     context.fillStyle = "#f5e0dc";
     context.textAlign = "center";
     context.textBaseline = "middle";
-    context.font = source.kind === "space" ? "600 11px sans-serif" : "700 12px sans-serif";
-    if (source.kind === "terminal") {
+    context.font = source.kind === "host"
+      ? "700 13px sans-serif"
+      : source.kind === "space"
+        ? "600 11px sans-serif"
+        : "700 12px sans-serif";
+    if (source.kind === "agent" || source.kind === "terminal") {
       drawTerminalGlyph(context, source);
       context.font = "600 9px sans-serif";
       context.fillStyle = "#cdd6f4";
       context.fillText(shortCanvasLabel(context, source.label, 70), 0, radius + 14);
     } else {
-      context.fillText(shortCanvasLabel(context, source.label, 76), 0, -5);
+      context.fillText(shortCanvasLabel(context, source.label, source.kind === "host" ? 96 : 76), 0, -5);
       context.font = "500 8px sans-serif";
       context.fillStyle = "#a6adc8";
-      context.fillText(shortCanvasLabel(context, source.hostLabel, 72), 0, 11);
+      context.fillText(
+        shortCanvasLabel(
+          context,
+          source.kind === "host"
+            ? `${source.subtitle ?? "Host"} · ${source.connectionState}`
+            : source.hostLabel,
+          86,
+        ),
+        0,
+        11,
+      );
       if (source.omittedChildCount > 0) {
         context.fillStyle = "#f9e2af";
-        context.fillText(`+${source.omittedChildCount} terminals`, 0, 25);
+        context.fillText(
+          `+${source.omittedChildCount} ${source.kind === "host" ? "spaces" : "children"}`,
+          0,
+          25,
+        );
       }
+      const badge = collapseBadgeOffset(source.kind);
       context.beginPath();
-      context.arc(36, -36, 11, 0, Math.PI * 2);
+      context.arc(badge, -badge, 11, 0, Math.PI * 2);
       context.fillStyle = "#313244";
       context.fill();
       context.strokeStyle = "#89b4fa";
@@ -550,7 +575,7 @@ class GraphRenderer {
       context.stroke();
       context.fillStyle = "#cdd6f4";
       context.font = "700 14px sans-serif";
-      context.fillText(this.#collapsedIds.has(source.id) ? "+" : "−", 36, -36);
+      context.fillText(this.#collapsedIds.has(source.id) ? "+" : "−", badge, -badge);
     }
     if (source.stale) {
       context.fillStyle = "#f38ba8";
@@ -579,12 +604,15 @@ class GraphRenderer {
     const nodes = [...this.#layout.nodes.values()].reverse();
     for (const node of nodes) {
       if (
-        node.kind === "space" &&
-        Math.hypot(worldX - (node.x + 36), worldY - (node.y - 36)) <= 14
+        (node.kind === "host" || node.kind === "space") &&
+        Math.hypot(
+          worldX - (node.x + collapseBadgeOffset(node.kind)),
+          worldY - (node.y - collapseBadgeOffset(node.kind)),
+        ) <= 14
       ) {
         return node;
       }
-      const radius = node.kind === "space" ? 50 : 25;
+      const radius = graphNodeRadius(node.kind) + 3;
       if (Math.hypot(worldX - node.x, worldY - node.y) <= radius) return node;
     }
     return null;
@@ -595,8 +623,11 @@ class GraphRenderer {
     const point = this.#point(event);
     const node = this.#hitNode(point.worldX, point.worldY);
     const collapse = Boolean(
-      node?.kind === "space" &&
-      Math.hypot(point.worldX - (node.x + 36), point.worldY - (node.y - 36)) <= 14,
+      (node?.kind === "host" || node?.kind === "space") &&
+      Math.hypot(
+        point.worldX - (node.x + collapseBadgeOffset(node.kind)),
+        point.worldY - (node.y - collapseBadgeOffset(node.kind)),
+      ) <= 14,
     );
     this.#pointer = {
       pointerId: event.pointerId,
@@ -644,7 +675,7 @@ class GraphRenderer {
     this.#canvas.releasePointerCapture?.(event.pointerId);
     if (!pointer.moved && pointer.nodeId && this.#layout) {
       const node = this.#layout.nodes.get(pointer.nodeId);
-      if (pointer.mode === "collapse" && node?.kind === "space") {
+      if (pointer.mode === "collapse" && (node?.kind === "host" || node?.kind === "space")) {
         this.#onToggleCollapse(node.id);
       } else if (node) {
         this.#onSelect(node.source.selectionKey, node.source.hostKey);
@@ -691,7 +722,10 @@ class GraphRenderer {
   #onDoubleClick = (event: MouseEvent) => {
     const point = this.#point(event);
     const node = this.#hitNode(point.worldX, point.worldY);
-    if (node?.source.kind !== "terminal" || !node.source.actionable) return;
+    if (
+      (node?.source.kind !== "terminal" && node?.source.kind !== "agent") ||
+      !node.source.actionable
+    ) return;
     event.preventDefault();
     this.#onActivate(node.source);
   };
@@ -703,12 +737,9 @@ class GraphRenderer {
     for (const target of this.#conversationTargets) {
       const elements = this.#connectorPaths.get(target.id);
       let node = nodesBySelectionKey.get(target.selectionKey);
-      let anchorKind = "terminal";
-      if (!node) {
-        const parentId = this.#conversationParentNodeIds.get(target.selectionKey);
-        node = parentId ? layout.nodes.get(parentId) : undefined;
-        anchorKind = "collapsed-parent";
-      }
+      const directNodeId = this.#conversationNodeIds.get(target.selectionKey);
+      if (!node && directNodeId) node = this.#visibleAncestor(layout, directNodeId);
+      const anchorKind = node?.id === directNodeId ? "terminal" : "collapsed-parent";
       if (!elements || !node) {
         elements?.path.setAttribute("visibility", "hidden");
         elements?.dot.setAttribute("visibility", "hidden");
@@ -754,9 +785,9 @@ class GraphRenderer {
       [...layout.nodes.values()].map((node) => [node.source.selectionKey, node]),
     );
     for (const target of this.#conversationTargets) {
-      const parentId = this.#conversationParentNodeIds.get(target.selectionKey);
+      const directNodeId = this.#conversationNodeIds.get(target.selectionKey);
       const node = nodesBySelectionKey.get(target.selectionKey) ??
-        (parentId ? layout.nodes.get(parentId) : undefined);
+        (directNodeId ? this.#visibleAncestor(layout, directNodeId) : undefined);
       if (!node) {
         this.#revealedConversationTargetSignatures.delete(target.id);
         continue;
@@ -780,6 +811,16 @@ class GraphRenderer {
         y: this.#camera.y + nudge.y,
       };
     }
+  }
+
+  #visibleAncestor(layout: GraphLayoutState, nodeId: string) {
+    let currentId: string | undefined = nodeId;
+    while (currentId) {
+      const node = layout.nodes.get(currentId);
+      if (node) return node;
+      currentId = this.#nodeParentIds.get(currentId);
+    }
+    return undefined;
   }
 
   #onVisibilityChange = () => {
@@ -885,6 +926,18 @@ function statusFill(status: string) {
           : "#28283a";
 }
 
+function graphNodeRank(kind: import("./herdrGraphProjection").WorldGraphNode["kind"]) {
+  return kind === "host" ? 0 : kind === "space" ? 1 : 2;
+}
+
+function graphNodeRadius(kind: import("./herdrGraphProjection").WorldGraphNode["kind"]) {
+  return kind === "host" ? 62 : kind === "space" ? 47 : 22;
+}
+
+function collapseBadgeOffset(kind: import("./herdrGraphProjection").WorldGraphNode["kind"]) {
+  return kind === "host" ? 49 : 36;
+}
+
 function statusStroke(status: string) {
   return status === "working" ? "#a6e3a1"
     : status === "blocked" ? "#f38ba8"
@@ -896,9 +949,9 @@ function statusStroke(status: string) {
 export type GraphTerminalGlyphKind = AgentIconKind | "generic-agent" | "terminal";
 
 export function graphTerminalGlyphKind(
-  node: Pick<import("./herdrGraphProjection").WorldGraphNode, "agentKind" | "agentRunning">,
+  node: Pick<import("./herdrGraphProjection").WorldGraphNode, "agentKind" | "kind">,
 ): GraphTerminalGlyphKind {
-  return node.agentKind ?? (node.agentRunning ? "generic-agent" : "terminal");
+  return node.agentKind ?? (node.kind === "agent" ? "generic-agent" : "terminal");
 }
 
 export function retainedGraphPositions(

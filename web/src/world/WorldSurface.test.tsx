@@ -16,12 +16,20 @@ vi.mock("./PixelOfficeCanvas", () => ({
     children,
     onLayoutChange,
     onCanvasRendered,
+    selectedKey,
+    conversationTargets,
   }: {
     children?: ReactNode;
     onLayoutChange?: (layout: PublishedOfficeLayout | null) => void;
     onCanvasRendered?: (revision: number) => void;
+    selectedKey?: string | null;
+    conversationTargets?: Array<{ id: string; selectedKey: string | null; targetKey: string }>;
   }) => (
     <div className="world-stage-scroll">
+      <output data-testid="office-presentation-selection">{selectedKey ?? "none"}</output>
+      <output data-testid="office-conversation-targets">
+        {JSON.stringify(conversationTargets ?? [])}
+      </output>
       <button type="button" data-testid="publish-revision-7" onClick={() => onLayoutChange?.(layout(7))} />
       <button type="button" data-testid="publish-revision-8" onClick={() => onLayoutChange?.(layout(8))} />
       <button type="button" data-testid="ack-revision-7" onClick={() => onCanvasRendered?.(7)} />
@@ -117,7 +125,6 @@ describe("WorldSurface Agent Bar revision gating", () => {
       deskPresented: true,
       destinationPresented: true,
     }];
-
     await act(async () => {
       root.render(<WorldSurface context={worldContext} />);
     });
@@ -133,6 +140,71 @@ describe("WorldSurface Agent Bar revision gating", () => {
     await act(async () => target?.click());
 
     expect(worldContext.onSelect).toHaveBeenCalledWith("agent-a");
+  });
+
+  it("maps a shell terminal selection to its Office desk without changing shared identity", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const worldContext = context();
+    const desk = {
+      key: "desk-a",
+      hostKey: "host-a",
+      roomKey: "room-a",
+      tabRef: { profileId: "host-a", kind: "tab" as const, nativeTargetId: "tab-a" },
+      terminalSelectionKeys: ["terminal-a"],
+      observedGeneration: "generation-a",
+      displayLabel: "Shell desk",
+      order: 1,
+      stale: false,
+      canOpenInSpaces: true,
+      completionAgentKeys: [],
+    };
+    worldContext.selectedKey = "terminal-a";
+    worldContext.projection.deskRoster = [{
+      desk,
+      roomLabel: "Room A",
+      hostLabel: "Host A",
+      presented: true,
+    }];
+    worldContext.conversationBubbles = [{
+      id: "shell-window",
+      selectedKey: "terminal-a",
+      targetKey: "terminal-a",
+      content: null,
+    }];
+
+    await act(async () => {
+      root.render(<WorldSurface context={worldContext} />);
+    });
+
+    expect(worldContext.selectedKey).toBe("terminal-a");
+    expect(container.querySelector("[data-testid='office-presentation-selection']")?.textContent)
+      .toBe("desk-a");
+    expect(JSON.parse(
+      container.querySelector("[data-testid='office-conversation-targets']")?.textContent ?? "[]",
+    )).toEqual([{
+      id: "shell-window",
+      selectedKey: "desk-a",
+      targetKey: "desk-a",
+    }]);
+  });
+
+  it("announces a rejected exact terminal handoff in Office", async () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.push(root);
+    const worldContext = context();
+    worldContext.handoffStatus = "That terminal is no longer available. Office remains open.";
+
+    await act(async () => {
+      root.render(<WorldSurface context={worldContext} />);
+    });
+
+    expect(container.querySelector("[role='status']")?.textContent)
+      .toBe(worldContext.handoffStatus);
   });
 });
 

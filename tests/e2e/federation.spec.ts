@@ -1,3 +1,4 @@
+import { expectHostState, selectAllHosts, selectHost } from "./sidebarControls";
 import { expect, test } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
@@ -14,20 +15,13 @@ test("one browser federates colliding native IDs and routes only to the owning b
 }) => {
   await page.goto("/spaces");
 
-  await expect(
-    page.getByRole("button", { name: "localhost, compatible" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Remote B, compatible" }),
-  ).toBeVisible();
-  await page
-    .getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
+  await expectHostState(page, "localhost", "compatible");
+  await expectHostState(page, "Remote B", "compatible");
+  await selectAllHosts(page);
   await expect(page.getByRole("button", { name: /^Codex A / })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Codex B / })).toBeVisible();
 
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await page.getByRole("button", { name: /^Codex B / }).click();
   await expect(page.getByText("Agent B", { exact: true })).toBeVisible();
   await page.locator(".terminal-stage").click();
@@ -66,27 +60,19 @@ test("offline, incompatible, and malformed profiles stay isolated", async ({
 }) => {
   await page.goto("/spaces");
 
-  await expect(
-    page.getByRole("button", { name: "Protocol C, incompatible" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Malformed D, incompatible" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Offline E, offline" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "localhost, compatible" }),
-  ).toBeVisible();
+  await expectHostState(page, "Protocol C", "incompatible");
+  await expectHostState(page, "Malformed D", "incompatible");
+  await expectHostState(page, "Offline E", "offline");
+  await expectHostState(page, "localhost", "compatible");
 
-  await page.getByRole("button", { name: "Offline E, offline" }).click();
+  await selectHost(page, "Offline E", "offline");
   await expect(page.getByRole("button", { name: "New tab" })).toHaveCount(0);
   await expect(page.locator(".xterm-helper-textarea")).toHaveCount(0);
   await expect(
     page.getByText("Connection disconnected", { exact: true }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "localhost, compatible" }).click();
+  await selectHost(page, "localhost", "compatible");
   await expect(page.getByRole("button", { name: "New tab" })).toBeEnabled();
   await expect(page.getByRole("button", { name: /^Codex A / })).toBeVisible();
 });
@@ -98,10 +84,7 @@ test("malformed snapshots are rejected without blanking another host", async ({
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto("/spaces");
-  await page
-    .getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
+  await selectAllHosts(page);
   await expect(page.getByRole("button", { name: /^Codex A / })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Codex B / })).toBeVisible();
 
@@ -110,10 +93,10 @@ test("malformed snapshots are rejected without blanking another host", async ({
   });
   await page.getByRole("button", { name: "Refresh" }).click();
 
-  await expect(page.getByRole("button", { name: "Remote B, offline" })).toBeVisible();
+  await expectHostState(page, "Remote B", "offline");
   await expect(page.getByRole("button", { name: /^Codex B / })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Codex A / })).toBeVisible();
-  await page.getByRole("button", { name: "localhost, compatible" }).click();
+  await selectHost(page, "localhost", "compatible");
   await expect(page.getByRole("button", { name: "New tab" })).toBeEnabled();
   expect(pageErrors).toEqual([]);
 });
@@ -123,7 +106,7 @@ test("retained offline rows cannot publish selection or focus mutations", async 
   request,
 }) => {
   await page.goto("/spaces");
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await page.getByRole("button", { name: /^Codex B / }).click();
 
   const beforeResponse = await request.get("http://127.0.0.1:4173/__fixture/requests");
@@ -135,13 +118,10 @@ test("retained offline rows cannot publish selection or focus mutations", async 
     data: { hostId: "host-b", snapshotMode: "offline" },
   });
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByRole("button", { name: "Remote B, offline" })).toBeVisible();
+  await expectHostState(page, "Remote B", "offline");
   await expect(page.getByRole("button", { name: "New space" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "New tab" })).toBeDisabled();
-  await page
-    .getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
+  await selectAllHosts(page);
   await page.getByRole("button", { name: /^Codex B / }).click();
 
   await expect
@@ -164,7 +144,7 @@ test("read-only terminal attach does not imply input, resize, scroll, or upload"
     data: { hostId: "host-b", features: ["snapshot", "terminal_attach"] },
   });
   await page.goto("/spaces");
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await expect
     .poll(async () => {
       const response = await request.get("http://127.0.0.1:4173/__fixture/requests");
@@ -226,7 +206,7 @@ test("partial structural command declarations disable every unsupported entry po
     data: { hostId: "host-b", commands: ["workspace.rename"] },
   });
   await page.goto("/spaces");
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
 
   await expect(page.getByRole("button", { name: "New space" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "New tab" })).toBeDisabled();
@@ -247,9 +227,9 @@ test("core surface capabilities are enforced per host", async ({ page, request }
   });
   await page.goto("/spaces");
 
-  await expect(page.getByRole("button", { name: "Remote B, incompatible" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "localhost, compatible" })).toBeVisible();
-  await page.getByRole("button", { name: "Remote B, incompatible" }).click();
+  await expectHostState(page, "Remote B", "incompatible");
+  await expectHostState(page, "localhost", "compatible");
+  await selectHost(page, "Remote B", "incompatible");
   await expect(page.getByText("Missing terminal_attach capability", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "New tab" })).toHaveCount(0);
 });
@@ -259,14 +239,14 @@ test("recovery re-handshakes capabilities before restoring controls", async ({
   request,
 }) => {
   await page.goto("/spaces");
-  await expect(page.getByRole("button", { name: "Remote B, compatible" })).toBeVisible();
+  await expectHostState(page, "Remote B", "compatible");
 
   await request.post("http://127.0.0.1:4173/__fixture/state", {
     data: { hostId: "host-b", snapshotMode: "offline" },
   });
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(page.getByRole("button", { name: "Remote B, offline" })).toBeVisible();
-  await page.getByRole("button", { name: "Remote B, offline" }).click();
+  await expectHostState(page, "Remote B", "offline");
+  await selectHost(page, "Remote B", "offline");
   await expect(page.getByRole("button", { name: "New space" })).toBeDisabled();
 
   const eventResponse = await request.post("http://127.0.0.1:4173/__fixture/ws-event", {
@@ -286,7 +266,7 @@ test("recovery re-handshakes capabilities before restoring controls", async ({
     },
   });
   expect((await eventResponse.json()).sent).toBeGreaterThan(0);
-  await expect(page.getByRole("button", { name: "Remote B, offline" })).toBeVisible();
+  await expectHostState(page, "Remote B", "offline");
   await expect(page.getByRole("button", { name: "New space" })).toBeDisabled();
 
   await request.post("http://127.0.0.1:4173/__fixture/state", {
@@ -294,8 +274,8 @@ test("recovery re-handshakes capabilities before restoring controls", async ({
   });
   await page.getByRole("button", { name: "Refresh" }).click();
 
-  await expect(page.getByRole("button", { name: "Remote B, incompatible" })).toBeVisible();
-  await page.getByRole("button", { name: "Remote B, incompatible" }).click();
+  await expectHostState(page, "Remote B", "incompatible");
+  await selectHost(page, "Remote B", "incompatible");
   await expect(page.getByRole("button", { name: "New tab" })).toBeDisabled();
   await expect
     .poll(async () => {

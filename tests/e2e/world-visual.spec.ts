@@ -1,10 +1,11 @@
+import { openView, expectHostState, selectAllHosts, selectView } from "./sidebarControls";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
-const evidenceDir = resolve("docs/evidence/spec-010-extension-003");
-const conversationEvidenceDir = resolve("docs/evidence/spec-001-office-agent-conversation-bubble");
+const evidenceDir = resolve(".scratch/playwright/evidence/spec-010-extension-003");
+const conversationEvidenceDir = resolve(".scratch/playwright/evidence/spec-001-office-agent-conversation-bubble");
 
 test.use({ reducedMotion: "reduce" });
 test.describe.configure({ timeout: 90_000 });
@@ -33,10 +34,7 @@ for (const viewport of [
     await page.goto("/world");
     await waitForOffice(page);
     await waitForFrameFixtures(page);
-    await page
-      .getByRole("group", { name: "Host" })
-      .getByRole("button", { name: "All", exact: true })
-      .click();
+    await selectAllHosts(page);
     await waitForLiveOffice(page);
     await expect(page.locator(".brand-sub")).toHaveText("3 blocked");
     const selectedAgent = page.locator(".agent-row").filter({ hasText: "Agent 11" });
@@ -46,12 +44,7 @@ for (const viewport of [
       path: resolve(evidenceDir, `world-live-${viewport.width}x${viewport.height}.png`),
       animations: "disabled",
     });
-    await page.locator(".world-stage-scroll").evaluate((element) =>
-      element.scrollTo({ top: element.scrollHeight, behavior: "auto" }));
-    await page.screenshot({
-      path: resolve(evidenceDir, `world-agent-bar-${viewport.width}x${viewport.height}.png`),
-      animations: "disabled",
-    });
+    await expect(page.getByRole("region", { name: "Agent Bar" })).toContainText(/visible/);
   });
 }
 
@@ -78,10 +71,7 @@ test("captures the stable Office conversation bubble", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/world");
   await waitForOffice(page);
-  await page
-    .getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
+  await selectAllHosts(page);
   await waitForLiveOffice(page);
   await page.locator(".agent-row").filter({ hasText: "Agent 11" }).click();
   const conversation = page.locator("[data-world-conversation='open']");
@@ -115,17 +105,20 @@ async function waitForOffice(page: import("@playwright/test").Page) {
 }
 
 async function selectOffice(page: Page) {
-  await page.locator(".world-theme-menu-trigger").click();
-  await page.getByRole("menu", { name: "World themes" })
-    .getByRole("menuitemradio", { name: "Office", exact: true })
-    .click();
+  await openView(page, "Office");
 }
 
-async function waitForFrameFixtures(page: import("@playwright/test").Page) {
-  await expect(page.getByRole("button", { name: "Remote B, compatible" })).toBeAttached();
-  await expect(page.getByRole("button", { name: "Protocol C, incompatible" })).toBeAttached();
-  await expect(page.getByRole("button", { name: "Malformed D, incompatible" })).toBeAttached();
-  await expect(page.getByRole("button", { name: "Offline E, offline" })).toBeAttached();
+async function waitForFrameFixtures(page: Page) {
+  const compact = await page.locator("aside.sidebar").evaluate((element) => element.hasAttribute("inert"));
+  if (compact) await page.getByRole("button", { name: "Back to Herdr sidebar" }).click();
+  await expectHostState(page, "Remote B", "compatible");
+  await expectHostState(page, "Protocol C", "incompatible");
+  await expectHostState(page, "Malformed D", "incompatible");
+  await expectHostState(page, "Offline E", "offline");
+  if (compact) {
+    await page.getByRole("button", { name: "Open Office view", exact: true }).click();
+    await expect(page.locator(".app")).toHaveAttribute("data-detail", "true");
+  }
 }
 
 async function waitForLiveOffice(page: import("@playwright/test").Page) {

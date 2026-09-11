@@ -5,8 +5,12 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Herdr World is a browser and mobile workspace for [Herdr](https://github.com/herdrdev/herdr).
-It combines live terminal Spaces with visual Pixel Office and Graph themes, multi-host viewing,
+It combines live terminal Spaces with visual Pixel Office, Tree, and Graph themes, multi-host viewing,
 shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
+
+Tree presents a compact Operations Console: host and space cards connect to stacked agent or
+terminal siblings, with observed coverage and persistent selection details. The shared sidebar
+switches all four views; phones use the searchable, keyboard-accessible hierarchy.
 
 The current public preview is
 [`v0.1.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
@@ -20,7 +24,7 @@ an interactive overview.
 
 | Graph overview | Connected terminals |
 |:--:|:--:|
-| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing six synthetic example workspaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
+| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing synthetic example spaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
 
 ## Quick Start
 
@@ -54,6 +58,10 @@ Checksum-verified standalone archives are available on the
 
 The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
 may need approval in **System Settings → Privacy & Security**.
+
+For agent-assisted development, start with [the native workflow](docs/agent-development.md).
+The [stack extraction guide](docs/agent-stack.md) lists reusable packages, skills and lessons;
+[OpenWiki and Skillgrade](docs/agent-pilots.md) remain opt-in experiments.
 
 ## Advanced Usage
 
@@ -117,6 +125,7 @@ To run from source:
 ```bash
 npm install
 npm install --prefix web
+npm ci --prefix harness
 npm run dev:local
 ```
 

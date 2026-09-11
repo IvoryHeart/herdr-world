@@ -14,6 +14,37 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  agent:
+    name: Agent harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: harness/package-lock.json
+      - run: npm ci --prefix harness
+      - run: npm run test:agent
+      - run: npm run spec:check
+      - run: npm run eval:check
+
+  delivery:
+    name: Delivery checks
+    if: always()
+    needs: [launchd, check, browser, agent]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs=JSON.parse(process.env.RESULTS); if (!Object.values(jobs).every(job => job.result === "success")) process.exit(1)'
+
   launchd:
     name: macOS launchd plugin lifecycle (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
@@ -60,6 +91,8 @@ jobs:
           sudo apt-get install --yes ripgrep
       - name: Install root dependencies
         run: npm ci
+      - name: Install pinned harness dependencies
+        run: npm ci --prefix harness
       - name: Install web dependencies
         run: npm ci --prefix web
       - name: Run complete non-live checks

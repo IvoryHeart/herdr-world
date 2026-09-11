@@ -8,7 +8,7 @@ minimal effort.
 # Repository delivery workflow
 
 - Never commit or push directly to `main`. Make all repository changes, including release preparation and fixes, on a branch and deliver them through a pull request. Do not run automation that pushes `main` directly; stop and use a PR-based workflow or ask for direction if the automation cannot do that.
-- Treat opening the pull request as the delivery stopping point. Do not merge it unless the repository owner explicitly asks you to merge. Pull requests require independent review before merging unless the repository owner explicitly states that review is not required.
+- Treat opening a ready pull request as the delivery stopping point. An optional early draft may expose a coherent checkpoint; it must remain explicitly incomplete until the same delivery evidence passes. Do not merge it unless the repository owner explicitly asks you to merge. Pull requests require independent review before merging unless the repository owner explicitly states that review is not required.
 
 Specifications are decision aids, not a gate on ordinary engineering work.
 Use one only when the repository owner asks for one or when a genuinely new
@@ -27,6 +27,32 @@ important validation, but a paired summary is not mandatory.
 This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Start Here
+
+- Read [docs/agent-development.md](docs/agent-development.md) for the native coding
+  workflow, model allocation, worktrees, evidence reuse and usage reporting. Use
+  [docs/knowledge-map.md](docs/knowledge-map.md) to locate contracts and source.
+- Use native coding-agent conversations and the three selected Superpowers skills. Start from
+  the owner's short goal, inspect the relevant source, clarify consequential gaps,
+  and continue authorized work in the same session. OpenSpec supplies decisions and
+  tasks when needed; routine fixes do not need a proposal.
+- Create or reuse a task worktree under the primary checkout's `.agents/worktrees/`
+  with `agent:worktree create <slug> <parent-ref>`. Resolve the requested parent PR's
+  actual branch first. Keep sequential writers and read-only reviewers in that
+  worktree; do not move or clean another agent's worktree.
+- Use native subagents for bounded implementation or independent review when useful.
+  Reuse their histories for scoped corrections and wait for native completion.
+  A small task can stay with the lead until independent review. No additional
+  supervisor, launcher or mandatory sequence of specialist agents is required.
+- Repository rules apply immediately when read. Missing live skill discovery can be
+  handled by reading the installed SKILL.md directly; do not require a new session
+  solely because the agent created a worktree. Report when a new MCP connection or
+  client setting actually requires reload; a setup check cannot certify this session.
+- Keep procedures in docs/agent-development.md, task-specific judgment in skills,
+  and transient task facts in ignored .agents/state/. Do not duplicate policy in
+  local overrides, role prompts or generated wiki pages.
+- Current contracts are in `openspec/specs/`, active proposals in `openspec/changes/`,
+  and historical numbered specs in `docs/specs/`. Use the pinned `npm run spec -- ...`.
+  Scratchpads, graphs and eval outputs do not override contracts, source or these rules.
 
 - Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See
@@ -51,7 +77,8 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Keep bridge command exposure narrow. Browser commands should stay allow-listed and parameter-validated in `web_bridge.rs`.
 - Keep generated outputs out of commits: `web/dist/`, `bridge/target/`, and
   `vendor/herdr-compat/target/`, `dist-packages/`, and Android build outputs.
-- The bridge is local-first and currently has no full browser authentication. Treat LAN binding and upload behavior as security-sensitive.
+- The bridge is local-first, with optional password authentication and bounded sessions.
+  It has no multi-user authorization model. Treat LAN binding and uploads as security-sensitive.
 
 ## Privacy And Local Data
 
@@ -65,13 +92,19 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Testing
 
-- Run `npm install --prefix web` if dependencies are missing.
+- Run `npm ci --prefix harness` to install the pinned development tools used by repository checks.
+- Reuse prepared dependencies. If web dependencies are missing, run `npm ci --prefix web`
+  to preserve the lockfile; dependency updates are a separate intentional change.
 - Run `npm run vendor:check` to verify the vendored layout.
 - Run `npm run lint:web` for ESLint.
 - Run `npm run test:web` for Vitest.
 - Run `npm run build:web` for the frontend production build.
 - Run `npm run bridge:test` for bridge unit tests when a Rust toolchain (cargo) is available.
-- Run `npm run check` before committing or releasing.
+- Run `npm run check` for the final implementation candidate before PR delivery or
+  release. Within an authorized task, use focused checks for intermediate commits;
+  the lead owns complete acceptance. Reuse successful checks when their relevant
+  source and command inputs are unchanged; reports and PR attribution alone do not
+  require repeating unrelated suites.
 - Install pinned `cargo-about` 0.9.2 and run `npm run notices:generate` whenever
   a production dependency graph changes. `npm run notices:check` is part of the
   normal repository check and must remain byte-clean.
@@ -129,4 +162,5 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - The release workflow builds and uploads the desktop, npm, plugin, and Homebrew outputs. Android
   remains separate until a signed public APK exists. Do not commit `dist-packages/`, APKs, or
   generated Android outputs.
-- Do not bump npm package versions until package publishing is defined.
+- Root and web development manifests remain private at `0.0.0`; public package versions
+  are derived from the reviewed release tag. Follow `docs/release.md`.

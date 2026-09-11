@@ -1,3 +1,5 @@
+import { CommandDraftContext, createCommandDraftStore } from "./commandDrafts";
+import { linkedWorkspaceLabels } from "./workspaceClose";
 import {
   Activity,
   Archive,
@@ -40,6 +42,7 @@ import type {
   KeyboardEvent as ReactKeyboardEvent,
   MutableRefObject,
   PointerEvent as ReactPointerEvent,
+  RefObject,
   ReactNode,
   SetStateAction,
 } from "react";
@@ -92,12 +95,14 @@ import { fetchLauncherPresets, supportsLauncherPresets } from "./launcherPresets
 import type { LauncherPresetsResponse } from "./launcherPresets";
 import {
   DEFAULT_MOBILE_COMMAND_ENTER_NEWLINE,
+  DEFAULT_MOBILE_COMMAND_FOCUS_AFTER_SUBMIT,
   DEFAULT_MOBILE_COMMAND_EXPANDING_INPUT,
   DEFAULT_MOBILE_KEYBOARD_HIDE_REFIT,
   DEFAULT_MOBILE_LONG_PRESS_BEHAVIOR,
   DEFAULT_MOBILE_TOUCH_SELECTION_ENDPOINT_TIMEOUT_MS,
   DEFAULT_MOBILE_TERMINAL_TAP_TARGET,
   parseMobileCommandEnterNewline,
+  parseMobileCommandFocusAfterSubmit,
   parseMobileCommandExpandingInput,
   parseMobileKeyboardHideRefit,
   parseMobileLongPressBehavior,
@@ -169,7 +174,8 @@ import {
 import { terminalSessionDescriptor } from "./terminalSessions";
 import { coreSurfaceRegistry } from "./surfaceRegistry";
 import { SurfaceSlotBoundary } from "./SurfaceSlotBoundary";
-import { WorldThemeSelector } from "./WorldThemeSelector";
+import { SidebarToolbar } from "./SidebarToolbar";
+import type { ToolbarPrimaryView } from "./SidebarToolbar";
 import {
   officeAgentHandoffRequest,
   officeRoomHandoffRequest,
@@ -180,6 +186,7 @@ import { projectHerdrOffice } from "./world/herdrOfficeProjection";
 import type { OfficeAgent } from "./world/herdrOfficeProjection";
 import { projectHerdrGraph } from "./world/graph/herdrGraphProjection";
 import type { WorldGraphNode } from "./world/graph/herdrGraphProjection";
+import { projectHerdrTree } from "./world/tree/treeProjection";
 import {
   useWorldConversationController,
   worldConversationAdmissionPending,
@@ -194,9 +201,13 @@ import {
   readWorldCompletionSeenKeys,
   writeWorldCompletionSeenKeys,
 } from "./world/completionSeenState";
-import { herdrOfficeSourcesFromRuntime } from "./world/worldRuntime";
+import { buildWorldModel } from "./world/worldModel";
+import { worldSourcesFromRuntime } from "./world/worldRuntime";
+import {
+  admitCurrentWorldSpace,
+  admitCurrentWorldTerminal,
+} from "./world/worldNodeAdmission";
 import type { WorldThemeContext } from "./world/worldThemeContext";
-import { worldThemeRegistry } from "./world/worldThemeRegistry";
 import type { WorldThemeDefinition } from "./world/worldThemeRegistry";
 import {
   DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
@@ -210,9 +221,19 @@ import {
   parseTerminalOutputCoalesceMs,
 } from "./terminalOutputCoalescing";
 import {
+  DEFAULT_DESKTOP_COMMAND_COMPOSER,
+  DEFAULT_DESKTOP_COMMAND_ENTER_NEWLINE,
   DEFAULT_TERMINAL_FONT_SIZE_PX,
+  defaultTerminalCursorBlink,
+  parseDesktopCommandComposer,
+  parseDesktopCommandEnterNewline,
+  parseTerminalCursorBlink,
   parseTerminalFontSizePx,
 } from "./terminalPrefs";
+import {
+  DEFAULT_AUTO_RENAME_UPLOAD_CONFLICTS,
+  parseAutoRenameUploadConflicts,
+} from "./uploadPrefs";
 import {
   aggregateStatus,
   basename,
@@ -250,7 +271,7 @@ import {
 import type { WorkspaceReorderDirection } from "./workspaceReorder";
 
 const NoteMarkdownPreview = lazy(() => import("./NoteMarkdownPreview"));
-const EMPTY_GRAPH_PROJECTION = projectHerdrGraph([]);
+const EMPTY_GRAPH_PROJECTION = projectHerdrGraph(buildWorldModel([]));
 
 type LoadState = "loading" | "ready" | "error";
 type Scope = "space" | "all";
@@ -467,6 +488,8 @@ type DialogState = {
   label: string;
   clearable?: boolean;
   noun?: "room";
+  sourceWorkspaceId?: string;
+  linkedWorkspaceLabels?: string[];
 };
 type DisplayPrefs = {
   hostScope: HostScope;
@@ -489,7 +512,11 @@ type DisplayPrefs = {
   notesPanelOpen: boolean;
   sidebarOpen: boolean;
   terminalFontSizePx: number;
+  terminalCursorBlink: boolean;
+  desktopCommandComposer: boolean;
+  desktopCommandEnterNewline: boolean;
   terminalScreenReaderText: boolean;
+  autoRenameUploadConflicts: boolean;
   terminalInputTransport: TerminalInputTransport;
   terminalInputBatchDelayMs: number;
   terminalOutputCoalesceMs: number;
@@ -502,6 +529,7 @@ type DisplayPrefs = {
   mobileKeyboardHideRefit: boolean;
   mobileCommandExpandingInput: boolean;
   mobileCommandEnterNewline: boolean;
+  mobileCommandFocusAfterSubmit: boolean;
 };
 type SharedNavigationPrefs = {
   selectedBridgeId: BridgeId | null;
@@ -553,7 +581,11 @@ function readDisplayPrefs(): DisplayPrefs {
     notesPanelOpen: false,
     sidebarOpen: true,
     terminalFontSizePx: DEFAULT_TERMINAL_FONT_SIZE_PX,
+    terminalCursorBlink: defaultTerminalCursorBlink(),
+    desktopCommandComposer: DEFAULT_DESKTOP_COMMAND_COMPOSER,
+    desktopCommandEnterNewline: DEFAULT_DESKTOP_COMMAND_ENTER_NEWLINE,
     terminalScreenReaderText: DEFAULT_TERMINAL_SCREEN_READER_TEXT,
+    autoRenameUploadConflicts: DEFAULT_AUTO_RENAME_UPLOAD_CONFLICTS,
     terminalInputTransport: DEFAULT_TERMINAL_INPUT_TRANSPORT,
     terminalInputBatchDelayMs: DEFAULT_TERMINAL_INPUT_BATCH_DELAY_MS,
     terminalOutputCoalesceMs: DEFAULT_TERMINAL_OUTPUT_COALESCE_MS,
@@ -566,6 +598,7 @@ function readDisplayPrefs(): DisplayPrefs {
     mobileKeyboardHideRefit: DEFAULT_MOBILE_KEYBOARD_HIDE_REFIT,
     mobileCommandExpandingInput: DEFAULT_MOBILE_COMMAND_EXPANDING_INPUT,
     mobileCommandEnterNewline: DEFAULT_MOBILE_COMMAND_ENTER_NEWLINE,
+    mobileCommandFocusAfterSubmit: DEFAULT_MOBILE_COMMAND_FOCUS_AFTER_SUBMIT,
   };
   try {
     const raw = window.localStorage.getItem(DISPLAY_PREFS_KEY);
@@ -749,9 +782,25 @@ function parseDisplayPrefsValue(
       typeof parsed.notesPanelOpen === "boolean" ? parsed.notesPanelOpen : fallback.notesPanelOpen,
     sidebarOpen,
     terminalFontSizePx: parseTerminalFontSizePx(parsed.terminalFontSizePx),
+    terminalCursorBlink: parseTerminalCursorBlink(
+      parsed.terminalCursorBlink,
+      fallback.terminalCursorBlink,
+    ),
+    desktopCommandComposer: parseDesktopCommandComposer(
+      parsed.desktopCommandComposer,
+      fallback.desktopCommandComposer,
+    ),
+    desktopCommandEnterNewline: parseDesktopCommandEnterNewline(
+      parsed.desktopCommandEnterNewline,
+      fallback.desktopCommandEnterNewline,
+    ),
     terminalScreenReaderText: parseTerminalScreenReaderText(
       parsed.terminalScreenReaderText,
       fallback.terminalScreenReaderText,
+    ),
+    autoRenameUploadConflicts: parseAutoRenameUploadConflicts(
+      parsed.autoRenameUploadConflicts,
+      fallback.autoRenameUploadConflicts,
     ),
     terminalInputTransport: parseTerminalInputTransport(parsed.terminalInputTransport),
     terminalInputBatchDelayMs: parseTerminalInputBatchDelayMs(parsed.terminalInputBatchDelayMs),
@@ -774,6 +823,9 @@ function parseDisplayPrefsValue(
     ),
     mobileCommandEnterNewline: parseMobileCommandEnterNewline(
       parsed.mobileCommandEnterNewline,
+    ),
+    mobileCommandFocusAfterSubmit: parseMobileCommandFocusAfterSubmit(
+      parsed.mobileCommandFocusAfterSubmit,
     ),
   };
 }
@@ -1004,6 +1056,15 @@ function usePointerDragResize(
 }
 
 export function App() {
+  const [commandDrafts] = useState(createCommandDraftStore);
+  return (
+    <CommandDraftContext.Provider value={commandDrafts}>
+      <AppContent commandDrafts={commandDrafts} />
+    </CommandDraftContext.Provider>
+  );
+}
+
+function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof createCommandDraftStore> }) {
   const bridge = useHostRegistry();
   const {
     activeSurface,
@@ -1165,21 +1226,29 @@ export function App() {
   const [noteDeleteTarget, setNoteDeleteTarget] = useState<ScopedNoteEntry | null>(null);
   const [deletingNote, setDeletingNote] = useState(false);
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
+  const [backendSettingsInitialConnection, setBackendSettingsInitialConnection] = useState(false);
   const backendSettingsReturnFocusRef = useRef<HTMLElement | null>(null);
-  const openBackendSettings = useCallback(() => {
-    backendSettingsReturnFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const viewSelectRef = useRef<HTMLSelectElement | null>(null);
+  const compactViewFocusRef = useRef(false);
+  const openBackendSettings = useCallback((
+    returnFocusTarget?: HTMLElement | null,
+    initialConnection = false,
+  ) => {
+    backendSettingsReturnFocusRef.current = returnFocusTarget ??
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    setBackendSettingsInitialConnection(initialConnection);
     setBackendSettingsOpen(true);
   }, []);
   const closeBackendSettings = useCallback(() => {
     setBackendSettingsOpen(false);
-    window.requestAnimationFrame(() => {
-      const target = backendSettingsReturnFocusRef.current;
-      backendSettingsReturnFocusRef.current = null;
-      if (target?.isConnected) {
-        target.focus();
-      }
-    });
+    setBackendSettingsInitialConnection(false);
+    const target = backendSettingsReturnFocusRef.current;
+    backendSettingsReturnFocusRef.current = null;
+    if (target?.isConnected && !target.closest("[inert]")) {
+      target.focus({ preventScroll: true });
+    } else {
+      document.querySelector<HTMLElement>('.stage:not([inert]) [aria-label="Back to Herdr sidebar"]')?.focus({ preventScroll: true });
+    }
   }, []);
   const prepareWorldSettingsOpen = useCallback(() => {
     setBackendSettingsOpen(false);
@@ -1193,8 +1262,20 @@ export function App() {
   const [terminalFontSizePx, setTerminalFontSizePx] = useState(
     initialPrefs.terminalFontSizePx,
   );
+  const [terminalCursorBlink, setTerminalCursorBlink] = useState(
+    initialPrefs.terminalCursorBlink,
+  );
+  const [desktopCommandComposer, setDesktopCommandComposer] = useState(
+    initialPrefs.desktopCommandComposer,
+  );
+  const [desktopCommandEnterNewline, setDesktopCommandEnterNewline] = useState(
+    initialPrefs.desktopCommandEnterNewline,
+  );
   const [terminalScreenReaderText, setTerminalScreenReaderText] = useState(
     initialPrefs.terminalScreenReaderText,
+  );
+  const [autoRenameUploadConflicts, setAutoRenameUploadConflicts] = useState(
+    initialPrefs.autoRenameUploadConflicts,
   );
   const [terminalInputTransport, setTerminalInputTransport] = useState(
     initialPrefs.terminalInputTransport,
@@ -1231,12 +1312,17 @@ export function App() {
   const [mobileCommandEnterNewline, setMobileCommandEnterNewline] = useState(
     initialPrefs.mobileCommandEnterNewline,
   );
+  const [mobileCommandFocusAfterSubmit, setMobileCommandFocusAfterSubmit] = useState(
+    initialPrefs.mobileCommandFocusAfterSubmit,
+  );
   const [launchTarget, setLaunchTarget] = useState<ScopedLaunchTarget | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refitToken, setRefitToken] = useState(0);
   const [terminalFocusToken, setTerminalFocusToken] = useState(0);
   const isCompactLayout = useIsCompactLayout();
+  const previousSidebarNavigationRef = useRef({ compact: isCompactLayout, detail: showDetail,
+    surface: activeSurface.id, theme: activeWorldTheme.id });
   const isTouchInput = useIsTouchInput();
   const showMobileKeyboardHideRefit = isNativeAndroid();
   const spacesSnapshotCacheRef = useRef<
@@ -1325,7 +1411,11 @@ export function App() {
       setSelectedPanesByBridgeId(sharedNavigationPrefs.selectedPanesByBridgeId);
       setActiveWorkspacesByBridgeId(sharedNavigationPrefs.activeWorkspacesByBridgeId);
       setTerminalFontSizePx(prefs.terminalFontSizePx);
+      setTerminalCursorBlink(prefs.terminalCursorBlink);
+      setDesktopCommandComposer(prefs.desktopCommandComposer);
+      setDesktopCommandEnterNewline(prefs.desktopCommandEnterNewline);
       setTerminalScreenReaderText(prefs.terminalScreenReaderText);
+      setAutoRenameUploadConflicts(prefs.autoRenameUploadConflicts);
       setTerminalInputTransport(prefs.terminalInputTransport);
       setTerminalInputBatchDelayMs(prefs.terminalInputBatchDelayMs);
       setTerminalOutputCoalesceMs(prefs.terminalOutputCoalesceMs);
@@ -1338,6 +1428,7 @@ export function App() {
       setMobileKeyboardHideRefit(prefs.mobileKeyboardHideRefit);
       setMobileCommandExpandingInput(prefs.mobileCommandExpandingInput);
       setMobileCommandEnterNewline(prefs.mobileCommandEnterNewline);
+      setMobileCommandFocusAfterSubmit(prefs.mobileCommandFocusAfterSubmit);
       setDisplayPrefsLoaded(true);
       },
     );
@@ -1487,7 +1578,7 @@ export function App() {
   );
   const worldSources = useMemo(
     () =>
-      herdrOfficeSourcesFromRuntime(
+      worldSourcesFromRuntime(
         bridge.profiles,
         bridge.availableRuntimes,
         connectionStates,
@@ -1500,15 +1591,22 @@ export function App() {
       : worldSources,
     [hostScope, selectedBridgeId, worldSources],
   );
-  const worldProjection = useMemo(
-    () => projectHerdrOffice(worldSourcesInScope, Date.now()),
+  const worldModel = useMemo(
+    () => buildWorldModel(worldSourcesInScope),
     [worldSourcesInScope],
   );
+  const worldProjection = useMemo(
+    () => projectHerdrOffice(worldModel, Date.now()),
+    [worldModel],
+  );
   const graphProjection = useMemo(
-    () => activeSurface.id === "world" && activeWorldTheme.id === "graph"
-      ? projectHerdrGraph(worldSourcesInScope)
+    () => activeSurface.id === "world" &&
+      (activeWorldTheme.id === "graph" || activeWorldTheme.id === "tree")
+      ? activeWorldTheme.id === "tree"
+        ? projectHerdrTree(worldModel)
+        : projectHerdrGraph(worldModel)
       : EMPTY_GRAPH_PROJECTION,
-    [activeSurface.id, activeWorldTheme.id, worldSourcesInScope],
+    [activeSurface.id, activeWorldTheme.id, worldModel],
   );
   useEffect(() => {
     officeDebug("world:projection", {
@@ -1533,6 +1631,7 @@ export function App() {
       target: {
         kind: agent.kind,
         targetKey: agent.targetKey,
+        selectionKey: agent.selectionKey,
         agentKey: agent.agentKey,
         bridgeId: agent.bridgeId,
         paneId: agent.paneId,
@@ -1605,6 +1704,7 @@ export function App() {
     selectWorldAgent({
       kind: "agent",
       targetKey: agent.key,
+      selectionKey: agent.key,
       agentKey: agent.key,
       bridgeId: agent.hostKey,
       paneId: pane.pane_id,
@@ -1619,7 +1719,7 @@ export function App() {
     stale: boolean;
     occupantAgentKey?: string;
     completionAgentKeys?: readonly string[];
-  }) => {
+  }, preferredPaneId?: string) => {
     cancelWorldCanvasSelection();
     const runtime = bridge.getRuntime(desk.hostKey);
     const source = worldSourcesInScope.find(
@@ -1636,9 +1736,33 @@ export function App() {
     const panes = source?.snapshot?.panes.filter(
       ({ tab_id }) => tab_id === desk.tabRef.nativeTargetId,
     ) ?? [];
-    const pane = occupant
-      ? panes.find(({ pane_id }) => pane_id === occupant.currentPaneRef.nativeTargetId) ?? null
-      : panes.find(({ focused }) => focused) ?? panes[0] ?? null;
+    const preferredPane = preferredPaneId !== undefined && source?.snapshot
+      ? choosePaneForTab(source.snapshot, desk.tabRef.nativeTargetId, preferredPaneId)
+      : null;
+    const pane = preferredPaneId !== undefined
+      ? panes.find(({ pane_id }) => pane_id === preferredPane) ?? null
+      : occupant
+        ? panes.find(({ pane_id }) => pane_id === occupant.currentPaneRef.nativeTargetId) ?? null
+        : panes.find(({ focused }) => focused) ?? panes[0] ?? null;
+    if (preferredPaneId !== undefined && !pane) {
+      setSelectedBridgeId(desk.hostKey);
+      setWorldHandoffStatus(
+        `That terminal is no longer available. ${activeWorldTheme.label} remains open.`,
+      );
+      return;
+    }
+    const selectedAgent = pane
+      ? worldProjection.roster.find(
+          ({ agent }) =>
+            agent.hostKey === desk.hostKey &&
+            agent.currentPaneRef.nativeTargetId === pane.pane_id,
+        )?.agent ?? null
+      : null;
+    const selectionKey = pane
+      ? selectedAgent?.key ?? qualifiedRuntimeKey(
+          qualifyRuntimeTarget(desk.hostKey, "terminal", pane.terminal_id),
+        )
+      : desk.key;
     const admissionReady = runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"]);
     const admissionPending = worldConversationAdmissionPending(
       runtime,
@@ -1659,7 +1783,7 @@ export function App() {
       admissionPending,
     });
     setSelectedBridgeId(desk.hostKey);
-    setWorldSelectedKey(occupant?.key ?? desk.key);
+    setWorldSelectedKey(selectionKey);
     setWorldHandoffStatus(null);
     if (
       desk.stale ||
@@ -1670,13 +1794,14 @@ export function App() {
     ) {
       return;
     }
-    if (occupant?.semanticStatus === "done") {
-      markWorldCompletionSeen(occupant.key);
+    if (selectedAgent?.semanticStatus === "done") {
+      markWorldCompletionSeen(selectedAgent.key);
     }
     selectWorldAgent({
       kind: "desk",
       targetKey: desk.key,
-      agentKey: occupant?.key ?? null,
+      selectionKey,
+      agentKey: selectedAgent?.key ?? null,
       bridgeId: desk.hostKey,
       paneId: pane.pane_id,
       generationKey: runtime.generationKey,
@@ -1758,9 +1883,11 @@ export function App() {
       return true;
     }
     setSelectedBridgeId(selectedRef.bridgeId);
-    setWorldSelectedKey(
-      agentEntry?.agent.key ?? deskEntry?.desk.occupantAgentKey ?? deskEntry?.desk.key ?? null,
-    );
+    setWorldSelectedKey(agentEntry?.agent.key ?? (selectedPane
+      ? qualifiedRuntimeKey(
+          qualifyRuntimeTarget(selectedRef.bridgeId, "terminal", selectedPane.terminal_id),
+        )
+      : deskEntry?.desk.key ?? null));
     setWorldHandoffStatus(null);
     return true;
   }, [selectedPaneRefState, worldProjection, worldSourcesInScope]);
@@ -1822,7 +1949,7 @@ export function App() {
       return;
     }
     if (deskEntry) {
-      selectWorldProjectedDesk(deskEntry.desk);
+      selectWorldProjectedDesk(deskEntry.desk, pane.pane_id);
       return;
     }
     pendingWorldPaneSelectionRef.current = {
@@ -1861,7 +1988,7 @@ export function App() {
     );
     if (deskEntry) {
       pendingWorldPaneSelectionRef.current = null;
-      selectWorldProjectedDesk(deskEntry.desk);
+      selectWorldProjectedDesk(deskEntry.desk, pending.paneId);
     }
   }, [
     activeSurface.id,
@@ -1962,7 +2089,28 @@ export function App() {
       openWorldTargetInSpaces(officeAgentHandoffRequest(agentEntry.agent));
       return;
     }
-    openWorldTabInSpaces(bridgeId, pane.tab_id);
+    const runtime = bridge.getRuntime(bridgeId);
+    const state = runtime && connectionStates[runtime.id]?.connectionKey === runtime.generationKey
+      ? connectionStates[runtime.id]
+      : null;
+    const currentPane = state?.snapshot?.panes.find(
+      ({ pane_id }) => pane_id === pane.pane_id,
+    ) ?? null;
+    if (
+      !runtime ||
+      !currentPane ||
+      !runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"])
+    ) {
+      setWorldHandoffStatus(
+        `That terminal is no longer available. ${activeWorldTheme.label} remains open.`,
+      );
+      return;
+    }
+    setWorldHandoffStatus(null);
+    clearWorldConversations();
+    navigatePrimaryView("spaces");
+    openPane(bridgeId, currentPane);
+    requestTerminalFocus();
   };
   const openWorldConversationInSpaces = (windowId: string, bridgeId: BridgeId, pane: PaneInfo) => {
     cancelWorldCanvasSelection();
@@ -2010,6 +2158,14 @@ export function App() {
       ),
     [bridge, runtimeIsAdmitted],
   );
+  useEffect(() => {
+    for (const { runtime, snapshot, loadState } of bridgeViews) {
+      if (runtime.canConnect && loadState === "ready" && snapshot) {
+        commandDrafts.retainPanes(runtime.id, snapshot.panes.map((pane) => pane.pane_id));
+      }
+    }
+  }, [bridgeViews, commandDrafts]);
+
   const pinnedAgentKeys = useMemo(
     () => buildAgentPinKeySet(bridgeViews, agentPinsStates),
     [agentPinsStates, bridgeViews],
@@ -2043,31 +2199,16 @@ export function App() {
     terminalOutputCoalesceMs,
   });
   const currentGraphTerminal = (node: WorldGraphNode) => {
-    if (node.kind !== "terminal" || !node.paneId) return null;
-    const latest = graphProjection.nodes.find(({ id }) => id === node.id);
     const runtime = bridge.getRuntime(node.hostKey);
     const state = runtime && connectionStates[runtime.id]?.connectionKey === runtime.generationKey
       ? connectionStates[runtime.id]
       : null;
-    const pane = state?.snapshot?.panes.find(({ pane_id }) => pane_id === node.paneId) ?? null;
-    if (
-      latest?.kind !== "terminal" ||
-      latest.paneId !== node.paneId ||
-      latest.selectionKey !== node.selectionKey ||
-      latest.observedGeneration !== node.observedGeneration ||
-      !runtime ||
-      runtime.generationKey !== node.observedGeneration ||
-      !pane ||
-      !runtimeAdmissionReady(runtime, state, ["snapshot", "terminal_attach"])
-    ) {
-      return null;
-    }
-    return { node: latest, runtime, pane };
+    return admitCurrentWorldTerminal(node, graphProjection, runtime, state);
   };
   const openGraphTerminal = (node: WorldGraphNode) => {
     const current = currentGraphTerminal(node);
     if (!current) {
-      setWorldHandoffStatus("That terminal is no longer available. Graph remains open.");
+      setWorldHandoffStatus(`That terminal is no longer available. ${activeWorldTheme.label} remains open.`);
       return;
     }
     const agentKey = worldProjection.roster.find(
@@ -2076,8 +2217,9 @@ export function App() {
         agent.currentPaneRef.nativeTargetId === current.pane.pane_id,
     )?.agent.key ?? null;
     worldConversationController.open({
-      kind: current.node.agentRunning ? "agent" : "pane",
+      kind: current.node.kind === "agent" ? "agent" : "pane",
       targetKey: current.node.selectionKey,
+      selectionKey: current.node.selectionKey,
       agentKey,
       bridgeId: current.runtime.id,
       paneId: current.pane.pane_id,
@@ -2086,17 +2228,21 @@ export function App() {
   };
   const openGraphNodeInSpaces = (node: WorldGraphNode) => {
     if (node.kind === "space") {
-      const latest = graphProjection.nodes.find(({ id }) => id === node.id);
-      if (latest?.kind === "space" && latest.handoff) {
-        openWorldTargetInSpaces(latest.handoff);
+      const current = admitCurrentWorldSpace(node, graphProjection);
+      if (current) {
+        openWorldTargetInSpaces(current.handoff);
       } else {
-        setWorldHandoffStatus("That space is no longer available. Graph remains open.");
+        setWorldHandoffStatus(`That space is no longer available. ${activeWorldTheme.label} remains open.`);
       }
+      return;
+    }
+    if (node.kind === "host") {
+      setWorldHandoffStatus("Select a space, agent, or terminal to open it in Spaces.");
       return;
     }
     const current = currentGraphTerminal(node);
     if (!current) {
-      setWorldHandoffStatus("That terminal is no longer available. Graph remains open.");
+      setWorldHandoffStatus(`That terminal is no longer available. ${activeWorldTheme.label} remains open.`);
       return;
     }
     setWorldHandoffStatus(null);
@@ -2471,6 +2617,34 @@ export function App() {
   }, [showDetail]);
 
   useEffect(() => {
+    const previous = previousSidebarNavigationRef.current;
+    previousSidebarNavigationRef.current = { compact: isCompactLayout, detail: showDetail,
+      surface: activeSurface.id, theme: activeWorldTheme.id };
+    if (!isCompactLayout || document.querySelector('[aria-modal="true"]')) return;
+    if (!showDetail && (previous.detail || !previous.compact)) {
+      viewSelectRef.current?.focus({ preventScroll: true });
+      return;
+    }
+    if (!showDetail || activeSurface.id !== "world" ||
+      (previous.compact && (!compactViewFocusRef.current ||
+        (previous.detail && previous.surface === activeSurface.id && previous.theme === activeWorldTheme.id)))) return;
+    const stage = document.querySelector(".stage");
+    if (!stage) return;
+    // A newly selected lazy surface may mount after the navigation render.
+    const observer = new MutationObserver(focusBack);
+    function focusBack() {
+      const target = stage?.querySelector<HTMLElement>('[aria-label="Back to Herdr sidebar"]');
+      if (target && !target.closest("[inert]") && !document.querySelector('[aria-modal="true"]')) {
+        target.focus({ preventScroll: true });
+        if (!target.closest(".surface-loading")) observer.disconnect();
+      }
+    }
+    observer.observe(stage, { childList: true, subtree: true });
+    focusBack();
+    return () => observer.disconnect();
+  }, [activeSurface.id, activeWorldTheme.id, isCompactLayout, showDetail]);
+
+  useEffect(() => {
     if (!selectedRuntime) {
       setSelectedPaneRefState(null);
       setActiveWorkspaceRefState(null);
@@ -2586,7 +2760,11 @@ export function App() {
       notesPanelOpen,
       sidebarOpen,
       terminalFontSizePx,
+      terminalCursorBlink,
+      desktopCommandComposer,
+      desktopCommandEnterNewline,
       terminalScreenReaderText,
+      autoRenameUploadConflicts,
       terminalInputTransport,
       terminalInputBatchDelayMs,
       terminalOutputCoalesceMs,
@@ -2599,6 +2777,7 @@ export function App() {
       mobileKeyboardHideRefit,
       mobileCommandExpandingInput,
       mobileCommandEnterNewline,
+      mobileCommandFocusAfterSubmit,
     });
   }, [
     displayPrefsLoaded,
@@ -2622,7 +2801,11 @@ export function App() {
     notesPanelOpen,
     sidebarOpen,
     terminalFontSizePx,
+    terminalCursorBlink,
+    desktopCommandComposer,
+    desktopCommandEnterNewline,
     terminalScreenReaderText,
+    autoRenameUploadConflicts,
     terminalInputTransport,
     terminalInputBatchDelayMs,
     terminalOutputCoalesceMs,
@@ -2635,6 +2818,7 @@ export function App() {
     mobileKeyboardHideRefit,
     mobileCommandExpandingInput,
     mobileCommandEnterNewline,
+    mobileCommandFocusAfterSubmit,
   ]);
 
   useEffect(() => {
@@ -3204,7 +3388,31 @@ export function App() {
     setShowDetail(false);
   };
 
+  const currentPrimaryView = activeSurface.id === "spaces" ? "spaces" : activeWorldTheme.id;
+  const selectPrimaryView = (view: ToolbarPrimaryView) => {
+    if (view === currentPrimaryView) {
+      return;
+    }
+    compactViewFocusRef.current = true;
+    if (view === "spaces") {
+      worldSelectionSeedPendingRef.current = false;
+      navigatePrimaryView("spaces");
+      return;
+    }
+    worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
+    navigateWorldTheme(
+      view,
+      isCompactLayout
+        ? withMobileDetailHistoryState(window.history.state)
+        : undefined,
+    );
+    if (isCompactLayout) {
+      openMobileDetail();
+    }
+  };
+
   const openPane = (bridgeId: BridgeId, pane: PaneInfo) => {
+    compactViewFocusRef.current = false;
     const runtime = bridge.getRuntime(bridgeId);
     if (!runtime) {
       return;
@@ -4480,7 +4688,10 @@ export function App() {
     if (key === "rename") {
       setDialog({ mode: "rename", kind, bridgeId, id, label, clearable });
     } else if (key === "close") {
-      setDialog({ mode: "close", kind, bridgeId, id, label });
+      const linkedLabels = kind === "space"
+        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], id)
+        : [];
+      setDialog({ mode: "close", kind, bridgeId, id, label, linkedWorkspaceLabels: linkedLabels });
     } else if (key === "newtab") {
       setSelectedBridgeId(bridgeId);
       setActiveWorkspaceRefState({ bridgeId, workspaceId: id });
@@ -4562,7 +4773,8 @@ export function App() {
     void exec(
       runtime,
       { kind: "workspace", id: "new", command: "workspace.create" },
-      (routedCommands) => routedCommands.createWorkspace(value),
+      (routedCommands) =>
+        routedCommands.createWorkspace({ label: value, sourceWorkspaceId: dialog.sourceWorkspaceId }),
       false,
       (result) => {
         const workspaceId = createdWorkspaceId(result);
@@ -4620,7 +4832,7 @@ export function App() {
     const action =
       kind === "space"
         ? (routedCommands: ReturnType<typeof createCommands>) =>
-            routedCommands.closeWorkspace(id)
+            routedCommands.closeWorkspace(id, Boolean(dialog.linkedWorkspaceLabels?.length))
         : kind === "tab"
           ? (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closeTab(id)
           : (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closePane(id);
@@ -4735,14 +4947,19 @@ export function App() {
     onOpenSeatLauncher: ({ bridgeId, workspaceId }) => {
       setLaunchTarget({ mode: "tab", workspaceId, bridgeId });
     },
-    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, label }) => {
+    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, sourceWorkspaceId, label }) => {
+      const linkedLabels = mode === "close"
+        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], workspaceId)
+        : [];
       setDialog({
         mode,
         kind: "space",
         bridgeId,
         id: workspaceId,
+        sourceWorkspaceId,
         label,
         noun: "room",
+        linkedWorkspaceLabels: linkedLabels,
       });
     },
   });
@@ -4777,11 +4994,15 @@ export function App() {
     onCloseRoom: worldRoomActions.openRoomClose,
   };
   const worldStage = WorldSurface ? (
-    <SurfaceSlotBoundary label="World" resetKey={`${activeSurface.id}:${activeWorldTheme.id}`}>
+    <SurfaceSlotBoundary label="World" resetKey={`${activeSurface.id}:${activeWorldTheme.id}`}
+      recoveryLabel={isCompactLayout ? "Back to Herdr sidebar" : undefined}
+      onRecover={isCompactLayout ? closeMobileDetail : undefined}>
       <Suspense
         fallback={
           <div className="surface-loading surface-loading-stage" role="status">
             Loading {activeWorldTheme.label}…
+            {isCompactLayout ? <button className="btn" type="button" aria-label="Back to Herdr sidebar"
+              onClick={closeMobileDetail}>Back to Herdr sidebar</button> : null}
           </div>
         }
       >
@@ -4826,6 +5047,7 @@ export function App() {
       <aside
         className="sidebar"
         aria-label="Switcher"
+        inert={isCompactLayout && showDetail ? true : undefined}
         data-space-reorder={spaceReorderMode ? "true" : undefined}
         onClickCapture={(event) => {
           if (
@@ -4872,31 +5094,12 @@ export function App() {
           bridgeViews={bridgeViews}
           primaryView={activeSurface.id}
           activeWorldTheme={activeWorldTheme}
-          worldThemes={worldThemeRegistry.list()}
-          onPrimaryView={(surfaceId) => {
-            worldSelectionSeedPendingRef.current = surfaceId === "world";
-            navigatePrimaryView(
-              surfaceId,
-              surfaceId === "world" && isCompactLayout
-                ? withMobileDetailHistoryState(window.history.state)
-                : undefined,
-            );
-            if (surfaceId === "world" && isCompactLayout) {
-              openMobileDetail();
-            }
-          }}
-          onWorldTheme={(themeId) => {
-            worldSelectionSeedPendingRef.current = activeSurface.id !== "world";
-            navigateWorldTheme(
-              themeId,
-              isCompactLayout
-                ? withMobileDetailHistoryState(window.history.state)
-                : undefined,
-            );
-            if (isCompactLayout) {
-              openMobileDetail();
-            }
-          }}
+          onView={selectPrimaryView}
+          onOpenCurrentView={isCompactLayout && activeSurface.id === "world" ? () => {
+            compactViewFocusRef.current = true;
+            openMobileDetail();
+          } : undefined}
+          viewRef={viewSelectRef}
           selectedBridgeId={selectedRuntime?.id ?? null}
           hostScope={hostScope}
           snapshot={snapshot}
@@ -4965,7 +5168,8 @@ export function App() {
               void refreshBridgeSnapshot(runtime, true);
             }
           }}
-          onBackendSettings={openBackendSettings}
+          onBackendSettings={() => openBackendSettings()}
+          onAddHost={(target) => openBackendSettings(target, true)}
           createSpaceEnabled={createSpaceSupported}
           createTabEnabled={createTabSupported}
           onCreateSpace={() =>
@@ -4973,7 +5177,7 @@ export function App() {
               ? void exec(
                   selectedRuntime,
                   { kind: "workspace", id: "new", command: "workspace.create" },
-                  (commands) => commands.createWorkspace(),
+                  (commands) => commands.createWorkspace({ sourceWorkspaceId: activeSpace?.workspace_id }),
                   true,
                 )
               : setError("Connection is not ready")
@@ -5051,7 +5255,12 @@ export function App() {
         />
       </aside>
 
-      <HerdrMainStage label={activeSurface.id === "world" ? `World ${activeWorldTheme.label}` : "Terminal"}>
+      <HerdrMainStage
+        label={activeSurface.id === "world" ? `World ${activeWorldTheme.label}` : "Terminal"}
+        inert={isCompactLayout && !showDetail ? true : undefined}
+        activeView={currentPrimaryView}
+        onView={selectPrimaryView}
+      >
         {activeSurface.id === "world" ? worldStage : (
           <>
         <TabBar
@@ -5176,6 +5385,7 @@ export function App() {
         </header>
         {showSplit && splitCells && selectedRuntime && selectedConnectionState ? (
           <SplitGrid
+            bridgeId={selectedRuntime?.id ?? ""}
             cells={splitCells}
             selectedPaneId={selectedPane?.pane_id ?? null}
             onSelectPane={(pane) => {
@@ -5189,14 +5399,19 @@ export function App() {
             refitToken={refitToken}
             focusToken={terminalFocusToken}
             touchInput={isTouchInput}
+            desktopCommandComposer={desktopCommandComposer}
+            desktopCommandEnterNewline={desktopCommandEnterNewline}
+            terminalCursorBlink={terminalCursorBlink}
             terminalFontSizePx={terminalFontSizePx}
             terminalScreenReaderText={terminalScreenReaderText}
+            autoRenameUploadConflicts={autoRenameUploadConflicts}
             mobileControlsScalePercent={mobileControlsScalePercent}
             mobileTapTarget={mobileTerminalTapTarget}
             mobileLongPressBehavior={mobileLongPressBehavior}
             mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
             mobileCommandExpandingInput={mobileCommandExpandingInput}
             mobileCommandEnterNewline={mobileCommandEnterNewline}
+            mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
             terminalInputTransport={terminalInputTransport}
             terminalInputBatchDelayMs={terminalInputBatchDelayMs}
             terminalOutputCoalesceMs={terminalOutputCoalesceMs}
@@ -5209,6 +5424,7 @@ export function App() {
           />
         ) : renderTerminal ? (
           <TerminalView
+            bridgeId={selectedRuntime?.id ?? ""}
             pane={selectedTerminalSession?.attachEnabled ? selectedPane : null}
             connectionKey={selectedTerminalSession?.sessionKey ?? "disconnected"}
             resumeToken={selectedRuntime?.resumeToken ?? 0}
@@ -5221,15 +5437,19 @@ export function App() {
             autoFocus={!isTouchInput}
             scrollSensitivity={isTouchInput ? 2 : 0.4}
             mobileControls={isTouchInput}
-            cursorBlink={!isTouchInput}
+            desktopCommandComposer={desktopCommandComposer}
+            desktopCommandEnterNewline={desktopCommandEnterNewline}
+            cursorBlink={!isTouchInput && terminalCursorBlink}
             terminalFontSizePx={terminalFontSizePx}
             terminalScreenReaderText={terminalScreenReaderText}
+            autoRenameUploadConflicts={autoRenameUploadConflicts}
             mobileControlsScalePercent={mobileControlsScalePercent}
             mobileTapTarget={mobileTerminalTapTarget}
             mobileLongPressBehavior={mobileLongPressBehavior}
             mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
             mobileCommandExpandingInput={mobileCommandExpandingInput}
             mobileCommandEnterNewline={mobileCommandEnterNewline}
+            mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
             terminalInputTransport={terminalInputTransport}
             terminalInputBatchDelayMs={terminalInputBatchDelayMs}
             terminalOutputCoalesceMs={terminalOutputCoalesceMs}
@@ -5410,9 +5630,9 @@ export function App() {
 
       {dialog?.mode === "close" ? (
         <ConfirmDialog
-          title={closeCopy(dialog.kind, dialog.noun).title}
-          message={closeCopy(dialog.kind, dialog.noun).message}
-          confirmLabel={closeCopy(dialog.kind, dialog.noun).confirm}
+          title={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).title}
+          message={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).message}
+          confirmLabel={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).confirm}
           busy={busy}
           onCancel={() => setDialog(null)}
           onConfirm={confirmClose}
@@ -5462,6 +5682,7 @@ export function App() {
         <BackendSettingsDialog
           showMobileTerminalSettings={isTouchInput}
           showRemoteAccess={!isNativeAndroid()}
+          initialConnectionCreation={backendSettingsInitialConnection}
           onOpenWorldSettings={worldSettingsController.open}
           notesEnabled={notesEnabled}
           onNotesEnabled={setNotesEnabled}
@@ -5475,8 +5696,16 @@ export function App() {
           onMultiHostSpaceSelection={setMultiHostSpaceSelection}
           terminalFontSizePx={terminalFontSizePx}
           onTerminalFontSizePx={setTerminalFontSizePx}
+          terminalCursorBlink={terminalCursorBlink}
+          onTerminalCursorBlink={setTerminalCursorBlink}
+          desktopCommandComposer={desktopCommandComposer}
+          onDesktopCommandComposer={setDesktopCommandComposer}
+          desktopCommandEnterNewline={desktopCommandEnterNewline}
+          onDesktopCommandEnterNewline={setDesktopCommandEnterNewline}
           terminalScreenReaderText={terminalScreenReaderText}
           onTerminalScreenReaderText={setTerminalScreenReaderText}
+          autoRenameUploadConflicts={autoRenameUploadConflicts}
+          onAutoRenameUploadConflicts={setAutoRenameUploadConflicts}
           terminalInputTransport={terminalInputTransport}
           onTerminalInputTransport={setTerminalInputTransport}
           terminalInputBatchDelayMs={terminalInputBatchDelayMs}
@@ -5500,7 +5729,9 @@ export function App() {
           mobileCommandExpandingInput={mobileCommandExpandingInput}
           onMobileCommandExpandingInput={setMobileCommandExpandingInput}
           mobileCommandEnterNewline={mobileCommandEnterNewline}
+          mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
           onMobileCommandEnterNewline={setMobileCommandEnterNewline}
+          onMobileCommandFocusAfterSubmit={setMobileCommandFocusAfterSubmit}
           showMobileKeyboardHideRefit={showMobileKeyboardHideRefit}
           mobileKeyboardHideRefit={mobileKeyboardHideRefit}
           onMobileKeyboardHideRefit={setMobileKeyboardHideRefit}
@@ -6616,20 +6847,26 @@ function hasOpenModal() {
 }
 
 function SplitGrid({
+  bridgeId,
   cells,
   selectedPaneId,
   onSelectPane,
   refitToken,
   focusToken,
   touchInput,
+  desktopCommandComposer,
+  desktopCommandEnterNewline,
+  terminalCursorBlink,
   terminalFontSizePx,
   terminalScreenReaderText,
+  autoRenameUploadConflicts,
   mobileControlsScalePercent,
   mobileTapTarget,
   mobileLongPressBehavior,
   mobileTouchSelectionEndpointTimeoutMs,
   mobileCommandExpandingInput,
   mobileCommandEnterNewline,
+  mobileCommandFocusAfterSubmit,
   terminalInputTransport,
   terminalInputBatchDelayMs,
   terminalOutputCoalesceMs,
@@ -6640,20 +6877,26 @@ function SplitGrid({
   httpUrl,
   wsUrl,
 }: {
+  bridgeId: string;
   cells: { pane: PaneInfo; style: CSSProperties }[];
   selectedPaneId: string | null;
   onSelectPane: (pane: PaneInfo) => void;
   refitToken: number;
   focusToken: number;
   touchInput: boolean;
+  desktopCommandComposer: boolean;
+  desktopCommandEnterNewline: boolean;
+  terminalCursorBlink: boolean;
   terminalFontSizePx: number;
   terminalScreenReaderText: boolean;
+  autoRenameUploadConflicts: boolean;
   mobileControlsScalePercent: number;
   mobileTapTarget: MobileTerminalTapTarget;
   mobileLongPressBehavior: MobileLongPressBehavior;
   mobileTouchSelectionEndpointTimeoutMs: MobileTouchSelectionEndpointTimeoutMs;
   mobileCommandExpandingInput: boolean;
   mobileCommandEnterNewline: boolean;
+  mobileCommandFocusAfterSubmit: boolean;
   terminalInputTransport: TerminalInputTransport;
   terminalInputBatchDelayMs: number;
   terminalOutputCoalesceMs: number;
@@ -6684,6 +6927,7 @@ function SplitGrid({
             onPointerDown={() => onSelectPane(pane)}
           >
             <TerminalView
+              bridgeId={bridgeId}
               pane={terminalSession?.attachEnabled ? pane : null}
               connectionKey={terminalSession?.sessionKey ?? "disconnected"}
               resumeToken={resumeToken}
@@ -6696,15 +6940,19 @@ function SplitGrid({
               autoFocus={selected && !touchInput}
               scrollSensitivity={touchInput ? 2 : 0.4}
               mobileControls={selected && touchInput}
-              cursorBlink={!touchInput}
+              desktopCommandComposer={selected && !touchInput && desktopCommandComposer}
+              desktopCommandEnterNewline={desktopCommandEnterNewline}
+              cursorBlink={!touchInput && terminalCursorBlink}
               terminalFontSizePx={terminalFontSizePx}
               terminalScreenReaderText={terminalScreenReaderText}
+              autoRenameUploadConflicts={autoRenameUploadConflicts}
               mobileControlsScalePercent={mobileControlsScalePercent}
               mobileTapTarget={mobileTapTarget}
               mobileLongPressBehavior={mobileLongPressBehavior}
               mobileTouchSelectionEndpointTimeoutMs={mobileTouchSelectionEndpointTimeoutMs}
               mobileCommandExpandingInput={mobileCommandExpandingInput}
               mobileCommandEnterNewline={mobileCommandEnterNewline}
+              mobileCommandFocusAfterSubmit={mobileCommandFocusAfterSubmit}
               terminalInputTransport={terminalInputTransport}
               terminalInputBatchDelayMs={terminalInputBatchDelayMs}
               terminalOutputCoalesceMs={terminalOutputCoalesceMs}
@@ -6819,9 +7067,9 @@ function Switcher({
   bridgeViews,
   primaryView,
   activeWorldTheme,
-  worldThemes,
-  onPrimaryView,
-  onWorldTheme,
+  onView,
+  viewRef,
+  onOpenCurrentView,
   selectedBridgeId,
   hostScope,
   snapshot,
@@ -6877,6 +7125,7 @@ function Switcher({
   onRefresh,
   onRefreshBridge,
   onBackendSettings,
+  onAddHost,
   createSpaceEnabled,
   createTabEnabled,
   onCreateSpace,
@@ -6886,9 +7135,9 @@ function Switcher({
   bridgeViews: BridgeConnectionView[];
   primaryView: string;
   activeWorldTheme: WorldThemeDefinition;
-  worldThemes: readonly WorldThemeDefinition[];
-  onPrimaryView: (surfaceId: string) => void;
-  onWorldTheme: (themeId: string) => void;
+  onView: (view: "spaces" | "office" | "tree" | "graph") => void;
+  viewRef: RefObject<HTMLSelectElement | null>;
+  onOpenCurrentView?: () => void;
   selectedBridgeId: BridgeId | null;
   hostScope: HostScope;
   snapshot: Snapshot | null;
@@ -6949,6 +7198,7 @@ function Switcher({
   onRefresh: () => void;
   onRefreshBridge: (bridgeId: BridgeId) => void;
   onBackendSettings: () => void;
+  onAddHost: (trigger: HTMLElement) => void;
   createSpaceEnabled: boolean;
   createTabEnabled: boolean;
   onCreateSpace: () => void;
@@ -8032,106 +8282,24 @@ function Switcher({
         </button>
       </header>
 
-      <div className="primary-view-switch" role="group" aria-label="Primary navigation">
-        <button
-          type="button"
-          data-on={primaryView === "spaces"}
-          aria-pressed={primaryView === "spaces"}
-          onClick={() => onPrimaryView("spaces")}
-        >
-          <SquareTerminal size={14} aria-hidden="true" />
-          Spaces
-        </button>
-        <WorldThemeSelector
-          themes={worldThemes}
-          activeTheme={activeWorldTheme}
-          worldActive={primaryView === "world"}
-          onActivate={() => onPrimaryView("world")}
-          onSelect={onWorldTheme}
-        />
-      </div>
-
-      <div className="sidebar-scope host-scope" role="group" aria-label="Host">
-        {bridgeViews.map((view) => (
-          <button
-            key={view.runtime.id}
-            className="bridge-chip"
-            type="button"
-            style={{ "--bridge-color": view.runtime.color } as CSSProperties}
-            data-on={hostScope === "selected" && selectedBridgeId === view.runtime.id}
-            data-connection={view.connectionState}
-            aria-pressed={hostScope === "selected" && selectedBridgeId === view.runtime.id}
-            aria-label={`${view.runtime.label}, ${view.connectionState}`}
-            title={`${view.runtime.label}: ${view.connectionState}`}
-            onClick={() => {
-              onSelectBridge(view.runtime.id);
-              onHostScope("selected");
-            }}
-          >
-            <span className="bridge-chip-dot" aria-hidden="true" />
-            <span className="bridge-chip-label">{view.runtime.label}</span>
-          </button>
-        ))}
-        {bridgeViews.length > 1 ? (
-          <button
-            className="bridge-chip"
-            type="button"
-            data-on={hostScope === "all"}
-            aria-pressed={hostScope === "all"}
-            onClick={() => onHostScope("all")}
-          >
-            <span className="bridge-chip-label">All</span>
-          </button>
-        ) : null}
-      </div>
-
-      <>
-      <div className="sidebar-mode" role="group" aria-label="Sidebar view">
-        <button
-          type="button"
-          data-on={sidebarView === "agents"}
-          aria-pressed={sidebarView === "agents"}
-          onClick={() => onSidebarView("agents")}
-        >
-          Agents
-        </button>
-        <button
-          type="button"
-          data-on={sidebarView === "tabs"}
-          aria-pressed={sidebarView === "tabs"}
-          onClick={() => onSidebarView("tabs")}
-        >
-          Tabs
-        </button>
-        {notesEnabled ? (
-          <button
-            type="button"
-            data-on={sidebarView === "notes"}
-            aria-pressed={sidebarView === "notes"}
-            onClick={() => onSidebarView("notes")}
-          >
-            Notes
-          </button>
-        ) : null}
-      </div>
-      <div className="sidebar-scope" role="group" aria-label="Sidebar scope">
-        <button
-          type="button"
-          data-on={scope === "space"}
-          aria-pressed={scope === "space"}
-          onClick={() => onScope("space")}
-        >
-          Space
-        </button>
-        <button
-          type="button"
-          data-on={scope === "all"}
-          aria-pressed={scope === "all"}
-          onClick={() => onScope("all")}
-        >
-          All
-        </button>
-      </div>
+      <SidebarToolbar
+        bridgeViews={bridgeViews}
+        primaryView={primaryView}
+        activeWorldTheme={activeWorldTheme}
+        scope={scope}
+        sidebarView={sidebarView}
+        notesEnabled={notesEnabled}
+        selectedBridgeId={selectedBridgeId}
+        hostScope={hostScope}
+        onPrimaryView={onView}
+        onHostScope={onHostScope}
+        onScope={onScope}
+        onSidebarView={onSidebarView}
+        onSelectBridge={onSelectBridge}
+        onAddHost={onAddHost}
+        viewRef={viewRef}
+        onOpenCurrentView={onOpenCurrentView}
+      />
 
       <div className="list" ref={spaceListRef}>
         {!hasListSnapshot ? (
@@ -8442,7 +8610,6 @@ function Switcher({
           onClose={() => setSpaceOptionsMenu(null)}
         />
       ) : null}
-      </>
     </>
   );
 }
@@ -10346,15 +10513,20 @@ export function menuItems(
   return paneItems;
 }
 
-function closeCopy(kind: MenuKind, noun?: "room") {
+export function closeCopy(kind: MenuKind, linkedLabels: readonly string[] = []) {
+  if (kind === "space" && linkedLabels.length > 0) {
+    return {
+      title: "Close workspace group?",
+      message: `This closes this space and all linked worktree spaces (${linkedLabels.join(", ")}), including every tab and pane in the group.`,
+      confirm: "Close entire group",
+    };
+  }
   switch (kind) {
     case "space":
       return {
-        title: noun === "room" ? "Close room?" : "Close space?",
-        message: noun === "room"
-          ? "This closes the Herdr workspace and every desk, tab, and pane inside it."
-          : "This closes the space and every tab and pane inside it.",
-        confirm: noun === "room" ? "Close room" : "Close space",
+        title: "Close space?",
+        message: "This closes the space and every tab and pane inside it.",
+        confirm: "Close space",
       };
     case "tab":
       return {

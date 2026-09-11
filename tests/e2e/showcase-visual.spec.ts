@@ -1,8 +1,9 @@
+import { selectAllHosts } from "./sidebarControls";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-const showcaseDir = resolve("docs/images");
+const showcaseDir = resolve(".scratch/playwright/evidence/showcase");
 const showcaseHostStore = {
   version: 2,
   enabledBridgeIds: ["same-origin", "demo-west"],
@@ -29,6 +30,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     localStorage.removeItem("herdr.world.graph-view.v1");
+    localStorage.removeItem("herdr.world.graph-view.v2");
     localStorage.removeItem("herdrWeb.worldView.v1");
   }, showcaseHostStore);
   await page.setViewportSize({ width: 1715, height: 1428 });
@@ -38,7 +40,7 @@ test("captures the public Graph overview from deterministic fixture data", async
   await page.goto("/?theme=graph");
   await waitForSettledGraph(page);
   await selectAllHosts(page);
-  await expect(page.getByText("6 spaces · 15 terminals", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 hosts · 6 spaces · 15 agents · 0 terminals", { exact: true })).toBeVisible();
   await hideSwitcher(page);
   await waitForSettledGraph(page);
   await page.getByRole("button", { name: "Fit graph", exact: true }).click();
@@ -53,7 +55,7 @@ test("captures connected terminals with canned fixture output", async ({ page })
   await page.goto("/?theme=graph");
   await waitForSettledGraph(page);
   await selectAllHosts(page);
-  await expect(page.getByText("6 spaces · 15 terminals", { exact: true })).toBeVisible();
+  await expect(page.getByText("2 hosts · 6 spaces · 15 agents · 0 terminals", { exact: true })).toBeVisible();
   await hideSwitcher(page);
   await waitForSettledGraph(page);
   await page.getByRole("button", { name: "Fit graph", exact: true }).click();
@@ -90,11 +92,7 @@ test("captures connected terminals with canned fixture output", async ({ page })
   });
 });
 
-async function selectAllHosts(page: Page) {
-  await page.getByRole("group", { name: "Host" })
-    .getByRole("button", { name: "All", exact: true })
-    .click();
-}
+
 
 async function hideSwitcher(page: Page) {
   await page.getByRole("button", { name: "Toggle sidebar" }).click();

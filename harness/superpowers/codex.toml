@@ -1,0 +1,10 @@
+# Repository-local native defaults. Existing user configuration is preserved.
+# Role-specific overrides and observed allocations: docs/agent-development.md.
+model = "gpt-5.6-sol"
+model_reasoning_effort = "xhigh"
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "xhigh"

@@ -143,6 +143,7 @@ export function WorldConversationBubble({
       </header>
       <div className="world-conversation-terminal">
         <TerminalView
+          bridgeId={runtime.id}
           pane={session.attachEnabled ? pane : null}
           connectionKey={session.sessionKey}
           resumeToken={runtime.resumeToken}

@@ -3,8 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPAT="$ROOT/vendor/herdr-compat"
-EXPECTED_HERDR_COMMIT="9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c"
-EXPECTED_HERDR_RELEASE="v0.8.2"
+EXPECTED_HERDR_COMMIT="b99002ac99b09e00b4ca692436cb15a6b0d676f1"
+EXPECTED_HERDR_RELEASE="v0.9.0"
 
 # This is the reviewed bridge compatibility surface. Keep the set explicit so
 # deleting a manifest entry cannot silently narrow the provenance claim.
@@ -12,6 +12,7 @@ EXPECTED_MANIFEST_ENTRIES=(
   "src/api/schema.rs|src/api/schema.rs"
   "src/api/schema/agents.rs|src/api/schema/agents.rs"
   "src/api/schema/common.rs|src/api/schema/common.rs"
+  "src/api/schema/commands.rs|src/api/schema/commands.rs"
   "src/api/schema/events.rs|src/api/schema/events.rs"
   "src/api/schema/integrations.rs|src/api/schema/integrations.rs"
   "src/api/schema/panes.rs|src/api/schema/panes.rs"
@@ -22,6 +23,7 @@ EXPECTED_MANIFEST_ENTRIES=(
   "src/api/schema/worktrees.rs|src/api/schema/worktrees.rs"
   "src/api/schema/tests.rs|src/api/schema/tests.rs"
   "src/protocol/wire.rs|src/protocol/wire.rs"
+  "src/protocol/wire.rs|src/protocol/wire/upstream_wire_tests.rs"
   "src/api/client.rs|src/api/client.rs"
   "src/api/status.rs|src/api/status.rs"
   "src/api/schema/tabs.rs|src/api/schema/tabs.rs"
@@ -32,6 +34,7 @@ EXPECTED_MANIFEST_ENTRIES=(
   "src/logging.rs|src/logging.rs"
   "src/popup_size.rs|src/popup_size.rs"
   "src/server/socket_paths.rs|src/server/socket_paths.rs"
+  "src/terminal_theme.rs|src/terminal_theme.rs"
 )
 
 if ! command -v rg >/dev/null; then
@@ -66,6 +69,8 @@ required=(
   "$COMPAT/src/popup_size.rs"
   "$COMPAT/src/protocol.rs"
   "$COMPAT/src/protocol/wire.rs"
+  "$COMPAT/src/protocol/wire/upstream_wire_tests.rs"
+  "$COMPAT/src/terminal_theme.rs"
   "$COMPAT/src/raw_input.rs"
   "$COMPAT/src/server/socket_paths.rs"
 )
@@ -89,7 +94,7 @@ if rg -n '#\[path[[:space:]]*=' "$ROOT/bridge" "$COMPAT" >/dev/null; then
 fi
 
 if rg -n '\bcustom_status\b' "$COMPAT" >/dev/null; then
-  echo "obsolete custom_status fields are not allowed in the Herdr 0.8.2 compatibility copy" >&2
+  echo "obsolete custom_status fields are not allowed in the Herdr 0.9.0 compatibility copy" >&2
   rg -n '\bcustom_status\b' "$COMPAT" >&2
   exit 1
 fi
@@ -145,9 +150,6 @@ parse_manifest_entries() {
       }
       if (length(destination_sha) != 64 || destination_sha ~ /[^0-9a-f]/) {
         fail("destination_sha256 must be 64 lowercase hexadecimal characters for " destination)
-      }
-      if (seen_source[source]++) {
-        fail("source path is not unique: " source)
       }
       if (seen_destination[destination]++) {
         fail("destination path is not unique: " destination)
@@ -214,6 +216,17 @@ parse_manifest_entries() {
       }
     }
   ' "$COMPAT/VENDOR-MANIFEST.toml"
+}
+
+verify_manifest_metadata() {
+  local expected_line="$1"
+  local matches
+
+  matches="$(rg -NxcF "$expected_line" "$COMPAT/VENDOR-MANIFEST.toml" || true)"
+  if [[ "$matches" != "1" ]]; then
+    echo "vendor manifest must contain exactly one $expected_line" >&2
+    return 1
+  fi
 }
 
 verify_manifest_hashes() {
@@ -283,6 +296,10 @@ verify_manifest_hashes() {
   fi
 }
 
+verify_manifest_metadata "release_tag = \"$EXPECTED_HERDR_RELEASE\""
+verify_manifest_metadata "upstream_commit = \"$EXPECTED_HERDR_COMMIT\""
+verify_manifest_metadata "protocol_version = 22"
+
 unexpected_path_deps="$(
   rg -n '(^|[[:space:]{,])path[[:space:]]*=' "$ROOT/bridge/Cargo.toml" "$COMPAT/Cargo.toml" \
     | grep -Ev 'path[[:space:]]*=[[:space:]]*"src/(main|lib)\.rs"' \
@@ -303,13 +320,13 @@ if [[ -n "${HERDR_SRC:-}" ]]; then
 
   upstream_commit="$(git -C "$HERDR_SRC" rev-parse HEAD 2>/dev/null || true)"
   if [[ "$upstream_commit" != "$EXPECTED_HERDR_COMMIT" ]]; then
-    echo "HERDR_SRC must be a Herdr v0.8.2 checkout at $EXPECTED_HERDR_COMMIT" >&2
+    echo "HERDR_SRC must be a Herdr v0.9.0 checkout at $EXPECTED_HERDR_COMMIT" >&2
     echo "found: ${upstream_commit:-not a git checkout}" >&2
     exit 1
   fi
 
   if [[ -n "$(git -C "$HERDR_SRC" status --short)" ]]; then
-    echo "HERDR_SRC must be a clean Herdr v0.8.2 checkout" >&2
+    echo "HERDR_SRC must be a clean Herdr v0.9.0 checkout" >&2
     git -C "$HERDR_SRC" status --short >&2
     exit 1
   fi
@@ -327,20 +344,16 @@ if [[ -n "${HERDR_SRC:-}" ]]; then
   }
 
   check_terminal_attach_protocol() {
-    if ! rg -q '^pub const PROTOCOL_VERSION: u32 = 20;' "$COMPAT/src/protocol/wire.rs"; then
-      echo "terminal attach compatibility copy must advertise Herdr protocol 20" >&2
+    if ! rg -q '^pub const PROTOCOL_VERSION: u32 = 22;' "$COMPAT/src/protocol/wire.rs"; then
+      echo "terminal attach compatibility copy must advertise Herdr protocol 22" >&2
       exit 1
     fi
-    for marker in AppDirectGraphics GraphicsTransmissionResult InputPixels GraphicsTransmissionStarted TerminalBell GraphicsFile GraphicsTransmissionRetired 'sgr_pixels: bool'; do
+    for marker in TerminalHello TerminalBell; do
       if ! rg -q "$marker" "$COMPAT/src/protocol/wire.rs"; then
-        echo "terminal attach compatibility copy is missing protocol-20 marker: $marker" >&2
+        echo "terminal attach compatibility copy is missing protocol-22 marker: $marker" >&2
         exit 1
       fi
     done
-    if ! rg -q 'TerminalAttach' "$COMPAT/src/protocol/wire.rs"; then
-      echo "terminal attach compatibility copy is missing TerminalAttach" >&2
-      exit 1
-    fi
   }
 
   compare_popup_size() {
@@ -377,7 +390,8 @@ if [[ -n "${HERDR_SRC:-}" ]]; then
     esac
     compare_exact "src/api/schema/$file_name" "src/api/schema/$file_name"
   done < <(find "$HERDR_SRC/src/api/schema" -maxdepth 1 -type f -name '*.rs' -print0)
-  compare_exact "src/protocol/wire.rs" "src/protocol/wire.rs"
+  # The vendored wire module extracts upstream's test block and adjusts one
+  # documentation link; the manifest verifies both reviewed hashes.
   compare_popup_size
   check_terminal_attach_protocol
 
@@ -385,5 +399,5 @@ if [[ -n "${HERDR_SRC:-}" ]]; then
 else
   verify_manifest_hashes
   echo "Herdr $EXPECTED_HERDR_RELEASE compatibility vendor layout and manifest hashes look clean"
-  echo "Set HERDR_SRC=/path/to/clean/herdr-v0.8.2 to compare exact upstream schema/wire copies"
+  echo "Set HERDR_SRC=/path/to/clean/herdr-v0.9.0 to compare exact upstream schema/wire copies"
 fi

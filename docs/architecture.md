@@ -13,8 +13,10 @@ browser
   └─ host profile N ─HTTP/WebSocket─> bridge N ─local socket─> Herdr N
 ```
 
-Every bridge is host-local to exactly one selected Herdr runtime. Federation happens in the
-browser. A bridge never discovers, proxies, routes to, or controls another bridge.
+Every bridge is host-local to exactly one selected Herdr runtime, and one live bridge process owns
+that runtime's client socket. A second current bridge targeting the same socket fails startup; use
+the existing bridge for additional browsers or select a different Herdr session. Federation happens
+in the browser. A bridge never discovers, proxies, routes to, or controls another bridge.
 
 ## Browser boundaries
 
@@ -36,8 +38,8 @@ browser. A bridge never discovers, proxies, routes to, or controls another bridg
 
 ## Compatibility and failure state
 
-Before snapshot or control traffic, a host must advertise bridge API `1`, terminal protocol `20`,
-Herdr `0.8.2` or newer, and the required web compatibility/feature surface. Unsupported or malformed
+Before snapshot or control traffic, a host must advertise bridge API `1`, terminal protocol `22`,
+Herdr `0.9.0` or newer, and the required web compatibility/feature surface. Unsupported or malformed
 capabilities are `incompatible`; network failure is `offline`; a lost host with an admitted snapshot
 may be displayed as stale/degraded. These states are local to that profile. There is no fallback to
 another host for a qualified action.
@@ -59,7 +61,8 @@ never connects directly to a provider backend or receives its credentials.
 
 ## Security boundary
 
-This increment is trusted-single-user software. An admitted browser has terminal-equivalent control.
-Host, Origin, and CSP checks reduce DNS-rebinding, CSRF, and accidental cross-origin exposure; they
-are not authentication or authorization. Loopback is the default. Operators own SSH, VPN, firewall,
-TLS, and authenticated reverse-proxy policy outside this repository.
+This is trusted-single-user software. Optional bridge password authentication issues bounded
+sessions; admitted browsers have terminal-equivalent control. Host, Origin, and CSP checks reduce
+DNS-rebinding, CSRF, and accidental cross-origin exposure and remain separate from authentication.
+There is no multi-user authorization model. Loopback is the default. Operators own SSH, VPN,
+firewall, TLS and reverse-proxy policy. See [federation](federation.md) for network operation.

@@ -13,18 +13,10 @@ upstream  git@github.com:kcosr/herdr-web.git
 
 Current synchronization points:
 
-- Herdr Web: `4384c884da418ea3f3fb75954da5347b2e12f063`
-  (`v0.5.0` plus the JetBrains Mono Nerd Font fallback merged in upstream PR #74)
-- Herdr compatibility: Herdr `v0.8.2`, commit
-  `9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c`, terminal protocol `20`
-
-The 2026-08-30 Herdr audit also reviewed `master` at
-`4a3b04f59ba3b7d8a15cea187b23e1e80c343b0c`. No stable release newer than
-`v0.8.2` exists at that point. `master` advertises terminal protocol `21` and
-contains unreleased API additions, so those sources are not vendored or
-admitted by the protocol-20 bridge. The stable compatibility reference above
-remains unchanged until a release is available for a complete refresh and
-stock-daemon validation.
+- Herdr Web: `3fb68ca4cc850ea39277120d74a30b7a038a4f8f`
+  (`v0.6.0` plus the mobile terminal keyboard controls merged in upstream PR #89)
+- Herdr compatibility: Herdr `v0.9.0`, commit
+  `b99002ac99b09e00b4ca692436cb15a6b0d676f1`, terminal protocol `22`
 
 Git history is the detailed synchronization record, and the Herdr Web commit
 above is a merge ancestor of this repository. `CHANGELOG.md` repeats only the

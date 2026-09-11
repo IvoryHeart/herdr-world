@@ -66,6 +66,7 @@ import { trapFocusWithin, useFocusReturn } from "./overlayFocus";
 type Props = {
   showMobileTerminalSettings: boolean;
   showRemoteAccess: boolean;
+  initialConnectionCreation?: boolean;
   onOpenWorldSettings: () => void;
   notesEnabled: boolean;
   onNotesEnabled: (enabled: boolean) => void;
@@ -79,8 +80,16 @@ type Props = {
   onMultiHostSpaceSelection: (enabled: boolean) => void;
   terminalFontSizePx: number;
   onTerminalFontSizePx: (value: number) => void;
+  terminalCursorBlink: boolean;
+  onTerminalCursorBlink: (enabled: boolean) => void;
+  desktopCommandComposer: boolean;
+  onDesktopCommandComposer: (enabled: boolean) => void;
+  desktopCommandEnterNewline: boolean;
+  onDesktopCommandEnterNewline: (enabled: boolean) => void;
   terminalScreenReaderText: boolean;
   onTerminalScreenReaderText: (enabled: boolean) => void;
+  autoRenameUploadConflicts: boolean;
+  onAutoRenameUploadConflicts: (enabled: boolean) => void;
   terminalInputTransport: TerminalInputTransport;
   onTerminalInputTransport: (transport: TerminalInputTransport) => void;
   terminalInputBatchDelayMs: number;
@@ -104,7 +113,9 @@ type Props = {
   mobileCommandExpandingInput: boolean;
   onMobileCommandExpandingInput: (enabled: boolean) => void;
   mobileCommandEnterNewline: boolean;
+  mobileCommandFocusAfterSubmit: boolean;
   onMobileCommandEnterNewline: (enabled: boolean) => void;
+  onMobileCommandFocusAfterSubmit: (enabled: boolean) => void;
   showMobileKeyboardHideRefit: boolean;
   mobileKeyboardHideRefit: boolean;
   onMobileKeyboardHideRefit: (enabled: boolean) => void;
@@ -126,6 +137,7 @@ const relativeHttpUrl = (path: string) => path;
 export function BackendSettingsDialog({
   showMobileTerminalSettings,
   showRemoteAccess,
+  initialConnectionCreation = false,
   onOpenWorldSettings,
   notesEnabled,
   onNotesEnabled,
@@ -139,8 +151,16 @@ export function BackendSettingsDialog({
   onMultiHostSpaceSelection,
   terminalFontSizePx,
   onTerminalFontSizePx,
+  terminalCursorBlink,
+  onTerminalCursorBlink,
+  desktopCommandComposer,
+  onDesktopCommandComposer,
+  desktopCommandEnterNewline,
+  onDesktopCommandEnterNewline,
   terminalScreenReaderText,
   onTerminalScreenReaderText,
+  autoRenameUploadConflicts,
+  onAutoRenameUploadConflicts,
   terminalInputTransport,
   onTerminalInputTransport,
   terminalInputBatchDelayMs,
@@ -162,7 +182,9 @@ export function BackendSettingsDialog({
   mobileCommandExpandingInput,
   onMobileCommandExpandingInput,
   mobileCommandEnterNewline,
+  mobileCommandFocusAfterSubmit,
   onMobileCommandEnterNewline,
+  onMobileCommandFocusAfterSubmit,
   showMobileKeyboardHideRefit,
   mobileKeyboardHideRefit,
   onMobileKeyboardHideRefit,
@@ -172,9 +194,12 @@ export function BackendSettingsDialog({
   const localHttpUrl = bridge.getRuntime(SAME_ORIGIN_BRIDGE_ID)?.httpUrl ?? relativeHttpUrl;
   const titleId = useId();
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const addressInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<FormState>(() => newBackendForm(bridge.store.backends));
   const [selectionMode, setSelectionMode] = useState<SelectionMode>(
-    initialSelectionMode(bridge.lastSelectedBridgeId, bridge.sameOriginAvailable),
+    initialConnectionCreation
+      ? "new"
+      : initialSelectionMode(bridge.lastSelectedBridgeId, bridge.sameOriginAvailable),
   );
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -190,8 +215,8 @@ export function BackendSettingsDialog({
   const sameOriginEnabled = bridge.store.enabledBridgeIds.includes(SAME_ORIGIN_BRIDGE_ID);
 
   useEffect(() => {
-    closeButtonRef.current?.focus();
-  }, []);
+    (initialConnectionCreation ? addressInputRef.current : closeButtonRef.current)?.focus();
+  }, [initialConnectionCreation]);
 
   useEffect(() => {
     if (activeArea === "mobile" && !showMobileTerminalSettings) {
@@ -522,6 +547,7 @@ export function BackendSettingsDialog({
                             <label className="field-label">
                               <span>Herdr address</span>
                               <input
+                                ref={addressInputRef}
                                 className="field"
                                 value={form.baseUrl}
                                 placeholder="http://herdr.example:8787"
@@ -835,6 +861,96 @@ export function BackendSettingsDialog({
                     onChange={(value) => onTerminalFontSizePx(parseTerminalFontSizePx(value))}
                   />
                 </div>
+                {!showMobileTerminalSettings ? (
+                  <div className="settings-row">
+                    <span title="Cursor blinking can be expensive in ghostty-web 0.4.0 on large high-DPI terminals">
+                      Cursor blink
+                    </span>
+                    <div
+                      className="segmented-control"
+                      role="group"
+                      aria-label="Terminal cursor blink"
+                    >
+                      <button
+                        type="button"
+                        data-on={!terminalCursorBlink}
+                        aria-pressed={!terminalCursorBlink}
+                        onClick={() => onTerminalCursorBlink(false)}
+                      >
+                        Off
+                      </button>
+                      <button
+                        type="button"
+                        data-on={terminalCursorBlink}
+                        aria-pressed={terminalCursorBlink}
+                        onClick={() => onTerminalCursorBlink(true)}
+                      >
+                        On
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {!showMobileTerminalSettings ? (
+                  <>
+                    <div className="settings-label">Command input</div>
+                    <div className="settings-row">
+                      <span title="Compose and edit commands below the terminal before sending them">
+                        Command composer
+                      </span>
+                      <div
+                        className="segmented-control"
+                        role="group"
+                        aria-label="Command composer"
+                      >
+                        <button
+                          type="button"
+                          data-on={!desktopCommandComposer}
+                          aria-pressed={!desktopCommandComposer}
+                          onClick={() => onDesktopCommandComposer(false)}
+                        >
+                          Off
+                        </button>
+                        <button
+                          type="button"
+                          data-on={desktopCommandComposer}
+                          aria-pressed={desktopCommandComposer}
+                          onClick={() => onDesktopCommandComposer(true)}
+                        >
+                          On
+                        </button>
+                      </div>
+                    </div>
+                    {desktopCommandComposer ? (
+                      <div className="settings-row">
+                        <span title="Use Ctrl+Enter on Windows/Linux or Cmd+Enter on macOS to send">
+                          Enter inserts newline
+                        </span>
+                        <div
+                          className="segmented-control"
+                          role="group"
+                          aria-label="Desktop composer Enter inserts newline"
+                        >
+                          <button
+                            type="button"
+                            data-on={!desktopCommandEnterNewline}
+                            aria-pressed={!desktopCommandEnterNewline}
+                            onClick={() => onDesktopCommandEnterNewline(false)}
+                          >
+                            Off
+                          </button>
+                          <button
+                            type="button"
+                            data-on={desktopCommandEnterNewline}
+                            aria-pressed={desktopCommandEnterNewline}
+                            onClick={() => onDesktopCommandEnterNewline(true)}
+                          >
+                            On
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
+                ) : null}
                 <div className="settings-label">Accessibility</div>
                 <div className="settings-row">
                   <span title="Expose only the bounded visible terminal viewport as screen-reader text">
@@ -858,6 +974,34 @@ export function BackendSettingsDialog({
                       data-on={terminalScreenReaderText}
                       aria-pressed={terminalScreenReaderText}
                       onClick={() => onTerminalScreenReaderText(true)}
+                    >
+                      On
+                    </button>
+                  </div>
+                </div>
+                <div className="settings-label">Uploads</div>
+                <div className="settings-row">
+                  <span title="Add a numeric suffix when an uploaded filename already exists instead of asking whether to replace it">
+                    Automatically rename conflicts
+                  </span>
+                  <div
+                    className="segmented-control"
+                    role="group"
+                    aria-label="Automatically rename conflicting uploads"
+                  >
+                    <button
+                      type="button"
+                      data-on={!autoRenameUploadConflicts}
+                      aria-pressed={!autoRenameUploadConflicts}
+                      onClick={() => onAutoRenameUploadConflicts(false)}
+                    >
+                      Off
+                    </button>
+                    <button
+                      type="button"
+                      data-on={autoRenameUploadConflicts}
+                      aria-pressed={autoRenameUploadConflicts}
+                      onClick={() => onAutoRenameUploadConflicts(true)}
                     >
                       On
                     </button>
@@ -1015,6 +1159,31 @@ export function BackendSettingsDialog({
                       data-on={mobileCommandExpandingInput}
                       aria-pressed={mobileCommandExpandingInput}
                       onClick={() => onMobileCommandExpandingInput(true)}
+                    >
+                      On
+                    </button>
+                  </div>
+                </div>
+                <div className="settings-row">
+                  <span>Focus command input after Send</span>
+                  <div
+                    className="segmented-control"
+                    role="group"
+                    aria-label="Focus command input after Send"
+                  >
+                    <button
+                      type="button"
+                      data-on={!mobileCommandFocusAfterSubmit}
+                      aria-pressed={!mobileCommandFocusAfterSubmit}
+                      onClick={() => onMobileCommandFocusAfterSubmit(false)}
+                    >
+                      Off
+                    </button>
+                    <button
+                      type="button"
+                      data-on={mobileCommandFocusAfterSubmit}
+                      aria-pressed={mobileCommandFocusAfterSubmit}
+                      onClick={() => onMobileCommandFocusAfterSubmit(true)}
                     >
                       On
                     </button>

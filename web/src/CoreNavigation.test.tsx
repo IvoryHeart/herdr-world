@@ -32,10 +32,13 @@ describe("core route contract", () => {
   it.each([
     ["/", "", "world", "office", "/", false],
     ["/", "?theme=office", "world", "office", "/", true],
+    ["/", "?theme=tree", "world", "tree", "/?theme=tree", false],
     ["/", "?theme=graph", "world", "graph", "/?theme=graph", false],
     ["/spaces", "", "spaces", "office", "/spaces", false],
     ["/world", "", "world", "office", "/", true],
     ["/world", "?theme=graph", "world", "graph", "/?theme=graph", true],
+    ["/world", "?theme=tree", "world", "tree", "/?theme=tree", true],
+    ["/", "?theme=tree&theme=graph", "world", "office", "/", true],
     ["/missing", "?theme=graph", "world", "office", "/", true],
     ["/", "?theme=mindcraft", "world", "office", "/", true],
     ["/", "?theme=unknown", "world", "office", "/", true],
@@ -113,6 +116,23 @@ describe("core route contract", () => {
     expect(container.querySelector("output")?.textContent).toBe("world:graph");
   });
 
+  it("restores Tree across Spaces and browser history", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => root.render(
+      <CoreNavigationProvider registry={coreSurfaceRegistry}><NavigationHarness /></CoreNavigationProvider>,
+    ));
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-theme='tree']")?.click());
+    expect(window.location.pathname + window.location.search).toBe("/?theme=tree");
+    await act(async () => container.querySelector<HTMLButtonElement>("[data-surface='spaces']")?.click());
+    expect(container.querySelector("output")?.textContent).toBe("spaces:tree");
+    await act(async () => { window.history.back(); await popstate(); });
+    expect(container.querySelector("output")?.textContent).toBe("world:tree");
+    expect(window.location.pathname + window.location.search).toBe("/?theme=tree");
+  });
+
   it("composes caller-owned state into the single theme history entry", async () => {
     const push = vi.spyOn(window.history, "pushState");
     const container = document.createElement("div");
@@ -145,6 +165,7 @@ function NavigationHarness() {
     <>
       <output>{navigation.activeSurface.id}:{navigation.activeWorldTheme.id}</output>
       <button data-theme="graph" onClick={() => navigation.navigateWorldTheme("graph")}>Graph</button>
+      <button data-theme="tree" onClick={() => navigation.navigateWorldTheme("tree")}>Tree</button>
       <button
         data-theme-state="graph"
         onClick={() => navigation.navigateWorldTheme("graph", { callerMarker: "detail" })}

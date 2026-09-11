@@ -85,7 +85,7 @@ wait_for_herdr() {
     if node --input-type=module - "$status" <<'NODE'
 try {
   const value = JSON.parse(process.argv[2] || "null");
-  process.exit(value?.running === true && value?.status === "running" && value?.protocol === 20 ? 0 : 1);
+  process.exit(value?.running === true && value?.status === "running" && value?.protocol === 22 ? 0 : 1);
 } catch {
   process.exit(1);
 }
@@ -166,7 +166,7 @@ process.stdin.on("data", (chunk) => { text += chunk; });
 process.stdin.on("end", () => {
   try {
     const value = JSON.parse(text);
-    process.exit(value.bridge_api_version === 1 && value.herdr_version === "0.8.2" && value.terminal_protocol === 20 && value.web_compat >= 1 ? 0 : 1);
+    process.exit(value.bridge_api_version === 1 && value.herdr_version === "0.9.0" && value.terminal_protocol === 22 && value.web_compat >= 1 ? 0 : 1);
   } catch {
     process.exit(1);
   }

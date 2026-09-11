@@ -1,5 +1,5 @@
-/node_modules/
-/web/node_modules/
+/node_modules
+/web/node_modules
 /web/dist/
 /web/.vite/
 /web/.next/
@@ -8,6 +8,34 @@
 /vendor/herdr-compat/target/
 /dist-packages/
 /.herdr-world-plugin/
+/.agents/.worktrees/
+/.agents/worktrees/
+# Repository-local upstream skills and native Codex configuration.
+/.agents/skills/superpowers
+/.agents/skills/openwiki
+/AGENTS.override.md
+/.codex/config.toml
+/.cargo/config.toml
+# Upstream Superpowers review packages and private task scratch.
+/.superpowers/
+/.agents/runs/
+/.agents/jobs/
+/.agents/state/
+/.agents/cache/
+/.ralph/
+/harness/node_modules
+/harness/bin/
+/harness/.install-*/
+/evals/.venv/
+/evals/jobs/
+/evals/.prepared/
+/evals/pilots/node_modules/
+# Pilot-generated knowledge stays private until source claims are reviewed.
+/openwiki/
+/.openwikiignore
+# Harbor may copy transient Docker Compose directories into its invocation directory.
+/tmp*/
+__pycache__/
 /_site/
 .specs/
 .scratch/

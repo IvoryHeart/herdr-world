@@ -3,9 +3,14 @@ import { hostProfile } from "../hostProfile";
 import type { AgentStatus, PaneInfo, Snapshot, TabInfo, WorkspaceInfo } from "../types";
 import {
   OFFICE_PRESENTATION_BOUNDS,
-  projectHerdrOffice,
+  projectHerdrOffice as projectOfficeModel,
 } from "./herdrOfficeProjection";
-import type { HerdrOfficeSourceHost } from "./herdrOfficeProjection";
+import { buildWorldModel } from "./worldModel";
+import type { WorldRuntimeSource } from "./worldModel";
+
+function projectHerdrOffice(sources: readonly WorldRuntimeSource[], generatedAt: number) {
+  return projectOfficeModel(buildWorldModel(sources), generatedAt);
+}
 
 describe("Herdr Office projection", () => {
   it("uses structured status for truthful destinations despite misleading labels", () => {
@@ -78,6 +83,10 @@ describe("Herdr Office projection", () => {
       });
     expect(projection.roster.find(({ agent }) => agent.semanticStatus === "unknown")?.agent.displayLabel)
       .toBe("Agent");
+    expect(projection.deskRoster.find(({ desk }) => desk.displayLabel === "shell")?.desk)
+      .toMatchObject({
+        terminalSelectionKeys: ['["profile-a","terminal","terminal-shell"]'],
+      });
   });
 
   it("projects one qualified deterministic desk per admitted tab including empty colliding labels", () => {
@@ -309,7 +318,7 @@ function liveHost(
   displayOrder: number,
   value: Snapshot,
   label = `Host ${profileId}`,
-): HerdrOfficeSourceHost {
+): WorldRuntimeSource {
   return {
     profile: hostProfile(profileId, label, `http://${profileId}.example`, true, displayOrder),
     location: "remote",

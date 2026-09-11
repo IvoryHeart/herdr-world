@@ -1,37 +1,41 @@
 schema_version = 1
 upstream_repository = "https://github.com/herdrdev/herdr"
-release_tag = "v0.8.2"
-upstream_commit = "9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c"
+release_tag = "v0.9.0"
+upstream_commit = "b99002ac99b09e00b4ca692436cb15a6b0d676f1"
 upstream_license = "Apache-2.0"
 upstream_license_path = "LICENSE"
 upstream_license_sha256 = "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
-protocol_version = 20
-refresh_command = "HERDR_SRC=/path/to/clean/herdr-v0.8.2 scripts/refresh-herdr-compat.sh"
-verification_command = "HERDR_SRC=/path/to/clean/herdr-v0.8.2 scripts/check-vendor.sh"
+protocol_version = 22
+refresh_command = "HERDR_SRC=/path/to/clean/herdr-v0.9.0 scripts/refresh-herdr-compat.sh"
+verification_command = "HERDR_SRC=/path/to/clean/herdr-v0.9.0 scripts/check-vendor.sh"
 
-# Exact copies are refreshed from the immutable source commit. Adapted entries
-# are intentionally retained and manually compared against that source during
-# a refresh; their local changes are listed below.
 [[files]]
 source = "src/api/schema.rs"
 destination = "src/api/schema.rs"
 mode = "exact"
-source_sha256 = "519d6670b444cea112124c183ca54685558f3408b4f5875b6f1204224c1c5694"
-destination_sha256 = "519d6670b444cea112124c183ca54685558f3408b4f5875b6f1204224c1c5694"
+source_sha256 = "0c8a994994cfc5a29f92bde59de391fb878864631927e88d8a2e77ad9efde4b4"
+destination_sha256 = "0c8a994994cfc5a29f92bde59de391fb878864631927e88d8a2e77ad9efde4b4"
 
 [[files]]
 source = "src/api/schema/agents.rs"
 destination = "src/api/schema/agents.rs"
 mode = "exact"
-source_sha256 = "0fd6f16a5c787079959765be89b3041336a4f31c8d96f70e90f555e5c51a41b1"
-destination_sha256 = "0fd6f16a5c787079959765be89b3041336a4f31c8d96f70e90f555e5c51a41b1"
+source_sha256 = "50cc48302f1cccdddd532afa3335c5f68e7cebb2e9d10c43cf4cfa4aa55fe07b"
+destination_sha256 = "50cc48302f1cccdddd532afa3335c5f68e7cebb2e9d10c43cf4cfa4aa55fe07b"
 
 [[files]]
 source = "src/api/schema/common.rs"
 destination = "src/api/schema/common.rs"
 mode = "exact"
-source_sha256 = "eaab6340aa92cfcbf90b87541421e90575f10844c8ac7516c5ab0746be012924"
-destination_sha256 = "eaab6340aa92cfcbf90b87541421e90575f10844c8ac7516c5ab0746be012924"
+source_sha256 = "aacc11e403f5f73fe61260c97231aeffa635f65c64c3f31cc12ef1bb0f330984"
+destination_sha256 = "aacc11e403f5f73fe61260c97231aeffa635f65c64c3f31cc12ef1bb0f330984"
+
+[[files]]
+source = "src/api/schema/commands.rs"
+destination = "src/api/schema/commands.rs"
+mode = "exact"
+source_sha256 = "b39f18b9b52b08c8a5d32cb32e343b6a0134cc33c0af181d45b6b1c240615b20"
+destination_sha256 = "b39f18b9b52b08c8a5d32cb32e343b6a0134cc33c0af181d45b6b1c240615b20"
 
 [[files]]
 source = "src/api/schema/events.rs"
@@ -44,15 +48,15 @@ destination_sha256 = "2ffa613e7a88b5934fe96b7593adfe4c04b21d3129fe92c95a6e67a908
 source = "src/api/schema/integrations.rs"
 destination = "src/api/schema/integrations.rs"
 mode = "exact"
-source_sha256 = "c32bf9f2e0e469aaac0d920da63bef98b68a1ba30f8340bc5016acb760b11711"
-destination_sha256 = "c32bf9f2e0e469aaac0d920da63bef98b68a1ba30f8340bc5016acb760b11711"
+source_sha256 = "1efe37f7fa7c11d356ad72e92deefffb44de221658e313c3c27227181207f26a"
+destination_sha256 = "1efe37f7fa7c11d356ad72e92deefffb44de221658e313c3c27227181207f26a"
 
 [[files]]
 source = "src/api/schema/panes.rs"
 destination = "src/api/schema/panes.rs"
 mode = "exact"
-source_sha256 = "7f0aeee71015ca0c725f962eba359234eaac4713d662f72437fa35c21e431174"
-destination_sha256 = "7f0aeee71015ca0c725f962eba359234eaac4713d662f72437fa35c21e431174"
+source_sha256 = "b3c02d2c587bdb7a5b0adac8ada261973ef0e6d2838ac73e392299ad50ab145a"
+destination_sha256 = "b3c02d2c587bdb7a5b0adac8ada261973ef0e6d2838ac73e392299ad50ab145a"
 
 [[files]]
 source = "src/api/schema/plugins.rs"
@@ -65,15 +69,15 @@ destination_sha256 = "5dc88cff1e89202c01d27a46525ebbb41a195d49c55d78b16202a3fa0d
 source = "src/api/schema/response.rs"
 destination = "src/api/schema/response.rs"
 mode = "exact"
-source_sha256 = "0da8645857e81952c394efdf8107b9b714207039b30fe64b6b6fdfff439ce3d0"
-destination_sha256 = "0da8645857e81952c394efdf8107b9b714207039b30fe64b6b6fdfff439ce3d0"
+source_sha256 = "b40f03d0b2887724609cb5690fb83a02c85262be769565442b8c53d0de6e7f8e"
+destination_sha256 = "b40f03d0b2887724609cb5690fb83a02c85262be769565442b8c53d0de6e7f8e"
 
 [[files]]
 source = "src/api/schema/server.rs"
 destination = "src/api/schema/server.rs"
 mode = "exact"
-source_sha256 = "b5f77380946b639e7f34eaa7fad562a21b11e5c9652a329a40fedb5f4ff33edd"
-destination_sha256 = "b5f77380946b639e7f34eaa7fad562a21b11e5c9652a329a40fedb5f4ff33edd"
+source_sha256 = "04dcdfc7d3a978fb6372a99805c1068d8f576b5c91ae25b290e17b824e99cdf4"
+destination_sha256 = "04dcdfc7d3a978fb6372a99805c1068d8f576b5c91ae25b290e17b824e99cdf4"
 
 [[files]]
 source = "src/api/schema/session.rs"
@@ -86,22 +90,43 @@ destination_sha256 = "0b9c325613c9f214f7d74277b8f5ccdbf3e02c0af80f53fc9ec9d94f22
 source = "src/api/schema/worktrees.rs"
 destination = "src/api/schema/worktrees.rs"
 mode = "exact"
-source_sha256 = "106e37fcc44a6be2bb34f68922c19d7e50f84c27ab0a707d33d39e9e9e777736"
-destination_sha256 = "106e37fcc44a6be2bb34f68922c19d7e50f84c27ab0a707d33d39e9e9e777736"
+source_sha256 = "1722e28a21330d8703a33b8f7280903681d7ec3463ab86b941439c3de6693c39"
+destination_sha256 = "1722e28a21330d8703a33b8f7280903681d7ec3463ab86b941439c3de6693c39"
 
 [[files]]
 source = "src/api/schema/tests.rs"
 destination = "src/api/schema/tests.rs"
 mode = "adapted"
-source_sha256 = "463d4e1c63206405449279141e473f7b2a8e64e6ac3011f9b4ed424a6791b06b"
-destination_sha256 = "5cbd78c41bfbb842d549ca827733c9f00ca917dad7034a6e305b6ca3590f5a04"
+source_sha256 = "e0e913ebb717ec10ebe1734ba9a6214574e1ffd1b1301b6bfd58e048eebb02c8"
+destination_sha256 = "5ffef2cd7a96db1c2b39716c72588c35d90f188f3dd083b2431a2db79d7304ec"
+
+[[files]]
+source = "src/api/schema/tabs.rs"
+destination = "src/api/schema/tabs.rs"
+mode = "adapted"
+source_sha256 = "0b6bf6d2afe6419c835082e39fac3470b832a12a7ba22e5723d3702ac4e5d810"
+destination_sha256 = "6eef0a486f143855156218793f53158e4596d79c27a940e824cbd9601e7869e7"
+
+[[files]]
+source = "src/api/schema/workspaces.rs"
+destination = "src/api/schema/workspaces.rs"
+mode = "adapted"
+source_sha256 = "80f326a0718875b496cd3b9305849a5142c82546eb13fe8b4435008258806654"
+destination_sha256 = "e1a76b0f87c76ae194fb4d09373e1cc40ae4bd2a6e91c480d4e2ad0d3a47339a"
 
 [[files]]
 source = "src/protocol/wire.rs"
 destination = "src/protocol/wire.rs"
-mode = "exact"
-source_sha256 = "4246cb081c1953b198081a80242deb2e1f126a3bde140d00cafba8aa51ae7722"
-destination_sha256 = "4246cb081c1953b198081a80242deb2e1f126a3bde140d00cafba8aa51ae7722"
+mode = "adapted"
+source_sha256 = "c93588b09ec0ceea4685e1d1b4393a1328eca33593b1091134871dd703194d99"
+destination_sha256 = "6ef48aa58592167b8f92967262dcf7844e67621a19183baea2b3abbc9b9c69ae"
+
+[[files]]
+source = "src/protocol/wire.rs"
+destination = "src/protocol/wire/upstream_wire_tests.rs"
+mode = "adapted"
+source_sha256 = "c93588b09ec0ceea4685e1d1b4393a1328eca33593b1091134871dd703194d99"
+destination_sha256 = "d1e36b66f1027511dfd7a1f219588b87f65676c4aca5b3ccaeb4a2a639c00e8a"
 
 [[files]]
 source = "src/api/client.rs"
@@ -118,45 +143,31 @@ source_sha256 = "ac666d9a7f541884bf8e330bf8ea477099d178b982341909b23aa7a2f1fd7e0
 destination_sha256 = "13d0601d72d2030b1d1f802f7d28f3cb0c8dfe147a4f1efd5d5eaefe2cc3afe5"
 
 [[files]]
-source = "src/api/schema/tabs.rs"
-destination = "src/api/schema/tabs.rs"
-mode = "adapted"
-source_sha256 = "0b6bf6d2afe6419c835082e39fac3470b832a12a7ba22e5723d3702ac4e5d810"
-destination_sha256 = "6eef0a486f143855156218793f53158e4596d79c27a940e824cbd9601e7869e7"
-
-[[files]]
-source = "src/api/schema/workspaces.rs"
-destination = "src/api/schema/workspaces.rs"
-mode = "adapted"
-source_sha256 = "7c5d0ceded815652509385aaca8fa4193597453f379bcb95c6fca752f16cd023"
-destination_sha256 = "a52f5f9eb87634e4eb01d49d60daed447f51a30371172b41cd9fbc538161a9d3"
-
-[[files]]
 source = "src/input/model.rs"
 destination = "src/input.rs"
-mode = "adapted"
-source_sha256 = "1abad6b13fef5a2b7567572bfda4e7dad051c68555c3b3c487e34fb687dc5625"
-destination_sha256 = "42891dad8764cbaeddfb6d3cf830aef0b4e17ac26e368c25b1af9e286e261e86"
+mode = "exact"
+source_sha256 = "c5a9ddf7c050f95fa90f5e17efbfda2bbb78c8ced97de78ccb07e8fc9d034364"
+destination_sha256 = "c5a9ddf7c050f95fa90f5e17efbfda2bbb78c8ced97de78ccb07e8fc9d034364"
 
 [[files]]
 source = "src/raw_input.rs"
 destination = "src/raw_input.rs"
 mode = "adapted"
-source_sha256 = "1ca82fdc563809ad7c93a41adbc62678b98db66a5d6ceef54f5427c6680f3017"
+source_sha256 = "07b8e74a2f974d19d6ceeeceb250c0eda8ec4f3c589997ca11f7203ce0b3a47d"
 destination_sha256 = "0b1a0797c082f90a1ee51d9b9e7ad5cd3828886c53c4416afba634f96e4fc6a3"
 
 [[files]]
 source = "src/ipc.rs"
 destination = "src/ipc.rs"
 mode = "adapted"
-source_sha256 = "5239586f6d1d41ce8723f160c9e3ba6721a0501645fa305c5acef699bf5e90b1"
+source_sha256 = "dd6ac4ae5f0658c350cb8fa0c73dd74ca91b6e06da4c2bb8dd78c8b5d0bbb85d"
 destination_sha256 = "1715a3c46cc4c1cce1bc58e4e0fae9d512bd2b90ce1b9f12abfd4f856c88eb79"
 
 [[files]]
 source = "src/logging.rs"
 destination = "src/logging.rs"
 mode = "adapted"
-source_sha256 = "2bb5a38f58fd7394925ef48f069835fdcc4666a313234115dc8cb726f124f3fd"
+source_sha256 = "51936fcfcc3d00d444bfcc70c124b369fb73e8a41ece4f5ea7029042bdc35a45"
 destination_sha256 = "3cfe3e443e9293b924da79375508714af24a5ff46e6a711eeef8a62c6cd1cad3"
 
 [[files]]
@@ -173,14 +184,9 @@ mode = "adapted"
 source_sha256 = "28cdddf4e8fa7e5123c2e79abc9b43ae7cd599a0dbb312b345b6b225cc65db96"
 destination_sha256 = "3fd2c7d2071167a324bdb10b60aea72c6adeeecdad8945203b9e576d0dc8de75"
 
-[local_adaptations]
-api_client = "Concrete socket paths and timeout/event helpers; no Herdr session ownership."
-api_status = "Retains only RuntimeStatus consumed by bridge admission."
-schema_tabs_workspaces = "Keeps optional clear-name sentinel labels for bridge rename behavior."
-input = "Keeps only wire-required input model types."
-raw_input = "Keeps only RawInputEvent types required by the copied protocol."
-ipc = "Keeps connect-only local socket helper; bridge owns listeners and teardown."
-logging = "Accepts a bridge-owned log directory instead of Herdr session state."
-popup_size = "Makes PopupSize public for copied schema types."
-socket_paths = "Derives from supplied overrides/defaults; bridge owns session resolution."
-schema_tests = "Removes upstream generated API-schema artifact test unavailable in this narrow crate."
+[[files]]
+source = "src/terminal_theme.rs"
+destination = "src/terminal_theme.rs"
+mode = "adapted"
+source_sha256 = "c4a8d16fe35bdec5c48581e53302c7c7147525df70729e1288c046fb4f931e79"
+destination_sha256 = "6316a9678b07f965d89090bfae73cf428416fbf1ad7d5ecee99fd89d3d262fc4"
