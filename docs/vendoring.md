@@ -94,13 +94,14 @@ git -C "$HERDR_SRC" describe --tags --exact-match HEAD
 HERDR_SRC="$HERDR_SRC" scripts/refresh-herdr-compat.sh
 ```
 
-The command copies only the exact upstream schema root/modules and `src/protocol/wire.rs` listed
-below:
+The command copies only the exact upstream schema root/modules and input model listed below. It
+preserves locally adapted files such as `src/protocol/wire.rs` and `src/terminal_theme.rs` for
+explicit review and manifest verification:
 
 ```text
 src/api/schema.rs          -> vendor/herdr-compat/src/api/schema.rs
 src/api/schema/*.rs        -> vendor/herdr-compat/src/api/schema/*.rs
-src/protocol/wire.rs       -> vendor/herdr-compat/src/protocol/wire.rs
+src/input/model.rs         -> vendor/herdr-compat/src/input.rs
 ```
 
 The copied source paths, destination paths, SHA-256 hashes, release provenance, license, and

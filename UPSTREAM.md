@@ -13,8 +13,8 @@ upstream  git@github.com:kcosr/herdr-web.git
 
 Current synchronization points:
 
-- Herdr Web: `4384c884da418ea3f3fb75954da5347b2e12f063`
-  (`v0.5.0` plus the JetBrains Mono Nerd Font fallback merged in upstream PR #74)
+- Herdr Web: `3fb68ca4cc850ea39277120d74a30b7a038a4f8f`
+  (`v0.6.0` plus the mobile terminal keyboard controls merged in upstream PR #89)
 - Herdr compatibility: Herdr `v0.9.0`, commit
   `b99002ac99b09e00b4ca692436cb15a6b0d676f1`, terminal protocol `22`
 

@@ -104,8 +104,8 @@ page-serving CSP for every bridge origin. The proxy must preserve WebSocket upgr
 Each profile is probed independently. An incompatible bridge API, missing feature declarations, or
 malformed capability data blocks that host without blocking compatible hosts. A Herdr `v0.9.0` or
 newer daemon is admitted only when its capabilities report terminal protocol `22` exactly; protocol
-`19`, protocol `21`, a missing protocol, and malformed protocol values are rejected before terminal
-attach. A network failure marks only that profile offline.
+`19`, protocol `20`, protocol `21`, protocol `23`, a missing protocol, and malformed protocol values
+are rejected before terminal attach. A network failure marks only that profile offline.
 Stale topology may remain visible for orientation, but structural commands and terminal input,
 resize, and scroll stay unavailable until the same host connection is freshly compatible again.
 
@@ -127,9 +127,9 @@ asset service or central gateway.
   confirm focus returns to its actual trigger, and verify the optional
   screen-reader mirror is scoped to the selected terminal viewport.
 - Disconnect one bridge and confirm the other host remains navigable and controllable.
-- Configure an exact protocol-`20` fixture and confirm it is admitted; configure protocol-`19`,
-  protocol-`21`, or a malformed/missing protocol fixture and confirm it is visible but not
-  controllable before terminal attach.
+- Configure an exact protocol-`22` fixture and confirm it is admitted; configure protocol-`19`,
+  protocol-`20`, protocol-`21`, protocol-`23`, or a malformed/missing protocol fixture and confirm it
+  is visible but not controllable before terminal attach.
 - Attach two browser clients to one terminal and confirm both see output; document that last resize
   wins and the Refit button reasserts the current browser size.
 - Verify desktop widths 1440 and 1920, and mobile width 375 with host switching and terminal access.
