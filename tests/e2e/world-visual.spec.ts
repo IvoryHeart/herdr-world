@@ -46,7 +46,10 @@ for (const viewport of [
     });
     await page.locator(".world-stage-scroll").evaluate((element) =>
       element.scrollTo({ top: element.scrollHeight, behavior: "auto" }));
-    await page.locator(".world-agent-bar").screenshot({
+    await page
+      .getByRole("region", { name: "Agent Bar" })
+      .locator(".world-agent-bar")
+      .screenshot({
       path: resolve(evidenceDir, `world-agent-bar-${viewport.width}x${viewport.height}.png`),
       animations: "disabled",
     });
