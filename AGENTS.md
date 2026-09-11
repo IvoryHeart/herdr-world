@@ -31,7 +31,7 @@ This is a lightweight internal onboarding note for agents working in this repo.
 - Read [docs/agent-development.md](docs/agent-development.md) for the native coding
   workflow, model allocation, worktrees, evidence reuse and usage reporting. Use
   [docs/knowledge-map.md](docs/knowledge-map.md) to locate contracts and source.
-- Use native coding-agent conversations and pinned Superpowers skills. Start from
+- Use native coding-agent conversations and the three selected Superpowers skills. Start from
   the owner's short goal, inspect the relevant source, clarify consequential gaps,
   and continue authorized work in the same session. OpenSpec supplies decisions and
   tasks when needed; routine fixes do not need a proposal.

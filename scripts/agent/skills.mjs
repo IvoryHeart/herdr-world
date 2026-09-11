@@ -1,8 +1,8 @@
 // Local installation only. Native Codex owns agent execution and discovery.
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, unlink, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { primaryCheckout, repoRoot } from './lib.mjs';
 
@@ -35,20 +35,48 @@ export async function installSkills(cwd = repoRoot) {
     }
   }
   const release = JSON.parse(await readFile(join(cwd, 'harness/superpowers/release.json'), 'utf8'));
+  if (!Array.isArray(release.selectedSkills) || !release.selectedSkills.length ||
+      new Set(release.selectedSkills).size !== release.selectedSkills.length ||
+      release.selectedSkills.some(name => !/^[a-z0-9-]+$/.test(name) || !release.skills.includes(name))) {
+    throw new Error('Invalid Superpowers skill selection');
+  }
   const bundle = join(cwd, '.agents/skills/superpowers');
-  if (!await exists(bundle)) {
+  let source;
+  if (await exists(bundle)) {
+    const digest = await bundleDigest(bundle);
+    if (digest !== release.selectedSkillsSha256) {
+      // Migrate only the verified old full-bundle link; never edit its shared target.
+      if (!(await lstat(bundle)).isSymbolicLink() || digest !== release.skillsSha256) {
+        throw new Error('Installed Superpowers skills differ from the pin');
+      }
+      source = await realpath(bundle);
+    }
+  } else {
     const cache = join(primaryCheckout(cwd), '.agents/cache', 'superpowers-' + release.version);
     if (!await exists(cache)) {
       await mkdir(join(cache, '..'), { recursive: true });
       execFileSync('git', ['clone', '--depth', '1', '--branch', release.ref, release.repository, cache], { stdio: 'inherit' });
+      const revision = execFileSync('git', ['-C', cache, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+      if (revision !== release.commit) throw new Error('Superpowers cache revision differs from the pin');
     }
-    const revision = execFileSync('git', ['-C', cache, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-    if (revision !== release.commit) throw new Error('Superpowers cache revision differs from the pin');
-    if (await bundleDigest(join(cache, 'skills')) !== release.skillsSha256) throw new Error('Superpowers cache contents differ from the pin');
-    await mkdir(join(cwd, '.agents/skills'), { recursive: true });
-    await symlink(relative(join(cwd, '.agents/skills'), join(cache, 'skills')), bundle, 'dir');
+    source = join(cache, 'skills');
   }
-  if (await bundleDigest(bundle) !== release.skillsSha256) throw new Error('Installed Superpowers skills differ from the pin');
+  if (source) {
+    if (await bundleDigest(source) !== release.skillsSha256) throw new Error('Superpowers cache contents differ from the pin');
+    // Stage outside skill discovery and validate before replacing any existing link.
+    await mkdir(join(cwd, '.agents/cache'), { recursive: true });
+    const stage = await mkdtemp(join(cwd, '.agents/cache', 'selected-skills-'));
+    try {
+      for (const name of release.selectedSkills) await cp(join(source, name), join(stage, name), { recursive: true });
+      if (await bundleDigest(stage) !== release.selectedSkillsSha256) throw new Error('Selected Superpowers skills differ from the pin');
+      await mkdir(join(cwd, '.agents/skills'), { recursive: true });
+      if (await exists(bundle)) await unlink(bundle);
+      await rename(stage, bundle);
+    } finally {
+      await rm(stage, { recursive: true, force: true });
+    }
+  }
+  if (await bundleDigest(bundle) !== release.selectedSkillsSha256) throw new Error('Installed Superpowers skills differ from the pin');
 
   // Remove only the byte-identical obsolete trial override; preserve user instructions.
   const override = join(cwd, 'AGENTS.override.md');
@@ -67,7 +95,8 @@ export async function installSkills(cwd = repoRoot) {
     await writeFile(config, template, { mode: 0o600 });
     configStatus = 'migrated-trial';
   }
-  return { superpowers: release.version, skills: release.skills.length, bundle: await realpath(bundle), config: configStatus,
+  return { superpowers: release.version, skills: release.selectedSkills.length, selectedSkills: release.selectedSkills,
+    bundle: await realpath(bundle), config: configStatus,
     activeSessionVerified: false };
 }
 

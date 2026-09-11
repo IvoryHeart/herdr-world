@@ -73,6 +73,10 @@ Web's own release history remains in its upstream changelog.
 
 ### Removed
 
+- Removed eleven Superpowers workflow skills and the OpenSpec propose skill from
+  project discovery. Setup now preserves a three-skill Superpowers selection;
+  OpenWiki remains an optional local integration. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
+
 - Retired the experimental Ralph runtime, custom supervisor and model containers,
   legacy role skills, unused Harbor execution path and Graphify tool pin. Retained
   historical evidence and reusable behavioral graders.

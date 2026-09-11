@@ -27,10 +27,15 @@ worktree, coordinating ownership to avoid concurrent edits to the same files.
 - **THEN** it resolves the primary checkout's central directory without recursive nesting
 
 ### Requirement: Native execution and portable skills
-The default workflow SHALL use native coding-agent conversations and pinned, unchanged
-Superpowers skills with OpenSpec. It SHALL NOT start Ralph, a second model supervisor
-or a repository Stop-hook continuation loop. User authorization and repository delivery
+The default workflow SHALL use native coding-agent conversations and a repository-selected
+subset of pinned, unchanged Superpowers skills with OpenSpec. Local setup SHALL expose
+only that selection and preserve it on repeated installation. It SHALL NOT start Ralph,
+a second model supervisor or a repository Stop-hook continuation loop. User authorization and repository delivery
 policy SHALL continue to apply. Local installation SHALL preserve unrelated settings.
+
+#### Scenario: Full-bundle installation migration
+- **WHEN** local setup encounters the verified old full-bundle skill link
+- **THEN** it installs only the selected skills without modifying the shared cache or another worktree, and repeated setup does not restore excluded skills
 
 #### Scenario: Conversational task start
 - **WHEN** the owner provides a short request and optional parent PR
