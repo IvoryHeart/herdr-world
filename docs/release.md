@@ -21,7 +21,7 @@ the release tag.
   as the npm trusted publisher for `@ivoryheart/herdr-world`.
 - `origin` fetch and push URLs both resolve to `IvoryHeart/herdr-world`. The release helper rejects
   upstream, fork, local-path, and unsupported remote URLs before making any release mutation.
-- A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
+- A local Herdr `v0.9.0` or newer session reporting terminal protocol `22` for browser and packaged
   bridge smoke testing.
 
 ## Prepare And Review
@@ -83,7 +83,7 @@ locally built substitute. The explicit distribution preflight runs the same Linu
 and Intel artifact, Formula, and plugin lifecycle matrix without publishing; ordinary pull requests
 rely on the normal CI workflow, including its release unit tests. Each native job checks the CPU
 format and bundle contents, then exercises the packaged bridge against two checksum-pinned stock
-Herdr v0.8.2 daemons. One required notice gate validates the complete cross-platform dependency
+Herdr v0.9.0 daemons. One required notice gate validates the complete cross-platform dependency
 closure before any native job starts, avoiding three redundant builds of the notice generator.
 
 ## Herdr Plugin Release
@@ -92,7 +92,7 @@ The plugin is released with the application tag but does not publish a second ap
 Before any public channel is changed, the workflow installs the exact generated npm tarball into an
 isolated checkout and runs the plugin lifecycle smoke on all three supported targets: Linux
 x86-64/glibc 2.34+, macOS ARM64, and macOS x86-64. The smoke uses a checksum-pinned stock Herdr
-v0.8.2 daemon and checks the plugin build, action listing, startup restoration, first/repeated start,
+v0.9.0 daemon and checks the plugin build, action listing, startup restoration, first/repeated start,
 status, open, doctor, restart, browser readiness, a second session/port, and
 stop-before-uninstall. The explicit preflight and tagged workflow use the same unpublished-package
 path, so a failure prevents the GitHub release, npm channel, and Homebrew Formula from advancing.
@@ -191,7 +191,7 @@ dist-packages/herdr-world-vX.Y.Z-android.apk
 
 ## Browser And Federation Smoke
 
-Start or attach a Herdr `v0.8.2` or newer session reporting terminal protocol `20`:
+Start or attach a Herdr `v0.9.0` or newer session reporting terminal protocol `22`:
 
 ```bash
 herdr

@@ -488,6 +488,7 @@ type DialogState = {
   label: string;
   clearable?: boolean;
   noun?: "room";
+  sourceWorkspaceId?: string;
   linkedWorkspaceLabels?: string[];
 };
 type DisplayPrefs = {
@@ -4772,7 +4773,8 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     void exec(
       runtime,
       { kind: "workspace", id: "new", command: "workspace.create" },
-      (routedCommands) => routedCommands.createWorkspace({ label: value }),
+      (routedCommands) =>
+        routedCommands.createWorkspace({ label: value, sourceWorkspaceId: dialog.sourceWorkspaceId }),
       false,
       (result) => {
         const workspaceId = createdWorkspaceId(result);
@@ -4945,14 +4947,19 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     onOpenSeatLauncher: ({ bridgeId, workspaceId }) => {
       setLaunchTarget({ mode: "tab", workspaceId, bridgeId });
     },
-    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, label }) => {
+    onOpenRoomDialog: ({ mode, bridgeId, workspaceId, sourceWorkspaceId, label }) => {
+      const linkedLabels = mode === "close"
+        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], workspaceId)
+        : [];
       setDialog({
         mode,
         kind: "space",
         bridgeId,
         id: workspaceId,
+        sourceWorkspaceId,
         label,
         noun: "room",
+        linkedWorkspaceLabels: linkedLabels,
       });
     },
   });

@@ -10,6 +10,8 @@ export type UploadedFile = {
   mime?: string | null;
 };
 
+export type UploadFetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
 export class UploadConflictError extends Error {
   constructor(
     readonly name: string,
@@ -21,12 +23,14 @@ export class UploadConflictError extends Error {
 
 export async function uploadWithOverwritePrompt(
   httpUrl: (path: string, query?: URLSearchParams) => string,
+  fetcher: UploadFetcher,
+  isAdmitted: () => boolean,
   file: UploadCandidate,
   autoRenameConflicts: boolean,
   confirmReplace: (error: UploadConflictError) => Promise<boolean>,
 ): Promise<UploadedFile> {
   try {
-    return await uploadFile(httpUrl, file, false, autoRenameConflicts);
+    return await uploadFile(httpUrl, fetcher, isAdmitted, file, false, autoRenameConflicts);
   } catch (error) {
     if (!(error instanceof UploadConflictError)) {
       throw error;
@@ -35,16 +39,21 @@ export async function uploadWithOverwritePrompt(
     if (!replace) {
       throw new Error("Upload canceled");
     }
-    return uploadFile(httpUrl, file, true, false);
+    return uploadFile(httpUrl, fetcher, isAdmitted, file, true, false);
   }
 }
 
 async function uploadFile(
   httpUrl: (path: string, query?: URLSearchParams) => string,
+  fetcher: UploadFetcher,
+  isAdmitted: () => boolean,
   file: UploadCandidate,
   overwrite: boolean,
   renameConflicts: boolean,
 ): Promise<UploadedFile> {
+  if (!isAdmitted()) {
+    throw new Error("Upload is no longer available for this terminal");
+  }
   const params = new URLSearchParams();
   if (file.name) {
     params.set("name", file.name);
@@ -54,7 +63,7 @@ async function uploadFile(
   } else if (renameConflicts) {
     params.set("rename_conflicts", "true");
   }
-  const response = await fetch(httpUrl("/api/uploads", params), {
+  const response = await fetcher(httpUrl("/api/uploads", params), {
     method: "POST",
     headers: file.blob.type ? { "content-type": file.blob.type } : undefined,
     body: file.blob,

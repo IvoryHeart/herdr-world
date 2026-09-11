@@ -18,7 +18,7 @@ herdr
 ```
 
 The active bridge baseline is Herdr `v0.9.0` or newer reporting terminal protocol
-`20` exactly. Protocol 19, protocol 21, missing protocol, and invalid Herdr
+`22` exactly. Protocol 21, protocol 23, missing protocol, and invalid Herdr
 versions are rejected before terminal attach; the error is intentionally bounded
 and does not echo untrusted version text.
 

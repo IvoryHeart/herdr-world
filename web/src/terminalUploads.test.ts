@@ -9,11 +9,12 @@ afterEach(() => {
 describe("uploadWithOverwritePrompt", () => {
   it("requests atomic conflict renaming when the setting is enabled", async () => {
     const fetchMock = vi.fn().mockResolvedValue(uploadResponse("image-1.png"));
-    vi.stubGlobal("fetch", fetchMock);
     const confirmReplace = vi.fn();
 
     const uploaded = await uploadWithOverwritePrompt(
       testHttpUrl,
+      fetchMock,
+      admitted,
       imageFile(),
       true,
       confirmReplace,
@@ -32,10 +33,9 @@ describe("uploadWithOverwritePrompt", () => {
       .fn()
       .mockResolvedValueOnce(conflictResponse("image.png"))
       .mockResolvedValueOnce(uploadResponse("image.png"));
-    vi.stubGlobal("fetch", fetchMock);
     const confirmReplace = vi.fn().mockResolvedValue(true);
 
-    await uploadWithOverwritePrompt(testHttpUrl, imageFile(), false, confirmReplace);
+    await uploadWithOverwritePrompt(testHttpUrl, fetchMock, admitted, imageFile(), false, confirmReplace);
 
     expect(confirmReplace).toHaveBeenCalledOnce();
     expect(requestQuery(fetchMock, 0)).toEqual({ name: "image.png" });
@@ -49,15 +49,31 @@ describe("uploadWithOverwritePrompt", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    vi.stubGlobal("fetch", fetchMock);
     const confirmReplace = vi.fn();
 
     await expect(
-      uploadWithOverwritePrompt(testHttpUrl, imageFile(), true, confirmReplace),
+      uploadWithOverwritePrompt(testHttpUrl, fetchMock, admitted, imageFile(), true, confirmReplace),
     ).rejects.toThrow("no available filename for image.png");
     expect(confirmReplace).not.toHaveBeenCalled();
   });
+
+  it("uses the supplied authenticated fetcher and rechecks admission before overwrite", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(conflictResponse("image.png"))
+      .mockResolvedValueOnce(uploadResponse("image.png"));
+    const isAdmitted = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
+    const confirmReplace = vi.fn().mockResolvedValue(true);
+
+    await expect(
+      uploadWithOverwritePrompt(testHttpUrl, fetchMock, isAdmitted, imageFile(), false, confirmReplace),
+    ).rejects.toThrow("Upload is no longer available for this terminal");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(isAdmitted).toHaveBeenCalledTimes(2);
+  });
 });
+
+const admitted = () => true;
 
 function imageFile() {
   return {

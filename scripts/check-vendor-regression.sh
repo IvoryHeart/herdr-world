@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HERDR_SOURCE="${HERDR_SRC:-}"
 
 if [[ -z "$HERDR_SOURCE" ]]; then
-  echo "HERDR_SRC must point at a clean Herdr v0.8.2 checkout" >&2
+  echo "HERDR_SRC must point at a clean Herdr v0.9.0 checkout" >&2
   exit 1
 fi
 

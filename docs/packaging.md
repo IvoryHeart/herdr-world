@@ -3,8 +3,8 @@
 `herdr-world` ships as desktop bridge/web tarballs, one universal npm package, Homebrew Formulae,
 and an Android APK.
 
-The desktop tarball does not include Herdr itself. Users still need Herdr `v0.8.2` or newer with
-terminal protocol `20`; the packaged launcher can guide an interactive user through consent-based
+The desktop tarball does not include Herdr itself. Users still need Herdr `v0.9.0` or newer with
+terminal protocol `22`; the packaged launcher can guide an interactive user through consent-based
 installation and startup of the default local session.
 
 The npm package is generated from the exact three verified desktop archives. It includes the web
@@ -76,7 +76,7 @@ herdr-world-vX.Y.Z-android-debug.apk
 
 The desktop release workflow builds Linux artifacts on Linux, macOS ARM artifacts on Apple Silicon,
 and macOS x86_64 artifacts on Intel. Each native archive is inspected and exercised against two
-stock Herdr v0.8.2 daemons before upload. Build the APK separately on a machine with the documented
+stock Herdr v0.9.0 daemons before upload. Build the APK separately on a machine with the documented
 Android SDK setup; Android is not part of the automated public release until a signed release APK
 exists.
 
@@ -181,7 +181,7 @@ manifest, and `README.md`. The bundled web tree must also contain its
 `legal/manifest.json` and referenced legal files so the same notices enter the
 Android WebView assembly.
 
-Before release, run the unpacked wrapper against a Herdr `v0.8.2` or newer daemon reporting protocol
+Before release, run the unpacked wrapper against a Herdr `v0.9.0` or newer daemon reporting protocol
 `20`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
 protocol. Complete the launcher checks in [docs/release.md](release.md) with the packaged bridge, not
 only a development build.

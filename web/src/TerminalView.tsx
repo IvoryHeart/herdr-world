@@ -82,6 +82,7 @@ import {
   UploadConflictError,
   uploadWithOverwritePrompt,
 } from "./terminalUploads";
+import { authenticatedFetch } from "./bridgeApi";
 import type { UploadCandidate, UploadedFile } from "./terminalUploads";
 
 type Props = {
@@ -1413,6 +1414,12 @@ export function TerminalView({
         uploaded.push(
           await uploadWithOverwritePrompt(
             httpUrl,
+            authenticatedFetch,
+            () =>
+              connectionKeyRef.current === uploadConnectionKey &&
+              terminalIdRef.current === uploadTerminalId &&
+              uploadEnabledRef.current &&
+              inputEnabledRef.current,
             file,
             autoRenameUploadConflicts,
             confirmUploadReplace,
