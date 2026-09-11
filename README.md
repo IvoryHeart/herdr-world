@@ -14,8 +14,8 @@ switches all four views; phones use the searchable, keyboard-accessible hierarch
 
 The current public preview is
 [`v0.1.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
-It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer
-with terminal protocol `20`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
+It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.9.0` or newer
+with terminal protocol `22`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
 an interactive overview.
 
 | Desktop | Mobile |

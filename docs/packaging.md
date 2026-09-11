@@ -182,7 +182,7 @@ manifest, and `README.md`. The bundled web tree must also contain its
 Android WebView assembly.
 
 Before release, run the unpacked wrapper against a Herdr `v0.9.0` or newer daemon reporting protocol
-`20`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
+`22`. Confirm the bridge accepts that combination and rejects a daemon reporting any other terminal
 protocol. Complete the launcher checks in [docs/release.md](release.md) with the packaged bridge, not
 only a development build.
 

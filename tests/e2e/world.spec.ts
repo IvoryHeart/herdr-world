@@ -1055,7 +1055,7 @@ test("creates and manages rooms through capability-gated workspace actions", asy
     return logs["host-a"].commands;
   }).toContainEqual({
     method: "workspace.create",
-    params: { focus: true, label: "Research" },
+    params: { focus: true, label: "Research", source_workspace_id: "main" },
   });
 
   const layout = await publishedOfficeLayout(page);

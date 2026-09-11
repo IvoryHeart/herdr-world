@@ -82,15 +82,15 @@ jobs:
           - platform: linux-x86_64
             runner: ubuntu-24.04
             herdr_asset: herdr-linux-x86_64
-            herdr_sha256: 976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4
+            herdr_sha256: 4fa1a01158dd8043da92d31b270780b0dcc10603038d9b61cac4d81ab63fb71f
           - platform: macos-arm64
             runner: macos-15
             herdr_asset: herdr-macos-aarch64
-            herdr_sha256: a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574
+            herdr_sha256: 32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17
           - platform: macos-x86_64
             runner: macos-15-intel
             herdr_asset: herdr-macos-x86_64
-            herdr_sha256: ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1
+            herdr_sha256: d0c920b2a126a74809fa1491411c9a097a44786cac9c2ca51b818a995581cf16
     steps:
       - uses: actions/checkout@v7
         with:
@@ -144,14 +144,14 @@ jobs:
           scripts/verify-desktop-package.sh "$VERSION" "${{ matrix.platform }}"
           node scripts/desktop-artifact-metadata.mjs "$VERSION" "${{ matrix.platform }}" \
             "dist-packages/herdr-world-${VERSION}-${{ matrix.platform }}.metadata.json"
-      - name: Download verified stock Herdr v0.8.2
+      - name: Download verified stock Herdr v0.9.0
         env:
           HERDR_ASSET: ${{ matrix.herdr_asset }}
           HERDR_SHA256: ${{ matrix.herdr_sha256 }}
         shell: bash
         run: |
           curl --proto '=https' --tlsv1.2 --fail --location --retry 3 \
-            "https://github.com/herdrdev/herdr/releases/download/v0.8.2/${HERDR_ASSET}" \
+            "https://github.com/herdrdev/herdr/releases/download/v0.9.0/${HERDR_ASSET}" \
             --output "${RUNNER_TEMP}/herdr"
           if command -v sha256sum >/dev/null 2>&1; then
             actual="$(sha256sum "${RUNNER_TEMP}/herdr" | awk '{print $1}')"
@@ -165,7 +165,7 @@ jobs:
           HERDR_BIN: ${{ runner.temp }}/herdr
           HERDR_WEB_BRIDGE_BIN: ${{ github.workspace }}/dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}/bin/herdr-world-bridge
           HERDR_WEB_STATIC_DIR: ${{ github.workspace }}/dist-packages/herdr-world-${{ steps.version.outputs.version }}-${{ matrix.platform }}/share/herdr-world/web
-        run: scripts/live-stock-v082.sh
+        run: scripts/live-stock-v090.sh
       - name: Retain the verified native artifact
         if: steps.restore.outcome == 'failure'
         uses: actions/upload-artifact@v7
@@ -927,15 +927,15 @@ jobs:
           - platform: linux-x86_64
             runner: ubuntu-24.04
             herdr_asset: herdr-linux-x86_64
-            herdr_sha256: 976150a14d490c94b243ea2e1a7eb2dfb67f12e36b182db90936f6728e6aecf4
+            herdr_sha256: 4fa1a01158dd8043da92d31b270780b0dcc10603038d9b61cac4d81ab63fb71f
           - platform: macos-arm64
             runner: macos-15
             herdr_asset: herdr-macos-aarch64
-            herdr_sha256: a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574
+            herdr_sha256: 32b53df09872628059c789a69f02a6b8e29e14ddf26711421f3463f70c1aef17
           - platform: macos-x86_64
             runner: macos-15-intel
             herdr_asset: herdr-macos-x86_64
-            herdr_sha256: ab50262c8190cd7aa9056d249d255c08c328c3e8716de9cfa29db4f131b8e2c1
+            herdr_sha256: d0c920b2a126a74809fa1491411c9a097a44786cac9c2ca51b818a995581cf16
     steps:
       - uses: actions/checkout@v7
         with:
@@ -978,14 +978,14 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "checkout=$checkout" >> "$GITHUB_OUTPUT"
           echo "package=$package" >> "$GITHUB_OUTPUT"
-      - name: Download verified stock Herdr v0.8.2
+      - name: Download verified stock Herdr v0.9.0
         env:
           HERDR_ASSET: ${{ matrix.herdr_asset }}
           HERDR_SHA256: ${{ matrix.herdr_sha256 }}
         shell: bash
         run: |
           curl --proto '=https' --tlsv1.2 --fail --location --retry 3 \
-            "https://github.com/herdrdev/herdr/releases/download/v0.8.2/${HERDR_ASSET}" \
+            "https://github.com/herdrdev/herdr/releases/download/v0.9.0/${HERDR_ASSET}" \
             --output "${RUNNER_TEMP}/herdr"
           if command -v sha256sum >/dev/null 2>&1; then
             actual="$(sha256sum "${RUNNER_TEMP}/herdr" | awk '{print $1}')"

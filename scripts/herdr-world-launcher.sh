@@ -26,8 +26,8 @@ STATIC_DIR="${HERDR_WORLD_STATIC_DIR:-$BUNDLE_ROOT/share/herdr-world/web}"
 
 HERDR_INSTALLER_URL="https://herdr.dev/install.sh"
 HERDR_INSTALL_DOCS_URL="https://herdr.dev/docs/install/"
-HERDR_MINIMUM_VERSION="v0.8.2"
-HERDR_TERMINAL_PROTOCOL="20"
+HERDR_MINIMUM_VERSION="v0.9.0"
+HERDR_TERMINAL_PROTOCOL="22"
 
 herdr_world_default_socket() {
   local config_home="${XDG_CONFIG_HOME:-}"
@@ -90,7 +90,7 @@ herdr_world_version_is_supported() {
   minor="${BASH_REMATCH[2]}"
   patch="${BASH_REMATCH[3]}"
 
-  (( major > 0 || minor > 8 || (minor == 8 && patch >= 2) ))
+  (( major > 0 || minor > 9 || (minor == 9 && patch >= 0) ))
 }
 
 herdr_world_binary_is_supported() {
@@ -190,7 +190,7 @@ Options are forwarded to the bridge:
   --no-herdr-setup            Disable interactive Herdr setup
   -h, --help                  Show this help without starting Herdr or a bridge
 
-The bridge requires Herdr 0.8.2 or newer with terminal protocol 20.
+The bridge requires Herdr 0.9.0 or newer with terminal protocol 22.
 EOF
 }
 

@@ -40,6 +40,21 @@ if ! rg -q 'manifest source hash mismatch for src/api/client.rs' "$evidence"; th
   exit 1
 fi
 
+copy_test_tree "$TEST_ROOT/metadata"
+metadata_manifest="$TEST_ROOT/metadata/vendor/herdr-compat/VENDOR-MANIFEST.toml"
+sed -i 's/^release_tag = "v0\.9\.0"$/release_tag = "v0.8.2"/' "$metadata_manifest"
+metadata_evidence="$TEST_ROOT/metadata/check.log"
+if HERDR_SRC="$HERDR_SOURCE" "$TEST_ROOT/metadata/scripts/check-vendor.sh" >"$metadata_evidence" 2>&1; then
+  echo "vendor provenance regression failed: bad release metadata was accepted" >&2
+  cat "$metadata_evidence" >&2
+  exit 1
+fi
+if ! rg -q 'vendor manifest must contain exactly one release_tag = "v0.9.0"' "$metadata_evidence"; then
+  echo "vendor provenance regression failed: bad release metadata rejected for an unexpected reason" >&2
+  cat "$metadata_evidence" >&2
+  exit 1
+fi
+
 MISSING_ENTRY_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/herdr-vendor-regression-missing.XXXXXX")"
 copy_test_tree "$MISSING_ENTRY_ROOT"
 missing_manifest="$MISSING_ENTRY_ROOT/vendor/herdr-compat/VENDOR-MANIFEST.toml"
@@ -79,7 +94,7 @@ if HERDR_SRC="$HERDR_SOURCE" "$MISSING_ENTRY_ROOT/scripts/check-vendor.sh" >"$mi
   cat "$missing_evidence" >&2
   exit 1
 fi
-if ! rg -q 'vendor manifest entry count mismatch: expected 23, found 22' "$missing_evidence"; then
+if ! rg -q 'vendor manifest entry count mismatch: expected 26, found 25' "$missing_evidence"; then
   echo "vendor provenance regression failed: missing adapted entry rejected for an unexpected reason" >&2
   cat "$missing_evidence" >&2
   exit 1
@@ -87,5 +102,7 @@ fi
 
 echo "vendor provenance regression passed: incorrect adapted source hash was rejected"
 echo "evidence: $evidence"
+echo "vendor manifest metadata regression passed: incorrect release metadata was rejected"
+echo "evidence: $metadata_evidence"
 echo "vendor manifest completeness regression passed: removed adapted entry was rejected"
 echo "evidence: $missing_evidence"

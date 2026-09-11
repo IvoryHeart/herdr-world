@@ -29,8 +29,10 @@ copy_exact src/api/schema.rs src/api/schema.rs
 for file in agents.rs common.rs commands.rs events.rs integrations.rs panes.rs plugins.rs response.rs server.rs session.rs worktrees.rs; do
   copy_exact "src/api/schema/$file" "src/api/schema/$file"
 done
-copy_exact src/protocol/wire.rs src/protocol/wire.rs
-copy_exact src/terminal_theme.rs src/terminal_theme.rs
+# These are the remaining byte-for-byte source copies. The protocol wire and
+# terminal theme are intentionally adapted for the standalone compatibility
+# crate, and are preserved for the manifest hash check below.
+copy_exact src/input/model.rs src/input.rs
 
 echo "Refreshed exact bridge-required Herdr v0.9.0 sources at $EXPECTED_COMMIT."
 echo "Locally adapted files were preserved; review them against VENDOR-MANIFEST.toml."

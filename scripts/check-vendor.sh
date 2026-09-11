@@ -218,6 +218,17 @@ parse_manifest_entries() {
   ' "$COMPAT/VENDOR-MANIFEST.toml"
 }
 
+verify_manifest_metadata() {
+  local expected_line="$1"
+  local matches
+
+  matches="$(rg -Nxc "^${expected_line}$" "$COMPAT/VENDOR-MANIFEST.toml" || true)"
+  if [[ "$matches" != "1" ]]; then
+    echo "vendor manifest must contain exactly one $expected_line" >&2
+    return 1
+  fi
+}
+
 verify_manifest_hashes() {
   local source_root="${1:-}"
   local manifest_entries
@@ -284,6 +295,10 @@ verify_manifest_hashes() {
     echo "verified upstream and destination hashes for $entry_count vendor manifest entries"
   fi
 }
+
+verify_manifest_metadata "release_tag = \"$EXPECTED_HERDR_RELEASE\""
+verify_manifest_metadata "upstream_commit = \"$EXPECTED_HERDR_COMMIT\""
+verify_manifest_metadata "protocol_version = 22"
 
 unexpected_path_deps="$(
   rg -n '(^|[[:space:]{,])path[[:space:]]*=' "$ROOT/bridge/Cargo.toml" "$COMPAT/Cargo.toml" \

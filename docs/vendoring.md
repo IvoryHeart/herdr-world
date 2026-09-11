@@ -35,7 +35,7 @@ through `--static-dir`.
 
 - Upstream checkout: a clean Herdr source checkout outside this repository
 - Upstream release baseline: `v0.9.0`
-- Release commit: `9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c`
+- Release commit: `b99002ac99b09e00b4ca692436cb15a6b0d676f1`
 - Terminal wire baseline: protocol `22`
 - License: Apache-2.0; see [`vendor/herdr-compat/VENDOR-MANIFEST.toml`](../vendor/herdr-compat/VENDOR-MANIFEST.toml)
 
@@ -138,17 +138,17 @@ HERDR_SRC="$HERDR_SRC" scripts/check-vendor-regression.sh
 ```
 
 The optional `HERDR_SRC` mode parses every `[[files]]` manifest entry, requires the complete
-reviewed 23-entry source-to-destination set, and verifies each source hash against the clean
+reviewed 26-entry source-to-destination set, and verifies each source hash against the clean
 upstream checkout as well as each destination hash. It also exact-compares every copied source file
 and the protocol-22 markers. The default mode verifies the manifest's destination hashes, required
 protocol-22 wire shapes, and crate layout. Locally adapted files are intentionally excluded from
 exact byte comparison, but their upstream source hashes and manifest presence are still verified;
 review their local adaptations manually during refresh. `PopupSize` is compared with only the
 documented visibility adaptation allowed. Frozen protocol frames live in `vendor/herdr-compat/tests/`
-and are tested by `protocol20_fixtures.rs`.
+and are tested by `protocol22_fixtures.rs`.
 
 The regression also removes the adapted `src/api/client.rs` manifest entry and confirms that the
-checker rejects the resulting 22-entry manifest.
+checker rejects the resulting 25-entry manifest.
 
 5. Re-run validation:
 
@@ -170,7 +170,7 @@ the refit button after changing browser sizes.
 ## Compatibility Policy
 
 The bridge pings Herdr's status API at startup and requires Herdr `v0.9.0` or newer with daemon
-protocol exactly `20`. Protocol 19, protocol 21, missing protocol, invalid versions, and other
+protocol exactly `22`. Protocol 19, protocol 20, protocol 21, missing protocol, invalid versions, and other
 unreviewed combinations are rejected before terminal attach with bounded diagnostics. The version
 floor covers the private JSON API shape, including the managed
 `agent.start` contract; the exact protocol check protects the copied bincode terminal wire format.
