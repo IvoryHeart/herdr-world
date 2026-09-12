@@ -35,6 +35,10 @@
   modified Backspace, Tab, and Escape input without requiring an extended keyboard protocol.
   [PR #89](https://github.com/kcosr/herdr-web/pull/89).
 
+- Start mobile terminal refit retries after the current terminal renderer mounts, so a slow tab
+  switch cannot leave the terminal at its initial keyboard-sized height.
+  [PR #90](https://github.com/kcosr/herdr-web/pull/90).
+
 ### Removed
 
 ## [0.6.0] - 2026-09-07
