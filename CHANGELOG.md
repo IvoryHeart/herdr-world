@@ -1,8 +1,6 @@
 # Changelog
 
-## [Unreleased]
-
-### Breaking Changes
+## [0.6.1] - 2026-09-12
 
 ### Added
 
@@ -38,8 +36,6 @@
 - Start mobile terminal refit retries after the current terminal renderer mounts, so a slow tab
   switch cannot leave the terminal at its initial keyboard-sized height.
   [PR #90](https://github.com/kcosr/herdr-web/pull/90).
-
-### Removed
 
 ## [0.6.0] - 2026-09-07
 
