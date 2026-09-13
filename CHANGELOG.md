@@ -8,6 +8,13 @@
 
 ### Changed
 
+- Automatically increment Android `versionCode` and stamp `versionName` in the tagged release
+  commit, keeping repeated builds of that release on the same Android version.
+  [PR #91](https://github.com/kcosr/herdr-web/pull/91).
+- Document APK package, signature, alignment, and update-signer checks, and clarify debug signing.
+  [PR #91](https://github.com/kcosr/herdr-web/pull/91) by
+  [Will Hampson (@Whamp)](https://github.com/Whamp).
+
 ### Fixed
 
 ### Removed

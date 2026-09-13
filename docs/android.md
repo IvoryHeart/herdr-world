@@ -199,10 +199,12 @@ the intended `versionName`. Require `apksigner` to report
 
 Android accepts an update when it keeps the `dev.herdr.web` application ID, uses a `versionCode`
 higher than or equal to the installed APK's, and has the same signing certificate or a valid
-proof-of-rotation signing lineage. This project's release policy always increments `versionCode`
-and uses the same debug keystore for ordinary debug updates. Increment `versionCode` in
-`android/app/build.gradle` before building an update. Use the `aapt` output above to check the
-version embedded in the artifact.
+proof-of-rotation signing lineage. For each new release, `node scripts/release.mjs vX.Y.Z`
+increments `versionCode` in `android/app/build.gradle` by one and sets `versionName` to `X.Y.Z`.
+Both values are committed with the release notes before the release tag is created. Build release
+APKs from that tag; rebuilding or syncing the same tag does not increment either value. Ordinary
+debug updates still use the same debug keystore. Use the `aapt` output above to check the version
+embedded in the artifact.
 
 Debug APKs are signed automatically with a debug certificate. That makes them suitable for local or
 internal testing, but a passing signature check does not make a debug APK suitable for public
