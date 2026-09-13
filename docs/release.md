@@ -79,7 +79,8 @@ The desktop tarballs are written to `dist-packages/`. The debug APK is written t
 Before uploading or distributing any tarball or APK, inspect the artifact and confirm it matches the
 documented release layout, platform, version, and source commit/tag. For desktop tarballs, list the
 archive contents and verify the wrapper, bridge binary, bundled `web/dist`, and README are present.
-For APKs, inspect the package listing or metadata with available local tools.
+For APKs, run the package, version, signature, and alignment checks in
+[docs/android.md](android.md).
 
 To stage the current debug APK under the release asset name for private testing:
 
@@ -142,6 +143,8 @@ The script:
 - promotes `CHANGELOG.md` from `Unreleased` to the release version/date
 - removes empty unused subsections from the released version notes
 - runs `npm run check`
+- increments Android `versionCode` by one and sets `versionName` to the release version in
+  `android/app/build.gradle`
 - commits `Release vX.Y.Z`
 - tags `vX.Y.Z`
 - pushes `main` and the tag atomically
@@ -150,6 +153,11 @@ The script:
 
 The release script does not upload binary artifacts. Upload separately packaged tarballs and APKs
 manually after the release exists.
+
+Android version metadata is part of the tagged release commit. Do not increment it again when
+building artifacts: all builds from the same tag must retain the same `versionCode` and
+`versionName`. Normal Android sync/build commands do not change these values. npm package versions
+remain independent of release versions.
 
 ## Android Validation
 

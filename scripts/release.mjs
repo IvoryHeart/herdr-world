@@ -17,6 +17,7 @@ const version = match[1];
 const tag = `v${version}`;
 const today = new Date().toISOString().slice(0, 10);
 const notesFile = join(process.cwd(), ".release-notes-tmp.md");
+const androidBuildFile = "android/app/build.gradle";
 const changelogSubsections = ["Breaking Changes", "Added", "Changed", "Fixed", "Removed"];
 
 function run(command, args, options = {}) {
@@ -91,6 +92,23 @@ function stampChangelog(changelog) {
   return released;
 }
 
+function prepareAndroidRelease() {
+  const gradle = readFileSync(androidBuildFile, "utf8");
+  const codePattern = /^([ \t]*versionCode[ \t]+)([1-9]\d*)([ \t]*)$/gm;
+  const namePattern = /^([ \t]*versionName[ \t]+)"[^"\r\n]*"([ \t]*)$/gm;
+  const codes = [...gradle.matchAll(codePattern)];
+  if (codes.length !== 1 || [...gradle.matchAll(namePattern)].length !== 1) {
+    fail(`${androidBuildFile} must contain exactly one literal versionCode and versionName`);
+  }
+  const nextCode = Number(codes[0][2]) + 1;
+  if (!Number.isSafeInteger(nextCode) || nextCode > 2_100_000_000) {
+    fail("Android versionCode increment would exceed 2100000000");
+  }
+  return gradle
+    .replace(codePattern, (_match, prefix, _code, suffix) => `${prefix}${nextCode}${suffix}`)
+    .replace(namePattern, (_match, prefix, suffix) => `${prefix}"${version}"${suffix}`);
+}
+
 function removeEmptyReleaseSubsections(changelog) {
   const releasePattern = new RegExp(
     `(## \\[${escapeRegex(version)}\\] - [^\\n]+\\n)([\\s\\S]*?)(?=\\n## \\[|$)`,
@@ -138,13 +156,15 @@ function escapeRegex(value) {
 try {
   validatePreflight();
   const changelog = readChangelogForRelease();
+  const androidRelease = prepareAndroidRelease();
 
   run("npm", ["run", "check"]);
 
   const released = stampChangelog(changelog);
+  writeFileSync(androidBuildFile, androidRelease);
   writeFileSync(notesFile, extractReleaseNotes(released));
 
-  run("git", ["add", "CHANGELOG.md"]);
+  run("git", ["add", "CHANGELOG.md", androidBuildFile]);
   run("git", ["commit", "-m", `Release ${tag}`]);
   run("git", ["tag", tag]);
   run("git", ["push", "--atomic", "origin", RELEASE_BRANCH, tag]);

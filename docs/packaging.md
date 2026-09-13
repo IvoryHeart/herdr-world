@@ -109,8 +109,8 @@ The debug build artifact is:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Before uploading or distributing an APK, inspect the package listing or metadata with available
-local tools, and confirm it was built from the intended release commit or tag.
+Before uploading or distributing an APK, run the package, version, signature, and alignment checks
+in [docs/android.md](android.md), and confirm it was built from the intended release commit or tag.
 
 To stage the current debug APK under the release asset name for private testing:
 
