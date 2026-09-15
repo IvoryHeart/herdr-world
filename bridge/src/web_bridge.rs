@@ -2332,7 +2332,7 @@ fn spawn_management_controller(
             command
                 .arg("submit")
                 .arg("-l")
-                .arg(label)
+                .arg(&label)
                 .arg("--")
                 .arg("/usr/bin/env");
             for value in controller_environment_arguments() {
