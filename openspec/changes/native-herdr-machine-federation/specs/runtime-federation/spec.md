@@ -2,13 +2,13 @@
 
 ### Requirement: Runtime authority
 Herdr SHALL own structural topology, agent lifecycle, terminal streams, saved SSH machine profiles,
-and remote endpoint compatibility. One managed World bridge SHALL expose its selected local Herdr
-runtime and Herdr's enabled saved SSH machine endpoints as separately qualified runtimes. The
+and remote API and terminal compatibility. One managed World bridge SHALL expose its selected local
+Herdr runtime and Herdr's enabled saved SSH machine endpoints as separately qualified runtimes. The
 bridge SHALL perform normal desktop federation for those native runtimes; the browser MAY retain
 explicit direct World bridge profiles as a compatibility path.
 
 #### Scenario: Saved machine becomes available
-- **WHEN** an enabled saved SSH machine completes compatible Herdr endpoint negotiation
+- **WHEN** an enabled saved SSH machine establishes compatible full API and terminal transports
 - **THEN** the serving World bridge exposes it as a qualified runtime without requiring a World
   installation, HTTP listener, or browser-reachable address on that machine
 
@@ -21,6 +21,12 @@ explicit direct World bridge profiles as a compatibility path.
 - **WHEN** Herdr reports a saved machine disabled or removed from its catalogue
 - **THEN** the bridge retires its live connection and the browser removes it from native runtime
   selection without stopping that machine's Herdr server or agents
+
+#### Scenario: Local is unavailable during gateway startup
+- **WHEN** the managed World bridge starts or restarts while its selected local Herdr runtime is
+  unavailable and at least one saved SSH machine is healthy
+- **THEN** the bridge binds its browser service, reports Local unavailable, and admits the healthy
+  saved machine without waiting for Local to recover
 
 #### Scenario: A second bridge targets the same runtime
 - **WHEN** a bridge starts while another Herdr World bridge owns the same direct local Herdr client
@@ -42,11 +48,18 @@ protocol and advertised capabilities before dispatching control.
   missing required capabilities
 - **THEN** the browser rejects terminal attach and control for that runtime
 
-#### Scenario: Unsupported native endpoint
-- **WHEN** a saved machine does not negotiate the reviewed endpoint generation, surface-interest,
-  health, command, or blob capabilities required for a requested operation
+#### Scenario: Unsupported native transport
+- **WHEN** a saved machine does not provide the reviewed Herdr API, terminal protocol, required
+  operation, or SSH Unix-socket forwarding required for native World access
 - **THEN** the bridge keeps the machine independently visible with bounded incompatibility or
   Attention guidance and does not dispatch the unsupported operation
+
+#### Scenario: Native snapshot is admitted
+- **WHEN** a saved machine supplies its initial snapshot and structural event subscription through
+  one forwarded Herdr API generation
+- **THEN** World preserves the authoritative workspaces, tabs, panes, terminal IDs, pane revisions,
+  layouts, agents, and optional worktree data and does not infer missing fields from client-shell
+  state
 
 #### Scenario: Response from a retired connection
 - **WHEN** a snapshot, terminal frame, upload result, or command response arrives from an earlier
@@ -79,14 +92,20 @@ connections, or store SSH credentials.
 
 ### Requirement: Independent browser terminal surfaces
 The serving bridge SHALL let bounded concurrent browser viewers observe and control different
-terminal surfaces on the same or different Herdr machines without one viewer's selection routing
-another viewer's input to the wrong pane. A viewer SHALL become controllable only after its runtime
-generation and requested surface are current.
+terminal IDs on the same or different Herdr machines through terminal-ID-specific direct streams
+without changing shared pane focus or routing another viewer's input to the wrong pane. A viewer
+SHALL become controllable only after its runtime generation and requested terminal are current.
 
 #### Scenario: Viewers select different remote panes
 - **WHEN** two browser terminal viewers select different panes on one saved machine
 - **THEN** each receives the requested pane surface and its input, scroll, focus, and resize actions
   remain scoped to that pane and viewer connection
+
+#### Scenario: Native client changes focus or zoom
+- **WHEN** an existing native Herdr client changes pane focus or zoom in the same tab observed by a
+  World terminal viewer
+- **THEN** the World viewer remains attached to its qualified terminal ID and does not send input to
+  the newly focused native pane
 
 #### Scenario: Viewers share one terminal
 - **WHEN** multiple browser viewers observe one terminal at different dimensions
@@ -99,10 +118,10 @@ generation and requested surface are current.
   arrive, after which the bridge reattaches it or reports a bounded failure
 
 ### Requirement: Machine-qualified World data
-World SHALL qualify note attachments and upload operations by runtime and pane identity. An upload
-targeting a saved SSH machine SHALL produce a path on that machine before World inserts or reports
-the path to its terminal, and SHALL remain subject to a declared size bound and stale-generation
-checks.
+World SHALL qualify note attachments, agent pins, observed activity, snapshot pruning, and upload
+operations by runtime and native identity. An upload targeting a saved SSH machine SHALL produce a
+path on that machine before World inserts or reports the path to its terminal, and SHALL remain
+subject to a declared size bound and stale-generation checks.
 
 #### Scenario: Upload to a saved machine
 - **WHEN** an admitted browser uploads a supported file to a current pane on a saved SSH machine
@@ -115,5 +134,6 @@ checks.
   silently rerouting the upload to another runtime
 
 #### Scenario: Equal pane IDs on two machines
-- **WHEN** notes are attached to equal native pane IDs owned by different machines
-- **THEN** each attachment remains associated only with its qualified machine and pane
+- **WHEN** notes, pins, or activity refer to equal native pane IDs owned by different machines
+- **THEN** each record remains associated only with its qualified machine and pane and one
+  machine's snapshot cannot prune or overwrite the other's records

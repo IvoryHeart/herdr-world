@@ -21,7 +21,13 @@ and origin policy.
 #### Scenario: Browser uses a direct bridge profile
 - **WHEN** an admitted browser selects an explicitly configured direct World bridge origin
 - **THEN** the serving page's CSP and the target bridge's Host, Origin, and authentication policy are
-  enforced as before
+  enforced as before and the browser discovers every qualified runtime advertised by that gateway
+
+#### Scenario: Android connects to an aggregate gateway
+- **WHEN** the Android client connects to one direct World gateway profile that advertises Local and
+  saved-machine runtimes
+- **THEN** the client discovers and operates those qualified runtimes through that one profile
+  without separate URLs for the gateway's saved machines
 
 ## ADDED Requirements
 
