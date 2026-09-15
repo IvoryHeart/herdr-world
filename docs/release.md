@@ -38,7 +38,6 @@ scripts/check-vendor.sh
 3. Run the full automated check:
 
 ```bash
-npm ci --prefix harness
 npm run check
 ```
 
@@ -58,10 +57,12 @@ node scripts/release.mjs prepare v0.1.0
 
 The preparation command requires the branch to start exactly at `origin/main`, repeats the normal
 repository check, updates every release reference, increments Android `versionCode`, stamps Android
-`versionName`, promotes the changelog notes, removes empty released subsections, records the exact
-Herdr Web baseline from `UPSTREAM.md`, and opens the next empty `## [Unreleased]` section in the
-same diff. The World changelog contains World releases and downstream changes; it links the
-baseline instead of copying Herdr Web's release history.
+`versionName`, updates the README and project site to the runtime's current minimum Herdr version
+and terminal protocol, promotes the changelog notes, removes empty released subsections, records
+the exact Herdr Web baseline from `UPSTREAM.md`, and opens the next empty `## [Unreleased]` section
+in the same diff. Tag validation rejects compatibility claims that drift from the runtime constants.
+The World changelog contains World releases and downstream changes; it links the baseline instead
+of copying Herdr Web's release history.
 
 The generated changelog date is the intended UTC release date. Merge, preflight, and tag on that
 date. If review delays the release past it, update the date in the release PR and have that revision

@@ -4,6 +4,7 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  assertCurrentReleaseCompatibility,
   assertCurrentReleaseReferences,
   isReleaseCommitSubject,
   normalizeReleaseTag,
@@ -64,6 +65,7 @@ if (!isReleaseCommitSubject(subject, tag)) {
 
 try {
   assertCurrentReleaseReferences(root);
+  assertCurrentReleaseCompatibility(root);
 } catch (error) {
   fail(error.message);
 }

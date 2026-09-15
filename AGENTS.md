@@ -29,30 +29,26 @@ This is a lightweight internal onboarding note for agents working in this repo.
 ## Start Here
 
 - Read [docs/agent-development.md](docs/agent-development.md) for the native coding
-  workflow, model allocation, worktrees, evidence reuse and usage reporting. Use
+  workflow, worktrees, verification and review. Use
   [docs/knowledge-map.md](docs/knowledge-map.md) to locate contracts and source.
-- Use native coding-agent conversations and the three selected Superpowers skills. Start from
-  the owner's short goal, inspect the relevant source, clarify consequential gaps,
-  and continue authorized work in the same session. OpenSpec supplies decisions and
-  tasks when needed; routine fixes do not need a proposal.
+- Use native coding-agent conversations. Start from the owner's short goal, inspect
+  the relevant source, clarify consequential gaps, and continue authorized work in
+  the same session. The five project OpenSpec skills cover explore, update, apply,
+  sync and archive when a maintained change applies; routine fixes need no proposal.
 - Create or reuse a task worktree under the primary checkout's `.agents/worktrees/`
-  with `agent:worktree create <slug> <parent-ref>`. Resolve the requested parent PR's
-  actual branch first. Keep sequential writers and read-only reviewers in that
-  worktree; do not move or clean another agent's worktree.
+  with `npm run agent:worktree -- create <slug> <parent-ref>`. Resolve the requested
+  parent PR's actual branch first. Keep sequential writers and read-only reviewers
+  in that worktree; do not move or clean another agent's worktree.
 - Use native subagents for bounded implementation or independent review when useful.
   Reuse their histories for scoped corrections and wait for native completion.
   A small task can stay with the lead until independent review. No additional
   supervisor, launcher or mandatory sequence of specialist agents is required.
-- Repository rules apply immediately when read. Missing live skill discovery can be
-  handled by reading the installed SKILL.md directly; do not require a new session
-  solely because the agent created a worktree. Report when a new MCP connection or
-  client setting actually requires reload; a setup check cannot certify this session.
-- Keep procedures in docs/agent-development.md, task-specific judgment in skills,
-  and transient task facts in ignored .agents/state/. Do not duplicate policy in
-  local overrides, role prompts or generated wiki pages.
+- Keep procedures in docs/agent-development.md and task-specific judgment in skills.
+  When a material milestone makes a current spec, the knowledge map, or an operational
+  runbook inaccurate, update that artifact in the same PR; source and tests remain the
+  implementation evidence.
 - Current contracts are in `openspec/specs/`, active proposals in `openspec/changes/`,
   and historical numbered specs in `docs/specs/`. Use the pinned `npm run spec -- ...`.
-  Scratchpads, graphs and eval outputs do not override contracts, source or these rules.
 
 - Work from the `herdr-world/` repository root. The canonical local startup command is
   `npm run dev:local`; its full-app URL is `http://127.0.0.1:8787`. See
@@ -92,13 +88,14 @@ This is a lightweight internal onboarding note for agents working in this repo.
 
 ## Testing
 
-- Run `npm ci --prefix harness` to install the pinned development tools used by repository checks.
+- Run `npm ci` to install root development tools, including the pinned OpenSpec CLI.
 - Reuse prepared dependencies. If web dependencies are missing, run `npm ci --prefix web`
   to preserve the lockfile; dependency updates are a separate intentional change.
 - Run `npm run vendor:check` to verify the vendored layout.
 - Run `npm run lint:web` for ESLint.
 - Run `npm run test:web` for Vitest.
 - Run `npm run build:web` for the frontend production build.
+- Run `npm run spec:check` for strict OpenSpec validation.
 - Run `npm run bridge:test` for bridge unit tests when a Rust toolchain (cargo) is available.
 - Run `npm run check` for the final implementation candidate before PR delivery or
   release. Within an authorized task, use focused checks for intermediate commits;

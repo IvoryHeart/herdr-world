@@ -20,10 +20,8 @@ Web's own release history remains in its upstream changelog.
   ([#81](https://github.com/IvoryHeart/herdr-world/pull/81),
   [#83](https://github.com/IvoryHeart/herdr-world/pull/83))
 
-- Added OpenSpec contracts, pinned Superpowers skills, native Codex development guidance,
-  shared worktree tooling, deduplicated lead/subagent usage reporting and deterministic
-  agent evals for reviewed PR delivery. Added opt-in OpenWiki and Skillgrade pilot setup
-  and a reusable stack guide for other repositories.
+- Added maintained OpenSpec contracts, five project-scoped OpenSpec lifecycle skills,
+  concise native agent guidance, strict contract validation and a central worktree helper.
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 - Added a simplified Network UI for connecting Herdr instances and allowing connections to the
@@ -44,11 +42,8 @@ Web's own release history remains in its upstream changelog.
   protocol `22`, including refreshed vendored protocol/schema provenance.
   [Herdr World PR #87](https://github.com/IvoryHeart/herdr-world/pull/87)
 
-- Reduced native development friction with explicit task parents, measured model-allocation
-  comparisons, and consolidated startup, cache and verification guidance. ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
-
-- Made native coding-agent execution the development default, with same-session worktree
-  setup, retained review histories, scoped verification and explicit model allocation.
+- Made native coding-agent execution the development default, with central worktree
+  setup, current project knowledge, scoped verification and independent review.
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 - Adopted the common sidebar for Office, Tree, Graph and Spaces. Tree now uses a compact dark
@@ -82,9 +77,6 @@ Web's own release history remains in its upstream changelog.
   runtime before it could cause partial `Attached elsewhere` terminal failures.
   ([#86](https://github.com/IvoryHeart/herdr-world/pull/86))
 
-- Restored native command cancellation cleanup for detached process groups and froze
-  both grader inputs in prepared pilot workspaces. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
-
 - Updated transitive XML parsers and the development YAML parser to patched
   versions, restoring the dependency security audit.
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
@@ -99,13 +91,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Removed
 
-- Removed eleven Superpowers workflow skills and the OpenSpec propose skill from
-  project discovery. Setup now preserves a three-skill Superpowers selection;
-  OpenWiki remains an optional local integration. ([#85](https://github.com/IvoryHeart/herdr-world/pull/85))
-
 - Retired the experimental Ralph runtime, custom supervisor and model containers,
-  legacy role skills, unused Harbor execution path and Graphify tool pin. Retained
-  historical evidence and reusable behavioral graders.
+  Superpowers setup, OpenWiki and Skillgrade pilots, model-allocation and usage accounting,
+  historical harness evals, legacy role skills, unused Harbor execution path and Graphify tool pin.
   ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
 
 ## [0.1.1] - 2026-09-01

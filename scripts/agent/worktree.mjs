@@ -1,10 +1,31 @@
 import { fileURLToPath } from 'node:url';
 import { mkdir, lstat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { git, primaryCheckout, slug, errorExit } from './lib.mjs';
+
+export function git(args, cwd = process.cwd()) {
+  return execFileSync('git', ['-c', 'core.fsmonitor=false', ...args], {
+    cwd,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null' },
+  }).trimEnd();
+}
+
+export function primaryCheckout(cwd = process.cwd()) {
+  const first = git(['worktree', 'list', '--porcelain'], cwd).split('\n')[0];
+  if (!first.startsWith('worktree ')) throw new Error('Cannot resolve primary checkout');
+  return first.slice('worktree '.length);
+}
+
+function validateSlug(value) {
+  if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(value ?? '')) {
+    throw new Error('Use a lowercase task slug (letters, digits, hyphens; max 64)');
+  }
+}
 
 export async function createWorktree(name, ref, cwd = process.cwd()) {
-  slug(name);
+  validateSlug(name);
   const primary = primaryCheckout(cwd);
   for (const part of [join(primary, '.agents'), join(primary, '.agents/worktrees')]) {
     try { if ((await lstat(part)).isSymbolicLink()) throw new Error('Worktree parent cannot be a symbolic link'); }
@@ -22,7 +43,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     if (action === 'create') console.log(await createWorktree(name, ref));
     else if (action === 'list') console.log(git(['worktree', 'list']));
-    else if (action === 'doctor') console.log(JSON.stringify({ primary: primaryCheckout(), directory: join(primaryCheckout(), '.agents/worktrees'), branch: git(['branch', '--show-current']) }, null, 2));
-    else throw new Error('Usage: agent:worktree -- create <slug> [ref] | list | doctor');
-  } catch (error) { errorExit(error); }
+    else throw new Error('Usage: agent:worktree -- create <slug> [ref] | list');
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }

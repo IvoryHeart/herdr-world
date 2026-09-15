@@ -21,6 +21,7 @@ import {
 import {
   compareReleaseTags,
   assertAndroidReleaseMetadata,
+  assertCurrentReleaseCompatibility,
   assertCurrentReleaseReferences,
   isReleaseCommitSubject,
   normalizeReleaseTag,
@@ -340,6 +341,7 @@ function validateTaggingBase() {
   let current;
   try {
     current = assertCurrentReleaseReferences();
+    assertCurrentReleaseCompatibility();
   } catch (error) {
     fail(error.message);
   }

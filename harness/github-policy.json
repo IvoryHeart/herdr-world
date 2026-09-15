@@ -1,8 +1,0 @@
-{
-  "branch": "main",
-  "requiredCheck": "Delivery checks",
-  "approvingReviews": 1,
-  "dismissStaleReviews": true,
-  "requireLastPushApproval": true,
-  "strictChecks": true
-}

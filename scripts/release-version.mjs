@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { MIN_HERDR_VERSION, TERMINAL_PROTOCOL } from "./herdr-world-plugin.mjs";
+
 export const RELEASE_REFERENCE_PATHS = [
   "README.md",
   "site/index.html",
@@ -11,6 +13,64 @@ export const OPTIONAL_RELEASE_REFERENCE_PATHS = ["herdr-plugin.toml"];
 
 const RELEASE_TAG_PATTERN =
   /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.([1-9]\d*))?$/;
+const README_COMPATIBILITY_PATTERN =
+  /requires Herdr `v([^`]+)` or newer\s+with terminal protocol `(\d+)`/g;
+const SITE_HERDR_PATTERN = /<dt>Herdr<\/dt><dd>v([^<]+)\+<\/dd>/g;
+const SITE_PROTOCOL_PATTERN = /<dt>Protocol<\/dt><dd>(\d+)<\/dd>/g;
+
+function exactlyOneMatch(contents, pattern, label) {
+  const matches = [...contents.matchAll(pattern)];
+  if (matches.length !== 1) {
+    throw new Error(`${label} must contain exactly one public Herdr compatibility claim`);
+  }
+  return matches[0];
+}
+
+function publicCompatibility(contents, relativePath) {
+  if (relativePath === "README.md") {
+    const match = exactlyOneMatch(contents, README_COMPATIBILITY_PATTERN, relativePath);
+    return { herdr: match[1], protocol: Number(match[2]) };
+  }
+  if (relativePath === "site/index.html") {
+    const herdr = exactlyOneMatch(contents, SITE_HERDR_PATTERN, relativePath);
+    const protocol = exactlyOneMatch(contents, SITE_PROTOCOL_PATTERN, relativePath);
+    return { herdr: herdr[1], protocol: Number(protocol[1]) };
+  }
+  throw new Error(`unsupported public compatibility surface: ${relativePath}`);
+}
+
+export function stampPublicReleaseCompatibility(contents, relativePath) {
+  publicCompatibility(contents, relativePath);
+  if (relativePath === "README.md") {
+    return contents.replace(
+      README_COMPATIBILITY_PATTERN,
+      `requires Herdr \`v${MIN_HERDR_VERSION}\` or newer\nwith terminal protocol \`${TERMINAL_PROTOCOL}\``,
+    );
+  }
+  return contents
+    .replace(SITE_HERDR_PATTERN, `<dt>Herdr</dt><dd>v${MIN_HERDR_VERSION}+</dd>`)
+    .replace(SITE_PROTOCOL_PATTERN, `<dt>Protocol</dt><dd>${TERMINAL_PROTOCOL}</dd>`);
+}
+
+export function assertPublicReleaseCompatibility({ readme, site }) {
+  for (const [relativePath, contents] of [["README.md", readme], ["site/index.html", site]]) {
+    const actual = publicCompatibility(contents, relativePath);
+    if (actual.herdr !== MIN_HERDR_VERSION || actual.protocol !== TERMINAL_PROTOCOL) {
+      throw new Error(
+        `${relativePath} advertises Herdr v${actual.herdr} with terminal protocol ${actual.protocol}; ` +
+        `expected Herdr v${MIN_HERDR_VERSION} with terminal protocol ${TERMINAL_PROTOCOL}`,
+      );
+    }
+  }
+  return true;
+}
+
+export function assertCurrentReleaseCompatibility(root = process.cwd()) {
+  return assertPublicReleaseCompatibility({
+    readme: readFileSync(join(root, "README.md"), "utf8"),
+    site: readFileSync(join(root, "site/index.html"), "utf8"),
+  });
+}
 
 export function parseReleaseTag(value) {
   if (typeof value !== "string") {
@@ -194,6 +254,9 @@ export function stampCurrentRelease(
           `uninstall ${homebrewFormulaName(newTag)}`,
         );
     }
+    if (["README.md", "site/index.html"].includes(relativePath)) {
+      updated = stampPublicReleaseCompatibility(updated, relativePath);
+    }
     if (updated === contents || updated.includes(oldReference)) {
       throw new Error(`could not replace every ${oldReference} reference in ${relativePath}`);
     }
@@ -209,5 +272,6 @@ export function stampCurrentRelease(
   );
 
   assertCurrentReleaseReferences(root);
+  assertCurrentReleaseCompatibility(root);
   return releaseReferencePaths(root);
 }

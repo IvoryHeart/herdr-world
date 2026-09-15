@@ -60,8 +60,6 @@ The macOS binaries are not yet signed or notarized. After verifying the download
 may need approval in **System Settings → Privacy & Security**.
 
 For agent-assisted development, start with [the native workflow](docs/agent-development.md).
-The [stack extraction guide](docs/agent-stack.md) lists reusable packages, skills and lessons;
-[OpenWiki and Skillgrade](docs/agent-pilots.md) remain opt-in experiments.
 
 ## Advanced Usage
 
@@ -76,7 +74,7 @@ herdr-world --no-herdr-setup
 The interactive launcher can offer to install, update, or start Herdr. It asks before each action;
 `--no-herdr-setup` disables those prompts.
 
-Agent harnesses running inside a Herdr pane can publish a short, expiring task summary for the
+Agent integrations running inside a Herdr pane can publish a short, expiring task summary for the
 Office without starting another bridge:
 
 ```bash
@@ -125,7 +123,6 @@ To run from source:
 ```bash
 npm install
 npm install --prefix web
-npm ci --prefix harness
 npm run dev:local
 ```
 
