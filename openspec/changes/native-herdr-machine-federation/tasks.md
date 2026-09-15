@@ -1,8 +1,9 @@
 ## Spike evidence
 
-This spike exercised the transport seams but failed the installed-OpenSSH boundary check, so its
-implementation is not accepted and no product task is complete. See
-[spike-evidence.md](spike-evidence.md).
+The fresh transport foundation now has committed RED/GREEN evidence for selected seams, including
+the installed-OpenSSH effective-config boundary. The bounded machine catalogue adapter in task 1.2
+is complete; the transport and product integration tasks remain open. See
+[spike-evidence.md](spike-evidence.md) for the exact proof and remaining gaps.
 
 ## 1. Pinned Herdr compatibility
 
@@ -10,7 +11,7 @@ implementation is not accepted and no product task is complete. See
   non-interactive OpenSSH options, `remote-client-bridge` bootstrap, and attention classification;
   distinguish every Herdr-derived helper from World-owned integration in provenance records and
   verify default plus `HERDR_SRC` vendor checks pass.
-- [ ] 1.2 Add a bounded adapter for `herdr machine list --json` using the explicitly resolved Herdr
+- [x] 1.2 Add a bounded adapter for `herdr machine list --json` using the explicitly resolved Herdr
   executable; verify unit tests cover valid profiles, duplicate IDs, disabled profiles, malformed or
   oversized output, command failure, and omission of target/session from browser-facing data.
 - [ ] 1.3 Implement the World-owned fixed remote session discovery and supervised OpenSSH

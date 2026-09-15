@@ -1,101 +1,102 @@
-# Native federation transport spike: rejected forward plan
+# Native federation transport spike: fresh foundation evidence
 
-This spike exercised two transport seams with deterministic synthetic fixtures. The
-installed-OpenSSH result below is durable and independently reproducible from this PR. The remaining
-parser, lifecycle, and direct-terminal observations came from an uncommitted harness that is not
-available from an immutable reference, so they are exploratory and unverified rather than
-implementation evidence. The implementation is not accepted, does not complete the federation
-change, and does not mark any task in `tasks.md` complete.
+This pass replaced the discarded exploratory harness with a committed, isolated transport module:
+`bridge/src/native_federation.rs`. It intentionally remains disconnected from the bridge runtime
+registry and browser. Task 1.2 is complete; the remaining OpenSpec task boxes stay unchecked.
 
-## Forwarded full API seam
+## Proven in committed fixtures
 
-An uncommitted `bridge/src/native_federation.rs` harness attempted a World-owned
-`OpenSshForwardPlan` and `SshForwarder`:
+### Herdr-derived command boundaries
 
-- the plan builds one argv item per value and uses `-T`, `BatchMode=yes`,
-  `NumberOfPasswordPrompts=0`, `StrictHostKeyChecking=yes`, bounded connection
-  attempts, `ClearAllForwardings=yes`, `ExitOnForwardFailure=yes`, and
-  `StreamLocalBindUnlink=yes`;
-- the forwarding command is `-N -L local_socket:remote_socket`, with no
-  remote shell command or browser-controlled text;
-- each generation gets a unique mode `0700` directory and an `api.sock` lease;
-  root creation rejects symlinked ancestors and lease cleanup removes only the
-  exact socket path and directory;
-- the process can be polled for early exit and is killed and reaped on
-  cancellation or drop; and
-- `RuntimeGeneration` retires on API or structural-subscription failure even
-  while the SSH child remains alive. A generation is actionable only when all
-  three health gates are true, and its token fences stale generations.
+- `MachineProfile` accepts the exact Herdr v0.9.0 `machine list --json` row shape and rejects
+  unknown fields, duplicate IDs, malformed fields, invalid targets or sessions, excess rows, and
+  output over 64 KiB.
+- `MachineListPlan` invokes only an explicitly resolved executable with the fixed
+  `machine list --json` arguments. The adapter drains stdout and stderr with independent bounds and
+  maps command failure to a bounded diagnostic. Browser descriptors contain only ID, label, and
+  enabled state.
+- `RemoteSessionPlan` constructs Herdr's fixed `session list --json` discovery command (without a
+  profile-only flag) and `exec ... remote-client-bridge` bootstrap command. The session parser
+  selects the explicit profile session and its authoritative socket path. Remote executable paths,
+  session names, and targets are bounded and validated before they can reach SSH.
 
-The plan is invalid. OpenSSH documents that `ClearAllForwardings` clears forwarding directives from
-both configuration and the command line. The installed client confirms this before any network
-connection is attempted:
+The row shape, command spellings, and non-interactive SSH option values are Herdr v0.9.0-derived.
+The pinned Herdr v0.9.0 commit (`b99002ac99b09e00b4ca692436cb15a6b0d676f1`) was checked directly:
+`src/cli/machine.rs` emits the six machine fields, `src/cli.rs` wraps session JSON in a
+`{"sessions": [...]}` object, `src/session.rs` defines the session socket fields and name rules,
+and `src/remote/attach.rs` supplies the non-interactive options plus the `--session` and
+`remote-client-bridge` command shapes.
+The parser, process boundaries, socket lease, forward verifier, and failure classification are
+World-owned adaptations. No vendored source was changed in this foundation pass, so the vendor
+manifest and full provenance refresh required by task 1.1 remain outstanding.
 
-```text
-$ ssh -G -o ClearAllForwardings=yes \
-    -L /tmp/world.sock:/tmp/remote.sock example.com
-clearallforwardings yes
-# no localforward entry
+### OpenSSH effective configuration
 
-$ ssh -G -L /tmp/world.sock:/tmp/remote.sock example.com
-clearallforwardings no
-localforward /tmp/world.sock /tmp/remote.sock
-```
+`OpenSshForwardPlan` uses one argument per value, Herdr's non-interactive options, `-T`, `-N`,
+`ExitOnForwardFailure=yes`, `StreamLocalBindUnlink=yes`, and the required
+`-L local_socket:remote_socket`. It deliberately does not add `ClearAllForwardings`.
 
-Argument order does not restore the forward. The accepted design therefore follows Herdr v0.9.0's
-actual non-interactive options, which do not set `ClearAllForwardings`, and preserves the saved
-target's effective OpenSSH configuration. The next implementation must prove the complete command
-through `ssh -G`, in addition to synthetic argv tests. If the product later requires an isolated
-API-only SSH connection, that requires a supported Herdr stdio API transport rather than a
-World-generated replacement SSH configuration.
+Three tests invoke the installed `ssh` binary in effective-config mode by prepending `-G` to the
+unchanged production forwarding argv:
 
-The discarded harness also explored a machine-list parser for the pinned v0.9 row shape, output and
-profile bounds, duplicate and invalid profile rejection, and a browser descriptor containing only
-`id`, `label`, and `enabled`. These observations must be reproduced in committed tests before they
-can support implementation review.
+- a synthetic saved-target config with an operator `LocalForward` preserves both the configured
+  forward and World's required `localforward` entry;
+- a synthetic saved-target config with `ClearAllForwardings yes` removes the required entry, and
+  the verifier maps that result to `Incompatible` for the affected machine ID. It does not produce
+  a gateway-wide failure.
 
-## Exploratory direct terminal stdio seam
+The failure fixture proves the effective-config boundary only. It does not prove a live configured
+forward or remote API connection.
 
-The discarded harness's `remote_client_bridge_plan` created a noninteractive SSH command whose fixed
-remote command is `remote-client-bridge`; the executable and named session are
-shell-quoted, while the SSH target remains a separate argv item. Its
-`attach_direct_terminal` adapter attempted to use the existing vendored Herdr protocol to:
+### World-owned process and socket seams
 
-1. send `TerminalHello` with protocol 22 and the requested dimensions;
-2. validate a `TerminalAnsi` `Welcome`; and
-3. send `AttachTerminal { terminal_id, takeover: false }`.
+- Each lease uses a private, owned `0700` root and unique generation directory, rejects relative
+  traversal and symlinked ancestors, validates platform Unix-socket path limits, and removes only
+  its exact socket path and empty directory on drop.
+- `SshForwarder` runs with stdin/stdout detached, captures bounded stderr, exposes exit status and
+  diagnostics, supports cancellation and reaping, and separates process polling from an injected
+  socket-readiness probe. A forwarding lease rejects a pre-created regular file or Unix socket,
+  while the concrete Unix readiness probe requires a live listener rather than stale filesystem
+  metadata. Process and readiness failures classify as machine-scoped `Attention`; effective-forward
+  incompatibility classifies as machine-scoped `Incompatible`.
+- Synthetic child processes cover clean readiness, timeout, stderr truncation, early exit,
+  cancellation, lease cleanup, and a hung `machine list` command. The catalogue helper drains both
+  bounded output pipes concurrently, kills and reaps a timed-out child, and returns a bounded
+  diagnostic. The fixture asserts the exact production forwarding argv before using the local child.
+  They do not stand in for an SSH server.
 
-The explored retry helper reportedly retried only recognized attachment-owner conflicts twice, then
-returned the existing `Attached elsewhere` result. It also classified a post-handshake
-`ServerShutdown` conflict for a later stream reader, rejected a second handshake on an established
-stream, and accepted Herdr's larger graphics frame limit.
+## TDD and checks
 
-## Evidence and limits
-
-Focused command:
+The focused RED was the honest compiler failure after declaring the new module:
 
 ```text
 cargo test --manifest-path bridge/Cargo.toml --bin herdr-web-bridge native_federation
+error[E0583]: file not found for module `native_federation`
 ```
 
-The uncommitted harness reported 25 passing synthetic tests, but the forwarding seam failed the
-subsequent system-boundary check above. There is no immutable commit or patch containing that
-harness, so the command and its direct-terminal results cannot be rerun or reviewed from this PR and
-must not be used as acceptance evidence. The reported initial RED was the expected compiler error for
-the newly declared but missing `native_federation` module. The second-pass RED
-covered the graphics frame cap, symlinked forward-root ancestor, direct target
-password validation, broad attachment-conflict matching, second-handshake
-state mutation, unbounded executable paths, and unknown catalogue fields; each reportedly
-passed in GREEN. The final review reportedly added direct stdio coverage for a
-post-handshake Herdr owner-conflict frame and invalid forward-root forms. The
-suite uses Unix socket pairs, a cursor, synthetic catalogue JSON, temporary
-private directories, and short local shell children. Those fixtures asserted the presence of both
-`ClearAllForwardings=yes` and `-L` but never asked OpenSSH for the resulting configuration, allowing
-the invalid combination to pass. It does not prove a real SSH connection, remote session discovery,
-Herdr bootstrap, API subscription over an actual forwarded socket, terminal output forwarding, or
-integration with the bridge runtime registry. The discarded process wrapper exposed exit status
-and cancellation, but suppressed SSH stderr and had no socket-readiness wait; those remain
-implementation-pass work. The
-post-handshake conflict classifier and retry budget were reportedly exercised over a synthetic wire
-frame, but no reconnecting supervisor consumed them. The replacement implementation must recreate
-these behaviors through committed test-first work and independently reviewable results.
+After the foundation was implemented, the same focused command passed with 29 transport tests,
+including the installed `ssh -G` checks. This pass also recorded RED/GREEN regressions for the
+Herdr session-list argv, plain-target password validation, `$HOME` executable shell metacharacters,
+machine-scoped effective-config error classification, exact production argv delivery, and
+generation cleanup after a socket-path-length rejection, plus pre-created socket rejection and
+machine-command timeout/reaping. `cargo fmt --manifest-path bridge/Cargo.toml` and the focused
+test command pass after formatting. The existing unrelated `web_bridge.rs` `UploadError::Forbidden`
+dead-code warning remains.
+
+## Remaining gaps
+
+- No vendor/herdr-compat helper extension, source-hash/provenance manifest update, clean external
+  Herdr checkout audit, or live saved-machine setup was performed.
+- No live SSH authentication, host-key, disabled stream-forwarding, remote executable discovery,
+  remote server bootstrap, remote session command execution, API socket connection,
+  API/subscription health generation, or independent API-versus-SSH lifetime behavior is
+  implemented or proven. The committed session parser only validates and selects captured JSON.
+- The process readiness seam has a Unix socket-connect probe but no production API client probe or
+  reconnecting supervisor yet. Catalogue refresh/last-valid retention and runtime-registry
+  integration are also absent.
+- `remote-client-bridge` stdio terminal attach, terminal IDs, `takeover=false`, conflict retries,
+  direct terminal streams, World terminal translation, browser integration, storage qualification,
+  uploads, security acceptance, and live end-to-end checks remain future work.
+
+No real machine targets, credentials, paths, or user data were copied into tracked files. Fixtures
+use synthetic names and the documentation-only address `192.0.2.1`.

@@ -103,7 +103,7 @@ pub(crate) fn effective_user_id() -> libc::uid_t {
 }
 
 #[cfg(unix)]
-fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
+pub(crate) fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 
     match fs::symlink_metadata(path) {
@@ -152,7 +152,7 @@ fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
 }
 
 #[cfg(not(unix))]
-fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
+pub(crate) fn ensure_private_owned_dir(path: &Path) -> io::Result<()> {
     ensure_private_dir(path)
 }
 

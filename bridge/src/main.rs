@@ -1,6 +1,7 @@
 mod agent_activity;
 mod agent_pins;
 mod launcher_presets;
+mod native_federation;
 mod notes;
 mod observability;
 mod observability_http;
