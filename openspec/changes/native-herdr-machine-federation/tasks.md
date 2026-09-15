@@ -1,3 +1,9 @@
+## Spike evidence
+
+This spike exercised the transport seams but failed the installed-OpenSSH boundary check, so its
+implementation is not accepted and no product task is complete. See
+[spike-evidence.md](spike-evidence.md).
+
 ## 1. Pinned Herdr compatibility
 
 - [ ] 1.1 Extend `vendor/herdr-compat` with the minimal v0.9.0 remote executable discovery,
@@ -11,7 +17,9 @@
   `-L local_socket:remote_socket` adapter around the pinned Herdr helpers, without catalogue mutation
   or prompt handling; verify synthetic SSH tests cover clean setup, bootstrap, disabled stream-local
   forwarding, timeout, incompatible Herdr, authentication and host-key Attention, process exit,
-  local socket ownership, cleanup, and cancellation.
+  local socket ownership, cleanup, and cancellation. Verify the complete argv with the installed
+  OpenSSH client's effective-configuration output, including that the required `-L` survives every
+  option and that operator-configured forwarding behavior remains consistent with Herdr.
 
 ## 2. Bridge runtime registry and supervision
 

@@ -32,6 +32,14 @@ OpenSSH supports forwarding a local Unix-domain socket to a remote Unix-domain s
 and bootstrap gives World a full remote Herdr API without adding a network listener or installing
 World remotely.
 
+The transport spike exposed one important boundary condition. `ClearAllForwardings=yes` clears
+forwardings supplied on the command line as well as those read from configuration, so combining it
+with World's required `-L` silently removes the API forward. Herdr v0.9.0 does not set that option.
+The native forwarder therefore preserves the operator's effective OpenSSH configuration, applies
+Herdr's pinned non-interactive options, and adds the private API forward without
+`ClearAllForwardings`. This keeps aliases, proxying, authentication, and any explicitly configured
+forwarding behavior consistent with Herdr instead of creating a second SSH configuration model.
+
 These points are documented in the reviewed [v0.9.0 release](https://github.com/herdrdev/herdr/releases/tag/v0.9.0),
 [machine guide](https://github.com/herdrdev/herdr/blob/b99002ac99b09e00b4ca692436cb15a6b0d676f1/docs/next/website/src/content/docs/connecting-machines.mdx),
 [session implementation](https://github.com/herdrdev/herdr/blob/b99002ac99b09e00b4ca692436cb15a6b0d676f1/src/session.rs),
@@ -93,6 +101,13 @@ code and are identified as such in provenance records. Herdr's `SshStdioBridge` 
 `remote-client-bridge` path remains the client-socket transport for bootstrap and direct terminal
 attachments; it is not the API forwarder.
 
+The forwarder uses Herdr's non-interactive SSH options as the baseline and does not add
+`ClearAllForwardings`. OpenSSH configuration for the saved target remains authoritative, including
+operator-configured forwarding directives. World does not generate a replacement SSH config or
+partially reconstruct the resolved target because doing so would split behavior from Herdr and
+break valid aliases, proxy jumps, identities, and site policy. An isolated API-only transport would
+instead require a supported Herdr stdio API bridge and is outside this pinned v0.9.0 design.
+
 The repo-owned bridge remains the product executable. It composes the vendored Herdr transport with
 World's HTTP/WebSocket, authentication, notes, uploads, bounds, and browser-session behavior.
 
@@ -123,9 +138,12 @@ For each enabled saved machine, the bridge uses the pinned Herdr transport seque
    obtain its authoritative API socket path and running state.
 3. When the server is absent, perform a transient `remote-client-bridge` handshake and detach after
    the command has started that server, then repeat session discovery.
-4. Start the World-owned forwarding supervisor, which runs one OpenSSH process that forwards a
-   private bridge-owned local Unix socket to the remote API socket. Require forward setup success,
-   non-interactive operation, server-alive checks, private local-directory ownership, and cleanup.
+4. Start the World-owned forwarding supervisor, which runs one OpenSSH process that preserves the
+   saved target's effective OpenSSH configuration and adds a private bridge-owned local Unix socket
+   forward to the remote API socket. Require forward setup success, non-interactive operation,
+   server-alive checks, private local-directory ownership, and cleanup. The complete invocation must
+   be checked through the installed OpenSSH client's effective configuration so an option cannot
+   erase the required forward.
 5. Connect the existing World `ApiClient` to the forwarded local socket.
 
 The provider applies the current bridge conversion to the remote `SessionSnapshot`: remote
@@ -274,6 +292,10 @@ service to that machine.
   record source hashes and adaptations, and refresh transport plus protocol in one reviewed update.
 - [SSH Unix-socket forwarding is disabled] -> Mark native World access incompatible with precise
   guidance and retain the direct bridge fallback.
+- [The saved target configures additional SSH forwards] -> Preserve those operator-owned OpenSSH
+  semantics as Herdr does, document that they apply to native World connections, and report a
+  bounded machine-specific failure if a configured or World API forward cannot be established.
+  Do not synthesize a replacement SSH configuration to isolate World from the saved profile.
 - [API tunnel and terminal processes fail separately] -> Let API and subscription health own
   runtime generation independently of SSH process lifetime, retire terminal attachments on failure,
   and reattach only after a same-generation snapshot.
@@ -300,7 +322,9 @@ service to that machine.
 
 1. Add the pinned Herdr-derived remote discovery and bootstrap helpers plus the World-owned API
    forwarding supervisor and bridge-internal runtime provider behind disabled native discovery;
-   verify against a clean v0.9.0 checkout and synthetic SSH fixtures.
+   verify against a clean v0.9.0 checkout, synthetic process fixtures, and the installed OpenSSH
+   client's effective configuration, including proof that the required `-L` survives the complete
+   option set.
 2. Start the bridge independently of Local, then add the logical runtime registry and
    machine-qualified routes while preserving local aliases and direct-profile behavior.
 3. Add catalogue discovery, full remote API supervision, direct terminal attachments, qualified

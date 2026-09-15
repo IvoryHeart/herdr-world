@@ -13,7 +13,8 @@ local bridge instead of maintaining a second normal-path network topology.
   discovery, identity, labels, enabled state, SSH target, and selected remote session.
 - Extend the pinned minimal Herdr compatibility crate with Herdr-derived remote discovery,
   bootstrap, SSH option, and terminal protocol helpers, and add a World-owned OpenSSH Unix-socket
-  forwarder for full remote API access.
+  forwarder for full remote API access while preserving the saved target's effective OpenSSH
+  configuration.
 - Make one World bridge aggregate its local Herdr runtime and enabled saved SSH machines into the
   existing host-qualified browser model, with independent failure and reconnect boundaries.
 - Keep browser traffic on the serving World origin for native machines. Remote hosts do not need a
@@ -52,5 +53,6 @@ The change affects the Rust bridge's runtime provider and connection supervision
 bridge startup behavior, terminal session ownership, bridge-owned runtime data, upload routing,
 federation tests, security tests, operational documentation, and the current federation and
 bridge-access specifications. It requires OpenSSH Unix-socket forwarding for native World access,
-adds no Herdr runtime binary to World distributions, does not require a change to Herdr v0.9.0,
-and does not install the World plugin or bridge on saved remote machines.
+preserves operator-configured SSH behavior for each saved target, adds no Herdr runtime binary to
+World distributions, does not require a change to Herdr v0.9.0, and does not install the World
+plugin or bridge on saved remote machines.

@@ -78,7 +78,9 @@ protocol and advertised capabilities before dispatching control.
 The bridge SHALL discover native remote runtimes from Herdr's supported machine-list output and use
 Herdr's opaque machine profile ID as their stable identity. World SHALL NOT maintain a second SSH
 target catalogue, modify Herdr machine profiles, accept browser-supplied SSH targets for native
-connections, or store SSH credentials.
+connections, or store SSH credentials. Native connections SHALL preserve the effective OpenSSH
+configuration used by Herdr for the saved target and SHALL NOT replace it with a World-generated
+SSH configuration.
 
 #### Scenario: Herdr catalogue changes
 - **WHEN** a saved machine is added, renamed, enabled, disabled, or removed through Herdr
@@ -90,6 +92,13 @@ connections, or store SSH credentials.
   non-interactive connection
 - **THEN** World marks only that machine as requiring Attention and presents Herdr-owned foreground
   recovery guidance without answering the prompt or changing the machine profile
+
+#### Scenario: Saved target has operator SSH configuration
+- **WHEN** a saved machine resolves through OpenSSH configuration containing aliases, proxying,
+  identities, site policy, or forwarding directives
+- **THEN** the native connection preserves that effective configuration, adds World's private API
+  forward, and reports a bounded machine-specific failure if the required forward cannot be
+  established
 
 #### Scenario: Catalogue cannot be read
 - **WHEN** the Herdr executable or valid machine-list output is unavailable
