@@ -19,7 +19,9 @@ implementation is not accepted and no product task is complete. See
   forwarding, timeout, incompatible Herdr, authentication and host-key Attention, process exit,
   local socket ownership, cleanup, and cancellation. Verify the complete argv with the installed
   OpenSSH client's effective-configuration output, including that the required `-L` survives every
-  option and that operator-configured forwarding behavior remains consistent with Herdr.
+  option. Include saved-target fixtures where configured forwarding directives succeed and where a
+  configured or required forward fails; the latter must produce bounded machine-specific Attention
+  or incompatibility without failing the gateway or another runtime.
 
 ## 2. Bridge runtime registry and supervision
 
