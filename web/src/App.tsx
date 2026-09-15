@@ -1,5 +1,9 @@
 import { CommandDraftContext, createCommandDraftStore } from "./commandDrafts";
-import { linkedWorkspaceLabels } from "./workspaceClose";
+import {
+  captureWorkspaceCloseConfirmation,
+  workspaceCloseConfirmationMatches,
+} from "./workspaceClose";
+import type { WorkspaceCloseConfirmation } from "./workspaceClose";
 import {
   Activity,
   Archive,
@@ -489,7 +493,7 @@ type DialogState = {
   clearable?: boolean;
   noun?: "room";
   sourceWorkspaceId?: string;
-  linkedWorkspaceLabels?: string[];
+  workspaceCloseConfirmation?: WorkspaceCloseConfirmation;
 };
 type DisplayPrefs = {
   hostScope: HostScope;
@@ -4688,10 +4692,19 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     if (key === "rename") {
       setDialog({ mode: "rename", kind, bridgeId, id, label, clearable });
     } else if (key === "close") {
-      const linkedLabels = kind === "space"
-        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], id)
-        : [];
-      setDialog({ mode: "close", kind, bridgeId, id, label, linkedWorkspaceLabels: linkedLabels });
+      const ref = connectionRefs.current[bridgeId];
+      const closeConfirmation = kind === "space" && runtime &&
+          ref?.connectionKey === runtime.generationKey && ref.snapshot
+        ? captureWorkspaceCloseConfirmation(ref.snapshot.workspaces, id, runtime.generationKey)
+        : null;
+      setDialog({
+        mode: "close",
+        kind,
+        bridgeId,
+        id,
+        label,
+        workspaceCloseConfirmation: closeConfirmation ?? undefined,
+      });
     } else if (key === "newtab") {
       setSelectedBridgeId(bridgeId);
       setActiveWorkspaceRefState({ bridgeId, workspaceId: id });
@@ -4823,20 +4836,66 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     const { kind, bridgeId, id } = dialog;
     const runtime = bridge.getRuntime(bridgeId);
     const commands = runtime ? createCommands(runtime.httpUrl) : null;
-    if (!commands) {
+    if (!runtime || !commands) {
       setError("Connection is not ready");
       return;
     }
-    const command =
-      kind === "space" ? "workspace.close" : kind === "tab" ? "tab.close" : "pane.close";
+    if (kind === "space") {
+      const requestGenerationKey = runtime.generationKey;
+      setBusy(true);
+      void (async () => {
+        try {
+          // The modal snapshot is not authority: read Herdr again immediately before dispatch.
+          const latest = await fetchRuntimeSnapshot(runtime.httpUrl);
+          const ref = connectionRefs.current[bridgeId];
+          if (!isRuntimeGenerationCurrent(ref, requestGenerationKey)) {
+            setError("Connection changed. Review the close confirmation again.");
+            return;
+          }
+          const currentConfirmation = captureWorkspaceCloseConfirmation(
+            latest.workspaces,
+            id,
+            requestGenerationKey,
+          );
+          if (!currentConfirmation) {
+            setError(
+              `${dialog.noun === "room" ? "Room" : "Space"} is no longer available on the current connection`,
+            );
+            return;
+          }
+          if (!workspaceCloseConfirmationMatches(
+            dialog.workspaceCloseConfirmation,
+            currentConfirmation,
+          )) {
+            setDialog({ ...dialog, workspaceCloseConfirmation: currentConfirmation });
+            setError(
+              `${dialog.noun === "room" ? "Room" : "Space"} membership or connection changed. Review the updated confirmation before closing.`,
+            );
+            return;
+          }
+          const closeWorkspaceGroup = currentConfirmation.linkedWorkspaceLabels.length > 0;
+          const ok = await exec(
+            runtime,
+            { kind: "workspace", id, command: "workspace.close" },
+            (routedCommands) => routedCommands.closeWorkspace(id, closeWorkspaceGroup),
+          );
+          if (ok) {
+            setDialog(null);
+          }
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "Could not verify space membership");
+        } finally {
+          setBusy(false);
+        }
+      })();
+      return;
+    }
+    const command = kind === "tab" ? "tab.close" : "pane.close";
     const action =
-      kind === "space"
-        ? (routedCommands: ReturnType<typeof createCommands>) =>
-            routedCommands.closeWorkspace(id, Boolean(dialog.linkedWorkspaceLabels?.length))
-        : kind === "tab"
-          ? (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closeTab(id)
-          : (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closePane(id);
-    void exec(runtime, { kind: kind === "space" ? "workspace" : kind, id, command }, action).then(
+      kind === "tab"
+        ? (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closeTab(id)
+        : (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closePane(id);
+    void exec(runtime, { kind, id, command }, action).then(
       (ok) => ok && setDialog(null),
     );
   };
@@ -4948,9 +5007,16 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
       setLaunchTarget({ mode: "tab", workspaceId, bridgeId });
     },
     onOpenRoomDialog: ({ mode, bridgeId, workspaceId, sourceWorkspaceId, label }) => {
-      const linkedLabels = mode === "close"
-        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], workspaceId)
-        : [];
+      const runtime = bridge.getRuntime(bridgeId);
+      const ref = connectionRefs.current[bridgeId];
+      const closeConfirmation = mode === "close" && runtime &&
+          ref?.connectionKey === runtime.generationKey && ref.snapshot
+        ? captureWorkspaceCloseConfirmation(
+            ref.snapshot.workspaces,
+            workspaceId,
+            runtime.generationKey,
+          )
+        : null;
       setDialog({
         mode,
         kind: "space",
@@ -4959,7 +5025,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
         sourceWorkspaceId,
         label,
         noun: "room",
-        linkedWorkspaceLabels: linkedLabels,
+        workspaceCloseConfirmation: closeConfirmation ?? undefined,
       });
     },
   });
@@ -5630,9 +5696,21 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
 
       {dialog?.mode === "close" ? (
         <ConfirmDialog
-          title={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).title}
-          message={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).message}
-          confirmLabel={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).confirm}
+          title={closeCopy(
+            dialog.kind,
+            dialog.workspaceCloseConfirmation?.linkedWorkspaceLabels,
+            dialog.noun,
+          ).title}
+          message={closeCopy(
+            dialog.kind,
+            dialog.workspaceCloseConfirmation?.linkedWorkspaceLabels,
+            dialog.noun,
+          ).message}
+          confirmLabel={closeCopy(
+            dialog.kind,
+            dialog.workspaceCloseConfirmation?.linkedWorkspaceLabels,
+            dialog.noun,
+          ).confirm}
           busy={busy}
           onCancel={() => setDialog(null)}
           onConfirm={confirmClose}
@@ -10513,16 +10591,28 @@ export function menuItems(
   return paneItems;
 }
 
-export function closeCopy(kind: MenuKind, linkedLabels: readonly string[] = []) {
+export function closeCopy(
+  kind: MenuKind,
+  linkedLabels: readonly string[] = [],
+  noun?: "room",
+) {
   if (kind === "space" && linkedLabels.length > 0) {
+    const spaceNoun = noun ?? "space";
     return {
-      title: "Close workspace group?",
-      message: `This closes this space and all linked worktree spaces (${linkedLabels.join(", ")}), including every tab and pane in the group.`,
+      title: noun === "room" ? "Close room group?" : "Close workspace group?",
+      message: `This closes this ${spaceNoun} and all linked worktree ${spaceNoun}s (${linkedLabels.join(", ")}), including every tab and pane in the group.`,
       confirm: "Close entire group",
     };
   }
   switch (kind) {
     case "space":
+      if (noun === "room") {
+        return {
+          title: "Close room?",
+          message: "This closes the room and every tab and pane inside it.",
+          confirm: "Close room",
+        };
+      }
       return {
         title: "Close space?",
         message: "This closes the space and every tab and pane inside it.",
