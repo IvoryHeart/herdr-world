@@ -1,9 +1,10 @@
 import { CommandDraftContext, createCommandDraftStore } from "./commandDrafts";
 import {
+  cancelWorkspaceCloseOperation,
   captureWorkspaceCloseConfirmation,
   executeConfirmedWorkspaceClose,
 } from "./workspaceClose";
-import type { WorkspaceCloseConfirmation } from "./workspaceClose";
+import type { WorkspaceCloseConfirmation, WorkspaceCloseOperation } from "./workspaceClose";
 import {
   Activity,
   Archive,
@@ -1321,12 +1322,17 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
   );
   const [launchTarget, setLaunchTarget] = useState<ScopedLaunchTarget | null>(null);
   const [busy, setBusy] = useState(false);
-  const workspaceCloseOperationRef = useRef<{ cancelled: boolean } | null>(null);
+  const [workspaceCloseMutationStarted, setWorkspaceCloseMutationStarted] = useState(false);
+  const workspaceCloseOperationRef = useRef<WorkspaceCloseOperation | null>(null);
   const cancelCloseDialog = useCallback(() => {
-    if (workspaceCloseOperationRef.current) {
-      workspaceCloseOperationRef.current.cancelled = true;
+    const operation = workspaceCloseOperationRef.current;
+    if (operation) {
+      if (!cancelWorkspaceCloseOperation(operation)) {
+        return;
+      }
       workspaceCloseOperationRef.current = null;
       setBusy(false);
+      setWorkspaceCloseMutationStarted(false);
     }
     setDialog(null);
   }, []);
@@ -4856,10 +4862,14 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     }
     if (kind === "space") {
       const requestGenerationKey = runtime.generationKey;
-      const operation = { cancelled: false };
+      const operation: WorkspaceCloseOperation = {
+        cancelled: false,
+        mutationStarted: false,
+      };
       workspaceCloseOperationRef.current = operation;
       const operationIsCurrent = () =>
         workspaceCloseOperationRef.current === operation && !operation.cancelled;
+      setWorkspaceCloseMutationStarted(false);
       setBusy(true);
       void (async () => {
         try {
@@ -4874,6 +4884,10 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
                 : null;
             },
             isCurrent: operationIsCurrent,
+            onMutationStart: () => {
+              operation.mutationStarted = true;
+              setWorkspaceCloseMutationStarted(true);
+            },
             closeWorkspace: (workspaceId) => exec(
               runtime,
               { kind: "workspace", id: workspaceId, command: "workspace.close" },
@@ -4891,6 +4905,10 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
           } else if (result.status === "unavailable") {
             setError(
               `${dialog.noun === "room" ? "Room" : "Space"} is no longer available on the current connection`,
+            );
+          } else if (result.status === "unsupported") {
+            setError(
+              `Cannot safely close this workspace group because it contains another primary checkout (${result.primaryWorkspaceLabels.join(", ")}). Resolve the duplicate primary in Herdr, then reopen this confirmation.`,
             );
           } else if (result.status === "partial") {
             if (result.total > 1) {
@@ -4910,6 +4928,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
           if (workspaceCloseOperationRef.current === operation) {
             workspaceCloseOperationRef.current = null;
             setBusy(false);
+            setWorkspaceCloseMutationStarted(false);
           }
         }
       })();
@@ -5737,6 +5756,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
             dialog.noun,
           ).confirm}
           busy={busy}
+          cancelDisabled={workspaceCloseMutationStarted}
           onCancel={cancelCloseDialog}
           onConfirm={confirmClose}
         />

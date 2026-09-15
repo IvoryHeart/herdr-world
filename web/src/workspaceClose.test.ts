@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  cancelWorkspaceCloseOperation,
   captureWorkspaceCloseConfirmation,
   executeConfirmedWorkspaceClose,
   linkedWorkspaceLabels,
   workspaceCloseConfirmationMatches,
 } from "./workspaceClose";
-import type { WorkspaceCloseConfirmation } from "./workspaceClose";
+import type { WorkspaceCloseConfirmation, WorkspaceCloseOperation } from "./workspaceClose";
 import type { WorkspaceInfo } from "./types";
 
 function workspace(id: string, repoKey?: string, linked = false): WorkspaceInfo {
@@ -192,5 +193,59 @@ describe("workspace group close confirmation", () => {
     expect(calls).toEqual(["child", "root"]);
     expect(calls).not.toContain("new-child");
     expect(result).toEqual({ status: "partial", completed: 1, total: 2 });
+  });
+
+  it("rejects a same-repository second primary before any close command", async () => {
+    const unsupportedWorkspaces = [
+      ...workspaces,
+      workspace("another-primary", "repo"),
+    ];
+    const confirmed = captureWorkspaceCloseConfirmation(
+      unsupportedWorkspaces,
+      "root",
+      "generation-a",
+    )!;
+    const calls: string[] = [];
+
+    const result = await executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: async () => confirmed,
+      isCurrent: () => true,
+      closeWorkspace: async (workspaceId) => {
+        calls.push(workspaceId);
+        return true;
+      },
+    });
+
+    expect(result).toEqual({
+      status: "unsupported",
+      primaryWorkspaceLabels: ["another-primary"],
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("allows cancellation before mutation and rejects it once mutation starts", async () => {
+    const preflight: WorkspaceCloseOperation = { cancelled: false, mutationStarted: false };
+    expect(cancelWorkspaceCloseOperation(preflight)).toBe(true);
+    expect(preflight.cancelled).toBe(true);
+
+    const operation: WorkspaceCloseOperation = { cancelled: false, mutationStarted: false };
+    const confirmed = captureWorkspaceCloseConfirmation(workspaces, "root", "generation-a")!;
+    const calls: string[] = [];
+    const result = await executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: async () => confirmed,
+      isCurrent: () => !operation.cancelled,
+      onMutationStart: () => { operation.mutationStarted = true; },
+      closeWorkspace: async (workspaceId) => {
+        expect(cancelWorkspaceCloseOperation(operation)).toBe(false);
+        calls.push(workspaceId);
+        return true;
+      },
+    });
+
+    expect(result).toEqual({ status: "complete", completed: 2, total: 2 });
+    expect(calls).toEqual(["child", "root"]);
+    expect(operation.cancelled).toBe(false);
   });
 });

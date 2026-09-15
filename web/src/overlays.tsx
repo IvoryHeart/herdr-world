@@ -349,6 +349,7 @@ export function ConfirmDialog({
   message,
   confirmLabel,
   busy,
+  cancelDisabled,
   onCancel,
   onConfirm,
 }: {
@@ -356,6 +357,7 @@ export function ConfirmDialog({
   message?: string;
   confirmLabel: string;
   busy?: boolean;
+  cancelDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -375,6 +377,7 @@ export function ConfirmDialog({
         type="button"
         tabIndex={-1}
         aria-label="Cancel"
+        disabled={cancelDisabled}
         onClick={onCancel}
       />
       <div
@@ -386,12 +389,13 @@ export function ConfirmDialog({
         aria-describedby={message ? messageId : undefined}
         tabIndex={-1}
         onKeyDown={(event) => {
-          if (event.key === "Escape") {
+          if (event.key === "Escape" && !cancelDisabled) {
             event.preventDefault();
             onCancel();
           } else if (
             event.key === "Enter" &&
             !busy &&
+            !cancelDisabled &&
             !(event.target instanceof HTMLButtonElement)
           ) {
             event.preventDefault();
@@ -409,13 +413,13 @@ export function ConfirmDialog({
           </div>
         ) : null}
         <div className="modal-actions">
-          <button type="button" className="btn" onClick={onCancel}>
+          <button type="button" className="btn" disabled={cancelDisabled} onClick={onCancel}>
             Cancel
           </button>
           <button
             type="button"
             className="btn btn-danger"
-            disabled={busy}
+            disabled={busy || cancelDisabled}
             onClick={onConfirm}
           >
             {confirmLabel}

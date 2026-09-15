@@ -5,11 +5,18 @@ export type WorkspaceCloseConfirmation = {
   targetWorkspaceId: string;
   workspaceIds: string[];
   linkedWorkspaceLabels: string[];
+  additionalPrimaryWorkspaceLabels: string[];
+};
+
+export type WorkspaceCloseOperation = {
+  cancelled: boolean;
+  mutationStarted: boolean;
 };
 
 export type WorkspaceCloseExecutionResult =
   | { status: "cancelled" | "unavailable" }
   | { status: "changed"; confirmation: WorkspaceCloseConfirmation }
+  | { status: "unsupported"; primaryWorkspaceLabels: string[] }
   | { status: "complete" | "partial"; completed: number; total: number };
 
 function linkedWorkspaces(workspaces: readonly WorkspaceInfo[], workspaceId: string) {
@@ -41,6 +48,9 @@ export function captureWorkspaceCloseConfirmation(
     targetWorkspaceId: workspaceId,
     workspaceIds: [workspaceId, ...linked.map((item) => item.workspace_id)].sort(),
     linkedWorkspaceLabels: linked.map((item) => item.label),
+    additionalPrimaryWorkspaceLabels: linked
+      .filter((item) => item.worktree?.is_linked_worktree === false)
+      .map((item) => item.label),
   };
 }
 
@@ -58,6 +68,15 @@ export function workspaceCloseConfirmationMatches(
   );
 }
 
+/** Cancel only while the operation is still a read-only preflight. */
+export function cancelWorkspaceCloseOperation(operation: WorkspaceCloseOperation | null) {
+  if (!operation || operation.mutationStarted) {
+    return false;
+  }
+  operation.cancelled = true;
+  return true;
+}
+
 /**
  * Close only the exact IDs the user confirmed. Linked workspaces go first and
  * the primary goes last, all with close_group=false. If another member joins,
@@ -67,6 +86,7 @@ export async function executeConfirmedWorkspaceClose(options: {
   confirmed: WorkspaceCloseConfirmation | null | undefined;
   fetchCurrent: () => Promise<WorkspaceCloseConfirmation | null>;
   isCurrent: () => boolean;
+  onMutationStart?: () => void;
   closeWorkspace: (workspaceId: string) => Promise<boolean>;
 }): Promise<WorkspaceCloseExecutionResult> {
   const current = await options.fetchCurrent();
@@ -76,6 +96,12 @@ export async function executeConfirmedWorkspaceClose(options: {
   if (!current) {
     return { status: "unavailable" };
   }
+  if (current.additionalPrimaryWorkspaceLabels.length > 0) {
+    return {
+      status: "unsupported",
+      primaryWorkspaceLabels: current.additionalPrimaryWorkspaceLabels,
+    };
+  }
   if (!workspaceCloseConfirmationMatches(options.confirmed, current)) {
     return { status: "changed", confirmation: current };
   }
@@ -84,6 +110,10 @@ export async function executeConfirmedWorkspaceClose(options: {
     ...current.workspaceIds.filter((workspaceId) => workspaceId !== current.targetWorkspaceId),
     current.targetWorkspaceId,
   ];
+  options.onMutationStart?.();
+  if (!options.isCurrent()) {
+    return { status: "cancelled" };
+  }
   let completed = 0;
   for (const workspaceId of workspaceIds) {
     if (!options.isCurrent()) {
