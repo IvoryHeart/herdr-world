@@ -64,6 +64,11 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Made workspace-group closing revalidate the exact confirmed members before mutation, close
+  confirmed linked workspaces before the primary workspace, reject unsupported multi-primary
+  groups, and report partial failures without hiding them. Corrected the confirmation copy to
+  refer to Office rooms rather than a stale surface name.
+
 - Updated the bridge TLS dependency to a release that rejects TLS 1.3 handshake messages crossing
   encryption-level boundaries. ([Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
 
