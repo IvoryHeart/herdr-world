@@ -34,6 +34,12 @@ Web's own release history remains in its upstream changelog.
 
 ### Changed
 
+- Synchronized with Herdr Web `v0.6.1` plus upstream Android release versioning. World release
+  preparation now increments Android `versionCode`, stamps `versionName`, and documents APK
+  package, signature, alignment, and update-signer verification.
+  ([Herdr Web PR #91](https://github.com/kcosr/herdr-web/pull/91),
+  [Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
+
 - Updated the Herdr World compatibility layer to Herdr `v0.9.0` and terminal
   protocol `22`, including refreshed vendored protocol/schema provenance.
   [Herdr World PR #87](https://github.com/IvoryHeart/herdr-world/pull/87)
@@ -62,6 +68,14 @@ Web's own release history remains in its upstream changelog.
   ([#79](https://github.com/IvoryHeart/herdr-world/pull/79)).
 
 ### Fixed
+
+- Updated the bridge TLS dependency to a release that rejects TLS 1.3 handshake messages crossing
+  encryption-level boundaries. ([Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
+
+- Started mobile terminal refit retries only after the current renderer mounts, so a slow tab
+  switch cannot leave the terminal at its initial keyboard-sized height.
+  ([Herdr Web PR #90](https://github.com/kcosr/herdr-web/pull/90),
+  [Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
 
 - Preserved exact shell terminal selection across Spaces, Office, Graph and Tree, kept split-pane
   handoffs on the pane the user chose, and rejected a second bridge targeting the same Herdr

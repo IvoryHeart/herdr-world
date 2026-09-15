@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   RELEASE_REFERENCE_PATHS,
+  assertAndroidReleaseMetadata,
   assertCurrentReleaseReferences,
   compareReleaseTags,
   escapeRegex,
@@ -14,10 +15,21 @@ import {
   npmDistributionTag,
   normalizeReleaseTag,
   parseReleaseTag,
+  prepareAndroidReleaseMetadata,
   releaseVersion,
   readCurrentReleaseTag,
   stampCurrentRelease,
 } from "./release-version.mjs";
+
+const ANDROID_BUILD = `apply plugin: 'com.android.application'
+
+android {
+    defaultConfig {
+        versionCode 7
+        versionName "1.2.2"
+    }
+}
+`;
 
 test("accepts only stable releases and numbered release candidates", () => {
   assert.equal(normalizeReleaseTag("1.2.3"), "v1.2.3");
@@ -50,6 +62,37 @@ test("compares stable and release-candidate precedence", () => {
   assert.equal(compareReleaseTags("v1.2.3-rc.9", "v1.2.3"), -1);
   assert.equal(compareReleaseTags("v1.2.4", "v1.2.3"), 1);
   assert.equal(compareReleaseTags("v1.2.3", "1.2.3"), 0);
+});
+
+test("stamps Android metadata once in the reviewed release diff", () => {
+  const prepared = prepareAndroidReleaseMetadata(ANDROID_BUILD, "v1.2.3-rc.4");
+
+  assert.match(prepared, /versionCode 8\b/);
+  assert.match(prepared, /versionName "1\.2\.3-rc\.4"/);
+  assert.equal(assertAndroidReleaseMetadata(prepared, "v1.2.3-rc.4"), true);
+  assert.equal(prepareAndroidReleaseMetadata(prepared, "v1.2.3-rc.4").match(/versionCode (\d+)/)?.[1], "9");
+});
+
+test("rejects Android metadata that no longer matches the reviewed release", () => {
+  assert.throws(
+    () => assertAndroidReleaseMetadata(ANDROID_BUILD, "v1.2.3"),
+    /Android versionName is 1\.2\.2, not 1\.2\.3/,
+  );
+});
+
+test("rejects ambiguous or exhausted Android release metadata", () => {
+  assert.throws(
+    () => prepareAndroidReleaseMetadata(ANDROID_BUILD.replace("versionCode 7", "versionCode releaseCode"), "v1.2.3"),
+    /exactly one literal versionCode and versionName/,
+  );
+  assert.throws(
+    () => prepareAndroidReleaseMetadata(`${ANDROID_BUILD}\nversionName "duplicate"\n`, "v1.2.3"),
+    /exactly one literal versionCode and versionName/,
+  );
+  assert.throws(
+    () => prepareAndroidReleaseMetadata(ANDROID_BUILD.replace("versionCode 7", "versionCode 2100000000"), "v1.2.3"),
+    /exceed 2100000000/,
+  );
 });
 
 test("maps release types to their public install channels", () => {
