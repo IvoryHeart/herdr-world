@@ -5,8 +5,8 @@ The bundle's root `LICENSE`, `THIRD_PARTY_NOTICES.md`, `UPSTREAM.md`, and files 
 `third_party/licenses/` and `third_party/dependencies/` describe the retained
 upstream, asset, npm, and Cargo terms.
 
-It does not include Herdr itself. Herdr World requires Herdr `v0.8.2` or newer with terminal
-protocol `20`.
+It does not include Herdr itself. Herdr World requires Herdr `v0.9.0` or newer with terminal
+protocol `22`.
 
 The macOS archives are not yet Developer ID signed or notarized. After verifying the archive
 checksum and source, macOS may require the first launch to be confirmed in System Settings →

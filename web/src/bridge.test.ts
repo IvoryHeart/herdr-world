@@ -361,8 +361,8 @@ describe("capabilities", () => {
         bridge_api_version: 1,
         commands: ["pane.split", 42],
         bridge_version: "1.2.3",
-        herdr_version: "0.8.2",
-        terminal_protocol: 20,
+        herdr_version: "0.9.0",
+        terminal_protocol: 22,
         configured_label: "Build host",
         features: ["snapshot", "terminal_attach", 42],
         web_compat: 1,
@@ -375,8 +375,8 @@ describe("capabilities", () => {
       bridge_api_version: 1,
       commands: ["pane.split"],
       bridge_version: "1.2.3",
-      herdr_version: "0.8.2",
-      terminal_protocol: 20,
+      herdr_version: "0.9.0",
+      terminal_protocol: 22,
       configured_label: "Build host",
       features: ["snapshot", "terminal_attach"],
       web_compat: 1,
@@ -589,14 +589,14 @@ describe("capabilities", () => {
     fetchMock.mockRestore();
   });
 
-  it("rejects a Herdr version below the protocol-20 floor", async () => {
+  it("rejects a Herdr version below the protocol-22 floor", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify(compatibleCapabilities({ herdr_version: "0.8.1" })), {
         status: 200,
       }),
     );
 
-    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(/0\.8\.2/iu);
+    await expect(probeBridgeBaseUrl("192.0.2.20:4000")).rejects.toThrow(/0\.9\.0/iu);
 
     fetchMock.mockRestore();
   });
@@ -606,8 +606,8 @@ function compatibleCapabilities(overrides: Record<string, unknown> = {}) {
   return {
     bridge_api_version: 1,
     bridge_version: "0.1.0",
-    herdr_version: "0.8.2",
-    terminal_protocol: 20,
+    herdr_version: "0.9.0",
+    terminal_protocol: 22,
     features: ["snapshot", "terminal_attach"],
     commands: [],
     web_compat: 1,

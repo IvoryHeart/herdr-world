@@ -98,8 +98,8 @@ async function openEvents(origin) {
 async function bridgeState(origin) {
   const capabilities = await json(origin, "/api/capabilities");
   assert.equal(capabilities.bridge_api_version, 1);
-  assert.equal(capabilities.herdr_version, "0.8.2");
-  assert.equal(capabilities.terminal_protocol, 20);
+  assert.equal(capabilities.herdr_version, "0.9.0");
+  assert.equal(capabilities.terminal_protocol, 22);
   for (const feature of requiredFeatures) {
     assert.ok(
       capabilities.features.includes(feature),
@@ -366,7 +366,7 @@ try {
         fanout: "two clients received A output",
         capabilitiesSnapshot: "capabilities and snapshot accepted",
         commandEvent: "workspace.rename command produced workspace.renamed event",
-        bell: "stock v0.8.2 direct terminal attach kept the stream open; TerminalBell is foreground-client-only",
+        bell: "stock v0.9.0 direct terminal attach kept the stream open; TerminalBell is foreground-client-only",
         input: "shared paste, ArrowUp, F1, Ctrl+A, and Ctrl+C passed",
         resize: "last resize 28x91; explicit refit 31x101 (stock ANSI stream rendered without separator spaces)",
         reconnect: "passed without replacing the Herdr process",

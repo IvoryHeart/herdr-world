@@ -38,10 +38,12 @@ describe("World conversation controller boundary", () => {
     expect(readWorldConversationTargets()[0]).toMatchObject({
       windowId: "host-0:pane-0",
       targetKey: "target-0",
+      selectionKey: "agent-0",
     });
     expect(readWorldConversationTargets()[1]).toMatchObject({
       kind: "pane",
       windowId: "host-1:pane-1",
+      selectionKey: "",
     });
     expect(readWorldConversationTargets().map(({ targetKey }) => targetKey)).not.toContain(
       "missing-runtime-fields",

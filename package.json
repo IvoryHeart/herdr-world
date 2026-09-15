@@ -31,12 +31,17 @@
     "android:open": "cap open android",
     "package:tarball": "scripts/package-tarball.sh",
     "build": "npm run build:web && npm run bridge:build",
-    "test": "npm run test:dev && npm run test:release && npm run test:pages && npm run test:web && npm run bridge:test",
+    "test": "npm run test:worktree && npm run test:dev && npm run test:release && npm run test:pages && npm run test:web && npm run bridge:test",
     "lint": "npm run lint:web && npm run bridge:fmt",
-    "check": "npm run vendor:check && npm run notices:check && npm run test:privacy && npm run lint && npm run test && npm run build",
-    "check:acceptance": "npm run check && npm run test:e2e && npm run test:security && npm run test:independence"
+    "check": "npm run vendor:check && npm run notices:check && npm run test:privacy && npm run spec:check && npm run lint && npm run test && npm run build",
+    "check:acceptance": "npm run check && npm run test:e2e && npm run test:security && npm run test:independence",
+    "agent:worktree": "node scripts/agent/worktree.mjs",
+    "spec": "openspec",
+    "spec:check": "openspec validate --all --strict --no-interactive",
+    "test:worktree": "node --test scripts/agent/worktree.test.mjs"
   },
   "devDependencies": {
+    "@fission-ai/openspec": "1.12.0",
     "@axe-core/playwright": "^4.10.2",
     "@capacitor/android": "^8.4.0",
     "@capacitor/cli": "^8.4.0",

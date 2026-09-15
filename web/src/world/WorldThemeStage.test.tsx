@@ -68,4 +68,41 @@ describe("World theme failure containment", () => {
     expect(container.textContent).toContain("Office survived");
     expect(container.textContent).toContain("Runtime observation remains mounted");
   });
+
+  it.each([
+    ["load", async () => { throw new Error("tree chunk unavailable"); }],
+    ["render", async () => ({ default: () => { throw new Error("tree render failed"); } })],
+  ] as const)("keeps the shell alive and returns to Office after a Tree %s failure", async (_kind, load) => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    window.history.replaceState({}, "", "/?theme=tree");
+    const themes = new WorldThemeRegistry([
+      {
+        id: "office",
+        label: "Office",
+        semanticIcon: "office",
+        load: async () => ({ default: () => <main>Office survived</main> }),
+      },
+      { id: "tree", label: "Tree", semanticIcon: "tree", load },
+    ]);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    await act(async () => {
+      root.render(
+        <CoreNavigationProvider registry={coreSurfaceRegistry} themeRegistry={themes}>
+          <div data-testid="persistent-shell">Runtime observation remains mounted</div>
+          <WorldThemeOutlet themeRegistry={themes} />
+        </CoreNavigationProvider>,
+      );
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("Tree unavailable");
+    expect(container.textContent).toContain("Runtime observation remains mounted");
+    const recover = [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Return to Office");
+    await act(async () => { recover?.click(); await Promise.resolve(); });
+    expect(window.location.pathname + window.location.search).toBe("/");
+    expect(container.textContent).toContain("Office survived");
+  });
 });

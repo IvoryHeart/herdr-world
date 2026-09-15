@@ -667,7 +667,7 @@ PERFORMANCE OF THIS SOFTWARE.
 
 The following npm package may be included in this product:
 
- - @xmldom/xmldom@0.8.13
+ - @xmldom/xmldom@0.8.15
 
 This package contains the following license:
 
@@ -718,7 +718,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 The following npm package may be included in this product:
 
- - @webgpu/types@0.1.71
+ - @webgpu/types@0.1.72
 
 This package contains the following license:
 

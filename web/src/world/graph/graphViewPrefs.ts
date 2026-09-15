@@ -1,4 +1,4 @@
-export const GRAPH_VIEW_PREFS_KEY = "herdr.world.graph-view.v1";
+export const GRAPH_VIEW_PREFS_KEY = "herdr.world.graph-view.v2";
 
 const MAX_SAVED_NODE_IDS = 2304;
 const MAX_NODE_ID_LENGTH = 512;

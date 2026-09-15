@@ -95,7 +95,7 @@ const port = Number(args[args.indexOf("--port") + 1]);
 const server = http.createServer((request, response) => {
   if (request.url === "/api/capabilities") {
     response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ bridge_api_version: 1, herdr_version: "0.8.2", terminal_protocol: 20, web_compat: 1 }));
+    response.end(JSON.stringify({ bridge_api_version: 1, herdr_version: "0.9.0", terminal_protocol: 22, web_compat: 1 }));
     return;
   }
   response.writeHead(200, { "content-type": "text/html" });
@@ -105,7 +105,7 @@ server.listen(port, "127.0.0.1");
 `);
   const herdr = path.join(bin, "herdr");
   executableScript(herdr, `#!/usr/bin/env node
-console.log(JSON.stringify({ running: true, status: "running", compatible: true, version: "0.8.2", protocol: 20, socket: process.env.HERDR_SOCKET_PATH }));
+console.log(JSON.stringify({ running: true, status: "running", compatible: true, version: "0.9.0", protocol: 22, socket: process.env.HERDR_SOCKET_PATH }));
 `);
   const fakeLaunchctl = path.join(bin, "launchctl");
   const statePath = path.join(bin, "service.pid");
@@ -498,14 +498,14 @@ test("readiness requires bridge, Herdr, protocol, and web compatibility", async 
   await assert.rejects(
     waitForReadiness("http://127.0.0.1:8787", expected, {
       timeoutMs: 120,
-      fetchImpl: async () => response({ bridge_api_version: 1, herdr_version: "0.8.2", terminal_protocol: 19, web_compat: 1 }),
+      fetchImpl: async () => response({ bridge_api_version: 1, herdr_version: "0.9.0", terminal_protocol: 19, web_compat: 1 }),
     }),
     /terminal protocol 19/,
   );
   const capabilities = await waitForReadiness("http://127.0.0.1:8787", expected, {
-    fetchImpl: async () => response({ bridge_api_version: 1, herdr_version: "0.8.2", terminal_protocol: 20, web_compat: 1 }),
+    fetchImpl: async () => response({ bridge_api_version: 1, herdr_version: "0.9.0", terminal_protocol: 22, web_compat: 1 }),
   });
-  assert.equal(capabilities.terminal_protocol, 20);
+  assert.equal(capabilities.terminal_protocol, 22);
 });
 
 test("LAN readiness probes use an accepted Host while connecting through loopback", async () => {
@@ -520,7 +520,7 @@ test("LAN readiness probes use an accepted Host while connecting through loopbac
   await waitForReadiness("http://127.0.0.1:8787", expected, {
     fetchImpl: async (_url, options) => {
       requestOptions = options;
-      return response({ bridge_api_version: 1, herdr_version: "0.8.2", terminal_protocol: 20, web_compat: 1 });
+      return response({ bridge_api_version: 1, herdr_version: "0.9.0", terminal_protocol: 22, web_compat: 1 });
     },
   });
   assert.equal(requestOptions.headers.host, "bridge.example.test:8787");

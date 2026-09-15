@@ -21,7 +21,7 @@ the release tag.
   as the npm trusted publisher for `@ivoryheart/herdr-world`.
 - `origin` fetch and push URLs both resolve to `IvoryHeart/herdr-world`. The release helper rejects
   upstream, fork, local-path, and unsupported remote URLs before making any release mutation.
-- A local Herdr `v0.8.2` or newer session reporting terminal protocol `20` for browser and packaged
+- A local Herdr `v0.9.0` or newer session reporting terminal protocol `22` for browser and packaged
   bridge smoke testing.
 
 ## Prepare And Review
@@ -56,10 +56,13 @@ node scripts/release.mjs prepare v0.1.0
 ```
 
 The preparation command requires the branch to start exactly at `origin/main`, repeats the normal
-repository check, updates every release reference, promotes the changelog notes, removes empty
-released subsections, records the exact Herdr Web baseline from `UPSTREAM.md`, and opens the next
-empty `## [Unreleased]` section in the same diff. The World changelog contains World releases and
-downstream changes; it links the baseline instead of copying Herdr Web's release history.
+repository check, updates every release reference, increments Android `versionCode`, stamps Android
+`versionName`, updates the README and project site to the runtime's current minimum Herdr version
+and terminal protocol, promotes the changelog notes, removes empty released subsections, records
+the exact Herdr Web baseline from `UPSTREAM.md`, and opens the next empty `## [Unreleased]` section
+in the same diff. Tag validation rejects compatibility claims that drift from the runtime constants.
+The World changelog contains World releases and downstream changes; it links the baseline instead
+of copying Herdr Web's release history.
 
 The generated changelog date is the intended UTC release date. Merge, preflight, and tag on that
 date. If review delays the release past it, update the date in the release PR and have that revision
@@ -82,7 +85,7 @@ locally built substitute. The explicit distribution preflight runs the same Linu
 and Intel artifact, Formula, and plugin lifecycle matrix without publishing; ordinary pull requests
 rely on the normal CI workflow, including its release unit tests. Each native job checks the CPU
 format and bundle contents, then exercises the packaged bridge against two checksum-pinned stock
-Herdr v0.8.2 daemons. One required notice gate validates the complete cross-platform dependency
+Herdr v0.9.0 daemons. One required notice gate validates the complete cross-platform dependency
 closure before any native job starts, avoiding three redundant builds of the notice generator.
 
 ## Herdr Plugin Release
@@ -91,7 +94,7 @@ The plugin is released with the application tag but does not publish a second ap
 Before any public channel is changed, the workflow installs the exact generated npm tarball into an
 isolated checkout and runs the plugin lifecycle smoke on all three supported targets: Linux
 x86-64/glibc 2.34+, macOS ARM64, and macOS x86-64. The smoke uses a checksum-pinned stock Herdr
-v0.8.2 daemon and checks the plugin build, action listing, startup restoration, first/repeated start,
+v0.9.0 daemon and checks the plugin build, action listing, startup restoration, first/repeated start,
 status, open, doctor, restart, browser readiness, a second session/port, and
 stop-before-uninstall. The explicit preflight and tagged workflow use the same unpublished-package
 path, so a failure prevents the GitHub release, npm channel, and Homebrew Formula from advancing.
@@ -155,8 +158,9 @@ archive contents and verify the root installer, named installer, version marker,
 binary, bundled `web/dist`, README, root license,
 third-party notices, upstream record, Apache/PixiJS license texts, generated production npm/Cargo
 licence inventories, World asset record, and Herdr vendor manifest are present.
-For APKs, inspect the package listing or metadata and verify the bundled
-`public/legal/manifest.json` and every file it names.
+For APKs, run the package, version, signature, and alignment checks in
+[docs/android.md](android.md), then verify the bundled `public/legal/manifest.json` and every file
+it names.
 
 The macOS archives are intentionally unsigned and unnotarized. Developer ID signing and
 notarization are deferred for the first stable `v0.1.0` release and can be revisited when project
@@ -190,7 +194,7 @@ dist-packages/herdr-world-vX.Y.Z-android.apk
 
 ## Browser And Federation Smoke
 
-Start or attach a Herdr `v0.8.2` or newer session reporting terminal protocol `20`:
+Start or attach a Herdr `v0.9.0` or newer session reporting terminal protocol `22`:
 
 ```bash
 herdr
@@ -233,7 +237,7 @@ npm run check:acceptance
 ```
 
 Repeat the startup, terminal attach, and launcher checks with an unpacked desktop tarball before
-uploading it. Confirm the bridge rejects every protocol other than `20`
+uploading it. Confirm the bridge rejects every protocol other than `22`
 instead of serving a partially compatible UI.
 
 ## Cut
@@ -280,6 +284,11 @@ and macOS x86-64 archives, npm package, plugin lifecycle, and Homebrew Formula b
 GitHub release or advancing a public package channel. It then publishes the enabled GitHub, npm, and
 Homebrew channels from those exact tested outputs. The release commit's site changes also trigger
 the Pages deployment. No separate desktop upload or documentation-edit step is required.
+
+Android version metadata is part of the tagged release commit. Do not increment it again when
+building artifacts: all builds from the same tag must retain the same `versionCode` and
+`versionName`. Normal Android sync/build commands do not change these values. npm package versions
+remain independent of release versions.
 
 ## Android Validation
 

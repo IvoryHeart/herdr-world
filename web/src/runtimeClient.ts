@@ -254,6 +254,7 @@ export function parseSnapshot(value: unknown): Snapshot {
 
 function parseWorkspace(value: unknown): WorkspaceInfo {
   const record = requiredRecord(value);
+  const worktree = parseOptionalWorktree(record.worktree);
   return {
     workspace_id: requiredId(record.workspace_id),
     number: requiredNonNegativeInteger(record.number),
@@ -264,6 +265,19 @@ function parseWorkspace(value: unknown): WorkspaceInfo {
     active_tab_id: requiredId(record.active_tab_id),
     agent_status: requiredAgentStatus(record.agent_status),
     ...optionalBooleanField("can_clear_name", record.can_clear_name),
+    ...(worktree ? { worktree } : {}),
+  };
+}
+
+function parseOptionalWorktree(value: unknown): WorkspaceInfo["worktree"] {
+  if (value === undefined || value === null) return undefined;
+  const record = requiredRecord(value);
+  return {
+    repo_key: requiredString(record.repo_key),
+    repo_name: requiredString(record.repo_name),
+    repo_root: requiredString(record.repo_root),
+    checkout_path: requiredString(record.checkout_path),
+    is_linked_worktree: requiredBoolean(record.is_linked_worktree),
   };
 }
 

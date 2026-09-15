@@ -1,9 +1,15 @@
-import { isAgentPane } from "../agentDetection";
-import type { HostProfile } from "../hostProfile";
 import type { HostConnectionState } from "../runtimeClient";
-import { qualifiedRuntimeKey, qualifyRuntimeTarget } from "../runtimeIdentity";
+import { qualifiedRuntimeKey } from "../runtimeIdentity";
 import type { QualifiedTarget } from "../runtimeIdentity";
-import type { AgentStatus, PaneInfo, Snapshot, TabInfo, WorkspaceInfo } from "../types";
+import type { AgentStatus, WorkspaceInfo } from "../types";
+import { stableNumber } from "./worldModel";
+import type {
+  WorldHostLocation,
+  WorldHostNode,
+  WorldLeafNode,
+  WorldModel,
+  WorldTab,
+} from "./worldModel";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
@@ -20,17 +26,6 @@ const HOST_THEME_COUNT = 6;
 const MAX_VISIBLE_LABEL = 80;
 const MAX_STATE_LABEL = 96;
 
-export type HerdrOfficeSourceHost = {
-  profile: HostProfile;
-  location: OfficeHostLocation;
-  connectionState: HostConnectionState;
-  generationKey: string | null;
-  features: readonly string[];
-  snapshot: Snapshot | null;
-};
-
-export type OfficeHostLocation = "local" | "remote";
-
 export type OfficeHostSkin = {
   themeIndex: number;
   badge: string;
@@ -42,7 +37,7 @@ export type OfficeHost = {
   /** Full display-safe source label for semantic DOM; canvas text uses displayLabel/geometry fitting. */
   accessibleLabel?: string;
   displayOrder: number;
-  location: OfficeHostLocation;
+  location: WorldHostLocation;
   connectionState: HostConnectionState;
   observed: boolean;
   stale: boolean;
@@ -80,6 +75,7 @@ export type OfficeDesk = {
   hostKey: string;
   roomKey: string;
   tabRef: QualifiedTarget;
+  terminalSelectionKeys: string[];
   observedGeneration: string;
   displayLabel: string;
   order: number;
@@ -205,12 +201,11 @@ export type HerdrOfficeProjection = {
 };
 
 type ProjectedHost = {
-  source: HerdrOfficeSourceHost;
+  modelHost: WorldHostNode;
   host: OfficeHost;
 };
 
 type ProjectedRoom = {
-  sourceHost: HerdrOfficeSourceHost;
   host: OfficeHost;
   workspace: WorkspaceInfo;
   room: Omit<
@@ -227,10 +222,10 @@ type ProjectedRoom = {
 };
 
 export function projectHerdrOffice(
-  sources: readonly HerdrOfficeSourceHost[],
+  model: WorldModel,
   generatedAt: number,
 ): HerdrOfficeProjection {
-  const projectedHosts = [...sources].sort(compareSourceHosts).map(projectHost);
+  const projectedHosts = model.hosts.map(projectHost);
   const allRooms = projectedHosts.flatMap(projectRooms).sort(compareProjectedRooms);
   const presentedRoomKeys = new Set(
     allRooms.slice(0, OFFICE_PRESENTATION_BOUNDS.rooms).map(({ room }) => room.key),
@@ -265,7 +260,7 @@ export function projectHerdrOffice(
   });
 
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));
-  const visibleHosts = projectedHosts.filter(({ source }) => source.profile.enabled);
+  const visibleHosts = projectedHosts.filter(({ modelHost }) => modelHost.source.profile.enabled);
   const receptions = visibleHosts
     .slice(0, OFFICE_PRESENTATION_BOUNDS.receptionDesks)
     .map(({ host }) => {
@@ -371,16 +366,16 @@ export function projectHerdrOffice(
     unresolved: omittedRooms ? [{ kind: "room-bound", count: omittedRooms }] : [],
     coverage: {
       configuredHosts: projectedHosts.length,
-      observedHosts: projectedHosts.filter(({ source }) => source.snapshot !== null).length,
+      observedHosts: projectedHosts.filter(({ modelHost }) => modelHost.source.snapshot !== null).length,
       compatibleHosts: projectedHosts.filter(({ host }) => host.compatibleWithWorld).length,
       connectingHosts: projectedHosts.filter(
-        ({ source }) => source.connectionState === "connecting",
+        ({ modelHost }) => modelHost.source.connectionState === "connecting",
       ).length,
       staleHosts,
       incompatibleHosts: projectedHosts.filter(
-        ({ source }) => source.connectionState === "incompatible",
+        ({ modelHost }) => modelHost.source.connectionState === "incompatible",
       ).length,
-      disabledHosts: projectedHosts.filter(({ source }) => !source.profile.enabled).length,
+      disabledHosts: projectedHosts.filter(({ modelHost }) => !modelHost.source.profile.enabled).length,
       observedWorkspaces: allRooms.length,
       observedDesks: allDesks.length,
       observedAgents: allAgents.length,
@@ -413,7 +408,8 @@ export function projectHerdrOffice(
   };
 }
 
-function projectHost(source: HerdrOfficeSourceHost): ProjectedHost {
+function projectHost(modelHost: WorldHostNode): ProjectedHost {
+  const { source } = modelHost;
   const featureSet = new Set(source.features);
   const enabled = source.profile.enabled;
   const incompatible = source.connectionState === "incompatible";
@@ -422,7 +418,7 @@ function projectHost(source: HerdrOfficeSourceHost): ProjectedHost {
   const stale = source.snapshot !== null && source.connectionState !== "compatible";
   const seed = stableNumber(source.profile.profileId);
   return {
-    source,
+    modelHost,
     host: {
       key: source.profile.profileId,
       displayLabel: boundedLabel(source.profile.label, "Host"),
@@ -442,41 +438,36 @@ function projectHost(source: HerdrOfficeSourceHost): ProjectedHost {
   };
 }
 
-function projectRooms({ source, host }: ProjectedHost): ProjectedRoom[] {
+function projectRooms({ modelHost, host }: ProjectedHost): ProjectedRoom[] {
+  const { source } = modelHost;
   if (!source.profile.enabled || !source.snapshot) {
     return [];
   }
-  const panesByWorkspace = new Map<string, PaneInfo[]>();
-  const tabsByWorkspace = new Map<string, TabInfo[]>();
-  for (const pane of source.snapshot.panes) {
-    const panes = panesByWorkspace.get(pane.workspace_id) ?? [];
-    panes.push(pane);
-    panesByWorkspace.set(pane.workspace_id, panes);
-  }
-  for (const tab of source.snapshot.tabs) {
-    const tabs = tabsByWorkspace.get(tab.workspace_id) ?? [];
-    tabs.push(tab);
-    tabsByWorkspace.set(tab.workspace_id, tabs);
-  }
-  return source.snapshot.workspaces.map((workspace) => {
-    const workspaceRef = qualifyRuntimeTarget(
-      source.profile.profileId,
-      "workspace",
-      workspace.workspace_id,
-    );
-    const roomKey = qualifiedRuntimeKey(workspaceRef);
+  return modelHost.spaces.map((space) => {
+    const { workspace, workspaceRef } = space;
+    const roomKey = space.id;
     const canOpenInSpaces =
       host.compatibleWithSpaces &&
       !host.stale &&
       source.connectionState === "compatible" &&
       Boolean(source.generationKey);
-    const desks = (tabsByWorkspace.get(workspace.workspace_id) ?? [])
-      .map((tab) => projectDesk(source, host, roomKey, tab, canOpenInSpaces))
+    const desks = space.tabs
+      .map((tab) => projectDesk(
+        modelHost,
+        host,
+        roomKey,
+        tab,
+        space.children
+          .filter(({ tabRef }) => tabRef.nativeTargetId === tab.tab.tab_id)
+          .map(({ terminalRef }) => qualifiedRuntimeKey(terminalRef))
+          .sort(),
+        canOpenInSpaces,
+      ))
       .sort(compareOfficeDesks);
     const deskKeys = new Set(desks.map(({ key }) => key));
-    const agents = (panesByWorkspace.get(workspace.workspace_id) ?? [])
-      .filter(isAgentPane)
-      .map((pane) => projectAgent(source, host, roomKey, pane, canOpenInSpaces, deskKeys))
+    const agents = space.children
+      .filter((child): child is WorldLeafNode & { kind: "agent" } => child.kind === "agent")
+      .map((agent) => projectAgent(modelHost, host, roomKey, agent, canOpenInSpaces, deskKeys))
       .sort(compareOfficeAgents);
     const roomLocalByDesk = new Map<string, OfficeAgent[]>();
     for (const agent of agents) {
@@ -498,7 +489,6 @@ function projectRooms({ source, host }: ProjectedHost): ProjectedRoom[] {
         .sort();
     }
     return {
-      sourceHost: source,
       host,
       workspace,
       room: {
@@ -519,19 +509,21 @@ function projectRooms({ source, host }: ProjectedHost): ProjectedRoom[] {
 }
 
 function projectDesk(
-  source: HerdrOfficeSourceHost,
+  modelHost: WorldHostNode,
   host: OfficeHost,
   roomKey: string,
-  tab: TabInfo,
+  worldTab: WorldTab,
+  terminalSelectionKeys: string[],
   canOpenInSpaces: boolean,
 ): OfficeDesk {
-  const tabRef = qualifyRuntimeTarget(source.profile.profileId, "tab", tab.tab_id);
+  const { tab, tabRef } = worldTab;
   return {
-    key: qualifiedRuntimeKey(tabRef),
+    key: worldTab.id,
     hostKey: host.key,
     roomKey,
     tabRef,
-    observedGeneration: source.generationKey ?? "",
+    terminalSelectionKeys,
+    observedGeneration: modelHost.source.generationKey ?? "",
     displayLabel: boundedLabel(tab.label, `Tab ${tab.number}`),
     order: tab.number,
     stale: host.stale,
@@ -541,26 +533,25 @@ function projectDesk(
 }
 
 function projectAgent(
-  source: HerdrOfficeSourceHost,
+  modelHost: WorldHostNode,
   host: OfficeHost,
   roomKey: string,
-  pane: PaneInfo,
+  leaf: WorldLeafNode & { kind: "agent" },
   canOpenInSpaces: boolean,
   deskKeys: ReadonlySet<string>,
 ): OfficeAgent {
-  const terminalRef = qualifyRuntimeTarget(source.profile.profileId, "terminal", pane.terminal_id);
-  const tabRef = qualifyRuntimeTarget(source.profile.profileId, "tab", pane.tab_id);
-  const key = qualifiedRuntimeKey(terminalRef);
+  const { pane, paneRef, terminalRef, tabRef } = leaf;
+  const key = leaf.id;
   const deskKey = qualifiedRuntimeKey(tabRef);
   const destination = statusDestination(pane.agent_status);
   const taskSummary = boundedSummary(pane.task_summary);
   return {
     key,
-    currentPaneRef: qualifyRuntimeTarget(source.profile.profileId, "pane", pane.pane_id),
+    currentPaneRef: paneRef,
     currentTerminalRef: terminalRef,
     currentTabRef: tabRef,
     deskKey: deskKeys.has(deskKey) ? deskKey : null,
-    observedGeneration: source.generationKey ?? "",
+    observedGeneration: modelHost.source.generationKey ?? "",
     roomKey,
     hostKey: host.key,
     displayLabel: boundedLabel(pane.display_agent || pane.agent, "Agent"),
@@ -589,13 +580,6 @@ function boundedSummary(value: string | undefined) {
     return null;
   }
   return summary.length > 160 ? `${summary.slice(0, 157).trimEnd()}…` : summary;
-}
-
-function compareSourceHosts(left: HerdrOfficeSourceHost, right: HerdrOfficeSourceHost) {
-  return (
-    left.profile.displayOrder - right.profile.displayOrder ||
-    left.profile.profileId.localeCompare(right.profile.profileId)
-  );
 }
 
 function compareProjectedRooms(left: ProjectedRoom, right: ProjectedRoom) {
@@ -688,13 +672,4 @@ function boundedLabel(value: string | null | undefined, fallback: string, limit 
 
 function normalizedLabel(value: string | null | undefined, fallback: string) {
   return value?.trim() || fallback;
-}
-
-export function stableNumber(value: string) {
-  let hash = 0x811c9dc5;
-  for (const character of value) {
-    hash ^= character.codePointAt(0) ?? 0;
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash >>> 0;
 }

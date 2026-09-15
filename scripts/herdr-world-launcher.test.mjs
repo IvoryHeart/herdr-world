@@ -300,7 +300,7 @@ test("server reachability parses Herdr status instead of trusting its exit code"
 fake_herdr() {
   cat <<'EOF'
 client:
-  version: 0.8.2
+  version: 0.9.0
 server:
   status: not running
   socket: /tmp/stale.sock
@@ -310,11 +310,11 @@ if herdr_world_server_is_reachable fake_herdr; then exit 21; fi
 fake_herdr() {
   cat <<'EOF'
 client:
-  version: 0.8.2
+  version: 0.9.0
 server:
   status: running
-  version: 0.8.2
-  protocol: 20
+  version: 0.9.0
+  protocol: 22
   compatible: yes
 EOF
 }
@@ -324,12 +324,12 @@ herdr_world_server_is_reachable fake_herdr
   assert.equal(result.status, 0);
 });
 
-test("supported Herdr version parsing is bounded to v0.8.2 or newer", () => {
+test("supported Herdr version parsing is bounded to v0.9.0 or newer", () => {
   const result = runLauncher(`
-for version in 0.8.2 v0.8.2 0.8.3 0.9.0 1.0.0 0.8.2+build.1; do
+for version in 0.9.0 v0.9.0 0.9.1 1.0.0 0.9.0+build.1; do
   herdr_world_version_is_supported "$version" || exit 11
 done
-for version in 0.8.1 0.7.9 invalid 0.8; do
+for version in 0.8.2 0.8.9 0.7.9 invalid 0.9; do
   if herdr_world_version_is_supported "$version"; then exit 12; fi
 done
 `);

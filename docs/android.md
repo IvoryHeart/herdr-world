@@ -30,6 +30,10 @@ Run `npm run android:sync` before opening or building Android from a fresh check
 That command stages the root licence, upstream/asset notices, and complete
 production npm licence inventory before Capacitor copies the web build.
 
+`npm run android:sync` and `npm run android:build:debug` can rewrite committed generated files such
+as `android/capacitor.settings.gradle` with machine-specific paths. After either command, check
+`git status` and revert unrelated generated edits before committing.
+
 ## Android Runtime Behavior
 
 The browser-served web app still defaults to the bridge that served the page. The bundled Android
@@ -97,7 +101,8 @@ device backup storage.
 
 The Android shell uses the same area-based Settings UI described in the project README. Android
 starts disconnected, so the Bridge area is required for selecting a backend. On narrow screens the
-area selector appears as horizontal tabs. Android-specific touch behavior lives in the Mobile area.
+area selector appears as horizontal tabs. Android-specific touch behavior lives in the Mobile area. Enable **Focus command input after Send** there to refocus the cleared command field
+for continued typing. This option is off by default and does not change Stage behavior.
 
 ## Build Prerequisites
 
@@ -165,6 +170,64 @@ Open in Android Studio after syncing:
 npm run android:open
 ```
 
+## APK Verification
+
+Before uploading or distributing an APK, verify its package, version, signature, and alignment with
+the Android SDK Build Tools from [Build Prerequisites](#build-prerequisites). Set `APK` to the
+artifact you will distribute. Set `ANDROID_BUILD_TOOLS` when you need a particular installed Build
+Tools version. Otherwise, the commands select one directory from the SDK's normal layout:
+
+```bash
+SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+: "${SDK_ROOT:?Set ANDROID_HOME or ANDROID_SDK_ROOT first}"
+BUILD_TOOLS="${ANDROID_BUILD_TOOLS:-$SDK_ROOT/build-tools/36.0.0}"
+for executable in aapt apksigner zipalign; do
+  if [ ! -x "$BUILD_TOOLS/$executable" ]; then
+    printf 'Missing Android SDK Build Tools executable: %s\n' "$BUILD_TOOLS/$executable" >&2
+    exit 1
+  fi
+done
+
+APK=android/app/build/outputs/apk/debug/app-debug.apk
+"$BUILD_TOOLS/aapt" dump badging "$APK" | grep '^package:'
+"$BUILD_TOOLS/apksigner" verify -v --print-certs "$APK"
+"$BUILD_TOOLS/zipalign" -c -P 16 -v 4 "$APK"
+```
+
+Confirm that the `package:` line reports `name='dev.herdr.world'`, the intended `versionCode`, and
+the intended `versionName`. Require `apksigner` to report
+`Verified using v2 scheme (APK Signature Scheme v2): true`. Require `zipalign` to end with
+`Verification successful`.
+
+## Installing Update APKs
+
+Android accepts an update when it keeps the `dev.herdr.world` application ID, uses a `versionCode`
+higher than or equal to the installed APK's, and has the same signing certificate or a valid
+proof-of-rotation signing lineage. For each new release, `node scripts/release.mjs prepare vX.Y.Z`
+increments `versionCode` in `android/app/build.gradle` by one and sets `versionName` to `X.Y.Z`.
+Both values are committed with the release notes before the release tag is created. Build release
+APKs from that tag; rebuilding or syncing the same tag does not increment either value. Ordinary
+debug updates still use the same debug keystore. Use the `aapt` output above to check the version
+embedded in the artifact.
+
+Debug APKs are signed automatically with a debug certificate. That makes them suitable for local or
+internal testing, but a passing signature check does not make a debug APK suitable for public
+distribution. To update an installed debug build, use the same debug keystore as the earlier build.
+
+To check signer continuity, use `adb shell pm path dev.herdr.world` to find the installed base APK and
+pull it with `adb pull <base-apk-path> installed.apk`. Run the certificate check for both APKs:
+
+```bash
+"$BUILD_TOOLS/apksigner" verify -v --print-certs installed.apk
+"$BUILD_TOOLS/apksigner" verify -v --print-certs "$APK"
+```
+
+Compare the `Signer #` certificate SHA-256 digest values. Unless a deliberate signing-key rotation
+with a valid proof-of-rotation lineage is in use, the signing-certificate digest must match the
+installed APK before Android will accept the update. A production APK must use an approved release
+signing key rather than the debug key, and it must pass the same package, version, signature, and
+alignment checks.
+
 ## Verification Status
 
 This branch was command-line verified with:
@@ -206,9 +269,10 @@ On a trusted LAN:
 
 ## Release Notes
 
-The generated debug APK is unsigned for distribution. A production release still needs:
+The generated debug APK is signed with a debug key for local or internal testing. It is not
+suitable for public distribution because it does not use a production release key. A production
+release still needs:
 
-- final Android application id decision;
 - app icon and splash assets;
 - signing key and release signing config;
 - release build command/checklist;

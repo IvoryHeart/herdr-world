@@ -5,6 +5,7 @@ import {
   Maximize2,
   PanelLeft,
   Search,
+  Server,
   SquareTerminal,
   ZoomIn,
   ZoomOut,
@@ -20,10 +21,11 @@ import {
 
 import { AgentIcon } from "../../AgentIcon";
 import type { SurfaceComponentProps } from "../../surfaceRegistry";
+import { useWorldConversationLayout } from "../WorldConversationLayer";
+import { isWorldThemeContext } from "../worldThemeContext";
+import type { WorldThemeContext } from "../worldThemeContext";
 import { GraphCanvas } from "./GraphCanvas";
 import type { GraphCanvasHandle, GraphConversationTarget } from "./GraphCanvas";
-import { useWorldConversationLayout } from "../WorldConversationLayer";
-import type { WorldGraphNode, WorldGraphSpace } from "./herdrGraphProjection";
 import {
   readInitialGraphViewPrefs,
   writeGraphViewPrefs,
@@ -34,8 +36,11 @@ import type {
   GraphViewPrefs,
   SavedGraphPosition,
 } from "./graphViewPrefs";
-import { isWorldThemeContext } from "../worldThemeContext";
-import type { WorldThemeContext } from "../worldThemeContext";
+import type {
+  WorldGraphHost,
+  WorldGraphNode,
+  WorldGraphSpace,
+} from "./herdrGraphProjection";
 
 export default function GraphTheme({ context: value }: SurfaceComponentProps) {
   if (!isWorldThemeContext(value)) {
@@ -53,9 +58,7 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
   const projection = context.graphProjection;
   const [initialView] = useState(readInitialGraphViewPrefs);
   const { prefs: initialPrefs, fitOnMount } = initialView;
-  const [collapsedIds, setCollapsedIds] = useState(
-    () => new Set(initialPrefs.collapsedIds),
-  );
+  const [collapsedIds, setCollapsedIds] = useState(() => new Set(initialPrefs.collapsedIds));
   const [query, setQuery] = useState("");
   const [conversationTargets, setConversationTargets] = useState<GraphConversationTarget[]>([]);
   const { rects: conversationRects } = useWorldConversationLayout();
@@ -87,17 +90,12 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
     writeGraphViewPrefs(prefsRef.current);
   }, []);
 
-  const matches = useMemo(
-    () => graphMatches(projection.spaces, query),
-    [projection.spaces, query],
-  );
-  const visibleSpaces = useMemo(
+  const matches = useMemo(() => graphMatches(projection.hosts, query), [projection.hosts, query]);
+  const visibleHosts = useMemo(
     () => query.trim()
-      ? projection.spaces.filter(({ node, terminals }) =>
-          matches?.has(node.id) || terminals.some(({ id }) => matches?.has(id)),
-        )
-      : projection.spaces,
-    [matches, projection.spaces, query],
+      ? projection.hosts.filter(({ node }) => matches?.has(node.id))
+      : projection.hosts,
+    [matches, projection.hosts, query],
   );
   const selectedNode = projection.nodes.find(
     ({ selectionKey }) => selectionKey === context.selectedKey,
@@ -115,16 +113,13 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
     context.onGraphSelect(selectionKey, hostKey);
   }, [context]);
 
-  const toggleCollapse = useCallback((spaceId: string) => {
+  const toggleCollapse = useCallback((nodeId: string) => {
     setCollapsedIds((current) => {
       const next = new Set(current);
-      if (next.has(spaceId)) next.delete(spaceId);
-      else next.add(spaceId);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
       collapsedIdsRef.current = next;
-      schedulePrefsWrite({
-        ...prefsRef.current,
-        collapsedIds: [...next],
-      });
+      schedulePrefsWrite({ ...prefsRef.current, collapsedIds: [...next] });
       return next;
     });
   }, [schedulePrefsWrite]);
@@ -172,6 +167,9 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
     setConversationTargets(targets);
   }, [conversationPanelTargetsKey, conversationRects]);
 
+  const overflowCount = projection.omittedHostCount +
+    projection.omittedSpaceCount +
+    projection.coverage.omittedTerminals;
   return (
     <div className="graph-stage-shell">
       <header className="graph-stage-bar">
@@ -186,7 +184,9 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
         </button>
         <div className="graph-stage-heading">
           <strong>World Graph</strong>
-          <span>{projection.coverage.presentedSpaces} spaces · {projection.coverage.presentedTerminals} terminals</span>
+          <span>
+            {projection.coverage.presentedHosts} {plural(projection.coverage.presentedHosts, "host", "hosts")} · {projection.coverage.presentedSpaces} {plural(projection.coverage.presentedSpaces, "space", "spaces")} · {projection.coverage.presentedAgents} {plural(projection.coverage.presentedAgents, "agent", "agents")} · {projection.coverage.presentedShells} {plural(projection.coverage.presentedShells, "terminal", "terminals")}
+          </span>
         </div>
         <label className="graph-search">
           <Search size={14} aria-hidden="true" />
@@ -194,27 +194,15 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
           <input
             type="search"
             value={query}
-            placeholder="Search spaces and terminals"
+            placeholder="Search hosts, spaces, agents"
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
         </label>
         <div className="graph-zoom-controls" role="group" aria-label="Graph zoom controls">
-          <button
-            className="icon-btn graph-zoom-button"
-            type="button"
-            aria-label="Zoom out"
-            title="Zoom out"
-            onClick={() => canvasRef.current?.zoomOut()}
-          >
+          <button className="icon-btn graph-zoom-button" type="button" aria-label="Zoom out" title="Zoom out" onClick={() => canvasRef.current?.zoomOut()}>
             <ZoomOut size={16} aria-hidden="true" />
           </button>
-          <button
-            className="icon-btn graph-zoom-button"
-            type="button"
-            aria-label="Zoom in"
-            title="Zoom in"
-            onClick={() => canvasRef.current?.zoomIn()}
-          >
+          <button className="icon-btn graph-zoom-button" type="button" aria-label="Zoom in" title="Zoom in" onClick={() => canvasRef.current?.zoomIn()}>
             <ZoomIn size={16} aria-hidden="true" />
           </button>
         </div>
@@ -240,42 +228,44 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
             onViewChange={updateViewPrefs}
           />
           <div className="graph-visual-help">
-            Double-click a terminal to open it · drag nodes to pin · use zoom controls or scroll
+            Double-click an agent or terminal to open it · drag nodes to pin · use zoom controls or scroll
           </div>
-          {projection.omittedSpaceCount > 0 ? (
-            <div className="graph-overflow-badge">
-              +{projection.omittedSpaceCount} spaces outside presentation bound
-            </div>
+          {overflowCount > 0 ? (
+            <div className="graph-overflow-badge">+{overflowCount} nodes outside presentation bounds</div>
           ) : null}
         </div>
         <aside className="graph-semantic" aria-label="Graph semantic view">
           <div className="graph-semantic-head">
             <div>
-              <strong>Projects and spaces</strong>
+              <strong>Hosts and spaces</strong>
               <span aria-live="polite">
-                {query.trim() ? `${visibleSpaces.length} matching spaces` : `${projection.spaces.length} presented spaces`}
+                {query.trim()
+                  ? `${visibleHosts.length} matching ${plural(visibleHosts.length, "host", "hosts")}`
+                  : `${projection.hosts.length} presented ${plural(projection.hosts.length, "host", "hosts")}`}
               </span>
             </div>
           </div>
-          {selectedNode ? (
-            <GraphDetails
-              node={selectedNode}
-              onOpenTerminal={() => context.onGraphOpenTerminal(selectedNode)}
-              onOpenInSpaces={() => context.onGraphOpenInSpaces(selectedNode)}
-            />
-          ) : (
-            <p className="graph-details-empty">Select a space or terminal to inspect it.</p>
-          )}
-          <ul className="graph-tree" aria-label="Presented projects, spaces, and terminals">
-            {visibleSpaces.map((space) => (
-              <GraphSemanticSpace
-                key={space.node.id}
-                space={space}
-                collapsed={collapsedIds.has(space.node.id)}
+          <div className="graph-details-slot">
+            {selectedNode ? (
+              <GraphDetails
+                node={selectedNode}
+                onOpenTerminal={() => context.onGraphOpenTerminal(selectedNode)}
+                onOpenInSpaces={() => context.onGraphOpenInSpaces(selectedNode)}
+              />
+            ) : (
+              <p className="graph-details-empty">Select a host, space, agent, or terminal to inspect it.</p>
+            )}
+          </div>
+          <ul className="graph-tree" aria-label="Presented hosts, spaces, agents, and terminals">
+            {visibleHosts.map((host) => (
+              <GraphSemanticHost
+                key={host.node.id}
+                host={host}
+                collapsedIds={collapsedIds}
                 selectedKey={context.selectedKey}
                 matches={matches}
                 queryActive={Boolean(query.trim())}
-                onToggle={() => toggleCollapse(space.node.id)}
+                onToggle={toggleCollapse}
                 onSelect={(node) => context.onGraphSelect(node.selectionKey, node.hostKey)}
                 onOpenTerminal={context.onGraphOpenTerminal}
                 onOpenInSpaces={context.onGraphOpenInSpaces}
@@ -283,120 +273,149 @@ function GraphStage({ context }: { context: WorldThemeContext }) {
               />
             ))}
           </ul>
-          {visibleSpaces.length === 0 ? (
-            <p className="graph-empty">No presented spaces match this search.</p>
+          {visibleHosts.length === 0 ? <p className="graph-empty">No presented hosts match this search.</p> : null}
+          {projection.omittedHostCount > 0 ? (
+            <p className="graph-semantic-overflow">
+              {projection.omittedHostCount} additional {plural(projection.omittedHostCount, "host", "hosts")} omitted by the 128-host presentation bound.
+            </p>
           ) : null}
           {projection.omittedSpaceCount > 0 ? (
             <p className="graph-semantic-overflow">
               {projection.omittedSpaceCount} additional {plural(projection.omittedSpaceCount, "space", "spaces")} omitted by the 128-space presentation bound.
             </p>
           ) : null}
-          {context.handoffStatus ? (
-            <p className="world-handoff-status" role="status">{context.handoffStatus}</p>
-          ) : null}
+          {context.handoffStatus ? <p className="world-handoff-status" role="status">{context.handoffStatus}</p> : null}
         </aside>
       </div>
     </div>
   );
 }
 
-function GraphSemanticSpace({
-  space,
-  collapsed,
-  selectedKey,
-  matches,
-  queryActive,
-  onToggle,
-  onSelect,
-  onOpenTerminal,
-  onOpenInSpaces,
-  setButtonRef,
-}: {
-  space: WorldGraphSpace;
-  collapsed: boolean;
+type SemanticTreeProps = {
+  collapsedIds: ReadonlySet<string>;
   selectedKey: string | null;
   matches: ReadonlySet<string> | null;
   queryActive: boolean;
-  onToggle: () => void;
+  onToggle: (nodeId: string) => void;
   onSelect: (node: WorldGraphNode) => void;
   onOpenTerminal: (node: WorldGraphNode) => void;
   onOpenInSpaces: (node: WorldGraphNode) => void;
   setButtonRef: (selectionKey: string, node: HTMLButtonElement | null) => void;
-}) {
-  const shownTerminals = queryActive
-    ? space.terminals.filter(({ id }) => matches?.has(id))
-    : space.terminals;
+};
+
+function GraphSemanticHost({ host, ...props }: { host: WorldGraphHost } & SemanticTreeProps) {
+  const collapsed = props.collapsedIds.has(host.node.id);
+  const shownSpaces = props.queryActive
+    ? host.spaces.filter(({ node }) => props.matches?.has(node.id))
+    : host.spaces;
+  return (
+    <li className="graph-tree-space" data-status={displayStatus(host.node)}>
+      <GraphParentRow
+        node={host.node}
+        collapsed={collapsed}
+        selectedKey={props.selectedKey}
+        onToggle={() => props.onToggle(host.node.id)}
+        onSelect={props.onSelect}
+        setButtonRef={props.setButtonRef}
+        icon={<Server size={15} aria-hidden="true" />}
+      />
+      {!collapsed ? (
+        <ul aria-label={`Spaces on ${host.node.label}`}>
+          {shownSpaces.map((space) => <GraphSemanticSpace key={space.node.id} space={space} {...props} />)}
+          {host.spaces.length === 0 ? <li className="graph-tree-empty">No observed spaces</li> : null}
+          {host.omittedSpaceCount > 0 ? (
+            <li className="graph-tree-overflow">{host.omittedSpaceCount} additional spaces omitted by the presentation bound.</li>
+          ) : null}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+function GraphSemanticSpace({ space, ...props }: { space: WorldGraphSpace } & SemanticTreeProps) {
+  const collapsed = props.collapsedIds.has(space.node.id);
+  const shownChildren = props.queryActive
+    ? space.children.filter(({ id }) => props.matches?.has(id))
+    : space.children;
   return (
     <li className="graph-tree-space" data-status={displayStatus(space.node)}>
-      <div className="graph-tree-row">
-        <button
-          className="graph-collapse"
-          type="button"
-          aria-label={`${collapsed ? "Expand" : "Collapse"} ${space.node.label}`}
-          aria-expanded={!collapsed}
-          onClick={onToggle}
-        >
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
-        <button
-          ref={(node) => setButtonRef(space.node.selectionKey, node)}
-          className="graph-tree-select"
-          type="button"
-          aria-pressed={selectedKey === space.node.selectionKey}
-          onClick={() => onSelect(space.node)}
-        >
-          <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(space.node)}</span>
-          <span>
-            <strong>{space.node.label}</strong>
-            <small>{nodeSummary(space.node)}</small>
-          </span>
-        </button>
-        {space.node.actionable ? (
-          <button className="graph-tree-open" type="button" onClick={() => onOpenInSpaces(space.node)}>
-            Open in Spaces
-          </button>
-        ) : null}
-      </div>
+      <GraphParentRow
+        node={space.node}
+        collapsed={collapsed}
+        selectedKey={props.selectedKey}
+        onToggle={() => props.onToggle(space.node.id)}
+        onSelect={props.onSelect}
+        onOpenInSpaces={() => props.onOpenInSpaces(space.node)}
+        setButtonRef={props.setButtonRef}
+      />
       {!collapsed ? (
-        <ul aria-label={`Terminals in ${space.node.label}`}>
-          {shownTerminals.map((terminal) => (
-            <li key={terminal.id} data-status={displayStatus(terminal)}>
+        <ul aria-label={`Agents and terminals in ${space.node.label}`}>
+          {shownChildren.map((child) => (
+            <li key={child.id} data-status={displayStatus(child)}>
               <button
-                ref={(node) => setButtonRef(terminal.selectionKey, node)}
+                ref={(node) => props.setButtonRef(child.selectionKey, node)}
                 className="graph-tree-select graph-tree-terminal"
                 type="button"
-                aria-pressed={selectedKey === terminal.selectionKey}
-                aria-label={`${terminal.label}, ${terminal.agentRunning ? "agent terminal" : "empty shell"}: ${nodeSummary(terminal)}. Double-click to open terminal.`}
-                onClick={() => onSelect(terminal)}
-                onDoubleClick={() => terminal.actionable && onOpenTerminal(terminal)}
+                aria-pressed={props.selectedKey === child.selectionKey}
+                aria-label={`${child.label}, ${nodeKindLabel(child)}: ${nodeSummary(child)}. Double-click to open terminal.`}
+                onClick={() => props.onSelect(child)}
+                onDoubleClick={() => child.actionable && props.onOpenTerminal(child)}
               >
-                <GraphTerminalIdentity node={terminal} />
-                <span>
-                  <strong>{terminal.label}</strong>
-                  <small>{nodeSummary(terminal)}</small>
-                </span>
+                <GraphTerminalIdentity node={child} />
+                <span><strong>{child.label}</strong><small>{nodeSummary(child)}</small></span>
               </button>
-              {terminal.actionable ? (
+              {child.actionable ? (
                 <span className="graph-tree-actions">
-                  <button className="graph-tree-open" type="button" onClick={() => onOpenTerminal(terminal)}>
-                    Open terminal
-                  </button>
-                  <button className="graph-tree-open" type="button" onClick={() => onOpenInSpaces(terminal)}>
-                    Open in Spaces
-                  </button>
+                  <button className="graph-tree-open" type="button" onClick={() => props.onOpenTerminal(child)}>Open terminal</button>
+                  <button className="graph-tree-open" type="button" onClick={() => props.onOpenInSpaces(child)}>Open in Spaces</button>
                 </span>
               ) : null}
             </li>
           ))}
-          {space.terminals.length === 0 ? <li className="graph-tree-empty">No attached terminals</li> : null}
-          {space.omittedTerminalCount > 0 ? (
+          {space.children.length === 0 ? <li className="graph-tree-empty">No agents or terminals</li> : null}
+          {space.omittedChildCount > 0 ? (
             <li className="graph-tree-overflow">
-              {space.omittedTerminalCount} additional {plural(space.omittedTerminalCount, "terminal", "terminals")} omitted by the per-space bound.
+              {space.omittedChildCount} additional {plural(space.omittedChildCount, "child", "children")} omitted by the per-space bound.
             </li>
           ) : null}
         </ul>
       ) : null}
     </li>
+  );
+}
+
+function GraphParentRow({
+  node,
+  collapsed,
+  selectedKey,
+  onToggle,
+  onSelect,
+  onOpenInSpaces,
+  setButtonRef,
+  icon,
+}: {
+  node: WorldGraphNode;
+  collapsed: boolean;
+  selectedKey: string | null;
+  onToggle: () => void;
+  onSelect: (node: WorldGraphNode) => void;
+  onOpenInSpaces?: () => void;
+  setButtonRef: (selectionKey: string, node: HTMLButtonElement | null) => void;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="graph-tree-row">
+      <button className="graph-collapse" type="button" aria-label={`${collapsed ? "Expand" : "Collapse"} ${node.label}`} aria-expanded={!collapsed} onClick={onToggle}>
+        <ChevronRight size={14} aria-hidden="true" />
+      </button>
+      <button ref={(button) => setButtonRef(node.selectionKey, button)} className="graph-tree-select" type="button" aria-pressed={selectedKey === node.selectionKey} onClick={() => onSelect(node)}>
+        {icon ?? <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(node)}</span>}
+        <span><strong>{node.label}</strong><small>{nodeSummary(node)}</small></span>
+      </button>
+      {node.actionable && onOpenInSpaces ? (
+        <button className="graph-tree-open" type="button" onClick={onOpenInSpaces}>Open in Spaces</button>
+      ) : null}
+    </div>
   );
 }
 
@@ -409,52 +428,46 @@ function GraphDetails({
   onOpenTerminal: () => void;
   onOpenInSpaces: () => void;
 }) {
+  const leaf = node.kind === "agent" || node.kind === "terminal";
   return (
     <section className="graph-details" aria-label="Selected Graph entity">
       <div>
-        {node.kind === "terminal"
+        {leaf
           ? <GraphTerminalIdentity node={node} />
-          : <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(node)}</span>}
-        <div>
-          <strong>{node.label}</strong>
-          <span>{node.kind === "space" ? "Space" : node.agentRunning ? "Agent terminal" : "Empty shell"} · {nodeSummary(node)}</span>
-        </div>
+          : node.kind === "host"
+            ? <Server size={17} aria-hidden="true" />
+            : <span className="graph-status-symbol" aria-hidden="true">{statusSymbol(node)}</span>}
+        <div><strong>{node.label}</strong><span>{nodeKindLabel(node)} · {nodeSummary(node)}</span></div>
       </div>
       {node.taskSummary ? <p>{node.taskSummary}</p> : null}
       <dl>
-        <div><dt>Host</dt><dd>{node.hostLabel}</dd></div>
+        {node.kind !== "host" ? <div><dt>Host</dt><dd>{node.hostLabel}</dd></div> : null}
         <div><dt>Status</dt><dd>{displayStatus(node)}</dd></div>
-        {node.stale ? (
-          <div><dt>Snapshot</dt><dd>{connectionSummary(node)}</dd></div>
-        ) : null}
-        {node.subtitle ? <div><dt>Project</dt><dd>{node.subtitle}</dd></div> : null}
+        {node.kind === "host" ? <div><dt>Connection</dt><dd>{node.connectionState}</dd></div> : null}
+        {node.stale ? <div><dt>Snapshot</dt><dd>{connectionSummary(node)}</dd></div> : null}
+        {node.kind === "host" && node.subtitle ? <div><dt>Location</dt><dd>{node.subtitle}</dd></div> : null}
+        {node.kind === "space" && node.subtitle ? <div><dt>Project</dt><dd>{node.subtitle}</dd></div> : null}
         {node.modelLabel ? <div><dt>Agent</dt><dd>{node.modelLabel}</dd></div> : null}
       </dl>
       {node.actionable ? (
         <div className="graph-details-actions">
-          {node.kind === "terminal" ? (
-            <button className="btn btn-primary" type="button" onClick={onOpenTerminal}>Open terminal</button>
-          ) : null}
+          {leaf ? <button className="btn btn-primary" type="button" onClick={onOpenTerminal}>Open terminal</button> : null}
           <button className={node.kind === "space" ? "btn btn-primary" : "btn"} type="button" onClick={onOpenInSpaces}>Open in Spaces</button>
         </div>
-      ) : (
+      ) : node.kind !== "host" ? (
         <span className="graph-action-unavailable">Open in Spaces unavailable</span>
-      )}
+      ) : null}
     </section>
   );
 }
 
 function GraphTerminalIdentity({ node }: { node: WorldGraphNode }) {
+  const agent = node.kind === "agent";
   return (
-    <span
-      className="graph-terminal-identity"
-      data-agent-kind={node.agentKind ?? (node.agentRunning ? "unknown" : "shell")}
-      title={node.agentRunning ? node.modelLabel ?? node.label : "Empty shell"}
-      aria-hidden="true"
-    >
+    <span className="graph-terminal-identity" data-agent-kind={node.agentKind ?? (agent ? "unknown" : "shell")} title={agent ? node.modelLabel ?? node.label : "Empty terminal"} aria-hidden="true">
       {node.agentKind
         ? <AgentIcon kind={node.agentKind} />
-        : node.agentRunning
+        : agent
           ? <Bot size={16} />
           : <SquareTerminal size={16} />}
       <span className="graph-terminal-status">{statusSymbol(node)}</span>
@@ -462,24 +475,39 @@ function GraphTerminalIdentity({ node }: { node: WorldGraphNode }) {
   );
 }
 
-export function graphMatches(spaces: readonly WorldGraphSpace[], rawQuery: string) {
+export function graphMatches(hosts: readonly WorldGraphHost[], rawQuery: string) {
   const query = rawQuery.trim().toLocaleLowerCase();
   if (!query) return null;
   const matches = new Set<string>();
-  for (const space of spaces) {
-    if (space.node.searchText.includes(query)) {
-      matches.add(space.node.id);
-      for (const terminal of space.terminals) matches.add(terminal.id);
+  for (const host of hosts) {
+    if (host.node.searchText.includes(query)) {
+      addHostTree(matches, host);
       continue;
     }
-    for (const terminal of space.terminals) {
-      if (terminal.searchText.includes(query)) {
+    for (const space of host.spaces) {
+      if (space.node.searchText.includes(query)) {
+        matches.add(host.node.id);
         matches.add(space.node.id);
-        matches.add(terminal.id);
+        for (const child of space.children) matches.add(child.id);
+        continue;
+      }
+      for (const child of space.children) {
+        if (!child.searchText.includes(query)) continue;
+        matches.add(host.node.id);
+        matches.add(space.node.id);
+        matches.add(child.id);
       }
     }
   }
   return matches;
+}
+
+function addHostTree(matches: Set<string>, host: WorldGraphHost) {
+  matches.add(host.node.id);
+  for (const space of host.spaces) {
+    matches.add(space.node.id);
+    for (const child of space.children) matches.add(child.id);
+  }
 }
 
 function displayStatus(node: WorldGraphNode) {
@@ -501,13 +529,21 @@ function nodeSummary(node: WorldGraphNode) {
     node.stale ? connectionSummary(node) : null,
     node.focused ? "focused" : null,
   ];
-  if (node.kind === "space") parts.push(node.hostLabel, node.subtitle ?? null);
+  if (node.kind === "host") parts.push(node.connectionState, node.subtitle ?? null);
+  else if (node.kind === "space") parts.push(node.hostLabel, node.subtitle ?? null);
   else parts.push(
-    node.agentRunning ? "agent running" : "empty shell",
+    node.kind === "agent" ? "agent" : "empty terminal",
     node.stateLabel ?? null,
     node.modelLabel ?? null,
   );
   return parts.filter(Boolean).join(" · ");
+}
+
+function nodeKindLabel(node: WorldGraphNode) {
+  return node.kind === "host" ? "Host"
+    : node.kind === "space" ? "Space"
+      : node.kind === "agent" ? "Agent"
+        : "Terminal";
 }
 
 function connectionSummary(node: WorldGraphNode) {

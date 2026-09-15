@@ -44,7 +44,7 @@ export class SurfaceSlotBoundary extends Component<
               : "Use the primary view switch to continue in Spaces."}
           </span>
           {this.props.onRecover ? (
-            <button className="btn" type="button" onClick={this.props.onRecover}>
+            <button className="btn" type="button" aria-label={this.props.recoveryLabel} onClick={this.props.onRecover}>
               {this.props.recoveryLabel ?? "Recover"}
             </button>
           ) : null}

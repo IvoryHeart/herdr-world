@@ -1,12 +1,13 @@
 import { hostProfile } from "../hostProfile";
 import type { AgentStatus, PaneInfo, Snapshot, WorkspaceInfo } from "../types";
 import { projectHerdrOffice } from "./herdrOfficeProjection";
-import type { HerdrOfficeSourceHost } from "./herdrOfficeProjection";
+import { buildWorldModel } from "./worldModel";
+import type { WorldRuntimeSource } from "./worldModel";
 
 export const WORLD_VISUAL_FIXTURE_TIME = Date.UTC(2026, 7, 2, 12, 0, 0);
 
 export const worldVisualFixture = projectHerdrOffice(
-  [
+  buildWorldModel([
     fixtureHost({
       profileId: "fixture-host-atlas",
       label: "Forge",
@@ -53,7 +54,7 @@ export const worldVisualFixture = projectHerdrOffice(
         fixturePane("ops", "cinder-pi", "Pi", "done", "Ready for review"),
       ],
     }),
-  ],
+  ]),
   WORLD_VISUAL_FIXTURE_TIME,
 );
 
@@ -69,11 +70,11 @@ function fixtureHost({
   profileId: string;
   label: string;
   displayOrder: number;
-  connectionState?: HerdrOfficeSourceHost["connectionState"];
+  connectionState?: WorldRuntimeSource["connectionState"];
   features?: readonly string[];
   workspaces: WorkspaceInfo[];
   panes: PaneInfo[];
-}): HerdrOfficeSourceHost {
+}): WorldRuntimeSource {
   return {
     profile: hostProfile(
       profileId,

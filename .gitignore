@@ -1,5 +1,5 @@
-/node_modules/
-/web/node_modules/
+/node_modules
+/web/node_modules
 /web/dist/
 /web/.vite/
 /web/.next/
@@ -8,6 +8,14 @@
 /vendor/herdr-compat/target/
 /dist-packages/
 /.herdr-world-plugin/
+/.agents/worktrees/
+/AGENTS.override.md
+/.codex/config.toml
+/.cargo/config.toml
+# Private task scratch.
+/.agents/state/
+/tmp*/
+__pycache__/
 /_site/
 .specs/
 .scratch/

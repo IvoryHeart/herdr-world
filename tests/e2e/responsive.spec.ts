@@ -1,9 +1,10 @@
+import { expectHostState, selectAllHosts, selectHost } from "./sidebarControls";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
-const evidenceDir = resolve("docs/evidence/spec-010");
+const evidenceDir = resolve(".scratch/playwright/evidence/spec-010");
 
 test.beforeAll(async () => {
   await mkdir(evidenceDir, { recursive: true });
@@ -25,15 +26,10 @@ for (const viewport of [
       localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     }, hostStore());
     await page.goto("/spaces");
-    await page
-      .getByRole("group", { name: "Host" })
-      .getByRole("button", { name: "All", exact: true })
-      .click();
+    await selectAllHosts(page);
     await expect(page.getByRole("button", { name: /^Codex A / })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Codex B / })).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Offline E, offline" }),
-    ).toBeVisible();
+    await expectHostState(page, "Offline E", "offline");
     await page.screenshot({
       path: resolve(
         evidenceDir,
@@ -50,15 +46,13 @@ test("captures the 375x812 switcher and usable terminal", async ({ page }) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
   }, hostStore());
   await page.goto("/spaces");
-  await expect(
-    page.getByRole("button", { name: "Offline E, offline" }),
-  ).toBeVisible();
+  await expectHostState(page, "Offline E", "offline");
   await page.screenshot({
     path: resolve(evidenceDir, "responsive-375x812-switcher.png"),
     fullPage: true,
   });
 
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await page.getByRole("button", { name: /^Codex B / }).click();
   await expect(
     page.getByRole("button", { name: "Back to switcher" }),
@@ -84,7 +78,7 @@ test("keeps the terminal responsive through rapid window resizing", async ({ pag
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
   }, hostStore());
   await page.goto("/spaces");
-  await page.getByRole("button", { name: "Remote B, compatible" }).click();
+  await selectHost(page, "Remote B", "compatible");
   await page.getByRole("button", { name: /^Codex B / }).click();
   await expect(page.getByRole("button", { name: "Refit terminal" })).toBeVisible();
 
@@ -98,4 +92,65 @@ test("keeps the terminal responsive through rapid window resizing", async ({ pag
   await expect(page.getByRole("button", { name: "Back to switcher" })).toBeVisible();
   await page.reload();
   await expect(page.locator(".terminal-stage")).toBeVisible();
+});
+
+test("keeps narrow-stage header actions above the collapsed-sidebar theme switcher", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/spaces");
+  const refit = page.getByRole("button", { name: "Refit terminal" });
+  await expect(refit).toBeVisible();
+
+  await page.getByRole("button", { name: "Toggle sidebar" }).click();
+  await expect(page.locator(".app")).toHaveAttribute("data-sidebar", "closed");
+  await page.locator(".stage > .stage-bar").getByRole("button", { name: "Notes" }).click();
+  await expect(page.locator(".app")).toHaveAttribute("data-notes", "open");
+  await page.setViewportSize({ width: 821, height: 900 });
+  await expect.poll(async () =>
+    Math.round((await page.locator(".stage").boundingBox())?.width ?? 0),
+  ).toBe(261);
+
+  await page.screenshot({
+    path: resolve(evidenceDir, "responsive-821x900-collapsed-notes.png"),
+    animations: "disabled",
+  });
+  const refitBox = await refit.boundingBox();
+  expect(refitBox).not.toBeNull();
+  const hitTargetLabel = await page.evaluate(({ x, y }) => {
+    const target = document.elementFromPoint(x, y);
+    return target?.closest("button")?.getAttribute("aria-label") ?? null;
+  }, {
+    x: refitBox!.x + refitBox!.width / 2,
+    y: refitBox!.y + refitBox!.height / 2,
+  });
+  expect(hitTargetLabel).toBe("Refit terminal");
+});
+
+test("keeps the collapsed-sidebar theme switcher inside an empty Spaces header", async ({
+  page,
+  request,
+}) => {
+  await request.post("http://127.0.0.1:4173/__fixture/state", {
+    data: { hostId: "host-a", snapshotVariant: "empty" },
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/spaces");
+  await expect(page.locator(".stage-sub")).toHaveText("no pane selected");
+  await page.getByRole("button", { name: "Toggle sidebar" }).click();
+  await expect(page.locator(".app")).toHaveAttribute("data-sidebar", "closed");
+  await expect(page.locator(".tabbar")).toHaveCount(0);
+
+  const headerBox = await page.locator(".stage > .stage-bar").boundingBox();
+  const switcherBox = await page.locator(".stage-theme-switcher").boundingBox();
+  expect(headerBox).not.toBeNull();
+  expect(switcherBox).not.toBeNull();
+  expect(switcherBox!.y).toBeGreaterThanOrEqual(headerBox!.y);
+  expect(switcherBox!.y + switcherBox!.height).toBeLessThanOrEqual(
+    headerBox!.y + headerBox!.height,
+  );
+  await page.screenshot({
+    path: resolve(evidenceDir, "responsive-empty-spaces-switcher.png"),
+    animations: "disabled",
+  });
 });

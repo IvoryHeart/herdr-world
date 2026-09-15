@@ -122,6 +122,27 @@ describe("snapshot admission contract", () => {
     expect(parseSnapshot(validSnapshot()).panes[0]?.pane_id).toBe("pane-1");
   });
 
+  it("preserves admitted workspace worktree metadata and rejects malformed metadata", () => {
+    const worktree = {
+      repo_key: "repo-1",
+      repo_name: "herdr-world",
+      repo_root: "/forge/herdr-world",
+      checkout_path: "/forge/herdr-world/.agents/worktree",
+      is_linked_worktree: true,
+    };
+    const snapshot = validSnapshot();
+    const input = {
+      ...snapshot,
+      workspaces: [{ ...snapshot.workspaces[0], worktree }],
+    };
+
+    expect(parseSnapshot(input).workspaces[0]?.worktree).toEqual(worktree);
+    expect(() => parseSnapshot({
+      ...input,
+      workspaces: [{ ...input.workspaces[0], worktree: { repo_key: "repo-1" } }],
+    })).toThrow(SnapshotContractError);
+  });
+
   it("rejects missing collections, malformed members, and cross-reference drift", () => {
     expect(() => parseSnapshot({})).toThrow(SnapshotContractError);
     expect(() => parseSnapshot({ ...validSnapshot(), panes: [{}] })).toThrow(

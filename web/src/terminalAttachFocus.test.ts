@@ -88,4 +88,19 @@ describe("terminal attach focus guard", () => {
       }),
     ).toBe(false);
   });
+  it("keeps focus on a toolbar when its filter activates another terminal", () => {
+    const toolbar = document.createElement("div");
+    toolbar.dataset.terminalAutofocus = "false";
+    const trigger = document.createElement("button");
+    toolbar.append(trigger);
+    document.body.append(toolbar);
+    trigger.focus();
+    expect(shouldRestoreTerminalFocus({
+      autoFocus: true,
+      currentTarget: trigger,
+      currentExternalFocusSequence: 0,
+      activationSnapshot: { target: trigger, externalFocusSequence: 0 },
+    })).toBe(false);
+  });
+
 });

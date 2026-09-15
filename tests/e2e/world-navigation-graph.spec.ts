@@ -6,6 +6,7 @@ import {
   waitForStableConversationRect,
 } from "./graphConnector";
 import { hostStore } from "./hostStore";
+import { openView, selectAllHosts, selectView, viewSelect } from "./sidebarControls";
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -14,6 +15,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     localStorage.removeItem("herdr.world.graph-view.v1");
+    localStorage.removeItem("herdr.world.graph-view.v2");
     localStorage.removeItem("herdrWeb.worldView.v1");
   }, hostStore());
 });
@@ -24,14 +26,14 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await page.goto("/");
   await waitForOffice(page);
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("group", { name: "Primary navigation" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByRole("button", { name: "Choose World theme" })).toHaveAttribute(
-    "aria-expanded", "false",
-  );
+  await expect(page.locator("[data-toolbar-row='view-hosts']")).toBeVisible();
+  await expect(viewSelect(page)).toHaveValue("office");
+  const viewOptions = viewSelect(page).locator("option");
+  await expect(viewOptions).toHaveCount(4);
+  await expect(viewOptions).toHaveText(["Office", "Tree", "Graph", "Spaces"]);
+  expect(await viewOptions.evaluateAll((options) =>
+    options.map((option) => (option as HTMLOptionElement).value),
+  )).toEqual(["office", "tree", "graph", "spaces"]);
   const initialCoreSockets = coreSockets(sockets).length;
 
   await selectTheme(page, "Graph");
@@ -40,7 +42,7 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await expect(page.getByRole("complementary", { name: "Graph semantic view" })).toBeVisible();
   expect(coreSockets(sockets)).toHaveLength(initialCoreSockets);
 
-  await page.getByRole("button", { name: "Spaces", exact: true }).click();
+  await selectView(page, "Spaces");
   await expect(page).toHaveURL(/\/spaces$/);
   await expect(page.locator("canvas[data-graph-canvas='true']")).toHaveCount(0);
   expect(coreSockets(sockets)).toHaveLength(initialCoreSockets);
@@ -70,10 +72,7 @@ test("makes Office canonical, preserves aliases, and restores theme/surface hist
   await expect(page.locator("canvas[data-office-canvas='true']")).toHaveCount(0);
   await page.reload();
   await expect(page).toHaveURL(/\/spaces$/);
-  await expect(page.getByRole("button", { name: "Spaces", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(viewSelect(page)).toHaveValue("spaces");
 });
 
 test("keeps a compact theme change to one traversable history entry", async ({ page }) => {
@@ -95,10 +94,7 @@ test("keeps a compact theme change to one traversable history entry", async ({ p
     await waitForOffice(page);
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator(".app")).toHaveAttribute("data-detail", "false");
-    await expect(page.getByRole("button", { name: "Office", exact: true })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(viewSelect(page)).toHaveValue("office");
     expect(await page.evaluate(() => window.history.length)).toBe(beforeThemeChange + 1);
 
     await page.goForward();
@@ -107,6 +103,20 @@ test("keeps a compact theme change to one traversable history entry", async ({ p
     await expect(page.locator(".app")).toHaveAttribute("data-detail", "true");
     expect(await page.evaluate(() => window.history.length)).toBe(beforeThemeChange + 1);
   }
+});
+
+test("presents every configured host as a root in all-host scope", async ({ page }) => {
+  await page.goto("/?theme=graph");
+  await waitForGraph(page);
+  await selectAllHosts(page);
+
+  const semantic = page.getByRole("complementary", { name: "Graph semantic view" });
+  await expect(semantic.locator(".graph-tree > .graph-tree-space")).toHaveCount(5);
+  await expect(semantic.locator(".graph-tree-space[data-status='disconnected']"))
+    .toContainText("Offline E");
+  await page.getByRole("searchbox", { name: "Search Graph" }).fill("Offline E");
+  await expect(semantic.getByText("1 matching host", { exact: true })).toBeVisible();
+  await expect(semantic.locator(".graph-tree > .graph-tree-space")).toHaveCount(1);
 });
 
 test("fits the settled Graph by default while retaining explicit manual cameras", async ({ page }) => {
@@ -151,10 +161,10 @@ test("offers inspection, search, collapse, fit, and explicit Spaces handoff with
 
   const search = page.getByRole("searchbox", { name: "Search Graph" });
   await search.fill("Codex A");
-  await expect(page.getByText("1 matching spaces", { exact: true })).toBeVisible();
+  await expect(page.getByText("1 matching host", { exact: true })).toBeVisible();
   const agent = page.locator(".graph-tree-terminal").filter({ hasText: "Codex A" });
   await expect(agent).toHaveAccessibleName(
-    /Codex A, agent terminal: working · focused · agent running · Running · codex/i,
+    /Codex A, Agent: working · focused · agent · Running · codex/i,
   );
   await agent.click();
   await expect(page.getByRole("region", { name: "Selected Graph entity" })).toContainText("Codex A");
@@ -273,7 +283,7 @@ test("identifies an attached empty shell and opens it with a node connector", as
 
   const shell = page.locator(".graph-tree-terminal").filter({ hasText: "Shell" });
   await expect(shell.locator(".graph-terminal-identity")).toHaveAttribute("data-agent-kind", "shell");
-  await expect(shell).toContainText("empty shell");
+  await expect(shell).toContainText("empty terminal");
   await shell.dblclick();
 
   const conversation = page.locator("[data-world-conversation='open']").filter({ hasText: "Shell" });
@@ -304,7 +314,7 @@ test("fully disposes each Graph renderer and remains usable at compact width", a
   }
 
   await page.getByRole("button", { name: "Back to Herdr sidebar" }).click();
-  await page.getByRole("button", { name: "Spaces", exact: true }).click();
+  await selectView(page, "Spaces");
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.activeRenderers ?? -1,
   )).toBe(0);
@@ -356,7 +366,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
   });
   await page.goto("/?theme=graph");
   await waitForGraph(page);
-  await expect(page.locator(".graph-tree-space")).toHaveCount(128);
+  await expect(page.locator(".graph-tree-space")).toHaveCount(129);
   await expect(page.locator(".graph-tree-terminal")).toHaveCount(16);
   await expect.poll(() => page.evaluate(
     () => window.__HERDR_GRAPH_RENDERER__?.activeAnimationFrames ?? -1,
@@ -369,19 +379,19 @@ test("keeps bounded topology and ownership stable through a live revision soak",
     await publishSnapshotChanged(request);
     await expect.poll(() => page.evaluate(
       () => window.__HERDR_GRAPH_RENDERER__?.nodes ?? -1,
-    )).toBe(144);
+    )).toBe(145);
 
     if (revision % 6 === 5) {
       await setSnapshotVariant(request, "empty");
       await publishSnapshotChanged(request);
       await expect.poll(() => page.evaluate(
         () => window.__HERDR_GRAPH_RENDERER__?.nodes ?? -1,
-      )).toBe(0);
+      )).toBe(1);
       await setSnapshotVariant(request, "large");
       await publishSnapshotChanged(request);
       await expect.poll(() => page.evaluate(
         () => window.__HERDR_GRAPH_RENDERER__?.nodes ?? -1,
-      )).toBe(144);
+      )).toBe(145);
     }
   }
 
@@ -396,8 +406,8 @@ test("keeps bounded topology and ownership stable through a live revision soak",
     activeObservers: 1,
     activeListeners: 7,
     canvases: 1,
-    nodes: 144,
-    links: 16,
+    nodes: 145,
+    links: 144,
     ready: true,
   });
   expect(coreSockets(sockets)).toHaveLength(initialCoreSockets);
@@ -406,11 +416,7 @@ test("keeps bounded topology and ownership stable through a live revision soak",
 });
 
 async function selectTheme(page: Page, label: "Office" | "Graph") {
-  const trigger = page.locator(".world-theme-menu-trigger");
-  await trigger.click();
-  await page.getByRole("menu", { name: "World themes" })
-    .getByRole("menuitemradio", { name: label, exact: true })
-    .click();
+  await openView(page, label);
 }
 
 async function waitForOffice(page: Page) {
@@ -436,7 +442,7 @@ async function waitForSettledGraph(page: Page) {
 
 async function savedGraphView(page: Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("herdr.world.graph-view.v1");
+    const raw = localStorage.getItem("herdr.world.graph-view.v2");
     if (!raw) return null;
     return JSON.parse(raw) as {
       camera: { x: number; y: number; zoom: number };
@@ -449,7 +455,7 @@ async function savedGraphView(page: Page) {
 
 async function savedGraphZoom(page: Page) {
   return page.evaluate(() => {
-    const raw = localStorage.getItem("herdr.world.graph-view.v1");
+    const raw = localStorage.getItem("herdr.world.graph-view.v2");
     if (!raw) return null;
     const value = JSON.parse(raw) as { camera?: { zoom?: unknown } };
     return typeof value.camera?.zoom === "number" ? value.camera.zoom : null;

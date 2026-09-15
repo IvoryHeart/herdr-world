@@ -158,8 +158,8 @@ const NOTE_DRAFT_STORAGE_PREFIX = "herdr-web:note-draft:v1:";
 const STORE_VERSION = 2;
 const APP_MIN_WEB_COMPAT = 1;
 const APP_BRIDGE_API_VERSION = 1;
-const APP_TERMINAL_PROTOCOL = 20;
-const APP_MIN_HERDR_VERSION = [0, 8, 2] as const;
+const APP_TERMINAL_PROTOCOL = 22;
+const APP_MIN_HERDR_VERSION = [0, 9, 0] as const;
 const MAX_CAPABILITY_STRING_LENGTH = 120;
 const MAX_CAPABILITY_LIST_LENGTH = 128;
 export const SAME_ORIGIN_BRIDGE_COLOR = "#b4befe";
@@ -1538,7 +1538,7 @@ function compatibilityError(capabilities: BridgeCapabilities) {
     return `Terminal protocol ${String(capabilities.terminal_protocol)} is incompatible; expected ${APP_TERMINAL_PROTOCOL}`;
   }
   if (!minimumVersionSatisfied(capabilities.herdr_version, APP_MIN_HERDR_VERSION)) {
-    return "Herdr version is incompatible; expected 0.8.2 or newer";
+    return "Herdr version is incompatible; expected 0.9.0 or newer";
   }
   if (
     typeof capabilities.web_compat === "number" &&

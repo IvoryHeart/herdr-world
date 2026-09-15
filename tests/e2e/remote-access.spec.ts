@@ -1,3 +1,4 @@
+import { expectHostState } from "./sidebarControls";
 import { expect, test, type Page } from "@playwright/test";
 import { hostStore } from "./hostStore";
 
@@ -10,7 +11,7 @@ test.beforeEach(async ({ page, request }) => {
 
 test("allows connections with advanced inbound permissions separate from destinations", async ({ page }) => {
   await page.goto("/spaces");
-  await expect(page.getByRole("button", { name: "localhost, compatible" })).toBeVisible();
+  await expectHostState(page, "localhost", "compatible");
   await openSettings(page);
   await page.getByRole("tab", { name: "Allow connections" }).click();
 
@@ -115,7 +116,7 @@ test("clears a password before showing the next queued connection prompt", async
       data: {
         hostId,
         passwordConfigured: true,
-        ...(hostId === "host-c" ? { terminalProtocol: 20 } : {}),
+        ...(hostId === "host-c" ? { terminalProtocol: 22 } : {}),
       },
     });
   }

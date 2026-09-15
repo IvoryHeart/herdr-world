@@ -1,4 +1,4 @@
-import { stableNumber } from "../herdrOfficeProjection";
+import { stableNumber } from "../worldModel";
 import type { HerdrGraphProjection, WorldGraphEdge, WorldGraphNode } from "./herdrGraphProjection";
 import type { SavedGraphPosition } from "./graphViewPrefs";
 
@@ -26,9 +26,14 @@ export function reconcileGraphLayout(
   collapsedIds: ReadonlySet<string>,
   savedPositions: Readonly<Record<string, SavedGraphPosition>> = {},
 ) {
-  const visibleNodes = projection.nodes.filter(
-    (node) => node.kind === "space" || !node.parentId || !collapsedIds.has(node.parentId),
-  );
+  const hiddenIds = new Set<string>();
+  const visibleNodes = projection.nodes.filter((node) => {
+    if (node.parentId && (hiddenIds.has(node.parentId) || collapsedIds.has(node.parentId))) {
+      hiddenIds.add(node.id);
+      return false;
+    }
+    return true;
+  });
   const visibleIds = new Set(visibleNodes.map(({ id }) => id));
   const edges = projection.edges.filter(
     ({ sourceId, targetId }) => visibleIds.has(sourceId) && visibleIds.has(targetId),
@@ -38,16 +43,14 @@ export function reconcileGraphLayout(
     edges: edges.map(({ sourceId, targetId }) => [sourceId, targetId]).sort(compareEdgeIds),
   });
   const nodes = new Map<string, GraphLayoutNode>();
-  const spaces = visibleNodes.filter(({ kind }) => kind === "space");
-  for (const [index, source] of spaces.entries()) {
-    nodes.set(source.id, reuseOrSeed(previous, source, index, spaces.length, savedPositions[source.id]));
+  const hosts = visibleNodes.filter(({ kind }) => kind === "host");
+  for (const [index, source] of hosts.entries()) {
+    nodes.set(source.id, reuseOrSeed(previous, source, index, hosts.length, savedPositions[source.id]));
   }
   for (const source of visibleNodes) {
-    if (source.kind !== "terminal") {
-      continue;
-    }
+    if (source.kind === "host") continue;
     const parent = source.parentId ? nodes.get(source.parentId) : null;
-    nodes.set(source.id, reuseOrSeedTerminal(previous, source, parent, savedPositions[source.id]));
+    nodes.set(source.id, reuseOrSeedChild(previous, source, parent, savedPositions[source.id]));
   }
   return {
     state: { nodes, edges, topologyKey },
@@ -56,42 +59,57 @@ export function reconcileGraphLayout(
 }
 
 export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
+  const hosts = [...state.nodes.values()].filter(({ kind }) => kind === "host");
   const spaces = [...state.nodes.values()].filter(({ kind }) => kind === "space");
-  const terminalsByParent = new Map<string, GraphLayoutNode[]>();
+  const childrenByParent = new Map<string, GraphLayoutNode[]>();
   for (const node of state.nodes.values()) {
-    if (node.kind === "terminal" && node.parentId) {
-      const siblings = terminalsByParent.get(node.parentId) ?? [];
+    if (node.kind !== "host" && node.parentId) {
+      const siblings = childrenByParent.get(node.parentId) ?? [];
       siblings.push(node);
-      terminalsByParent.set(node.parentId, siblings);
+      childrenByParent.set(node.parentId, siblings);
+    }
+  }
+
+  for (let leftIndex = 0; leftIndex < hosts.length; leftIndex += 1) {
+    const left = hosts[leftIndex];
+    if (!left) continue;
+    if (!left.pinned) {
+      left.vx += -left.x * 0.0007 * alpha;
+      left.vy += -left.y * 0.0007 * alpha;
+    }
+    for (let rightIndex = leftIndex + 1; rightIndex < hosts.length; rightIndex += 1) {
+      const right = hosts[rightIndex];
+      if (!right) continue;
+      repel(left, right, 620, 4, alpha);
     }
   }
 
   for (let leftIndex = 0; leftIndex < spaces.length; leftIndex += 1) {
     const left = spaces[leftIndex];
     if (!left) continue;
-    if (!left.pinned) {
-      left.vx += -left.x * 0.0007 * alpha;
-      left.vy += -left.y * 0.0007 * alpha;
+    for (const host of hosts) {
+      if (left.parentId !== host.id) repel(left, host, 260, 2, alpha);
     }
     for (let rightIndex = leftIndex + 1; rightIndex < spaces.length; rightIndex += 1) {
       const right = spaces[rightIndex];
-      if (!right) continue;
-      repel(left, right, 230, 2.2, alpha);
+      if (right) repel(left, right, 150, 1.8, alpha);
     }
   }
 
-  for (const [parentId, terminals] of terminalsByParent) {
+  for (const [parentId, children] of childrenByParent) {
     const parent = state.nodes.get(parentId);
     if (!parent) continue;
-    for (let index = 0; index < terminals.length; index += 1) {
-      const terminal = terminals[index];
-      if (!terminal) continue;
-      if (!terminal.pinned) {
-        spring(terminal, parent, 110, 0.028, alpha);
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index];
+      if (!child) continue;
+      if (!child.pinned) {
+        spring(child, parent, child.kind === "space" ? 180 : 105, 0.028, alpha);
       }
-      for (let otherIndex = index + 1; otherIndex < terminals.length; otherIndex += 1) {
-        const other = terminals[otherIndex];
-        if (other) repel(terminal, other, 58, 1.5, alpha);
+      for (let otherIndex = index + 1; otherIndex < children.length; otherIndex += 1) {
+        const other = children[otherIndex];
+        if (other) {
+          repel(child, other, child.kind === "space" ? 120 : 58, 1.5, alpha);
+        }
       }
     }
   }
@@ -123,7 +141,7 @@ export function graphBounds(nodes: Iterable<GraphLayoutNode>) {
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   for (const node of nodes) {
-    const radius = node.kind === "space" ? 54 : 24;
+    const radius = node.kind === "host" ? 70 : node.kind === "space" ? 50 : 24;
     minX = Math.min(minX, node.x - radius);
     minY = Math.min(minY, node.y - radius);
     maxX = Math.max(maxX, node.x + radius);
@@ -161,7 +179,7 @@ function reuseOrSeed(
   return layoutNode(source, saved?.x ?? Math.cos(angle) * radius, saved?.y ?? Math.sin(angle) * radius, saved?.pinned ?? false);
 }
 
-function reuseOrSeedTerminal(
+function reuseOrSeedChild(
   previous: GraphLayoutState | null,
   source: WorldGraphNode,
   parent: GraphLayoutNode | null | undefined,
@@ -174,10 +192,11 @@ function reuseOrSeedTerminal(
     return existing;
   }
   const angle = stableFraction(source.id) * Math.PI * 2;
+  const radius = source.kind === "space" ? 145 : 82;
   return layoutNode(
     source,
-    saved?.x ?? (parent?.x ?? 0) + Math.cos(angle) * 86,
-    saved?.y ?? (parent?.y ?? 0) + Math.sin(angle) * 86,
+    saved?.x ?? (parent?.x ?? 0) + Math.cos(angle) * radius,
+    saved?.y ?? (parent?.y ?? 0) + Math.sin(angle) * radius,
     saved?.pinned ?? false,
   );
 }

@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { MIN_HERDR_VERSION, TERMINAL_PROTOCOL } from "./herdr-world-plugin.mjs";
+
 export const RELEASE_REFERENCE_PATHS = [
   "README.md",
   "site/index.html",
@@ -11,6 +13,79 @@ export const OPTIONAL_RELEASE_REFERENCE_PATHS = ["herdr-plugin.toml"];
 
 const RELEASE_TAG_PATTERN =
   /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.([1-9]\d*))?$/;
+const README_COMPATIBILITY_PATTERN =
+  /requires Herdr `v([^`]+)` or newer\s+with terminal protocol `(\d+)`/g;
+const SITE_HERDR_PATTERN = /<dt>Herdr<\/dt><dd>v([^<]+)\+<\/dd>/g;
+const SITE_PROTOCOL_PATTERN = /<dt>Protocol<\/dt><dd>(\d+)<\/dd>/g;
+const SITE_MANAGED_HERDR_PATTERN = /Herdr-managed \/ Herdr ([0-9]+\.[0-9]+\.[0-9]+)\+/g;
+
+function exactlyOneMatch(contents, pattern, label) {
+  const matches = [...contents.matchAll(pattern)];
+  if (matches.length !== 1) {
+    throw new Error(`${label} must contain exactly one public Herdr compatibility claim`);
+  }
+  return matches[0];
+}
+
+function publicCompatibility(contents, relativePath) {
+  if (relativePath === "README.md") {
+    const match = exactlyOneMatch(contents, README_COMPATIBILITY_PATTERN, relativePath);
+    return { herdr: [match[1]], protocol: [Number(match[2])] };
+  }
+  if (relativePath === "site/index.html") {
+    const herdr = exactlyOneMatch(contents, SITE_HERDR_PATTERN, relativePath);
+    const protocol = exactlyOneMatch(contents, SITE_PROTOCOL_PATTERN, relativePath);
+    const managedHerdr = exactlyOneMatch(contents, SITE_MANAGED_HERDR_PATTERN, relativePath);
+    return { herdr: [herdr[1], managedHerdr[1]], protocol: [Number(protocol[1])] };
+  }
+  throw new Error(`unsupported public compatibility surface: ${relativePath}`);
+}
+
+export function stampPublicReleaseCompatibility(contents, relativePath) {
+  publicCompatibility(contents, relativePath);
+  if (relativePath === "README.md") {
+    return contents.replace(
+      README_COMPATIBILITY_PATTERN,
+      `requires Herdr \`v${MIN_HERDR_VERSION}\` or newer\nwith terminal protocol \`${TERMINAL_PROTOCOL}\``,
+    );
+  }
+  return contents
+    .replace(SITE_HERDR_PATTERN, `<dt>Herdr</dt><dd>v${MIN_HERDR_VERSION}+</dd>`)
+    .replace(SITE_PROTOCOL_PATTERN, `<dt>Protocol</dt><dd>${TERMINAL_PROTOCOL}</dd>`)
+    .replace(SITE_MANAGED_HERDR_PATTERN, `Herdr-managed / Herdr ${MIN_HERDR_VERSION}+`);
+}
+
+export function assertPublicReleaseCompatibility({ readme, site }) {
+  for (const [relativePath, contents] of [["README.md", readme], ["site/index.html", site]]) {
+    const actual = publicCompatibility(contents, relativePath);
+    const invalidHerdr = actual.herdr.find((version) => version !== MIN_HERDR_VERSION);
+    const invalidProtocol = actual.protocol.find((protocol) => protocol !== TERMINAL_PROTOCOL);
+    if (invalidHerdr !== undefined && invalidProtocol !== undefined) {
+      throw new Error(
+        `${relativePath} advertises Herdr v${invalidHerdr} with terminal protocol ${invalidProtocol}; ` +
+        `expected Herdr v${MIN_HERDR_VERSION} with terminal protocol ${TERMINAL_PROTOCOL}`,
+      );
+    }
+    if (invalidHerdr !== undefined) {
+      throw new Error(
+        `${relativePath} advertises Herdr v${invalidHerdr}; expected Herdr v${MIN_HERDR_VERSION}`,
+      );
+    }
+    if (invalidProtocol !== undefined) {
+      throw new Error(
+        `${relativePath} advertises terminal protocol ${invalidProtocol}; expected ${TERMINAL_PROTOCOL}`,
+      );
+    }
+  }
+  return true;
+}
+
+export function assertCurrentReleaseCompatibility(root = process.cwd()) {
+  return assertPublicReleaseCompatibility({
+    readme: readFileSync(join(root, "README.md"), "utf8"),
+    site: readFileSync(join(root, "site/index.html"), "utf8"),
+  });
+}
 
 export function parseReleaseTag(value) {
   if (typeof value !== "string") {
@@ -70,6 +145,51 @@ export function compareReleaseTags(left, right) {
   if (a.rc === null) return 1;
   if (b.rc === null) return -1;
   return a.rc > b.rc ? 1 : -1;
+}
+
+function readAndroidReleaseMetadata(buildFile) {
+  const codePattern = /^([ \t]*versionCode[ \t]+)([1-9]\d*)([ \t]*)$/gm;
+  const namePattern = /^([ \t]*versionName[ \t]+)"([^"\r\n]*)"([ \t]*)$/gm;
+  const codes = [...buildFile.matchAll(codePattern)];
+  const names = [...buildFile.matchAll(namePattern)];
+  if (codes.length !== 1 || names.length !== 1) {
+    throw new Error(
+      "android/app/build.gradle must contain exactly one literal versionCode and versionName",
+    );
+  }
+
+  return {
+    code: Number(codes[0][2]),
+    name: names[0][2],
+    codePattern,
+    namePattern,
+  };
+}
+
+export function assertAndroidReleaseMetadata(buildFile, releaseTag) {
+  const metadata = readAndroidReleaseMetadata(buildFile);
+  const version = releaseVersion(releaseTag);
+  if (metadata.code > 2_100_000_000) {
+    throw new Error("Android versionCode exceeds 2100000000");
+  }
+  if (metadata.name !== version) {
+    throw new Error(`Android versionName is ${metadata.name}, not ${version}`);
+  }
+  return true;
+}
+
+export function prepareAndroidReleaseMetadata(buildFile, releaseTag) {
+  const version = releaseVersion(releaseTag);
+  const metadata = readAndroidReleaseMetadata(buildFile);
+
+  const nextCode = metadata.code + 1;
+  if (!Number.isSafeInteger(nextCode) || nextCode > 2_100_000_000) {
+    throw new Error("Android versionCode increment would exceed 2100000000");
+  }
+
+  return buildFile
+    .replace(metadata.codePattern, (_match, prefix, _code, suffix) => `${prefix}${nextCode}${suffix}`)
+    .replace(metadata.namePattern, (_match, prefix, _name, suffix) => `${prefix}"${version}"${suffix}`);
 }
 
 export function releaseReferencePaths(root = process.cwd()) {
@@ -149,6 +269,9 @@ export function stampCurrentRelease(
           `uninstall ${homebrewFormulaName(newTag)}`,
         );
     }
+    if (["README.md", "site/index.html"].includes(relativePath)) {
+      updated = stampPublicReleaseCompatibility(updated, relativePath);
+    }
     if (updated === contents || updated.includes(oldReference)) {
       throw new Error(`could not replace every ${oldReference} reference in ${relativePath}`);
     }
@@ -164,5 +287,6 @@ export function stampCurrentRelease(
   );
 
   assertCurrentReleaseReferences(root);
+  assertCurrentReleaseCompatibility(root);
   return releaseReferencePaths(root);
 }

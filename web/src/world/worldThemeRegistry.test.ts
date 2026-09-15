@@ -7,13 +7,14 @@ import {
 import type { WorldThemeDefinition, WorldThemeId } from "./worldThemeRegistry";
 
 describe("World theme registry", () => {
-  it("ships Office and Graph exactly once while keeping Mindcraft unavailable", () => {
+  it("ships Office, Tree, and Graph exactly once while keeping Mindcraft unavailable", () => {
     expect(worldThemeRegistry.list().map(({ id, label, semanticIcon }) => ({
       id,
       label,
       semanticIcon,
     }))).toEqual([
       { id: "office", label: "Office", semanticIcon: "pixel-office" },
+      { id: "tree", label: "Tree", semanticIcon: "hierarchy-tree" },
       { id: "graph", label: "Graph", semanticIcon: "project-graph" },
     ]);
     expect(worldThemeRegistry.get("mindcraft")).toBeNull();

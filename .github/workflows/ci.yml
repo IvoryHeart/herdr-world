@@ -14,6 +14,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  delivery:
+    name: Delivery checks
+    if: always()
+    needs: [launchd, check, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'const jobs=JSON.parse(process.env.RESULTS); if (!Object.values(jobs).every(job => job.result === "success")) process.exit(1)'
+
   launchd:
     name: macOS launchd plugin lifecycle (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}

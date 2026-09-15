@@ -40,7 +40,7 @@ describe("Graph semantic interface", () => {
     const agentSelect = [...container.querySelectorAll<HTMLButtonElement>(".graph-tree-terminal")]
       .find((button) => button.textContent?.includes("Codex"));
     expect(agentSelect?.getAttribute("aria-label")).toContain(
-      "Codex, agent terminal: working · agent running · Implementing",
+      "Codex, Agent: working · agent · Implementing",
     );
     await act(async () => agentSelect?.click());
     expect(value.onGraphSelect).toHaveBeenCalledWith("terminal", "host");
@@ -48,7 +48,7 @@ describe("Graph semantic interface", () => {
     expect(value.onGraphOpenInSpaces).not.toHaveBeenCalled();
 
     await act(async () => agentSelect?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
-    expect(value.onGraphOpenTerminal).toHaveBeenCalledWith(expect.objectContaining({ kind: "terminal" }));
+    expect(value.onGraphOpenTerminal).toHaveBeenCalledWith(expect.objectContaining({ kind: "agent" }));
 
     value.selectedKey = "terminal";
     await act(async () => root.render(<GraphTheme context={value} />));
@@ -58,7 +58,7 @@ describe("Graph semantic interface", () => {
     expect(value.onGraphOpenTerminal).toHaveBeenCalledTimes(2);
     await act(async () => [...(detail?.querySelectorAll<HTMLButtonElement>("button") ?? [])]
       .find((button) => button.textContent === "Open in Spaces")?.click());
-    expect(value.onGraphOpenInSpaces).toHaveBeenCalledWith(expect.objectContaining({ kind: "terminal" }));
+    expect(value.onGraphOpenInSpaces).toHaveBeenCalledWith(expect.objectContaining({ kind: "agent" }));
   });
 
   it("searches bounded semantic fields and supports per-space collapse", async () => {
@@ -70,7 +70,16 @@ describe("Graph semantic interface", () => {
     await act(async () => root.render(<GraphTheme context={value} />));
     expect(container.querySelector(".graph-tree-terminal")).not.toBeNull();
 
-    const collapse = container.querySelector<HTMLButtonElement>(".graph-collapse");
+    const hostCollapse = [...container.querySelectorAll<HTMLButtonElement>(".graph-collapse")]
+      .find((button) => button.getAttribute("aria-label")?.includes("Forge"));
+    expect(container.querySelector(".graph-tree")?.textContent).toContain("compatible · Local host");
+    await act(async () => hostCollapse?.click());
+    expect(hostCollapse?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.querySelector(".graph-tree-terminal")).toBeNull();
+    await act(async () => hostCollapse?.click());
+
+    const collapse = [...container.querySelectorAll<HTMLButtonElement>(".graph-collapse")]
+      .find((button) => button.getAttribute("aria-label")?.includes("Platform"));
     await act(async () => collapse?.click());
     expect(collapse?.getAttribute("aria-expanded")).toBe("false");
     expect(container.querySelector(".graph-tree-terminal")).toBeNull();
@@ -84,7 +93,7 @@ describe("Graph semantic interface", () => {
         input.dispatchEvent(new Event("input", { bubbles: true }));
       }
     });
-    expect(container.querySelector(".graph-empty")?.textContent).toContain("No presented spaces");
+    expect(container.querySelector(".graph-empty")?.textContent).toContain("No presented hosts");
   });
 
   it.each(["degraded", "connecting"] as const)(
@@ -104,7 +113,7 @@ describe("Graph semantic interface", () => {
 
       const agent = container.querySelector<HTMLButtonElement>(".graph-tree-terminal");
       expect(agent?.getAttribute("aria-label")).toContain(
-        `working · ${connectionState} · stale · agent running`,
+        `working · ${connectionState} · stale · agent`,
       );
       expect(agent?.getAttribute("aria-label")).not.toContain("disconnected");
       value.selectedKey = "terminal";
@@ -178,10 +187,20 @@ function context(): WorldThemeContext {
 }
 
 function projection(): HerdrGraphProjection {
+  const host = node({
+    id: "host",
+    kind: "host",
+    parentId: null,
+    selectionKey: "host",
+    label: "Forge",
+    hostLabel: "Forge",
+    subtitle: "Local host",
+    actionable: false,
+  });
   const space = node({
     id: "space",
     kind: "space",
-    parentId: null,
+    parentId: "host",
     selectionKey: "space",
     label: "Platform",
     hostLabel: "Forge",
@@ -196,7 +215,7 @@ function projection(): HerdrGraphProjection {
   });
   const agent = node({
     id: "agent",
-    kind: "terminal",
+    kind: "agent",
     parentId: "space",
     selectionKey: "terminal",
     label: "Codex",
@@ -205,16 +224,29 @@ function projection(): HerdrGraphProjection {
     taskSummary: "Reviewing Graph",
     paneId: "pane",
     observedGeneration: "generation",
-    agentRunning: true,
     agentKind: "codex",
   });
   return {
     version: 1,
-    nodes: [space, agent],
-    edges: [{ sourceId: "space", targetId: "agent", kind: "contains" }],
-    spaces: [{ node: space, terminals: [agent], observedTerminalCount: 3, omittedTerminalCount: 2 }],
+    nodes: [host, space, agent],
+    edges: [
+      { sourceId: "host", targetId: "space", kind: "contains" },
+      { sourceId: "space", targetId: "agent", kind: "contains" },
+    ],
+    hosts: [{
+      node: host,
+      spaces: [{ node: space, children: [agent], observedChildCount: 3, omittedChildCount: 2 }],
+      observedSpaceCount: 2,
+      omittedSpaceCount: 1,
+    }],
+    spaces: [{ node: space, children: [agent], observedChildCount: 3, omittedChildCount: 2 }],
+    omittedHostCount: 0,
     omittedSpaceCount: 1,
     coverage: {
+      configuredHosts: 1,
+      observedHosts: 1,
+      presentedHosts: 1,
+      omittedHosts: 0,
       observedSpaces: 2,
       presentedSpaces: 1,
       observedAgents: 3,
@@ -229,7 +261,7 @@ function projection(): HerdrGraphProjection {
       presentedShells: 0,
       status: { idle: 0, working: 1, blocked: 0, done: 0, unknown: 2 },
     },
-    presentationBounds: { spaces: 128, terminalsPerSpace: 16 },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
 }
 
@@ -251,9 +283,10 @@ function node(overrides: Partial<WorldGraphNode> & Pick<WorldGraphNode, "id" | "
       .toLocaleLowerCase(),
     handoff: null,
     ...overrides,
-    paneId: overrides.paneId ?? (overrides.kind === "terminal" ? overrides.id : null),
+    paneId: overrides.paneId ?? (
+      overrides.kind === "terminal" || overrides.kind === "agent" ? overrides.id : null
+    ),
     observedGeneration: overrides.observedGeneration ?? "generation",
-    agentRunning: overrides.agentRunning ?? overrides.kind === "terminal",
     agentKind: overrides.agentKind ?? null,
   };
 }

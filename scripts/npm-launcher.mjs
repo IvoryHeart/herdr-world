@@ -54,7 +54,7 @@ export function packageHelp() {
 
 Starts the Herdr World browser bridge for the selected Herdr session.
 
-The task-summary command reports bounded, expiring harness metadata for the
+The task-summary command reports bounded, expiring agent metadata for the
 current Herdr pane without starting the browser bridge.
 
 Options are forwarded to the bridge:
@@ -64,7 +64,7 @@ Options are forwarded to the bridge:
   --no-herdr-setup            Disable interactive Herdr setup
   -h, --help                  Show this help without starting Herdr or a bridge
 
-The bridge requires Herdr 0.8.2 or newer with terminal protocol 20.
+The bridge requires Herdr 0.9.0 or newer with terminal protocol 22.
 `;
 }
 

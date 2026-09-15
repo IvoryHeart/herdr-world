@@ -175,10 +175,11 @@ describe("Graph renderer ownership", () => {
     await renderCanvas(spaceProjection(), { onViewChange, fitOnMount: true });
     flushAllFrames();
     const [camera, positions, cameraMode] = onViewChange.mock.lastCall ?? [];
-    expect(camera).toMatchObject({ x: -70, zoom: 2 });
+    expect(camera).toMatchObject({ zoom: 2 });
     expect(Math.abs(camera?.y ?? Number.POSITIVE_INFINITY)).toBe(0);
     expect(cameraMode).toBe("fit");
     expect(positions).toMatchObject({
+      host: { x: -100, y: 0, pinned: true },
       space: { x: 0, y: 0, pinned: true },
       terminal: { x: 100, y: 0, pinned: true },
     });
@@ -233,17 +234,17 @@ describe("Graph renderer ownership", () => {
       clientY: 300,
     })));
     expect(onActivate).toHaveBeenCalledWith(expect.objectContaining({
-      kind: "terminal",
+      kind: "agent",
       selectionKey: "terminal-selection",
     }));
   });
 
   it("uses each branded glyph and stable generic-agent and empty-shell fallbacks", () => {
     for (const agentKind of ["claude", "codex", "pi", "grok", "opencode"] as const) {
-      expect(graphTerminalGlyphKind({ agentRunning: true, agentKind })).toBe(agentKind);
+      expect(graphTerminalGlyphKind({ kind: "agent", agentKind })).toBe(agentKind);
     }
-    expect(graphTerminalGlyphKind({ agentRunning: true, agentKind: null })).toBe("generic-agent");
-    expect(graphTerminalGlyphKind({ agentRunning: false, agentKind: null })).toBe("terminal");
+    expect(graphTerminalGlyphKind({ kind: "agent", agentKind: null })).toBe("generic-agent");
+    expect(graphTerminalGlyphKind({ kind: "terminal", agentKind: null })).toBe("terminal");
   });
 
   it("preserves hidden terminal positions across collapse and prunes removed topology", async () => {
@@ -258,6 +259,7 @@ describe("Graph renderer ownership", () => {
     await rerender(projection, new Set(["space"]));
     await wheel(canvas);
     expect(onViewChange.mock.lastCall?.[1]).toMatchObject({
+      host: { x: -100, y: 0, pinned: true },
       space: { x: 0, y: 0, pinned: true },
       terminal: { x: 100, y: 0, pinned: true },
     });
@@ -269,17 +271,22 @@ describe("Graph renderer ownership", () => {
 
     const spaceOnly: HerdrGraphProjection = {
       ...projection,
-      nodes: projection.nodes.filter(({ kind }) => kind === "space"),
-      edges: [],
+      nodes: projection.nodes.filter(({ kind }) => kind === "host" || kind === "space"),
+      edges: projection.edges.filter(({ targetId }) => targetId === "space"),
       spaces: projection.spaces.map((space) => ({
         ...space,
-        terminals: [],
-        observedTerminalCount: 0,
+        children: [],
+        observedChildCount: 0,
+      })),
+      hosts: projection.hosts.map((host) => ({
+        ...host,
+        spaces: host.spaces.map((space) => ({ ...space, children: [], observedChildCount: 0 })),
       })),
     };
     await rerender(spaceOnly, new Set());
     await wheel(canvas);
     expect(onViewChange.mock.lastCall?.[1]).toEqual({
+      host: { x: -100, y: 0, pinned: true },
       space: { x: 0, y: 0, pinned: true },
     });
   });
@@ -308,6 +315,7 @@ async function renderCanvas(
     cameraMode: "fit" as const,
     collapsedIds: [],
     positions: {
+      host: { x: -100, y: 0, pinned: true },
       space: { x: 0, y: 0, pinned: true },
       terminal: { x: 100, y: 0, pinned: true },
     },
@@ -376,9 +384,15 @@ function emptyProjection(): HerdrGraphProjection {
     version: 1,
     nodes: [],
     edges: [],
+    hosts: [],
     spaces: [],
+    omittedHostCount: 0,
     omittedSpaceCount: 0,
     coverage: {
+      configuredHosts: 0,
+      observedHosts: 0,
+      presentedHosts: 0,
+      omittedHosts: 0,
       observedSpaces: 0,
       presentedSpaces: 0,
       observedAgents: 0,
@@ -393,15 +407,37 @@ function emptyProjection(): HerdrGraphProjection {
       presentedShells: 0,
       status: { idle: 0, working: 0, blocked: 0, done: 0, unknown: 0 },
     },
-    presentationBounds: { spaces: 128, terminalsPerSpace: 16 },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
 }
 
 function spaceProjection(): HerdrGraphProjection {
+  const host: WorldGraphNode = {
+    id: "host",
+    kind: "host",
+    parentId: null,
+    hostKey: "host",
+    hostLabel: "Host",
+    label: "Host",
+    subtitle: "Local host",
+    status: "unknown",
+    focused: false,
+    stale: false,
+    disconnected: false,
+    connectionState: "compatible",
+    actionable: false,
+    selectionKey: "host",
+    omittedChildCount: 0,
+    searchText: "host",
+    handoff: null,
+    paneId: null,
+    observedGeneration: "generation",
+    agentKind: null,
+  };
   const space: WorldGraphNode = {
     id: "space",
     kind: "space",
-    parentId: null,
+    parentId: host.id,
     hostKey: "host",
     hostLabel: "Host",
     label: "Space",
@@ -417,27 +453,37 @@ function spaceProjection(): HerdrGraphProjection {
     handoff: null,
     paneId: null,
     observedGeneration: "generation",
-    agentRunning: false,
     agentKind: null,
   };
   const terminal: WorldGraphNode = {
     ...space,
     id: "terminal",
-    kind: "terminal",
+    kind: "agent",
     parentId: space.id,
     label: "Codex",
     selectionKey: "terminal-selection",
     paneId: "pane",
-    agentRunning: true,
     agentKind: "codex",
   };
   return {
     ...emptyProjection(),
-    nodes: [space, terminal],
-    edges: [{ sourceId: space.id, targetId: terminal.id, kind: "contains" }],
-    spaces: [{ node: space, terminals: [terminal], observedTerminalCount: 1, omittedTerminalCount: 0 }],
+    nodes: [host, space, terminal],
+    edges: [
+      { sourceId: host.id, targetId: space.id, kind: "contains" },
+      { sourceId: space.id, targetId: terminal.id, kind: "contains" },
+    ],
+    hosts: [{
+      node: host,
+      spaces: [{ node: space, children: [terminal], observedChildCount: 1, omittedChildCount: 0 }],
+      observedSpaceCount: 1,
+      omittedSpaceCount: 0,
+    }],
+    spaces: [{ node: space, children: [terminal], observedChildCount: 1, omittedChildCount: 0 }],
     coverage: {
       ...emptyProjection().coverage,
+      configuredHosts: 1,
+      observedHosts: 1,
+      presentedHosts: 1,
       observedSpaces: 1,
       presentedSpaces: 1,
     },

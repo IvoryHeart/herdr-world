@@ -20,7 +20,7 @@ import { useWorldConversationLayout } from "./WorldConversationLayer";
 import type { WorldConversationBubblePanel } from "./WorldConversationLayer";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import { OFFICE_PRESENTATION_BOUNDS } from "./herdrOfficeProjection";
-import { officeCalloutForKey } from "./officeSelection";
+import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
 import type { OfficeCallout } from "./officeSelection";
 import type { OfficeObservability } from "./officeObservability";
 import {
@@ -223,14 +223,15 @@ function WorldStage({
   const conversationTargets = useMemo(
     () => context.conversationBubbles.map((panel): OfficeConversationAnchorTarget => ({
       id: panel.id,
-      selectedKey: panel.selectedKey,
-      targetKey: panel.targetKey,
+      selectedKey: officePresentationKey(projection, panel.selectedKey),
+      targetKey: officePresentationKey(projection, panel.targetKey) ?? panel.targetKey,
     })),
-    [context.conversationBubbles],
+    [context.conversationBubbles, projection],
   );
-  const selectedRoomKey = projection.rooms.find(({ key }) => key === context.selectedKey)?.key ??
-    projection.deskRoster.find(({ desk }) => desk.key === context.selectedKey)?.desk.roomKey ??
-    projection.roster.find(({ agent }) => agent.key === context.selectedKey)?.agent.roomKey ??
+  const officeSelectedKey = officePresentationKey(projection, context.selectedKey);
+  const selectedRoomKey = projection.rooms.find(({ key }) => key === officeSelectedKey)?.key ??
+    projection.deskRoster.find(({ desk }) => desk.key === officeSelectedKey)?.desk.roomKey ??
+    projection.roster.find(({ agent }) => agent.key === officeSelectedKey)?.agent.roomKey ??
     null;
   const agentBarRect = officeLayout?.agentBarRect;
   const agentBarReady = Boolean(
@@ -443,10 +444,13 @@ function WorldStage({
           <RotateCcw size={16} />
         </button>
       </header>
+      {context.handoffStatus ? (
+        <p className="world-handoff-status" role="status">{context.handoffStatus}</p>
+      ) : null}
       {context.compact ? (
         <WorldCompactTargetChooser
           projection={projection}
-          selectedKey={context.selectedKey}
+          selectedKey={officeSelectedKey}
           onSelect={context.onSelect}
           onActivateAgent={onActivateAgent}
           onActivateRoom={onActivateRoom}
@@ -462,7 +466,7 @@ function WorldStage({
         <PixelOfficeCanvas
           projection={projection}
           observability={context.observability}
-          selectedKey={context.selectedKey}
+          selectedKey={officeSelectedKey}
           completionSeenKeys={context.completionSeenKeys}
           conversationTargets={conversationTargets}
           onSelect={context.onSelect}
@@ -481,7 +485,7 @@ function WorldStage({
           <WorldAgentBar
             className="world-canvas-agent-bar"
             projection={projection}
-            selectedKey={context.selectedKey}
+            selectedKey={officeSelectedKey}
             barWidth={agentBarRect?.width ?? OFFICE_GEOMETRY.agentBarPreferredWidth}
             barHeight={agentBarRect?.height ?? OFFICE_GEOMETRY.ceoBandHeight - 4}
             left={agentBarRect?.x}
@@ -494,7 +498,7 @@ function WorldStage({
             <WorldSemanticTargets
               layout={officeLayout}
               projection={projection}
-              selectedKey={context.selectedKey}
+              selectedKey={officeSelectedKey}
               interactive={agentBarReady}
               onSelect={context.onSelect}
               onActivateAgent={onActivateAgent}
@@ -513,15 +517,15 @@ function WorldStage({
           ) : null}
         </PixelOfficeCanvas>
       </div>
-      {context.selectedKey && selectedCanvasAnchor ? (
+      {officeSelectedKey && selectedCanvasAnchor ? (
         <WorldCanvasCallout
-          callout={officeCalloutForKey(projection, context.selectedKey)}
+          callout={officeCalloutForKey(projection, officeSelectedKey)}
           left={selectedCanvasAnchor.left}
           top={selectedCanvasAnchor.top}
           persistent
         />
       ) : null}
-      {canvasHover && !(canvasHover.key === context.selectedKey && officeCalloutForKey(projection, canvasHover.key)?.summary) ? (
+      {canvasHover && !(canvasHover.key === officeSelectedKey && officeCalloutForKey(projection, canvasHover.key)?.summary) ? (
         <WorldCanvasCallout
           callout={officeCalloutForKey(projection, canvasHover.key)}
           left={canvasHover.left}

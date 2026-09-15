@@ -13,6 +13,7 @@ export type WorldRoomDialogRequest = {
   mode: "create" | "rename" | "close";
   bridgeId: BridgeId;
   workspaceId: string;
+  sourceWorkspaceId?: string;
   label: string;
 };
 
@@ -105,7 +106,8 @@ export function createWorldRoomActions({
   };
 
   const openNewRoom = (roomKey?: string) => {
-    const runtime = runtimeForRoom(roomForKey(roomKey));
+    const room = roomForKey(roomKey);
+    const runtime = runtimeForRoom(room);
     if (!runtime || !canCreateRoom(roomKey)) {
       onStatus("Room creation is unavailable on this host.");
       return;
@@ -115,6 +117,7 @@ export function createWorldRoomActions({
       mode: "create",
       bridgeId: runtime.id,
       workspaceId: "new",
+      sourceWorkspaceId: room?.workspaceRef.nativeTargetId ?? selectedWorkspaceId ?? undefined,
       label: "",
     });
   };

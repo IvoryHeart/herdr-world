@@ -4,6 +4,7 @@ import type { ComponentProps } from "react";
 import type { BridgeId, BridgeRuntime } from "../bridge";
 import type { BridgeConnectionState } from "../runtimeConnection";
 import { runtimeAdmissionReady } from "../runtimeClient";
+import { qualifiedRuntimeKey, qualifyRuntimeTarget } from "../runtimeIdentity";
 import { terminalSessionDescriptor } from "../terminalSessions";
 import type { TerminalSessionDescriptor } from "../terminalSessions";
 import type { PaneInfo } from "../types";
@@ -15,6 +16,7 @@ import type { HerdrOfficeProjection, OfficeAgent } from "./herdrOfficeProjection
 export type WorldConversationTargetInput = {
   kind: "agent" | "desk" | "pane";
   targetKey: string;
+  selectionKey: string;
   agentKey: string | null;
   bridgeId: BridgeId;
   paneId: string;
@@ -34,7 +36,19 @@ type WorldConversationView = {
   runtime: BridgeRuntime;
   session: TerminalSessionDescriptor;
   targetKey: string;
+  selectionKey: string;
 };
+
+function conversationSelectionKey(
+  target: Pick<WorldConversationTarget, "selectionKey" | "agentKey" | "targetKey" | "bridgeId">,
+  pane?: PaneInfo | null,
+) {
+  if (target.selectionKey) return target.selectionKey;
+  if (target.agentKey) return target.agentKey;
+  return pane
+    ? qualifiedRuntimeKey(qualifyRuntimeTarget(target.bridgeId, "terminal", pane.terminal_id))
+    : target.targetKey;
+}
 
 type BubblePreferences = Pick<
   ComponentProps<typeof WorldConversationBubble>,
@@ -109,6 +123,10 @@ export function readWorldConversationTargets(): WorldConversationTarget[] {
         windowId: worldConversationWindowId(record.bridgeId, record.paneId),
         kind: record.kind,
         targetKey: record.targetKey,
+        selectionKey:
+          typeof record.selectionKey === "string"
+            ? record.selectionKey
+            : (record.agentKey as string | null) ?? "",
         agentKey: record.agentKey as string | null,
         bridgeId: record.bridgeId,
         paneId: record.paneId,
@@ -145,6 +163,7 @@ function writeWorldConversationTargets(targets: readonly WorldConversationTarget
       JSON.stringify(targets.map((target) => ({
         kind: target.kind,
         targetKey: target.targetKey,
+        selectionKey: target.selectionKey,
         agentKey: target.agentKey,
         bridgeId: target.bridgeId,
         paneId: target.paneId,
@@ -211,7 +230,7 @@ export function useWorldConversationController({
       return;
     }
     onSelectBridge(target.bridgeId);
-    onSelectKey(target.agentKey ?? target.targetKey);
+    onSelectKey(conversationSelectionKey(target));
     onStatus(null);
     setTargets((current) => {
       const index = current.findIndex(({ windowId: id }) => id === windowId);
@@ -239,7 +258,7 @@ export function useWorldConversationController({
     if (!target) {
       return;
     }
-    onSelectKey(target.agentKey ?? target.targetKey);
+    onSelectKey(conversationSelectionKey(target, cacheRef.current.get(windowId)?.pane));
     onSelectBridge(target.bridgeId);
     onStatus(null);
   }, [onSelectBridge, onSelectKey, onStatus, targets]);
@@ -292,6 +311,7 @@ export function useWorldConversationController({
             runtime,
             session,
             targetKey: target.targetKey,
+            selectionKey: conversationSelectionKey(target, pane),
           };
           cacheRef.current.set(target.windowId, next);
           return [next];
@@ -309,6 +329,7 @@ export function useWorldConversationController({
           agent: agent ?? cached.agent,
           targetLabel: agent?.displayLabel ?? cached.targetLabel,
           hostLabel: agentEntry?.hostLabel ?? deskEntry?.hostLabel ?? cached.hostLabel,
+          selectionKey: conversationSelectionKey(target, cached.pane),
         }];
       }
       return [];
@@ -382,7 +403,7 @@ export function useWorldConversationController({
     () => conversations.map((conversation) => ({
       id: conversation.windowId,
       targetKey: conversation.targetKey,
-      selectedKey: conversation.agent?.key ?? conversation.targetKey,
+      selectedKey: conversation.selectionKey,
       content: (
         <WorldConversationBubble
           key={`${conversation.windowId}:${conversation.session.sessionKey}`}

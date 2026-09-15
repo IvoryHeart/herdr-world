@@ -58,6 +58,7 @@ export function officeCalloutForKey(
   projection: HerdrOfficeProjection,
   key: string,
 ): OfficeCallout | null {
+  key = officePresentationKey(projection, key) ?? key;
   const agentEntry = projection.roster.find(({ agent }) => agent.key === key);
   if (agentEntry) {
     const { agent } = agentEntry;
@@ -112,6 +113,7 @@ export function findOfficeSelection(
   projection: HerdrOfficeProjection,
   selectedKey: string | null,
 ): OfficeSelection | null {
+  selectedKey = officePresentationKey(projection, selectedKey);
   if (!selectedKey) {
     return null;
   }
@@ -129,6 +131,26 @@ export function findOfficeSelection(
   }
   const host = projection.hosts.find((entry) => entry.key === selectedKey);
   return host ? { kind: "host", host } : null;
+}
+
+export function officePresentationKey(
+  projection: HerdrOfficeProjection,
+  selectedKey: string | null,
+) {
+  if (!selectedKey) {
+    return null;
+  }
+  if (
+    projection.roster.some(({ agent }) => agent.key === selectedKey) ||
+    projection.deskRoster.some(({ desk }) => desk.key === selectedKey) ||
+    projection.roomRoster.some(({ key }) => key === selectedKey) ||
+    projection.hosts.some(({ key }) => key === selectedKey)
+  ) {
+    return selectedKey;
+  }
+  return projection.deskRoster.find(({ desk }) =>
+    desk.terminalSelectionKeys.includes(selectedKey)
+  )?.desk.key ?? selectedKey;
 }
 
 export function formatOfficeActivityAge(timestamp: number | undefined, now = Date.now()) {

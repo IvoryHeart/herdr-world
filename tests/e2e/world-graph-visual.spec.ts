@@ -8,7 +8,7 @@ import {
 } from "./graphConnector";
 import { hostStore } from "./hostStore";
 
-const evidenceDir = resolve("docs/evidence/spec-018");
+const evidenceDir = resolve(".scratch/playwright/evidence/spec-018");
 
 test.beforeAll(async () => {
   await mkdir(evidenceDir, { recursive: true });
@@ -19,6 +19,7 @@ test.beforeEach(async ({ page, request }) => {
   await page.addInitScript((store) => {
     localStorage.setItem("herdrWeb.bridgeBackends.v2", JSON.stringify(store));
     localStorage.removeItem("herdr.world.graph-view.v1");
+    localStorage.removeItem("herdr.world.graph-view.v2");
     localStorage.removeItem("herdrWeb.worldView.v1");
   }, hostStore());
 });

@@ -16,7 +16,7 @@ Windows, Linux ARM64, musl Linux, and unknown libc environments are not supporte
 Package installation only installs files. It does not download or build native code, install Herdr,
 create a workspace, or start a process.
 
-Herdr World still requires a running Herdr 0.8.2 or newer session using terminal protocol 20. Start
+Herdr World still requires a running Herdr 0.9.0 or newer session using terminal protocol 22. Start
 Herdr from the directory containing the work it should manage, then run `herdr-world`. Use
 `herdr-world --help` for bridge options. The bridge binds to loopback by default; Host, Origin, and
 Content Security Policy checks are request protections, not user authentication.

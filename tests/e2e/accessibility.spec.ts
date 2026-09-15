@@ -1,3 +1,4 @@
+import { expectHostState } from "./sidebarControls";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { hostStore } from "./hostStore";
@@ -23,9 +24,7 @@ test("core controls are keyboard-visible, labelled, reduced-motion safe, and axe
       ),
     )
     .toBe(true);
-  await expect(
-    page.getByRole("button", { name: "localhost, compatible" }),
-  ).toBeVisible();
+  await expectHostState(page, "localhost", "compatible");
 
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(

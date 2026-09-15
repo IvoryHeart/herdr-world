@@ -2,15 +2,15 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-HERDR_BIN="${HERDR_BIN:-/tmp/herdr-upstream-v082/target/release/herdr}"
+HERDR_BIN="${HERDR_BIN:-/tmp/herdr-upstream-v090/target/release/herdr}"
 BRIDGE_BIN="${HERDR_WEB_BRIDGE_BIN:-$ROOT/bridge/target/debug/herdr-web-bridge}"
 STATIC_DIR="${HERDR_WEB_STATIC_DIR:-$ROOT/web/dist}"
 BRIDGE_A_PORT="${HERDR_WEB_LIVE_PORT_A:-8791}"
 BRIDGE_B_PORT="${HERDR_WEB_LIVE_PORT_B:-8792}"
 
 [[ -x "$HERDR_BIN" ]] || {
-  echo "stock Herdr v0.8.2 binary not found: $HERDR_BIN" >&2
-  echo "Build it from the clean v0.8.2 checkout with: ZIG=/path/to/zig cargo build --release --bin herdr" >&2
+  echo "stock Herdr v0.9.0 binary not found: $HERDR_BIN" >&2
+  echo "Build it from the clean v0.9.0 checkout with: ZIG=/path/to/zig cargo build --release --bin herdr" >&2
   exit 1
 }
 [[ -x "$BRIDGE_BIN" ]] || {
@@ -22,7 +22,7 @@ BRIDGE_B_PORT="${HERDR_WEB_LIVE_PORT_B:-8792}"
   exit 1
 }
 
-LIVE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/herdr-web-stock-v082.XXXXXX")"
+LIVE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/herdr-web-stock-v090.XXXXXX")"
 mkdir -p "$LIVE_ROOT/config-a" "$LIVE_ROOT/state-a" "$LIVE_ROOT/config-b" "$LIVE_ROOT/state-b"
 pid_daemon_a=0
 pid_daemon_b=0
@@ -36,7 +36,7 @@ cleanup() {
   for pid in "$pid_bridge_a" "$pid_bridge_b" "$pid_daemon_a" "$pid_daemon_b"; do
     [[ "$pid" != 0 ]] && wait "$pid" 2>/dev/null || true
   done
-  echo "stock-v0.8.2 evidence logs: $LIVE_ROOT"
+  echo "stock-v0.9.0 evidence logs: $LIVE_ROOT"
 }
 trap cleanup EXIT
 
@@ -57,16 +57,16 @@ status_b=""
 for _ in $(seq 1 100); do
   status_a="$(HERDR_SOCKET_PATH="$LIVE_ROOT/herdr-a.sock" "$HERDR_BIN" status server 2>&1 || true)"
   status_b="$(HERDR_SOCKET_PATH="$LIVE_ROOT/herdr-b.sock" "$HERDR_BIN" status server 2>&1 || true)"
-  if [[ "$status_a" == *"version: 0.8.2"* && "$status_a" == *"protocol: 20"* \
-    && "$status_b" == *"version: 0.8.2"* && "$status_b" == *"protocol: 20"* ]]; then
+  if [[ "$status_a" == *"version: 0.9.0"* && "$status_a" == *"protocol: 22"* \
+    && "$status_b" == *"version: 0.9.0"* && "$status_b" == *"protocol: 22"* ]]; then
     break
   fi
   sleep 0.2
 done
 printf '%s\n' '--- stock daemon A ---' "$status_a" '--- stock daemon B ---' "$status_b"
-if [[ "$status_a" != *"version: 0.8.2"* || "$status_a" != *"protocol: 20"* \
-  || "$status_b" != *"version: 0.8.2"* || "$status_b" != *"protocol: 20"* ]]; then
-  echo "stock Herdr v0.8.2 daemons did not become ready" >&2
+if [[ "$status_a" != *"version: 0.9.0"* || "$status_a" != *"protocol: 22"* \
+  || "$status_b" != *"version: 0.9.0"* || "$status_b" != *"protocol: 22"* ]]; then
+  echo "stock Herdr v0.9.0 daemons did not become ready" >&2
   exit 1
 fi
 

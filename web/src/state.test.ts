@@ -211,6 +211,16 @@ describe("projection selection helpers", () => {
 
     expect(choosePaneForTab(data, "1-2")).toBe("1-3");
   });
+
+  it("uses only an explicitly requested pane within a split tab", () => {
+    const data = snapshot([
+      { ...pane("first", true), tab_id: "split" },
+      { ...pane("requested"), tab_id: "split" },
+    ]);
+
+    expect(choosePaneForTab(data, "split", "requested")).toBe("requested");
+    expect(choosePaneForTab(data, "split", "vanished")).toBeNull();
+  });
 });
 
 describe("chooseDirectionalPane", () => {

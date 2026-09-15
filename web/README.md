@@ -67,3 +67,10 @@ Pane snapshots may include an optional bounded `task_summary` mapped from Herdr 
 The Office treats it as untrusted presentation text and remains compatible when it is absent. The
 bridge subscribes to `pane.updated`, so reports, clears, and expiry are reflected by the normal
 snapshot refresh path rather than a frontend-only update channel.
+
+World themes consume `src/world/worldModel.ts`, a pure model built once from configured hosts and
+admitted snapshots. Its current hierarchy is host → space → agent or terminal. Agent and terminal
+are sibling interpretations of one terminal-backed entity; tabs remain qualified space metadata
+used by Office desks. Office may move agents to reception or the bar visually, while their model
+parent remains the owning space. Add future parent/child agent relationships only from admitted
+authoritative runtime data.

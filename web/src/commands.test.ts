@@ -43,6 +43,32 @@ describe("command helpers", () => {
     );
   });
 
+  it("creates a workspace using the selected bridge and explicit source workspace", async () => {
+    const requests: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      requests.push({ input, body: JSON.parse(String(init?.body)) });
+      return new Response(JSON.stringify({ type: "ok" }), { status: 200 });
+    });
+
+    const remote = createCommands((path) => `http://remote:4000${path}`);
+    await remote.createWorkspace("space-selected");
+    await remote.createWorkspace();
+
+    expect(requests).toEqual([
+      {
+        input: "http://remote:4000/api/command",
+        body: {
+          method: "workspace.create",
+          params: { focus: true, source_workspace_id: "space-selected" },
+        },
+      },
+      {
+        input: "http://remote:4000/api/command",
+        body: { method: "workspace.create", params: { focus: true } },
+      },
+    ]);
+  });
+
   it("clears workspace and tab names with null labels", async () => {
     const requests: unknown[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
@@ -76,6 +102,22 @@ describe("command helpers", () => {
           before_workspace_id: "space-before",
         },
       },
+    ]);
+  });
+
+  it("never lets the browser client request an unbounded workspace-group close", async () => {
+    const requests: unknown[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      requests.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ type: "ok" }), { status: 200 });
+    });
+
+    await commands.closeWorkspace("space-1");
+    await (commands.closeWorkspace as (...args: unknown[]) => Promise<unknown>)("space-2", true);
+
+    expect(requests).toEqual([
+      { method: "workspace.close", params: { workspace_id: "space-1", close_group: false } },
+      { method: "workspace.close", params: { workspace_id: "space-2", close_group: false } },
     ]);
   });
 
