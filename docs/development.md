@@ -128,7 +128,7 @@ HERDR_SOCKET_PATH=/absolute/path/to/herdr.sock scripts/run-bridge.sh
 
 ## Reporting agent task summaries
 
-A harness or hook running inside an active Herdr agent pane can publish a
+An agent integration running inside an active Herdr agent pane can publish a
 bounded status line for Office callouts:
 
 ```bash
@@ -140,7 +140,7 @@ herdr-world task-summary --clear
 The command talks directly to Herdr and does not start, stop, or restart the
 browser bridge. It uses `HERDR_PANE_ID` by default; `--pane ID` and
 `--session NAME` select an explicit target. New reports require an active
-`agent_session` and are bound to its agent and metadata source so stale harness
+`agent_session` and are bound to its agent and metadata source so stale integration
 state can be retired by Herdr. Clearing remains available after an agent exits.
 
 Summaries default to a 900,000 ms (15-minute) TTL; `--ttl-ms` accepts 1 through

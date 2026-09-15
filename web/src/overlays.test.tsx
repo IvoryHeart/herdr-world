@@ -205,6 +205,33 @@ describe("ConfirmDialog", () => {
     await act(async () => root.render(null));
     expect(document.activeElement).toBe(opener);
   });
+
+  it("makes every cancellation path unavailable once cancellation is disabled", async () => {
+    const onCancel = vi.fn();
+    const { container } = await render(
+      <ConfirmDialog
+        title="Close workspace group?"
+        confirmLabel="Close"
+        cancelDisabled
+        onCancel={onCancel}
+        onConfirm={vi.fn()}
+      />,
+    );
+    const dialog = requiredElement<HTMLDivElement>(container, '[role="dialog"]');
+    const scrim = requiredElement<HTMLButtonElement>(container, ".overlay-scrim");
+    const cancel = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent === "Cancel");
+    const confirm = Array.from(dialog.querySelectorAll<HTMLButtonElement>("button"))
+      .find((button) => button.textContent === "Close");
+
+    expect(scrim.disabled).toBe(true);
+    expect(cancel?.disabled).toBe(true);
+    expect(confirm?.disabled).toBe(true);
+    await act(async () => scrim.click());
+    await act(async () => cancel?.click());
+    await press(dialog, "Escape");
+    expect(onCancel).not.toHaveBeenCalled();
+  });
 });
 
 const menuItems = [

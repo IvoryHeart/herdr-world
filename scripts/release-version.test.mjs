@@ -8,6 +8,7 @@ import {
   RELEASE_REFERENCE_PATHS,
   assertAndroidReleaseMetadata,
   assertCurrentReleaseReferences,
+  assertPublicReleaseCompatibility,
   compareReleaseTags,
   escapeRegex,
   homebrewFormulaName,
@@ -19,6 +20,7 @@ import {
   releaseVersion,
   readCurrentReleaseTag,
   stampCurrentRelease,
+  stampPublicReleaseCompatibility,
 } from "./release-version.mjs";
 
 const ANDROID_BUILD = `apply plugin: 'com.android.application'
@@ -30,6 +32,14 @@ android {
     }
 }
 `;
+
+function releaseReadme(version, details = "") {
+  return `${version}${details}\nrequires Herdr \`v0.8.2\` or newer\nwith terminal protocol \`20\`.\n`;
+}
+
+function releaseSite(version, details = "") {
+  return `${version}${details}\n<div><dt>Herdr</dt><dd>v0.8.2+</dd></div>\n<div><dt>Protocol</dt><dd>20</dd></div>\n<p>Herdr-managed / Herdr 0.8.2+</p>\n`;
+}
 
 test("accepts only stable releases and numbered release candidates", () => {
   assert.equal(normalizeReleaseTag("1.2.3"), "v1.2.3");
@@ -71,6 +81,37 @@ test("stamps Android metadata once in the reviewed release diff", () => {
   assert.match(prepared, /versionName "1\.2\.3-rc\.4"/);
   assert.equal(assertAndroidReleaseMetadata(prepared, "v1.2.3-rc.4"), true);
   assert.equal(prepareAndroidReleaseMetadata(prepared, "v1.2.3-rc.4").match(/versionCode (\d+)/)?.[1], "9");
+});
+
+test("stamps and validates the current public Herdr compatibility requirement", () => {
+  const readme = "requires Herdr `v0.8.2` or newer\nwith terminal protocol `20`.\n";
+  const site = "<div><dt>Herdr</dt><dd>v0.8.2+</dd></div>\n<div><dt>Protocol</dt><dd>20</dd></div>\n<p>Herdr-managed / Herdr 0.8.2+</p>\n";
+  const stampedReadme = stampPublicReleaseCompatibility(readme, "README.md");
+  const stampedSite = stampPublicReleaseCompatibility(site, "site/index.html");
+
+  assert.equal(
+    stampedReadme,
+    "requires Herdr `v0.9.0` or newer\nwith terminal protocol `22`.\n",
+  );
+  assert.equal(
+    stampedSite,
+    "<div><dt>Herdr</dt><dd>v0.9.0+</dd></div>\n<div><dt>Protocol</dt><dd>22</dd></div>\n<p>Herdr-managed / Herdr 0.9.0+</p>\n",
+  );
+  assert.throws(
+    () => assertPublicReleaseCompatibility({ readme, site }),
+    /README\.md advertises Herdr v0\.8\.2 with terminal protocol 20; expected Herdr v0\.9\.0 with terminal protocol 22/,
+  );
+  assert.equal(
+    assertPublicReleaseCompatibility({ readme: stampedReadme, site: stampedSite }),
+    true,
+  );
+  assert.throws(
+    () => assertPublicReleaseCompatibility({
+      readme: stampedReadme,
+      site: stampedSite.replace("Herdr-managed / Herdr 0.9.0+", "Herdr-managed / Herdr 0.8.2+"),
+    }),
+    /site\/index\.html advertises Herdr v0\.8\.2; expected Herdr v0\.9\.0/,
+  );
 });
 
 test("rejects Android metadata that no longer matches the reviewed release", () => {
@@ -126,8 +167,8 @@ test("stamps every public release reference from one source of truth", () => {
   try {
     mkdirSync(join(root, "site"));
     writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
-    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1 twice v1.2.3-rc.1\n");
-    writeFileSync(join(root, "site", "index.html"), "<p>v1.2.3-rc.1</p>\n");
+    writeFileSync(join(root, "README.md"), releaseReadme("v1.2.3-rc.1", " twice v1.2.3-rc.1"));
+    writeFileSync(join(root, "site", "index.html"), releaseSite("v1.2.3-rc.1"));
     writeFileSync(join(root, "site", "site.js"), 'const version = "v1.2.3-rc.1";\n');
 
     stampCurrentRelease("v1.2.3-rc.2", root);
@@ -148,8 +189,8 @@ test("stamps the plugin manifest's intentionally unprefixed version", () => {
   try {
     mkdirSync(join(root, "site"));
     writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
-    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
-    writeFileSync(join(root, "site", "index.html"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "README.md"), releaseReadme("v1.2.3-rc.1"));
+    writeFileSync(join(root, "site", "index.html"), releaseSite("v1.2.3-rc.1"));
     writeFileSync(join(root, "site", "site.js"), "v1.2.3-rc.1\n");
     writeFileSync(join(root, "herdr-plugin.toml"), 'version = "1.2.3-rc.1"\n');
 
@@ -168,11 +209,11 @@ test("switches public install channels when moving from an RC to stable", () => 
     writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
     writeFileSync(
       join(root, "README.md"),
-      "v1.2.3-rc.1 @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+      releaseReadme("v1.2.3-rc.1", " @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc"),
     );
     writeFileSync(
       join(root, "site", "index.html"),
-      "v1.2.3-rc.1 @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc\n",
+      releaseSite("v1.2.3-rc.1", " @1.2.3-rc.1 @next tap/herdr-world-rc upgrade herdr-world-rc uninstall herdr-world-rc"),
     );
     writeFileSync(
       join(root, "site", "site.js"),
@@ -200,15 +241,15 @@ test("fails closed when a required public surface has drifted", () => {
   try {
     mkdirSync(join(root, "site"));
     writeFileSync(join(root, "release.json"), '{"current":"v1.2.3"}\n');
-    writeFileSync(join(root, "README.md"), "v1.2.3\n");
-    writeFileSync(join(root, "site", "index.html"), "v1.2.3\n");
+    writeFileSync(join(root, "README.md"), releaseReadme("v1.2.3"));
+    writeFileSync(join(root, "site", "index.html"), releaseSite("v1.2.3"));
     writeFileSync(join(root, "site", "site.js"), "v9.9.9\n");
 
     assert.throws(
       () => stampCurrentRelease("v1.2.4", root),
       /site\/site\.js does not reference the current release v1\.2\.3/,
     );
-    assert.equal(readFileSync(join(root, "README.md"), "utf8"), "v1.2.3\n");
+    assert.equal(readFileSync(join(root, "README.md"), "utf8"), releaseReadme("v1.2.3"));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -219,8 +260,8 @@ test("rejects reusing a release tag even when public references already match", 
   try {
     mkdirSync(join(root, "site"));
     writeFileSync(join(root, "release.json"), '{"current":"v1.2.3-rc.1"}\n');
-    writeFileSync(join(root, "README.md"), "v1.2.3-rc.1\n");
-    writeFileSync(join(root, "site", "index.html"), "v1.2.3-rc.1\n");
+    writeFileSync(join(root, "README.md"), releaseReadme("v1.2.3-rc.1"));
+    writeFileSync(join(root, "site", "index.html"), releaseSite("v1.2.3-rc.1"));
     writeFileSync(join(root, "site", "site.js"), "v1.2.3-rc.1\n");
 
     assert.throws(

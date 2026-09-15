@@ -33,9 +33,9 @@ The current boundary and upstream-sync contract is documented in
 
 ## Pull Requests
 
-Agent-assisted development uses [OpenSpec and the development harness](docs/agent-development.md).
+Agent-assisted development uses the [lean native workflow and OpenSpec](docs/agent-development.md).
 The [knowledge map](docs/knowledge-map.md) points to maintained contracts and source.
-New agent worktrees share the primary checkout's ignored `.agents/.worktrees/`.
+New agent worktrees share the primary checkout's ignored `.agents/worktrees/`.
 
 - Keep one pull request focused on one coherent concern.
 - Explain the problem, the chosen approach, and any user-visible trade-offs.

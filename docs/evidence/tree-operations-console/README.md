@@ -37,7 +37,6 @@ Validation on the reviewed implementation (`b48ccfa`):
 | `npm run check:acceptance` | Passed: repository checks, 560 web tests, 297 Rust tests, 85 browser tests, security and independence audits |
 | Browser opt-in scenarios | Two skipped: operator-provided live SSH bridges and hardware GPU performance |
 | `npm run spec:check` | Six strict validations passed |
-| `npm run eval:check` | Eight grader controls and two tests passed; no model performance measured |
 | Camera stress check | Five repeated runs passed under repository-check load |
 | Privacy and whitespace | Tracked files, added-text history and synthetic screenshots reviewed; `git diff --check` passed |
 
@@ -45,7 +44,4 @@ The security audit passed under the repository's thresholds; existing dependency
 remain. No production dependency graph changed. Subsequent delivery edits only record these facts,
 complete the task checklist and attach the PR link.
 
-Execution used unchanged Superpowers 6.3.0 skills and native Codex, with sequential implementation
-writers and independent native review. No Ralph run was started. Complete native usage totals are
-unavailable, so this task makes no comparative cost or workflow-efficiency claim. Private run and
-review evidence is retained in the task worktree.
+Execution used native coding agents with sequential implementation writers and independent review.

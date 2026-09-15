@@ -457,7 +457,7 @@ of hidden requirements.
   prefer it for hover callouts, reception/bar announcements, and later agent
   timelines. The current status, state label, terminal title, and directory
   remain fallbacks when a harness does not provide a summary.
-- **Dependencies:** Existing harness/session identity, Herdr agent metadata
+- **Dependencies:** Existing agent-session identity and Herdr agent metadata
   reporting, bridge/web schema exposure, summary source and freshness, expiry
   or TTL, privacy filtering, prompt/log redaction, and upstream agreement on a
   stable field or extension hook.

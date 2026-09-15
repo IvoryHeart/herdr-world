@@ -3,8 +3,7 @@ import assert from 'node:assert/strict';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createWorktree } from './worktree.mjs';
-import { git } from './lib.mjs';
+import { createWorktree, git } from './worktree.mjs';
 
 async function fixture(t) {
   const primary = await mkdtemp(join(tmpdir(), 'world-worktree-'));

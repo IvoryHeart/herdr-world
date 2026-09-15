@@ -3,7 +3,6 @@ set -euo pipefail
 
 npm audit --audit-level=high
 npm audit --prefix web --audit-level=high
-npm audit --prefix harness --audit-level=high
 
 if command -v cargo-audit >/dev/null 2>&1; then
   cargo audit --file bridge/Cargo.lock

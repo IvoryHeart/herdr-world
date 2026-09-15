@@ -1,5 +1,10 @@
 import { CommandDraftContext, createCommandDraftStore } from "./commandDrafts";
-import { linkedWorkspaceLabels } from "./workspaceClose";
+import {
+  cancelWorkspaceCloseOperation,
+  captureWorkspaceCloseConfirmation,
+  executeConfirmedWorkspaceClose,
+} from "./workspaceClose";
+import type { WorkspaceCloseConfirmation, WorkspaceCloseOperation } from "./workspaceClose";
 import {
   Activity,
   Archive,
@@ -489,7 +494,7 @@ type DialogState = {
   clearable?: boolean;
   noun?: "room";
   sourceWorkspaceId?: string;
-  linkedWorkspaceLabels?: string[];
+  workspaceCloseConfirmation?: WorkspaceCloseConfirmation;
 };
 type DisplayPrefs = {
   hostScope: HostScope;
@@ -1317,6 +1322,20 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
   );
   const [launchTarget, setLaunchTarget] = useState<ScopedLaunchTarget | null>(null);
   const [busy, setBusy] = useState(false);
+  const [workspaceCloseMutationStarted, setWorkspaceCloseMutationStarted] = useState(false);
+  const workspaceCloseOperationRef = useRef<WorkspaceCloseOperation | null>(null);
+  const cancelCloseDialog = useCallback(() => {
+    const operation = workspaceCloseOperationRef.current;
+    if (operation) {
+      if (!cancelWorkspaceCloseOperation(operation)) {
+        return;
+      }
+      workspaceCloseOperationRef.current = null;
+      setBusy(false);
+      setWorkspaceCloseMutationStarted(false);
+    }
+    setDialog(null);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [refitToken, setRefitToken] = useState(0);
   const [terminalFocusToken, setTerminalFocusToken] = useState(0);
@@ -1450,7 +1469,11 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
         return true;
       }
       if (dialog) {
-        setDialog(null);
+        if (dialog.mode === "close") {
+          cancelCloseDialog();
+        } else {
+          setDialog(null);
+        }
         return true;
       }
       if (launchTarget) {
@@ -1478,6 +1501,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
   }, [
     backendSettingsOpen,
     closeBackendSettings,
+    cancelCloseDialog,
     cancelSpaceReorder,
     deletingNote,
     dialog,
@@ -4688,10 +4712,19 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     if (key === "rename") {
       setDialog({ mode: "rename", kind, bridgeId, id, label, clearable });
     } else if (key === "close") {
-      const linkedLabels = kind === "space"
-        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], id)
-        : [];
-      setDialog({ mode: "close", kind, bridgeId, id, label, linkedWorkspaceLabels: linkedLabels });
+      const ref = connectionRefs.current[bridgeId];
+      const closeConfirmation = kind === "space" && runtime &&
+          ref?.connectionKey === runtime.generationKey && ref.snapshot
+        ? captureWorkspaceCloseConfirmation(ref.snapshot.workspaces, id, runtime.generationKey)
+        : null;
+      setDialog({
+        mode: "close",
+        kind,
+        bridgeId,
+        id,
+        label,
+        workspaceCloseConfirmation: closeConfirmation ?? undefined,
+      });
     } else if (key === "newtab") {
       setSelectedBridgeId(bridgeId);
       setActiveWorkspaceRefState({ bridgeId, workspaceId: id });
@@ -4823,20 +4856,90 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     const { kind, bridgeId, id } = dialog;
     const runtime = bridge.getRuntime(bridgeId);
     const commands = runtime ? createCommands(runtime.httpUrl) : null;
-    if (!commands) {
+    if (!runtime || !commands) {
       setError("Connection is not ready");
       return;
     }
-    const command =
-      kind === "space" ? "workspace.close" : kind === "tab" ? "tab.close" : "pane.close";
+    if (kind === "space") {
+      const requestGenerationKey = runtime.generationKey;
+      const operation: WorkspaceCloseOperation = {
+        cancelled: false,
+        mutationStarted: false,
+      };
+      workspaceCloseOperationRef.current = operation;
+      const operationIsCurrent = () =>
+        workspaceCloseOperationRef.current === operation && !operation.cancelled;
+      setWorkspaceCloseMutationStarted(false);
+      setBusy(true);
+      void (async () => {
+        try {
+          const result = await executeConfirmedWorkspaceClose({
+            confirmed: dialog.workspaceCloseConfirmation,
+            fetchCurrent: async () => {
+              // The modal snapshot is not authority: read Herdr again before dispatch.
+              const latest = await fetchRuntimeSnapshot(runtime.httpUrl);
+              const ref = connectionRefs.current[bridgeId];
+              return isRuntimeGenerationCurrent(ref, requestGenerationKey)
+                ? captureWorkspaceCloseConfirmation(latest.workspaces, id, requestGenerationKey)
+                : null;
+            },
+            isCurrent: operationIsCurrent,
+            onMutationStart: () => {
+              operation.mutationStarted = true;
+              setWorkspaceCloseMutationStarted(true);
+            },
+            closeWorkspace: (workspaceId) => exec(
+              runtime,
+              { kind: "workspace", id: workspaceId, command: "workspace.close" },
+              (routedCommands) => routedCommands.closeWorkspace(workspaceId),
+            ),
+          });
+          if (!operationIsCurrent()) {
+            return;
+          }
+          if (result.status === "changed") {
+            setDialog({ ...dialog, workspaceCloseConfirmation: result.confirmation });
+            setError(
+              `${dialog.noun === "room" ? "Room" : "Space"} membership or connection changed. Review the updated confirmation before closing.`,
+            );
+          } else if (result.status === "unavailable") {
+            setError(
+              `${dialog.noun === "room" ? "Room" : "Space"} is no longer available on the current connection`,
+            );
+          } else if (result.status === "unsupported") {
+            setError(
+              `Cannot safely close this workspace group because it contains another primary checkout (${result.primaryWorkspaceLabels.join(", ")}). Resolve the duplicate primary in Herdr, then reopen this confirmation.`,
+            );
+          } else if (result.status === "partial") {
+            if (result.total > 1) {
+              setDialog(null);
+              setError(
+                `Workspace-group close stopped after ${result.completed} of ${result.total} confirmed close commands. Current state may be partially changed; refresh and review before retrying.`,
+              );
+            }
+          } else if (result.status === "complete") {
+            setDialog(null);
+          }
+        } catch (caught) {
+          if (operationIsCurrent()) {
+            setError(caught instanceof Error ? caught.message : "Could not verify space membership");
+          }
+        } finally {
+          if (workspaceCloseOperationRef.current === operation) {
+            workspaceCloseOperationRef.current = null;
+            setBusy(false);
+            setWorkspaceCloseMutationStarted(false);
+          }
+        }
+      })();
+      return;
+    }
+    const command = kind === "tab" ? "tab.close" : "pane.close";
     const action =
-      kind === "space"
-        ? (routedCommands: ReturnType<typeof createCommands>) =>
-            routedCommands.closeWorkspace(id, Boolean(dialog.linkedWorkspaceLabels?.length))
-        : kind === "tab"
-          ? (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closeTab(id)
-          : (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closePane(id);
-    void exec(runtime, { kind: kind === "space" ? "workspace" : kind, id, command }, action).then(
+      kind === "tab"
+        ? (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closeTab(id)
+        : (routedCommands: ReturnType<typeof createCommands>) => routedCommands.closePane(id);
+    void exec(runtime, { kind, id, command }, action).then(
       (ok) => ok && setDialog(null),
     );
   };
@@ -4948,9 +5051,16 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
       setLaunchTarget({ mode: "tab", workspaceId, bridgeId });
     },
     onOpenRoomDialog: ({ mode, bridgeId, workspaceId, sourceWorkspaceId, label }) => {
-      const linkedLabels = mode === "close"
-        ? linkedWorkspaceLabels(connectionRefs.current[bridgeId]?.snapshot?.workspaces ?? [], workspaceId)
-        : [];
+      const runtime = bridge.getRuntime(bridgeId);
+      const ref = connectionRefs.current[bridgeId];
+      const closeConfirmation = mode === "close" && runtime &&
+          ref?.connectionKey === runtime.generationKey && ref.snapshot
+        ? captureWorkspaceCloseConfirmation(
+            ref.snapshot.workspaces,
+            workspaceId,
+            runtime.generationKey,
+          )
+        : null;
       setDialog({
         mode,
         kind: "space",
@@ -4959,7 +5069,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
         sourceWorkspaceId,
         label,
         noun: "room",
-        linkedWorkspaceLabels: linkedLabels,
+        workspaceCloseConfirmation: closeConfirmation ?? undefined,
       });
     },
   });
@@ -5630,11 +5740,24 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
 
       {dialog?.mode === "close" ? (
         <ConfirmDialog
-          title={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).title}
-          message={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).message}
-          confirmLabel={closeCopy(dialog.kind, dialog.linkedWorkspaceLabels).confirm}
+          title={closeCopy(
+            dialog.kind,
+            dialog.workspaceCloseConfirmation?.linkedWorkspaceLabels,
+            dialog.noun,
+          ).title}
+          message={closeCopy(
+            dialog.kind,
+            dialog.workspaceCloseConfirmation?.linkedWorkspaceLabels,
+            dialog.noun,
+          ).message}
+          confirmLabel={closeCopy(
+            dialog.kind,
+            dialog.workspaceCloseConfirmation?.linkedWorkspaceLabels,
+            dialog.noun,
+          ).confirm}
           busy={busy}
-          onCancel={() => setDialog(null)}
+          cancelDisabled={workspaceCloseMutationStarted}
+          onCancel={cancelCloseDialog}
           onConfirm={confirmClose}
         />
       ) : null}
@@ -10513,16 +10636,28 @@ export function menuItems(
   return paneItems;
 }
 
-export function closeCopy(kind: MenuKind, linkedLabels: readonly string[] = []) {
+export function closeCopy(
+  kind: MenuKind,
+  linkedLabels: readonly string[] = [],
+  noun?: "room",
+) {
   if (kind === "space" && linkedLabels.length > 0) {
+    const spaceNoun = noun ?? "space";
     return {
-      title: "Close workspace group?",
-      message: `This closes this space and all linked worktree spaces (${linkedLabels.join(", ")}), including every tab and pane in the group.`,
+      title: noun === "room" ? "Close room group?" : "Close workspace group?",
+      message: `This closes this ${spaceNoun} and all linked worktree ${spaceNoun}s (${linkedLabels.join(", ")}), including every tab and pane in the group.`,
       confirm: "Close entire group",
     };
   }
   switch (kind) {
     case "space":
+      if (noun === "room") {
+        return {
+          title: "Close room?",
+          message: "This closes the room and every tab and pane inside it.",
+          confirm: "Close room",
+        };
+      }
       return {
         title: "Close space?",
         message: "This closes the space and every tab and pane inside it.",

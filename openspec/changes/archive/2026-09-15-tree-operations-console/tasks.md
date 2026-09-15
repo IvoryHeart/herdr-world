@@ -1,6 +1,6 @@
 # Tree Operations Console Implementation Plan
 
-> **For agentic workers:** Use superpowers:subagent-driven-development with sequential writers, task review and final review. This OpenSpec document is the only implementation plan.
+> **For agentic workers:** Keep sequential writers, task review and final review. This OpenSpec document is the implementation plan.
 
 **Goal:** Deliver the approved common sidebar and compact Tree Operations Console in a ready PR.
 
@@ -8,7 +8,7 @@
 
 **Tech Stack:** React, TypeScript, CSS, Vitest, Playwright; existing dependencies only.
 
-**Spec:** `openspec/changes/tree-operations-console/design.md` and `specs/world-surfaces/spec.md`; existing `openspec/specs/world-surfaces/spec.md` remains binding.
+**Spec:** `design.md` and `specs/world-surfaces/spec.md`; the current `openspec/specs/world-surfaces/spec.md` remains binding.
 
 ## Global Constraints
 
@@ -16,7 +16,7 @@
 - Preserve search with ancestors, independent collapse, selection without activation, guarded current-generation actions, pan/zoom/Fit, validated Tree preferences and canonical `/?theme=tree` history.
 - Preserve PR #79 mobile open/back focus, host-health visibility and Add Host behavior.
 - All published evidence uses synthetic fixtures. No production dependency or bridge protocol changes.
-- Use Superpowers/native Codex; do not start Ralph. Only one implementation writer at a time. Stop at a ready PR; do not merge.
+- Use native coding agents with only one implementation writer at a time. Stop at a ready PR; do not merge.
 
 ## 1. Shared navigation
 
@@ -74,4 +74,4 @@ const selectedNode = projection.nodes.find(node => node.selectionKey === context
 
 - [x] 3.1 Controller obtains final independent whole-change source and visual review, resolves findings, and records the result once in a sanitized delivery note.
 - [x] 3.2 Controller runs `npm run check:acceptance` and `npm run spec:check` on the final candidate, records exact results and any opt-in skips, and checks published screenshots contain only synthetic data.
-- [x] 3.3 Controller opens a ready PR against PR #81's actual branch, identifies the explicitly adopted PR #79 dependency, adds the PR number to the changelog, verifies remote status, and stops before merge. Record Superpowers/native Codex execution without claiming Ralph acceptance or comparative cost savings.
+- [x] 3.3 Controller opens a ready PR against PR #81's actual branch, identifies the explicitly adopted PR #79 dependency, adds the PR number to the changelog, verifies remote status, and stops before merge.

@@ -70,6 +70,20 @@ describe("close confirmation", () => {
     expect(closeCopy("tab", ["unrelated"]).title).toBe("Close tab?");
     expect(closeCopy("pane", ["unrelated"]).title).toBe("Close pane?");
   });
+
+  it("uses room terminology for Office closes without changing Spaces copy", () => {
+    expect(closeCopy("space", [], "room")).toEqual({
+      title: "Close room?",
+      message: "This closes the room and every tab and pane inside it.",
+      confirm: "Close room",
+    });
+    expect(closeCopy("space", ["feature-room"], "room")).toEqual({
+      title: "Close room group?",
+      message: "This closes this room and all linked worktree rooms (feature-room), including every tab and pane in the group.",
+      confirm: "Close entire group",
+    });
+    expect(closeCopy("space").title).toBe("Close space?");
+  });
 });
 
 describe("App connection guards", () => {

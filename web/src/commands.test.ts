@@ -105,7 +105,7 @@ describe("command helpers", () => {
     ]);
   });
 
-  it("closes workspace groups only with explicit authorization", async () => {
+  it("never lets the browser client request an unbounded workspace-group close", async () => {
     const requests: unknown[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
       requests.push(JSON.parse(String(init?.body)));
@@ -113,11 +113,11 @@ describe("command helpers", () => {
     });
 
     await commands.closeWorkspace("space-1");
-    await commands.closeWorkspace("space-1", true);
+    await (commands.closeWorkspace as (...args: unknown[]) => Promise<unknown>)("space-2", true);
 
     expect(requests).toEqual([
       { method: "workspace.close", params: { workspace_id: "space-1", close_group: false } },
-      { method: "workspace.close", params: { workspace_id: "space-1", close_group: true } },
+      { method: "workspace.close", params: { workspace_id: "space-2", close_group: false } },
     ]);
   });
 
