@@ -69,6 +69,9 @@ Web's own release history remains in its upstream changelog.
 
 ### Fixed
 
+- Updated the bridge TLS dependency to a release that rejects TLS 1.3 handshake messages crossing
+  encryption-level boundaries. ([Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
+
 - Started mobile terminal refit retries only after the current renderer mounts, so a slow tab
   switch cannot leave the terminal at its initial keyboard-sized height.
   ([Herdr Web PR #90](https://github.com/kcosr/herdr-web/pull/90),
