@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   captureWorkspaceCloseConfirmation,
+  executeConfirmedWorkspaceClose,
   linkedWorkspaceLabels,
   workspaceCloseConfirmationMatches,
 } from "./workspaceClose";
+import type { WorkspaceCloseConfirmation } from "./workspaceClose";
 import type { WorkspaceInfo } from "./types";
 
 function workspace(id: string, repoKey?: string, linked = false): WorkspaceInfo {
@@ -82,5 +84,113 @@ describe("workspace group close confirmation", () => {
 
     expect(captureWorkspaceCloseConfirmation(workspaces, "missing", "generation-a")).toBeNull();
     expect(workspaceCloseConfirmationMatches(confirmed, null)).toBe(false);
+  });
+
+  it("closes confirmed linked members individually and the primary last", async () => {
+    const confirmed = captureWorkspaceCloseConfirmation(workspaces, "root", "generation-a")!;
+    const calls: string[] = [];
+
+    const result = await executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: async () => confirmed,
+      isCurrent: () => true,
+      closeWorkspace: async (workspaceId) => {
+        calls.push(workspaceId);
+        return true;
+      },
+    });
+
+    expect(calls).toEqual(["child", "root"]);
+    expect(result).toEqual({ status: "complete", completed: 2, total: 2 });
+  });
+
+  it("does not dispatch after cancellation during the confirmation refresh", async () => {
+    const confirmed = captureWorkspaceCloseConfirmation(workspaces, "root", "generation-a")!;
+    let resolveCurrent!: (confirmation: WorkspaceCloseConfirmation | null) => void;
+    let current = true;
+    const calls: string[] = [];
+    const resultPromise = executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: () => new Promise((resolve) => { resolveCurrent = resolve; }),
+      isCurrent: () => current,
+      closeWorkspace: async (workspaceId) => {
+        calls.push(workspaceId);
+        return true;
+      },
+    });
+
+    current = false;
+    resolveCurrent(confirmed);
+
+    await expect(resultPromise).resolves.toEqual({ status: "cancelled" });
+    expect(calls).toEqual([]);
+  });
+
+  it("renews the dialog without dispatch when the refreshed membership changed", async () => {
+    const confirmed = captureWorkspaceCloseConfirmation(workspaces, "root", "generation-a")!;
+    const changed = captureWorkspaceCloseConfirmation(
+      [...workspaces, workspace("new-child", "repo", true)],
+      "root",
+      "generation-a",
+    )!;
+    const calls: string[] = [];
+
+    const result = await executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: async () => changed,
+      isCurrent: () => true,
+      closeWorkspace: async (workspaceId) => {
+        calls.push(workspaceId);
+        return true;
+      },
+    });
+
+    expect(result).toEqual({ status: "changed", confirmation: changed });
+    expect(calls).toEqual([]);
+  });
+
+  it("stops after cancellation during a sequential close", async () => {
+    const confirmed = captureWorkspaceCloseConfirmation(workspaces, "root", "generation-a")!;
+    let current = true;
+    const calls: string[] = [];
+
+    const result = await executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: async () => confirmed,
+      isCurrent: () => current,
+      closeWorkspace: async (workspaceId) => {
+        calls.push(workspaceId);
+        current = false;
+        return true;
+      },
+    });
+
+    expect(result).toEqual({ status: "cancelled" });
+    expect(calls).toEqual(["child"]);
+  });
+
+  it("cannot include a member that joins after confirmation and reports a partial stop", async () => {
+    const confirmed = captureWorkspaceCloseConfirmation(workspaces, "root", "generation-a")!;
+    const calls: string[] = [];
+    let unseenMemberJoined = false;
+
+    const result = await executeConfirmedWorkspaceClose({
+      confirmed,
+      fetchCurrent: async () => confirmed,
+      isCurrent: () => true,
+      closeWorkspace: async (workspaceId) => {
+        calls.push(workspaceId);
+        if (workspaceId === "child") {
+          unseenMemberJoined = true;
+          return true;
+        }
+        // Herdr v0.9.0 rejects close_group=false on the primary while a linked member exists.
+        return !unseenMemberJoined;
+      },
+    });
+
+    expect(calls).toEqual(["child", "root"]);
+    expect(calls).not.toContain("new-child");
+    expect(result).toEqual({ status: "partial", completed: 1, total: 2 });
   });
 });

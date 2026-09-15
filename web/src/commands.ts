@@ -108,8 +108,8 @@ export function createCommands(httpUrl: BridgeHttpUrl = sameOriginHttpUrl) {
     },
     renameWorkspace: (workspaceId: string, label: string | null) =>
       runCommand(httpUrl, "workspace.rename", { workspace_id: workspaceId, label }),
-    closeWorkspace: (workspaceId: string, closeGroup: boolean = false) =>
-      runCommand(httpUrl, "workspace.close", { workspace_id: workspaceId, close_group: closeGroup }),
+    closeWorkspace: (workspaceId: string) =>
+      runCommand(httpUrl, "workspace.close", { workspace_id: workspaceId, close_group: false }),
     focusWorkspace: (workspaceId: string) =>
       runCommand(httpUrl, "workspace.focus", { workspace_id: workspaceId }),
     moveWorkspaceBlock: (workspaceIds: string[], beforeWorkspaceId: string | null) =>

@@ -1,7 +1,7 @@
 import { CommandDraftContext, createCommandDraftStore } from "./commandDrafts";
 import {
   captureWorkspaceCloseConfirmation,
-  workspaceCloseConfirmationMatches,
+  executeConfirmedWorkspaceClose,
 } from "./workspaceClose";
 import type { WorkspaceCloseConfirmation } from "./workspaceClose";
 import {
@@ -1321,6 +1321,15 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
   );
   const [launchTarget, setLaunchTarget] = useState<ScopedLaunchTarget | null>(null);
   const [busy, setBusy] = useState(false);
+  const workspaceCloseOperationRef = useRef<{ cancelled: boolean } | null>(null);
+  const cancelCloseDialog = useCallback(() => {
+    if (workspaceCloseOperationRef.current) {
+      workspaceCloseOperationRef.current.cancelled = true;
+      workspaceCloseOperationRef.current = null;
+      setBusy(false);
+    }
+    setDialog(null);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [refitToken, setRefitToken] = useState(0);
   const [terminalFocusToken, setTerminalFocusToken] = useState(0);
@@ -1454,7 +1463,11 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
         return true;
       }
       if (dialog) {
-        setDialog(null);
+        if (dialog.mode === "close") {
+          cancelCloseDialog();
+        } else {
+          setDialog(null);
+        }
         return true;
       }
       if (launchTarget) {
@@ -1482,6 +1495,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
   }, [
     backendSettingsOpen,
     closeBackendSettings,
+    cancelCloseDialog,
     cancelSpaceReorder,
     deletingNote,
     dialog,
@@ -4842,50 +4856,61 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
     }
     if (kind === "space") {
       const requestGenerationKey = runtime.generationKey;
+      const operation = { cancelled: false };
+      workspaceCloseOperationRef.current = operation;
+      const operationIsCurrent = () =>
+        workspaceCloseOperationRef.current === operation && !operation.cancelled;
       setBusy(true);
       void (async () => {
         try {
-          // The modal snapshot is not authority: read Herdr again immediately before dispatch.
-          const latest = await fetchRuntimeSnapshot(runtime.httpUrl);
-          const ref = connectionRefs.current[bridgeId];
-          if (!isRuntimeGenerationCurrent(ref, requestGenerationKey)) {
-            setError("Connection changed. Review the close confirmation again.");
+          const result = await executeConfirmedWorkspaceClose({
+            confirmed: dialog.workspaceCloseConfirmation,
+            fetchCurrent: async () => {
+              // The modal snapshot is not authority: read Herdr again before dispatch.
+              const latest = await fetchRuntimeSnapshot(runtime.httpUrl);
+              const ref = connectionRefs.current[bridgeId];
+              return isRuntimeGenerationCurrent(ref, requestGenerationKey)
+                ? captureWorkspaceCloseConfirmation(latest.workspaces, id, requestGenerationKey)
+                : null;
+            },
+            isCurrent: operationIsCurrent,
+            closeWorkspace: (workspaceId) => exec(
+              runtime,
+              { kind: "workspace", id: workspaceId, command: "workspace.close" },
+              (routedCommands) => routedCommands.closeWorkspace(workspaceId),
+            ),
+          });
+          if (!operationIsCurrent()) {
             return;
           }
-          const currentConfirmation = captureWorkspaceCloseConfirmation(
-            latest.workspaces,
-            id,
-            requestGenerationKey,
-          );
-          if (!currentConfirmation) {
-            setError(
-              `${dialog.noun === "room" ? "Room" : "Space"} is no longer available on the current connection`,
-            );
-            return;
-          }
-          if (!workspaceCloseConfirmationMatches(
-            dialog.workspaceCloseConfirmation,
-            currentConfirmation,
-          )) {
-            setDialog({ ...dialog, workspaceCloseConfirmation: currentConfirmation });
+          if (result.status === "changed") {
+            setDialog({ ...dialog, workspaceCloseConfirmation: result.confirmation });
             setError(
               `${dialog.noun === "room" ? "Room" : "Space"} membership or connection changed. Review the updated confirmation before closing.`,
             );
-            return;
-          }
-          const closeWorkspaceGroup = currentConfirmation.linkedWorkspaceLabels.length > 0;
-          const ok = await exec(
-            runtime,
-            { kind: "workspace", id, command: "workspace.close" },
-            (routedCommands) => routedCommands.closeWorkspace(id, closeWorkspaceGroup),
-          );
-          if (ok) {
+          } else if (result.status === "unavailable") {
+            setError(
+              `${dialog.noun === "room" ? "Room" : "Space"} is no longer available on the current connection`,
+            );
+          } else if (result.status === "partial") {
+            if (result.total > 1) {
+              setDialog(null);
+              setError(
+                `Workspace-group close stopped after ${result.completed} of ${result.total} confirmed close commands. Current state may be partially changed; refresh and review before retrying.`,
+              );
+            }
+          } else if (result.status === "complete") {
             setDialog(null);
           }
         } catch (caught) {
-          setError(caught instanceof Error ? caught.message : "Could not verify space membership");
+          if (operationIsCurrent()) {
+            setError(caught instanceof Error ? caught.message : "Could not verify space membership");
+          }
         } finally {
-          setBusy(false);
+          if (workspaceCloseOperationRef.current === operation) {
+            workspaceCloseOperationRef.current = null;
+            setBusy(false);
+          }
         }
       })();
       return;
@@ -5712,7 +5737,7 @@ function AppContent({ commandDrafts }: { commandDrafts: ReturnType<typeof create
             dialog.noun,
           ).confirm}
           busy={busy}
-          onCancel={() => setDialog(null)}
+          onCancel={cancelCloseDialog}
           onConfirm={confirmClose}
         />
       ) : null}
