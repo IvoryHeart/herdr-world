@@ -12,6 +12,7 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -1206,6 +1207,25 @@ function launchdServicePath(record, command) {
   return definition.match(/^\s*path = (.+)$/m)?.[1]?.trim() ?? null;
 }
 
+function canonicalPath(pathname) {
+  const unresolved = [];
+  let current = path.resolve(pathname);
+  while (!existsSync(current) && path.dirname(current) !== current) {
+    unresolved.unshift(path.basename(current));
+    current = path.dirname(current);
+  }
+  try {
+    current = realpathSync(current);
+  } catch {
+    // The supervisor may retain a definition path after its file was removed.
+  }
+  return path.join(current, ...unresolved);
+}
+
+function equivalentPaths(left, right) {
+  return typeof left === "string" && typeof right === "string" && canonicalPath(left) === canonicalPath(right);
+}
+
 function unrecordedService(identity, supervisor) {
   return {
     target_identity: identity,
@@ -1259,7 +1279,7 @@ async function recoverUnrecordedService(
 
     const expectedPath = pathForSupervisor(stateDir, record, "plist");
     const actualPath = launchdServicePath(record, supervisor.command);
-    if (actualPath !== expectedPath) {
+    if (!equivalentPaths(actualPath, expectedPath)) {
       throw new PluginError(
         `launchd service ${record.service_name} is already loaded from an unexpected definition; refusing to stop an unrelated service`,
       );
