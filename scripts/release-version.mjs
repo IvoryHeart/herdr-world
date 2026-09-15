@@ -17,6 +17,7 @@ const README_COMPATIBILITY_PATTERN =
   /requires Herdr `v([^`]+)` or newer\s+with terminal protocol `(\d+)`/g;
 const SITE_HERDR_PATTERN = /<dt>Herdr<\/dt><dd>v([^<]+)\+<\/dd>/g;
 const SITE_PROTOCOL_PATTERN = /<dt>Protocol<\/dt><dd>(\d+)<\/dd>/g;
+const SITE_MANAGED_HERDR_PATTERN = /Herdr-managed \/ Herdr ([0-9]+\.[0-9]+\.[0-9]+)\+/g;
 
 function exactlyOneMatch(contents, pattern, label) {
   const matches = [...contents.matchAll(pattern)];
@@ -29,12 +30,13 @@ function exactlyOneMatch(contents, pattern, label) {
 function publicCompatibility(contents, relativePath) {
   if (relativePath === "README.md") {
     const match = exactlyOneMatch(contents, README_COMPATIBILITY_PATTERN, relativePath);
-    return { herdr: match[1], protocol: Number(match[2]) };
+    return { herdr: [match[1]], protocol: [Number(match[2])] };
   }
   if (relativePath === "site/index.html") {
     const herdr = exactlyOneMatch(contents, SITE_HERDR_PATTERN, relativePath);
     const protocol = exactlyOneMatch(contents, SITE_PROTOCOL_PATTERN, relativePath);
-    return { herdr: herdr[1], protocol: Number(protocol[1]) };
+    const managedHerdr = exactlyOneMatch(contents, SITE_MANAGED_HERDR_PATTERN, relativePath);
+    return { herdr: [herdr[1], managedHerdr[1]], protocol: [Number(protocol[1])] };
   }
   throw new Error(`unsupported public compatibility surface: ${relativePath}`);
 }
@@ -49,16 +51,29 @@ export function stampPublicReleaseCompatibility(contents, relativePath) {
   }
   return contents
     .replace(SITE_HERDR_PATTERN, `<dt>Herdr</dt><dd>v${MIN_HERDR_VERSION}+</dd>`)
-    .replace(SITE_PROTOCOL_PATTERN, `<dt>Protocol</dt><dd>${TERMINAL_PROTOCOL}</dd>`);
+    .replace(SITE_PROTOCOL_PATTERN, `<dt>Protocol</dt><dd>${TERMINAL_PROTOCOL}</dd>`)
+    .replace(SITE_MANAGED_HERDR_PATTERN, `Herdr-managed / Herdr ${MIN_HERDR_VERSION}+`);
 }
 
 export function assertPublicReleaseCompatibility({ readme, site }) {
   for (const [relativePath, contents] of [["README.md", readme], ["site/index.html", site]]) {
     const actual = publicCompatibility(contents, relativePath);
-    if (actual.herdr !== MIN_HERDR_VERSION || actual.protocol !== TERMINAL_PROTOCOL) {
+    const invalidHerdr = actual.herdr.find((version) => version !== MIN_HERDR_VERSION);
+    const invalidProtocol = actual.protocol.find((protocol) => protocol !== TERMINAL_PROTOCOL);
+    if (invalidHerdr !== undefined && invalidProtocol !== undefined) {
       throw new Error(
-        `${relativePath} advertises Herdr v${actual.herdr} with terminal protocol ${actual.protocol}; ` +
+        `${relativePath} advertises Herdr v${invalidHerdr} with terminal protocol ${invalidProtocol}; ` +
         `expected Herdr v${MIN_HERDR_VERSION} with terminal protocol ${TERMINAL_PROTOCOL}`,
+      );
+    }
+    if (invalidHerdr !== undefined) {
+      throw new Error(
+        `${relativePath} advertises Herdr v${invalidHerdr}; expected Herdr v${MIN_HERDR_VERSION}`,
+      );
+    }
+    if (invalidProtocol !== undefined) {
+      throw new Error(
+        `${relativePath} advertises terminal protocol ${invalidProtocol}; expected ${TERMINAL_PROTOCOL}`,
       );
     }
   }

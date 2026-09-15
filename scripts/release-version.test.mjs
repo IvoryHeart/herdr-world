@@ -38,7 +38,7 @@ function releaseReadme(version, details = "") {
 }
 
 function releaseSite(version, details = "") {
-  return `${version}${details}\n<div><dt>Herdr</dt><dd>v0.8.2+</dd></div>\n<div><dt>Protocol</dt><dd>20</dd></div>\n`;
+  return `${version}${details}\n<div><dt>Herdr</dt><dd>v0.8.2+</dd></div>\n<div><dt>Protocol</dt><dd>20</dd></div>\n<p>Herdr-managed / Herdr 0.8.2+</p>\n`;
 }
 
 test("accepts only stable releases and numbered release candidates", () => {
@@ -85,7 +85,7 @@ test("stamps Android metadata once in the reviewed release diff", () => {
 
 test("stamps and validates the current public Herdr compatibility requirement", () => {
   const readme = "requires Herdr `v0.8.2` or newer\nwith terminal protocol `20`.\n";
-  const site = "<div><dt>Herdr</dt><dd>v0.8.2+</dd></div>\n<div><dt>Protocol</dt><dd>20</dd></div>\n";
+  const site = "<div><dt>Herdr</dt><dd>v0.8.2+</dd></div>\n<div><dt>Protocol</dt><dd>20</dd></div>\n<p>Herdr-managed / Herdr 0.8.2+</p>\n";
   const stampedReadme = stampPublicReleaseCompatibility(readme, "README.md");
   const stampedSite = stampPublicReleaseCompatibility(site, "site/index.html");
 
@@ -95,7 +95,7 @@ test("stamps and validates the current public Herdr compatibility requirement", 
   );
   assert.equal(
     stampedSite,
-    "<div><dt>Herdr</dt><dd>v0.9.0+</dd></div>\n<div><dt>Protocol</dt><dd>22</dd></div>\n",
+    "<div><dt>Herdr</dt><dd>v0.9.0+</dd></div>\n<div><dt>Protocol</dt><dd>22</dd></div>\n<p>Herdr-managed / Herdr 0.9.0+</p>\n",
   );
   assert.throws(
     () => assertPublicReleaseCompatibility({ readme, site }),
@@ -104,6 +104,13 @@ test("stamps and validates the current public Herdr compatibility requirement", 
   assert.equal(
     assertPublicReleaseCompatibility({ readme: stampedReadme, site: stampedSite }),
     true,
+  );
+  assert.throws(
+    () => assertPublicReleaseCompatibility({
+      readme: stampedReadme,
+      site: stampedSite.replace("Herdr-managed / Herdr 0.9.0+", "Herdr-managed / Herdr 0.8.2+"),
+    }),
+    /site\/index\.html advertises Herdr v0\.8\.2; expected Herdr v0\.9\.0/,
   );
 });
 
