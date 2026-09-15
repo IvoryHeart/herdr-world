@@ -2332,12 +2332,13 @@ fn spawn_management_controller(
             command
                 .arg("submit")
                 .arg("-l")
-                .arg(label)
+                .arg(&label)
                 .arg("--")
                 .arg("/usr/bin/env");
             for value in controller_environment_arguments() {
                 command.arg(value);
             }
+            command.arg(format!("HERDR_WORLD_APPLY_JOB_LABEL={label}"));
             command.arg(format!(
                 "HERDR_WORLD_APPLY_GRACE_MS={CONTROLLER_HANDOFF_GRACE_MS}"
             ));

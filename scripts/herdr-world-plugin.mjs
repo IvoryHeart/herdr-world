@@ -12,6 +12,7 @@ import {
   readFileSync,
   readdirSync,
   readlinkSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -51,6 +52,7 @@ const LOCK_TIMEOUT_MS = 10_000;
 const APPLY_STATUS_FILE = "remote-access-apply.json";
 const MAX_REMOTE_ACCESS_ITEMS = 32;
 const MAX_REMOTE_ACCESS_VALUE_BYTES = 512;
+const APPLY_JOB_LABEL_PATTERN = /^io\.ivoryheart\.herdr-world\.apply\.\d+-\d+$/;
 
 export class PluginError extends Error {
   constructor(message, options = {}) {
@@ -1206,6 +1208,25 @@ function launchdServicePath(record, command) {
   return definition.match(/^\s*path = (.+)$/m)?.[1]?.trim() ?? null;
 }
 
+function canonicalPath(pathname) {
+  const unresolved = [];
+  let current = path.resolve(pathname);
+  while (!existsSync(current) && path.dirname(current) !== current) {
+    unresolved.unshift(path.basename(current));
+    current = path.dirname(current);
+  }
+  try {
+    current = realpathSync(current);
+  } catch {
+    // The supervisor may retain a definition path after its file was removed.
+  }
+  return path.join(current, ...unresolved);
+}
+
+function equivalentPaths(left, right) {
+  return typeof left === "string" && typeof right === "string" && canonicalPath(left) === canonicalPath(right);
+}
+
 function unrecordedService(identity, supervisor) {
   return {
     target_identity: identity,
@@ -1259,7 +1280,7 @@ async function recoverUnrecordedService(
 
     const expectedPath = pathForSupervisor(stateDir, record, "plist");
     const actualPath = launchdServicePath(record, supervisor.command);
-    if (actualPath !== expectedPath) {
+    if (!equivalentPaths(actualPath, expectedPath)) {
       throw new PluginError(
         `launchd service ${record.service_name} is already loaded from an unexpected definition; refusing to stop an unrelated service`,
       );
@@ -2023,6 +2044,18 @@ function readRemoteAccessRequest(draftPath) {
   };
 }
 
+function removeSubmittedApplyJob(env) {
+  const label = env.HERDR_WORLD_APPLY_JOB_LABEL;
+  if (!APPLY_JOB_LABEL_PATTERN.test(label ?? "")) return;
+  let launchctl;
+  try {
+    launchctl = supervisorCommand("HERDR_WORLD_LAUNCHCTL", env);
+  } catch {
+    return;
+  }
+  commandResult(launchctl, ["remove", label], { env, timeout: RUNTIME_TIMEOUT_MS });
+}
+
 export async function applyRemoteAccessAction({
   draftPath,
   root = ROOT,
@@ -2121,6 +2154,7 @@ export async function applyRemoteAccessAction({
       throw error;
     } finally {
       rmSync(draftPath, { force: true });
+      removeSubmittedApplyJob(env);
     }
   };
   return withTargetLock(lockContext.stateDir, lockContext.target.identity, execute);
