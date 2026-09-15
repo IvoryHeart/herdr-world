@@ -52,6 +52,7 @@ const LOCK_TIMEOUT_MS = 10_000;
 const APPLY_STATUS_FILE = "remote-access-apply.json";
 const MAX_REMOTE_ACCESS_ITEMS = 32;
 const MAX_REMOTE_ACCESS_VALUE_BYTES = 512;
+const APPLY_JOB_LABEL_PATTERN = /^io\.ivoryheart\.herdr-world\.apply\.\d+-\d+$/;
 
 export class PluginError extends Error {
   constructor(message, options = {}) {
@@ -2043,6 +2044,18 @@ function readRemoteAccessRequest(draftPath) {
   };
 }
 
+function removeSubmittedApplyJob(env) {
+  const label = env.HERDR_WORLD_APPLY_JOB_LABEL;
+  if (!APPLY_JOB_LABEL_PATTERN.test(label ?? "")) return;
+  let launchctl;
+  try {
+    launchctl = supervisorCommand("HERDR_WORLD_LAUNCHCTL", env);
+  } catch {
+    return;
+  }
+  commandResult(launchctl, ["remove", label], { env, timeout: RUNTIME_TIMEOUT_MS });
+}
+
 export async function applyRemoteAccessAction({
   draftPath,
   root = ROOT,
@@ -2141,6 +2154,7 @@ export async function applyRemoteAccessAction({
       throw error;
     } finally {
       rmSync(draftPath, { force: true });
+      removeSubmittedApplyJob(env);
     }
   };
   return withTargetLock(lockContext.stateDir, lockContext.target.identity, execute);

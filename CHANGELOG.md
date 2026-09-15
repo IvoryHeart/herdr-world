@@ -97,7 +97,8 @@ Web's own release history remains in its upstream changelog.
   [Herdr World PR #75](https://github.com/IvoryHeart/herdr-world/pull/75)
 
 - Fixed macOS launchd recovery when the supervisor reports the `/private` alias for a managed
-  service path, so saving Network settings no longer rejects the bridge as an unrelated service.
+  service path, and cleaned up submitted apply jobs after completion, so saving Network settings
+  no longer rejects the bridge or leaves repeated stale reconciliations behind.
 
 ### Removed
 

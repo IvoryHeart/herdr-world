@@ -162,6 +162,7 @@ if (args[0] === "bootout") {
   }
   process.exit(0);
 }
+if (args[0] === "remove") process.exit(0);
 process.exit(0);
 `);
   writeFileSync(commandPath, JSON.stringify([process.execPath, entrypoint, "--host", "127.0.0.1", "--port", String(port)]));
@@ -782,6 +783,41 @@ test("remote access apply waits for readiness and restores the prior service on 
     assert.equal(fsExists(fixture.statePath), true);
   } finally {
     try { await runAction("stop", options); } catch {}
+    await new Promise((resolve) => fixture.socketServer.close(resolve));
+    rmSync(fixture.socketPath, { force: true });
+    rmSync(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("launchd apply removes its submitted one-shot job after completion", async () => {
+  const fixture = await launchdFixture();
+  mkdirSync(path.join(fixture.root, "scripts"), { recursive: true });
+  writeFileSync(
+    path.join(fixture.root, "scripts", "herdr-world-plugin.mjs"),
+    readFileSync(path.join(ROOT, "scripts", "herdr-world-plugin.mjs")),
+  );
+  const options = { root: fixture.root, env: fixture.env, platform: "darwin", arch: "arm64" };
+  const requestPath = path.join(fixture.stateDir, "remote-access-request.json");
+  try {
+    mkdirSync(fixture.stateDir, { recursive: true });
+    writeFileSync(requestPath, JSON.stringify({
+      apply_id: "apply-test-1",
+      remote_access: {
+        enabled: true,
+        accepted_hosts: ["bridge.example.test"],
+        allowed_page_origins: ["http://world.example.test"],
+        allowed_bridge_origins: [],
+      },
+    }));
+    fixture.env.HERDR_WORLD_APPLY_JOB_LABEL = "io.ivoryheart.herdr-world.apply.123-4";
+    await applyRemoteAccessAction({ draftPath: requestPath, ...options });
+    const commands = readFileSync(fixture.logPath, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+    assert.ok(commands.some((args) => args[0] === "remove" && args[1] === fixture.env.HERDR_WORLD_APPLY_JOB_LABEL));
+  } finally {
     await new Promise((resolve) => fixture.socketServer.close(resolve));
     rmSync(fixture.socketPath, { force: true });
     rmSync(fixture.root, { recursive: true, force: true });

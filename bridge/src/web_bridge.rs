@@ -2338,6 +2338,7 @@ fn spawn_management_controller(
             for value in controller_environment_arguments() {
                 command.arg(value);
             }
+            command.arg(format!("HERDR_WORLD_APPLY_JOB_LABEL={label}"));
             command.arg(format!(
                 "HERDR_WORLD_APPLY_GRACE_MS={CONTROLLER_HANDOFF_GRACE_MS}"
             ));
