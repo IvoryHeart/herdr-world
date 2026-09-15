@@ -57,10 +57,11 @@ node scripts/release.mjs prepare v0.1.0
 ```
 
 The preparation command requires the branch to start exactly at `origin/main`, repeats the normal
-repository check, updates every release reference, promotes the changelog notes, removes empty
-released subsections, records the exact Herdr Web baseline from `UPSTREAM.md`, and opens the next
-empty `## [Unreleased]` section in the same diff. The World changelog contains World releases and
-downstream changes; it links the baseline instead of copying Herdr Web's release history.
+repository check, updates every release reference, increments Android `versionCode`, stamps Android
+`versionName`, promotes the changelog notes, removes empty released subsections, records the exact
+Herdr Web baseline from `UPSTREAM.md`, and opens the next empty `## [Unreleased]` section in the
+same diff. The World changelog contains World releases and downstream changes; it links the
+baseline instead of copying Herdr Web's release history.
 
 The generated changelog date is the intended UTC release date. Merge, preflight, and tag on that
 date. If review delays the release past it, update the date in the release PR and have that revision
@@ -156,8 +157,9 @@ archive contents and verify the root installer, named installer, version marker,
 binary, bundled `web/dist`, README, root license,
 third-party notices, upstream record, Apache/PixiJS license texts, generated production npm/Cargo
 licence inventories, World asset record, and Herdr vendor manifest are present.
-For APKs, inspect the package listing or metadata and verify the bundled
-`public/legal/manifest.json` and every file it names.
+For APKs, run the package, version, signature, and alignment checks in
+[docs/android.md](android.md), then verify the bundled `public/legal/manifest.json` and every file
+it names.
 
 The macOS archives are intentionally unsigned and unnotarized. Developer ID signing and
 notarization are deferred for the first stable `v0.1.0` release and can be revisited when project
@@ -281,6 +283,11 @@ and macOS x86-64 archives, npm package, plugin lifecycle, and Homebrew Formula b
 GitHub release or advancing a public package channel. It then publishes the enabled GitHub, npm, and
 Homebrew channels from those exact tested outputs. The release commit's site changes also trigger
 the Pages deployment. No separate desktop upload or documentation-edit step is required.
+
+Android version metadata is part of the tagged release commit. Do not increment it again when
+building artifacts: all builds from the same tag must retain the same `versionCode` and
+`versionName`. Normal Android sync/build commands do not change these values. npm package versions
+remain independent of release versions.
 
 ## Android Validation
 

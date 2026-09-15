@@ -13,8 +13,8 @@ upstream  git@github.com:kcosr/herdr-web.git
 
 Current synchronization points:
 
-- Herdr Web: `3fb68ca4cc850ea39277120d74a30b7a038a4f8f`
-  (`v0.6.0` plus the mobile terminal keyboard controls merged in upstream PR #89)
+- Herdr Web: `35f193404016056c6063229bab4c512946ad5a22`
+  (`v0.6.1` plus Android release versioning merged in upstream PR #91)
 - Herdr compatibility: Herdr `v0.9.0`, commit
   `b99002ac99b09e00b4ca692436cb15a6b0d676f1`, terminal protocol `22`
 

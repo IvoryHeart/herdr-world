@@ -85,6 +85,12 @@ import {
 import { authenticatedFetch } from "./bridgeApi";
 import type { UploadCandidate, UploadedFile } from "./terminalUploads";
 
+type TerminalRendererFactory = (
+  fontSizePx: number,
+  transparentBackground: boolean,
+  cursorBlink: boolean,
+) => TerminalRenderer;
+
 type Props = {
   bridgeId: string;
   pane: PaneInfo | null;
@@ -148,6 +154,8 @@ type Props = {
   accessibilityLabel?: string;
   /** Whether this is the currently selected terminal in a split. */
   selected?: boolean;
+  /** Creates a terminal renderer for each mounted terminal pane. */
+  createTerminalRenderer?: TerminalRendererFactory;
 };
 
 type UploadConflictState = {
@@ -177,6 +185,14 @@ type TerminalRendererReady = {
 };
 const MAX_UPLOAD_FILES = 8;
 const DEBUG_TERMINAL_RECONNECT = false;
+
+function createGhosttyTerminalRenderer(
+  fontSizePx: number,
+  transparentBackground: boolean,
+  cursorBlink: boolean,
+) {
+  return new GhosttyRenderer(fontSizePx, transparentBackground, cursorBlink);
+}
 
 export function TerminalView({
   bridgeId,
@@ -213,6 +229,7 @@ export function TerminalView({
   autoRenameUploadConflicts = true,
   accessibilityLabel = "Terminal",
   selected = false,
+  createTerminalRenderer = createGhosttyTerminalRenderer,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLElement | null>(null);
@@ -585,7 +602,7 @@ export function TerminalView({
     let lastMeasuredHostSize = { width: host.clientWidth, height: host.clientHeight };
     const generation = rendererGenerationRef.current + 1;
     rendererGenerationRef.current = generation;
-    const renderer: TerminalRenderer = new GhosttyRenderer(
+    const renderer = createTerminalRenderer(
       terminalFontSizePxRef.current,
       transparentBackground,
       cursorBlink,
@@ -727,6 +744,7 @@ export function TerminalView({
   }, [
     connectionKey,
     cursorBlink,
+    createTerminalRenderer,
     clearQueuedTerminalInput,
     flushBatchedTerminalInput,
     focusCommandInput,
@@ -1313,7 +1331,8 @@ export function TerminalView({
   }, [refitToken, resizeTerminal]);
 
   useEffect(() => {
-    if (!mobileControls || !pane) {
+    const terminalId = pane?.terminal_id ?? null;
+    if (!mobileControls || !terminalId || rendererReady?.terminalId !== terminalId) {
       return;
     }
     const refit = () => {
@@ -1327,7 +1346,7 @@ export function TerminalView({
         window.clearTimeout(timer);
       }
     };
-  }, [mobileControls, pane?.terminal_id, resizeTerminal]);
+  }, [mobileControls, pane?.terminal_id, rendererReady, resizeTerminal]);
 
   const uploadDisabled =
     !pane || !uploadEnabledRef.current || !inputEnabledRef.current || uploading;

@@ -72,6 +72,51 @@ export function compareReleaseTags(left, right) {
   return a.rc > b.rc ? 1 : -1;
 }
 
+function readAndroidReleaseMetadata(buildFile) {
+  const codePattern = /^([ \t]*versionCode[ \t]+)([1-9]\d*)([ \t]*)$/gm;
+  const namePattern = /^([ \t]*versionName[ \t]+)"([^"\r\n]*)"([ \t]*)$/gm;
+  const codes = [...buildFile.matchAll(codePattern)];
+  const names = [...buildFile.matchAll(namePattern)];
+  if (codes.length !== 1 || names.length !== 1) {
+    throw new Error(
+      "android/app/build.gradle must contain exactly one literal versionCode and versionName",
+    );
+  }
+
+  return {
+    code: Number(codes[0][2]),
+    name: names[0][2],
+    codePattern,
+    namePattern,
+  };
+}
+
+export function assertAndroidReleaseMetadata(buildFile, releaseTag) {
+  const metadata = readAndroidReleaseMetadata(buildFile);
+  const version = releaseVersion(releaseTag);
+  if (metadata.code > 2_100_000_000) {
+    throw new Error("Android versionCode exceeds 2100000000");
+  }
+  if (metadata.name !== version) {
+    throw new Error(`Android versionName is ${metadata.name}, not ${version}`);
+  }
+  return true;
+}
+
+export function prepareAndroidReleaseMetadata(buildFile, releaseTag) {
+  const version = releaseVersion(releaseTag);
+  const metadata = readAndroidReleaseMetadata(buildFile);
+
+  const nextCode = metadata.code + 1;
+  if (!Number.isSafeInteger(nextCode) || nextCode > 2_100_000_000) {
+    throw new Error("Android versionCode increment would exceed 2100000000");
+  }
+
+  return buildFile
+    .replace(metadata.codePattern, (_match, prefix, _code, suffix) => `${prefix}${nextCode}${suffix}`)
+    .replace(metadata.namePattern, (_match, prefix, _name, suffix) => `${prefix}"${version}"${suffix}`);
+}
+
 export function releaseReferencePaths(root = process.cwd()) {
   return [
     ...RELEASE_REFERENCE_PATHS,

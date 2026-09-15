@@ -20,9 +20,11 @@ import {
 } from "./release-target.mjs";
 import {
   compareReleaseTags,
+  assertAndroidReleaseMetadata,
   assertCurrentReleaseReferences,
   isReleaseCommitSubject,
   normalizeReleaseTag,
+  prepareAndroidReleaseMetadata,
   stampCurrentRelease,
 } from "./release-version.mjs";
 
@@ -345,6 +347,11 @@ function validateTaggingBase() {
     fail(`public release references point to ${current}, not ${tag}`);
   }
   try {
+    assertAndroidReleaseMetadata(readFileSync("android/app/build.gradle", "utf8"), tag);
+  } catch (error) {
+    fail(error.message);
+  }
+  try {
     validatePreparedChangelogForTag();
   } catch (error) {
     fail(error.message);
@@ -361,6 +368,16 @@ function prepareRelease() {
   const head = validatePreparationBase();
   const changelog = readFileSync("CHANGELOG.md", "utf8");
   const upstream = readFileSync("UPSTREAM.md", "utf8");
+  const androidBuildFile = "android/app/build.gradle";
+  let androidRelease;
+  try {
+    androidRelease = prepareAndroidReleaseMetadata(
+      readFileSync(androidBuildFile, "utf8"),
+      tag,
+    );
+  } catch (error) {
+    fail(error.message);
+  }
   run("npm", ["run", "check"]);
   if (fetchMainWithoutTags() !== head) {
     fail(`${RELEASE_REMOTE}/${RELEASE_BRANCH} advanced during release preparation; start again`);
@@ -371,6 +388,7 @@ function prepareRelease() {
   try {
     stampCurrentRelease(tag);
     writeFileSync("CHANGELOG.md", prepareReleaseChangelog(changelog, tag, releaseDate, upstream));
+    writeFileSync(androidBuildFile, androidRelease);
   } catch (error) {
     fail(error.message);
   }
