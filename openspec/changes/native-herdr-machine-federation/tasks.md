@@ -1,16 +1,17 @@
 ## 1. Pinned Herdr compatibility
 
 - [ ] 1.1 Extend `vendor/herdr-compat` with the minimal v0.9.0 remote executable discovery,
-  non-interactive OpenSSH construction, server bootstrap, Unix-socket forwarding lifecycle, and
-  attention classification; record exact provenance and adaptations and verify default plus
-  `HERDR_SRC` vendor checks pass.
+  non-interactive OpenSSH options, `remote-client-bridge` bootstrap, and attention classification;
+  distinguish every Herdr-derived helper from World-owned integration in provenance records and
+  verify default plus `HERDR_SRC` vendor checks pass.
 - [ ] 1.2 Add a bounded adapter for `herdr machine list --json` using the explicitly resolved Herdr
   executable; verify unit tests cover valid profiles, duplicate IDs, disabled profiles, malformed or
   oversized output, command failure, and omission of target/session from browser-facing data.
-- [ ] 1.3 Add fixed remote session discovery, `remote-client-bridge` bootstrap, and supervised
-  Unix-socket forwarding without catalogue mutation or prompt handling; verify synthetic SSH tests
-  cover clean setup, disabled stream-local forwarding, timeout, incompatible Herdr, authentication
-  and host-key Attention, process exit, cleanup, and cancellation.
+- [ ] 1.3 Implement the World-owned fixed remote session discovery and supervised OpenSSH
+  `-L local_socket:remote_socket` adapter around the pinned Herdr helpers, without catalogue mutation
+  or prompt handling; verify synthetic SSH tests cover clean setup, bootstrap, disabled stream-local
+  forwarding, timeout, incompatible Herdr, authentication and host-key Attention, process exit,
+  local socket ownership, cleanup, and cancellation.
 
 ## 2. Bridge runtime registry and supervision
 
@@ -24,7 +25,8 @@
   legacy direct-profile compatibility.
 - [ ] 2.3 Add catalogue refresh and one full-API supervisor per enabled saved machine; verify tests
   cover add, rename, enable, disable, remove, catalogue failure, independent reconnect, and a saved
-  machine remaining usable while Local is unavailable.
+  machine remaining usable while Local is unavailable, including remote server restart while the
+  SSH forwarding process remains alive.
 - [ ] 2.4 Map each native `SessionSnapshot` and structural event subscription through the existing
   runtime conversion; verify fixtures preserve workspaces, tabs, panes, terminal IDs, pane
   revisions, layouts, agents, optional worktree data, bounds, boot changes, and same-generation
@@ -35,7 +37,8 @@
   with no remote CLI fallback or browser-controlled shell text.
 - [ ] 2.6 Move runtime generation ownership into the aggregate bridge for native machines; verify
   delayed snapshots, events, command results, upload results, and terminal frames from retired
-  tunnels cannot change or control the replacement generation.
+  tunnels cannot change or control the replacement generation and API/subscription failure retires
+  a generation independently of SSH process lifetime.
 
 ## 3. Concurrent terminal attachments
 
@@ -48,7 +51,8 @@
   supported message, generation fencing, and capability rejection.
 - [ ] 3.3 Add viewer detach, idle reap, global/per-session limits, backpressure, and reconnect
   reattachment; verify stress tests bound SSH processes and memory while preserving current shared
-  output and refit behavior for two viewers of one terminal.
+  output and refit behavior for two viewers of one terminal. Preserve `takeover=false`, bounded
+  conflict retries, and "Attached elsewhere" when another native or direct gateway owns the terminal.
 
 ## 4. Machine-qualified World data
 
@@ -83,9 +87,11 @@
 - [ ] 6.2 Exercise Local plus at least one saved SSH machine with two browser viewers on different
   panes of one split or zoomed tab, an existing native client, machine failure/recovery, structural
   actions, managed agent launch, terminal control, notes, pins, activity, and uploads; repeat bridge
-  startup with Local unavailable, verify disabled stream-local forwarding produces bounded
-  incompatibility guidance, retain bounded diagnostics, and confirm no remote World installation
-  or listener exists.
+  startup with Local unavailable and remote Herdr restart while the SSH forward remains alive;
+  verify disabled stream-local forwarding produces bounded incompatibility guidance and a
+  native-plus-direct attachment conflict preserves the current owner and reports "Attached
+  elsewhere"; retain bounded diagnostics and confirm no remote World installation or listener
+  exists.
 - [ ] 6.3 Update architecture, federation, development, security, plugin, vendoring, knowledge-map,
   Android/gateway, and compatibility guidance; synchronize the accepted delta into current specs
   and add the user-facing result to the Unreleased changelog.

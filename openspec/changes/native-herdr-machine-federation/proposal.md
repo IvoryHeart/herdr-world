@@ -11,9 +11,9 @@ local bridge instead of maintaining a second normal-path network topology.
 
 - Make Herdr's saved machine catalogue the authoritative source for normal desktop multi-machine
   discovery, identity, labels, enabled state, SSH target, and selected remote session.
-- Extend the pinned minimal Herdr compatibility crate with the smallest coherent Herdr remote
-  discovery, SSH socket-forwarding, and terminal stdio transport slice required to connect to saved
-  machines from the World bridge.
+- Extend the pinned minimal Herdr compatibility crate with Herdr-derived remote discovery,
+  bootstrap, SSH option, and terminal protocol helpers, and add a World-owned OpenSSH Unix-socket
+  forwarder for full remote API access.
 - Make one World bridge aggregate its local Herdr runtime and enabled saved SSH machines into the
   existing host-qualified browser model, with independent failure and reconnect boundaries.
 - Keep browser traffic on the serving World origin for native machines. Remote hosts do not need a

@@ -66,6 +66,12 @@ protocol and advertised capabilities before dispatching control.
   generation after the same runtime reconnects
 - **THEN** the bridge and browser discard it without changing current state or admitting input
 
+#### Scenario: Remote API fails behind a live SSH forward
+- **WHEN** a saved machine's Herdr API or structural subscription fails while its SSH forwarding
+  process remains alive
+- **THEN** the bridge retires that runtime generation, makes its control paths non-actionable, and
+  requires a fresh subscription and snapshot before readmitting it
+
 ## ADDED Requirements
 
 ### Requirement: Herdr machine catalogue authority
@@ -111,6 +117,12 @@ SHALL become controllable only after its runtime generation and requested termin
 - **WHEN** multiple browser viewers observe one terminal at different dimensions
 - **THEN** each continues receiving current output, resize arbitration remains explicit, and a
   viewer can reassert its dimensions through the existing refit behavior
+
+#### Scenario: Another gateway owns the terminal attachment
+- **WHEN** a native gateway path requests a terminal already attached through a direct or other
+  native gateway path
+- **THEN** it preserves the current owner, performs only bounded conflict retries, and reports the
+  terminal as attached elsewhere without silently taking it over
 
 #### Scenario: Viewer reconnects
 - **WHEN** a terminal viewer survives a machine reconnect

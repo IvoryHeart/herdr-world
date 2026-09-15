@@ -79,18 +79,26 @@ Herdr terminal streams for viewers.
 ### Treat Herdr as the pinned transport upstream
 
 Extend `vendor/herdr-compat` from the same exact Herdr release commit already recorded in
-`UPSTREAM.md` and `VENDOR-MANIFEST.toml`. Copy only the remote executable discovery,
-non-interactive OpenSSH construction, bootstrap, error classification, Unix-socket forwarding
-lifecycle, and related protocol pieces the bridge needs. Record every copied or adapted file and
-source hash in the existing vendor manifest and refresh checks. The existing vendored API client
-and direct terminal protocol remain the data-plane implementation.
+`UPSTREAM.md` and `VENDOR-MANIFEST.toml`. Copy or adapt only Herdr's remote executable discovery,
+non-interactive OpenSSH options, `remote-client-bridge` bootstrap, error classification, and related
+protocol pieces the bridge needs. Record every upstream-derived file, helper, adaptation, and source
+hash in the existing vendor manifest and refresh checks. The existing vendored API client and direct
+terminal protocol remain the data-plane implementation.
+
+The full-API Unix-socket forwarder is new World-owned integration. It uses OpenSSH's documented
+`-L local_socket:remote_socket` primitive and may reuse the pinned Herdr-derived SSH option and
+process-error helpers, but Herdr v0.9.0 does not supply or own this forwarding supervisor. Its
+construction, lifecycle, local socket security, health checks, and tests stay in World-owned bridge
+code and are identified as such in provenance records. Herdr's `SshStdioBridge` and
+`remote-client-bridge` path remains the client-socket transport for bootstrap and direct terminal
+attachments; it is not the API forwarder.
 
 The repo-owned bridge remains the product executable. It composes the vendored Herdr transport with
 World's HTTP/WebSocket, authentication, notes, uploads, bounds, and browser-session behavior.
 
-This keeps Herdr responsible for machine identity, SSH behavior, process discovery, server startup,
-and native protocols. It avoids depending on Herdr's TUI selection model or independently designing
-an SSH protocol.
+This keeps Herdr responsible for machine identity, saved-profile SSH semantics, process discovery,
+server startup, and native protocols. It avoids depending on Herdr's TUI selection model or
+independently designing an SSH protocol.
 
 ### Read the machine catalogue through the supported CLI
 
@@ -115,9 +123,9 @@ For each enabled saved machine, the bridge uses the pinned Herdr transport seque
    obtain its authoritative API socket path and running state.
 3. When the server is absent, perform a transient `remote-client-bridge` handshake and detach after
    the command has started that server, then repeat session discovery.
-4. Start one supervised OpenSSH process that forwards a private bridge-owned local Unix socket to
-   the remote API socket. Require forward setup success, non-interactive operation, server-alive
-   checks, private local-directory ownership, and cleanup.
+4. Start the World-owned forwarding supervisor, which runs one OpenSSH process that forwards a
+   private bridge-owned local Unix socket to the remote API socket. Require forward setup success,
+   non-interactive operation, server-alive checks, private local-directory ownership, and cleanup.
 5. Connect the existing World `ApiClient` to the forwarded local socket.
 
 The provider applies the current bridge conversion to the remote `SessionSnapshot`: remote
@@ -126,7 +134,8 @@ data become the corresponding machine-qualified World snapshot fields. No author
 inferred from client-shell state. The bridge subscribes to structural events and obtains the
 initial snapshot over the same forwarded API generation before declaring the runtime online. A
 reconnect retires that subscription and snapshot together, creates a new generation, and cannot
-mix events or responses from the previous tunnel.
+mix events or responses from the previous tunnel. API and subscription health own the generation:
+loss of either retires it even when the underlying SSH forwarding process remains alive.
 
 The forwarded API is also the sole native lane for all allow-listed structural commands and
 launcher operations. World retains its parameter validation and command allow-list. A missing
@@ -145,8 +154,8 @@ weaken SSH policy or install a relay.
 | Machine discovery and identity | Local `herdr machine list --json` |
 | Remote session and API socket discovery | Fixed remote `herdr session list --json` over OpenSSH |
 | Remote server bootstrap | Herdr `remote-client-bridge` handshake |
-| Snapshots, events, layouts, IDs, and revisions | Full Herdr JSON API through the socket forward |
-| Structural commands and launcher operations | Full Herdr JSON API through the socket forward |
+| Snapshots, events, layouts, IDs, and revisions | Full Herdr JSON API through World's OpenSSH socket forward |
+| Structural commands and launcher operations | Full Herdr JSON API through World's OpenSSH socket forward |
 | Terminal output, input, resize, focus, and scroll | Dedicated direct terminal stream through `remote-client-bridge` |
 | Notes, pins, and observed activity | Runtime-qualified World state in the serving bridge |
 | Generic named-file upload | Fixed bounded SSH staging to the selected machine |
@@ -187,6 +196,12 @@ demand, become controllable only after the runtime generation and terminal ID ar
 after a fresh generation, and close after viewer detach or an idle bound. Hard viewer and machine
 limits, backpressure, and resize arbitration preserve the current World terminal contract. SSH
 connection sharing is an optional implementation optimization and cannot change viewer isolation.
+
+Every automatic attachment uses the existing `takeover=false` behavior. A terminal already owned
+through another native or direct World gateway remains with that owner; the new path performs only
+the existing bounded conflict retries and then reports "Attached elsewhere". World does not
+deduplicate gateways, share terminal ownership across gateway processes, or add an ownership
+service.
 
 The local runtime keeps the same API and direct terminal implementation. Both local and
 saved-machine providers implement one bridge-internal runtime interface so the browser does not
@@ -259,8 +274,9 @@ service to that machine.
   record source hashes and adaptations, and refresh transport plus protocol in one reviewed update.
 - [SSH Unix-socket forwarding is disabled] -> Mark native World access incompatible with precise
   guidance and retain the direct bridge fallback.
-- [API tunnel and terminal processes fail separately] -> Let the API tunnel own runtime generation,
-  retire its terminal attachments on failure, and reattach only after a same-generation snapshot.
+- [API tunnel and terminal processes fail separately] -> Let API and subscription health own
+  runtime generation independently of SSH process lifetime, retire terminal attachments on failure,
+  and reattach only after a same-generation snapshot.
 - [One terminal stream per active terminal creates SSH processes] -> Share the stream among viewers
   of that terminal, enforce per-session and global limits, idle-reap unused streams, and measure
   before adding SSH connection multiplexing.
@@ -277,13 +293,14 @@ service to that machine.
 - [Machine removal races with browser actions] -> Retire the generation before closing transport
   and reject all later actions and results for that runtime.
 - [Direct and native entries refer to the same server] -> Keep their distinct explicit runtime
-  identities and do not deduplicate from hostnames, paths, labels, or topology.
+  identities, retain non-takeover attachment and bounded "Attached elsewhere" behavior, and do not
+  deduplicate from hostnames, paths, labels, or topology.
 
 ## Migration Plan
 
-1. Add the pinned Herdr remote discovery, bootstrap, forwarding, and bridge-internal runtime provider
-   behind disabled native discovery; verify against a clean v0.9.0 checkout and synthetic SSH
-   fixtures.
+1. Add the pinned Herdr-derived remote discovery and bootstrap helpers plus the World-owned API
+   forwarding supervisor and bridge-internal runtime provider behind disabled native discovery;
+   verify against a clean v0.9.0 checkout and synthetic SSH fixtures.
 2. Start the bridge independently of Local, then add the logical runtime registry and
    machine-qualified routes while preserving local aliases and direct-profile behavior.
 3. Add catalogue discovery, full remote API supervision, direct terminal attachments, qualified
