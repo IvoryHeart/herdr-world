@@ -177,6 +177,7 @@ process.exit(0);
     HERDR_SOCKET_PATH: socketPath,
     HERDR_BIN_PATH: herdr,
     HERDR_WORLD_NODE_PATH: process.execPath,
+    SSH_AUTH_SOCK: "/run/user/1000/ssh-agent-checkpoint1.sock",
   };
   if (!real) env.HERDR_WORLD_LAUNCHCTL = fakeLaunchctl;
   return {
@@ -563,18 +564,21 @@ test("supervisor definitions contain the absolute Node command and safe environm
   const environment = {
     HERDR_SOCKET_PATH: "/private/herdr.sock",
     HERDR_WORLD_SETUP: "never",
+    SSH_AUTH_SOCK: "/run/user/1000/ssh-agent-checkpoint1.sock",
     PATH: "/usr/bin",
   };
   const unit = renderSystemdUnit(record, environment);
   assert.match(unit, /ExecStart="\/opt\/node\/bin\/node" "\/managed\/\.herdr-world-plugin\/node_modules\/\.bin\/herdr-world"/);
   assert.match(unit, /Environment="HERDR_WORLD_SETUP=never"/);
   assert.match(unit, /Environment="HERDR_SOCKET_PATH=\/private\/herdr\.sock"/);
+  assert.match(unit, /Environment="SSH_AUTH_SOCK=\/run\/user\/1000\/ssh-agent-checkpoint1\.sock"/);
   const plist = renderLaunchdPlist(record, environment, "/private/service.log");
   assert.match(plist, /<key>ProgramArguments<\/key>/);
   assert.match(plist, /<key>RunAtLoad<\/key><true\/>/);
   assert.match(plist, /<key>KeepAlive<\/key><true\/>/);
   assert.match(plist, /<string>\/opt\/node\/bin\/node<\/string>/);
   assert.match(plist, /<key>HERDR_WORLD_SETUP<\/key><string>never<\/string>/);
+  assert.match(plist, /<key>SSH_AUTH_SOCK<\/key><string>\/run\/user\/1000\/ssh-agent-checkpoint1\.sock<\/string>/);
 });
 
 test("launchd bootstraps RunAtLoad services once and unloads partial startup", async () => {
@@ -684,6 +688,7 @@ test("start recovers an owned launchd service when its runtime record is missing
     assert.ok(plistName);
     const serviceDefinition = readFileSync(path.join(fixture.stateDir, "supervisors", plistName), "utf8");
     assert.match(serviceDefinition, /<string>0\.0\.0\.0<\/string>/);
+    assert.match(serviceDefinition, /<key>SSH_AUTH_SOCK<\/key><string>\/run\/user\/1000\/ssh-agent-checkpoint1\.sock<\/string>/);
   } finally {
     try { await runAction("stop", options); } catch {}
     await new Promise((resolve) => fixture.socketServer.close(resolve));
