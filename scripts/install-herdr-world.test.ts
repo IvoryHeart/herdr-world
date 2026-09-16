@@ -155,9 +155,13 @@ describe("release installer", () => {
   test("verifies, backs up, and installs the expected platform package", () => {
     const fixture = createInstallerFixture();
     mkdirSync(fixture.installDir, { recursive: true });
-    writeFileSync(join(fixture.installDir, "herdr-world"), "previous binary\n", {
-      mode: 0o755,
-    });
+    writeFileSync(
+      join(fixture.installDir, "herdr-world"),
+      "previous binary\n",
+      {
+        mode: 0o755,
+      },
+    );
     writeFileSync(join(fixture.installDir, "herdr-gui"), "legacy GUI binary\n");
     writeFileSync(
       join(fixture.installDir, "herdr-studio"),

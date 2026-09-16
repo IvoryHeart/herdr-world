@@ -1,57 +1,25 @@
 # Upstreams
 
-Herdr World is derived from
-[`kcosr/herdr-web`](https://github.com/kcosr/herdr-web) and runs against
-[`herdrdev/herdr`](https://github.com/herdrdev/herdr).
-
-The Git remotes are:
-
-```text
-origin    git@github.com:IvoryHeart/herdr-world.git
-upstream  git@github.com:kcosr/herdr-web.git
-```
+Herdr World derives its application foundation from
+[`powerfooI/roamgate`](https://github.com/powerfooI/roamgate) and connects to the
+separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runtime.
 
 Current synchronization points:
 
-- Herdr Web: `35f193404016056c6063229bab4c512946ad5a22`
-  (`v0.6.1` plus Android release versioning merged in upstream PR #91)
-- Herdr compatibility: Herdr `v0.9.0`, commit
-  `b99002ac99b09e00b4ca692436cb15a6b0d676f1`, terminal protocol `22`
+- Roamgate: `81c506e6135f5f3b47f7042252ffdac0ec2bf679` (main, imported as a merge
+  ancestor before the World rebrand and visual projection)
+- Herdr compatibility: Herdr 0.9.0, terminal protocol 22
 
-Git history is the detailed synchronization record, and the Herdr Web commit
-above is a merge ancestor of this repository. `CHANGELOG.md` repeats only the
-per-release baseline correlation; it does not copy the upstream release history
-or maintain a separate adoption ledger.
-
-## Release Lineage Convention
-
-Herdr World and Herdr Web keep independent release identities and changelogs. A World version does
-not imply a matching Web version, and a Web version is never added as a World changelog section.
-Each World release instead records one exact Web baseline: the descriptive upstream version or
-marker together with the full synchronization commit from this file. The release helper renders
-that correlation as "Herdr Web baseline: Derived from …" and release validation requires it to
-match the synchronization point at the tagged commit.
+Git history is the detailed source record. Future Roamgate refreshes are explicit merge
+or replay changes against a pinned commit; World does not depend on a separately installed
+Roamgate process, data directory, service, or private API.
 
 Use these terms consistently:
 
-- **Derived from** describes Herdr Web source synchronized into this repository and then changed
-  downstream.
-- **Compatible with** describes the external Herdr release and terminal protocol accepted by the
-  bridge.
-- **Depends on** is reserved for a package or runtime dependency that remains independently
-  installed and resolved; it does not describe copied or synchronized Web source.
+- **Derived from** describes copied or synchronized Roamgate application source.
+- **Compatible with** describes the external Herdr runtime and protocol.
+- **Depends on** is reserved for an independently installed package or runtime.
 
-Record World-owned changes under the current World `Unreleased` section. An adopted upstream
-change may be mentioned when it changes the World product, with its upstream attribution and World
-integration PR, but do not reproduce the upstream release notes. Update this file's synchronization
-point before preparing a World release; the prepared changelog correlation is generated from it.
-
-To update:
-
-```bash
-git fetch upstream
-git merge upstream/main
-```
-
-Keep World implementation in its World-owned directories and resolve only the
-small integration seams when an upstream change touches them.
+Each World release records the exact Roamgate synchronization point. Required MIT
+attribution is retained in [LICENSE](LICENSE) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

@@ -3,6 +3,19 @@
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
 
+## Visual control plane
+
+- **Spaces** is the focused operational workspace: terminals, files, changes,
+  annotations, worktrees, and Agent History for one selected connection.
+- **Office**, **Tree**, and **Graph** observe every connected local or SSH Herdr
+  profile through one host-qualified WorldObject. Equal workspace, pane, or terminal
+  IDs on different hosts remain distinct.
+- Failed hosts retain their last observed topology as visibly stale, never actionable.
+  Selecting a live entity revalidates its connection generation before opening the
+  same terminal or host-specific Inspector context in Spaces.
+- World runs as one application and one browser origin. No remote World/Roamgate
+  service or browser bridge URL is required for an SSH host.
+
 ## Workspace, Tab, and Pane Navigation
 
 - Browse workspaces and recognized agents; create, rename, focus, pin, or close
@@ -179,8 +192,6 @@ Commands run through `sh -c`. The following variables are available:
 | `HERDR_WORLD_HOOK_EVENT` | `worktree.created`, `worktree.opened`, `worktree.before_remove`, or `worktree.removed` |
 | `HERDR_WORLD_HOOK_CHECKOUT_PATH` | Same target path exposed under a `HERDR_WORLD_`-prefixed alias |
 | `HERDR_WORLD_HOOK_SOURCE_CHECKOUT_PATH` | Same source path exposed under a `HERDR_WORLD_`-prefixed alias |
-
-Legacy `HERDR_GUI_HOOK_*` aliases remain available with the same values.
 
 Notices show hook outcomes and bounded diagnostics (exit code, stderr, or error).
 Failed `teardown` stops removal: fix/disable the hook before retrying. Other hooks

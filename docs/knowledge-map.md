@@ -1,43 +1,29 @@
 # Current repository knowledge
 
-Read only the rows relevant to the task. Contracts describe intended observable behavior;
-source and tests establish what is implemented. Reconcile discrepancies in the same change.
-Historical delivery notes are evidence, not current rules.
+Contracts describe intended behavior; source and tests establish implementation. Read
+only the rows relevant to the task. Historical numbered specs are rationale, not current
+operational guidance.
 
-| Topic | Maintained contract | Source and operational entry points |
+| Topic | Maintained contract | Source and runbooks |
 | --- | --- | --- |
-| Runtime ownership, host isolation, terminal identity | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | [Architecture](architecture.md), [federation](federation.md); `web/src/hostRegistry.tsx`, `runtimeClient.ts`, `runtimeConnection.ts`, `terminalSessions.ts` |
-| Browser commands and bridge access | [Bridge access](../openspec/specs/bridge-access/spec.md) | `web/src/commands.ts`, `bridgeApi.ts`, `remoteAccess.ts`; `bridge/src/web_bridge.rs`; [development](development.md) |
-| Office, Tree, Graph, Spaces and optional observations | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `web/src/world/worldModel.ts`, `worldRuntime.ts`, `herdrOfficeProjection.ts`, `tree/TreeTheme.tsx`, `tree/TreeTheme.css`, `graph/`; `web/src/AppShell.tsx`, `surfaceRegistry.ts`; [observability](observability.md), [assets](world-assets.md) |
-| Upstream, vendoring and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [UPSTREAM](../UPSTREAM.md), [vendoring](vendoring.md), [packaging](packaging.md), [release](release.md) |
+| Managed local/SSH runtimes, qualification, retries | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | `server/src/connections/`, `server/src/bridge/`, [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) |
+| Browser RPC, authentication and same-origin access | [Bridge access](../openspec/specs/bridge-access/spec.md) | `server/src/index.ts`, `server/src/http/`, `web/src/api.ts`, [security](../SECURITY.md) |
+| Aggregate WorldObject, Spaces, Office, Tree and Graph | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `server/src/world/snapshot.ts`, `web/src/world/`, `web/src/App.tsx`, [features](../FEATURES.md) |
+| Terminals, Files, Changes and Agent History | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `server/src/bridge/`, `server/src/workspace/`, `web/src/components/`, [architecture](ARCHITECTURE.md) |
+| Upstream, packages, plugin and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [UPSTREAM](../UPSTREAM.md), [packaging](packaging.md), [release](release.md), `scripts/`, `herdr-plugin.toml` |
 
-## Cross-language command path
+## RPC paths
 
-For `workspace.rename`, start at `createCommands` in `web/src/commands.ts`.
-It POSTs the method and parameters to the owning bridge's `/api/command`.
-Qualified dispatch and current capability admission live in
-`web/src/federatedRuntime.tsx` and `runtimeClient.ts`.
-In `bridge/src/web_bridge.rs`, the route reaches `command_handler`, checks
-`ALLOWED_COMMANDS`, deserializes the typed compatibility request, calls
-`validate_web_command`, and sends `api.request` to the selected Herdr socket.
-Read both ends and their tests. A same-language graph cannot establish this entire path.
+`web/src/api.ts` owns one WebSocket to the World service. Bridge-global methods such as
+`connections.*` and `world.snapshot` carry no connection identity. Downstream methods
+carry an immutable `connection_id` and runtime `connection_generation`; routing and
+lease revalidation live in `server/src/connections/` and `server/src/index.ts`.
 
-## Historical decisions
+The aggregate observation path is read-only: `server/src/world/snapshot.ts` fetches a
+bounded snapshot from every ready runtime and marks cached failed-host data stale.
+`web/src/world/runtimeStore.ts` rejects late aggregate responses, and
+`web/src/world/worldObject.ts` qualifies every node by connection. Mutations and terminal
+attachments continue through the focused connection store in `web/src/store.ts`.
 
-- Specs 002 and 005–006: observability and optional Office projection.
-- Specs 004, 013, 015–017: downstream, protocol and distribution history.
-- Specs 001, 003, 007–012 and 018: Office/Graph presentation evolution.
-- Spec 014: browser CI scaling.
-- Spec 019: remote access and UI-managed network settings.
-
-These capability specs are maintained summaries. Historical files retain rationale and
-evidence; their immutable/extension/summary ceremony is retired. Unmapped areas remain
-documented by source, tests and relevant runbooks. This map is not exhaustive API coverage.
-
-Change a contract when behavior changes, a runbook when operation changes, and this map
-when ownership changes. Unresolved proposals belong in `openspec/changes/`. Private
-scratchpads, generated reports and graphs, and dated research are not authority.
-Use synthetic examples only.
-
-Repository delivery policy lives in `AGENTS.md`; the concise worktree, OpenSpec,
-verification, and review procedure is in [Agent development](agent-development.md).
+Repository workflow lives in [AGENTS.md](../AGENTS.md) and
+[agent development](agent-development.md). Use synthetic data in tracked evidence.

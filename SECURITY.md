@@ -38,9 +38,5 @@ mirror) and its manifest/checksums. Checksums detect corruption and bind the
 archive, **not independently verify publisher identity**. Custom mirrors are
 trusted executable-code infrastructure.
 
-`HERDR_GUI_*` aliases `HERDR_WORLD_*`; explicit new values win, even empty ones.
-Auth-token migration preserves the old secret. Protect both copies and backups;
-see [migration and rotation](./docs/DEPLOYMENT.md#transition-from-herdr-studio--herdr-gui).
 Update requests require normal listener authentication plus `x-herdr-world-update: 1`.
-Legacy `x-herdr-gui-update: 1` is accepted; the new header wins if both appear.
-Neither header replaces login.
+That header does not replace login.

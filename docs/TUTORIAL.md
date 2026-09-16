@@ -41,9 +41,9 @@ Herdr World neither provides models nor installs/signs in to Codex, Claude, Pi, 
 other tools. Closing the browser leaves terminals running, but host sleep,
 shutdown, or process exit can stop work.
 
-The commands below use source-build identities. Published 0.7.0 still uses legacy
-service/plugin names; read the [migration guide](./DEPLOYMENT.md#transition-from-herdr-studio--herdr-gui)
-before changing an existing installation.
+The current foundation uses only Herdr World service, plugin, storage, and browser
+identities. It intentionally starts with fresh preferences rather than importing an
+older World or Roamgate installation.
 
 ### Open your first workspace: about 5 minutes
 
@@ -75,7 +75,7 @@ working before configuring remote access.
 > even with a password configured. A new `herdr-world service install` uses
 > `0.0.0.0:8787` with a token; the plugin uses this service too.
 
-![Desktop workspace with project navigation on the left, live terminals in the center, and changed files on the right](./images/herdr-world-desktop-changes.png)
+![Spaces showing synthetic workspaces, recognized agent states, and a live terminal](./images/herdr-world-desktop-spaces.png)
 
 *Find the project and active pane. Screenshot menu positions can differ by release.*
 
@@ -153,8 +153,6 @@ for History, Files, and Changes on your platform.
 
 **You are done when:** you can identify the new lines and verify the run command.
 
-![File Explorer previewing a README with raw and rendered views](./images/herdr-world-desktop-files.png)
-
 *File-tree search covers loaded files, not repository-wide full-text search.*
 
 Right-click/long-press for file actions, drag to upload, or download a file or
@@ -175,8 +173,6 @@ Right-click/long-press for file actions, drag to upload, or download a file or
 
 Drafts stay in this browser/checkout, not GitHub PRs or other devices. Failed
 re-anchoring marks a comment stale but retains its original quote.
-
-![Diff Viewer with a comment on selected changed lines](./images/herdr-world-desktop-annotations.png)
 
 ### 2.5 Do not rush into bulk actions
 
@@ -248,7 +244,7 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 **You are done when:** the home-screen icon opens your project. Install the stable
 Herdr World service URL, not this tutorial's Pages URL.
 
-![Mobile terminal with touch shortcut controls](./images/herdr-world-mobile-terminal.png)
+![Mobile Spaces terminal with touch shortcut controls](./images/herdr-world-mobile-spaces.png)
 
 **PWA is not offline access or background keep-alive.** Host sleep, stopped
 Herdr World, or a disconnected VPN interrupts access. Completion notifications can

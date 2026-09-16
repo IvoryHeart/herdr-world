@@ -16,7 +16,6 @@ import {
   parseSha256File,
   readServiceEnv,
   releaseAssetFor,
-  supportsIdentityMigrationPrebuilt,
 } from "./world-plugin";
 
 describe("plugin build commands", () => {
@@ -32,7 +31,7 @@ describe("plugin build commands", () => {
       mkdtempSync(join(tmpdir(), "world-plugin-build-test-")),
     );
     roots.push(root);
-    for (const dir of ["scripts", "web", "server", "bin"]) {
+    for (const dir of ["scripts", "server", "bin"]) {
       mkdirSync(join(root, dir));
     }
     copyFileSync(
@@ -46,8 +45,9 @@ describe("plugin build commands", () => {
     );
     writeFileSync(
       join(root, "package.json"),
-      JSON.stringify({ version: "9.8.7" }),
+      JSON.stringify({ version: "0.0.0" }),
     );
+    writeFileSync(join(root, "herdr-plugin.toml"), 'version = "9.8.7"\n');
     writeFileSync(
       join(root, "bin/bun"),
       `#!/bin/sh
@@ -68,19 +68,6 @@ globalThis.fetch = async (url) => {
     );
     return root;
   }
-
-  test("0.7.0 build refuses downloading legacy identities before mutation", () => {
-    const root = checkout();
-    writeFileSync(
-      join(root, "package.json"),
-      JSON.stringify({ version: "0.7.0" }),
-    );
-    const result = invoke(root, "build");
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr.toString()).toContain("requires a source build");
-    expect(existsSync(join(root, "fetch.log"))).toBeFalse();
-    expect(existsSync(join(root, "build.log"))).toBeFalse();
-  });
 
   function invoke(
     root: string,
@@ -115,28 +102,21 @@ globalThis.fetch = async (url) => {
     expect(result.exitCode).toBe(0);
     expect(
       readFileSync(join(root, "build.log"), "utf8").trim().split("\n"),
-    ).toEqual([
-      `${root}: install`,
-      `${root}/web: install`,
-      `${root}/server: install`,
-      `${root}: run build`,
-    ]);
+    ).toEqual([`${root}: install --frozen-lockfile`, `${root}: run build`]);
     expect(existsSync(join(root, "fetch.log"))).toBe(false);
   });
 
   test("build-source stops on dependency installation failure", () => {
     const root = checkout();
-    expect(
-      invoke(root, "build-source", { FAIL_DIR: join(root, "web") }).exitCode,
-    ).toBe(23);
+    expect(invoke(root, "build-source", { FAIL_DIR: root }).exitCode).toBe(23);
     expect(
       readFileSync(join(root, "build.log"), "utf8").trim().split("\n"),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
     expect(existsSync(join(root, "fetch.log"))).toBe(false);
   });
 
   test.each(["404", "500", "throw"])(
-    "release-only build fails actionably on %s without source or legacy fallback",
+    "release-only build fails actionably on %s and explains source fallback",
     (status) => {
       const root = checkout();
       const result = invoke(root, "build", { HTTP_STATUS: status });
@@ -158,13 +138,6 @@ globalThis.fetch = async (url) => {
       expect(existsSync(join(root, "server/herdr-world.exe"))).toBe(false);
     },
   );
-});
-
-test("prebuilt identity floor compares numeric versions", () => {
-  for (const version of ["0.6.2", "0.7.0", "0.7.0-beta.1", "unknown"])
-    expect(supportsIdentityMigrationPrebuilt(version)).toBeFalse();
-  for (const version of ["0.7.1", "0.8.0", "0.10.0", "1.0.0"])
-    expect(supportsIdentityMigrationPrebuilt(version)).toBeTrue();
 });
 
 describe("releaseAssetFor", () => {
@@ -192,9 +165,9 @@ describe("releaseAssetFor", () => {
 describe("parseSha256File", () => {
   test("extracts the digest from shasum output", () => {
     const digest = "a".repeat(64);
-    expect(parseSha256File(`${digest}  herdr-world-darwin-arm64.tar.xz\n`)).toBe(
-      digest,
-    );
+    expect(
+      parseSha256File(`${digest}  herdr-world-darwin-arm64.tar.xz\n`),
+    ).toBe(digest);
   });
 
   test("rejects content without a digest", () => {
@@ -222,7 +195,7 @@ describe("readServiceEnv", () => {
 
   test("ignores comments and unrelated keys", () => {
     const contents =
-      "# HOST=10.0.0.1\nHERDR_GUI_LOG_LEVEL=info\nHOST=127.0.0.1\n";
+      "# HOST=10.0.0.1\nUNRELATED_SETTING=info\nHOST=127.0.0.1\n";
     expect(readServiceEnv(contents, "HOST")).toBe("127.0.0.1");
   });
 });
@@ -263,16 +236,15 @@ describe("computeUrl", () => {
     expect(computeUrl(dir)).toBe("http://127.0.0.1:8787");
   });
 
-  test("new password values take precedence, including empty values", () => {
+  test("password values suppress tokens, while empty values do not", () => {
     const dir = fixture({
-      "herdr-world.env":
-        "HOST=0.0.0.0\nHERDR_GUI_PASSWORD=old\nHERDR_WORLD_PASSWORD=new\n",
+      "herdr-world.env": "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=new\n",
       "auth-token": "saved-token\n",
     });
     expect(computeUrl(dir)).toBe("http://localhost:8787");
     writeFileSync(
       join(dir, "herdr-world.env"),
-      "HOST=0.0.0.0\nHERDR_GUI_PASSWORD=old\nHERDR_WORLD_PASSWORD=\n",
+      "HOST=0.0.0.0\nHERDR_WORLD_PASSWORD=\n",
     );
     expect(computeUrl(dir)).toBe("http://localhost:8787/?token=saved-token");
   });

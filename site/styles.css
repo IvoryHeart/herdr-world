@@ -277,9 +277,9 @@
 
   .brand-logo {
     display: block;
-    width: 160px;
-    height: auto;
-    filter: brightness(0) invert(0.85);
+    width: 36px;
+    height: 36px;
+    border-radius: 9px;
   }
 
   .primary-nav {
@@ -1939,7 +1939,8 @@
   }
 
   .brand-logo {
-    width: 140px;
+    width: 34px;
+    height: 34px;
   }
 
   .hero {

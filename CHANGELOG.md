@@ -1,107 +1,44 @@
 # Changelog
 
-This changelog records Herdr World releases and downstream changes. Each release identifies the
-exact [Herdr Web](https://github.com/kcosr/herdr-web) baseline from which it was derived; Herdr
-Web's own release history remains in its upstream changelog.
+This changelog records Herdr World releases and downstream changes. Current releases identify the
+exact Roamgate source synchronization in [UPSTREAM.md](UPSTREAM.md); historical release entries
+retain their original Herdr Web lineage.
 
 ## [Unreleased]
 
 ### Breaking Changes
 
+- Replaced the Herdr Web/Rust/Capacitor application with one Bun-compiled Herdr
+  World service and responsive Web/PWA derived from Roamgate. Existing bridge
+  profiles, browser preferences and Roamgate state are not imported; native Android
+  packaging is not part of this foundation.
+
 ### Added
 
-- Added a compact in-stage switcher for Spaces, Office, Graph and Tree when the common desktop
-  sidebar is collapsed. ([#84](https://github.com/IvoryHeart/herdr-world/pull/84))
-
-- Added a statically bundled Tree World theme with a bounded host-to-space-to-agent/terminal
-  hierarchy, searchable ancestor context, branch collapse, pan/zoom/fit controls with a current
-  zoom percentage, operational
-  details and guarded terminal/Spaces actions, plus an accessible compact semantic presentation.
-  ([#81](https://github.com/IvoryHeart/herdr-world/pull/81),
-  [#83](https://github.com/IvoryHeart/herdr-world/pull/83))
-
-- Added maintained OpenSpec contracts, five project-scoped OpenSpec lifecycle skills,
-  concise native agent guidance, strict contract validation and a central worktree helper.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
-
-- Added a simplified Network UI for connecting Herdr instances and allowing connections to the
-  current Herdr, with connection status, detected and copyable addresses, an optional memory-hard
-  password, reload-safe tab-scoped client sessions, readiness/rollback status, and progressively
-  disclosed exact host, page-origin, and destination permissions.
-  [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
+- Added UI-managed local and OpenSSH Herdr profiles with isolated runtimes,
+  generations, retries and failure states behind one same-origin World application.
+- Added a bounded aggregate topology path and connection-qualified WorldObject for
+  observing several Herdr hosts without allowing stale or retired data to control
+  them.
+- Added native Spaces, Office, Tree and Graph views with canonical navigation,
+  qualified terminal handoff and Files, Changes and Agent History routing.
+- Added World-owned standalone archives, installer, user services and the
+  `ivoryheart.herdr-world` Herdr plugin for Linux, macOS and Windows.
 
 ### Changed
 
-- Synchronized with Herdr Web `v0.6.1` plus upstream Android release versioning. World release
-  preparation now increments Android `versionCode`, stamps `versionName`, and documents APK
-  package, signature, alignment, and update-signer verification.
-  ([Herdr Web PR #91](https://github.com/kcosr/herdr-web/pull/91),
-  [Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
-
-- Updated the Herdr World compatibility layer to Herdr `v0.9.0` and terminal
-  protocol `22`, including refreshed vendored protocol/schema provenance.
-  [Herdr World PR #87](https://github.com/IvoryHeart/herdr-world/pull/87)
-
-- Made native coding-agent execution the development default, with central worktree
-  setup, current project knowledge, scoped verification and independent review.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
-
-- Adopted the common sidebar for Office, Tree, Graph and Spaces. Tree now uses a compact dark
-  Operations Console with bounded space columns, stacked agent/terminal siblings, attached
-  connectors, visible kind/status/focus cues, configured and observed coverage, and a persistent
-  inspector beside a compact accessible outline. Empty and collapsed branches omit child links.
-  ([#82](https://github.com/IvoryHeart/herdr-world/pull/82))
-
-- Made hosts the primary Graph nodes and derived both Graph and Office from one host-qualified
-  World hierarchy of spaces with sibling agent and terminal children. Graph now keeps configured
-  unavailable hosts visible, supports host and space collapse, and preserves validated repository
-  names as optional space context. ([#80](https://github.com/IvoryHeart/herdr-world/pull/80))
-
-- Compacted sidebar navigation into View and Hosts pickers with the list mode and space filter
-  together below. Added a direct Add Host shortcut to Network settings, while preserving the
-  Settings cog, host health visibility, keyboard navigation, and compact view return
-  ([#79](https://github.com/IvoryHeart/herdr-world/pull/79)).
-
-### Fixed
-
-- Made workspace-group closing revalidate the exact confirmed members before mutation, close
-  confirmed linked workspaces before the primary workspace, reject unsupported multi-primary
-  groups, and report partial failures without hiding them. Corrected the confirmation copy to
-  refer to Office rooms rather than a stale surface name.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78),
-  [#89](https://github.com/IvoryHeart/herdr-world/pull/89))
-
-- Updated the bridge TLS dependency to a release that rejects TLS 1.3 handshake messages crossing
-  encryption-level boundaries. ([Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
-
-- Started mobile terminal refit retries only after the current renderer mounts, so a slow tab
-  switch cannot leave the terminal at its initial keyboard-sized height.
-  ([Herdr Web PR #90](https://github.com/kcosr/herdr-web/pull/90),
-  [Herdr World PR #88](https://github.com/IvoryHeart/herdr-world/pull/88))
-
-- Preserved exact shell terminal selection across Spaces, Office, Graph and Tree, kept split-pane
-  handoffs on the pane the user chose, and rejected a second bridge targeting the same Herdr
-  runtime before it could cause partial `Attached elsewhere` terminal failures.
-  ([#86](https://github.com/IvoryHeart/herdr-world/pull/86))
-
-- Updated transitive XML parsers and the development YAML parser to patched
-  versions, restoring the dependency security audit.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78))
-
-- Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under
-  advanced client-origin settings, while retaining explicit policy for pages served elsewhere.
-  [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
-- Reconciled an owned launchd or systemd service whose runtime record was lost, so changing the
-  plugin bind host or access policy can take effect instead of leaving an old loopback service
-  loaded and blocking restart.
-  [Herdr World PR #75](https://github.com/IvoryHeart/herdr-world/pull/75)
+- Based the active application source on Roamgate commit
+  `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an
+  external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
+- Kept private development manifests at `0.0.0`; reviewed plugin versions now
+  provide tagged binary, archive and update identities at release time.
 
 ### Removed
 
-- Retired the experimental Ralph runtime, custom supervisor and model containers,
-  Superpowers setup, OpenWiki and Skillgrade pilots, model-allocation and usage accounting,
-  historical harness evals, legacy role skills, unused Harbor execution path and Graphify tool pin.
-  ([#78](https://github.com/IvoryHeart/herdr-world/pull/78), [#85](https://github.com/IvoryHeart/herdr-world/pull/85))
+- Removed browser-to-bridge federation, remote World installations and the former
+  Host, Origin and cross-origin CSP configuration workflow.
+- Removed the Rust bridge, vendored Herdr compatibility crate, native Capacitor
+  Android build and inherited legacy service/preference migration paths.
 
 ## [0.1.1] - 2026-09-01
 

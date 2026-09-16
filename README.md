@@ -1,40 +1,44 @@
 # Herdr World
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./site/assets/herdr-world-lockup-on-charcoal.png" />
-    <img src="./site/assets/herdr-world-lockup-charcoal.png" alt="Herdr World logo" width="400" />
-  </picture>
+  <img src="./web/public/herdr-world-logo.svg" alt="Herdr World ram mark" width="128" />
 </p>
 
-A **browser client** for [Herdr](https://herdr.dev). Control terminals, inspect
-agent sessions, and review files and diffs on desktop or mobile.
+A **visual control plane** for [Herdr](https://herdr.dev). Observe agents across
+local and SSH hosts in Office, Tree, and Graph; open the same qualified terminal,
+files, changes, and agent history in Spaces on desktop or mobile.
 **Requires a running Herdr server.**
 
 ## Screenshots
 
 ### Desktop
 
-[![Desktop workspace with live terminals and image changes][desktop-changes]][desktop-changes]
+[![Office view showing agents across two Herdr hosts][desktop-office]][desktop-office]
 
-Workspace terminals with changed files and image previews.
+Office shows agent state across hosts at a glance. Tree and Graph expose the
+same qualified runtime, while Spaces keeps Herdr's full terminal and repository
+workflow one click away.
 
 <!-- markdownlint-disable MD033 -->
 
 <table width="100%">
   <thead>
     <tr>
-      <th width="50%" align="center">File explorer</th>
-      <th width="50%" align="center">Diff annotations</th>
+      <th width="33.33%" align="center">Tree</th>
+      <th width="33.33%" align="center">Graph</th>
+      <th width="33.33%" align="center">Spaces</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td width="50%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-files.png"><img src="./docs/images/herdr-world-desktop-files.png" alt="Desktop file explorer" width="100%" /></a>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-tree.png"><img src="./docs/images/herdr-world-desktop-tree.png" alt="Tree view of hosts, spaces, and agents" width="100%" /></a>
       </td>
-      <td width="50%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-desktop-annotations.png"><img src="./docs/images/herdr-world-desktop-annotations.png" alt="Desktop diff annotations" width="100%" /></a>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-graph.png"><img src="./docs/images/herdr-world-desktop-graph.png" alt="Graph view of hosts, spaces, and agents" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-spaces.png"><img src="./docs/images/herdr-world-desktop-spaces.png" alt="Spaces terminal workspace" width="100%" /></a>
       </td>
     </tr>
   </tbody>
@@ -45,21 +49,21 @@ Workspace terminals with changed files and image previews.
 <table width="100%">
   <thead>
     <tr>
-      <th width="33.33%" align="center">Changed files</th>
-      <th width="33.33%" align="center">Full terminal control</th>
-      <th width="33.33%" align="center">File viewer</th>
+      <th width="33.33%" align="center">Office</th>
+      <th width="33.33%" align="center">Tree</th>
+      <th width="33.33%" align="center">Spaces</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-mobile-changes.png"><img src="./docs/images/herdr-world-mobile-changes.png" alt="Mobile changed files viewer" width="100%" /></a>
+        <a href="./docs/images/herdr-world-mobile-office.png"><img src="./docs/images/herdr-world-mobile-office.png" alt="Mobile Office view" width="100%" /></a>
       </td>
       <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-mobile-terminal.png"><img src="./docs/images/herdr-world-mobile-terminal.png" alt="Mobile terminal" width="100%" /></a>
+        <a href="./docs/images/herdr-world-mobile-tree.png"><img src="./docs/images/herdr-world-mobile-tree.png" alt="Mobile Tree view" width="100%" /></a>
       </td>
       <td width="33.33%" align="center" valign="top">
-        <a href="./docs/images/herdr-world-mobile-files.png"><img src="./docs/images/herdr-world-mobile-files.png" alt="Mobile file viewer" width="100%" /></a>
+        <a href="./docs/images/herdr-world-mobile-spaces.png"><img src="./docs/images/herdr-world-mobile-spaces.png" alt="Mobile Spaces terminal" width="100%" /></a>
       </td>
     </tr>
   </tbody>
@@ -69,11 +73,7 @@ Workspace terminals with changed files and image previews.
 
 Click any screenshot to open the full-resolution image.
 
-[desktop-changes]: ./docs/images/herdr-world-desktop-changes.png
-
-> **Moving from Herdr Studio / herdr-gui?** Automatic upgrades are not supported.
-> Follow the [migration guide](./docs/DEPLOYMENT.md#transition-from-herdr-studio--herdr-gui)
-> to install Herdr World manually.
+[desktop-office]: ./docs/images/herdr-world-desktop-office.png
 
 ## Quick start
 
@@ -93,9 +93,11 @@ Click any screenshot to open the full-resolution image.
 3. On Linux/macOS, add `~/.local/bin` to `PATH` and run `herdr-world`.
    On Windows, extract the archive and run `herdr-world.exe`. Open the printed URL.
 
-See [deployment](./docs/DEPLOYMENT.md) for checksums, configuration, updates,
-and services, or [historical installation](./docs/DEPLOYMENT.md#install-historical-herdr-studio)
-for `herdr-gui` 0.6.2.
+Use the connection selector to add local sockets or an SSH destination. One World
+service owns every connection; the browser stays on the same World origin.
+
+See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
+updates, and services.
 
 ## Install as a PWA
 
@@ -116,6 +118,8 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 - [Features and shortcuts](./FEATURES.md)
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
 - [Architecture](./docs/ARCHITECTURE.md): system contracts.
+- [Development](./docs/development.md), [packaging](./docs/packaging.md), and
+  [release process](./docs/release.md).
 - [Security](./SECURITY.md) and [contributing](./CONTRIBUTING.md).
 
 ## Development

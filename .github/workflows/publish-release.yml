@@ -46,37 +46,35 @@ jobs:
             exit 1
           fi
 
-          read_version_at() {
-            git show "$1:$2" \
-              | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).version)'
+          read_plugin_version_at() {
+            git show "$1:herdr-plugin.toml" \
+              | bun -e 'const text = await Bun.stdin.text(); console.log(text.match(/^version = "([^"]+)"/m)?.[1] ?? "")'
           }
 
-          # Find the first-parent commit that changed the top-level package
-          # version to VERSION, not the later commit that changed away from it.
+          # Find the first-parent commit that changed the public plugin version
+          # to VERSION. Private package manifests intentionally stay at 0.0.0.
           release_sha=""
           while read -r candidate_sha; do
-            if [ "$(read_version_at "$candidate_sha" package.json)" != "$VERSION" ]; then
+            if [ "$(read_plugin_version_at "$candidate_sha")" != "$VERSION" ]; then
               continue
             fi
             parent_sha="$(git rev-parse "${candidate_sha}^1" 2>/dev/null || true)"
             if [ -z "$parent_sha" ] || \
-              [ "$(read_version_at "$parent_sha" package.json)" != "$VERSION" ]; then
+              [ "$(read_plugin_version_at "$parent_sha")" != "$VERSION" ]; then
               release_sha="$candidate_sha"
               break
             fi
-          done < <(git rev-list --first-parent origin/main -- package.json)
+          done < <(git rev-list --first-parent origin/main -- herdr-plugin.toml)
 
           if [ -z "$release_sha" ]; then
             echo "error: no release commit for $VERSION exists on main" >&2
             exit 1
           fi
 
-          read_version() {
-            read_version_at "$release_sha" "$1"
-          }
-          test "$(read_version package.json)" = "$VERSION"
-          test "$(read_version web/package.json)" = "$VERSION"
-          test "$(read_version server/package.json)" = "$VERSION"
+          test "$(read_plugin_version_at "$release_sha")" = "$VERSION"
+          for manifest in package.json web/package.json server/package.json; do
+            test "$(git show "$release_sha:$manifest" | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).version)')" = "0.0.0"
+          done
 
           tag="v$VERSION"
           if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then

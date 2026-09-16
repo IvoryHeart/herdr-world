@@ -26,6 +26,12 @@ operations, terminal and clipboard relay, authentication, health, and updates.
 React owns presentation and browser-local preferences. xterm displays Herdr's
 server-rendered output rather than reconstructing a PTY in the bridge.
 
+Spaces keeps one selected connection for operational work. The bridge-global
+`world.snapshot` path reads bounded topology from every ready runtime. The browser
+qualifies that data by connection and generation into one WorldObject used by Office,
+Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
+Files, Changes, or Agent History revalidates and switches to the exact owning runtime.
+
 ## Agent activity
 
 The bridge enriches `agent.list` with optional `last_activity_at` epoch
@@ -186,8 +192,7 @@ clipboard pushes carry that identity. HTTP streams recheck the lease per chunk
 and cancel their source on replacement. Dispatched effects may finish on the
 original runtime, but retired replies, chunks, and metadata cannot publish.
 Explicit malformed, unknown, stale, or not-ready identities fail without fallback.
-Omitted identities and legacy HTTP aliases remain a bounded, logged compatibility
-path for older single-connection clients only.
+Omitted identities remain a bounded, logged compatibility path for the process default.
 
 Bridge-global authentication, health, updates, client accounting, and profile
 management remain independent of downstream readiness. Global RPC rejects
@@ -282,11 +287,10 @@ users need neither Bun nor Node.js. Source builds use Bun and Vite. See
 
 Herdr World has a separate release namespace: executable and package members,
 archive/checksum filenames, and manifest identity all use `herdr-world`. Every
-release provides a manifest; missing or legacy metadata fails closed without
+release provides a manifest; missing or mismatched metadata fails closed without
 an archive-discovery fallback. Publication checks require exactly the six
-platforms' Herdr World assets and prohibit legacy update aliases. Historical
-clients cannot discover Herdr World from their old Latest URLs; see the
-[manual transition contract](./DEPLOYMENT.md#transition-from-herdr-studio--herdr-gui).
+platforms' World assets. Archives include the executable, version marker, licence,
+upstream lineage, dependency/source notices, and asset licences.
 
 ## Trust boundary
 

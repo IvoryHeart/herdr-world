@@ -3,10 +3,14 @@ set -euo pipefail
 
 platform="${1:-linux-x64}"
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="$(
+version="${HERDR_WORLD_BUILD_VERSION:-$(
   cd "$root_dir"
   bun -e 'console.log(require("./package.json").version)'
-)"
+)}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "HERDR_WORLD_BUILD_VERSION must be an X.Y.Z release version" >&2
+  exit 2
+fi
 
 binary_name="herdr-world"
 case "$platform" in
@@ -59,6 +63,11 @@ mkdir -p "$package_dir"
 cp "$binary" "$package_dir/$binary_name"
 chmod 755 "$package_dir/$binary_name"
 printf 'herdr-world %s %s\n' "$version" "$platform" > "$package_dir/VERSION"
+cp "$root_dir/LICENSE" "$package_dir/LICENSE"
+cp "$root_dir/THIRD_PARTY_NOTICES.md" "$package_dir/THIRD_PARTY_NOTICES.md"
+cp "$root_dir/DEPENDENCY_NOTICES.md" "$package_dir/DEPENDENCY_NOTICES.md"
+cp "$root_dir/UPSTREAM.md" "$package_dir/UPSTREAM.md"
+cp -R "$root_dir/LICENSES" "$package_dir/LICENSES"
 
 rm -f \
   "$versioned_archive" \

@@ -53,4 +53,22 @@ describe("Herdr World release boundary", () => {
     expect(publish).not.toContain("herdr-gui");
     expect(publish).toContain("--latest");
   });
+
+  test("release packages carry World lineage and complete notice inputs", async () => {
+    const packaging = await readFile(
+      new URL("./package-release.sh", import.meta.url),
+      "utf8",
+    );
+    for (const required of [
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "DEPENDENCY_NOTICES.md",
+      "UPSTREAM.md",
+      "LICENSES",
+    ]) {
+      expect(packaging).toContain(required);
+    }
+    expect(packaging).not.toContain("herdr-gui");
+    expect(packaging).not.toContain("roamgate-");
+  });
 });

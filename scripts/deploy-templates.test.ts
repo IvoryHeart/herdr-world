@@ -6,7 +6,9 @@ test("renamed systemd template runs Herdr World and uses the Herdr World environ
   ).text();
   expect(unit).toContain("Description=Herdr World");
   expect(unit).toContain("ExecStart=%h/.local/bin/herdr-world");
-  expect(unit).toContain("EnvironmentFile=-%h/.config/herdr-world/herdr-world.env");
+  expect(unit).toContain(
+    "EnvironmentFile=-%h/.config/herdr-world/herdr-world.env",
+  );
 });
 
 test("launchd template executes the installed Herdr World binary with Herdr World identities and state paths", async () => {

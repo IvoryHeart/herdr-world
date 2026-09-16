@@ -17,8 +17,10 @@ installable application instead of rebuilding the same capabilities beside it.
   token/password protection for managed non-loopback service installs.
 - Make Roamgate's workspace terminal, Inspector, Files, Changes, Agent History and connection
   surfaces native World capabilities rather than a separately installed Roamgate application.
-- Project all managed Herdr connections into the shared, host-qualified World hierarchy and retain
-  Spaces, Office, Tree and Graph as first-class views with guarded, connection-qualified actions.
+- Project all managed Herdr connections into a shared, host-qualified World hierarchy and establish
+  Spaces, Office, Tree and Graph as first-class native views with guarded, connection-qualified
+  actions. Rich canvas behavior from the retired foundation can return in focused follow-ups over
+  this shared model rather than enlarging the foundation cutover.
 - Preserve Herdr as an external runtime. World neither bundles Herdr nor introduces a generic
   provider/plugin SDK in this change.
 - Start the new foundation with fresh World connection and presentation settings. Existing
@@ -51,7 +53,7 @@ None.
   development commands.
 - Retires the current remote-bridge settings, browser federation, vendored `herdr-compat` crate and
   native Android build from the active product tree.
-- Ports the current World model, Office, Tree and Graph behavior onto Roamgate's connection-scoped
-  snapshots and terminal ownership.
+- Re-establishes the World model and essential Office, Tree and Graph observation, selection,
+  search/disclosure and handoff behavior over connection-scoped snapshots and terminal ownership.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.

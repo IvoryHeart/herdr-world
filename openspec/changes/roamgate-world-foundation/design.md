@@ -12,8 +12,8 @@ shared World model plus Office, Tree and Graph.
 **Goals:**
 
 - Deliver one coherent World application based on the pinned Roamgate tree.
-- Preserve Roamgate's working product surfaces and test coverage while adding World as native
-  navigation and projection.
+- Preserve Roamgate's working product surfaces and test coverage while adding a coherent first
+  native World projection and navigation layer.
 - Preserve qualified identity and failure isolation while moving federation into the service.
 - Keep the replacement reviewable through staged commits and requirement-linked checks.
 
@@ -25,6 +25,8 @@ shared World model plus Office, Tree and Graph.
 - Changing Herdr core or defining a new Herdr protocol.
 - Native Capacitor Android packaging in the foundation replacement; the responsive PWA is the
   supported mobile application in this change.
+- Parity with every view-specific canvas interaction and persisted presentation preference from
+  the retired Herdr Web foundation. Those can be layered over the new shared WorldObject later.
 
 ## Decisions
 
@@ -52,13 +54,14 @@ path publishes status and snapshots for all ready profiles into a browser store 
 ID and generation. WorldObject is projected from that store. Mutations, resource requests and
 terminal attachments always resolve back to one qualified runtime and never fall back.
 
-### Port World as native routes over the Roamgate store
+### Establish World as native routes over the Roamgate store
 
-The current World model and Office/Tree/Graph renderers are adapted to Roamgate snapshot types and
-selection/terminal APIs. Roamgate's existing terminal workspace becomes the Spaces experience and
-its Inspector remains the host-specific operational surface. World views use the same component
-tree and terminal ownership rather than embedding another application or maintaining a parallel
-runtime client.
+The shared World hierarchy and focused Office/Tree/Graph views are built against the aggregate
+snapshot types and existing selection/terminal APIs. Roamgate's existing terminal workspace
+becomes the Spaces experience and its Inspector remains the host-specific operational surface.
+Spaces stays mounted when a visual view is selected, so World uses the same component tree and
+terminal ownership rather than embedding another application or maintaining a parallel runtime
+client. Advanced canvas interactions are follow-up view work, not a second foundation requirement.
 
 ### Rebrand before release integration
 

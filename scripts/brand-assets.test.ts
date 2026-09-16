@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 
 const asset = async (path: string) =>
   Buffer.from(
@@ -39,4 +40,28 @@ test("the application uses only World-owned brand asset paths", async () => {
   expect(`${index}\n${app}\n${manifest}`.toLowerCase()).not.toContain(
     "roamgate",
   );
+});
+
+test("the project site uses the World ram identity instead of renamed upstream art", async () => {
+  const [index, tutorial, logo] = await Promise.all([
+    Bun.file(new URL("../site/index.html", import.meta.url)).text(),
+    Bun.file(new URL("../site/tutorial/index.html", import.meta.url)).text(),
+    Bun.file(
+      new URL("../site/assets/herdr-world-logo.svg", import.meta.url),
+    ).text(),
+  ]);
+  expect(index).toContain("./assets/herdr-world-logo.svg");
+  expect(tutorial).toContain("../assets/herdr-world-logo.svg");
+  expect(logo).toContain('aria-label="Herdr logo"');
+  expect(`${index}\n${tutorial}\n${logo}`.toLowerCase()).not.toContain(
+    "roamgate",
+  );
+  expect(
+    existsSync(
+      new URL(
+        "../site/assets/herdr-world-lockup-charcoal.png",
+        import.meta.url,
+      ),
+    ),
+  ).toBeFalse();
 });

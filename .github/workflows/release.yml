@@ -34,11 +34,12 @@ jobs:
           package_version="$(bun -e 'console.log(require("./package.json").version)')"
           web_version="$(bun -e 'console.log(require("./web/package.json").version)')"
           server_version="$(bun -e 'console.log(require("./server/package.json").version)')"
+          plugin_version="$(bun -e 'const text = await Bun.file("herdr-plugin.toml").text(); console.log(text.match(/^version = "([^"]+)"/m)?.[1] ?? "")')"
 
-          [[ "$package_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          test "$GITHUB_REF_NAME" = "v$package_version"
-          test "$web_version" = "$package_version"
-          test "$server_version" = "$package_version"
+          test "$package_version" = "0.0.0"
+          test "$web_version" = "0.0.0"
+          test "$server_version" = "0.0.0"
+          test "$GITHUB_REF_NAME" = "v$plugin_version"
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - run: bun run precommit
 
@@ -66,7 +67,10 @@ jobs:
           no-cache: true
       - run: bun install --frozen-lockfile
       - name: Build release package
-        run: bun run package:${{ matrix.platform }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          HERDR_WORLD_BUILD_VERSION="$version" bun run package:${{ matrix.platform }}
       - name: Verify release package
         shell: bash
         run: |
@@ -100,6 +104,10 @@ jobs:
           mkdir -p "$extract_dir"
           tar -xJf "dist/$versioned_archive" -C "$extract_dir"
           grep -Fx "herdr-world $version $platform" "$extract_dir/$package_dir/VERSION"
+          for legal in LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_NOTICES.md UPSTREAM.md; do
+            test -f "$extract_dir/$package_dir/$legal"
+          done
+          test -f "$extract_dir/$package_dir/LICENSES/CLAW-EMPIRE-APACHE-2.0.txt"
           binary_name="herdr-world"
           case "$platform" in
             windows-*) binary_name="herdr-world.exe" ;;

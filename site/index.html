@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Herdr World is an open-source browser client for Herdr. Control terminals, inspect agent sessions, review files and diffs, and manage worktrees from desktop or mobile."
+      content="Herdr World is an open-source visual control plane for Herdr agents across local and SSH hosts, with terminals and review tools for desktop and mobile."
     />
     <meta property="og:type" content="website" />
     <meta
       property="og:title"
-      content="Herdr World - Your Herdr workspace, in any browser"
+      content="Herdr World - A visual control plane for Herdr agents"
     />
     <meta
       property="og:description"
-      content="Herdr World is a browser client for Herdr. Access terminals and review agent sessions from desktop or mobile."
+      content="Observe agents across local and SSH hosts, then open their terminals, files, changes and history from one World application."
     />
     <meta
       property="og:url"
@@ -29,16 +29,16 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Herdr World - Keep every agent in sight"
+      content="Herdr World - A visual control plane for Herdr agents"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Herdr World - Your Herdr workspace, in any browser"
+      content="Herdr World - A visual control plane for Herdr agents"
     />
     <meta
       name="twitter:description"
-      content="Herdr World is a browser client for Herdr."
+      content="One visual control plane for local and remote Herdr agents."
     />
     <meta
       name="twitter:image"
@@ -49,7 +49,7 @@
     <link rel="icon" type="image/png" sizes="48x48" href="./assets/herdr-world-icon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/herdr-world-icon-180.png" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Herdr World - Your Herdr workspace, in any browser</title>
+    <title>Herdr World - A visual control plane for Herdr agents</title>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -57,7 +57,7 @@
         "name": "Herdr World",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
-        "description": "An open-source browser client for Herdr.",
+        "description": "An open-source visual control plane for Herdr agents across local and SSH hosts.",
         "url": "https://ivoryheart.github.io/herdr-world/",
         "downloadUrl": "https://github.com/IvoryHeart/herdr-world/releases/latest",
         "license": "https://opensource.org/license/mit"
@@ -74,7 +74,8 @@
     <header class="site-header" data-header>
       <div class="shell header-inner">
         <a class="brand" href="#top" aria-label="Herdr World home">
-          <img class="brand-logo" src="./assets/herdr-world-lockup-charcoal.png" width="160" height="64" alt="Herdr World" />
+          <img class="brand-logo" src="./assets/herdr-world-logo.svg" width="36" height="36" alt="" />
+          <span>Herdr World</span>
         </a>
 
         <button
@@ -118,7 +119,7 @@
         <div class="hero-copy reveal">
           <div class="eyebrow">
             <span class="status-dot"></span>
-            Browser client for
+            Visual control plane for
             <a
               href="https://herdr.dev"
               target="_blank"
@@ -126,7 +127,7 @@
               >Herdr</a
             >
           </div>
-          <h1>Your Herdr workspace, <span>in any browser.</span></h1>
+          <h1>Every Herdr host, <span>in one World.</span></h1>
           <p class="hero-lede">
             <a
               href="https://herdr.dev"
@@ -134,9 +135,9 @@
               rel="noopener noreferrer"
               >Herdr</a
             >
-            keeps the terminals alive. Herdr World turns the whole herd into a
-            fast, visual workspace for terminals, sessions, files, diffs, and
-            worktrees from any modern browser.
+            keeps the terminals alive. Herdr World observes agents across local
+            and SSH hosts, then opens the exact terminal, files, changes and
+            session history in one application.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">
@@ -156,7 +157,7 @@
             <span>PWA</span>
           </div>
           <p class="hero-requirement">
-            Formerly Herdr Studio. Requires a running
+            Requires a running
             <a
               href="https://herdr.dev"
               target="_blank"
@@ -177,24 +178,23 @@
               <span class="window-live"><i></i> Connected</span>
             </div>
             <a
-              href="./assets/herdr-world-desktop-changes.png"
-              aria-label="Open the Herdr World workspace screenshot"
+              href="./assets/herdr-world-desktop-office.png"
+              aria-label="Open the Herdr World Office screenshot"
             >
               <picture>
                 <source
                   type="image/avif"
                   srcset="
-                    ./assets/herdr-studio-hero-720.avif   720w,
-                    ./assets/herdr-studio-hero-1200.avif 1200w,
-                    ./assets/herdr-studio-hero-2400.avif 2400w
+                    ./assets/herdr-world-hero-720.avif   720w,
+                    ./assets/herdr-world-hero-1200.avif 1200w
                   "
                   sizes="(max-width: 620px) calc(100vw - 8px), (max-width: 1240px) calc(100vw - 48px), 1180px"
                 />
                 <img
-                  src="./assets/herdr-world-desktop-changes.png"
-                  alt="Herdr World showing multiple workspaces, live terminals, and image changes"
-                  width="4998"
-                  height="2714"
+                  src="./assets/herdr-world-desktop-office.png"
+                  alt="Herdr World Office showing agents across two Herdr hosts"
+                  width="1440"
+                  height="900"
                   fetchpriority="high"
                 />
               </picture>
@@ -387,13 +387,13 @@
                 aria-selected="true"
                 tabindex="0"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-changes.png"
-                data-alt="Herdr World changed files and image previews beside live terminals"
-                data-label="Changes"
-                data-title="Review code and image changes beside your terminals."
-                data-copy="Inspect staged, unstaged, untracked, and branch changes without leaving the active workspace."
+                data-image="./assets/herdr-world-desktop-office.png"
+                data-alt="Herdr World Office showing agents across two Herdr hosts"
+                data-label="Office"
+                data-title="See the whole agent world at a glance."
+                data-copy="Scan every connected host, space, and recognized agent without losing the terminal workflow underneath."
               >
-                <span>01</span> Changes
+                <span>01</span> Office
               </button>
               <button
                 type="button"
@@ -403,13 +403,13 @@
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-files.png"
-                data-alt="Herdr World file explorer with a rendered README preview"
-                data-label="File explorer"
-                data-title="Browse the repository without leaving the terminal."
-                data-copy="Preview source, Markdown, Mermaid, and images; search loaded files; upload, download, copy paths, and manage files locally or over SSH."
+                data-image="./assets/herdr-world-desktop-tree.png"
+                data-alt="Herdr World Tree showing qualified hosts, spaces, and agents"
+                data-label="Tree"
+                data-title="Trace every agent back to its runtime."
+                data-copy="Search and collapse a qualified host-space-agent hierarchy, even when native identifiers collide across machines."
               >
-                <span>02</span> Files
+                <span>02</span> Tree
               </button>
               <button
                 type="button"
@@ -419,13 +419,13 @@
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
-                data-image="./assets/herdr-world-desktop-annotations.png"
-                data-alt="Herdr World diff viewer with a line annotation beside live terminals"
-                data-label="Diff annotations"
-                data-title="Turn precise lines into actionable feedback."
-                data-copy="Select diff lines, add comments, and prepare structured feedback for your agent."
+                data-image="./assets/herdr-world-desktop-graph.png"
+                data-alt="Herdr World Graph showing relationships between hosts, spaces, and agents"
+                data-label="Graph"
+                data-title="Follow runtime relationships visually."
+                data-copy="Move from a machine to a workspace to the exact agent or terminal, then hand off into its live Spaces context."
               >
-                <span>03</span> Annotations
+                <span>03</span> Graph
               </button>
             </div>
 
@@ -440,19 +440,19 @@
               <div class="showcase-window">
                 <div class="showcase-topline">
                   <span><i></i><i></i><i></i></span>
-                  <strong data-showcase-label>Changes</strong>
+                  <strong data-showcase-label>Office</strong>
                   <em>Local / Connected</em>
                 </div>
                 <a
-                  href="./assets/herdr-world-desktop-changes.png"
+                  href="./assets/herdr-world-desktop-office.png"
                   aria-label="Open the current Herdr World product screenshot"
                   data-showcase-link
                 >
                   <img
-                    src="./assets/herdr-world-desktop-changes.png"
-                    alt="Herdr World changed files and image previews beside live terminals"
-                    width="4998"
-                    height="2714"
+                    src="./assets/herdr-world-desktop-office.png"
+                    alt="Herdr World Office showing agents across two Herdr hosts"
+                    width="1440"
+                    height="900"
                     loading="lazy"
                     decoding="async"
                     data-showcase-image
@@ -461,11 +461,11 @@
               </div>
               <div class="showcase-caption" aria-live="polite">
                 <h3 data-showcase-title>
-                  Review code and image changes beside your terminals.
+                  See the whole agent world at a glance.
                 </h3>
                 <p data-showcase-copy>
-                  Inspect staged, unstaged, untracked, and branch changes
-                  without leaving the active workspace.
+                  Scan every connected host, space, and recognized agent
+                  without losing the terminal workflow underneath.
                 </p>
               </div>
             </div>
@@ -535,9 +535,8 @@
             <p class="kicker">The control room travels</p>
             <h2>Designed for the screen you have.</h2>
             <p>
-              Check a blocked agent from the train. Review a diff from the
-              couch. Send the one command that unblocks a long-running task
-              without opening your laptop.
+              Check a blocked agent from the train. Find its host and space,
+              then open the same live terminal without opening your laptop.
             </p>
             <ul>
               <li>
@@ -566,12 +565,12 @@
           >
             <figure class="phone phone-left">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-changes.png">
+              <a href="./assets/herdr-world-mobile-office.png">
                 <img
-                  src="./assets/herdr-world-mobile-changes.png"
-                  alt="Herdr World changed files view on mobile"
-                  width="1179"
-                  height="2379"
+                  src="./assets/herdr-world-mobile-office.png"
+                  alt="Herdr World Office view on mobile"
+                  width="390"
+                  height="844"
                   loading="lazy"
                   decoding="async"
                 />
@@ -579,12 +578,12 @@
             </figure>
             <figure class="phone phone-center">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-terminal.png">
+              <a href="./assets/herdr-world-mobile-tree.png">
                 <img
-                  src="./assets/herdr-world-mobile-terminal.png"
-                  alt="Herdr World terminal controls on mobile"
-                  width="1179"
-                  height="2379"
+                  src="./assets/herdr-world-mobile-tree.png"
+                  alt="Herdr World Tree view on mobile"
+                  width="390"
+                  height="844"
                   loading="lazy"
                   decoding="async"
                 />
@@ -592,12 +591,12 @@
             </figure>
             <figure class="phone phone-right">
               <div class="phone-speaker"></div>
-              <a href="./assets/herdr-world-mobile-files.png">
+              <a href="./assets/herdr-world-mobile-spaces.png">
                 <img
-                  src="./assets/herdr-world-mobile-files.png"
-                  alt="Herdr World rendered file preview on mobile"
-                  width="1179"
-                  height="2379"
+                  src="./assets/herdr-world-mobile-spaces.png"
+                  alt="Herdr World Spaces terminal controls on mobile"
+                  width="390"
+                  height="844"
                   loading="lazy"
                   decoding="async"
                 />
@@ -716,10 +715,11 @@
       <div class="shell footer-grid">
         <div class="footer-brand">
           <a class="brand" href="#top">
-            <img class="brand-logo" src="./assets/herdr-world-lockup-charcoal.png" width="160" height="64" alt="Herdr World" />
+            <img class="brand-logo" src="./assets/herdr-world-logo.svg" width="36" height="36" alt="" />
+            <span>Herdr World</span>
           </a>
           <p>
-            An open-source browser client for
+            An open-source visual control plane for
             <a
               href="https://herdr.dev"
               target="_blank"

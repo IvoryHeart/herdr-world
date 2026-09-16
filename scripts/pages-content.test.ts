@@ -73,7 +73,7 @@ describe("tutorial Markdown", () => {
     const { content } = await renderTutorial(
       '# Tutorial\n\n<a id="tailscale"></a>\n\n## Networking\n\n' +
         "[Jump](#tailscale) [Deployment](./DEPLOYMENT.md#logging) [Security](../SECURITY.md)\n\n" +
-        "![Workspace](./images/herdr-world-desktop-changes.png)\n\n```bash\necho '<safe>'\n```\n\n" +
+        "![Workspace](./images/herdr-world-desktop-office.png)\n\n```bash\necho '<safe>'\n```\n\n" +
         "| Name | Purpose |\n| --- | --- |\n| Serve | Private access |\n",
     );
     expect(content).toContain('href="#tailscale"');
@@ -83,9 +83,9 @@ describe("tutorial Markdown", () => {
     expect(content).toContain(
       'href="https://github.com/IvoryHeart/herdr-world/blob/main/SECURITY.md"',
     );
-    expect(content).toContain('src="../assets/herdr-world-desktop-changes.png"');
-    expect(content).toContain('width="4998"');
-    expect(content).toContain('height="2714"');
+    expect(content).toContain('src="../assets/herdr-world-desktop-office.png"');
+    expect(content).toContain('width="1440"');
+    expect(content).toContain('height="900"');
     expect(content).toContain('loading="lazy"');
     expect(content).toContain("&lt;safe&gt;");
     expect(content).toContain('role="region"');
@@ -141,12 +141,15 @@ describe("Pages references", () => {
     );
     const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
-    expect(screenshots).toHaveLength(6);
-    for (const source of [site, build]) {
-      expect([...new Set(source.match(screenshotPattern))].sort()).toEqual(
-        screenshots,
-      );
-    }
+    expect(screenshots).toHaveLength(7);
+    expect([...new Set(build.match(screenshotPattern))].sort()).toEqual(
+      screenshots,
+    );
+    expect([...new Set(site.match(screenshotPattern))].sort()).toEqual(
+      screenshots.filter(
+        (screenshot) => screenshot !== "herdr-world-desktop-spaces.png",
+      ),
+    );
     for (const source of [site, tutorial, build]) {
       expect(source).not.toMatch(/herdr-studio-(?:desktop|mobile)-/);
     }

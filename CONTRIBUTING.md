@@ -27,7 +27,7 @@ assets required by server typechecks and process tests.
 | Lint | `bun run lint` caches unchanged content in `node_modules/.cache/eslint/`. Use `bun run lint --no-cache` for fresh checks after tooling/dependency updates. |
 | Related tests | `bun test <path>` or `bun run test:quick` (includes integration tests, excludes three Chrome-based files). |
 | Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
-| Submission | `bun run precommit` runs formatting, lint, full typechecks, and the full test suite. Quick checks do not replace it. |
+| Submission | `bun run check` validates notices, formatting, lint, full typechecks/tests, production builds and OpenSpec. Quick checks do not replace it. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory; its `pre-commit` hook runs `bun run precommit`.
@@ -37,8 +37,7 @@ Workspace checks: `bun run --filter herdr-world-web typecheck` and
 
 Frontend changes: `bun run build:web`. Production assets/bundling: `bun run build`.
 Releases: package and inspect every supported archive/checksum; see
-[build commands](docs/DEPLOYMENT.md#build-a-standalone-executable) and
-[release policy](AGENTS.md#release-notes).
+[packaging](docs/packaging.md) and [release](docs/release.md).
 
 ## Style Organization
 

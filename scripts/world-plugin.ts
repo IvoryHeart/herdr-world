@@ -29,14 +29,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  dataRoot,
-  assertSafeDataPath,
-} from "../server/src/config/data-paths";
+import { dataRoot, assertSafeDataPath } from "../server/src/config/data-paths";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BINARY_CANDIDATES =
-  process.platform === "win32" ? ["herdr-world.exe", "herdr-world"] : ["herdr-world"];
+  process.platform === "win32"
+    ? ["herdr-world.exe", "herdr-world"]
+    : ["herdr-world"];
 
 function binaryPath(): string | null {
   for (const name of BINARY_CANDIDATES) {
@@ -84,7 +83,10 @@ export const PLATFORM_ASSETS: Record<
   "darwin-x64": { asset: "herdr-world-darwin-x64", binary: "herdr-world" },
   "linux-arm64": { asset: "herdr-world-linux-arm64", binary: "herdr-world" },
   "linux-x64": { asset: "herdr-world-linux-x64", binary: "herdr-world" },
-  "win32-arm64": { asset: "herdr-world-windows-arm64", binary: "herdr-world.exe" },
+  "win32-arm64": {
+    asset: "herdr-world-windows-arm64",
+    binary: "herdr-world.exe",
+  },
   "win32-x64": { asset: "herdr-world-windows-x64", binary: "herdr-world.exe" },
 };
 
@@ -103,24 +105,8 @@ export function parseSha256File(text: string): string | null {
   return match?.[1] ?? null;
 }
 
-export function supportsIdentityMigrationPrebuilt(version: string): boolean {
-  const match =
-    /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.exec(
-      version,
-    );
-  if (!match) return false;
-  const [major, minor, patch] = match.slice(1, 4).map(Number);
-  return major > 0 || minor > 7 || (minor === 7 && patch > 0);
-}
-
 async function downloadPrebuilt(): Promise<number> {
   const version = packageVersion();
-  if (!supportsIdentityMigrationPrebuilt(version)) {
-    console.error(
-      `world-plugin: published versions through 0.7.0 use legacy service/data/plugin identities. This checkout requires a source build. ${SOURCE_INSTALL_HINT}`,
-    );
-    return 1;
-  }
   const target = releaseAssetFor(process.platform, process.arch);
   if (!target) {
     console.error(
@@ -189,25 +175,21 @@ async function downloadPrebuilt(): Promise<number> {
 }
 
 function buildSource(): number {
-  // This repo is not a Bun workspace: web/ and server/ carry their own
-  // dependencies, so a clean checkout needs an install in each location.
-  for (const dir of [".", "web", "server"]) {
-    const code = run(["bun", "install"], join(REPO_ROOT, dir));
-    if (code !== 0) return code;
-  }
+  const installCode = run(["bun", "install", "--frozen-lockfile"], REPO_ROOT);
+  if (installCode !== 0) return installCode;
   return run(["bun", "run", "build"]);
 }
 
 async function ensureBinary(): Promise<string | null> {
   const existing = binaryPath();
   if (existing) return existing;
-  console.error("world-plugin: herdr-world binary missing, downloading it first");
+  console.error(
+    "world-plugin: herdr-world binary missing, downloading it first",
+  );
   if ((await downloadPrebuilt()) !== 0) return null;
   const downloaded = binaryPath();
   if (!downloaded) {
-    console.error(
-      "world-plugin: download finished but no binary was produced",
-    );
+    console.error("world-plugin: download finished but no binary was produced");
   }
   return downloaded;
 }
@@ -219,10 +201,8 @@ async function service(...args: string[]): Promise<number> {
 }
 
 function packageVersion(): string {
-  const packageJson = JSON.parse(
-    readFileSync(join(REPO_ROOT, "package.json"), "utf8"),
-  ) as { version?: string };
-  return packageJson.version ?? "unknown";
+  const manifest = readFileSync(join(REPO_ROOT, "herdr-plugin.toml"), "utf8");
+  return /^\s*version\s*=\s*"([^"]+)"/m.exec(manifest)?.[1] ?? "unknown";
 }
 
 function configDir(): string {

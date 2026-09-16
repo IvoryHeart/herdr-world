@@ -6,7 +6,6 @@ const source = readFileSync(
   new URL("../site/tutorial.js", import.meta.url),
   "utf8",
 );
-const legacyKey = "herdr-studio-tutorial-checklist-v1";
 const currentKey = "herdr-world-tutorial-checklist-v1";
 
 function render(values: Map<string, string>, failWrite = false) {
@@ -38,19 +37,13 @@ function render(values: Map<string, string>, failWrite = false) {
   return check.checked;
 }
 
-test("tutorial copies legacy progress once and preserves the original", () => {
-  const values = new Map([[legacyKey, "[true]"]]);
+test("tutorial restores World progress", () => {
+  const values = new Map([[currentKey, "[true]"]]);
   expect(render(values)).toBeTrue();
-  expect(values.get(currentKey)).toBe("[true]");
   values.set(currentKey, "[false]");
   expect(render(values)).toBeFalse();
-  expect(values.get(legacyKey)).toBe("[true]");
 });
 
-test("tutorial reads legacy progress despite write failure and retries later", () => {
-  const values = new Map([[legacyKey, "[true]"]]);
-  expect(render(values, true)).toBeTrue();
-  expect(values.has(currentKey)).toBeFalse();
-  expect(render(values)).toBeTrue();
-  expect(values.get(currentKey)).toBe("[true]");
+test("tutorial starts fresh when World progress is absent", () => {
+  expect(render(new Map())).toBeFalse();
 });

@@ -9,15 +9,28 @@ const outputDirectory = join(root, ".pages-dist");
 const assetDirectory = join(outputDirectory, "assets");
 
 const assets = [
-  ["docs/images/herdr-world-desktop-changes.png", "herdr-world-desktop-changes.png"],
-  ["docs/images/herdr-world-desktop-files.png", "herdr-world-desktop-files.png"],
   [
-    "docs/images/herdr-world-desktop-annotations.png",
-    "herdr-world-desktop-annotations.png",
+    "docs/images/herdr-world-desktop-office.png",
+    "herdr-world-desktop-office.png",
   ],
-  ["docs/images/herdr-world-mobile-changes.png", "herdr-world-mobile-changes.png"],
-  ["docs/images/herdr-world-mobile-files.png", "herdr-world-mobile-files.png"],
-  ["docs/images/herdr-world-mobile-terminal.png", "herdr-world-mobile-terminal.png"],
+  ["docs/images/herdr-world-desktop-tree.png", "herdr-world-desktop-tree.png"],
+  [
+    "docs/images/herdr-world-desktop-graph.png",
+    "herdr-world-desktop-graph.png",
+  ],
+  [
+    "docs/images/herdr-world-desktop-spaces.png",
+    "herdr-world-desktop-spaces.png",
+  ],
+  [
+    "docs/images/herdr-world-mobile-office.png",
+    "herdr-world-mobile-office.png",
+  ],
+  ["docs/images/herdr-world-mobile-tree.png", "herdr-world-mobile-tree.png"],
+  [
+    "docs/images/herdr-world-mobile-spaces.png",
+    "herdr-world-mobile-spaces.png",
+  ],
 ] as const;
 
 async function ensureFile(path: string): Promise<void> {

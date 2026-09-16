@@ -20,14 +20,14 @@
 
 ## 4. Distribution and knowledge
 
-- [ ] 4.1 Remove the retired Rust bridge, vendored compatibility crate, browser-federation configuration and Capacitor build from active distribution paths, and verify no release or startup command references them
-- [ ] 4.2 Generate complete dependency/source notices, record Roamgate lineage, and verify notice and upstream-reference checks are byte-clean
-- [ ] 4.3 Reconcile README, feature, architecture, deployment, development, packaging, release and knowledge-map documentation with the one-service World product and verify every documented command exists
-- [ ] 4.4 Synchronize the four affected current capability specs with the delivered behavior and pass strict OpenSpec validation
+- [x] 4.1 Remove the retired Rust bridge, vendored compatibility crate, browser-federation configuration and Capacitor build from active distribution paths, and verify no release or startup command references them
+- [x] 4.2 Generate complete dependency/source notices, record Roamgate lineage, and verify notice and upstream-reference checks are byte-clean
+- [x] 4.3 Reconcile README, feature, architecture, deployment, development, packaging, release and knowledge-map documentation with the one-service World product and verify every documented command exists
+- [x] 4.4 Synchronize the four affected current capability specs with the delivered behavior and pass strict OpenSpec validation
 
 ## 5. Acceptance and delivery
 
-- [ ] 5.1 Run formatting, lint, type checking, unit/integration tests and production builds through the repository's final check command and record exact results
-- [ ] 5.2 Exercise the compiled World application against a local Herdr plus the deterministic SSH fixture, verifying connection management, aggregate World views, terminal input, Files, Changes and Agent History
-- [ ] 5.3 Run responsive browser acceptance at desktop and phone sizes, inspect World and workspace surfaces visually, and attach review screenshots without committing generated captures
+- [x] 5.1 Run formatting, lint, type checking, unit/integration tests and production builds through the repository's final check command and record exact results
+- [x] 5.2 Exercise the compiled World application against a local Herdr plus the deterministic SSH fixture, verifying connection management, aggregate World views, terminal input, Files, Changes and Agent History
+- [x] 5.3 Run responsive browser acceptance at desktop and phone sizes, inspect World and workspace surfaces visually, and publish privacy-safe synthetic product captures for documentation and review
 - [ ] 5.4 Review the full diff and history for secrets, unrelated generated output and stale Roamgate product identities; commit staged implementation slices, push the branch and open a ready PR to `main` that identifies the superseded World branches and verification evidence
