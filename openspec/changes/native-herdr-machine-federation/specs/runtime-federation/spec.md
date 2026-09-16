@@ -111,7 +111,13 @@ closure, and bounded transport diagnostics. Before final acceptance the connecti
 also provide bounded remote byte delivery. The boundary SHALL preserve independent progress for a
 structural subscription, request clients, launcher operations, and multiple terminal streams. Herdr
 adaptation and connection mechanics SHALL remain outside presentation-specific World code, and SSH
-process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands.
+process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands. The adapter SHALL
+resolve the configured session selector once per admitted generation and SHALL give every API and
+terminal connection an immutable assignment containing the same target and concrete session. Every
+remote API and terminal relay invocation SHALL explicitly name that resolved session, including the
+literal `default`, and SHALL NOT re-evaluate the selector or inherit an environment or socket
+override as a different session during that generation. A status response whose session field is
+derived only from the invocation environment SHALL NOT by itself prove the server/socket mapping.
 
 #### Scenario: Long-lived operations run concurrently
 
@@ -132,6 +138,20 @@ process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands.
   API and terminal protocol compatibility, resolves the configured `Default` or named selector to
   the actual session identity, and speaks the reviewed Herdr protocol after the relay reaches that
   session's socket
+
+#### Scenario: Implicit remote selection changes during a generation
+
+- **WHEN** the remote invocation environment or default selection changes after World admits a
+  generation and before it opens a request, launcher, or terminal connection
+- **THEN** every stream explicitly connects to the concrete session recorded in that generation's
+  resolved assignment, and no traffic crosses into the newly implicit session
+
+#### Scenario: Socket override makes reported session ambiguous
+
+- **WHEN** a remote status invocation reports a session name while an API or client socket override
+  can direct the invocation to another server
+- **THEN** World does not admit or replace the runtime binding until the adapter independently
+  verifies that the resolved assignment maps both relay surfaces to the intended session
 
 #### Scenario: OpenSSH executes the fixed remote command
 

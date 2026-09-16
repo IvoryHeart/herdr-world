@@ -6,7 +6,7 @@ Historical delivery notes are evidence, not current rules.
 
 | Topic | Maintained contract | Source and operational entry points |
 | --- | --- | --- |
-| Runtime ownership, host isolation, terminal identity | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | [Architecture](architecture.md), [federation](federation.md); `web/src/hostRegistry.tsx`, `runtimeClient.ts`, `runtimeConnection.ts`, `terminalSessions.ts` |
+| Runtime ownership, host isolation, terminal identity | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | [Architecture](architecture.md), [federation](federation.md); `bridge/src/herdr_connector.rs`; `web/src/hostRegistry.tsx`, `runtimeClient.ts`, `runtimeConnection.ts`, `terminalSessions.ts` |
 | Browser commands and bridge access | [Bridge access](../openspec/specs/bridge-access/spec.md) | `web/src/commands.ts`, `bridgeApi.ts`, `remoteAccess.ts`; `bridge/src/web_bridge.rs`; [development](development.md) |
 | Office, Tree, Graph, Spaces and optional observations | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `web/src/world/worldModel.ts`, `worldRuntime.ts`, `herdrOfficeProjection.ts`, `tree/TreeTheme.tsx`, `tree/TreeTheme.css`, `graph/`; `web/src/AppShell.tsx`, `surfaceRegistry.ts`; [observability](observability.md), [assets](world-assets.md) |
 | Upstream, vendoring and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [UPSTREAM](../UPSTREAM.md), [vendoring](vendoring.md), [packaging](packaging.md), [release](release.md) |

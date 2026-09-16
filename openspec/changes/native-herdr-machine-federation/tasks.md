@@ -40,11 +40,12 @@ This pull request remains draft until checkpoint 4 passes.
     bounded transport diagnostics. Each remote connection accepts `Default` or a named Herdr session
     selector; the resolved pre-provisioned session is mandatory for runtime admission. Connection
     configuration identity remains distinct from the runtime-binding identity used for persisted
-    World entities.
+    World entities. Resolution occurs once per generation and produces one immutable assignment for
+    every API and terminal connection in that generation.
   - **Evidence:** Focused Rust tests cover connection validation, fixed argv construction, adapter
     and connection lifecycle, independent connection creation, local-management authority, binding
-    rotation when `Default` resolves differently or the target changes, and redaction without a
-    local shell or embedded secrets.
+    rotation when `Default` resolves differently or the target changes, same-session pinning while
+    implicit remote selection changes, and redaction without a local shell or embedded secrets.
   - **Stop and revisit:** Stop if SSH process handling needs Herdr entity/presentation types, the
     adapter needs World views, cannot establish the resolved session before admission, or the seam
     exposes browser-visible credentials, arbitrary SSH flags or commands, or coupled connection
@@ -60,7 +61,9 @@ This pull request remains draft until checkpoint 4 passes.
     executable/relay revision, deterministic noninteractive lookup, default and named selector
     resolution, resolved session identity, stream framing, remote received command/arguments,
     process startup, exit, timeout, cancellation, malformed targets, missing agent,
-    missing/incompatible Herdr, and bounded diagnostics.
+    missing/incompatible Herdr, and bounded diagnostics. The fixture proves that both API and
+    terminal relay builders explicitly pass the one resolved session, including literal `default`,
+    and reject ambiguous status-only identity when socket overrides can redirect a relay.
   - **Stop and revisit:** Stop if implementation requires a local shell, user-supplied shell program
     or shell text, stored key material, interactive prompt handling, unbounded stderr, automatic
     remote bootstrap, or remote World code. A fixed encoded relay command executed by the remote
@@ -74,7 +77,8 @@ This pull request remains draft until checkpoint 4 passes.
     layout, pane, and launcher operations while the remote subscription remains open.
   - **Evidence:** A reproducible live fixture records the exact revisions, protocol, agent
     availability, pre-provisioned running session, relay capability and framing, an event caused by
-    a concurrent command, and independent progress of every connection before any terminal attach.
+    a concurrent command, independent progress of every connection before any terminal attach, and
+    continued use of the admitted session after the remote implicit selection changes.
   - **Stop and revisit:** Stop if the relay works only in an interactive shell, serializes the
     subscription ahead of other clients, or omits required snapshot fields.
 

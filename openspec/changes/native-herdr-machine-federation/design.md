@@ -103,6 +103,20 @@ non-actionable until that resolution succeeds. Settings may present a successful
 for example,
 `Default (currently product-a)`.
 
+Resolution occurs once when a connection generation is admitted. The adapter creates one immutable
+resolved assignment containing the target and concrete session, and every API subscription,
+request, launcher operation, and terminal stream in that generation uses that assignment. Both API
+and terminal relay commands explicitly supply `--session <resolved-session>`, including for the
+literal `default`; they never re-evaluate `Default` or inherit a later `HERDR_SESSION`, API-socket
+override, or client-socket override. A reconnect may resolve the configured selector again and then
+uses the existing binding-retention or binding-rotation rules.
+
+The session field printed by `status server --json` describes the command invocation environment;
+it is not by itself an attestation from the connected server. When a socket override can redirect
+that invocation, admission requires an independent proof that the resolved name maps both relay
+surfaces to the intended API and client sockets. If the adapter cannot establish that mapping, it
+leaves the connection unbound.
+
 The resolved connection identifies a particular Herdr runtime, not merely a machine. The SSH target
 and session selector are connection configuration, not runtime entity identity. World does not
 derive the stable connection ID from either field. Each resolved target/session assignment receives
@@ -172,6 +186,8 @@ The Herdr adapter owns the documented snapshot/event sequence: establish and ack
 structural subscription, buffer events, request the snapshot on an independent API connection,
 then apply the snapshot and buffered events without a gap. It maps Herdr capabilities and native
 entities into the qualified World runtime input without teaching World views about Herdr protocol.
+All of those connections, and later terminal connections, are opened from the same immutable
+generation assignment rather than resolving the configured selector for each stream.
 
 ### Qualify every runtime and connection generation
 
