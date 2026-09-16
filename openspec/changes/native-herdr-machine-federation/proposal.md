@@ -9,21 +9,29 @@ the same socket protocols to Local or to a local socket backed by SSH and a remo
 live investigation on current Herdr master confirmed that saved-machine SSH authentication and
 remote API requests work, but Herdr does not yet expose that relay as a public long-lived client
 interface. That is not a server-side protocol limitation. The World bridge is already a pinned
-Herdr client and can own a narrow SSH connector while keeping Herdr authoritative for topology,
-commands, agents, and terminal semantics.
+Herdr client and can own a narrow SSH-backed connection mechanism while keeping Herdr authoritative
+for topology, commands, agents, and terminal semantics.
 
 The active change therefore moves from waiting for a new Herdr-owned multihost API to defining a
-Herdr-specific connector seam in the World bridge. The seam supports the existing local socket and
-an SSH-backed socket without coupling World presentation code to either transport. It stays small
-enough to contribute to or replace with an equivalent Herdr Web implementation later.
+Herdr-specific adapter inside the World bridge. World owns the connection list and runtime
+lifecycle; the adapter owns Herdr protocol and capability semantics; local-socket and SSH-backed
+connection mechanisms carry the same pinned Herdr protocols. These are responsibility boundaries,
+not a generic provider framework or a requirement for separate packages or services.
 
 ## What Changes
 
-- Define one Herdr connector contract that yields compatible API and terminal connections from
-  either the existing local socket or a supervised SSH-backed relay.
-- Let the World bridge own remote Herdr profiles, connector lifecycle, SSH process supervision,
-  reconnect generations, and bounded transport diagnostics. Initial profile CRUD and target/session
-  disclosure reuse the existing actual-loopback local-management boundary.
+- Let the World bridge own a bounded connection list, browser access, routing, runtime identity,
+  reconnect generations, bounded diagnostics, and World-specific data. Each connection identifies
+  one particular Herdr runtime; an SSH-backed connection therefore names a pre-provisioned Herdr
+  session rather than only a machine.
+- Keep Herdr API requests, snapshot/event ordering, capabilities, native identifiers, command and
+  launcher mapping, terminal semantics, compatibility checks, and the pinned relay command inside
+  one Herdr-specific adapter boundary.
+- Keep local-socket and supervised SSH process mechanics below that adapter. SSH process handling
+  carries bounded bytes and lifecycle state without understanding Herdr agents, panes, layouts, or
+  World presentation types.
+- Require connection CRUD and target/session disclosure to use the existing actual-loopback
+  local-management boundary.
 - Keep OpenSSH authoritative for host aliases, keys, agents, host verification, proxy jumps, and
   other SSH policy. World stores no passwords or private keys and does not answer interactive SSH
   prompts.
@@ -35,20 +43,23 @@ enough to contribute to or replace with an equivalent Herdr Web implementation l
   protocol behavior. The remote Herdr server receives the same compatible client protocols it
   receives from local clients.
 - Prove snapshot/subscription ordering, concurrent commands and launchers, and independent
-  terminal-ID streams through a real SSH connector before widening browser integration.
-- Adapt Local and remote Herdr connections into the existing qualified `WorldModel` through one
-  same-origin World gateway, with independent failure and reconnect boundaries.
-- Give each target/session binding its own persistent runtime identity. Retargeting a profile keeps
-  its configuration identity but retires the old runtime binding, detaches viewers, and does not
-  silently associate old World data with the new server.
+  terminal-ID streams through a real SSH-backed connection before widening browser integration.
+- Adapt Local and remote Herdr connections through the Herdr adapter into the existing qualified
+  `WorldModel` through one same-origin World gateway, with independent failure and reconnect
+  boundaries.
+- Give each target/session binding its own persistent runtime identity. Retargeting a connection
+  keeps its configuration identity but retires the old runtime binding, detaches viewers, and does
+  not silently associate old World data with the new server.
 - Keep direct World bridge profiles as a compatibility path and preserve healthy Local operation
-  when remote profiles or SSH are unavailable.
-- Keep the connector isolated in upstream-aligned bridge code. Track Herdr Web and adopt an
-  equivalent upstream connector when it satisfies the same contract; upstream adoption is not a
-  prerequisite for completing the downstream implementation.
-- Leave provider support for non-Herdr servers outside this change. The connector boundary avoids
-  making SSH or Herdr presentation assumptions part of the World model so a later, concrete server
-  provider can be added separately.
+  when remote connections or SSH are unavailable.
+- Keep the adapter and connection mechanics isolated in upstream-aligned bridge code. Track Herdr
+  Web and adopt equivalent upstream work when it satisfies the same contract; upstream adoption is
+  not a prerequisite for completing the downstream implementation.
+- Keep the Herdr plugin responsible for installing, starting, and opening World without making it
+  authoritative over World's connection list or routing remote connections through Local.
+- Leave non-Herdr backends, a public provider SDK, and dynamic provider loading outside this
+  change. If a second concrete backend arrives, evolve the shared representation from its proven
+  differences instead of prebuilding a generic runtime platform.
 
 ## Capabilities
 
@@ -59,16 +70,16 @@ None.
 ### Modified Capabilities
 
 - `runtime-federation`: Move the normal desktop path from multiple browser-selected World bridges
-  to one World gateway with local-socket and SSH-backed Herdr connectors, while preserving unified
-  model ingestion, qualified identity, complete topology, terminal isolation, World-owned data,
-  and failure isolation.
+  to one World gateway with a World-owned connection list, one Herdr adapter, and local-socket or
+  SSH-backed connection mechanisms, while preserving unified model ingestion, qualified identity,
+  complete topology, terminal isolation, World-owned data, and failure isolation.
 - `bridge-access`: Keep remote Herdr traffic behind the serving gateway's same-origin browser
-  boundary, add explicit authorization for managing remote profiles, and retain the existing
+  boundary, add explicit authorization for managing Herdr connections, and retain the existing
   policy for compatibility-mode direct bridge URLs.
 
 ## Impact
 
-The change affects the Rust bridge connection layer, profile persistence and settings, plugin
+The change affects the Rust bridge connection layer, connection persistence and settings, plugin
 service environment, browser runtime discovery, terminal ownership, uploads, federation tests,
 security tests, operational documentation, and the current federation and bridge-access specs.
 The first delivery remains Herdr-specific and pinned to a reviewed Herdr compatibility baseline.
@@ -78,6 +89,6 @@ OpenSSH access and a compatible Herdr executable/session reachable by the review
 The current direct bridge federation remains supported during migration and as an explicit
 alternative.
 
-This active change remains incomplete until the connector, thin World integration, security work,
-and live end-to-end acceptance are implemented and evidenced. Specification validation alone does
-not make the pull request ready to merge.
+This active change remains incomplete until the Herdr connection, thin World integration, security
+work, and live end-to-end acceptance are implemented and evidenced. Specification validation alone
+does not make the pull request ready to merge.

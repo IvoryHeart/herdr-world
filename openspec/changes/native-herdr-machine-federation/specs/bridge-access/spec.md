@@ -7,9 +7,9 @@ binding. Host, Origin, and CSP policy SHALL remain distinct from optional passwo
 SSH-backed Herdr traffic SHALL pass through that serving bridge and SHALL NOT require a World HTTP
 listener, browser password, Host admission, Origin admission, or CSP destination on each remote
 machine. Explicit direct World bridge profiles SHALL retain their current destination and origin
-policy. Remote profile CRUD and target/session disclosure SHALL reuse the existing local-management
-boundary and require the request's actual TCP peer to be loopback; an admitted remote runtime
-session or configured password SHALL NOT grant that authority.
+policy. Remote connection CRUD and target/session disclosure SHALL reuse the existing
+local-management boundary and require the request's actual TCP peer to be loopback; an admitted
+remote runtime session or configured password SHALL NOT grant that authority.
 
 #### Scenario: Password-protected connection
 
@@ -21,7 +21,7 @@ session or configured password SHALL NOT grant that authority.
 
 - **WHEN** an admitted browser selects a remote Herdr runtime exposed by its serving bridge
 - **THEN** HTTP and WebSocket traffic stays on the serving bridge origin and the browser makes no
-  direct request to the remote machine, its Herdr socket, or the SSH connector
+  direct request to the remote machine, its Herdr socket, or the SSH-backed connection
 
 #### Scenario: Browser uses a direct bridge profile
 
@@ -38,36 +38,36 @@ session or configured password SHALL NOT grant that authority.
 
 ## ADDED Requirements
 
-### Requirement: Remote profile and connector boundary
+### Requirement: Remote connection and adapter boundary
 
 The bridge SHALL expose a narrow, actual-loopback local-management surface and a separate bounded
-runtime surface. Profile management MAY accept a validated label, OpenSSH target or alias, optional
-Herdr session, and enabled state. It SHALL NOT accept or expose passwords, private keys, arbitrary
-SSH options, executable paths, user-supplied remote commands, shell programs, shell text, or upload
-destinations. Routine runtime descriptors SHALL expose only opaque identity, label, state,
-generation, capabilities, and World runtime data. Browser runtime operations SHALL target an
-admitted opaque runtime-binding ID and an allow-listed World operation.
+runtime surface. Connection management MAY accept a validated label, OpenSSH target or alias, one
+explicit Herdr session, and enabled state. It SHALL NOT accept or expose passwords, private keys,
+arbitrary SSH options, executable paths, user-supplied remote commands, shell programs, shell text,
+or upload destinations. Routine runtime descriptors SHALL expose only opaque identity, label,
+state, generation, capabilities, and World runtime data. Browser runtime operations SHALL target
+an admitted opaque runtime-binding ID and an allow-listed World operation.
 
-#### Scenario: Local-management user edits a profile
+#### Scenario: Local-management user edits a connection
 
 - **WHEN** a request from an actual loopback TCP peer passes Host and Origin checks and submits
-  bounded fields through the explicit remote-profile settings surface
+  bounded fields through the explicit remote-connection settings surface
 - **THEN** the bridge validates and persists those fields, retires any changed live generation, and
   does not disclose credential material or accept a user-supplied shell command
 
-#### Scenario: Remote admitted user edits a profile
+#### Scenario: Remote admitted user edits a connection
 
-- **WHEN** a non-loopback browser presents a valid runtime session or password and requests profile
-  CRUD or target/session details
+- **WHEN** a non-loopback browser presents a valid runtime session or password and requests
+  connection CRUD or target/session details
 - **THEN** the bridge rejects it because runtime admission does not grant local-management authority
 
 #### Scenario: Runtime request supplies transport details
 
 - **WHEN** a snapshot, command, terminal, or upload runtime request supplies an SSH target, session,
-  connector option, executable, credential, remote path, or shell command instead of an admitted
+  connection option, executable, credential, remote path, or shell command instead of an admitted
   runtime ID and allow-listed operation
-- **THEN** the bridge rejects it without starting transport, modifying a profile, or forwarding the
-  request to Herdr
+- **THEN** the bridge rejects it without starting transport, modifying a connection, or forwarding
+  the request to Herdr
 
 #### Scenario: Browser invokes an arbitrary Herdr method
 
@@ -79,13 +79,14 @@ admitted opaque runtime-binding ID and an allow-listed World operation.
 
 - **WHEN** a browser asks the bridge to connect to an unpersisted target, relay arbitrary bytes, or
   run a remote command
-- **THEN** the bridge rejects the request and exposes no general connector endpoint
+- **THEN** the bridge rejects the request and exposes no general transport endpoint
 
 #### Scenario: Serving bridge is exposed beyond loopback
 
-- **WHEN** the operator enables non-loopback access to a serving bridge with enabled remote profiles
+- **WHEN** the operator enables non-loopback access to a serving bridge with enabled remote
+  connections
 - **THEN** the settings surface states that an admitted browser receives terminal-equivalent access
-  to Local and every enabled runtime exposed by that bridge
+  to Local and every enabled connection exposed by that bridge
 
 #### Scenario: Connection details appear in routine output
 

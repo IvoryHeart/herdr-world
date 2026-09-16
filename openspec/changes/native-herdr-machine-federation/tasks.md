@@ -4,18 +4,21 @@ This pull request remains draft until checkpoint 4 passes.
 
 ## 0. Reconcile the transport decision
 
-- [x] 0.1 Record the current Herdr remote-path investigation.
+- [x] 0.1 Record the current Herdr remote path and product ownership boundary.
   - **Owner:** World owns the compatibility and architecture decision.
   - **Observable result:** Evidence distinguishes the working SSH-backed Herdr client path from the
     missing public long-lived `--machine` stream and explains why the latter is no longer a product
-    blocker.
+    blocker. The active design assigns connections, access, routing, identity, and World data to
+    World; Herdr semantics to the adapter; and bounded byte/process handling to the local or SSH
+    connection mechanism.
   - **Evidence:** `docs/evidence/checkpoint1-herdr-connection.md` records the pinned release,
     current-master source audit, live SSH-agent authentication, remote control, and snapshot result.
   - **Stop and revisit:** Revisit if the recorded remote relay cannot carry the same API and terminal
     protocols used by the existing local bridge.
 
 - [x] 0.2 Preserve SSH-agent discovery in generated managed-service environments.
-  - **Owner:** World owns its plugin service definition; OpenSSH owns agent use.
+  - **Owner:** The Herdr plugin installs, starts, and opens World and owns its service definition;
+    World owns the connection list; OpenSSH owns agent use.
   - **Observable result:** When `SSH_AUTH_SOCK` is present at service generation, systemd-user and
     launchd definitions pass it to the World bridge, and Settings-triggered systemd-user, launchd,
     and fallback controller handoffs preserve it through a service restart without recording key
@@ -25,26 +28,31 @@ This pull request remains draft until checkpoint 4 passes.
   - **Stop and revisit:** Revisit if the shipped supervisor cannot inherit a usable agent socket or
     requires World to copy credentials.
 
-## 1. Prove the Herdr connector
+## 1. Prove the Herdr connection
 
-- [ ] 1.1 Define the minimal Herdr connector contract and profile schema.
-  - **Owner:** World owns the connector and profile lifecycle; Herdr owns protocol semantics;
-    OpenSSH owns SSH policy.
+- [ ] 1.1 Define the minimal World connection, Herdr adapter, and connection-mechanism boundaries.
+  - **Owner:** World owns its connection list and lifecycle; the Herdr adapter owns protocol,
+    capability, state, and command mapping; connection mechanisms own bounded local-socket or SSH
+    process/byte-stream handling; OpenSSH owns SSH policy.
   - **Observable result:** The existing local socket and one SSH-backed target can each produce
-    independent API connections, terminal-ID connections, generation state, and bounded diagnostics
-    through one Herdr-specific interface. Profile configuration identity remains distinct from the
-    runtime-binding identity used for persisted World entities.
-  - **Evidence:** Focused Rust tests cover profile validation, fixed argv construction, connector
-    lifecycle, independent connection creation, local-management authority, binding rotation on
-    retarget, and redaction without a local shell or embedded secrets.
-  - **Stop and revisit:** Stop if the seam needs World presentation types, browser-visible
-    credentials, arbitrary SSH flags or commands, or cannot isolate connection lifetimes.
+    independent API connections and terminal-ID connections through one Herdr-specific adapter,
+    while the World registry maintains generation state and each connection mechanism reports
+    bounded transport diagnostics. Each remote connection names one explicit pre-provisioned Herdr
+    session. Connection configuration identity remains distinct from the runtime-binding identity
+    used for persisted World entities.
+  - **Evidence:** Focused Rust tests cover connection validation, fixed argv construction, adapter
+    and connection lifecycle, independent connection creation, local-management authority, binding
+    rotation on retarget, and redaction without a local shell or embedded secrets.
+  - **Stop and revisit:** Stop if SSH process handling needs Herdr entity/presentation types, the
+    adapter needs World views, or the seam exposes browser-visible credentials, arbitrary SSH flags
+    or commands, or coupled connection lifetimes.
 
 - [ ] 1.2 Implement the smallest SSH-backed socket relay against the pinned Herdr surface.
-  - **Owner:** World supervises the connector process; OpenSSH selects target/authentication;
-    remote Herdr connects the relay to its selected session socket.
-  - **Observable result:** A configured profile establishes a compatible remote Herdr API connection
-    without a remote World installation or browser-reachable listener.
+  - **Owner:** The Herdr adapter owns the pinned relay command and compatibility; World supervises
+    the bounded SSH process; OpenSSH selects target/authentication; remote Herdr connects the relay
+    to the connection's explicit session socket.
+  - **Observable result:** A configured World connection establishes a compatible remote Herdr API
+    connection without a remote World installation or browser-reachable listener.
   - **Evidence:** Integration tests cover the separately pinned relay-capability probe, exact Herdr
     executable/relay revision, deterministic noninteractive lookup, selected session, stream
     framing, remote received command/arguments, process startup, exit, timeout, cancellation,
@@ -55,9 +63,10 @@ This pull request remains draft until checkpoint 4 passes.
     login shell is expected OpenSSH behavior and is not itself a stop condition.
 
 - [ ] 1.3 Prove live snapshot, subscription, commands, and launcher concurrency.
-  - **Owner:** World owns connector concurrency and recovery; Herdr owns API results and events.
+  - **Owner:** World owns connection concurrency and recovery; the Herdr adapter owns request and
+    snapshot/event sequencing; Herdr owns API results and events.
   - **Observable result:** Through the managed World service environment, Local and one real SSH
-    profile return complete snapshots, establish subscriptions without an event gap, and complete
+    connection return complete snapshots, establish subscriptions without an event gap, and complete
     layout, pane, and launcher operations while the remote subscription remains open.
   - **Evidence:** A reproducible live fixture records the exact revisions, protocol, agent
     availability, pre-provisioned running session, relay capability and framing, an event caused by
@@ -67,9 +76,9 @@ This pull request remains draft until checkpoint 4 passes.
 
 ## 2. Prove terminal compatibility
 
-- [ ] 2.1 Route explicit terminal-ID streams through the connector.
-  - **Owner:** World owns connection supervision and browser adaptation; Herdr owns terminal IDs and
-    terminal protocol behavior.
+- [ ] 2.1 Route explicit terminal-ID streams through the Herdr adapter.
+  - **Owner:** World owns connection supervision and browser adaptation; the Herdr adapter owns
+    terminal mapping and compatibility; Herdr owns terminal IDs and terminal protocol behavior.
   - **Observable result:** Two independent streams can attach to different terminal IDs while the
     structural subscription and command connection remain active.
   - **Evidence:** Focused bridge tests cover handshake, output, input, resize, scroll, focus,
@@ -89,18 +98,19 @@ This pull request remains draft until checkpoint 4 passes.
 
 ## 3. Prove the thin World integration
 
-- [ ] 3.1 Add bounded World-owned remote profile persistence and lifecycle.
-  - **Owner:** World owns profile IDs, runtime-binding IDs, labels, targets, sessions, enabled state,
-    validation, and generation retirement; OpenSSH configuration remains user-owned.
+- [ ] 3.1 Add bounded World-owned Herdr connection persistence and lifecycle.
+  - **Owner:** World owns connection IDs, runtime-binding IDs, labels, targets, sessions, enabled
+    state, validation, and generation retirement; OpenSSH configuration remains user-owned.
   - **Observable result:** An actual-loopback local-management user can add, edit, enable, disable,
-    and remove a remote Herdr profile without storing keys or exposing a general SSH/command
-    interface. Retargeting keeps the profile ID but creates a fresh runtime binding and detaches old
-    viewers.
+    and remove a remote Herdr connection for one explicit session without storing keys or exposing
+    a general SSH/command interface. Retargeting keeps the connection ID but creates a fresh runtime
+    binding and detaches old viewers. Herdr saved-profile import is not required or authoritative.
   - **Evidence:** Bridge, persistence, recovery, and security tests cover corrupt data, collisions,
     hostile values, bounds, redaction, remote-admin rejection, restart, generation changes, and an
     A-to-B retarget with colliding native IDs and persisted records.
-  - **Stop and revisit:** Stop if stable identity depends on mutable targets, profile input can alter
-    connector argv structure, or routine runtime payloads disclose connection details.
+  - **Stop and revisit:** Stop if stable identity depends on mutable targets, connection input can
+    alter SSH argv structure, a Herdr catalogue becomes authoritative over World connections, or
+    routine runtime payloads disclose connection details.
 
 - [ ] 3.2 Feed Local and one SSH-backed runtime through the existing qualified `WorldModel`.
   - **Owner:** World owns registry and model qualification; Herdr owns each native snapshot.
@@ -108,8 +118,8 @@ This pull request remains draft until checkpoint 4 passes.
     through `WorldRuntimeSource`, with equal native IDs isolated by gateway, runtime, and generation.
   - **Evidence:** Model, browser, and live tests show one model containing both runtimes and no
     presentation-specific or parallel topology store.
-  - **Stop and revisit:** Stop if the connector leaks into presentation code or any action/state is
-    admitted with an unqualified identifier.
+  - **Stop and revisit:** Stop if Herdr or SSH details leak into presentation code, a parallel
+    topology model appears, or any action/state is admitted with an unqualified identifier.
 
 - [ ] 3.3 Preserve independent startup, failure, command, and terminal routing.
   - **Owner:** World owns registry supervision, allow-listed dispatch, and same-origin adaptation.
@@ -126,17 +136,18 @@ merge.
 ## 4. Complete product acceptance
 
 - [ ] 4.1 Complete transport recovery, bounds, and diagnostics.
-  - **Owner:** World owns connector retry, timeout, cancellation, process cleanup, generation
+  - **Owner:** World owns connection retry, timeout, cancellation, process cleanup, generation
     fencing, and bounded user-facing state.
   - **Observable result:** Authentication, host-key, DNS, SSH, remote Herdr, protocol, sleep/wake,
-    disconnect, and restart failures remain profile-local and recover without stale control.
+    disconnect, and restart failures remain connection-local and recover without stale control.
   - **Evidence:** Unit, integration, and live failure tests cover the supported platforms and the
     actual managed-service environment without logging targets, usernames, or credential material.
   - **Stop and revisit:** Stop if World must answer prompts, parse unstable output for correctness,
-    leak environment-specific data, or cannot terminate orphaned connector processes.
+    leak environment-specific data, or cannot terminate orphaned SSH processes.
 
 - [ ] 4.2 Complete bounded remote upload delivery.
-  - **Owner:** World owns upload policy and connector delivery; OpenSSH owns authentication.
+  - **Owner:** World owns upload policy; the bounded connection mechanism owns byte delivery; the
+    Herdr adapter owns insertion into the selected pane; OpenSSH owns authentication.
   - **Observable result:** A validated upload creates a private remote path for the selected current
     runtime and inserts only that path into its pane, with cleanup on cancellation or failure.
   - **Evidence:** Tests cover images and generic files, bounds, hostile names, overwrite, conflicts,
@@ -154,25 +165,27 @@ merge.
   - **Stop and revisit:** Stop on cross-runtime data mutation, unbounded resource use, or control
     before a fresh compatible surface.
 
-- [ ] 4.4 Complete profile settings, browser access policy, and security acceptance.
+- [ ] 4.4 Complete connection settings, browser access policy, and security acceptance.
   - **Owner:** World owns settings authorization, Host/Origin/CSP/password policy, disclosure,
     command admission, desktop and Android behavior.
   - **Observable result:** One gateway profile exposes qualified Local and remote Herdr runtimes;
-    no remote World listener is required; direct bridge profiles remain compatible; profile editing
+    no remote World listener is required; direct bridge profiles remain compatible; connection
+    editing
     remains actual-loopback local management and cannot become a general SSH or Herdr proxy.
-  - **Evidence:** Browser, accessibility, responsive, API, privacy, and security tests cover profile
-    lifecycle, hostile requests, non-loopback disclosure, and desktop/phone flows.
+  - **Evidence:** Browser, accessibility, responsive, API, privacy, and security tests cover
+    connection lifecycle, hostile requests, non-loopback disclosure, and desktop/phone flows.
   - **Stop and revisit:** Stop if credentials reach the browser, runtime access bypasses admission,
-    or non-loopback exposure understates authority over enabled profiles.
+    or non-loopback exposure understates authority over enabled connections.
 
-- [ ] 4.5 Compare and contribute the proven seam upstream without blocking delivery.
+- [ ] 4.5 Compare and contribute the proven Herdr boundary upstream without blocking delivery.
   - **Owner:** World owns downstream delivery and Herdr Web synchronization; upstream maintainers own
     acceptance into Herdr Web.
-  - **Observable result:** The connector contract and evidence are compared with current Herdr Web;
-    reusable bridge work is proposed upstream, or the downstream compatibility reason is recorded.
+  - **Observable result:** The Herdr adapter and connection-mechanism contract and evidence are
+    compared with current Herdr Web; reusable bridge work is proposed upstream, or the downstream
+    compatibility reason is recorded.
   - **Evidence:** Link the upstream proposal or the recorded comparison. If upstream later lands an
-    equivalent connector, rerun conformance before adopting it through normal synchronization.
-  - **Stop and revisit:** Stop adoption if upstream behavior weakens connector concurrency,
+    equivalent implementation, rerun conformance before adopting it through normal synchronization.
+  - **Stop and revisit:** Stop adoption if upstream behavior weakens connection concurrency,
     qualification, security, or compatibility; upstream acceptance itself is not a merge gate.
 
 - [ ] 4.6 Pass final live acceptance and repository delivery checks.

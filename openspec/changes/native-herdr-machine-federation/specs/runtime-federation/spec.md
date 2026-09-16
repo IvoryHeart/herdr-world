@@ -4,17 +4,20 @@
 
 Herdr SHALL remain authoritative for structural topology, agent lifecycle, commands, launchers, and
 terminal protocol behavior. One managed World bridge SHALL expose its selected Local Herdr runtime
-and enabled World-owned remote Herdr profiles as separately qualified runtimes. World SHALL own
-connector profiles, local and SSH connector lifecycle, browser protocol adaptation, qualification,
-bounded command admission, notes, pins, observed activity, and upload policy. OpenSSH SHALL remain
-authoritative for SSH target resolution, authentication material, host verification, proxying, and
-connection policy. The browser MAY retain explicit direct World bridge profiles as a compatibility
-path.
+and enabled World-owned remote Herdr connections as separately qualified runtimes. World SHALL own
+its connection list, local and SSH connection lifecycle, browser access and routing, qualification,
+reconnect generations, bounded command admission, notes, pins, observed activity, and upload
+policy. A Herdr-specific adapter SHALL own API requests, snapshot/event ordering, native entity and
+capability mapping, commands, launchers, terminal semantics, compatibility checks, and the pinned
+relay command. Local-socket and SSH process handling SHALL remain below that adapter and SHALL NOT
+depend on Herdr entity or World presentation types. OpenSSH SHALL remain authoritative for SSH
+target resolution, authentication material, host verification, proxying, and connection policy.
+The browser MAY retain explicit direct World bridge profiles as a compatibility path.
 
-#### Scenario: Remote Herdr profile becomes available
+#### Scenario: Remote Herdr connection becomes available
 
-- **WHEN** an enabled World remote profile establishes compatible Herdr API and terminal
-  connections through its SSH connector
+- **WHEN** an enabled World remote connection establishes compatible Herdr API and terminal
+  connections through SSH
 - **THEN** the serving bridge exposes it as a qualified runtime without requiring a World
   installation, HTTP listener, or browser-reachable address on that machine
 
@@ -24,25 +27,31 @@ path.
 - **THEN** other runtimes remain usable and cached topology from the failed runtime is marked stale
   without admitting control
 
-#### Scenario: Remote profile is disabled or removed
+#### Scenario: Remote connection is disabled or removed
 
-- **WHEN** an actual-loopback local-management user disables or removes a World remote profile
-- **THEN** the bridge retires its connector generation and removes it from runtime selection without
-  stopping the remote Herdr server or its agents
+- **WHEN** an actual-loopback local-management user disables or removes a World remote connection
+- **THEN** the bridge retires its connection generation and removes it from runtime selection
+  without stopping the remote Herdr server or its agents
+
+#### Scenario: Herdr plugin starts World
+
+- **WHEN** the Herdr plugin installs, starts, or opens the local World bridge
+- **THEN** it may bootstrap the existing Local socket but does not own or limit World's connection
+  list, and remote connections reach their selected Herdr sessions without routing through Local
 
 #### Scenario: Local is unavailable during gateway startup
 
-- **WHEN** the managed World bridge starts while Local is unavailable and one remote profile is
+- **WHEN** the managed World bridge starts while Local is unavailable and one remote connection is
   healthy
 - **THEN** the bridge binds its browser service, reports Local unavailable, and admits the healthy
   remote runtime without waiting for Local to recover
 
-#### Scenario: Every remote connector is unavailable
+#### Scenario: Every remote connection is unavailable
 
 - **WHEN** SSH, agent access, or every configured remote target is unavailable while Local is
   healthy
-- **THEN** Local and explicit direct bridge profiles remain usable and each remote profile reports
-  only its bounded profile-local state
+- **THEN** Local and explicit direct bridge profiles remain usable and each remote connection
+  reports only its bounded connection-local state
 
 #### Scenario: A second bridge targets the same runtime
 
@@ -53,8 +62,9 @@ path.
 ### Requirement: Qualified admission
 
 The bridge and browser SHALL qualify actions, cached state, terminal sessions, and asynchronous
-responses by gateway identity, runtime identity, and connector generation. Each Herdr runtime SHALL
-pass the reviewed API and terminal compatibility checks before World dispatches control.
+responses by gateway identity, runtime identity, and connection generation. The Herdr adapter SHALL
+apply the reviewed API, terminal, relay, and capability compatibility checks before World dispatches
+control.
 
 #### Scenario: Colliding native identifiers
 
@@ -71,15 +81,15 @@ pass the reviewed API and terminal compatibility checks before World dispatches 
 #### Scenario: Remote snapshot is admitted
 
 - **WHEN** an SSH-backed runtime supplies its initial snapshot and buffered structural events from
-  one compatible connector generation
+  one compatible connection generation
 - **THEN** World preserves authoritative workspaces, tabs, panes, terminal IDs, pane revisions,
   layouts, agents, and optional worktree data without inferring missing fields from client-selected
   state
 
-#### Scenario: Response from a retired connector
+#### Scenario: Response from a retired connection
 
 - **WHEN** a snapshot, event, terminal frame, upload result, or command response arrives from an
-  earlier generation after the same profile reconnects or changes
+  earlier generation after the same connection reconnects or changes
 - **THEN** the bridge and browser discard it without changing current state or admitting input
 
 #### Scenario: Herdr API fails while SSH remains present
@@ -91,15 +101,17 @@ pass the reviewed API and terminal compatibility checks before World dispatches 
 
 ## ADDED Requirements
 
-### Requirement: Herdr connector boundary
+### Requirement: Herdr adapter and connection-mechanism boundary
 
-World SHALL use one Herdr-specific connector contract for its existing local socket and remote
-SSH-backed runtimes. A connector SHALL provide independent compatible API connections, terminal
-connections opened by terminal ID, lifecycle and generation state, and bounded diagnostics. Before
-final acceptance it SHALL also provide bounded remote byte delivery. The contract SHALL preserve
-independent progress for a structural subscription, request clients, launcher operations, and
-multiple terminal streams. Connector implementation SHALL remain outside presentation-specific
-World code.
+World SHALL use one Herdr-specific adapter for its existing local-socket and remote SSH-backed
+connections. The adapter SHALL provide independent compatible API connections, terminal
+connections opened by terminal ID, and Herdr protocol and capability semantics. The World registry
+SHALL assign connection identity and generations; each connection mechanism SHALL report readiness,
+closure, and bounded transport diagnostics. Before final acceptance the connection mechanism SHALL
+also provide bounded remote byte delivery. The boundary SHALL preserve independent progress for a
+structural subscription, request clients, launcher operations, and multiple terminal streams. Herdr
+adaptation and connection mechanics SHALL remain outside presentation-specific World code, and SSH
+process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands.
 
 #### Scenario: Long-lived operations run concurrently
 
@@ -107,22 +119,22 @@ World code.
   while World dispatches structural commands and launcher operations
 - **THEN** the subscription, commands, launchers, and both terminals make independent progress
 
-#### Scenario: Local and SSH connectors share the contract
+#### Scenario: Local and SSH connections share the Herdr adapter
 
 - **WHEN** the runtime registry opens Local and one SSH-backed Herdr runtime
-- **THEN** the registry consumes the same connector operations and Herdr protocol model without a
-  transport-specific topology path
+- **THEN** both use the same Herdr adapter and qualified model-ingestion path without a
+  connection-specific topology model
 
-#### Scenario: Connector uses the pinned Herdr relay surface
+#### Scenario: Herdr adapter uses the pinned relay surface
 
-- **WHEN** World launches the reviewed SSH relay for an admitted profile
+- **WHEN** World launches the reviewed SSH relay for an admitted connection
 - **THEN** it verifies the exact executable/relay revision and relay capability independently from
   API and terminal protocol compatibility, selects the admitted session deterministically, and
   speaks the reviewed Herdr protocol after the relay reaches the remote socket
 
 #### Scenario: OpenSSH executes the fixed remote command
 
-- **WHEN** World starts an SSH-backed connector
+- **WHEN** World starts an SSH-backed connection
 - **THEN** it invokes OpenSSH directly without a local shell and supplies one fixed, correctly
   encoded remote relay command for the remote login shell, with no user-selected shell program,
   executable, remote command, or shell text
@@ -131,97 +143,99 @@ World code.
 
 - **WHEN** a remote Herdr reports the reviewed API and terminal protocols but does not pass the
   separately pinned relay-capability probe
-- **THEN** World keeps that profile non-actionable and does not treat protocol compatibility as
+- **THEN** World keeps that connection non-actionable and does not treat protocol compatibility as
   proof that remote federation is available
 
-#### Scenario: Connector implementation serializes clients
+#### Scenario: Connection mechanism serializes clients
 
-- **WHEN** a candidate connector lets a long-lived subscription or terminal stream prevent another
-  required connection from opening or progressing
-- **THEN** the connector fails conformance and native remote federation remains disabled
+- **WHEN** a candidate connection mechanism lets a long-lived subscription or terminal stream
+  prevent another required connection from opening or progressing
+- **THEN** the connection mechanism fails adapter conformance and native remote federation remains
+  disabled
 
 #### Scenario: Herdr compatibility baseline changes
 
 - **WHEN** World adopts a different Herdr release, commit, API protocol, terminal protocol, or relay
   behavior
-- **THEN** connector conformance and live acceptance pass again and compatibility provenance is
-  updated before that baseline is admitted
+- **THEN** adapter and connection conformance and live acceptance pass again and compatibility
+  provenance is updated before that baseline is admitted
 
-#### Scenario: Another server provider is considered
+### Requirement: World-owned Herdr connections
 
-- **WHEN** a future server does not speak the Herdr API and terminal protocols
-- **THEN** it requires a separate provider-to-World adapter and SHALL NOT be treated as compatible
-  merely because SSH can reach it
+The World bridge SHALL maintain a bounded Herdr connection list. Each remote connection SHALL
+contain an opaque stable connection ID, opaque runtime-binding ID, label, validated OpenSSH target
+or alias, one explicit pre-provisioned Herdr session, and enabled state. The list SHALL NOT contain
+passwords, private keys, agent tickets, user-supplied shell commands, or arbitrary SSH options. The
+connection ID identifies editable configuration; the runtime-binding ID identifies persisted
+runtime entities. Target or session retargeting SHALL mint a new runtime-binding ID, while
+reconnecting the same assignment SHALL retain it. Connection mutation and target/session disclosure
+SHALL require the existing actual-loopback local-management boundary. Herdr's saved-machine
+catalogue SHALL NOT be authoritative over the World connection list.
 
-### Requirement: World-owned remote Herdr profiles
+#### Scenario: User adds a remote connection
 
-The World bridge SHALL maintain a bounded remote Herdr profile catalogue containing an opaque
-stable profile ID, opaque runtime-binding ID, label, validated OpenSSH target or alias, optional
-Herdr session, and enabled state. The catalogue SHALL NOT contain passwords, private keys, agent
-tickets, user-supplied shell commands, or arbitrary SSH options. The profile ID identifies editable
-configuration; the runtime-binding ID identifies persisted runtime entities. Target or session
-retargeting SHALL mint a new runtime-binding ID, while reconnecting the same assignment SHALL retain
-it. Profile mutation and target/session disclosure SHALL require the existing actual-loopback
-local-management boundary.
-
-#### Scenario: User adds a remote profile
-
-- **WHEN** an actual-loopback local-management user supplies a valid label, OpenSSH target, and
-  optional Herdr session
-- **THEN** World assigns separate opaque profile and runtime-binding IDs, persists only the bounded
-  fields, and starts the connector without accepting key material or arbitrary command text
+- **WHEN** an actual-loopback local-management user supplies a valid label, OpenSSH target, and one
+  explicit Herdr session
+- **THEN** World assigns separate opaque connection and runtime-binding IDs, persists only the
+  bounded fields, and starts the connection without accepting key material or arbitrary command text
 
 #### Scenario: User selects a key
 
-- **WHEN** the user needs a particular identity or agent for a remote profile
+- **WHEN** the user needs a particular identity or agent for a remote connection
 - **THEN** the user selects it through normal OpenSSH configuration or `ssh-agent` and World stores
   no copy of the key or passphrase
 
-#### Scenario: Profile transport fields change
+#### Scenario: Connection target or session changes
 
-- **WHEN** a local-management user changes a profile target or session from assignment A to B
-- **THEN** World preserves the profile ID, retires A's generation, detaches A's viewers, mints a new
-  runtime-binding ID for B, and does not attach A's persisted records to B
+- **WHEN** a local-management user changes a connection target or session from assignment A to B
+- **THEN** World preserves the connection ID, retires A's generation, detaches A's viewers, mints a
+  new runtime-binding ID for B, and does not attach A's persisted records to B
 
-#### Scenario: Profile label or enabled state changes
+#### Scenario: Connection label or enabled state changes
 
-- **WHEN** a local-management user renames, disables, or re-enables a profile without changing its
+- **WHEN** a local-management user renames, disables, or re-enables a connection without changing its
   target or session
 - **THEN** World retains the runtime-binding ID while applying normal generation retirement and
   reconnect rules
 
-#### Scenario: Profile requires interactive attention
+#### Scenario: Connection requires interactive attention
 
 - **WHEN** host trust, authentication, remote installation, update, or server replacement requires
   interaction
-- **THEN** World marks only that profile as requiring Attention and directs the user to an ordinary
-  terminal without answering a prompt or modifying OpenSSH configuration
+- **THEN** World marks only that connection as requiring Attention and directs the user to an
+  ordinary terminal without answering a prompt or modifying OpenSSH configuration
 
 #### Scenario: Remote Herdr is missing or incompatible
 
 - **WHEN** the admitted SSH target lacks the reviewed Herdr relay behavior or reports an
   incompatible protocol
-- **THEN** World keeps the profile visible but non-actionable with bounded guidance and does not
+- **THEN** World keeps the connection visible but non-actionable with bounded guidance and does not
   install, replace, or upgrade Herdr automatically
 
-#### Scenario: Browser supplies connector control
+#### Scenario: Browser supplies connection control
 
-- **WHEN** a profile request includes an executable, SSH flag, private-key path, remote command,
-  upload destination, or shell text outside the bounded profile schema
-- **THEN** the bridge rejects it without starting a connector or changing the stored profile
+- **WHEN** a connection request includes an executable, SSH flag, private-key path, remote command,
+  upload destination, or shell text outside the bounded connection schema
+- **THEN** the bridge rejects it without starting transport or changing the stored connection
 
-#### Scenario: Remote admitted client attempts profile administration
+#### Scenario: Remote admitted client attempts connection administration
 
-- **WHEN** a non-loopback browser with a valid runtime session requests profile CRUD or
+- **WHEN** a non-loopback browser with a valid runtime session requests connection CRUD or
   target/session details
 - **THEN** the bridge rejects the request because runtime admission does not grant local-management
   authority
+
+#### Scenario: A Herdr saved profile is imported
+
+- **WHEN** a later optional import copies a Herdr saved-machine entry into World
+- **THEN** World creates an independent connection for one explicit session, and later Herdr
+  catalogue edits, deletion, or unavailability do not silently retarget or remove it
 
 ### Requirement: Unified WorldModel ingestion
 
 The browser SHALL convert Local, SSH-backed, and direct compatibility runtime sources through the
 same qualified `WorldModel` ingestion path. Tree, Graph, Office, Spaces, and other topology
-projections SHALL consume that unified model rather than connector-specific topology stores.
+projections SHALL consume that unified model rather than connection-specific topology stores.
 
 #### Scenario: One gateway advertises multiple runtimes
 
@@ -230,7 +244,7 @@ projections SHALL consume that unified model rather than connector-specific topo
 
 #### Scenario: SSH-backed and direct sources are both configured
 
-- **WHEN** an operator retains a direct World bridge profile while enabling an SSH-backed profile
+- **WHEN** an operator retains a direct World bridge profile while enabling an SSH-backed connection
 - **THEN** both remain separately qualified by gateway and runtime identity without implicit
   deduplication or command fallback
 
@@ -240,16 +254,16 @@ projections SHALL consume that unified model rather than connector-specific topo
 - **THEN** the model replaces only that runtime's admitted snapshot and buffered events while
   preserving unrelated runtime state
 
-#### Scenario: One profile is retargeted to another server
+#### Scenario: One connection is retargeted to another server
 
-- **WHEN** a profile changes from server/session A to B and both servers contain equal native IDs
+- **WHEN** a connection changes from server/session A to B and both servers contain equal native IDs
 - **THEN** B enters the model under a new runtime-binding ID, A's viewers detach, and A's cached or
   persisted entities are neither attached to nor pruned by B
 
 ### Requirement: Independent browser terminal surfaces
 
 Each terminal viewer SHALL bind to a qualified runtime, terminal ID, viewer connection, and current
-connector generation. The connector SHALL open the remote terminal by terminal ID and SHALL NOT
+connection generation. The Herdr adapter SHALL open the remote terminal by terminal ID and SHALL NOT
 derive it from native TUI selection. World SHALL preserve the existing browser terminal behavior
 and prevent focus, resize, scroll, or input from targeting another terminal.
 
@@ -288,14 +302,14 @@ and prevent focus, resize, scroll, or input from targeting another terminal.
 
 World SHALL qualify note attachments, agent pins, observed activity, snapshot pruning, and upload
 operations by runtime and native identity. World SHALL own upload admission and policy. Remote
-bytes SHALL travel only through the admitted profile's bounded connector delivery operation and
-produce a path on that remote machine before World inserts or reports it to the terminal.
+bytes SHALL travel only through the admitted connection's bounded delivery operation and produce a
+path on that remote machine before the Herdr adapter inserts or reports it to the terminal.
 
 #### Scenario: Upload to an SSH-backed runtime
 
 - **WHEN** an admitted browser uploads a supported file to a current remote pane
-- **THEN** World validates the upload, the connector creates a bounded private remote path, and only
-  that path is delivered to the selected pane
+- **THEN** World validates the upload, the connection mechanism creates a bounded private remote
+  path, and only that path is delivered to the selected pane through the Herdr adapter
 
 #### Scenario: Remote upload fails
 
@@ -306,7 +320,7 @@ produce a path on that remote machine before World inserts or reports it to the 
 #### Scenario: Browser supplies a remote destination
 
 - **WHEN** an upload request includes a remote path, SSH target, or shell text
-- **THEN** World rejects that field and does not pass it to the connector
+- **THEN** World rejects that field and does not pass it to the connection mechanism
 
 #### Scenario: Equal pane IDs on two runtimes
 
@@ -314,9 +328,9 @@ produce a path on that remote machine before World inserts or reports it to the 
 - **THEN** each record remains associated only with its qualified runtime and pane and one runtime's
   snapshot cannot prune or overwrite the other's records
 
-#### Scenario: Retargeted profile reuses native IDs
+#### Scenario: Retargeted connection reuses native IDs
 
-- **WHEN** a profile's old and new runtime bindings contain equal native pane, terminal, or agent
+- **WHEN** a connection's old and new runtime bindings contain equal native pane, terminal, or agent
   IDs
 - **THEN** notes, pins, activity, uploads, and viewers remain associated with the binding that
   created them and do not silently move to the replacement runtime
