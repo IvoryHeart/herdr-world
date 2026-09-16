@@ -408,13 +408,13 @@ describe("connection protocol routing", () => {
 
   test("keeps old web consumers compatible with additive top-level identity", () => {
     const response = JSON.parse(
-      serializeConnectionEnvelope("legacy-default", {
+      serializeConnectionEnvelope("startup-default", {
         id: "rpc",
         result: { ok: true },
       }),
     );
     const terminalMessage = JSON.parse(
-      serializeConnectionEnvelope("legacy-default", {
+      serializeConnectionEnvelope("startup-default", {
         terminal: {
           terminal_id: "term",
           width: 80,

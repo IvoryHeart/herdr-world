@@ -214,34 +214,3 @@ ${programArguments}
 </plist>
 `;
 }
-
-/** Published <= 0.7.0 identities, retained until explicit service cutover. */
-export function resolveLegacyServicePaths(
-  platform: ServicePlatform,
-  homeDir: string,
-  appDataDir?: string,
-): ServicePaths {
-  const base =
-    platform === "windows-task"
-      ? join(appDataDir ?? join(homeDir, "AppData", "Roaming"), "herdr-gui")
-      : join(homeDir, ".config", "herdr-gui");
-  const config = join(base, "herdr-gui.env");
-  if (platform === "windows-task") {
-    const userKey = createHash("sha256")
-      .update(base.toLowerCase())
-      .digest("hex")
-      .slice(0, 16);
-    return {
-      config,
-      definition: join(base, "herdr-gui-task.ps1"),
-      taskName: `dev.herdr.herdr-gui-${userKey}`,
-    };
-  }
-  return {
-    config,
-    definition:
-      platform === "systemd"
-        ? join(homeDir, ".config", "systemd", "user", "herdr-gui.service")
-        : join(homeDir, "Library", "LaunchAgents", "dev.herdr.herdr-gui.plist"),
-  };
-}

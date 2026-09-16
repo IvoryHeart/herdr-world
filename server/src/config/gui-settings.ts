@@ -2,7 +2,7 @@ import { defaultDataFile } from "./data-paths";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { rename, rm, writeFile } from "node:fs/promises";
-import { LEGACY_DEFAULT_CONNECTION_ID } from "../connections/types";
+import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { serverLogger } from "../utils/logger";
 import { sourceCheckoutPath as workspaceSourceCheckoutPath } from "../workspace/utils";
 
@@ -193,7 +193,7 @@ export function updateGuiSettings(
 }
 
 export function connectionSettingsPrefix(connectionId?: string | null): string {
-  return connectionId && connectionId !== LEGACY_DEFAULT_CONNECTION_ID
+  return connectionId && connectionId !== STARTUP_DEFAULT_CONNECTION_ID
     ? `connection:${encodeURIComponent(connectionId)}:`
     : "";
 }

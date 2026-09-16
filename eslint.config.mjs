@@ -62,7 +62,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["server/src/**/*.ts", "scripts/**/*.ts"],
+    files: ["server/src/**/*.ts", "scripts/**/*.{ts,mjs}"],
     languageOptions: {
       globals: {
         ...globals.bunBuiltin,

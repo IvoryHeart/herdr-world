@@ -244,7 +244,7 @@ export function createWorkspaceAutoSync(args: {
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 2_000));
-  const connectionId = args.connectionId ?? "legacy-default";
+  const connectionId = args.connectionId ?? "startup-default";
   const syncFailureReporters = new Map<string, RecoveryReporter>();
   const tickFailureReporter = createRecoveryReporter({
     logger,

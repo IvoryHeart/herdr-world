@@ -118,10 +118,7 @@ Options (flags override HERDR_WORLD_* environment variables):
 
   let logLevel: LogLevel;
   try {
-    logLevel = resolveServerLogLevel(
-      args["log-level"],
-      worldEnv("LOG_LEVEL"),
-    );
+    logLevel = resolveServerLogLevel(args["log-level"], worldEnv("LOG_LEVEL"));
   } catch (error) {
     console.error(`[bridge] ${(error as Error).message}`);
     process.exit(2);

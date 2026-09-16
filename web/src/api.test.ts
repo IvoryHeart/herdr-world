@@ -45,7 +45,7 @@ function createTestBridge(connectTimeoutMs = 5, reconnectDelayMs = 1000) {
 
 function sendHello(
   socket: HangingWebSocket,
-  defaultConnectionId = "legacy-default",
+  defaultConnectionId = "startup-default",
 ) {
   socket.onmessage?.({
     data: JSON.stringify({
@@ -245,7 +245,7 @@ describe("bridge connection lifecycle", () => {
     await Bun.sleep(5);
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         id: request.id,
         result: { ok: true },
       }),
@@ -284,19 +284,19 @@ describe("bridge connection lifecycle", () => {
     const push = { terminal_id: "term_1", data: "Y29weQ==" };
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         terminal_clipboard: push,
       }),
     } as MessageEvent);
     remove();
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         terminal_clipboard: push,
       }),
     } as MessageEvent);
 
-    expect(received).toEqual([{ connection_id: "legacy-default", ...push }]);
+    expect(received).toEqual([{ connection_id: "startup-default", ...push }]);
   });
 
   test("dispatches agent status events that omit data.type", async () => {
@@ -331,13 +331,13 @@ describe("bridge connection lifecycle", () => {
     };
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         ...statusEvent,
       }),
     } as MessageEvent);
 
     expect(events).toEqual([
-      { connection_id: "legacy-default", ...statusEvent },
+      { connection_id: "startup-default", ...statusEvent },
     ]);
   });
 
@@ -366,14 +366,14 @@ describe("bridge connection lifecycle", () => {
 
     ManualWebSocket.instance.onmessage?.({
       data: JSON.stringify({
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         terminal_closed: { terminal_id: "term_1", reason: "stream_closed" },
       }),
     } as MessageEvent);
 
     expect(closed).toEqual([
       {
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         terminal_id: "term_1",
         reason: "stream_closed",
       },
@@ -416,20 +416,20 @@ describe("bridge connection lifecycle", () => {
       bytes: "",
     };
     ManualWebSocket.instance.onmessage?.({
-      data: JSON.stringify({ connection_id: "legacy-default", ...event }),
+      data: JSON.stringify({ connection_id: "startup-default", ...event }),
     } as MessageEvent);
     ManualWebSocket.instance.onmessage?.({
-      data: JSON.stringify({ connection_id: "legacy-default", terminal }),
+      data: JSON.stringify({ connection_id: "startup-default", terminal }),
     } as MessageEvent);
 
     expect(events).toEqual([
       {
-        connection_id: "legacy-default",
+        connection_id: "startup-default",
         ...event,
       },
     ]);
     expect(terminals).toEqual([
-      { connection_id: "legacy-default", ...terminal },
+      { connection_id: "startup-default", ...terminal },
     ]);
   });
 

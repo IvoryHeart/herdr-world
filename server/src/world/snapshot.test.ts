@@ -16,7 +16,7 @@ function status(
   return {
     id,
     label: id.toUpperCase(),
-    source: id === "local" ? "legacy-config" : "saved-profile",
+    source: id === "local" ? "startup-config" : "saved-profile",
     is_default: id === "local",
     state,
     generation,
@@ -104,9 +104,9 @@ describe("WorldSnapshotService", () => {
       ["local", "shared-pane", "Local workspace"],
       ["remote", "shared-pane", "Remote workspace"],
     ]);
-    expect(result.connections.every((connection) => connection.actionable)).toBe(
-      true,
-    );
+    expect(
+      result.connections.every((connection) => connection.actionable),
+    ).toBe(true);
   });
 
   test("retains a failed host as stale without admitting control", async () => {

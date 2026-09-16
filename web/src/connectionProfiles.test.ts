@@ -41,7 +41,7 @@ describe("local connection profile presentation", () => {
 
   test("suggests deterministic safe IDs without using the reserved ID", () => {
     expect(suggestConnectionId("Local Dév / Main")).toBe("local-dev-main");
-    expect(suggestConnectionId("legacy default")).toBe("local-default");
+    expect(suggestConnectionId("startup default")).toBe("local-default");
     expect(suggestConnectionId("***")).toBe("local");
   });
 
@@ -69,7 +69,7 @@ describe("local connection profile presentation", () => {
     });
     expect(() =>
       localConnectionProfilePayload({
-        id: "legacy-default",
+        id: "startup-default",
         label: "Bad",
         controlSocketPath: "/tmp/control.sock",
         clientSocketPath: "/tmp/client.sock",

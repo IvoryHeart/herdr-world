@@ -11,6 +11,12 @@ const servers: net.Server[] = [];
 const sockets = new Set<net.Socket>();
 const controlCalls = new Map<string, string[]>();
 
+function worldServerCommand(): string[] {
+  return Bun.env.HERDR_WORLD_TEST_BINARY
+    ? [Bun.env.HERDR_WORLD_TEST_BINARY]
+    : [process.execPath, "server/src/index.ts"];
+}
+
 afterEach(async () => {
   for (const socket of sockets) socket.destroy();
   sockets.clear();
@@ -200,7 +206,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   delete env.HERDR_SSH_HOST;
   delete env.HERDR_SESSION;
   const repositoryRoot = join(import.meta.dir, "../../..");
-  const child = Bun.spawn(["bun", "server/src/index.ts"], {
+  const child = Bun.spawn(worldServerCommand(), {
     cwd: repositoryRoot,
     env,
     stdout: "pipe",
@@ -478,7 +484,7 @@ for (const { protocol, welcomeProtocol, accepted } of [
     };
     delete env.HERDR_SSH_HOST;
     delete env.HERDR_SESSION;
-    const child = Bun.spawn(["bun", "server/src/index.ts"], {
+    const child = Bun.spawn(worldServerCommand(), {
       cwd: join(import.meta.dir, "../../.."),
       env,
       stdout: "pipe",
@@ -508,7 +514,7 @@ for (const { protocol, welcomeProtocol, accepted } of [
         JSON.stringify({
           id: "connect-default",
           method: "connections.connect",
-          params: { id: "legacy-default" },
+          params: { id: "startup-default" },
         }),
       );
       const response = await reply.finally(() => clearTimeout(timer));

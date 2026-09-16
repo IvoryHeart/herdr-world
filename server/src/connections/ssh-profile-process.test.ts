@@ -16,6 +16,12 @@ const roots: string[] = [];
 const servers: net.Server[] = [];
 const sockets = new Set<net.Socket>();
 
+function worldServerCommand(): string[] {
+  return Bun.env.HERDR_WORLD_TEST_BINARY
+    ? [Bun.env.HERDR_WORLD_TEST_BINARY]
+    : [process.execPath, "server/src/index.ts"];
+}
+
 afterEach(async () => {
   for (const socket of sockets) socket.destroy();
   sockets.clear();
@@ -59,7 +65,7 @@ async function fakeHerdr(
         const request = JSON.parse(input.slice(0, newline));
         const result =
           request.method === "ping"
-            ? { version: `fake-${id}`, protocol: 14 }
+            ? { version: `fake-${id}`, protocol: 22 }
             : request.method === "workspace.list"
               ? {
                   workspaces: [
@@ -300,7 +306,7 @@ process.on("SIGINT", () => void stop());
     { mode: 0o600 },
   );
   const repositoryRoot = join(import.meta.dir, "../../..");
-  const child = Bun.spawn(["bun", "server/src/index.ts"], {
+  const child = Bun.spawn(worldServerCommand(), {
     cwd: repositoryRoot,
     env: {
       ...process.env,
@@ -384,7 +390,7 @@ process.on("SIGINT", () => void stop());
         (item: any) => item.id === "ssh-beta",
       );
       const legacy = catalog.connections.find(
-        (item: any) => item.id === "legacy-default",
+        (item: any) => item.id === "startup-default",
       );
       if (
         alpha?.state === "ready" &&
@@ -401,7 +407,7 @@ process.on("SIGINT", () => void stop());
       (item: any) => item.id === "ssh-beta",
     );
     const legacy = catalog.connections.find(
-      (item: any) => item.id === "legacy-default",
+      (item: any) => item.id === "startup-default",
     );
     expect(alpha).toMatchObject({ state: "ready", type: "ssh" });
     expect(beta).toMatchObject({ state: "ready", type: "ssh" });
@@ -418,7 +424,7 @@ process.on("SIGINT", () => void stop());
         .workspaces[0].name,
     ).toBe("from-ssh-beta");
     expect(
-      (await rpc("workspace.list", {}, "legacy-default", legacyGeneration))
+      (await rpc("workspace.list", {}, "startup-default", legacyGeneration))
         .workspaces[0].name,
     ).toBe("from-legacy-ssh");
 
@@ -508,7 +514,7 @@ process.on("SIGINT", () => void stop());
     let legacyStatus: any;
     for (let attempt = 0; attempt < 200; attempt += 1) {
       legacyStatus = (await rpc("connections.list")).connections.find(
-        (item: any) => item.id === "legacy-default",
+        (item: any) => item.id === "startup-default",
       );
       if (legacyStatus?.state === "error") break;
       await Bun.sleep(20);

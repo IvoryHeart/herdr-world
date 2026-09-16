@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  parseWorldSnapshotResult,
-  WorldRuntimeStore,
-} from "./runtimeStore";
+import { parseWorldSnapshotResult, WorldRuntimeStore } from "./runtimeStore";
 
 function result(label: string, generation = 1) {
   return {
@@ -110,10 +107,12 @@ describe("World aggregate runtime store", () => {
     await runtime.refresh();
 
     expect(
-      runtime.get().connections.map((connection) => [
-        connection.connectionId,
-        connection.snapshot?.workspaces[0].workspace_id,
-      ]),
+      runtime
+        .get()
+        .connections.map((connection) => [
+          connection.connectionId,
+          connection.snapshot?.workspaces[0].workspace_id,
+        ]),
     ).toEqual([
       ["host-a", "shared"],
       ["host-b", "shared"],

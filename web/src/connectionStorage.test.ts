@@ -3,8 +3,8 @@ import {
   connectionStorageKey,
   FILE_EXPLORER_WORKSPACE_STORAGE_KEY,
   FILE_PREVIEW_STORAGE_KEY,
-  LEGACY_DEFAULT_CONNECTION_ID,
-  migrateLegacyConnectionStorage,
+  STARTUP_DEFAULT_CONNECTION_ID,
+  copyStartupProfileStorage,
   readConnectionResourceSelection,
   transitionConnectionResourceSelection,
   writeConnectionResourceSelection,
@@ -38,10 +38,10 @@ class MemoryStorage {
 }
 
 describe("connection resource storage", () => {
-  test("preserves legacy-default keys and injectively encodes other identities", () => {
+  test("preserves startup-default keys and injectively encodes other identities", () => {
     expect(
       connectionStorageKey(
-        LEGACY_DEFAULT_CONNECTION_ID,
+        STARTUP_DEFAULT_CONNECTION_ID,
         FILE_EXPLORER_WORKSPACE_STORAGE_KEY,
       ),
     ).toBe(FILE_EXPLORER_WORKSPACE_STORAGE_KEY);
@@ -55,7 +55,7 @@ describe("connection resource storage", () => {
     );
   });
 
-  test("copies legacy single-connection preferences into the first real profile once", () => {
+  test("copies startup-profile preferences into the first saved profile once", () => {
     const storage = new MemoryStorage();
     storage.setItem(FILE_EXPLORER_WORKSPACE_STORAGE_KEY, "legacy-workspace");
     storage.setItem(FILE_PREVIEW_STORAGE_KEY, '{"path":"legacy.md"}');
@@ -70,7 +70,7 @@ describe("connection resource storage", () => {
       '{"path":"alpha.md"}',
     );
 
-    expect(migrateLegacyConnectionStorage(storage, "alpha")).toBeTrue();
+    expect(copyStartupProfileStorage(storage, "alpha")).toBeTrue();
     expect(
       storage.getItem(
         connectionStorageKey("alpha", FILE_EXPLORER_WORKSPACE_STORAGE_KEY),
@@ -99,8 +99,8 @@ describe("connection resource storage", () => {
       connectionStorageKey("alpha", FILE_EXPLORER_WORKSPACE_STORAGE_KEY),
     );
     storage.setItem(FILE_EXPLORER_WORKSPACE_STORAGE_KEY, "new-legacy-value");
-    expect(migrateLegacyConnectionStorage(storage, "alpha")).toBeFalse();
-    expect(migrateLegacyConnectionStorage(storage, "beta")).toBeFalse();
+    expect(copyStartupProfileStorage(storage, "alpha")).toBeFalse();
+    expect(copyStartupProfileStorage(storage, "beta")).toBeFalse();
     expect(
       storage.getItem(
         connectionStorageKey("alpha", FILE_EXPLORER_WORKSPACE_STORAGE_KEY),

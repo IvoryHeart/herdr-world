@@ -22,19 +22,20 @@ import {
   validateConnectionProfile,
 } from "./profiles";
 import { createSshProfileRuntimeConfig } from "./ssh-profile-runtime";
-import { type ConnectionIdentity, LEGACY_DEFAULT_CONNECTION_ID } from "./types";
+import {
+  type ConnectionIdentity,
+  STARTUP_DEFAULT_CONNECTION_ID,
+} from "./types";
 
-export type SyntheticLocalProfile = LocalConnectionProfile & {
-  id: typeof LEGACY_DEFAULT_CONNECTION_ID;
+export type StartupLocalProfile = LocalConnectionProfile & {
+  id: typeof STARTUP_DEFAULT_CONNECTION_ID;
 };
 
-export type ManagedConnectionProfile =
-  | ConnectionProfile
-  | SyntheticLocalProfile;
+export type ManagedConnectionProfile = ConnectionProfile | StartupLocalProfile;
 
 export type ConnectionProfileBootstrap = {
   defaultConnectionId: string;
-  explicitLegacyOverride: boolean;
+  explicitStartupOverride: boolean;
   persistedRegistry: PersistedConnectionRegistry | null;
   /** Set when startup preserved an invalid registry and fell back to legacy. */
   registryLoadError?: string;
@@ -46,8 +47,8 @@ export type ConnectionProfileBootstrap = {
 
 export function loadConnectionProfileBootstrap(args: {
   store: ConnectionProfileStore;
-  legacyProfile: SyntheticLocalProfile;
-  explicitLegacyOverride: boolean;
+  startupProfile: StartupLocalProfile;
+  explicitStartupOverride: boolean;
 }): ConnectionProfileBootstrap {
   const persistedRegistry = args.store.load();
   const persisted =
@@ -55,13 +56,13 @@ export function loadConnectionProfileBootstrap(args: {
       profile,
       readOnly: false,
     })) ?? [];
-  if (args.explicitLegacyOverride) {
+  if (args.explicitStartupOverride) {
     return {
-      defaultConnectionId: LEGACY_DEFAULT_CONNECTION_ID,
-      explicitLegacyOverride: true,
+      defaultConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
+      explicitStartupOverride: true,
       persistedRegistry,
       registrations: [
-        { profile: args.legacyProfile, readOnly: true },
+        { profile: args.startupProfile, readOnly: true },
         ...persisted,
       ],
     };
@@ -69,16 +70,16 @@ export function loadConnectionProfileBootstrap(args: {
   if (persistedRegistry) {
     return {
       defaultConnectionId: persistedRegistry.default_connection_id,
-      explicitLegacyOverride: false,
+      explicitStartupOverride: false,
       persistedRegistry,
       registrations: persisted,
     };
   }
   return {
-    defaultConnectionId: LEGACY_DEFAULT_CONNECTION_ID,
-    explicitLegacyOverride: false,
+    defaultConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
+    explicitStartupOverride: false,
     persistedRegistry: null,
-    registrations: [{ profile: args.legacyProfile, readOnly: true }],
+    registrations: [{ profile: args.startupProfile, readOnly: true }],
   };
 }
 
@@ -89,8 +90,8 @@ export function connectionIdentityForProfile(
     id: profile.id,
     label: profile.label,
     source:
-      profile.id === LEGACY_DEFAULT_CONNECTION_ID
-        ? "legacy-config"
+      profile.id === STARTUP_DEFAULT_CONNECTION_ID
+        ? "startup-config"
         : profile.type === "ssh"
           ? "ssh-profile"
           : "local-profile",
@@ -179,7 +180,7 @@ export async function testConnectionSockets(
 }
 
 export function testLocalConnectionProfile(
-  profile: LocalConnectionProfile | SyntheticLocalProfile,
+  profile: LocalConnectionProfile | StartupLocalProfile,
 ) {
   return testConnectionSockets(
     profile.control_socket_path,
@@ -320,7 +321,7 @@ export class ConnectionProfileService<
       }
       const previousRegistry = this.registry;
       const migration =
-        !previousRegistry && !this.args.bootstrap.explicitLegacyOverride;
+        !previousRegistry && !this.args.bootstrap.explicitStartupOverride;
       // The first persisted profile retires the synthetic legacy default.
       // Keep the local server in the list by persisting it as a writable
       // Local profile with the same socket paths instead of dropping it.
@@ -377,8 +378,8 @@ export class ConnectionProfileService<
       this.registry = nextRegistry;
       if (migration) {
         this.args.manager.setDefault(profile.id);
-        await this.args.manager.unregister(LEGACY_DEFAULT_CONNECTION_ID);
-        this.profiles.delete(LEGACY_DEFAULT_CONNECTION_ID);
+        await this.args.manager.unregister(STARTUP_DEFAULT_CONNECTION_ID);
+        this.profiles.delete(STARTUP_DEFAULT_CONNECTION_ID);
       }
       if (migrationSeed) {
         await this.startManaged(migrationSeed.id, true).catch(() => undefined);
@@ -396,17 +397,17 @@ export class ConnectionProfileService<
   private localMigrationSeed(
     newProfileId: string,
   ): LocalConnectionProfile | null {
-    const legacyProfile = this.args.bootstrap.registrations.find(
+    const startupProfile = this.args.bootstrap.registrations.find(
       (registration) =>
-        registration.profile.id === LEGACY_DEFAULT_CONNECTION_ID,
+        registration.profile.id === STARTUP_DEFAULT_CONNECTION_ID,
     )?.profile;
-    if (!legacyProfile || legacyProfile.type !== "local") return null;
+    if (!startupProfile || startupProfile.type !== "local") return null;
     return {
       id: newProfileId === "local" ? "localhost" : "local",
       label: "Local",
       type: "local",
-      control_socket_path: legacyProfile.control_socket_path,
-      client_socket_path: legacyProfile.client_socket_path,
+      control_socket_path: startupProfile.control_socket_path,
+      client_socket_path: startupProfile.client_socket_path,
       auto_connect: true,
     };
   }
@@ -536,7 +537,7 @@ export class ConnectionProfileService<
               profiles: nextProfiles,
             }
           : null;
-      if (!nextRegistry && !this.args.bootstrap.explicitLegacyOverride) {
+      if (!nextRegistry && !this.args.bootstrap.explicitStartupOverride) {
         throw new Error("cannot remove the last persisted connection");
       }
       const previousState = this.args.manager.status(connectionId).state;
@@ -589,7 +590,7 @@ export class ConnectionProfileService<
       this.requireWritableRegistryState();
       if (typeof connectionId !== "string")
         throw new Error("connection id is required");
-      if (this.args.bootstrap.explicitLegacyOverride) {
+      if (this.args.bootstrap.explicitStartupOverride) {
         throw new Error(
           "explicit CLI/environment connection remains the process default",
         );

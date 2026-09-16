@@ -523,8 +523,9 @@ function SshProfileForm({
         Leave the socket paths empty and Herdr World infers the default Herdr
         sockets under the remote home directory at connect time. Authentication
         comes from the bridge service user&apos;s OpenSSH config, ssh-agent, or
-        system Keychain. Establish host trust outside Herdr World. Passwords, keys,
-        passphrases, commands, ports, and SSH options are never stored here.
+        system Keychain. Establish host trust outside Herdr World. Passwords,
+        keys, passphrases, commands, ports, and SSH options are never stored
+        here.
       </p>
       {feedback ? (
         <div
@@ -1067,10 +1068,10 @@ export function ConnectionSwitcher() {
     ({
       id: state.activeConnectionId,
       label:
-        state.activeConnectionId === "legacy-default"
+        state.activeConnectionId === "startup-default"
           ? "Default"
           : state.activeConnectionId,
-      source: "legacy-config",
+      source: "startup-config",
       is_default: state.defaultConnectionId === state.activeConnectionId,
       state: "disconnected",
       generation: 0,

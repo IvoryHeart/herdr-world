@@ -16,7 +16,7 @@ import {
   connectionIdentityForProfile,
   loadConnectionProfileBootstrap,
   type ManagedConnectionProfile,
-  type SyntheticLocalProfile,
+  type StartupLocalProfile,
   testLocalConnectionProfile,
 } from "./profile-service";
 import {
@@ -89,9 +89,9 @@ function ssh(id: string, autoConnect = false): SshConnectionProfile {
   };
 }
 
-const legacy: SyntheticLocalProfile = {
+const legacy: StartupLocalProfile = {
   ...local("ignored"),
-  id: "legacy-default",
+  id: "startup-default",
   label: "Default",
 };
 
@@ -108,8 +108,8 @@ function runtimeFactory(created: Map<string, FakeRuntime[]>) {
           id: profile.id,
           label: profile.label,
           source:
-            profile.id === "legacy-default"
-              ? "legacy-config"
+            profile.id === "startup-default"
+              ? "startup-config"
               : profile.type === "ssh"
                 ? "ssh-profile"
                 : "local-profile",
@@ -254,8 +254,8 @@ describe("connection profile bootstrap", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     expect(bootstrap.defaultConnectionId).toBe("beta");
     expect(bootstrap.registrations.map(({ profile }) => profile.id)).toEqual([
@@ -273,12 +273,12 @@ describe("connection profile bootstrap", () => {
     const before = readFileSync(store.path, "utf8");
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: true,
+      startupProfile: legacy,
+      explicitStartupOverride: true,
     });
-    expect(bootstrap.defaultConnectionId).toBe("legacy-default");
+    expect(bootstrap.defaultConnectionId).toBe("startup-default");
     expect(bootstrap.registrations.map(({ profile }) => profile.id)).toEqual([
-      "legacy-default",
+      "startup-default",
       "alpha",
     ]);
     expect(readFileSync(store.path, "utf8")).toBe(before);
@@ -292,18 +292,18 @@ describe("connection profile bootstrap", () => {
     expect(() =>
       loadConnectionProfileBootstrap({
         store,
-        legacyProfile: legacy,
-        explicitLegacyOverride: false,
+        startupProfile: legacy,
+        explicitStartupOverride: false,
       }),
     ).toThrow("not valid JSON");
     const bootstrap = {
-      defaultConnectionId: "legacy-default",
-      explicitLegacyOverride: false,
+      defaultConnectionId: "startup-default",
+      explicitStartupOverride: false,
       persistedRegistry: null,
       registryLoadError: "connection registry is not valid JSON",
       registrations: [{ profile: legacy, readOnly: true }],
     };
-    const manager = new ConnectionManager<FakeRuntime>("legacy-default");
+    const manager = new ConnectionManager<FakeRuntime>("startup-default");
     const service = new ConnectionProfileService({
       manager,
       store,
@@ -315,11 +315,11 @@ describe("connection profile bootstrap", () => {
     await expect(service.create(local("alpha"))).rejects.toThrow(
       "registry is invalid",
     );
-    await expect(service.test({ id: "legacy-default" })).resolves.toMatchObject(
-      {
-        ok: true,
-      },
-    );
+    await expect(
+      service.test({ id: "startup-default" }),
+    ).resolves.toMatchObject({
+      ok: true,
+    });
     expect(readFileSync(path, "utf8")).toBe("{not-json");
   });
 
@@ -327,10 +327,10 @@ describe("connection profile bootstrap", () => {
     const store = new ConnectionProfileStore({ path: tempPath() });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
-    expect(bootstrap.defaultConnectionId).toBe("legacy-default");
+    expect(bootstrap.defaultConnectionId).toBe("startup-default");
     expect(bootstrap.registrations).toEqual([
       { profile: legacy, readOnly: true },
     ]);
@@ -441,8 +441,8 @@ describe("connection profile service", () => {
     const store = new ConnectionProfileStore({ path: tempPath() });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -464,7 +464,7 @@ describe("connection profile service", () => {
       state: "ready",
     });
     expect(manager.defaultId()).toBe("alpha");
-    expect(manager.has("legacy-default")).toBeFalse();
+    expect(manager.has("startup-default")).toBeFalse();
     expect(retired?.stops).toBe(1);
     expect(store.load()).toEqual({
       version: 2,
@@ -496,8 +496,8 @@ describe("connection profile service", () => {
     const store = new ConnectionProfileStore({ path: tempPath() });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -539,8 +539,8 @@ describe("connection profile service", () => {
     };
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: failingLegacy,
-      explicitLegacyOverride: false,
+      startupProfile: failingLegacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -553,7 +553,7 @@ describe("connection profile service", () => {
       bootstrap,
       createRuntime: (profile) => (context) => {
         const runtime = baseFactory(profile)(context);
-        if (profile.id === "legacy-default") {
+        if (profile.id === "startup-default") {
           runtime.stop = async () => {
             runtime.stops += 1;
             throw new Error("synthetic cleanup failed");
@@ -568,9 +568,11 @@ describe("connection profile service", () => {
       id: "alpha",
       is_default: true,
     });
-    expect(manager.has("legacy-default")).toBeFalse();
+    expect(manager.has("startup-default")).toBeFalse();
     expect(service.list().map(({ id }) => id)).toEqual(["local", "alpha"]);
-    expect(() => manager.start("legacy-default")).toThrow("unknown connection");
+    expect(() => manager.start("startup-default")).toThrow(
+      "unknown connection",
+    );
   });
 
   test("starts default and auto-connect profiles independently and isolates failures", async () => {
@@ -586,8 +588,8 @@ describe("connection profile service", () => {
     const store = await persistedStore(registry);
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -613,8 +615,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -662,8 +664,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: true,
+      startupProfile: legacy,
+      explicitStartupOverride: true,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -677,7 +679,7 @@ describe("connection profile service", () => {
 
     await service.remove("alpha");
     expect(store.load()).toBeNull();
-    expect(manager.defaultId()).toBe("legacy-default");
+    expect(manager.defaultId()).toBe("startup-default");
     expect(manager.has("alpha")).toBeFalse();
   });
 
@@ -690,8 +692,8 @@ describe("connection profile service", () => {
     const before = readFileSync(store.path, "utf8");
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -732,8 +734,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -763,8 +765,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("remote");
     const created = new Map<string, FakeRuntime[]>();
@@ -834,8 +836,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("remote");
     const timers: Array<{
@@ -903,8 +905,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("remote");
     let releaseStop!: () => void;
@@ -972,8 +974,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("remote");
     let releaseFirstProbe!: () => void;
@@ -1055,8 +1057,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("remote");
     const created = new Map<string, FakeRuntime[]>();
@@ -1114,8 +1116,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("remote");
     const created = new Map<string, FakeRuntime[]>();
@@ -1197,8 +1199,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -1250,8 +1252,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("alpha");
     const created = new Map<string, FakeRuntime[]>();
@@ -1310,8 +1312,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>("alpha");
     const created = new Map<string, FakeRuntime[]>();
@@ -1362,8 +1364,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,
@@ -1401,8 +1403,8 @@ describe("connection profile service", () => {
     });
     const bootstrap = loadConnectionProfileBootstrap({
       store,
-      legacyProfile: legacy,
-      explicitLegacyOverride: false,
+      startupProfile: legacy,
+      explicitStartupOverride: false,
     });
     const manager = new ConnectionManager<FakeRuntime>(
       bootstrap.defaultConnectionId,

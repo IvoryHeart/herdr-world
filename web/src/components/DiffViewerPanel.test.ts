@@ -27,7 +27,7 @@ describe("connection-scoped diff identity", () => {
     expect(diffSelectionStorageKey("alpha", "same", "working")).not.toBe(
       diffSelectionStorageKey("beta", "same", "working"),
     );
-    expect(diffSelectionStorageKey("legacy-default", "same", "working")).toBe(
+    expect(diffSelectionStorageKey("startup-default", "same", "working")).toBe(
       "diffViewerSelected:same:working",
     );
     expect(diffCacheKey(alpha, "runtime-a", "working", "checkout:stable")).toBe(

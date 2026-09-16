@@ -328,7 +328,7 @@ describe("workspace resource scope", () => {
   test("does not restore ambiguous legacy repository-wide state", () => {
     const storage = memoryStorage();
     const scope = resourceScopeForWorkspace(
-      "legacy-default",
+      "startup-default",
       workspace("auth", "/repo/.worktrees/auth"),
     );
     storage.setItem(

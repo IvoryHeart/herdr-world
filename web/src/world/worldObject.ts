@@ -62,10 +62,10 @@ export type WorldObject = {
 
 export function worldObjectId(
   connectionId: string,
-  kind: WorldObjectKind,
+  identity: WorldObjectKind | "pane",
   nativeId: string,
 ) {
-  return JSON.stringify([connectionId, kind, nativeId]);
+  return JSON.stringify([connectionId, identity, nativeId]);
 }
 
 function boundedLabel(value: unknown, fallback: string) {
@@ -85,7 +85,11 @@ function status(value: unknown): WorldAgentStatus {
 }
 
 function buildHost(connection: WorldRuntimeConnection): WorldHostObject {
-  const id = worldObjectId(connection.connectionId, "host", connection.connectionId);
+  const id = worldObjectId(
+    connection.connectionId,
+    "host",
+    connection.connectionId,
+  );
   const tabsByWorkspace = new Map<string, Tab[]>();
   const panesByWorkspace = new Map<string, Pane[]>();
   for (const tab of connection.snapshot?.tabs ?? []) {
@@ -111,7 +115,7 @@ function buildHost(connection: WorldRuntimeConnection): WorldHostObject {
             typeof pane.agent === "string" && pane.agent.trim().length > 0;
           const kind = isAgent ? "agent" : "terminal";
           return {
-            id: worldObjectId(connection.connectionId, kind, pane.pane_id),
+            id: worldObjectId(connection.connectionId, "pane", pane.pane_id),
             kind,
             nativeId: pane.pane_id,
             parentId: spaceId,

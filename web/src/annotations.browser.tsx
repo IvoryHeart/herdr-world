@@ -1358,8 +1358,7 @@ export async function checkAnnotationUX(
       "hidden Inspector preview did not complete",
     );
     check(
-      readReviewAnnotations(worldLocalStorage, secondKey)[0]?.stale !==
-        true &&
+      readReviewAnnotations(worldLocalStorage, secondKey)[0]?.stale !== true &&
         document.querySelector<HTMLTextAreaElement>(".annotation-card textarea")
           ?.value === "Other checkout",
       "old Inspector reanchored the active workspace's draft",

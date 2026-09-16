@@ -1,8 +1,5 @@
 import { sanitizeConnectionError } from "../connections/manager";
-import type {
-  ConnectionId,
-  ConnectionStatus,
-} from "../connections/types";
+import type { ConnectionId, ConnectionStatus } from "../connections/types";
 
 const MAX_CONNECTIONS = 64;
 const MAX_WORKSPACES = 512;

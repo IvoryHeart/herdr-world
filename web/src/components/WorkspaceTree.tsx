@@ -355,10 +355,7 @@ export function WorkspaceTree({
     setAgentDropTarget(null);
   }, [connectionClient]);
   useEffect(() => {
-    worldLocalStorage.setItem(
-      WORKSPACE_AGENT_LAYOUT_STORAGE_KEY,
-      agentLayout,
-    );
+    worldLocalStorage.setItem(WORKSPACE_AGENT_LAYOUT_STORAGE_KEY, agentLayout);
   }, [agentLayout]);
   useEffect(() => {
     worldLocalStorage.setItem(

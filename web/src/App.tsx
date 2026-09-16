@@ -1535,13 +1535,9 @@ export default function App() {
       const current = inspectorStateRef.current;
       const sameOwner = !!current && sameResourceOwner(current.scope, scope);
       const stageWidth = inspectorStageRef.current?.clientWidth ?? 0;
-      const preferences = readInspectorPreferences(
-        worldLocalStorage,
-        scope,
-        {
-          rightSize: stageWidth > 0 ? stageWidth * 0.42 : undefined,
-        },
-      );
+      const preferences = readInspectorPreferences(worldLocalStorage, scope, {
+        rightSize: stageWidth > 0 ? stageWidth * 0.42 : undefined,
+      });
       const dock = sameOwner ? current.dock : preferences.dock;
       const preferredSize = sameOwner
         ? current.size

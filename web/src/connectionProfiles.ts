@@ -93,7 +93,7 @@ export function suggestConnectionId(
     .replace(/^[^a-z0-9]+|[-._:]+$/g, "")
     .slice(0, 128);
   if (!suggested) return fallback;
-  return suggested === "legacy-default" ? `${fallback}-default` : suggested;
+  return suggested === "startup-default" ? `${fallback}-default` : suggested;
 }
 
 export function localConnectionProfilePayload(value: {
@@ -110,7 +110,7 @@ export function localConnectionProfilePayload(value: {
   if (
     !CONNECTION_ID_PATTERN.test(id) ||
     id.length > 128 ||
-    id === "legacy-default"
+    id === "startup-default"
   ) {
     throw new Error(
       "ID must start with a letter or number and use only letters, numbers, dot, colon, underscore, or hyphen.",
@@ -168,7 +168,7 @@ export function sshConnectionProfilePayload(value: {
   if (
     !CONNECTION_ID_PATTERN.test(id) ||
     id.length > 128 ||
-    id === "legacy-default"
+    id === "startup-default"
   ) {
     throw new Error(
       "ID must start with a letter or number and use only letters, numbers, dot, colon, underscore, or hyphen.",

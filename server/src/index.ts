@@ -41,7 +41,7 @@ import {
   ConnectionProfileService,
   connectionIdentityForProfile,
   loadConnectionProfileBootstrap,
-  type SyntheticLocalProfile,
+  type StartupLocalProfile,
   testConnectionSockets,
 } from "./connections/profile-service";
 import {
@@ -70,7 +70,7 @@ import {
 } from "./connections/runtime";
 import { createShutdownController } from "./connections/shutdown";
 import { bindListenerBeforeConnectionStart } from "./connections/startup";
-import { LEGACY_DEFAULT_CONNECTION_ID } from "./connections/types";
+import { STARTUP_DEFAULT_CONNECTION_ID } from "./connections/types";
 import { createAuthHandlers, unauthenticatedLoginRedirect } from "./http/auth";
 import { serveStatic } from "./http/static-files";
 import {
@@ -92,7 +92,8 @@ import {
   WORKTREE_REMOVE_TIMEOUT_MS,
 } from "./worktree/remove";
 
-const APP_VERSION = packageJson.version;
+const APP_VERSION =
+  process.env.HERDR_WORLD_BUILD_VERSION?.trim() || packageJson.version;
 const serviceCommandResult = runServiceCommand(process.argv.slice(2));
 if (serviceCommandResult === SERVICE_COMMAND_CONTINUE) {
   process.argv.splice(2);
@@ -284,15 +285,15 @@ function summarizeHerdrEvent(event: any): string {
 }
 
 const connectionProfileStore = new ConnectionProfileStore();
-const syntheticLegacyProfile: SyntheticLocalProfile = {
-  id: LEGACY_DEFAULT_CONNECTION_ID,
+const startupDefaultProfile: StartupLocalProfile = {
+  id: STARTUP_DEFAULT_CONNECTION_ID,
   label: "Default",
   type: "local",
   control_socket_path: config.socketPath,
   client_socket_path: config.clientSocketPath,
   auto_connect: true,
 };
-const explicitLegacyOverride = Boolean(
+const explicitStartupOverride = Boolean(
   config.hasExplicitSocketPath ||
     config.hasExplicitClientSocketPath ||
     config.sshHost ||
@@ -302,8 +303,8 @@ let connectionBootstrap;
 try {
   connectionBootstrap = loadConnectionProfileBootstrap({
     store: connectionProfileStore,
-    legacyProfile: syntheticLegacyProfile,
-    explicitLegacyOverride,
+    startupProfile: startupDefaultProfile,
+    explicitStartupOverride,
   });
 } catch (error) {
   const registryLoadError = sanitizeConnectionError(error);
@@ -312,12 +313,12 @@ try {
     profile_mutations: "disabled",
   });
   connectionBootstrap = {
-    defaultConnectionId: LEGACY_DEFAULT_CONNECTION_ID,
-    explicitLegacyOverride,
+    defaultConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
+    explicitStartupOverride,
     persistedRegistry: null,
     registryLoadError,
     registrations: [
-      { profile: syntheticLegacyProfile, readOnly: true as const },
+      { profile: startupDefaultProfile, readOnly: true as const },
     ],
   };
 }
@@ -408,12 +409,12 @@ const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
 });
 
 function runtimeFactoryForProfile(
-  profile: ConnectionProfile | SyntheticLocalProfile,
+  profile: ConnectionProfile | StartupLocalProfile,
 ) {
   const identity = connectionIdentityForProfile(profile);
   return (context: ConnectionRuntimeContext) => {
     const profileConfig: SshTunnelConfig =
-      profile.id === LEGACY_DEFAULT_CONNECTION_ID
+      profile.id === STARTUP_DEFAULT_CONNECTION_ID
         ? downstreamConnectionConfig
         : profile.type === "ssh"
           ? createSshProfileRuntimeConfig(profile)
@@ -707,10 +708,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     try {
       const snapshots = worldSnapshots;
       if (!snapshots) throw new Error("World snapshot service is unavailable");
-      sendReply(
-        { id, result: await snapshots.snapshot() },
-        "world-snapshot",
-      );
+      sendReply({ id, result: await snapshots.snapshot() }, "world-snapshot");
     } catch (error) {
       sendError("world-snapshot-error", error);
     }

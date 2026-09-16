@@ -232,12 +232,22 @@ export function installHerdrService(
       "systemd daemon-reload",
     );
     assertRunSucceeded(
-      runCommand(["systemctl", "--user", "enable", "herdr-world-herdr.service"]),
+      runCommand([
+        "systemctl",
+        "--user",
+        "enable",
+        "herdr-world-herdr.service",
+      ]),
       "systemd service enable",
     );
     // Explicit restart: `enable` does not restart an already-active service.
     assertRunSucceeded(
-      runCommand(["systemctl", "--user", "restart", "herdr-world-herdr.service"]),
+      runCommand([
+        "systemctl",
+        "--user",
+        "restart",
+        "herdr-world-herdr.service",
+      ]),
       "systemd service start",
     );
     return paths;

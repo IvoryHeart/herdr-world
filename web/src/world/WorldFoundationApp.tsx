@@ -25,12 +25,13 @@ import "./world.css";
 export type WorldView = "spaces" | "office" | "tree" | "graph";
 
 const VIEW_KEY = "worldView";
-const WORLD_VIEWS: readonly WorldView[] = [
-  "spaces",
-  "office",
-  "tree",
-  "graph",
-];
+const WORLD_VIEWS: readonly WorldView[] = ["spaces", "office", "tree", "graph"];
+const WORLD_VIEW_PATHS: Record<WorldView, string> = {
+  spaces: "/spaces",
+  office: "/office",
+  tree: "/tree",
+  graph: "/graph",
+};
 
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
@@ -38,7 +39,17 @@ export function parseWorldView(value: unknown): WorldView {
     : "spaces";
 }
 
+export function worldViewFromPath(pathname: string): WorldView {
+  const match = Object.entries(WORLD_VIEW_PATHS).find(
+    ([, path]) => path === pathname,
+  );
+  return (match?.[0] as WorldView | undefined) ?? "spaces";
+}
+
 function initialView() {
+  if (window.location.pathname !== "/") {
+    return worldViewFromPath(window.location.pathname);
+  }
   return parseWorldView(worldLocalStorage.getItem(VIEW_KEY));
 }
 
@@ -50,9 +61,29 @@ export default function WorldFoundationApp() {
     return () => worldRuntimeStore.stop();
   }, []);
 
+  useEffect(() => {
+    if (window.location.pathname === "/") {
+      const url = new URL(window.location.href);
+      url.pathname = WORLD_VIEW_PATHS[view];
+      window.history.replaceState(window.history.state, "", url);
+    }
+    const onPopState = () => {
+      const next = worldViewFromPath(window.location.pathname);
+      setViewState(next);
+      worldLocalStorage.setItem(VIEW_KEY, next);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [view]);
+
   const setView = (next: WorldView) => {
     setViewState(next);
     worldLocalStorage.setItem(VIEW_KEY, next);
+    if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
+      const url = new URL(window.location.href);
+      url.pathname = WORLD_VIEW_PATHS[next];
+      window.history.pushState(window.history.state, "", url);
+    }
     if (next === "spaces") {
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     }
@@ -61,7 +92,15 @@ export default function WorldFoundationApp() {
   return (
     <div className="world-foundation-shell">
       <nav className="world-primary-nav" aria-label="World views">
-        <a className="world-primary-brand" href="#world" aria-label="Herdr World">
+        <a
+          className="world-primary-brand"
+          href={WORLD_VIEW_PATHS.spaces}
+          aria-label="Herdr World"
+          onClick={(event) => {
+            event.preventDefault();
+            setView("spaces");
+          }}
+        >
           <img src="/herdr-world-logo.svg" alt="" width="25" height="25" />
           <span>World</span>
         </a>
@@ -118,11 +157,23 @@ function WorldControlPlane({
       <div className={`world-view-layout ${selected ? "has-selection" : ""}`}>
         <section className="world-view-stage" aria-label={`${view} view`}>
           {view === "office" ? (
-            <OfficeView world={world} selectedId={selectedId} onSelect={setSelectedId} />
+            <OfficeView
+              world={world}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
           ) : view === "tree" ? (
-            <TreeView world={world} selectedId={selectedId} onSelect={setSelectedId} />
+            <TreeView
+              world={world}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
           ) : (
-            <GraphView world={world} selectedId={selectedId} onSelect={setSelectedId} />
+            <GraphView
+              world={world}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+            />
           )}
         </section>
         {selected ? (
@@ -156,9 +207,15 @@ function WorldStatusHeader({
         <span className="world-live-dot" data-status={runtime.status} />
         <span>{ready} ready</span>
         <span>{world.spaces.length} spaces</span>
-        <span>{world.leaves.filter((leaf) => leaf.kind === "agent").length} agents</span>
-        {stale ? <span className="world-stale-count">{stale} stale</span> : null}
-        {runtime.error ? <span className="world-runtime-error">{runtime.error}</span> : null}
+        <span>
+          {world.leaves.filter((leaf) => leaf.kind === "agent").length} agents
+        </span>
+        {stale ? (
+          <span className="world-stale-count">{stale} stale</span>
+        ) : null}
+        {runtime.error ? (
+          <span className="world-runtime-error">{runtime.error}</span>
+        ) : null}
       </div>
     </header>
   );
@@ -180,7 +237,7 @@ function EmptyWorld() {
   );
 }
 
-function OfficeView({ world, selectedId, onSelect }: ViewProps) {
+export function OfficeView({ world, selectedId, onSelect }: ViewProps) {
   if (!world.hosts.length) return <EmptyWorld />;
   return (
     <div className="world-office">
@@ -245,8 +302,8 @@ function OfficeRoom({
             className={`world-desk world-status-${leaf.status} ${
               selectedId === leaf.id ? "is-selected" : ""
             }`}
-            disabled={!leaf.actionable}
             onClick={() => onSelect(leaf.id)}
+            aria-disabled={!leaf.actionable}
             title={`${leaf.label} · ${leaf.status}`}
           >
             <span className="world-character-frame">
@@ -270,8 +327,9 @@ function OfficeRoom({
   );
 }
 
-function TreeView({ world, selectedId, onSelect }: ViewProps) {
+export function TreeView({ world, selectedId, onSelect }: ViewProps) {
   const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const normalized = query.trim().toLowerCase();
   const matches = (node: WorldObjectNode) =>
     !normalized ||
@@ -285,6 +343,13 @@ function TreeView({ world, selectedId, onSelect }: ViewProps) {
         (space) => matches(space) || space.children.some(matches),
       ),
   );
+  const toggle = (id: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   return (
     <div className="world-tree-shell">
       <label className="world-search">
@@ -303,13 +368,18 @@ function TreeView({ world, selectedId, onSelect }: ViewProps) {
               key={host.id}
               host={host}
               matches={matches}
+              forceExpanded={Boolean(normalized)}
+              collapsed={collapsed}
+              onToggle={toggle}
               selectedId={selectedId}
               onSelect={onSelect}
             />
           ))}
         </div>
       ) : (
-        <div className="world-empty"><h2>No matches</h2></div>
+        <div className="world-empty">
+          <h2>No matches</h2>
+        </div>
       )}
     </div>
   );
@@ -318,43 +388,110 @@ function TreeView({ world, selectedId, onSelect }: ViewProps) {
 function TreeHost({
   host,
   matches,
+  forceExpanded,
+  collapsed,
+  onToggle,
   selectedId,
   onSelect,
 }: {
   host: WorldHostObject;
   matches(node: WorldObjectNode): boolean;
+  forceExpanded: boolean;
+  collapsed: ReadonlySet<string>;
+  onToggle(id: string): void;
   selectedId: string | null;
   onSelect(id: string): void;
 }) {
+  const hostMatch = matches(host);
+  const hostExpanded = forceExpanded || !collapsed.has(host.id);
   return (
-    <details className="world-tree-host" open role="treeitem">
-      <summary>
+    <div
+      className="world-tree-host"
+      role="treeitem"
+      aria-expanded={hostExpanded}
+    >
+      <div className="world-tree-line">
+        <TreeToggle node={host} expanded={hostExpanded} onToggle={onToggle} />
         <TreeButton node={host} selectedId={selectedId} onSelect={onSelect} />
-      </summary>
-      <div role="group">
-        {host.spaces
-          .filter(
-            (space) => matches(space) || space.children.some(matches),
-          )
-          .map((space) => (
-            <details key={space.id} className="world-tree-space" open role="treeitem">
-              <summary>
-                <TreeButton node={space} selectedId={selectedId} onSelect={onSelect} />
-              </summary>
-              <div role="group">
-                {space.children.filter(matches).map((leaf) => (
-                  <TreeButton
-                    key={leaf.id}
-                    node={leaf}
-                    selectedId={selectedId}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </div>
-            </details>
-          ))}
       </div>
-    </details>
+      {hostExpanded ? (
+        <div role="group">
+          {host.spaces
+            .filter(
+              (space) =>
+                hostMatch || matches(space) || space.children.some(matches),
+            )
+            .map((space) => {
+              const spaceMatch = matches(space);
+              const spaceExpanded = forceExpanded || !collapsed.has(space.id);
+              return (
+                <div
+                  key={space.id}
+                  className="world-tree-space"
+                  role="treeitem"
+                  aria-expanded={spaceExpanded}
+                >
+                  <div className="world-tree-line">
+                    <TreeToggle
+                      node={space}
+                      expanded={spaceExpanded}
+                      onToggle={onToggle}
+                    />
+                    <TreeButton
+                      node={space}
+                      selectedId={selectedId}
+                      onSelect={onSelect}
+                    />
+                  </div>
+                  {spaceExpanded ? (
+                    <div role="group">
+                      {space.children
+                        .filter(
+                          (leaf) => hostMatch || spaceMatch || matches(leaf),
+                        )
+                        .map((leaf) => (
+                          <div
+                            className="world-tree-line"
+                            key={leaf.id}
+                            role="treeitem"
+                          >
+                            <span className="world-tree-toggle-spacer" />
+                            <TreeButton
+                              node={leaf}
+                              selectedId={selectedId}
+                              onSelect={onSelect}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TreeToggle({
+  node,
+  expanded,
+  onToggle,
+}: {
+  node: WorldHostObject | WorldSpaceObject;
+  expanded: boolean;
+  onToggle(id: string): void;
+}) {
+  return (
+    <button
+      type="button"
+      className="world-tree-toggle"
+      aria-label={`${expanded ? "Collapse" : "Expand"} ${node.label}`}
+      onClick={() => onToggle(node.id)}
+    >
+      {expanded ? "−" : "+"}
+    </button>
   );
 }
 
@@ -373,10 +510,7 @@ function TreeButton({
       className={`world-tree-node world-node-${node.kind} ${
         selectedId === node.id ? "is-selected" : ""
       }`}
-      onClick={(event) => {
-        event.preventDefault();
-        onSelect(node.id);
-      }}
+      onClick={() => onSelect(node.id)}
     >
       <span className="world-tree-node-icon">
         {node.kind === "agent" ? (
@@ -396,32 +530,112 @@ function TreeButton({
   );
 }
 
-function GraphView({ world, selectedId, onSelect }: ViewProps) {
+export function GraphView({ world, selectedId, onSelect }: ViewProps) {
+  const [query, setQuery] = useState("");
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   if (!world.hosts.length) return <EmptyWorld />;
+  const normalized = query.trim().toLowerCase();
+  const matches = (node: WorldObjectNode) =>
+    !normalized ||
+    `${node.label} ${node.connectionId} ${node.kind}`
+      .toLowerCase()
+      .includes(normalized);
+  const toggle = (id: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const visibleHosts = world.hosts.filter(
+    (host) =>
+      matches(host) ||
+      host.spaces.some(
+        (space) => matches(space) || space.children.some(matches),
+      ),
+  );
   return (
-    <div className="world-graph" role="tree" aria-label="World relationship graph">
-      {world.hosts.map((host) => (
-        <div className="world-graph-host" key={host.id}>
-          <GraphNode node={host} selectedId={selectedId} onSelect={onSelect} />
-          <div className="world-graph-branches">
-            {host.spaces.map((space) => (
-              <div className="world-graph-space" key={space.id}>
-                <GraphNode node={space} selectedId={selectedId} onSelect={onSelect} />
-                <div className="world-graph-leaves">
-                  {space.children.map((leaf) => (
-                    <GraphNode
-                      key={leaf.id}
-                      node={leaf}
-                      selectedId={selectedId}
-                      onSelect={onSelect}
-                    />
-                  ))}
-                </div>
+    <div className="world-graph-shell">
+      <label className="world-search">
+        <span>Search graph</span>
+        <input
+          type="search"
+          value={query}
+          placeholder="Host, space, or agent"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+      {visibleHosts.length ? (
+        <div
+          className="world-graph"
+          role="tree"
+          aria-label="World relationship graph"
+        >
+          {visibleHosts.map((host) => {
+            const hostMatch = matches(host);
+            const hostExpanded = Boolean(normalized) || !collapsed.has(host.id);
+            return (
+              <div className="world-graph-host" key={host.id}>
+                <GraphNode
+                  node={host}
+                  selectedId={selectedId}
+                  onSelect={onSelect}
+                  expanded={hostExpanded}
+                  onToggle={toggle}
+                />
+                {hostExpanded ? (
+                  <div className="world-graph-branches">
+                    {host.spaces
+                      .filter(
+                        (space) =>
+                          hostMatch ||
+                          matches(space) ||
+                          space.children.some(matches),
+                      )
+                      .map((space) => {
+                        const spaceMatch = matches(space);
+                        const spaceExpanded =
+                          Boolean(normalized) || !collapsed.has(space.id);
+                        return (
+                          <div className="world-graph-space" key={space.id}>
+                            <GraphNode
+                              node={space}
+                              selectedId={selectedId}
+                              onSelect={onSelect}
+                              expanded={spaceExpanded}
+                              onToggle={toggle}
+                            />
+                            {spaceExpanded ? (
+                              <div className="world-graph-leaves">
+                                {space.children
+                                  .filter(
+                                    (leaf) =>
+                                      hostMatch || spaceMatch || matches(leaf),
+                                  )
+                                  .map((leaf) => (
+                                    <GraphNode
+                                      key={leaf.id}
+                                      node={leaf}
+                                      selectedId={selectedId}
+                                      onSelect={onSelect}
+                                    />
+                                  ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : null}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      ))}
+      ) : (
+        <div className="world-empty">
+          <h2>No matches</h2>
+        </div>
+      )}
     </div>
   );
 }
@@ -430,26 +644,45 @@ function GraphNode({
   node,
   selectedId,
   onSelect,
+  expanded,
+  onToggle,
 }: {
   node: WorldObjectNode;
   selectedId: string | null;
   onSelect(id: string): void;
+  expanded?: boolean;
+  onToggle?(id: string): void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      className="world-graph-node-wrap"
       role="treeitem"
-      className={`world-graph-node world-node-${node.kind} ${
-        selectedId === node.id ? "is-selected" : ""
-      } ${node.stale ? "is-stale" : ""}`}
-      onClick={() => onSelect(node.id)}
+      {...(expanded === undefined ? {} : { "aria-expanded": expanded })}
     >
-      <small>{node.kind}</small>
-      <strong>{node.label}</strong>
-      {node.kind === "agent" || node.kind === "terminal" ? (
-        <span>{node.status}</span>
+      <button
+        type="button"
+        className={`world-graph-node world-node-${node.kind} ${
+          selectedId === node.id ? "is-selected" : ""
+        } ${node.stale ? "is-stale" : ""}`}
+        onClick={() => onSelect(node.id)}
+      >
+        <small>{node.kind}</small>
+        <strong>{node.label}</strong>
+        {node.kind === "agent" || node.kind === "terminal" ? (
+          <span>{node.status}</span>
+        ) : null}
+      </button>
+      {onToggle && expanded !== undefined ? (
+        <button
+          type="button"
+          className="world-graph-toggle"
+          aria-label={`${expanded ? "Collapse" : "Expand"} ${node.label}`}
+          onClick={() => onToggle(node.id)}
+        >
+          {expanded ? "−" : "+"}
+        </button>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -499,45 +732,87 @@ function WorldSelectionPanel({
 
   return (
     <aside className="world-selection-panel" aria-label="World selection">
-      <button className="world-panel-close" type="button" onClick={onClose} aria-label="Close">
+      <button
+        className="world-panel-close"
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+      >
         ×
       </button>
       <p className="world-eyebrow">{node.kind}</p>
       <h2>{node.label}</h2>
       <dl>
-        <div><dt>Host</dt><dd>{node.connectionId}</dd></div>
-        <div><dt>Generation</dt><dd>{node.generation}</dd></div>
-        <div><dt>State</dt><dd>{node.stale ? "stale" : "live"}</dd></div>
-        {leaf ? <div><dt>Agent</dt><dd>{leaf.status}</dd></div> : null}
+        <div>
+          <dt>Host</dt>
+          <dd>{node.connectionId}</dd>
+        </div>
+        <div>
+          <dt>Generation</dt>
+          <dd>{node.generation}</dd>
+        </div>
+        <div>
+          <dt>State</dt>
+          <dd>{node.stale ? "stale" : "live"}</dd>
+        </div>
+        {leaf ? (
+          <div>
+            <dt>Agent</dt>
+            <dd>{leaf.status}</dd>
+          </div>
+        ) : null}
       </dl>
       {workspace ? (
         <div className="world-panel-actions">
-          <button type="button" disabled={!node.actionable || working} onClick={() => void activate()}>
+          <button
+            type="button"
+            disabled={!node.actionable || working}
+            onClick={() => void activate()}
+          >
             Open in Spaces
           </button>
-          <button type="button" disabled={!node.actionable || working} onClick={() => void activate("files")}>
+          <button
+            type="button"
+            disabled={!node.actionable || working}
+            onClick={() => void activate("files")}
+          >
             Files
           </button>
-          <button type="button" disabled={!node.actionable || working} onClick={() => void activate("changes")}>
+          <button
+            type="button"
+            disabled={!node.actionable || working}
+            onClick={() => void activate("changes")}
+          >
             Changes
           </button>
           {leaf?.kind === "agent" ? (
-            <button type="button" disabled={!node.actionable || working} onClick={() => void activate("history")}>
+            <button
+              type="button"
+              disabled={!node.actionable || working}
+              onClick={() => void activate("history")}
+            >
               Agent History
             </button>
           ) : null}
         </div>
       ) : null}
       {!node.actionable ? (
-        <p className="world-panel-warning">This observation is read-only until its host is ready again.</p>
+        <p className="world-panel-warning">
+          This observation is read-only until its host is ready again.
+        </p>
       ) : null}
-      {error ? <p className="world-panel-error" role="alert">{error}</p> : null}
+      {error ? (
+        <p className="world-panel-error" role="alert">
+          {error}
+        </p>
+      ) : null}
     </aside>
   );
 }
 
 function workspaceTarget(node: WorldObjectNode) {
-  if (node.kind === "space") return { workspaceId: node.nativeId, paneId: null };
+  if (node.kind === "space")
+    return { workspaceId: node.nativeId, paneId: null };
   if (node.kind === "agent" || node.kind === "terminal") {
     return { workspaceId: node.workspaceId, paneId: node.nativeId };
   }
@@ -565,6 +840,17 @@ export async function focusWorldNode(node: WorldObjectNode) {
       workspaceId: target.workspaceId,
       paneId: target.paneId,
     });
+    const current = store
+      .get()
+      .connections.find((candidate) => candidate.id === node.connectionId);
+    if (
+      store.get().activeConnectionId !== node.connectionId ||
+      !current ||
+      current.state !== "ready" ||
+      current.generation !== node.generation
+    ) {
+      throw new Error("The selected host changed while it was opening");
+    }
   } else {
     if (store.get().activeConnectionId !== node.connectionId) {
       if (!store.selectConnection(node.connectionId)) {

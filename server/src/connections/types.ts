@@ -1,4 +1,4 @@
-export const LEGACY_DEFAULT_CONNECTION_ID = "legacy-default";
+export const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 
 export type ConnectionId = string;
 
@@ -8,10 +8,10 @@ export type ConnectionIdentity = {
   source: string;
 };
 
-export type LegacyConnectionIdentity = ConnectionIdentity & {
-  id: typeof LEGACY_DEFAULT_CONNECTION_ID;
+export type StartupConnectionIdentity = ConnectionIdentity & {
+  id: typeof STARTUP_DEFAULT_CONNECTION_ID;
   label: "Default";
-  source: "legacy-config";
+  source: "startup-config";
 };
 
 export type ConnectionState =
@@ -34,8 +34,8 @@ export type ConnectionStatus = {
   };
 };
 
-export const LEGACY_DEFAULT_CONNECTION: LegacyConnectionIdentity = {
-  id: LEGACY_DEFAULT_CONNECTION_ID,
+export const STARTUP_DEFAULT_CONNECTION: StartupConnectionIdentity = {
+  id: STARTUP_DEFAULT_CONNECTION_ID,
   label: "Default",
-  source: "legacy-config",
+  source: "startup-config",
 };

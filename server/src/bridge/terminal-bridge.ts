@@ -159,7 +159,7 @@ export function createTerminalBridge(args: {
     if (disposed) return;
     if (!isTerminalClipboardPayload(data)) {
       logger.warn("dropped invalid terminal clipboard payload", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
       });
       return;
     }
@@ -179,7 +179,7 @@ export function createTerminalBridge(args: {
         : null;
     if (!recentTarget) {
       logger.warn("dropped terminal clipboard without recent input", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
         terminal: terminalId,
       });
       return;
@@ -194,7 +194,7 @@ export function createTerminalBridge(args: {
       },
     });
     logger.debug("terminal clipboard", {
-      connection: args.connectionId ?? "legacy-default",
+      connection: args.connectionId ?? "startup-default",
       terminal: targetTerminalId,
       payload: formatBytes(data.length),
       target: args.clientLabel(target),
@@ -294,7 +294,7 @@ export function createTerminalBridge(args: {
         if (!args.lookupPaneId || worldEnv("DISABLE_ENDPOINT") === "1") {
           logger.warn(
             "terminal-program OSC 52 unavailable on the legacy fallback: Herdr protocol 22 routes clipboard only to endpoint shell clients; browser copy/paste is unaffected",
-            { connection: args.connectionId ?? "legacy-default" },
+            { connection: args.connectionId ?? "startup-default" },
           );
         }
         return;
@@ -308,7 +308,7 @@ export function createTerminalBridge(args: {
       });
       relay.on("error", (error) =>
         logger.warn("clipboard relay error", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           error: formatError(error),
         }),
       );
@@ -332,7 +332,7 @@ export function createTerminalBridge(args: {
             return;
           }
           logger.debug("clipboard relay connected", {
-            connection: args.connectionId ?? "legacy-default",
+            connection: args.connectionId ?? "startup-default",
           });
         })
         .catch((error) => {
@@ -342,7 +342,7 @@ export function createTerminalBridge(args: {
           }
           if (!disposed && sharedTerminals.size > 0) {
             logger.warn("clipboard relay connection failed", {
-              connection: args.connectionId ?? "legacy-default",
+              connection: args.connectionId ?? "startup-default",
               error: formatError(error),
             });
           }
@@ -377,7 +377,7 @@ export function createTerminalBridge(args: {
     if (disposed) return false;
     if (timedOut) {
       logger.debug("clipboard relay still connecting", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
       });
       return false;
     }
@@ -408,7 +408,7 @@ export function createTerminalBridge(args: {
     if (timer) clearTimeout(timer);
     if (timedOut) {
       logger.warn("terminal first frame still pending", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
         terminal: shared.terminalId,
         clipboard_relay: "deferred",
       });
@@ -523,7 +523,7 @@ export function createTerminalBridge(args: {
     };
     sharedTerminals.set(terminalId, shared);
     logger.debug("terminal stream connecting", {
-      connection: args.connectionId ?? "legacy-default",
+      connection: args.connectionId ?? "startup-default",
       terminal: terminalId,
       size: `${cols}x${rows}`,
       socket: args.clientSocketPath,
@@ -541,7 +541,7 @@ export function createTerminalBridge(args: {
       const now = Date.now();
       if (!shared.firstFrameLogged || now - shared.lastFrameLogAt >= 30_000) {
         logger.debug("terminal frame", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           terminal: terminalId,
           size: `${t.width}x${t.height}`,
           full: t.full,
@@ -604,7 +604,7 @@ export function createTerminalBridge(args: {
     });
     thin.on("welcome", (w) => {
       logger.debug("terminal stream welcome", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
         terminal: terminalId,
         version: w.version,
         encoding: w.encoding,
@@ -614,7 +614,7 @@ export function createTerminalBridge(args: {
     thin.on("error", (error) => {
       shared.lastError = formatError(error);
       logger.warn("terminal stream error", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
         terminal: formatError(terminalId),
         error: formatError(error),
       });
@@ -627,7 +627,7 @@ export function createTerminalBridge(args: {
         resolve(false);
       }
       logger.debug("terminal stream closed", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
         terminal: terminalId,
         frames: shared.frames,
         bytes: formatBytes(shared.bytes),
@@ -641,7 +641,7 @@ export function createTerminalBridge(args: {
       // blank terminal behind.
       if (isCurrent(creationRevision) && shared.viewers.size > 0) {
         logger.warn("terminal stream closed with live viewers", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           terminal: terminalId,
           viewers: shared.viewers.size,
         });
@@ -915,7 +915,7 @@ export function createTerminalBridge(args: {
           logger.debug(
             refreshReusedTerminal ? "terminal refreshed" : "terminal resized",
             {
-              connection: args.connectionId ?? "legacy-default",
+              connection: args.connectionId ?? "startup-default",
               client: args.clientLabel(ws),
               terminal: terminalId,
               size: `${cols}x${rows}`,
@@ -931,7 +931,7 @@ export function createTerminalBridge(args: {
           throw new Error("terminal bridge disposed");
         }
         logger.debug("terminal attached", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           client: args.clientLabel(ws),
           terminal: terminalId,
           viewers: shared.viewers.size,
@@ -991,7 +991,7 @@ export function createTerminalBridge(args: {
       if (method === "terminal.detach") {
         detachTerminalViewer(ws, requestedTerminalId ?? null);
         logger.debug("terminal detached", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           client: args.clientLabel(ws),
           terminal: requestedTerminalId ?? "none",
           viewers:
@@ -1078,7 +1078,7 @@ export function createTerminalBridge(args: {
           syncClipboardRelaySize(relaySize.cols, relaySize.rows);
         }
         logger.debug("terminal resized", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           client: args.clientLabel(ws),
           terminal: requestedTerminalId ?? "none",
           size: `${cols}x${rows}`,

@@ -14,10 +14,10 @@ test("settings keys preserve legacy format and isolate connection identities", (
   };
 
   expect(repoSettingsKey("same-repo")).toBe("local:same-repo");
-  expect(repoSettingsKey("same-repo", undefined, "legacy-default")).toBe(
+  expect(repoSettingsKey("same-repo", undefined, "startup-default")).toBe(
     "local:same-repo",
   );
-  expect(repoSettingsKey("same-repo", "same-host", "legacy-default")).toBe(
+  expect(repoSettingsKey("same-repo", "same-host", "startup-default")).toBe(
     "ssh:same-host:same-repo",
   );
 

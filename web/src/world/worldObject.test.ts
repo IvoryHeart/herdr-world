@@ -9,7 +9,7 @@ function connection(
   return {
     connectionId,
     label: connectionId,
-    source: connectionId === "local" ? "legacy-config" : "saved-profile",
+    source: connectionId === "local" ? "startup-config" : "saved-profile",
     isDefault: connectionId === "local",
     state: "ready",
     generation: 4,
@@ -79,8 +79,9 @@ describe("WorldObject", () => {
       "agent",
       "terminal",
     ]);
-    expect(world.nodeById.get(worldObjectId("remote", "agent", "shared-pane")))
-      .toMatchObject({ connectionId: "remote", nativeId: "shared-pane" });
+    expect(
+      world.nodeById.get(worldObjectId("remote", "pane", "shared-pane")),
+    ).toMatchObject({ connectionId: "remote", nativeId: "shared-pane" });
   });
 
   test("never aliases colliding native ids and does not admit stale hosts", () => {
@@ -95,14 +96,30 @@ describe("WorldObject", () => {
       }),
     ]);
     const local = world.nodeById.get(
-      worldObjectId("local", "agent", "shared-pane"),
+      worldObjectId("local", "pane", "shared-pane"),
     );
     const remote = world.nodeById.get(
-      worldObjectId("remote", "agent", "shared-pane"),
+      worldObjectId("remote", "pane", "shared-pane"),
     );
 
     expect(local?.id).not.toBe(remote?.id);
     expect(local?.actionable).toBe(true);
     expect(remote).toMatchObject({ stale: true, actionable: false });
+  });
+
+  test("keeps terminal-backed identity when agent classification changes", () => {
+    const first = buildWorldObject([connection("local")]).leaves[0];
+    const changed = connection("local");
+    if (changed.snapshot) {
+      changed.snapshot.panes[0] = {
+        ...changed.snapshot.panes[0],
+        agent: undefined,
+      };
+    }
+    const second = buildWorldObject([changed]).leaves[0];
+
+    expect(first.kind).toBe("agent");
+    expect(second.kind).toBe("terminal");
+    expect(second.id).toBe(first.id);
   });
 });

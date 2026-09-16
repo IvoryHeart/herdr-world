@@ -97,7 +97,10 @@ describe("update helpers", () => {
     for (const legacy of ["herdr-gui", "herdr-studio"]) {
       expect(() =>
         parseUpdateManifest(
-          updateManifest("9.8.7", "linux-x64").replaceAll("herdr-world", legacy),
+          updateManifest("9.8.7", "linux-x64").replaceAll(
+            "herdr-world",
+            legacy,
+          ),
         ),
       ).toThrow("invalid update manifest");
     }
@@ -345,7 +348,9 @@ describe("update helpers", () => {
       error: "manifest not found",
     });
     expect(commands).toHaveLength(1);
-    expect(commands[0].join(" ")).toContain("herdr-world-linux-x64.update.json");
+    expect(commands[0].join(" ")).toContain(
+      "herdr-world-linux-x64.update.json",
+    );
     expect(commands[0].join(" ")).not.toContain(".tar.xz");
   });
 
@@ -773,8 +778,7 @@ describe("update helpers", () => {
       current_version: "0.2.6",
       update_available: false,
       can_auto_update: false,
-      reason:
-        "Update checks are disabled by HERDR_WORLD_DISABLE_UPDATE_CHECK.",
+      reason: "Update checks are disabled by HERDR_WORLD_DISABLE_UPDATE_CHECK.",
     });
   });
 

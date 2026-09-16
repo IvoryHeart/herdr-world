@@ -196,7 +196,7 @@ describe("connection profile validation", () => {
     expect(() =>
       validateLocalConnectionProfile({
         ...local("alpha"),
-        id: "legacy-default",
+        id: "startup-default",
       }),
     ).toThrow("reserved");
     expect(() =>

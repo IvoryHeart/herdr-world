@@ -58,9 +58,21 @@ test.skipIf(!chrome).each([390, 320])(
         { stdout: "ignore", stderr: Bun.file(join(dir, "browser.log")) },
       );
       const portFile = join(dir, "profile", "DevToolsActivePort");
-      for (let i = 0; i < 200 && !existsSync(portFile); i++)
+      const browserLog = join(dir, "browser.log");
+      let port = "";
+      for (let i = 0; i < 200 && !port; i++) {
+        if (existsSync(portFile)) {
+          port = (await readFile(portFile, "utf8")).split("\n")[0];
+        } else if (existsSync(browserLog)) {
+          port =
+            (await readFile(browserLog, "utf8")).match(
+              /DevTools listening on ws:\/\/127\.0\.0\.1:(\d+)/,
+            )?.[1] ?? "";
+        }
+        if (port) break;
         await Bun.sleep(25);
-      const port = (await readFile(portFile, "utf8")).split("\n")[0];
+      }
+      if (!port) throw new Error("Chromium did not expose a DevTools port");
       const targets = (await (
         await fetch(`http://127.0.0.1:${port}/json/list`)
       ).json()) as { type: string; webSocketDebuggerUrl: string }[];

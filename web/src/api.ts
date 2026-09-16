@@ -230,7 +230,7 @@ export interface ConnectionClient {
   acceptsServerGeneration(value: unknown): boolean;
 }
 
-const LEGACY_DEFAULT_CONNECTION_ID = "legacy-default";
+const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 const RPC_TIMEOUT_MS = 30000;
 const CONNECT_TIMEOUT_MS = 8000;
 const HEARTBEAT_INTERVAL_MS = 10000;
@@ -311,7 +311,7 @@ function isBridgeHello(value: unknown): value is BridgeHello {
 }
 
 /**
- * Client for the local herdr-gui bridge (WebSocket).
+ * Client for the same-origin Herdr World service (WebSocket).
  *
  * Downstream RPC: { id, method, params, connection_id }
  * Global RPC:     { id, method, params }
@@ -338,7 +338,7 @@ export class Bridge {
   private heartbeatInFlight = false;
   private reconnectEnabled = true;
   private _status: ConnectionStatus = "disconnected";
-  private _activeConnectionId = LEGACY_DEFAULT_CONNECTION_ID;
+  private _activeConnectionId = STARTUP_DEFAULT_CONNECTION_ID;
   private _clientGeneration = 0;
   private _hello: BridgeHello | null = null;
   private helloAcceptedForSocket = false;
@@ -681,7 +681,7 @@ export class Bridge {
       this.helloAcceptedForSocket = true;
       this._hello = msg;
       this.clearConnectTimer();
-      if (this._activeConnectionId === LEGACY_DEFAULT_CONNECTION_ID) {
+      if (this._activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID) {
         this.setActiveConnection(msg.default_connection_id);
       }
       this.helloHandlers.forEach((handler) => handler(msg));

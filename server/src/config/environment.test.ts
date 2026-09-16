@@ -8,7 +8,9 @@ describe("Herdr World environment", () => {
       "secret",
     );
     expect(worldEnv("PASSWORD", { HERDR_WORLD_PASSWORD: "" })).toBe("");
-    expect(worldEnv("PASSWORD", { HERDR_GUI_PASSWORD: "legacy" })).toBeUndefined();
+    expect(
+      worldEnv("PASSWORD", { HERDR_GUI_PASSWORD: "legacy" }),
+    ).toBeUndefined();
     expect(worldEnv("PASSWORD", {})).toBeUndefined();
   });
 

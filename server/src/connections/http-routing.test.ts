@@ -22,7 +22,7 @@ function deferred() {
 
 function registry(entries: Record<string, Runtime | null>) {
   return {
-    defaultId: () => "legacy-default",
+    defaultId: () => "startup-default",
     has: (connectionId: string) => Object.hasOwn(entries, connectionId),
     readyRuntimeLease: (connectionId: string) => {
       const runtime = entries[connectionId] ?? null;
@@ -177,10 +177,10 @@ describe("connection HTTP routing", () => {
   });
 
   test("resolves explicit and legacy routes without cross-runtime fallback", () => {
-    const legacy: Runtime = { id: "legacy-default" };
+    const legacy: Runtime = { id: "startup-default" };
     const remote: Runtime = { id: "remote-dev" };
     const routes = registry({
-      "legacy-default": legacy,
+      "startup-default": legacy,
       "remote-dev": remote,
       waiting: null,
     });
@@ -212,7 +212,7 @@ describe("connection HTTP routing", () => {
         legacyLogger,
       }),
     ).toMatchObject({
-      connectionId: "legacy-default",
+      connectionId: "startup-default",
       runtime: legacy,
       usedLegacyDefault: true,
     });
@@ -343,7 +343,7 @@ describe("connection HTTP routing", () => {
     const oldRuntime: Runtime = { id: "old" };
     const replacement: Runtime = { id: "replacement" };
     const entries: Record<string, Runtime | null> = {
-      "legacy-default": oldRuntime,
+      "startup-default": oldRuntime,
     };
     const route = parseConnectionHttpRoute("/api/herdr-info", "GET");
     if (route?.kind !== "connection") throw new Error("expected route");
@@ -353,14 +353,14 @@ describe("connection HTTP routing", () => {
     });
     expect(resolved.isCurrent()).toBe(true);
 
-    entries["legacy-default"] = replacement;
+    entries["startup-default"] = replacement;
     const response = publishConnectionHttpResponse(
       resolved,
       Response.json({ server_id: "old" }),
     );
     expect(response.status).toBe(409);
     expect(response.headers.get("X-Herdr-Connection-Id")).toBe(
-      "legacy-default",
+      "startup-default",
     );
     expect(response.headers.get("X-Herdr-Connection-Generation")).toBe("1");
     expect(await response.json()).toEqual({
@@ -386,7 +386,7 @@ describe("connection HTTP routing", () => {
     });
     const response = publishConnectionHttpResponse(
       {
-        connectionId: "legacy-default",
+        connectionId: "startup-default",
         generation: 7,
         isCurrent: () => current,
       },

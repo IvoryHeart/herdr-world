@@ -45,7 +45,7 @@ import {
 import { createAgentStatusSubscriptionLoop } from "./agent-status-subscription";
 import { sanitizeConnectionError } from "./manager";
 import { createEventSubscriptionLoop } from "./subscription-loop";
-import { type ConnectionIdentity, LEGACY_DEFAULT_CONNECTION } from "./types";
+import { type ConnectionIdentity, STARTUP_DEFAULT_CONNECTION } from "./types";
 
 const DEFAULT_EVENTS = [
   "workspace.created",
@@ -101,7 +101,7 @@ export function createLegacyConnectionRuntime(args: {
 }) {
   const { config } = args;
   const logger = args.logger ?? silentLogger;
-  const identity = { ...(args.identity ?? LEGACY_DEFAULT_CONNECTION) };
+  const identity = { ...(args.identity ?? STARTUP_DEFAULT_CONNECTION) };
   const socketPath = config.socketPath;
   const clientSocketPath = config.clientSocketPath;
   const sshHost = () => config.sshHost;

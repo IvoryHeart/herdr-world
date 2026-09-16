@@ -21,7 +21,7 @@ import { validateSshDestination } from "../bridge/ssh-command";
 import { nativeSocketPath } from "../config/server-config";
 import { worldEnv } from "../config/environment";
 import { validateConnectionId } from "./protocol";
-import { LEGACY_DEFAULT_CONNECTION_ID } from "./types";
+import { STARTUP_DEFAULT_CONNECTION_ID } from "./types";
 
 export const CONNECTION_PROFILE_FILE_VERSION = 2;
 export const MAX_CONNECTION_PROFILES = 64;
@@ -150,8 +150,8 @@ export function validateLocalConnectionProfile(
     "connection profile",
   );
   const id = validateConnectionId(value.id);
-  if (id === LEGACY_DEFAULT_CONNECTION_ID) {
-    throw new Error(`${LEGACY_DEFAULT_CONNECTION_ID} is reserved`);
+  if (id === STARTUP_DEFAULT_CONNECTION_ID) {
+    throw new Error(`${STARTUP_DEFAULT_CONNECTION_ID} is reserved`);
   }
   if (value.type !== "local") {
     throw new Error("only local connection profiles are supported");
@@ -225,8 +225,8 @@ export function validateSshConnectionProfile(
     "connection profile",
   );
   const id = validateConnectionId(value.id);
-  if (id === LEGACY_DEFAULT_CONNECTION_ID) {
-    throw new Error(`${LEGACY_DEFAULT_CONNECTION_ID} is reserved`);
+  if (id === STARTUP_DEFAULT_CONNECTION_ID) {
+    throw new Error(`${STARTUP_DEFAULT_CONNECTION_ID} is reserved`);
   }
   if (value.type !== "ssh") throw new Error("invalid connection profile type");
   if (typeof value.auto_connect !== "boolean") {

@@ -190,7 +190,7 @@ export function createSshTunnelManager(args: {
         .replace(/\s+/g, " ")
         .trim()
         .slice(0, 300));
-  const connectionDetail = `connection=${args.connectionId ?? "legacy-default"}`;
+  const connectionDetail = `connection=${args.connectionId ?? "startup-default"}`;
   const remove =
     args.dependencies?.remove ?? ((path) => rmSync(path, { force: true }));
   const removeDirectory =
@@ -345,7 +345,7 @@ export function createSshTunnelManager(args: {
         proc.kill();
       } catch (error) {
         logger.warn("unable to stop SSH tunnel", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           error: formatError(error),
         });
       }
@@ -354,7 +354,7 @@ export function createSshTunnelManager(args: {
         proc.kill(9);
       } catch (error) {
         logger.warn("unable to force-stop SSH tunnel", {
-          connection: args.connectionId ?? "legacy-default",
+          connection: args.connectionId ?? "startup-default",
           error: formatError(error),
         });
       }
@@ -418,12 +418,12 @@ export function createSshTunnelManager(args: {
     const argv = sshTunnelArgv(host, forwards);
 
     logger.debug("starting SSH tunnel", {
-      connection: args.connectionId ?? "legacy-default",
+      connection: args.connectionId ?? "startup-default",
       destination: formatError(host),
     });
     for (const forward of forwards) {
       logger.debug("SSH tunnel forwarding socket", {
-        connection: args.connectionId ?? "legacy-default",
+        connection: args.connectionId ?? "startup-default",
         label: forward.label,
         local: forward.local,
         remote: forward.remote,
@@ -492,7 +492,7 @@ export function createSshTunnelManager(args: {
       });
 
     logger.debug("SSH tunnel ready", {
-      connection: args.connectionId ?? "legacy-default",
+      connection: args.connectionId ?? "startup-default",
     });
   }
 

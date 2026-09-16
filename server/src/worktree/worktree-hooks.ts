@@ -166,9 +166,6 @@ export function createWorktreeHookRunner(args: {
       HERDR_WORLD_HOOK_EVENT: event,
       HERDR_WORLD_HOOK_CHECKOUT_PATH: hookArgs.checkoutPath,
       HERDR_WORLD_HOOK_SOURCE_CHECKOUT_PATH: hookArgs.sourceCheckoutPath ?? "",
-      HERDR_GUI_HOOK_EVENT: event,
-      HERDR_GUI_HOOK_CHECKOUT_PATH: hookArgs.checkoutPath,
-      HERDR_GUI_HOOK_SOURCE_CHECKOUT_PATH: hookArgs.sourceCheckoutPath ?? "",
     });
     const cwdPath = hookArgs.cwdPath ?? hookArgs.checkoutPath;
     const script =

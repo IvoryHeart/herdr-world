@@ -1,7 +1,7 @@
 import { WORKSPACE_PINS_STORAGE_KEY } from "./workspacePins";
 import { COLLAPSED_WORKTREE_GROUPS_STORAGE_KEY } from "./workspaceTreeCollapse";
 
-export const LEGACY_DEFAULT_CONNECTION_ID = "legacy-default";
+export const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
 
 export const FILE_EXPLORER_WORKSPACE_STORAGE_KEY = "fileExplorerWorkspaceId";
 export const FILE_PREVIEW_STORAGE_KEY = "filePreview";
@@ -24,13 +24,12 @@ type StorageWriter = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 type EnumerableStorageWriter = StorageWriter &
   Partial<Pick<Storage, "key" | "length">>;
 
-const LEGACY_MIGRATION_MARKER_KEY = "connectionStorageLegacyMigration:v1";
+const STARTUP_PROFILE_COPY_MARKER_KEY = "connectionStorageStartupCopy:v1";
 const DIFF_SELECTION_STORAGE_PREFIX = "diffViewerSelected:";
 
 /**
- * Namespaces one server-resource preference without changing legacy-default
- * keys. Path-segment encoding keeps arbitrary connection IDs and base keys
- * injective while preserving current single-connection browser data.
+ * Namespaces one server-resource preference while preserving the startup
+ * profile's unqualified key until the first saved profile is created.
  */
 export function connectionStorageKey(
   connectionId: string,
@@ -38,7 +37,7 @@ export function connectionStorageKey(
 ): string {
   if (!connectionId) throw new Error("invalid connection_id");
   if (!baseKey) throw new Error("invalid storage key");
-  if (connectionId === LEGACY_DEFAULT_CONNECTION_ID) return baseKey;
+  if (connectionId === STARTUP_DEFAULT_CONNECTION_ID) return baseKey;
   return `herdr.connection/${encodeURIComponent(connectionId)}/${encodeURIComponent(baseKey)}`;
 }
 
@@ -137,20 +136,20 @@ export function writeConnectionResourceSelection(
   }
 }
 
-/** Copy pre-connection preferences once without overwriting target values. */
-export function migrateLegacyConnectionStorage(
+/** Copy startup-profile preferences once without overwriting target values. */
+export function copyStartupProfileStorage(
   storage: EnumerableStorageWriter,
   targetConnectionId: string,
 ): boolean {
   if (
     !targetConnectionId ||
-    targetConnectionId === LEGACY_DEFAULT_CONNECTION_ID
+    targetConnectionId === STARTUP_DEFAULT_CONNECTION_ID
   ) {
     return false;
   }
-  if (storage.getItem(LEGACY_MIGRATION_MARKER_KEY) !== null) return false;
+  if (storage.getItem(STARTUP_PROFILE_COPY_MARKER_KEY) !== null) return false;
 
-  const legacyKeys = new Set([
+  const startupKeys = new Set([
     FILE_EXPLORER_WORKSPACE_STORAGE_KEY,
     FILE_PREVIEW_STORAGE_KEY,
     DIFF_VIEWER_WORKSPACE_STORAGE_KEY,
@@ -163,17 +162,17 @@ export function migrateLegacyConnectionStorage(
       storage.key?.(index),
     );
     for (const key of existingKeys) {
-      if (key?.startsWith(DIFF_SELECTION_STORAGE_PREFIX)) legacyKeys.add(key);
+      if (key?.startsWith(DIFF_SELECTION_STORAGE_PREFIX)) startupKeys.add(key);
     }
   }
 
-  for (const legacyKey of legacyKeys) {
-    const value = storage.getItem(legacyKey);
+  for (const startupKey of startupKeys) {
+    const value = storage.getItem(startupKey);
     if (value === null) continue;
-    const targetKey = connectionStorageKey(targetConnectionId, legacyKey);
+    const targetKey = connectionStorageKey(targetConnectionId, startupKey);
     if (storage.getItem(targetKey) === null) storage.setItem(targetKey, value);
   }
-  storage.setItem(LEGACY_MIGRATION_MARKER_KEY, "1");
+  storage.setItem(STARTUP_PROFILE_COPY_MARKER_KEY, "1");
   return true;
 }
 

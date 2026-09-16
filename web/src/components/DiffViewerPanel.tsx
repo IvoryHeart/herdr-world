@@ -123,7 +123,7 @@ function diffScopeStorageKey(connectionId: string, resourceKey?: string) {
 }
 
 function loadDiffScope(
-  connectionId = "legacy-default",
+  connectionId = "startup-default",
   resourceKey?: string,
 ): DiffScope {
   const scoped = worldLocalStorage.getItem(

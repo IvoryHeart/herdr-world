@@ -24,8 +24,8 @@ import {
   parseConnectionSummary,
 } from "./api";
 import {
-  LEGACY_DEFAULT_CONNECTION_ID,
-  migrateLegacyConnectionStorage,
+  STARTUP_DEFAULT_CONNECTION_ID,
+  copyStartupProfileStorage,
 } from "./connectionStorage";
 import { disposeTerminalConnection } from "./terminalConnection";
 import { isReconnectRetryableError } from "./reconnectRetry";
@@ -325,11 +325,11 @@ const initial: State = {
     worldLocalStorage.getItem("connectionPaused") === "true",
   bridgeStatus: null,
   connections: [],
-  defaultConnectionId: LEGACY_DEFAULT_CONNECTION_ID,
-  activeConnectionId: LEGACY_DEFAULT_CONNECTION_ID,
+  defaultConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
+  activeConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
   connectionGeneration: 0,
   sessionsByConnectionId: {
-    [LEGACY_DEFAULT_CONNECTION_ID]: initialSession,
+    [STARTUP_DEFAULT_CONNECTION_ID]: initialSession,
   },
   ...initialSession,
   notice: null,
@@ -1448,10 +1448,10 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
     return false;
   }
   if (
-    state.activeConnectionId === LEGACY_DEFAULT_CONNECTION_ID &&
+    state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
     typeof localStorage !== "undefined"
   ) {
-    migrateLegacyConnectionStorage(worldLocalStorage, connectionId);
+    copyStartupProfileStorage(worldLocalStorage, connectionId);
   }
   stopPolling();
   disposeTerminalConnection(
@@ -2053,7 +2053,7 @@ export const store = {
       const defaultConnectionId = hello.default_connection_id;
       set({ defaultConnectionId });
       if (
-        state.activeConnectionId === LEGACY_DEFAULT_CONNECTION_ID &&
+        state.activeConnectionId === STARTUP_DEFAULT_CONNECTION_ID &&
         defaultConnectionId !== state.activeConnectionId
       ) {
         selectConnectionNow(defaultConnectionId, false);
@@ -3012,10 +3012,7 @@ export const store = {
 
   setAutomaticUpdateChecksEnabled(enabled: boolean) {
     try {
-      worldLocalStorage.setItem(
-        AUTOMATIC_UPDATE_CHECKS_KEY,
-        String(enabled),
-      );
+      worldLocalStorage.setItem(AUTOMATIC_UPDATE_CHECKS_KEY, String(enabled));
     } catch {
       // The in-memory preference still applies when storage is unavailable.
     }
