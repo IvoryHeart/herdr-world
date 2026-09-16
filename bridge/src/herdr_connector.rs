@@ -305,7 +305,7 @@ impl SshHerdrConnector {
 
     fn remote_executable_candidates(&self, target: &str) -> io::Result<Vec<PathBuf>> {
         let command = format!(
-            "printf '\\n%s\\n' '{}'\nfor candidate in \"$HOME/.local/bin/herdr\" /opt/homebrew/bin/herdr /usr/local/bin/herdr /home/linuxbrew/.linuxbrew/bin/herdr /usr/bin/herdr; do [ -x \"$candidate\" ] && printf '%s\\n' \"$candidate\"; done\ncommand -v herdr 2>/dev/null || true",
+            "printf '\\n%s\\n' '{}'\nfor candidate in \"$HOME/.local/bin/herdr\" /opt/homebrew/bin/herdr /usr/local/bin/herdr \"$HOME/.linuxbrew/bin/herdr\" /usr/bin/herdr; do [ -x \"$candidate\" ] && printf '%s\\n' \"$candidate\"; done\ncommand -v herdr 2>/dev/null || true",
             REMOTE_OUTPUT_READY_MARKER
         );
         let output = self.run_remote(target, &command)?;
@@ -1135,7 +1135,7 @@ mod tests {
             "build.example",
             SessionSelector::Default,
             7,
-            "/home/herdr/.local/bin/herdr",
+            "/opt/herdr/bin/herdr",
             Some(status("agents", "/run/herdr/agents/herdr.sock")),
             status("agents", "/run/herdr/agents/herdr.sock"),
         )
@@ -1148,7 +1148,7 @@ mod tests {
             "build.example",
             SessionSelector::Default,
             8,
-            "/home/herdr/.local/bin/herdr",
+            "/opt/herdr/bin/herdr",
             Some(status("agents", "/tmp/overridden.sock")),
             status("agents", "/run/herdr/agents/herdr.sock"),
         )
@@ -1164,7 +1164,7 @@ mod tests {
             "build.example",
             SessionSelector::Default,
             4,
-            "/home/herdr/.local/bin/herdr",
+            "/opt/herdr/bin/herdr",
             Some(status("default", "/run/herdr/default/herdr.sock")),
             status("default", "/run/herdr/default/herdr.sock"),
         )
@@ -1185,7 +1185,7 @@ mod tests {
             "build.example",
             SessionSelector::Named("product-a".into()),
             2,
-            "/home/herdr/.local/bin/herdr",
+            "/opt/herdr/bin/herdr",
             None,
             status("product-b", "/run/herdr/product-b/herdr.sock"),
         )
