@@ -1,34 +1,38 @@
 ## Why
 
 Herdr World currently federates one independently exposed World bridge per Herdr runtime in the
-browser, which makes every additional host require a bridge installation, reachable URL, browser
-profile, reciprocal Origin/CSP policy, restart, and often separate authentication. Herdr v0.9.0 now
-owns saved SSH machine profiles and native multi-machine connectivity, and World already pins and
-vendors the private Herdr compatibility surface, so World can reuse that native model through one
-local bridge instead of maintaining a second normal-path network topology.
+browser. Every additional host therefore requires another bridge installation, reachable URL,
+browser profile, reciprocal Origin/CSP policy, restart path, and often separate authentication.
+Herdr already owns saved machine profiles and native multi-machine connectivity, so the clean
+product boundary is one World gateway consuming a supported Herdr multihost interface.
+
+The first implementation spike proved that recreating Herdr's remote path in World is the wrong
+boundary. A World-owned OpenSSH forwarding supervisor duplicated Herdr policy, depended on private
+bootstrap details, and did not prove the complete saved-machine path end to end. The product
+requirements remain valid, but implementation now depends on a supported, machine-qualified Herdr
+transport rather than World filling that gap.
 
 ## What Changes
 
-- Make Herdr's saved machine catalogue the authoritative source for normal desktop multi-machine
-  discovery, identity, labels, enabled state, SSH target, and selected remote session.
-- Extend the pinned minimal Herdr compatibility crate with Herdr-derived remote discovery,
-  bootstrap, SSH option, and terminal protocol helpers, and add a World-owned OpenSSH Unix-socket
-  forwarder for full remote API access while preserving the saved target's effective OpenSSH
-  configuration.
-- Make one World bridge aggregate its local Herdr runtime and enabled saved SSH machines into the
-  existing host-qualified browser model, with independent failure and reconnect boundaries.
-- Keep browser traffic on the serving World origin for native machines. Remote hosts do not need a
-  World installation, HTTP listener, password, Host admission, Origin admission, or CSP entry.
-- Preserve direct bridge URL profiles as an explicit compatibility path for deployments that
-  cannot use the local Herdr machine catalogue; keep remote browser access to the serving bridge as
-  a separate concern.
-- Preserve World-specific behavior through authoritative remote Herdr JSON API connections and
-  dedicated terminal streams, including complete layouts and identity, bounded browser command
-  exposure, launcher operations, concurrent terminal viewers, reconnect fencing, pins, activity,
-  notes, and remote upload delivery.
-- Replace the current normal-path browser profile workflow with machine state derived from Herdr;
-  machine setup and interactive SSH approval continue through `herdr machine add` and Herdr's
-  foreground recovery guidance.
+- Make a supported Herdr machine-qualified multihost transport the prerequisite and authoritative
+  connectivity boundary for native federation.
+- Require that Herdr interface to expose bounded machine identity and state, authoritative session
+  snapshots and subscriptions, structural commands and launchers, terminal-ID streams, connection
+  generations, and a remote byte-delivery capability for World uploads.
+- Keep saved-profile selection, SSH behavior, authentication and host-key handling, remote Herdr
+  discovery and bootstrap, reconnection, and transport error classification inside Herdr.
+- Require an end-to-end Herdr conformance proof for Local and a saved machine before World runtime
+  integration starts.
+- Make one World bridge adapt the proven Herdr interface into the existing machine-qualified model
+  and same-origin browser gateway, with independent runtime failure and reconnect boundaries.
+- Feed Local, native saved-machine, and direct compatibility sources through the same qualified
+  `WorldModel` ingestion path rather than adding a native-machine presentation model.
+- Preserve World ownership of runtime qualification, notes, pins, observed activity, upload policy,
+  browser sessions, bounds, and allow-listed command exposure.
+- Preserve direct World bridge profiles as an explicit compatibility path while native federation
+  is unavailable or during migration.
+- Remove the World-owned OpenSSH Unix-socket forwarder, remote shell staging, and copied private
+  Herdr bootstrap helpers from the accepted design.
 
 ## Capabilities
 
@@ -39,20 +43,22 @@ None.
 ### Modified Capabilities
 
 - `runtime-federation`: Move normal desktop federation from multiple browser-selected World bridges
-  to one World bridge that aggregates Herdr-owned local and saved-SSH machine endpoints while
-  preserving qualified identity, compatibility admission, failure isolation, terminal ownership,
-  and stale-state fencing.
-- `bridge-access`: Require native saved machines to remain behind the serving bridge's same-origin
-  browser boundary, while retaining explicit access policy for exposing the serving bridge and for
-  compatibility-mode direct bridge URLs.
+  to one World gateway that consumes a supported Herdr multihost transport while preserving
+  unified `WorldModel` ingestion, qualified identity, full topology, commands and launchers,
+  terminal isolation, World-owned data, failure isolation, and stale-generation fencing.
+- `bridge-access`: Keep native machine traffic behind the serving gateway's same-origin browser
+  boundary while retaining explicit access policy for the gateway and compatibility-mode direct
+  bridge URLs.
 
 ## Impact
 
-The change affects the Rust bridge's runtime provider and connection supervision, the minimal
-`vendor/herdr-compat` source set and provenance checks, browser runtime discovery and settings,
-bridge startup behavior, terminal session ownership, bridge-owned runtime data, upload routing,
-federation tests, security tests, operational documentation, and the current federation and
-bridge-access specifications. It requires OpenSSH Unix-socket forwarding for native World access,
-preserves operator-configured SSH behavior for each saved target, adds no Herdr runtime binary to
-World distributions, does not require a change to Herdr v0.9.0, and does not install the World
-plugin or bridge on saved remote machines.
+The change first requires a supported Herdr multihost interface and a pinned release or commit that
+passes the documented conformance fixture. World integration then affects the Rust bridge runtime
+provider, browser runtime discovery and settings, bridge startup and supervision, terminal session
+ownership, World-owned persisted data, uploads, federation tests, security tests, operational
+documentation, and the current federation and bridge-access specifications.
+
+World will not implement SSH, remote shell execution, Herdr executable discovery, or server
+bootstrap for native federation. Saved remote machines will not need a World installation or HTTP
+listener. Until the Herdr contract is available and proven, current direct bridge profiles remain
+the supported multihost path.
