@@ -7,8 +7,9 @@ binding. Host, Origin, and CSP policy SHALL remain distinct from optional passwo
 SSH-backed Herdr traffic SHALL pass through that serving bridge and SHALL NOT require a World HTTP
 listener, browser password, Host admission, Origin admission, or CSP destination on each remote
 machine. Explicit direct World bridge profiles SHALL retain their current destination and origin
-policy. Remote profile mutation SHALL be treated as security-sensitive bridge configuration and
-SHALL require an admitted browser session.
+policy. Remote profile CRUD and target/session disclosure SHALL reuse the existing local-management
+boundary and require the request's actual TCP peer to be loopback; an admitted remote runtime
+session or configured password SHALL NOT grant that authority.
 
 #### Scenario: Password-protected connection
 
@@ -39,20 +40,26 @@ SHALL require an admitted browser session.
 
 ### Requirement: Remote profile and connector boundary
 
-The bridge SHALL expose a narrow, authenticated profile-management surface and a separate bounded
+The bridge SHALL expose a narrow, actual-loopback local-management surface and a separate bounded
 runtime surface. Profile management MAY accept a validated label, OpenSSH target or alias, optional
 Herdr session, and enabled state. It SHALL NOT accept or expose passwords, private keys, arbitrary
-SSH options, executable paths, remote commands, shell text, or upload destinations. Routine runtime
-descriptors SHALL expose only opaque identity, label, state, generation, capabilities, and World
-runtime data. Browser runtime operations SHALL target an admitted opaque runtime ID and an
-allow-listed World operation.
+SSH options, executable paths, user-supplied remote commands, shell programs, shell text, or upload
+destinations. Routine runtime descriptors SHALL expose only opaque identity, label, state,
+generation, capabilities, and World runtime data. Browser runtime operations SHALL target an
+admitted opaque runtime-binding ID and an allow-listed World operation.
 
-#### Scenario: Authorized user edits a profile
+#### Scenario: Local-management user edits a profile
 
-- **WHEN** an admitted user opens the explicit remote-profile settings surface and submits bounded
-  profile fields
+- **WHEN** a request from an actual loopback TCP peer passes Host and Origin checks and submits
+  bounded fields through the explicit remote-profile settings surface
 - **THEN** the bridge validates and persists those fields, retires any changed live generation, and
-  does not disclose credential material or construct a shell command
+  does not disclose credential material or accept a user-supplied shell command
+
+#### Scenario: Remote admitted user edits a profile
+
+- **WHEN** a non-loopback browser presents a valid runtime session or password and requests profile
+  CRUD or target/session details
+- **THEN** the bridge rejects it because runtime admission does not grant local-management authority
 
 #### Scenario: Runtime request supplies transport details
 

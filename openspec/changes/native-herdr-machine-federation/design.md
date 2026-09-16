@@ -85,25 +85,40 @@ an adapter, but this change does not speculate about that interface.
 World stores remote Herdr profiles in its trusted bridge configuration. Each profile contains:
 
 - an opaque stable profile ID;
+- an opaque runtime-binding ID for the current target/session assignment;
 - a user-facing label;
 - one OpenSSH target or SSH-config alias;
 - an optional Herdr session name;
 - enabled state.
 
 The SSH target and session are transport configuration, not runtime entity identity. World does
-not derive the stable profile ID from either field. Editing transport fields retires the current
-generation before reconnecting.
+not derive the stable profile ID from either field. Each target/session assignment also receives a
+persistent opaque runtime-binding ID. Reconnects to the same assignment retain that binding, while
+editing either transport field retires the current generation, mints a new runtime-binding ID,
+detaches existing viewers, and reconnects as a distinct runtime. Notes, pins, activity, and cached
+references from the old binding remain associated with it and do not attach to or get pruned by the
+new server, even when native IDs collide.
 
 Profiles contain no passwords, private keys, agent tickets, or generated shell text. OpenSSH
 remains authoritative for hostname resolution, users, ports, key selection, agents, host keys,
 proxy jumps, control sockets, and related policy. A user chooses a key through normal OpenSSH
 configuration or `ssh-agent`, not by uploading key material into World.
 
-The bridge invokes fixed executable arguments without a shell. The configured target and session
-occupy validated argument positions and cannot supply extra flags, remote commands, destinations,
-or shell fragments. The reviewed remote relay command is a pinned compatibility dependency just
-like the currently vendored API and terminal protocol. Adopting a different Herdr release requires
-rerunning connector conformance and updating provenance.
+The bridge invokes the local OpenSSH executable directly without a local shell. OpenSSH sends one
+fixed, correctly encoded relay command that the SSH server executes through the remote user's login
+shell. World accepts no user-selected shell program or shell text; the configured target and
+session occupy validated values and cannot supply extra local flags, remote commands, or
+destinations. Tests must observe what the remote process actually receives rather than proving only
+the local argument vector.
+
+The reviewed remote relay command is a pinned compatibility dependency separate from API and
+terminal protocol compatibility. The current `v0.9.0` compatibility source does not provide the
+required `remote-api-bridge`; the inspected Herdr master revision `18061191` does. Connector
+admission therefore requires an exact executable/relay revision, deterministic noninteractive
+executable lookup, selected session, relay capability probe, and stream framing in addition to API
+and terminal protocol checks. The API relay requires an already-running compatible session and
+must support metadata access before any terminal attachment. Adopting another Herdr revision
+requires rerunning connector conformance and updating provenance.
 
 Remote Herdr must already be compatible and reachable. When host trust, authentication, remote
 installation, update, or server replacement requires interaction, the connector reports bounded
@@ -134,8 +149,9 @@ The stable identity of an entity is:
 ```
 
 `gateway_id` distinguishes direct World gateways. Within a gateway, `runtime_id` is Local or the
-opaque World remote-profile ID. `native_entity_id` remains the authoritative Herdr workspace, tab,
-pane, terminal, or agent ID.
+remote profile's opaque runtime-binding ID. `profile_id` identifies editable connector
+configuration and is not an entity namespace. `native_entity_id` remains the authoritative Herdr
+workspace, tab, pane, terminal, or agent ID.
 
 Every asynchronous value is also fenced by the connector generation:
 
@@ -172,15 +188,18 @@ The browser talks only to the serving World bridge. A remote Herdr machine needs
 listener, Host/Origin policy, browser password, or CSP destination. Direct bridge profiles retain
 their existing cross-origin behavior.
 
-Profile mutation is a narrow authenticated configuration operation. The bridge validates profile
-IDs, labels, targets, sessions, bounds, and allowed state transitions. A browser can manage a
+Profile mutation and target/session disclosure initially reuse the existing local-management
+boundary: the TCP peer must be actual loopback in addition to passing ordinary Host and Origin
+checks. A remote client is not allowed to administer profiles merely because it has an admitted
+runtime session or password. This adds no multi-user role system. The bridge validates profile IDs,
+labels, targets, sessions, bounds, and allowed state transitions. A local browser can manage a
 profile only through those explicit operations; it cannot select an executable, add SSH options,
 provide a remote command, obtain credentials, or invoke the connector as a general proxy.
 
 Runtime descriptors expose only the opaque runtime ID, label, state, generation, capabilities, and
-World runtime data. Settings may show the configured target and session to an authorized user who
-is editing that profile, but snapshots, model payloads, routine logs, and unrelated browser clients
-do not contain those fields.
+World runtime data. Settings may show the configured target and session only across the same
+actual-loopback local-management boundary used for editing that profile; snapshots, model payloads,
+routine logs, and unrelated browser clients do not contain those fields.
 
 Exposing the serving bridge beyond loopback grants an admitted browser terminal-equivalent access
 to every enabled runtime that gateway exposes. Settings must state that scope. Password
@@ -246,7 +265,9 @@ real connector proof.
 ## Risks / Trade-offs
 
 - **World now owns SSH process lifecycle.** The connector is deliberately narrow, uses OpenSSH as
-  the policy engine, avoids a shell, and keeps remote setup interactive and external.
+  the policy engine, avoids a local shell and user-supplied shell text, and keeps remote setup
+  interactive and external. The fixed relay command still passes through the remote login shell as
+  required by OpenSSH.
 - **The relay command is not a stable public Herdr API.** World already pins private Herdr API and
   terminal compatibility. The relay joins that reviewed compatibility surface and must pass live
   conformance for every adopted revision.

@@ -22,12 +22,15 @@ enough to contribute to or replace with an equivalent Herdr Web implementation l
 - Define one Herdr connector contract that yields compatible API and terminal connections from
   either the existing local socket or a supervised SSH-backed relay.
 - Let the World bridge own remote Herdr profiles, connector lifecycle, SSH process supervision,
-  reconnect generations, and bounded transport diagnostics.
+  reconnect generations, and bounded transport diagnostics. Initial profile CRUD and target/session
+  disclosure reuse the existing actual-loopback local-management boundary.
 - Keep OpenSSH authoritative for host aliases, keys, agents, host verification, proxy jumps, and
   other SSH policy. World stores no passwords or private keys and does not answer interactive SSH
   prompts.
 - Require a compatible remote Herdr installation and session. Automatic remote installation,
   replacement, and upgrade are outside this change.
+- Pin and probe the remote API relay capability separately from API and terminal protocol
+  compatibility; protocol `22` alone does not establish that the relay command exists.
 - Preserve Herdr as the authority for session topology, agents, commands, launchers, and terminal
   protocol behavior. The remote Herdr server receives the same compatible client protocols it
   receives from local clients.
@@ -35,6 +38,9 @@ enough to contribute to or replace with an equivalent Herdr Web implementation l
   terminal-ID streams through a real SSH connector before widening browser integration.
 - Adapt Local and remote Herdr connections into the existing qualified `WorldModel` through one
   same-origin World gateway, with independent failure and reconnect boundaries.
+- Give each target/session binding its own persistent runtime identity. Retargeting a profile keeps
+  its configuration identity but retires the old runtime binding, detaches viewers, and does not
+  silently associate old World data with the new server.
 - Keep direct World bridge profiles as a compatibility path and preserve healthy Local operation
   when remote profiles or SSH are unavailable.
 - Keep the connector isolated in upstream-aligned bridge code. Track Herdr Web and adopt an

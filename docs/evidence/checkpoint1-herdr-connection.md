@@ -44,6 +44,9 @@ The same Herdr revision was inspected without modifying or contributing to that 
 - `src/cli/target.rs` resolves an enabled saved profile and lazily creates a `SavedSshApiBridge`.
 - `src/remote/saved.rs` starts Herdr's private remote relay and exposes a local socket path to
   Herdr's ordinary `ApiClient`.
+- `src/remote.rs` gives that relay a separate `remote-api-bridge --check` capability marker
+  (`herdr-api-bridge-v1`). The inspected master has this command; World's pinned `v0.9.0`
+  compatibility source does not. API protocol `22` therefore cannot stand in for relay capability.
 - `src/cli/api.rs` publicly exposes one-shot `api snapshot` and schema operations; it does not expose
   a long-lived `api connect` command.
 - Herdr's socket API documentation requires a separate acknowledged `events.subscribe` connection
@@ -79,5 +82,7 @@ remain later checkpoints.
 
 The World plugin service environment now carries `SSH_AUTH_SOCK` alongside the existing Herdr and
 plugin state variables. Focused tests cover the variable in generated systemd-user and launchd
-definitions. Those definitions do not prove that a real supervisor executed the service or that
-the child inherited a live agent socket; the checkpoint fixture must prove that behavior.
+definitions. The bridge's Settings controller handoff also preserves it through systemd-user,
+launchd, and cleared-environment fallback restarts. Those tests do not prove that a real supervisor
+executed the service or that the child inherited a live agent socket; the checkpoint fixture must
+prove that behavior.

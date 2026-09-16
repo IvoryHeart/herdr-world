@@ -2231,6 +2231,7 @@ const CONTROLLER_ENVIRONMENT: &[&str] = &[
     "LANG",
     "LC_ALL",
     "HOSTNAME",
+    "SSH_AUTH_SOCK",
     "PATH",
     "HERDR_PLUGIN_CONFIG_DIR",
     "HERDR_PLUGIN_STATE_DIR",
@@ -2247,9 +2248,15 @@ const CONTROLLER_ENVIRONMENT: &[&str] = &[
 ];
 
 fn controller_environment_arguments() -> Vec<String> {
+    controller_environment_arguments_from(|name| env::var(name).ok())
+}
+
+fn controller_environment_arguments_from(
+    mut value: impl FnMut(&str) -> Option<String>,
+) -> Vec<String> {
     CONTROLLER_ENVIRONMENT
         .iter()
-        .filter_map(|name| env::var(name).ok().map(|value| format!("{name}={value}")))
+        .filter_map(|name| value(name).map(|value| format!("{name}={value}")))
         .collect()
 }
 
@@ -7697,6 +7704,18 @@ mod tests {
         }
 
         assert_eq!(candidates, ["192.0.2.20", "workstation.local"]);
+    }
+
+    #[test]
+    fn settings_controller_preserves_ssh_agent_access() {
+        let environment = controller_environment_arguments_from(|name| match name {
+            "PATH" => Some("/usr/bin".to_string()),
+            "SSH_AUTH_SOCK" => Some("/run/user/1000/agent.sock".to_string()),
+            _ => None,
+        });
+
+        assert!(environment.contains(&"PATH=/usr/bin".to_string()));
+        assert!(environment.contains(&"SSH_AUTH_SOCK=/run/user/1000/agent.sock".to_string()));
     }
 
     #[test]

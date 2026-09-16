@@ -26,7 +26,7 @@ path.
 
 #### Scenario: Remote profile is disabled or removed
 
-- **WHEN** an authorized user disables or removes a World remote profile
+- **WHEN** an actual-loopback local-management user disables or removes a World remote profile
 - **THEN** the bridge retires its connector generation and removes it from runtime selection without
   stopping the remote Herdr server or its agents
 
@@ -116,8 +116,23 @@ World code.
 #### Scenario: Connector uses the pinned Herdr relay surface
 
 - **WHEN** World launches the reviewed SSH relay for an admitted profile
-- **THEN** it uses fixed executable arguments, records the exact Herdr compatibility provenance,
-  and speaks the reviewed Herdr API or terminal protocol after the relay reaches the remote socket
+- **THEN** it verifies the exact executable/relay revision and relay capability independently from
+  API and terminal protocol compatibility, selects the admitted session deterministically, and
+  speaks the reviewed Herdr protocol after the relay reaches the remote socket
+
+#### Scenario: OpenSSH executes the fixed remote command
+
+- **WHEN** World starts an SSH-backed connector
+- **THEN** it invokes OpenSSH directly without a local shell and supplies one fixed, correctly
+  encoded remote relay command for the remote login shell, with no user-selected shell program,
+  executable, remote command, or shell text
+
+#### Scenario: Protocol matches but relay is absent
+
+- **WHEN** a remote Herdr reports the reviewed API and terminal protocols but does not pass the
+  separately pinned relay-capability probe
+- **THEN** World keeps that profile non-actionable and does not treat protocol compatibility as
+  proof that remote federation is available
 
 #### Scenario: Connector implementation serializes clients
 
@@ -141,17 +156,20 @@ World code.
 ### Requirement: World-owned remote Herdr profiles
 
 The World bridge SHALL maintain a bounded remote Herdr profile catalogue containing an opaque
-stable ID, label, validated OpenSSH target or alias, optional Herdr session, and enabled state. The
-catalogue SHALL NOT contain passwords, private keys, agent tickets, generated shell commands, or
-arbitrary SSH options. Mutable target and session fields SHALL NOT form runtime identity. Profile
-mutation SHALL require the same admitted configuration authority as other security-sensitive bridge
-settings.
+stable profile ID, opaque runtime-binding ID, label, validated OpenSSH target or alias, optional
+Herdr session, and enabled state. The catalogue SHALL NOT contain passwords, private keys, agent
+tickets, user-supplied shell commands, or arbitrary SSH options. The profile ID identifies editable
+configuration; the runtime-binding ID identifies persisted runtime entities. Target or session
+retargeting SHALL mint a new runtime-binding ID, while reconnecting the same assignment SHALL retain
+it. Profile mutation and target/session disclosure SHALL require the existing actual-loopback
+local-management boundary.
 
 #### Scenario: User adds a remote profile
 
-- **WHEN** an authorized user supplies a valid label, OpenSSH target, and optional Herdr session
-- **THEN** World assigns an opaque runtime ID, persists only the bounded profile fields, and starts
-  the connector without accepting key material or arbitrary command text
+- **WHEN** an actual-loopback local-management user supplies a valid label, OpenSSH target, and
+  optional Herdr session
+- **THEN** World assigns separate opaque profile and runtime-binding IDs, persists only the bounded
+  fields, and starts the connector without accepting key material or arbitrary command text
 
 #### Scenario: User selects a key
 
@@ -161,9 +179,16 @@ settings.
 
 #### Scenario: Profile transport fields change
 
-- **WHEN** an authorized user changes a profile target or session
-- **THEN** World retires the current generation before reconnecting while preserving the opaque
-  profile ID
+- **WHEN** a local-management user changes a profile target or session from assignment A to B
+- **THEN** World preserves the profile ID, retires A's generation, detaches A's viewers, mints a new
+  runtime-binding ID for B, and does not attach A's persisted records to B
+
+#### Scenario: Profile label or enabled state changes
+
+- **WHEN** a local-management user renames, disables, or re-enables a profile without changing its
+  target or session
+- **THEN** World retains the runtime-binding ID while applying normal generation retirement and
+  reconnect rules
 
 #### Scenario: Profile requires interactive attention
 
@@ -184,6 +209,13 @@ settings.
 - **WHEN** a profile request includes an executable, SSH flag, private-key path, remote command,
   upload destination, or shell text outside the bounded profile schema
 - **THEN** the bridge rejects it without starting a connector or changing the stored profile
+
+#### Scenario: Remote admitted client attempts profile administration
+
+- **WHEN** a non-loopback browser with a valid runtime session requests profile CRUD or
+  target/session details
+- **THEN** the bridge rejects the request because runtime admission does not grant local-management
+  authority
 
 ### Requirement: Unified WorldModel ingestion
 
@@ -207,6 +239,12 @@ projections SHALL consume that unified model rather than connector-specific topo
 - **WHEN** an SSH-backed runtime advances its generation
 - **THEN** the model replaces only that runtime's admitted snapshot and buffered events while
   preserving unrelated runtime state
+
+#### Scenario: One profile is retargeted to another server
+
+- **WHEN** a profile changes from server/session A to B and both servers contain equal native IDs
+- **THEN** B enters the model under a new runtime-binding ID, A's viewers detach, and A's cached or
+  persisted entities are neither attached to nor pruned by B
 
 ### Requirement: Independent browser terminal surfaces
 
@@ -275,3 +313,10 @@ produce a path on that remote machine before World inserts or reports it to the 
 - **WHEN** notes, pins, or activity refer to equal native pane IDs owned by different runtimes
 - **THEN** each record remains associated only with its qualified runtime and pane and one runtime's
   snapshot cannot prune or overwrite the other's records
+
+#### Scenario: Retargeted profile reuses native IDs
+
+- **WHEN** a profile's old and new runtime bindings contain equal native pane, terminal, or agent
+  IDs
+- **THEN** notes, pins, activity, uploads, and viewers remain associated with the binding that
+  created them and do not silently move to the replacement runtime

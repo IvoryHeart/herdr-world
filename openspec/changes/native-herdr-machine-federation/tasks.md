@@ -17,8 +17,11 @@ This pull request remains draft until checkpoint 4 passes.
 - [x] 0.2 Preserve SSH-agent discovery in generated managed-service environments.
   - **Owner:** World owns its plugin service definition; OpenSSH owns agent use.
   - **Observable result:** When `SSH_AUTH_SOCK` is present at service generation, systemd-user and
-    launchd definitions pass it to the World bridge without recording key material.
-  - **Evidence:** Focused plugin tests cover both generated supervisor definitions.
+    launchd definitions pass it to the World bridge, and Settings-triggered systemd-user, launchd,
+    and fallback controller handoffs preserve it through a service restart without recording key
+    material.
+  - **Evidence:** Focused plugin tests cover both generated supervisor definitions; a bridge
+    regression test covers the shared controller environment used by every handoff path.
   - **Stop and revisit:** Revisit if the shipped supervisor cannot inherit a usable agent socket or
     requires World to copy credentials.
 
@@ -29,9 +32,11 @@ This pull request remains draft until checkpoint 4 passes.
     OpenSSH owns SSH policy.
   - **Observable result:** The existing local socket and one SSH-backed target can each produce
     independent API connections, terminal-ID connections, generation state, and bounded diagnostics
-    through one Herdr-specific interface.
+    through one Herdr-specific interface. Profile configuration identity remains distinct from the
+    runtime-binding identity used for persisted World entities.
   - **Evidence:** Focused Rust tests cover profile validation, fixed argv construction, connector
-    lifecycle, independent connection creation, and redaction without a shell or embedded secrets.
+    lifecycle, independent connection creation, local-management authority, binding rotation on
+    retarget, and redaction without a local shell or embedded secrets.
   - **Stop and revisit:** Stop if the seam needs World presentation types, browser-visible
     credentials, arbitrary SSH flags or commands, or cannot isolate connection lifetimes.
 
@@ -40,11 +45,14 @@ This pull request remains draft until checkpoint 4 passes.
     remote Herdr connects the relay to its selected session socket.
   - **Observable result:** A configured profile establishes a compatible remote Herdr API connection
     without a remote World installation or browser-reachable listener.
-  - **Evidence:** Integration tests cover process startup, exit, timeout, cancellation, malformed
-    targets, missing agent, missing/incompatible Herdr, and bounded diagnostics; provenance names
-    the exact Herdr relay surface consumed.
-  - **Stop and revisit:** Stop if implementation requires a shell, stored key material, interactive
-    prompt handling, unbounded stderr, or remote World code.
+  - **Evidence:** Integration tests cover the separately pinned relay-capability probe, exact Herdr
+    executable/relay revision, deterministic noninteractive lookup, selected session, stream
+    framing, remote received command/arguments, process startup, exit, timeout, cancellation,
+    malformed targets, missing agent, missing/incompatible Herdr, and bounded diagnostics.
+  - **Stop and revisit:** Stop if implementation requires a local shell, user-supplied shell program
+    or shell text, stored key material, interactive prompt handling, unbounded stderr, automatic
+    remote bootstrap, or remote World code. A fixed encoded relay command executed by the remote
+    login shell is expected OpenSSH behavior and is not itself a stop condition.
 
 - [ ] 1.3 Prove live snapshot, subscription, commands, and launcher concurrency.
   - **Owner:** World owns connector concurrency and recovery; Herdr owns API results and events.
@@ -52,8 +60,8 @@ This pull request remains draft until checkpoint 4 passes.
     profile return complete snapshots, establish subscriptions without an event gap, and complete
     layout, pane, and launcher operations while the remote subscription remains open.
   - **Evidence:** A reproducible live fixture records the exact revisions, protocol, agent
-    availability, an event caused by a concurrent command, and independent progress of every
-    connection.
+    availability, pre-provisioned running session, relay capability and framing, an event caused by
+    a concurrent command, and independent progress of every connection before any terminal attach.
   - **Stop and revisit:** Stop if the relay works only in an interactive shell, serializes the
     subscription ahead of other clients, or omits required snapshot fields.
 
@@ -82,12 +90,15 @@ This pull request remains draft until checkpoint 4 passes.
 ## 3. Prove the thin World integration
 
 - [ ] 3.1 Add bounded World-owned remote profile persistence and lifecycle.
-  - **Owner:** World owns opaque IDs, labels, targets, sessions, enabled state, validation, and
-    generation retirement; OpenSSH configuration remains user-owned.
-  - **Observable result:** An authorized user can add, edit, enable, disable, and remove a remote
-    Herdr profile without storing keys or exposing a general SSH/command interface.
+  - **Owner:** World owns profile IDs, runtime-binding IDs, labels, targets, sessions, enabled state,
+    validation, and generation retirement; OpenSSH configuration remains user-owned.
+  - **Observable result:** An actual-loopback local-management user can add, edit, enable, disable,
+    and remove a remote Herdr profile without storing keys or exposing a general SSH/command
+    interface. Retargeting keeps the profile ID but creates a fresh runtime binding and detaches old
+    viewers.
   - **Evidence:** Bridge, persistence, recovery, and security tests cover corrupt data, collisions,
-    hostile values, bounds, redaction, restart, and generation changes.
+    hostile values, bounds, redaction, remote-admin rejection, restart, generation changes, and an
+    A-to-B retarget with colliding native IDs and persisted records.
   - **Stop and revisit:** Stop if stable identity depends on mutable targets, profile input can alter
     connector argv structure, or routine runtime payloads disclose connection details.
 
@@ -148,7 +159,7 @@ merge.
     command admission, desktop and Android behavior.
   - **Observable result:** One gateway profile exposes qualified Local and remote Herdr runtimes;
     no remote World listener is required; direct bridge profiles remain compatible; profile editing
-    cannot become a general SSH or Herdr proxy.
+    remains actual-loopback local management and cannot become a general SSH or Herdr proxy.
   - **Evidence:** Browser, accessibility, responsive, API, privacy, and security tests cover profile
     lifecycle, hostile requests, non-loopback disclosure, and desktop/phone flows.
   - **Stop and revisit:** Stop if credentials reach the browser, runtime access bypasses admission,
