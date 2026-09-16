@@ -13,10 +13,10 @@
 ## 3. First-class World experience
 
 - [x] 3.1 Port the shared WorldObject projection onto the aggregate Roamgate runtime store, and verify deterministic host-space-agent-or-terminal hierarchy tests for local and SSH profiles
-- [ ] 3.2 Integrate native Spaces, Office, Tree and Graph navigation into the Roamgate shell without mounting a second app, and verify canonical navigation plus desktop/mobile accessibility tests
-- [ ] 3.3 Port Office rendering, selection and terminal conversation handoff, and verify one qualified terminal remains usable across Spaces and Office
-- [ ] 3.4 Port Tree and Graph rendering over the shared WorldObject, and verify colliding identifiers, stale hosts, search/collapse, guarded activation and compact layouts
-- [ ] 3.5 Route World selections into Roamgate Files, Changes and Agent History context, and verify an aggregate selection cannot open resources from a different host or checkout
+- [x] 3.2 Integrate native Spaces, Office, Tree and Graph navigation into the Roamgate shell without mounting a second app, and verify canonical navigation plus desktop/mobile accessibility tests
+- [x] 3.3 Port Office rendering, selection and terminal conversation handoff, and verify one qualified terminal remains usable across Spaces and Office
+- [x] 3.4 Port Tree and Graph rendering over the shared WorldObject, and verify colliding identifiers, stale hosts, search/collapse, guarded activation and compact layouts
+- [x] 3.5 Route World selections into Roamgate Files, Changes and Agent History context, and verify an aggregate selection cannot open resources from a different host or checkout
 
 ## 4. Distribution and knowledge
 
