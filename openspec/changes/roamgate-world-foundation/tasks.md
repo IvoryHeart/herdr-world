@@ -39,4 +39,4 @@
 - [x] 6.3 Make retained aggregate observations stale and non-actionable on browser disconnect or refresh failure, and coalesce invalidations without starving admitted snapshots
 - [x] 6.4 Generate platform-independent dependency inventory plus bundled copyright and licence texts, and verify release archives contain them
 - [x] 6.5 Inject the reviewed build version into the frontend and document the replacement installer cutover plus intentionally retired and deferred visual workflows
-- [ ] 6.6 Run focused regressions, the complete repository check and packaged-distribution inspection; respond to every review thread and keep PR #93 ready
+- [x] 6.6 Run focused regressions, the complete repository check and packaged-distribution inspection; respond to every review thread and keep PR #93 ready
