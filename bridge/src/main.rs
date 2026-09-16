@@ -1,5 +1,6 @@
 mod agent_activity;
 mod agent_pins;
+mod herdr_connector;
 mod launcher_presets;
 mod notes;
 mod observability;

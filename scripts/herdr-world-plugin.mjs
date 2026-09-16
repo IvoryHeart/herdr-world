@@ -994,7 +994,7 @@ function selectedEnvironment(env, target, serviceId, root, nodePath, supervisor)
   };
   for (const name of [
     "HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "HERDR_CONFIG_PATH", "TMPDIR",
-    "LANG", "LC_ALL", "HOSTNAME", "HERDR_PLUGIN_CONFIG_DIR", "HERDR_PLUGIN_STATE_DIR",
+    "LANG", "LC_ALL", "HOSTNAME", "SSH_AUTH_SOCK", "HERDR_PLUGIN_CONFIG_DIR", "HERDR_PLUGIN_STATE_DIR",
     "HERDR_BIN_PATH",
     "HERDR_WORLD_LAUNCHCTL", "HERDR_WORLD_SYSTEMCTL",
   ]) {
