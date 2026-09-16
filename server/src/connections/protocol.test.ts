@@ -66,7 +66,12 @@ describe("connection protocol routing", () => {
 
   test("keeps bridge-global methods unscoped and rejects misleading identity fields", () => {
     const routes = registry({});
-    for (const method of ["bridge.ping", "bridge.status", "connections.list"]) {
+    for (const method of [
+      "bridge.ping",
+      "bridge.status",
+      "connections.list",
+      "world.snapshot",
+    ]) {
       expect(
         resolveRpcRoute({
           request: request(method),

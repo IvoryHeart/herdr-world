@@ -7,12 +7,12 @@
 ## 2. Managed runtime projection
 
 - [x] 2.1 Preserve and characterize Roamgate local/SSH profile lifecycle, dual-socket forwarding, retry classification and generation isolation under World identities, and verify the focused connection/server suites
-- [ ] 2.2 Add a bounded aggregate snapshot/status/event interface for every ready connection, and verify tests cover two connections, colliding native IDs, one failed host and retired generations
-- [ ] 2.3 Add the browser aggregate runtime store with connection-qualified selection and action routing, and verify delayed or stale data cannot cross or replace another connection
+- [x] 2.2 Add a bounded aggregate snapshot/status/event interface for every ready connection, and verify tests cover two connections, colliding native IDs, one failed host and retired generations
+- [x] 2.3 Add the browser aggregate runtime store with connection-qualified selection and action routing, and verify delayed or stale data cannot cross or replace another connection
 
 ## 3. First-class World experience
 
-- [ ] 3.1 Port the shared WorldObject projection onto the aggregate Roamgate runtime store, and verify deterministic host-space-agent-or-terminal hierarchy tests for local and SSH profiles
+- [x] 3.1 Port the shared WorldObject projection onto the aggregate Roamgate runtime store, and verify deterministic host-space-agent-or-terminal hierarchy tests for local and SSH profiles
 - [ ] 3.2 Integrate native Spaces, Office, Tree and Graph navigation into the Roamgate shell without mounting a second app, and verify canonical navigation plus desktop/mobile accessibility tests
 - [ ] 3.3 Port Office rendering, selection and terminal conversation handoff, and verify one qualified terminal remains usable across Spaces and Office
 - [ ] 3.4 Port Tree and Graph rendering over the shared WorldObject, and verify colliding identifiers, stale hosts, search/collapse, guarded activation and compact layouts

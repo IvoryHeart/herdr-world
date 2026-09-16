@@ -86,6 +86,7 @@ import {
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel } from "./utils/rpc-logging";
 import { syncWorktreeBase } from "./worktree/create";
+import { WorldSnapshotService } from "./world/snapshot";
 import {
   removeWorktreeWithRecovery,
   WORKTREE_REMOVE_TIMEOUT_MS,
@@ -323,6 +324,24 @@ try {
 
 const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
+let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
+
+function publishWorldInvalidation(
+  connectionId: string,
+  connectionGeneration: number,
+) {
+  const revision = worldSnapshots?.invalidate();
+  if (revision === undefined) return;
+  const line = JSON.stringify({
+    control: {
+      type: "world_invalidated",
+      connection_id: connectionId,
+      connection_generation: connectionGeneration,
+      revision,
+    },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-invalidation");
+}
 
 function connectionFailureReporter(connectionId: string): RecoveryReporter {
   let reporter = connectionFailureReporters.get(connectionId);
@@ -340,6 +359,7 @@ function connectionFailureReporter(connectionId: string): RecoveryReporter {
 const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   connectionBootstrap.defaultConnectionId,
   (status) => {
+    publishWorldInvalidation(status.id, status.generation);
     const fields = {
       connection: status.id,
       state: status.state,
@@ -369,6 +389,7 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   },
   logger.child("connections"),
 );
+worldSnapshots = new WorldSnapshotService(connectionManager);
 
 const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
   ping: () => {
@@ -417,6 +438,7 @@ function runtimeFactoryForProfile(
         markRpcError,
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
+          publishWorldInvalidation(eventIdentity.id, context.generation);
           logger.debug("Herdr event", {
             connection: eventIdentity.id,
             detail: summarizeHerdrEvent(event),
@@ -678,6 +700,26 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
         },
       },
       "connections-list",
+    );
+    return;
+  }
+  if (method === "world.snapshot") {
+    try {
+      const snapshots = worldSnapshots;
+      if (!snapshots) throw new Error("World snapshot service is unavailable");
+      sendReply(
+        { id, result: await snapshots.snapshot() },
+        "world-snapshot",
+      );
+    } catch (error) {
+      sendError("world-snapshot-error", error);
+    }
+    return;
+  }
+  if (method.startsWith("world.")) {
+    sendError(
+      "unknown-world-method",
+      new Error(`unknown bridge-global method: ${method}`),
     );
     return;
   }
@@ -1316,6 +1358,7 @@ function main() {
                   connection_id: true,
                   connection_scoped_http: true,
                   connection_runtime_generation: true,
+                  world_snapshot: true,
                 },
               }),
               "hello",

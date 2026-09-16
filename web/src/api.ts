@@ -201,8 +201,11 @@ export interface TerminalClosedPush {
 }
 
 export interface BridgeControlMsg {
-  type: "pause_connection";
+  type: "pause_connection" | "world_invalidated";
   reason?: string;
+  connection_id?: string;
+  connection_generation?: number;
+  revision?: number;
 }
 
 type Pending = {
@@ -235,7 +238,11 @@ const HEARTBEAT_TIMEOUT_MS = 6000;
 const MAX_WS_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 export function isBridgeGlobalMethod(method: string): boolean {
-  return method.startsWith("bridge.") || method.startsWith("connections.");
+  return (
+    method.startsWith("bridge.") ||
+    method.startsWith("connections.") ||
+    method.startsWith("world.")
+  );
 }
 
 function wsUrl(): string {

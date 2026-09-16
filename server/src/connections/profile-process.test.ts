@@ -322,6 +322,23 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       (await rpc("workspace.list", {}, "beta", betaGeneration)).workspaces[0]
         .name,
     ).toBe("from-beta");
+    const aggregate = await rpc("world.snapshot");
+    expect(
+      aggregate.connections.map(
+        (connection: { connection_id: string }) => connection.connection_id,
+      ),
+    ).toEqual(["alpha", "beta"]);
+    expect(
+      aggregate.connections.map(
+        (connection: { snapshot: { workspaces: Array<{ name: string }> } }) =>
+          connection.snapshot.workspaces[0].name,
+      ),
+    ).toEqual(["from-alpha", "from-beta"]);
+    expect(
+      aggregate.connections.every(
+        (connection: { actionable: boolean }) => connection.actionable,
+      ),
+    ).toBe(true);
 
     const replacementAlpha = {
       ...beta,
@@ -410,6 +427,17 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     await rpc("connections.remove", { id: "gamma" });
 
     await rpc("connections.disconnect", { id: "alpha" });
+    const disconnectedAggregate = await rpc("world.snapshot");
+    expect(
+      disconnectedAggregate.connections.find(
+        (connection: { connection_id: string }) =>
+          connection.connection_id === "alpha",
+      ),
+    ).toMatchObject({
+      stale: true,
+      actionable: false,
+      snapshot_generation: oldAlphaGeneration,
+    });
     await rpc("connections.set_default", { id: "beta" });
     expect((await rpc("workspace.list")).workspaces[0].name).toBe("from-beta");
     await rpc("connections.remove", { id: "alpha" });
