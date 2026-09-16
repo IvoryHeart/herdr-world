@@ -12,33 +12,42 @@ retain their original Herdr Web lineage.
   World service and responsive Web/PWA derived from Roamgate. Existing bridge
   profiles, browser preferences and Roamgate state are not imported; native Android
   packaging is not part of this foundation.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Added
 
 - Added UI-managed local and OpenSSH Herdr profiles with isolated runtimes,
   generations, retries and failure states behind one same-origin World application.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Added a bounded aggregate topology path and connection-qualified WorldObject for
   observing several Herdr hosts without allowing stale or retired data to control
   them.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Added native Spaces, Office, Tree and Graph views with canonical navigation,
   qualified terminal handoff and Files, Changes and Agent History routing.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Added World-owned standalone archives, installer, user services and the
   `ivoryheart.herdr-world` Herdr plugin for Linux, macOS and Windows.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Changed
 
 - Based the active application source on Roamgate commit
   `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an
   external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
   provide tagged binary, archive and update identities at release time.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Removed
 
 - Removed browser-to-bridge federation, remote World installations and the former
   Host, Origin and cross-origin CSP configuration workflow.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Removed the Rust bridge, vendored Herdr compatibility crate, native Capacitor
   Android build and inherited legacy service/preference migration paths.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ## [0.1.1] - 2026-09-01
 

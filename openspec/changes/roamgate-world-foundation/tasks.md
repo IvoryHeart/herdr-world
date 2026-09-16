@@ -30,4 +30,4 @@
 - [x] 5.1 Run formatting, lint, type checking, unit/integration tests and production builds through the repository's final check command and record exact results
 - [x] 5.2 Exercise the compiled World application against a local Herdr plus the deterministic SSH fixture, verifying connection management, aggregate World views, terminal input, Files, Changes and Agent History
 - [x] 5.3 Run responsive browser acceptance at desktop and phone sizes, inspect World and workspace surfaces visually, and publish privacy-safe synthetic product captures for documentation and review
-- [ ] 5.4 Review the full diff and history for secrets, unrelated generated output and stale Roamgate product identities; commit staged implementation slices, push the branch and open a ready PR to `main` that identifies the superseded World branches and verification evidence
+- [x] 5.4 Review the full diff and history for secrets, unrelated generated output and stale Roamgate product identities; commit staged implementation slices, push the branch and open a ready PR to `main` that identifies the superseded World branches and verification evidence
