@@ -166,14 +166,15 @@ process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands.
 The World bridge SHALL maintain a bounded Herdr connection list. Each remote connection SHALL
 contain an opaque stable connection ID, label, validated OpenSSH target or alias, a Herdr session
 selector that defaults to `Default` and may instead be `Named(name)`, enabled state, and an optional
-current runtime binding. The list SHALL NOT contain passwords, private keys, agent tickets,
-user-supplied shell commands, or arbitrary SSH options. The connection ID identifies editable
-configuration. Before admission, the adapter SHALL resolve either selector to an actual
-pre-provisioned session; World SHALL then create or retain an opaque runtime-binding ID that records
-the resolved session and identifies persisted runtime entities. A connection whose selector has not
-resolved SHALL remain visible but unbound and non-actionable. Reconnects to the same target and
-resolved session SHALL retain the runtime-binding ID. A target change or a selector resolving to a
-different session SHALL mint a new runtime-binding ID.
+current runtime binding. An imported connection MAY also contain its source Herdr profile ID solely
+as provenance for deduplication. The list SHALL NOT contain passwords, private keys, agent tickets,
+user-supplied shell commands, arbitrary SSH options, or unrelated Herdr profile metadata. The
+connection ID identifies editable configuration. Before admission, the adapter SHALL resolve either
+selector to an actual pre-provisioned session; World SHALL then create or retain an opaque
+runtime-binding ID that records the resolved session and identifies persisted runtime entities. A
+connection whose selector has not resolved SHALL remain visible but unbound and non-actionable.
+Reconnects to the same target and resolved session SHALL retain the runtime-binding ID. A target
+change or a selector resolving to a different session SHALL mint a new runtime-binding ID.
 Connection mutation and configured/resolved target/session disclosure SHALL require the existing
 actual-loopback local-management boundary. Herdr's saved-machine catalogue SHALL NOT be
 authoritative over the World connection list.
@@ -252,12 +253,44 @@ authoritative over the World connection list.
 - **THEN** the bridge rejects the request because runtime admission does not grant local-management
   authority
 
-#### Scenario: A Herdr saved profile is imported
+#### Scenario: Connection settings discover Herdr profiles
 
-- **WHEN** a later optional import copies a Herdr saved-machine entry into World
-- **THEN** World creates an independent connection with its imported named selector or `Default`,
-  resolves the actual session under normal admission rules, and does not let later Herdr catalogue
-  edits, deletion, or unavailability silently retarget or remove it
+- **WHEN** an actual-loopback local-management user opens connection settings
+- **THEN** World automatically reads the supported Herdr saved-machine catalogue and presents valid
+  profiles as unpersisted import candidates without connecting to them
+
+#### Scenario: User imports and connects one Herdr profile
+
+- **WHEN** the user explicitly chooses **Import and connect** for a discovered profile
+- **THEN** World copies only its bounded target and session selector, maps a missing session to
+  `Default` or preserves a named session, assigns an independent connection ID, records the source
+  profile ID only as provenance, and follows normal resolution and admission rules
+
+#### Scenario: User imports all Herdr profiles
+
+- **WHEN** the user explicitly chooses **Import all**
+- **THEN** World imports and connects every valid nonduplicate candidate independently, reports
+  per-profile failures without rolling back successful imports, and does not import invalid entries
+
+#### Scenario: Herdr profile was already imported
+
+- **WHEN** discovery returns a source profile ID already recorded as provenance on a World connection
+- **THEN** World marks the candidate as imported and does not create a duplicate connection unless
+  the user explicitly requests a separate manual connection
+
+#### Scenario: User refreshes Herdr profiles
+
+- **WHEN** the user explicitly refreshes the discovered catalogue after a source profile changes or
+  disappears
+- **THEN** World presents the difference without mutating, disabling, or removing the imported
+  connection, and applies changed target/session fields only through a separate user action and the
+  normal runtime-binding rotation rules
+
+#### Scenario: Herdr profile discovery fails
+
+- **WHEN** the supported catalogue is absent, unavailable, malformed, or contains an invalid entry
+- **THEN** existing and manually configured World connections remain usable, discovery reports
+  bounded per-source guidance, and no candidate is persisted or connected implicitly
 
 ### Requirement: Unified WorldModel ingestion
 

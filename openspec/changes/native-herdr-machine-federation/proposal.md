@@ -58,6 +58,10 @@ not a generic provider framework or a requirement for separate packages or servi
   not a prerequisite for completing the downstream implementation.
 - Keep the Herdr plugin responsible for installing, starting, and opening World without making it
   authoritative over World's connection list or routing remote connections through Local.
+- Discover saved Herdr machine profiles automatically on the actual-loopback connection-settings
+  surface and provide explicit **Import and connect** and **Import all** actions. Imported records
+  receive independent World identities; stored Herdr profile provenance supports deduplication but
+  does not create catalogue authority or silent synchronization.
 - Leave non-Herdr backends, a public provider SDK, and dynamic provider loading outside this
   change. If a second concrete backend arrives, evolve the shared representation from its proven
   differences instead of prebuilding a generic runtime platform.
@@ -80,10 +84,11 @@ None.
 
 ## Impact
 
-The change affects the Rust bridge connection layer, connection persistence and settings, plugin
-service environment, browser runtime discovery, terminal ownership, uploads, federation tests,
-security tests, operational documentation, and the current federation and bridge-access specs.
-The first delivery remains Herdr-specific and pinned to a reviewed Herdr compatibility baseline.
+The change affects the Rust bridge connection layer, connection persistence and settings, supported
+Herdr profile discovery/import, plugin service environment, browser runtime discovery, terminal
+ownership, uploads, federation tests, security tests, operational documentation, and the current
+federation and bridge-access specs. The first delivery remains Herdr-specific and pinned to a
+reviewed Herdr compatibility baseline.
 
 Saved remote machines do not need a World installation or HTTP listener. They do need ordinary
 OpenSSH access and a compatible Herdr executable/session reachable by the reviewed relay command.

@@ -7,9 +7,9 @@ binding. Host, Origin, and CSP policy SHALL remain distinct from optional passwo
 SSH-backed Herdr traffic SHALL pass through that serving bridge and SHALL NOT require a World HTTP
 listener, browser password, Host admission, Origin admission, or CSP destination on each remote
 machine. Explicit direct World bridge profiles SHALL retain their current destination and origin
-policy. Remote connection CRUD and target/session disclosure SHALL reuse the existing
-local-management boundary and require the request's actual TCP peer to be loopback; an admitted
-remote runtime session or configured password SHALL NOT grant that authority.
+policy. Remote connection CRUD, Herdr profile discovery/import, and target/session disclosure SHALL
+reuse the existing local-management boundary and require the request's actual TCP peer to be
+loopback; an admitted remote runtime session or configured password SHALL NOT grant that authority.
 
 #### Scenario: Password-protected connection
 
@@ -59,8 +59,14 @@ and an allow-listed World operation.
 #### Scenario: Remote admitted user edits a connection
 
 - **WHEN** a non-loopback browser presents a valid runtime session or password and requests
-  connection CRUD or target/session details
+  connection CRUD, Herdr profile discovery/import, or target/session details
 - **THEN** the bridge rejects it because runtime admission does not grant local-management authority
+
+#### Scenario: Local settings discover Herdr profiles
+
+- **WHEN** an actual loopback TCP peer passes Host and Origin checks and opens connection settings
+- **THEN** the bridge may return bounded Herdr import candidates and accept explicit import actions
+  without exposing credentials, arbitrary SSH settings, commands, or unrelated profile metadata
 
 #### Scenario: Runtime request supplies transport details
 
@@ -92,5 +98,5 @@ and an allow-listed World operation.
 #### Scenario: Connection details appear in routine output
 
 - **WHEN** the bridge serializes runtime snapshots, model events, diagnostics, or ordinary logs
-- **THEN** OpenSSH targets, sessions, usernames, agent socket paths, environment values, and
-  credential-shaped data are omitted or redacted
+- **THEN** OpenSSH targets, sessions, source Herdr profile IDs, usernames, agent socket paths,
+  environment values, and credential-shaped data are omitted or redacted

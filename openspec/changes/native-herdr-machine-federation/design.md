@@ -119,10 +119,19 @@ remains authoritative for hostname resolution, users, ports, key selection, agen
 proxy jumps, control sockets, and related policy. A user chooses a key through normal OpenSSH
 configuration or `ssh-agent`, not by uploading key material into World.
 
-Herdr's saved-machine catalogue may be used later as an import convenience, but it is not
-authoritative over World's connections. An import copies a target and optional named-session
-selector into a World connection; subsequent catalogue edits, deletion, or availability do not
-silently retarget, disable, or remove that connection. Import is not required for this delivery.
+When an actual-loopback user opens connection settings, World automatically reads Herdr's supported
+saved-machine catalogue and shows valid profiles as import candidates. Discovery is read-only: it
+does not persist, enable, or connect a candidate. The user can choose **Import and connect** for one
+candidate or explicitly choose **Import all**. A profile without a configured session becomes a
+`Default` selector; a configured session becomes `Named(name)`.
+
+Import copies the bounded target and selector into a World-owned connection, assigns independent
+connection and runtime-binding identities under the normal resolution rules, and records the Herdr
+profile ID only as provenance for deduplication. It does not copy keys, passwords, arbitrary SSH
+options, commands, or unrelated catalogue metadata. An explicit **Refresh from Herdr** re-reads the
+catalogue and presents additions, changes, and removals. Applying a discovered change requires a
+separate user action and follows normal retargeting rules. Catalogue edits, deletion, or
+unavailability never silently retarget, disable, or remove an imported connection.
 
 The bridge invokes the local OpenSSH executable directly without a local shell. OpenSSH sends one
 fixed, correctly encoded relay command that the SSH server executes through the remote user's login
@@ -299,8 +308,9 @@ real connection proof.
   terminal compatibility. The relay joins that reviewed compatibility surface and must pass live
   conformance for every adopted revision.
 - **World and Herdr have separate catalogues.** World connections are explicit gateway
-  configuration. A later import convenience may copy a Herdr saved profile into a World connection,
-  but Herdr catalogue synchronization and authority are outside this change.
+  configuration. Automatic discovery and explicit import reduce duplicate setup, while provenance
+  supports deduplication. Refresh presents source differences but never silently synchronizes or
+  makes the Herdr catalogue authoritative.
 - **Managed services may lose agent access.** Service generation preserves `SSH_AUTH_SOCK`; live
   acceptance must prove the actual supervisor environment and report Attention when the socket is
   absent or stale.
@@ -315,7 +325,8 @@ real connection proof.
 1. Replace the obsolete public-machine-stream gate with the Herdr adapter/connection contract and
    preserve the prior investigation as rationale.
 2. Implement and prove the SSH-backed connection against one pre-provisioned remote Herdr session.
-3. Add remote connection persistence and the bounded Local-plus-remote runtime registry path.
+3. Add remote connection persistence, automatic Herdr profile discovery with explicit import, and
+   the bounded Local-plus-remote runtime registry path.
 4. Complete terminal, lifecycle, upload, security, persistence, and browser acceptance.
 5. Compare the proven seam with current Herdr Web, propose reusable bridge work upstream, and adopt
    an equivalent upstream implementation if and when it lands.

@@ -109,8 +109,7 @@ This pull request remains draft until checkpoint 4 passes.
     and remove a remote Herdr connection whose session selector defaults to `Default` and may instead
     name a session, without storing keys or exposing a general SSH/command interface. A changed
     target or a selector resolving to a different session keeps the connection ID but creates a
-    fresh runtime binding and detaches old viewers. Herdr saved-profile import is not required or
-    authoritative.
+    fresh runtime binding and detaches old viewers.
   - **Evidence:** Bridge, persistence, recovery, and security tests cover corrupt data, collisions,
     hostile values, bounds, redaction, remote-admin rejection, restart, stable default reconnect,
     changed-default rotation, generation changes, and an A-to-B retarget with colliding native IDs
@@ -119,7 +118,22 @@ This pull request remains draft until checkpoint 4 passes.
     alter SSH argv structure, a Herdr catalogue becomes authoritative over World connections, or
     routine runtime payloads disclose connection details.
 
-- [ ] 3.2 Feed Local and one SSH-backed runtime through the existing qualified `WorldModel`.
+- [ ] 3.2 Add local Herdr profile discovery and explicit import.
+  - **Owner:** World owns discovery presentation, import decisions, independent connection IDs, and
+    provenance; Herdr owns the supported saved-machine catalogue.
+  - **Observable result:** Opening connection settings from an actual loopback peer automatically
+    shows valid Herdr profile candidates. The user can **Import and connect** one or explicitly
+    **Import all**. Missing sessions become `Default`, named sessions remain named, and imported
+    connections operate independently from later Herdr catalogue changes.
+  - **Evidence:** Bridge and browser tests cover empty/unavailable/malformed catalogues, local-only
+    disclosure, single and bulk import, explicit activation, session-selector mapping, provenance
+    deduplication, refresh differences, manual apply, deletion, and catalogue changes that leave
+    imported connections untouched.
+  - **Stop and revisit:** Stop if discovery requires copying credentials or arbitrary SSH settings,
+    import silently enables without a user action, profile provenance becomes runtime identity, or
+    catalogue refresh silently mutates a World connection.
+
+- [ ] 3.3 Feed Local and one SSH-backed runtime through the existing qualified `WorldModel`.
   - **Owner:** World owns registry and model qualification; Herdr owns each native snapshot.
   - **Observable result:** Local and remote Herdr entities appear in Spaces, Tree, Graph, and Office
     through `WorldRuntimeSource`, with equal native IDs isolated by gateway, runtime, and generation.
@@ -128,7 +142,7 @@ This pull request remains draft until checkpoint 4 passes.
   - **Stop and revisit:** Stop if Herdr or SSH details leak into presentation code, a parallel
     topology model appears, or any action/state is admitted with an unqualified identifier.
 
-- [ ] 3.3 Preserve independent startup, failure, command, and terminal routing.
+- [ ] 3.4 Preserve independent startup, failure, command, and terminal routing.
   - **Owner:** World owns registry supervision, allow-listed dispatch, and same-origin adaptation.
   - **Observable result:** Healthy Local survives all remote failures; a healthy remote survives
     Local restart; structural commands, launchers, and terminals stay on their selected runtime.
@@ -177,8 +191,8 @@ merge.
     command admission, desktop and Android behavior.
   - **Observable result:** One gateway profile exposes qualified Local and remote Herdr runtimes;
     no remote World listener is required; direct bridge profiles remain compatible; connection
-    editing
-    remains actual-loopback local management and cannot become a general SSH or Herdr proxy.
+    editing and Herdr profile import remain actual-loopback local management and cannot become a
+    general SSH or Herdr proxy.
   - **Evidence:** Browser, accessibility, responsive, API, privacy, and security tests cover
     connection lifecycle, hostile requests, non-loopback disclosure, and desktop/phone flows.
   - **Stop and revisit:** Stop if credentials reach the browser, runtime access bypasses admission,
@@ -199,7 +213,8 @@ merge.
   - **Owner:** World owns final acceptance.
   - **Observable result:** Local plus one remote Herdr support concurrent events, commands,
     launchers, two browser terminals, a native client, failure/recovery, notes, pins, activity, and
-    uploads through one origin in the shipped managed environment.
+    uploads through one origin in the shipped managed environment; at least one remote connection
+    is created through Herdr profile import.
   - **Evidence:** Record exact revisions and complete live results; update architecture, federation,
     development, security, plugin, vendoring, knowledge map, Android/gateway, compatibility, current
     specs, and Unreleased changelog; regenerate notices if dependencies changed; pass strict
