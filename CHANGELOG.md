@@ -40,6 +40,15 @@ retain their original Herdr Web lineage.
   provide tagged binary, archive and update identities at release time.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
+### Fixed
+
+- Enforced automatic same-authority browser admission, fenced cross-host World
+  handoffs and hidden-view shortcuts, made disconnected observations read-only,
+  bundled deterministic dependency licence texts, displayed the reviewed release
+  version in the frontend, and admitted the recognized pre-foundation launcher
+  symlink during installer cutover.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+
 ### Removed
 
 - Removed browser-to-bridge federation, remote World installations and the former

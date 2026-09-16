@@ -58,23 +58,37 @@ describe("World aggregate runtime store", () => {
     expect(parsed?.connections[0].snapshot?.workspaces[0].label).toBe("valid");
   });
 
-  test("a delayed older request cannot replace a newer aggregate", async () => {
+  test("a delayed response from before disconnect cannot replace a newer aggregate", async () => {
     const resolvers: Array<(value: unknown) => void> = [];
+    let statusListener: (
+      status: "connecting" | "connected" | "disconnected",
+    ) => void = () => {
+      throw new Error("status listener was not registered");
+    };
     const runtime = new WorldRuntimeStore({
       call: () =>
         new Promise((resolve) => {
           resolvers.push(resolve);
         }),
       onControl: () => () => undefined,
-      onStatus: () => () => undefined,
+      onStatus: (listener) => {
+        statusListener = listener;
+        return () => undefined;
+      },
     });
 
+    runtime.start();
     const older = runtime.refresh();
-    const newer = runtime.refresh();
-    resolvers[1](result("newer", 2));
-    await newer;
+    statusListener("disconnected");
+    statusListener("connected");
     resolvers[0](result("older", 1));
     await older;
+    await Promise.resolve();
+    resolvers[1](result("newer", 2));
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (runtime.get().revision === 2) break;
+      await Promise.resolve();
+    }
 
     expect(runtime.get().connections[0].generation).toBe(2);
     expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
@@ -117,5 +131,87 @@ describe("World aggregate runtime store", () => {
       ["host-a", "shared"],
       ["host-b", "shared"],
     ]);
+  });
+
+  test("makes retained observations stale and non-actionable on disconnect", async () => {
+    let statusListener: (
+      status: "connecting" | "connected" | "disconnected",
+    ) => void = () => {
+      throw new Error("status listener was not registered");
+    };
+    const runtime = new WorldRuntimeStore({
+      call: async () => result("observed"),
+      onControl: () => () => undefined,
+      onStatus: (listener) => {
+        statusListener = listener;
+        return () => undefined;
+      },
+    });
+
+    await runtime.refresh();
+    runtime.start();
+    statusListener("disconnected");
+
+    expect(runtime.get().status).toBe("error");
+    expect(runtime.get().connections[0]).toMatchObject({
+      stale: true,
+      actionable: false,
+    });
+  });
+
+  test("makes retained observations stale when refresh fails", async () => {
+    let shouldFail = false;
+    const runtime = new WorldRuntimeStore({
+      call: async () => {
+        if (shouldFail) throw new Error("observation failed");
+        return result("observed");
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+
+    await runtime.refresh();
+    shouldFail = true;
+    await runtime.refresh();
+
+    expect(runtime.get().error).toBe("observation failed");
+    expect(runtime.get().connections[0]).toMatchObject({
+      stale: true,
+      actionable: false,
+    });
+  });
+
+  test("admits an in-flight snapshot before servicing one queued refresh", async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    const runtime = new WorldRuntimeStore({
+      call: () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        }),
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+
+    const first = runtime.refresh();
+    void runtime.refresh();
+    void runtime.refresh();
+    expect(resolvers).toHaveLength(1);
+
+    resolvers[0](result("first", 1));
+    await first;
+    await Promise.resolve();
+    expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
+      "first",
+    );
+    expect(resolvers).toHaveLength(2);
+
+    resolvers[1](result("second", 2));
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (runtime.get().revision === 2) break;
+      await Promise.resolve();
+    }
+    expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
+      "second",
+    );
   });
 });

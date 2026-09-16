@@ -63,6 +63,7 @@ describe("Herdr World release boundary", () => {
       "LICENSE",
       "THIRD_PARTY_NOTICES.md",
       "DEPENDENCY_NOTICES.md",
+      "DEPENDENCY_LICENSES.md",
       "UPSTREAM.md",
       "LICENSES",
     ]) {

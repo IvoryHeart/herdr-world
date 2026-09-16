@@ -23,7 +23,6 @@ import {
   SunMoon,
   Wifi,
 } from "lucide-react";
-import packageJson from "../../package.json";
 import type { Theme } from "../App";
 import {
   ACCENT_OPTIONS,
@@ -39,6 +38,7 @@ import { useLayoutPreferences } from "../layoutPreferences";
 import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import { useConnectionClient } from "../useConnectionClient";
+import { APP_VERSION } from "../version";
 import {
   mobileTerminalShortcutCount,
   type MobileTerminalShortcutRows,
@@ -71,7 +71,6 @@ const MobileLayoutDialog = lazyWithReload("mobile-layout", () =>
   })),
 );
 
-const APP_VERSION = packageJson.version;
 const RELEASES_URL = "https://github.com/IvoryHeart/herdr-world/releases";
 export const CONFIG_MENU_ID = "herdr-world-config-menu";
 

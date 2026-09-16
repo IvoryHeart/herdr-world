@@ -19,6 +19,16 @@ with that World service rather than connecting to independently deployed bridges
 - **THEN** other hosts remain usable and cached topology from the failed host is stale without
   admitting control
 
+#### Scenario: Browser loses the World service
+- **WHEN** the browser disconnects from World or aggregate observation fails
+- **THEN** every retained host observation becomes stale and non-actionable until a newly admitted
+  snapshot restores it
+
+#### Scenario: Continuous aggregate invalidation
+- **WHEN** topology invalidations arrive faster than an aggregate snapshot round trip
+- **THEN** World keeps at most one browser refresh in flight, admits its current-generation result,
+  and then services one coalesced follow-up refresh
+
 #### Scenario: User disconnects a connection
 - **WHEN** a user disconnects or removes a managed profile
 - **THEN** World stops only its runtime and transport without stopping that Herdr server, session,

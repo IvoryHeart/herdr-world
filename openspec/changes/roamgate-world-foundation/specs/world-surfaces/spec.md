@@ -19,6 +19,16 @@ SHALL be unavailable for stale observations.
 - **THEN** the same Spaces application and terminal ownership remain available without another
   service or attachment
 
+#### Scenario: Spaces is mounted but hidden
+- **WHEN** Office, Tree or Graph is the active view and a Spaces operational shortcut is pressed
+- **THEN** the mounted Spaces application does not create, focus, close or otherwise mutate a pane
+  or workspace
+
+#### Scenario: Active host changes during handoff
+- **WHEN** the active connection or runtime generation changes while a World entity is opening
+- **THEN** the handoff is rejected before dispatch or before reporting success and never targets a
+  colliding workspace on the newly active host
+
 #### Scenario: Theme switch with an open terminal
 - **WHEN** a user switches among Office, Tree and Graph while a terminal is open in Spaces
 - **THEN** every view interprets the same qualified entities and returning to Spaces restores the

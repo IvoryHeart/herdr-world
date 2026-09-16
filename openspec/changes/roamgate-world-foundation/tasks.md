@@ -31,3 +31,12 @@
 - [x] 5.2 Exercise the compiled World application against a local Herdr plus the deterministic SSH fixture, verifying connection management, aggregate World views, terminal input, Files, Changes and Agent History
 - [x] 5.3 Run responsive browser acceptance at desktop and phone sizes, inspect World and workspace surfaces visually, and publish privacy-safe synthetic product captures for documentation and review
 - [x] 5.4 Review the full diff and history for secrets, unrelated generated output and stale Roamgate product identities; commit staged implementation slices, push the branch and open a ready PR to `main` that identifies the superseded World branches and verification evidence
+
+## 6. Review corrections
+
+- [x] 6.1 Enforce automatic request-authority and same-origin admission for privileged browser WebSocket traffic without adding user-managed allow-lists, with rejection coverage
+- [x] 6.2 Preserve the selected connection lease through World-to-Spaces handoff and suppress Spaces operational shortcuts while that mounted view is hidden, with browser-level regressions
+- [x] 6.3 Make retained aggregate observations stale and non-actionable on browser disconnect or refresh failure, and coalesce invalidations without starving admitted snapshots
+- [x] 6.4 Generate platform-independent dependency inventory plus bundled copyright and licence texts, and verify release archives contain them
+- [x] 6.5 Inject the reviewed build version into the frontend and document the replacement installer cutover plus intentionally retired and deferred visual workflows
+- [ ] 6.6 Run focused regressions, the complete repository check and packaged-distribution inspection; respond to every review thread and keep PR #93 ready

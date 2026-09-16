@@ -123,7 +123,7 @@ export default function WorldFoundationApp() {
         className={`world-spaces-layer ${view === "spaces" ? "is-active" : ""}`}
         aria-hidden={view !== "spaces"}
       >
-        <App />
+        <App operationalShortcutsEnabled={view === "spaces"} />
       </div>
       {view !== "spaces" ? (
         <WorldControlPlane view={view} onOpenSpaces={() => setView("spaces")} />
@@ -819,10 +819,51 @@ function workspaceTarget(node: WorldObjectNode) {
   return null;
 }
 
-export async function focusWorldNode(node: WorldObjectNode) {
+type WorldFocusStore = {
+  get(): {
+    activeConnectionId: string;
+    serverRuntimeGeneration: number | null;
+    connections: Array<{
+      id: string;
+      state: string;
+      generation: number;
+    }>;
+  };
+  selectConnection(connectionId: string): boolean;
+  refresh(): Promise<unknown>;
+  focusWorkspace(workspaceId: string): Promise<unknown>;
+  focusTaskNotificationTarget(target: {
+    connectionId: string;
+    runtimeGeneration: number;
+    workspaceId: string;
+    paneId: string;
+  }): Promise<unknown>;
+};
+
+function worldNodeLeaseIsActive(
+  node: WorldObjectNode,
+  focusStore: WorldFocusStore,
+) {
+  const snapshot = focusStore.get();
+  const connection = snapshot.connections.find(
+    (candidate) => candidate.id === node.connectionId,
+  );
+  return (
+    snapshot.activeConnectionId === node.connectionId &&
+    snapshot.serverRuntimeGeneration === node.generation &&
+    connection?.state === "ready" &&
+    connection.generation === node.generation &&
+    node.actionable
+  );
+}
+
+export async function focusWorldNode(
+  node: WorldObjectNode,
+  focusStore: WorldFocusStore = store,
+) {
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
-  const connection = store
+  const connection = focusStore
     .get()
     .connections.find((candidate) => candidate.id === node.connectionId);
   if (
@@ -834,37 +875,29 @@ export async function focusWorldNode(node: WorldObjectNode) {
     throw new Error("The selected host generation is no longer available");
   }
   if (target.paneId) {
-    await store.focusTaskNotificationTarget({
+    await focusStore.focusTaskNotificationTarget({
       connectionId: node.connectionId,
       runtimeGeneration: node.generation,
       workspaceId: target.workspaceId,
       paneId: target.paneId,
     });
-    const current = store
-      .get()
-      .connections.find((candidate) => candidate.id === node.connectionId);
-    if (
-      store.get().activeConnectionId !== node.connectionId ||
-      !current ||
-      current.state !== "ready" ||
-      current.generation !== node.generation
-    ) {
+    if (!worldNodeLeaseIsActive(node, focusStore)) {
       throw new Error("The selected host changed while it was opening");
     }
   } else {
-    if (store.get().activeConnectionId !== node.connectionId) {
-      if (!store.selectConnection(node.connectionId)) {
+    if (focusStore.get().activeConnectionId !== node.connectionId) {
+      if (!focusStore.selectConnection(node.connectionId)) {
         throw new Error("The selected host could not be activated");
       }
-      await store.refresh();
+      await focusStore.refresh();
     }
-    const current = store
-      .get()
-      .connections.find((candidate) => candidate.id === node.connectionId);
-    if (!current || current.generation !== node.generation) {
+    if (!worldNodeLeaseIsActive(node, focusStore)) {
       throw new Error("The selected host changed while it was opening");
     }
-    await store.focusWorkspace(target.workspaceId);
+    await focusStore.focusWorkspace(target.workspaceId);
+    if (!worldNodeLeaseIsActive(node, focusStore)) {
+      throw new Error("The selected host changed while it was opening");
+    }
   }
 }
 

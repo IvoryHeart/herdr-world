@@ -66,6 +66,7 @@ printf 'herdr-world %s %s\n' "$version" "$platform" > "$package_dir/VERSION"
 cp "$root_dir/LICENSE" "$package_dir/LICENSE"
 cp "$root_dir/THIRD_PARTY_NOTICES.md" "$package_dir/THIRD_PARTY_NOTICES.md"
 cp "$root_dir/DEPENDENCY_NOTICES.md" "$package_dir/DEPENDENCY_NOTICES.md"
+cp "$root_dir/DEPENDENCY_LICENSES.md" "$package_dir/DEPENDENCY_LICENSES.md"
 cp "$root_dir/UPSTREAM.md" "$package_dir/UPSTREAM.md"
 cp -R "$root_dir/LICENSES" "$package_dir/LICENSES"
 

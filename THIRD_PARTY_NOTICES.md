@@ -39,9 +39,11 @@ which publishes its assets under the MIT License. See
 
 ## JavaScript dependencies
 
-The complete resolved JavaScript package inventory and declared licence identifiers are
-generated from the pinned Bun install in
-[`DEPENDENCY_NOTICES.md`](DEPENDENCY_NOTICES.md). Package authors retain their own
+The complete platform-independent JavaScript package inventory and declared licence
+identifiers are generated from the pinned Bun lockfile in
+[`DEPENDENCY_NOTICES.md`](DEPENDENCY_NOTICES.md). Copyright, permission and notice
+texts shipped by those package payloads are reproduced in
+[`DEPENDENCY_LICENSES.md`](DEPENDENCY_LICENSES.md). Package authors retain their own
 copyrights and licence terms.
 
 ## Trademarks

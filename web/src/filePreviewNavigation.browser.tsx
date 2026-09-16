@@ -46,6 +46,7 @@ const pending = new Map<
   string,
   ReturnType<typeof Promise.withResolvers<FilePreview>>
 >();
+const calledMethods: string[] = [];
 const fileNames = ["A.md", "B.md", "C.md", "alias.md"];
 function response(path: string, workspaceId = "one"): FilePreview {
   return {
@@ -69,6 +70,7 @@ const client: ConnectionClient = {
   isCurrent: () => true,
   acceptsServerGeneration: (generation) => generation === 1,
   call: async (method, params = {}) => {
+    calledMethods.push(method);
     const workspaceId = String(params.workspace_id ?? "one");
     const path = String(params.path ?? "");
     if (method === "file.read") {
@@ -168,6 +170,20 @@ function commandMenuEvent() {
   // Match the platform preset: Meta+K on macOS, Ctrl+Alt+K elsewhere.
   const binding = defaultShortcutBindings(detectShortcutPlatform())[
     "command.menu"
+  ][0];
+  const parts = binding.split("+");
+  return new KeyboardEvent("keydown", {
+    key: parts[parts.length - 1].toLowerCase(),
+    ctrlKey: parts.includes("Ctrl"),
+    altKey: parts.includes("Alt"),
+    metaKey: parts.includes("Meta"),
+    shiftKey: parts.includes("Shift"),
+    bubbles: true,
+  });
+}
+function tabCreateEvent() {
+  const binding = defaultShortcutBindings(detectShortcutPlatform())[
+    "tab.create"
   ][0];
   const parts = binding.split("+");
   return new KeyboardEvent("keydown", {
@@ -473,6 +489,25 @@ async function run() {
       ?.textContent?.includes("B.md"),
     "retired workspace request rendered",
   );
+
+  calledMethods.length = 0;
+  flushSync(() => root.render(<App operationalShortcutsEnabled={false} />));
+  await settle();
+  flushSync(() => window.dispatchEvent(tabCreateEvent()));
+  await settle();
+  check(
+    !calledMethods.includes("tab.create"),
+    "hidden Spaces handled the New Tab shortcut",
+  );
+  flushSync(() => root.render(<App />));
+  await settle();
+  calledMethods.length = 0;
+  flushSync(() => window.dispatchEvent(tabCreateEvent()));
+  await until(
+    () => calledMethods.includes("tab.create"),
+    "active Spaces shortcut",
+  );
+
   root.unmount();
   element.remove();
   await checkAnnotationUX(check);

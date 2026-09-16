@@ -210,6 +210,41 @@ describe("release installer", () => {
     expect(readFileSync(outside, "utf8")).toBe("outside\n");
   });
 
+  test("replaces the recognized pre-foundation launcher symlink", () => {
+    const fixture = createInstallerFixture();
+    const home = join(fixture.root, "home");
+    const installDir = join(home, ".local", "bin");
+    const legacyBinary = join(
+      home,
+      ".local",
+      "share",
+      "herdr-world",
+      "v0.1.1",
+      "bin",
+      "herdr-world",
+    );
+    mkdirSync(join(legacyBinary, ".."), { recursive: true });
+    mkdirSync(installDir, { recursive: true });
+    writeFileSync(legacyBinary, "legacy launcher target\n", { mode: 0o755 });
+    symlinkSync(legacyBinary, join(installDir, "herdr-world"));
+
+    const result = runInstaller(fixture, undefined, {
+      HOME: home,
+      XDG_DATA_HOME: join(home, ".local", "share"),
+      HERDR_WORLD_INSTALL_DIR: installDir,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(readFileSync(legacyBinary, "utf8")).toBe("legacy launcher target\n");
+    const installed = Bun.spawnSync(
+      [join(installDir, "herdr-world"), "--version"],
+      {
+        stdout: "pipe",
+      },
+    );
+    expect(installed.stdout.toString().trim()).toBe("herdr-world 9.8.7");
+  });
+
   test("rejects unauthenticated non-loopback release mirrors", () => {
     const fixture = createInstallerFixture();
     const result = runInstaller(

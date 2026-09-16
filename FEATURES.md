@@ -16,6 +16,21 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
+### Foundation cutover boundaries
+
+The first Roamgate-derived foundation keeps the complete Spaces terminal, Files,
+Changes, annotations, worktrees, Agent History, profile management, and essential
+multi-host Office/Tree/Graph hierarchy. The following distinctions are intentional:
+
+- Rich Office/Graph canvas gestures, persisted visual layouts, completion scenery, and
+  in-scene terminal conversation windows are deferred follow-up work over the shared
+  WorldObject. Use **Open in Spaces** for the same qualified terminal today.
+- The former World-owned notes store and `task-summary` publishing path are retired;
+  they are not migrated or promised by this foundation. Workspace pinning and review
+  annotations remain available in Spaces.
+- Browser-federated bridge URLs, native Capacitor Android packaging, and old visual
+  preference keys are retired. The responsive installable PWA is the mobile client.
+
 ## Workspace, Tab, and Pane Navigation
 
 - Browse workspaces and recognized agents; create, rename, focus, pin, or close

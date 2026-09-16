@@ -104,7 +104,7 @@ jobs:
           mkdir -p "$extract_dir"
           tar -xJf "dist/$versioned_archive" -C "$extract_dir"
           grep -Fx "herdr-world $version $platform" "$extract_dir/$package_dir/VERSION"
-          for legal in LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_NOTICES.md UPSTREAM.md; do
+          for legal in LICENSE THIRD_PARTY_NOTICES.md DEPENDENCY_NOTICES.md DEPENDENCY_LICENSES.md UPSTREAM.md; do
             test -f "$extract_dir/$package_dir/$legal"
           done
           test -f "$extract_dir/$package_dir/LICENSES/CLAW-EMPIRE-APACHE-2.0.txt"

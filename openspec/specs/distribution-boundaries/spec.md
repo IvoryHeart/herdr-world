@@ -15,9 +15,9 @@ notices. Herdr SHALL remain a separately installed external runtime.
 
 #### Scenario: Desktop archive
 - **WHEN** a release archive is built
-- **THEN** it contains the Herdr World executable, embedded web assets, notices and documentation,
-  without a bundled Herdr runtime, a second Roamgate executable or the retired Rust compatibility
-  bridge
+- **THEN** it contains the Herdr World executable, embedded web assets, complete generated dependency
+  inventory and licence/copyright texts, asset notices and documentation, without a bundled Herdr
+  runtime, a second Roamgate executable or the retired Rust compatibility bridge
 
 ### Requirement: Reviewed release identity
 Release preparation SHALL use a branch and reviewed PR. Final artifacts SHALL be built
@@ -39,7 +39,11 @@ application source from compatibility with the external Herdr runtime.
 All user-facing executables, archives, update metadata, services, configuration directories,
 browser storage and Herdr plugin entries SHALL use Herdr World identities. Required licence and
 copyright attribution SHALL name upstream projects without requiring them as separately installed
-products.
+products. The embedded frontend and compiled service SHALL expose the same reviewed release version.
+
+#### Scenario: Tagged application version
+- **WHEN** a tagged release builds the embedded frontend and compiled service
+- **THEN** both display or report that tagged version rather than a private development-manifest value
 
 #### Scenario: Plugin installation
 - **WHEN** a user installs the `ivoryheart.herdr-world` Herdr plugin and invokes its start action

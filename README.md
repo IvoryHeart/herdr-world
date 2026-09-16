@@ -143,5 +143,6 @@ binding; read [SECURITY.md](./SECURITY.md) before allowing another device access
 
 ## License
 
-Code: [MIT](./LICENSE). Bundled fonts and brand assets retain their original
-terms; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).
+Code: [MIT](./LICENSE). Bundled dependencies, fonts and brand assets retain their
+original terms; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the
+generated [dependency licence texts](./DEPENDENCY_LICENSES.md).

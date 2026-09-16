@@ -161,7 +161,9 @@ export function parseWorldSnapshotResult(
 export class WorldRuntimeStore {
   private state: WorldRuntimeState = INITIAL_STATE;
   private readonly listeners = new Set<() => void>();
-  private requestSequence = 0;
+  private observationEpoch = 0;
+  private refreshInFlight: Promise<void> | null = null;
+  private refreshQueued = false;
   private invalidationTimer: ReturnType<typeof setTimeout> | null = null;
   private fallbackTimer: ReturnType<typeof setInterval> | null = null;
   private unlistenControl: (() => void) | null = null;
@@ -183,6 +185,9 @@ export class WorldRuntimeStore {
     });
     this.unlistenStatus = this.client.onStatus((status) => {
       if (status === "connected") void this.refresh();
+      else if (status === "disconnected") {
+        this.invalidateObservation("World service disconnected");
+      }
     });
     this.fallbackTimer = setInterval(
       () => void this.refresh(),
@@ -191,6 +196,8 @@ export class WorldRuntimeStore {
   }
 
   stop() {
+    this.observationEpoch += 1;
+    this.refreshQueued = false;
     this.unlistenControl?.();
     this.unlistenStatus?.();
     this.unlistenControl = null;
@@ -202,25 +209,58 @@ export class WorldRuntimeStore {
   }
 
   async refresh() {
-    const requestSequence = ++this.requestSequence;
+    if (this.refreshInFlight) {
+      this.refreshQueued = true;
+      return this.refreshInFlight;
+    }
+    const observationEpoch = this.observationEpoch;
     if (this.state.status === "idle") {
       this.set({ ...this.state, status: "loading", error: null });
     }
+    const request = this.performRefresh(observationEpoch);
+    this.refreshInFlight = request;
+    await request;
+    if (this.refreshInFlight !== request) return;
+    this.refreshInFlight = null;
+    if (this.refreshQueued) {
+      this.refreshQueued = false;
+      void this.refresh();
+    }
+  }
+
+  private async performRefresh(observationEpoch: number) {
     try {
       const parsed = parseWorldSnapshotResult(
         await this.client.call("world.snapshot"),
       );
       if (!parsed) throw new Error("invalid World snapshot response");
-      if (requestSequence !== this.requestSequence) return;
+      if (observationEpoch !== this.observationEpoch) return;
       this.set({ ...parsed, status: "ready", error: null });
     } catch (error) {
-      if (requestSequence !== this.requestSequence) return;
-      this.set({
-        ...this.state,
-        status: "error",
-        error: error instanceof Error ? error.message : String(error),
-      });
+      if (observationEpoch !== this.observationEpoch) return;
+      this.markUnavailable(
+        error instanceof Error ? error.message : String(error),
+      );
     }
+  }
+
+  private invalidateObservation(message: string) {
+    this.observationEpoch += 1;
+    this.refreshQueued = false;
+    this.markUnavailable(message);
+  }
+
+  private markUnavailable(message: string) {
+    this.set({
+      ...this.state,
+      status: "error",
+      error: message,
+      connections: this.state.connections.map((connection) => ({
+        ...connection,
+        stale: connection.stale || connection.snapshot !== null,
+        actionable: false,
+      })),
+    });
   }
 
   private scheduleRefresh() {

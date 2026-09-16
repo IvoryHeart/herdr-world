@@ -14,7 +14,7 @@ fail() {
 
 [ -n "$install_dir" ] || fail "install directory must not be empty"
 
-for command in curl tar install uname awk cat mktemp; do
+for command in curl tar install uname awk cat mktemp readlink; do
   command -v "$command" >/dev/null 2>&1 ||
     fail "required command not found: $command"
 done
@@ -94,8 +94,18 @@ esac
 package_dir="herdr-world-${platform}"
 mkdir -p "$install_dir"
 target="$install_dir/herdr-world"
-if { [ -e "$target" ] || [ -L "$target" ]; } &&
-  { [ ! -f "$target" ] || [ -L "$target" ]; }; then
+legacy_install_base="${XDG_DATA_HOME:-$HOME/.local/share}/herdr-world"
+legacy_launcher_target=""
+if [ -L "$target" ]; then
+  candidate_launcher_target="$(readlink "$target")" ||
+    fail "unable to inspect existing install target"
+  case "$candidate_launcher_target" in
+  "$legacy_install_base"/v[0-9]*.[0-9]*.[0-9]*/bin/herdr-world)
+    legacy_launcher_target="$candidate_launcher_target"
+    ;;
+  *) fail "install target exists but is not a regular file" ;;
+  esac
+elif [ -e "$target" ] && [ ! -f "$target" ]; then
   fail "install target exists but is not a regular file"
 fi
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/herdr-world-install.XXXXXX")"
@@ -174,14 +184,21 @@ binary_version="$("$binary" --version)"
 [ "$binary_version" = "herdr-world $package_version" ] ||
   fail "binary version does not match package VERSION"
 
-if { [ -e "$target" ] || [ -L "$target" ]; } &&
-  { [ ! -f "$target" ] || [ -L "$target" ]; }; then
+if [ -L "$target" ]; then
+  [ -n "$legacy_launcher_target" ] &&
+    [ "$(readlink "$target")" = "$legacy_launcher_target" ] ||
+    fail "install target changed during installation"
+elif [ -e "$target" ] && [ ! -f "$target" ]; then
   fail "install target changed during installation"
 fi
 target_tmp="$(mktemp "$install_dir/.herdr-world.new.XXXXXX")"
 install -m 0755 "$binary" "$target_tmp"
 backup=""
-if [ -f "$target" ] && [ ! -L "$target" ]; then
+if [ -L "$target" ]; then
+  rm -f "$target"
+  printf 'Replacing pre-foundation launcher; legacy bundle remains at %s\n' \
+    "$legacy_launcher_target"
+elif [ -f "$target" ]; then
   backup="$target.previous"
   backup_tmp="$(mktemp "$install_dir/.herdr-world.previous.XXXXXX")"
   install -m 0755 "$target" "$backup_tmp"

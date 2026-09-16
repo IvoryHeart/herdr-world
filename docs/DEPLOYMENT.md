@@ -40,6 +40,40 @@ This foundation starts with fresh World state. It uses
 Roamgate settings, or their browser preferences. Those files remain untouched for
 rollback.
 
+### Replacing Herdr World 0.1.1 or earlier
+
+Stop the old World service before installing this foundation so it does not retain
+port 8787. Use the removal path for the channel you previously installed:
+
+```bash
+# Run this while the old command is still installed, if it managed a user service.
+herdr-world service uninstall
+
+# Then choose only the package-manager command that applies.
+npm uninstall --global @ivoryheart/herdr-world
+brew uninstall herdr-world
+```
+
+For a Herdr-managed installation, stop and unregister the old plugin before installing
+the replacement:
+
+```bash
+herdr plugin action invoke ivoryheart.herdr-world.stop
+herdr plugin uninstall ivoryheart.herdr-world
+herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
+```
+
+The former desktop-tarball installer exposed `~/.local/bin/herdr-world` as a symlink
+into `~/.local/share/herdr-world/vX.Y.Z/`. The new release installer recognizes and
+replaces that default launcher safely while leaving the old versioned bundle available
+for rollback. A custom or unrelated symlink is rejected; move it aside explicitly and
+rerun the installer. The obsolete `herdr-world-installer` command and old versioned
+bundle can be removed manually after the new application and profiles are verified.
+
+Install the new release using the command above, start it, and recreate local or SSH
+profiles in Spaces. Old profile files and browser preferences are deliberately neither
+read nor deleted.
+
 ## Managed Herdr setup
 
 For the default local profile, World can install or start the pinned Herdr runtime:
@@ -148,10 +182,13 @@ is authoritative.
 
 Loopback listeners intentionally bypass login. A managed non-loopback service creates
 a persistent login token unless `HERDR_WORLD_PASSWORD` is set. A token URL establishes
-an HttpOnly session and removes the token from the address bar. World performs no Host
-or browser-Origin allow-list checks; the listener, authentication, firewall/VPN, and
-TLS proxy form the access boundary. Read [SECURITY.md](../SECURITY.md) before exposing
-the listener beyond loopback.
+an HttpOnly session and removes the token from the address bar. Privileged browser
+WebSocket admission automatically requires the browser Origin authority to equal the
+request Host authority; loopback listeners also reject non-loopback Host authorities.
+There is no user-managed Host or Origin allow-list. An HTTPS reverse proxy must preserve
+the public Host header. The listener, authentication, firewall/VPN, and TLS proxy remain
+the broader access boundary. Read [SECURITY.md](../SECURITY.md) before exposing the
+listener beyond loopback.
 
 World is a trusted single-user administration tool. It does not provide TLS,
 rate-limiting, multi-user roles, or a sandbox.

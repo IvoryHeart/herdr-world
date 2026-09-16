@@ -19,7 +19,8 @@ checksums and an update manifest.
 Each archive must contain:
 
 - the platform executable and `VERSION` file;
-- `LICENSE`, `THIRD_PARTY_NOTICES.md`, `DEPENDENCY_NOTICES.md` and `LICENSES/`;
+- `LICENSE`, `THIRD_PARTY_NOTICES.md`, `DEPENDENCY_NOTICES.md`,
+  `DEPENDENCY_LICENSES.md` and `LICENSES/`;
 - `UPSTREAM.md` with the exact Roamgate synchronization point.
 
 Inspect the archive and validate its checksum before publication. Never commit

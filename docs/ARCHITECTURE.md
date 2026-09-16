@@ -299,13 +299,16 @@ permission system. Authenticated browsers can control terminals, change files,
 manage shared profiles, and execute trusted repository hooks. It provides neither
 TLS termination nor rate limiting; see [SECURITY.md](../SECURITY.md).
 
-The bridge performs no browser-Origin or request-Host checks; listener access and
-any required authentication determine authority. Secure the outer access path as
-described in [SECURITY.md](../SECURITY.md#trust-model), including for forwarded
-loopback listeners. The browser accepts one valid unscoped bridge hello before
-other messages. Replies/events have validated, exclusive message kinds; downstream
-events cannot inject reserved bridge fields. NDJSON lines and subscription
-acknowledgements are bounded, and malformed terminal frames are dropped.
+The service automatically admits a browser WebSocket only when its Origin authority
+equals the request Host authority; loopback listeners additionally require a loopback
+Host. This preserves automatic same-origin use without user-maintained network-policy
+lists. Originless native clients remain possible, and listener access plus any required
+authentication still determine authority. Secure the outer access path as described in
+[SECURITY.md](../SECURITY.md#trust-model), including for forwarded loopback listeners.
+The browser accepts one valid unscoped bridge hello before other messages.
+Replies/events have validated, exclusive message kinds; downstream events cannot inject
+reserved bridge fields. NDJSON lines and subscription acknowledgements are bounded, and
+malformed terminal frames are dropped.
 Observable HTTP traversal forms are rejected, but Bun can normalize dot segments
 before routing; legacy aliases prevent distinguishing every such pre-handler
 normalization.

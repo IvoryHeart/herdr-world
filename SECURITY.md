@@ -28,10 +28,13 @@ Use an independently authenticated proxy if that boundary is insufficient.
 - Use HTTPS or a trusted VPN; restrict access with a firewall/reverse proxy.
 - Treat worktree hooks as executable code.
 
-The bridge checks neither browser Origin nor request Host. Any request reaching
-it and passing required authentication has full authority. Secure the outer
-access path: built-in authentication supplies no TLS, rate limiting, multi-user
-authorization, or sandboxing.
+The service automatically rejects browser WebSocket requests whose Origin authority
+does not equal their request Host authority. A loopback listener also rejects a
+non-loopback Host authority, preventing a public name from being treated as the local
+application through DNS rebinding. This needs no user-maintained allow-list. HTTPS
+reverse proxies must preserve the public Host header. Originless native clients remain
+admissible, so listener access and authentication are still security boundaries: the
+built-in service supplies no TLS, rate limiting, multi-user authorization, or sandboxing.
 
 Updates trust the configured HTTPS release origin (or explicit loopback test
 mirror) and its manifest/checksums. Checksums detect corruption and bind the

@@ -48,7 +48,7 @@ import {
   useState,
 } from "react";
 import type { ITheme } from "@xterm/xterm";
-import packageJson from "../package.json";
+import { APP_VERSION } from "./version";
 import {
   type AccentColor,
   normalizeAccentColor,
@@ -1090,7 +1090,23 @@ function TerminalPaneLayout({
   );
 }
 
-export default function App() {
+export function appShouldHandleGlobalShortcut(
+  operationalShortcutsEnabled: boolean,
+  event: Pick<KeyboardEvent, "defaultPrevented" | "isComposing" | "keyCode">,
+) {
+  return (
+    operationalShortcutsEnabled &&
+    !event.defaultPrevented &&
+    !event.isComposing &&
+    event.keyCode !== 229
+  );
+}
+
+export default function App({
+  operationalShortcutsEnabled = true,
+}: {
+  operationalShortcutsEnabled?: boolean;
+} = {}) {
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
@@ -2595,7 +2611,8 @@ export default function App() {
   }, [connectionClient, focusedWorkspace, inspectorState]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
+      if (!appShouldHandleGlobalShortcut(operationalShortcutsEnabled, e))
+        return;
       if (
         document.querySelector(
           ".modal-backdrop, .command-popover, .context-menu",
@@ -2842,6 +2859,7 @@ export default function App() {
       toggleSidebar();
     };
     const onKeyUp = (e: KeyboardEvent) => {
+      if (!operationalShortcutsEnabled) return;
       const modifier = paneJumpModifierRef.current;
       if (paneJumpOpen && modifier && !e[modifier]) {
         e.preventDefault();
@@ -2867,6 +2885,7 @@ export default function App() {
     movePaneJumpSelection,
     mobile,
     openWorkspaces,
+    operationalShortcutsEnabled,
     paneJumpOpen,
     paneJumpOptions.length,
     selectPaneJumpIndex,
@@ -3162,7 +3181,7 @@ export default function App() {
               alt=""
             />
             <span className="brand-title">Herdr World</span>
-            <span className="brand-version">v{packageJson.version}</span>
+            <span className="brand-version">v{APP_VERSION}</span>
           </div>
           <ConnectionSwitcher />
         </div>

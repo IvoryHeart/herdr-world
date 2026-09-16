@@ -1,11 +1,18 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import packageJson from "./package.json";
+
+const appVersion =
+  process.env.HERDR_WORLD_BUILD_VERSION?.trim() || packageJson.version;
 
 // In dev, the web app talks to the bridge through Vite's proxy so the
 // frontend can use a relative /ws URL (same origin, no hardcoded port).
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __HERDR_WORLD_VERSION__: JSON.stringify(appVersion),
+  },
   resolve: {
     alias: [
       {
