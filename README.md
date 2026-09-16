@@ -1,157 +1,143 @@
-# Herdr World
+# Roamgate
 
-[![Release](https://img.shields.io/github/v/release/IvoryHeart/herdr-world?include_prereleases&label=release)](https://github.com/IvoryHeart/herdr-world/releases)
-[![CI](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./site/assets/roamgate-lockup-on-charcoal.png" />
+    <img src="./site/assets/roamgate-lockup-charcoal.png" alt="Roamgate logo" width="400" />
+  </picture>
+</p>
 
-Herdr World is a browser and mobile workspace for [Herdr](https://github.com/herdrdev/herdr).
-It combines live terminal Spaces with visual Pixel Office, Tree, and Graph themes, multi-host viewing,
-shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
+A **browser client** for [Herdr](https://herdr.dev). Control terminals, inspect
+agent sessions, and review files and diffs on desktop or mobile.
+**Requires a running Herdr server.**
 
-Tree presents a compact Operations Console: host and space cards connect to stacked agent or
-terminal siblings, with observed coverage and persistent selection details. The shared sidebar
-switches all four views; phones use the searchable, keyboard-accessible hierarchy.
+## Screenshots
 
-The current public preview is
-[`v0.1.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
-It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer
-with terminal protocol `20`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
-an interactive overview.
+### Desktop
 
-| Desktop | Mobile |
-|:--:|:--:|
-| <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing hosts, workspaces, and agents" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
+[![Desktop workspace with live terminals and image changes][desktop-changes]][desktop-changes]
 
-| Graph overview | Connected terminals |
-|:--:|:--:|
-| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing synthetic example spaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
+Workspace terminals with changed files and image previews.
 
-## Quick Start
+<!-- markdownlint-disable MD033 -->
 
-Start or attach to a Herdr session, then choose an installation method. npm and the Herdr plugin
-require Node.js `22.14.0` or newer.
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%" align="center">File explorer</th>
+      <th width="50%" align="center">Diff annotations</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <a href="./docs/images/roamgate-desktop-files.png"><img src="./docs/images/roamgate-desktop-files.png" alt="Desktop file explorer" width="100%" /></a>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <a href="./docs/images/roamgate-desktop-annotations.png"><img src="./docs/images/roamgate-desktop-annotations.png" alt="Desktop diff annotations" width="100%" /></a>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
-### npm
+### Mobile
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="33.33%" align="center">Changed files</th>
+      <th width="33.33%" align="center">Full terminal control</th>
+      <th width="33.33%" align="center">File viewer</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/roamgate-mobile-changes.png"><img src="./docs/images/roamgate-mobile-changes.png" alt="Mobile changed files viewer" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/roamgate-mobile-terminal.png"><img src="./docs/images/roamgate-mobile-terminal.png" alt="Mobile terminal" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/roamgate-mobile-files.png"><img src="./docs/images/roamgate-mobile-files.png" alt="Mobile file viewer" width="100%" /></a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-enable MD033 -->
+
+Click any screenshot to open the full-resolution image.
+
+[desktop-changes]: ./docs/images/roamgate-desktop-changes.png
+
+> **Moving from Herdr Studio / herdr-gui?** Automatic upgrades are not supported.
+> Follow the [migration guide](./docs/DEPLOYMENT.md#transition-from-herdr-studio--herdr-gui)
+> to install Roamgate manually.
+
+## Quick start
+
+1. Install and start [Herdr](https://herdr.dev), or let Roamgate install and
+   start it later with `roamgate herdr setup`.
+2. On Linux or macOS, install Roamgate:
+
+   ```bash
+   # Empty selects latest; use X.Y.Z (no v prefix) to pin a Roamgate version.
+   curl -fsSL \
+     https://github.com/powerfooI/roamgate/releases/latest/download/install-roamgate.sh \
+     | ROAMGATE_VERSION= sh
+   ```
+
+   On Windows, download the matching x64 or ARM64 archive from the
+   [latest release](https://github.com/powerfooI/roamgate/releases/latest).
+3. On Linux/macOS, add `~/.local/bin` to `PATH` and run `roamgate`.
+   On Windows, extract the archive and run `roamgate.exe`. Open the printed URL.
+
+See [deployment](./docs/DEPLOYMENT.md) for checksums, configuration, updates,
+and services, or [historical installation](./docs/DEPLOYMENT.md#install-historical-herdr-studio)
+for `herdr-gui` 0.6.2.
+
+## Install as a PWA
+
+**PWA installation is recommended for daily use:** a separate app window without
+browser tabs or the address bar. Open and authenticate with Roamgate, then install:
+
+- **iPhone/iPad Safari:** Share -> Add to Home Screen.
+- **macOS Safari 17+:** File -> Add to Dock.
+- **Chrome/Edge:** browser menu -> Install app.
+
+The process must stay running and reachable. **PWA mode is not offline access.**
+
+## Documentation
+
+- [Website](https://roamgate.dev/) and
+  [hands-on tutorial](https://roamgate.dev/tutorial/)
+  ([Markdown](./docs/TUTORIAL.md)): local work, mobile, and private remote access.
+- [Features and shortcuts](./FEATURES.md)
+- [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
+- [Architecture](./docs/ARCHITECTURE.md): system contracts.
+- [Security](./SECURITY.md) and [contributing](./CONTRIBUTING.md).
+
+## Development
+
+Use Bun 1.4.1 or newer and a running Herdr server:
 
 ```bash
-npm install --global @ivoryheart/herdr-world@latest
-herdr-world
+bun install --frozen-lockfile
+# Run in separate terminals:
+bun run dev:server
+bun run dev:web
 ```
 
-### Homebrew
+Open <http://localhost:5173>. See [CONTRIBUTING.md](./CONTRIBUTING.md) for checks
+and pull requests.
 
-```bash
-brew install IvoryHeart/tap/herdr-world
-herdr-world
-```
+## Security
 
-### Herdr plugin
+Roamgate controls terminals and modifies real files. Keep the default loopback
+binding; read [SECURITY.md](./SECURITY.md) before allowing another device access.
 
-```bash
-herdr plugin install IvoryHeart/herdr-world --ref v0.1.1
-herdr plugin action invoke open --plugin ivoryheart.herdr-world
-```
+## License
 
-Open [http://127.0.0.1:8787](http://127.0.0.1:8787) if the browser does not open automatically.
-Checksum-verified standalone archives are available on the
-[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
-
-The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
-may need approval in **System Settings → Privacy & Security**.
-
-For agent-assisted development, start with [the native workflow](docs/agent-development.md).
-
-## Advanced Usage
-
-Select a session, socket, or alternate port with normal launcher options:
-
-```bash
-herdr-world --session NAME
-HERDR_SOCKET_PATH=/path/to/herdr.sock herdr-world --port 8791
-herdr-world --no-herdr-setup
-```
-
-The interactive launcher can offer to install, update, or start Herdr. It asks before each action;
-`--no-herdr-setup` disables those prompts.
-
-Agent integrations running inside a Herdr pane can publish a short, expiring task summary for the
-Office without starting another bridge:
-
-```bash
-herdr-world task-summary "Reviewing release checks"
-herdr-world task-summary --clear
-```
-
-The command uses `HERDR_PANE_ID`, binds reports to the pane's active agent session, defaults to a
-15-minute TTL, and accepts `--ttl-ms`, `--pane`, and `--session` for explicit bounded targets. It
-normalizes whitespace, caps summaries at 160 Unicode characters, and redacts obvious
-credential-shaped values. See the [development guide](docs/development.md#reporting-agent-task-summaries)
-for the full contract.
-
-Useful plugin operations include:
-
-```bash
-herdr plugin action invoke status --plugin ivoryheart.herdr-world
-herdr plugin action invoke doctor --plugin ivoryheart.herdr-world
-herdr plugin action invoke restart --plugin ivoryheart.herdr-world
-herdr plugin log list --plugin ivoryheart.herdr-world --limit 20
-```
-
-Plugin actions are asynchronous and target-scoped. Before uninstalling, repeat the stop-and-status
-sequence for every Herdr target or named session and wait for each action log to report
-`status: succeeded`:
-
-```bash
-herdr plugin action invoke stop --plugin ivoryheart.herdr-world
-herdr plugin action invoke status --plugin ivoryheart.herdr-world
-herdr --session NAME plugin action invoke stop --plugin ivoryheart.herdr-world
-herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
-herdr plugin uninstall ivoryheart.herdr-world
-```
-
-Use Settings → Network → Connections to connect Herdr World to another Herdr. Adding a connection
-normally needs only its address; Herdr World asks for a password when the other Herdr requires one.
-Use Network → Allow connections to let Herdr World elsewhere connect to this Herdr. The basic flow
-provides an on/off control, a copyable address, and optional password protection. Exact host, page,
-and destination restrictions remain available under Advanced network permissions. Development or
-standalone launches show these settings as read-only when no controller-owned restart boundary is
-available. Direct connections are intended for a trusted LAN/VPN path; use TLS, a VPN, or SSH for
-untrusted networks.
-
-To run from source:
-
-```bash
-npm install
-npm install --prefix web
-npm run dev:local
-```
-
-The full application is served at [http://127.0.0.1:8787](http://127.0.0.1:8787). Run
-`npm run check` before submitting changes.
-
-Binding the bridge beyond loopback is security-sensitive and requires explicit host and origin
-allow-lists. Use a VPN, SSH tunnel, or authenticated reverse proxy for remote access. See the
-[development](docs/development.md), [federation](docs/federation.md), [Android](docs/android.md), and
-[packaging](docs/packaging.md) guides for detailed workflows.
-
-## Contributing And Support
-
-Contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md). Use
-[GitHub Issues](https://github.com/IvoryHeart/herdr-world/issues) for bugs and focused feature
-requests. Security reports must follow [`SECURITY.md`](SECURITY.md) and should not be disclosed
-publicly before a fix is available. Community support is best-effort.
-
-## Licensing
-
-Herdr World is available under the [MIT License](LICENSE). Bundled components and assets retain
-their own licences and notices; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
-generated inventories in [`third_party/dependencies`](third_party/dependencies/README.md).
-
-## Acknowledgements
-
-Herdr World builds on [Herdr](https://github.com/herdrdev/herdr),
-[Herdr Web](https://github.com/kcosr/herdr-web),
-[Ghostty Web](https://www.npmjs.com/package/ghostty-web),
-[Ghostty](https://github.com/ghostty-org/ghostty), [PixiJS](https://pixijs.com/), and character art
-adapted from [Claw-Empire](https://github.com/thinkinaixyz/claw-empire). Thank you to their
-maintainers and contributors.
+Code: [MIT](./LICENSE). Bundled fonts and brand assets retain their original
+terms; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

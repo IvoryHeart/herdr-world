@@ -1,61 +1,42 @@
-# Third-party notices
+# Third-Party Notices
 
-Herdr World contains code and assets from the projects below. The repository
-history, lockfiles, and referenced manifests provide the exact version record.
+Roamgate includes or renders assets from third-party projects. Those assets
+remain under their original licenses and are not relicensed by the project
+MIT license.
 
-## Herdr Web
+## Roamgate artwork
 
-Herdr World is derived from
-[`kcosr/herdr-web`](https://github.com/kcosr/herdr-web), licensed under the MIT
-License, Copyright (c) 2026 Kevin. The retained MIT terms are in the repository
-[`LICENSE`](LICENSE). The current synchronized revision is recorded in
-[`UPSTREAM.md`](UPSTREAM.md).
+The Roamgate bird, wordmark, icons, and social images were supplied by the
+project owner. They are not Herdr's official logo. The small application marks
+are resized exports of that artwork, displayed on a warm-white background.
 
-## Herdr compatibility source
+## Nerd Fonts
 
-`vendor/herdr-compat` contains copied or adapted source from
-[`herdrdev/herdr`](https://github.com/herdrdev/herdr) v0.9.0 at commit
-`b99002ac99b09e00b4ca692436cb15a6b0d676f1`, licensed under Apache-2.0.
-The exact source paths, hashes, and local dispositions are recorded in
-[`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml).
-The license text is retained in
-[`third_party/licenses/Apache-2.0.txt`](third_party/licenses/Apache-2.0.txt).
+`web/src/assets/herdr-nerd-symbols.woff2` is a glyph-only derivative of
+[Nerd Fonts](https://github.com/ryanoasis/nerd-fonts). Nerd Fonts combines
+glyph sources under several licenses; the bundled font remains subject to the
+upstream licensing terms documented in
+[`LICENSES/NERD-FONTS.txt`](./LICENSES/NERD-FONTS.txt) and the upstream
+[license audit](https://github.com/ryanoasis/nerd-fonts/blob/master/license-audit.md).
 
-## Claw-Empire character assets and Office adaptations
+## Lobe Icons
 
-The character sprites in `web/public/world/characters` are copied from
-[`GreenSheep01201/claw-empire`](https://github.com/GreenSheep01201/claw-empire)
-at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under
-Apache-2.0, Copyright 2026 GreenSheep01201 (seowongil@gmail.com).
+Agent brand icons imported from `@lobehub/icons-static-svg` are provided by
+[Lobe Icons](https://github.com/lobehub/lobe-icons), Copyright (c) 2023
+LobeHub, under the MIT License. See
+[`LICENSES/LOBE-ICONS.txt`](./LICENSES/LOBE-ICONS.txt).
 
-The Office geometry and drawing TypeScript files are modified adaptations of
-the historical sources identified by hash in [`docs/world-assets.md`](docs/world-assets.md).
-Herdr World's TypeScript port and subsequent modifications are documented
-there as modified material. The Apache-2.0 text is retained in
-[`third_party/licenses/Apache-2.0.txt`](third_party/licenses/Apache-2.0.txt).
+## Pi
 
-## PixiJS
+`web/src/assets/pi-logo.svg` is adapted from the
+[Pi press kit](https://pi.dev/press-kit), which publishes its assets under the
+MIT License. See [`LICENSES/PI.txt`](./LICENSES/PI.txt).
 
-World rendering uses PixiJS 8.3.4, licensed under the MIT License, Copyright
-(c) 2013-2023 Mathew Groves and Chad Engler. Its license is retained in
-[`third_party/licenses/PixiJS-MIT.txt`](third_party/licenses/PixiJS-MIT.txt)
-and alongside the shipped World assets.
+## Trademarks
 
-## JetBrains Mono Nerd Font
+Herdr, Pi, Codex, Claude, Gemini, Kimi, Grok, and other product names and logos
+are trademarks of their respective owners. Their appearance identifies
+compatible tools and does not imply endorsement of Roamgate.
 
-The terminal includes `JetBrainsMonoNerdFontMono-Regular.woff2` as a fallback
-for box-drawing, symbol, and private-use glyphs. The font is licensed under the
-SIL Open Font License 1.1, Copyright 2020 The JetBrains Mono Project Authors.
-The copyright notice and full license are retained in
-[`web/public/fonts/OFL.txt`](web/public/fonts/OFL.txt) and shipped alongside
-the font.
-
-## Other dependencies
-
-JavaScript and Rust dependency versions are pinned by `package-lock.json`,
-`web/package-lock.json`, `bridge/Cargo.lock`, and
-`vendor/herdr-compat/Cargo.lock`. The complete production npm and planned
-desktop Cargo closures, their selected licences, copyright notices, and full
-licence texts are checked in under
-[`third_party/dependencies`](third_party/dependencies). Release assembly fails
-when those generated inventories drift from the resolved dependency graphs.
+JavaScript dependencies retain the licenses declared by their respective
+packages.

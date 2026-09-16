@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://roamgate.dev/sitemap.xml

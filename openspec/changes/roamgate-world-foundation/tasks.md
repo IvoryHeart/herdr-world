@@ -1,6 +1,6 @@
 ## 1. Foundation import
 
-- [ ] 1.1 Record Roamgate commit `81c506e6135f5f3b47f7042252ffdac0ec2bf679` in branch ancestry, replace the active application tree with that source while retaining World planning/history, and verify the imported upstream quick suite passes unchanged
+- [x] 1.1 Record Roamgate commit `81c506e6135f5f3b47f7042252ffdac0ec2bf679` in branch ancestry, replace the active application tree with that source while retaining World planning/history, and verify the imported upstream quick suite passes unchanged
 - [ ] 1.2 Rebrand package, executable, service, environment, data-directory, browser-storage, update and UI identities to Herdr World, and verify identity audits find no executable Roamgate product surface while required attribution remains
 - [ ] 1.3 Adapt the standalone installer and Herdr plugin to install/start/status/restart/uninstall the World binary, and verify focused installer, service and plugin contract tests
 

@@ -1,50 +1,106 @@
 # Contributing
 
-Herdr World is an independent downstream application. Contributions are
-welcome when they improve its existing terminal, federation, World surface,
-observability, packaging, or maintenance workflows.
+## Development Setup
 
-## Before You Start
+1. Install Bun 1.4.1 or newer (CI uses 1.4.1) and start a local Herdr server.
+2. From the repository root, run `bun install --frozen-lockfile`.
+3. Run these in separate terminals, then open <http://localhost:5173>:
 
-- Search the existing issues and pull requests first.
-- Open an issue before a large new visualization, integration, protocol change,
-  or architectural redesign so the intended scope can be agreed early.
-- Small fixes, tests, documentation improvements, and dependency maintenance
-  can go directly to a pull request.
+   ```bash
+   bun run dev:server
+   bun run dev:web
+   ```
 
-Generic changes that could also benefit Herdr Web may be implemented here.
-Herdr World maintainers can separately propose a focused upstream patch;
-contributors do not need upstream approval or coordination before helping this
-project.
+Keep `bun.lock` (the only lockfile) and shared tools (TypeScript, Bun types,
+formatting/linting) at root; browser/Vite dependencies in `web/package.json`;
+server runtime dependencies in `server/package.json`. After dependency changes,
+run root `bun install` and commit manifests/lockfile.
 
-## Source Boundaries
+## Validation
 
-- Keep World presentation and behavior under `web/src/world/` and World assets
-  under `web/public/world/` where practical.
-- Keep generic Herdr Web-aligned changes close to their upstream paths.
-- Keep the bridge allow-list narrow and preserve one bridge manager, one runtime
-  cache, and one terminal-session owner.
-- Read `docs/vendoring.md` before changing `vendor/herdr-compat/`.
-- Do not add credentials, private machine paths, generated build output, or
-  untracked third-party assets.
+**Fresh checkout:** install dependencies, then `bun run typecheck` to build/embed
+assets required by server typechecks and process tests.
 
-The current boundary and upstream-sync contract is documented in
-`docs/specs/004-world-packaging-and-upstream-boundaries-spec.md`.
+| During iteration | Command / limits |
+| --- | --- |
+| Types | `bun run typecheck:quick` checks root scripts, web, and server without rebuilding assets or validating production bundles. |
+| Lint | `bun run lint` caches unchanged content in `node_modules/.cache/eslint/`. Use `bun run lint --no-cache` for fresh checks after tooling/dependency updates. |
+| Related tests | `bun test <path>` or `bun run test:quick` (includes integration tests, excludes three Chrome-based files). |
+| Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
+| Submission | `bun run precommit` runs formatting, lint, full typechecks, and the full test suite. Quick checks do not replace it. |
+
+Run `bun run install-hooks` once per clone to point Git at the tracked
+`.githooks/` directory; its `pre-commit` hook runs `bun run precommit`.
+
+Workspace checks: `bun run --filter roamgate-web typecheck` and
+`bun run --filter roamgate-server typecheck` (builds/embeds web assets first).
+
+Frontend changes: `bun run build:web`. Production assets/bundling: `bun run build`.
+Releases: package and inspect every supported archive/checksum; see
+[build commands](docs/DEPLOYMENT.md#build-a-standalone-executable) and
+[release policy](AGENTS.md#release-notes).
+
+## Style Organization
+
+Global styling is split by responsibility; there is no monolithic stylesheet.
+
+- `web/src/styles/tokens.css`: theme variables only (`:root`, `data-theme`,
+  `data-accent` selectors).
+- `web/src/styles/base.css`: element resets and shared primitives (`.modal`,
+  `.form-field`, `.badge`, `.status-*`, `.git-*`, `.panel*`, loading states).
+  Styles used by several unrelated components belong here, not in one
+  component's file.
+- `web/src/styles/vendor.css`: shared syntax highlighting and diff renderer
+  overrides. Consumer-specific library overrides live with their components.
+- `web/src/styles/layout/*.css`: app-shell regions (`app`, `topbar`,
+  `sidebar`, `toast`, `mobile-nav`), imported once by `App.tsx`.
+- `web/src/components/<Name>.css`: styles for one component, imported by that
+  component (`import "./<Name>.css"`) and deleted together with it. The same
+  pattern applies to `web/src/components/ui/` primitives.
+
+Keep class names prefixed with the component name (for example
+`.agent-history-card-title`) so selectors stay searchable and collision-free.
+Media queries (including mobile adaptations) live in the owning file next to
+the rules they adjust; do not create a separate mobile stylesheet.
+
+App shell and Suspense fallback styles must load before the lazy content they
+surround: use `styles/base.css` or `styles/layout/`. Styles shared across
+independently loaded features belong in a shared stylesheet imported by each
+consumer, or in `styles/base.css` when needed globally. A feature's components
+may share co-located CSS when their explicit static imports guarantee it loads
+on every rendering path; do not rely on an unrelated feature being opened.
+
+## Pages Website and Tutorial
+
+Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text.
+`scripts/build-pages.ts` renders into `site/tutorial/index.html`, rewrites
+screenshots/references, and checks built-site links/fragments.
+
+```bash
+bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
+bun run build:site
+```
+
+Serve `.pages-dist/` locally and check `/tutorial/`, narrow screens, keyboard
+navigation, and JavaScript-disabled reading. Production canonical URLs, social
+images, and the sitemap use <https://roamgate.dev/>. Do not commit `.pages-dist/`.
+
+**Deploy Pages** runs on pushes to `main` (including merged PRs); manual dispatch
+remains available for retries. Both require a published Roamgate release as GitHub
+Latest: the live installer probe blocks upload on missing assets, HTTP errors,
+or network failures. Source builds do not qualify. After repository renames,
+align the site's installer URL and workflow probe.
 
 ## Pull Requests
 
-Agent-assisted development uses the [lean native workflow and OpenSpec](docs/agent-development.md).
-The [knowledge map](docs/knowledge-map.md) points to maintained contracts and source.
-New agent worktrees share the primary checkout's ignored `.agents/worktrees/`.
+Use focused commits and short imperative messages. PR descriptions should cover
+behavior, verification, and compatibility impact. For UI changes, upload
+screenshots as GitHub attachments and embed them in the PR description. Do not
+commit screenshot files to the repository solely for PR review. Do not commit
+generated assets (`dist/`, `server/public/`) or binaries.
 
-- Keep one pull request focused on one coherent concern.
-- Explain the problem, the chosen approach, and any user-visible trade-offs.
-- Add or update proportionate tests.
-- Add user-visible changes to `CHANGELOG.md` under `Unreleased`.
-- Preserve applicable attribution and update `THIRD_PARTY_NOTICES.md` or the
-  relevant provenance manifest when adding third-party material.
-- Run `npm run check`; use `npm run check:acceptance` when browser behavior or
-  runtime integration changes.
+Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
+`bug` (fix titles), or `enhancement` (other code). Release preparation gets
+`skip-changelog`. Override with a `.github/release.yml` category before merging.
 
-Contributions are submitted under the repository's MIT license unless a file
-or directory carries an explicit third-party license notice.
+Contributions are licensed under MIT.

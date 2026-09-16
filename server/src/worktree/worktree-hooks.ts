@@ -1,0 +1,330 @@
+import { sshCommandArgv } from "../bridge/ssh-command";
+import {
+  repoWorktreeHooksEnabled,
+  workspaceRepoSettingsKey,
+} from "../config/gui-settings";
+import {
+  uniqueStrings,
+  checkoutPath as workspaceCheckoutPath,
+  sourceCheckoutPath as workspaceSourceCheckoutPath,
+} from "../workspace/utils";
+
+type RunProcess = (
+  argv: string[],
+  input?: string,
+) => Promise<{ stdout: string; stderr: string }>;
+
+type RunProcessWithCode = (
+  argv: string[],
+  input?: string,
+) => Promise<{ code: number; stdout: string; stderr: string }>;
+
+export const WORKTREE_HOOK_EVENTS = [
+  "worktree.created",
+  "worktree.opened",
+  "worktree.before_remove",
+  "worktree.removed",
+] as const;
+
+export type WorktreeHookEvent = (typeof WORKTREE_HOOK_EVENTS)[number];
+
+export type WorktreeHookRunResult = {
+  event: WorktreeHookEvent;
+  status: "skipped" | "succeeded" | "failed";
+  exit_code?: number;
+  stdout?: string;
+  stderr?: string;
+  error?: string;
+};
+
+type PaseoWorktreeHook = "setup" | "opened" | "teardown" | "removed";
+
+export type PaseoWorktreeHookConfig = {
+  setup?: string;
+  opened?: string;
+  teardown?: string;
+  removed?: string;
+};
+
+export function createWorktreeHookRunner(args: {
+  connectionId?: string;
+  herdr: {
+    call(method: string, params?: Record<string, unknown>): Promise<any>;
+  };
+  sshHost: () => string | undefined;
+  runProcess: RunProcess;
+  runProcessWithCode: RunProcessWithCode;
+  shQuote: (value: string) => string;
+  hooksEnabled?: (repoKey?: string | null) => Promise<boolean>;
+}) {
+  function repoSettingsKey(workspace: any): string | null {
+    return workspaceRepoSettingsKey(
+      workspace,
+      args.sshHost(),
+      args.connectionId,
+    );
+  }
+
+  // Read a file from the same host where Herdr is operating, local or via SSH.
+  async function readTextFileMaybe(path: string): Promise<string | null> {
+    if (!path) return null;
+    const host = args.sshHost();
+    if (host) {
+      const { stdout } = await args.runProcess(
+        sshCommandArgv(
+          host,
+          `if [ -f ${args.shQuote(path)} ]; then cat ${args.shQuote(path)}; fi`,
+        ),
+      );
+      return stdout.trim() ? stdout : null;
+    }
+    const file = Bun.file(path);
+    return (await file.exists()) ? await file.text() : null;
+  }
+
+  // Load repo-local paseo.json hook config from the target worktree first.
+  async function readPaseoWorktreeHooks(
+    checkoutPath: string,
+    sourceCheckoutPath?: string,
+  ): Promise<{
+    path: string;
+    config: PaseoWorktreeHookConfig;
+  } | null> {
+    for (const base of uniqueStrings([checkoutPath, sourceCheckoutPath])) {
+      const path = `${base.replace(/\/+$/, "")}/paseo.json`;
+      const text = await readTextFileMaybe(path);
+      if (!text) continue;
+      const raw = JSON.parse(text);
+      const worktree = raw?.worktree;
+      const config =
+        worktree && typeof worktree === "object"
+          ? (worktree as PaseoWorktreeHookConfig)
+          : {};
+      return { path, config };
+    }
+    return null;
+  }
+
+  // Map paseo's small hook vocabulary onto the existing GUI notice events.
+  function paseoHookEvent(hook: PaseoWorktreeHook): WorktreeHookEvent {
+    switch (hook) {
+      case "setup":
+        return "worktree.created";
+      case "opened":
+        return "worktree.opened";
+      case "teardown":
+        return "worktree.before_remove";
+      case "removed":
+        return "worktree.removed";
+    }
+  }
+
+  // Build shell-safe inline environment assignments for local and SSH execution.
+  function shellEnvAssignments(env: Record<string, string>): string {
+    return Object.entries(env)
+      .map(([key, value]) => `${key}=${args.shQuote(value)}`)
+      .join(" ");
+  }
+
+  // Execute a paseo worktree hook inside the target checkout and capture output.
+  async function runPaseoWorktreeHook(hookArgs: {
+    hook: PaseoWorktreeHook;
+    checkoutPath: string;
+    sourceCheckoutPath?: string;
+    cwdPath?: string;
+    repoSettingsKey?: string | null;
+  }): Promise<WorktreeHookRunResult> {
+    const event = paseoHookEvent(hookArgs.hook);
+    if (!hookArgs.checkoutPath) return { event, status: "skipped" };
+    const hooksEnabled = args.hooksEnabled ?? repoWorktreeHooksEnabled;
+    if (!(await hooksEnabled(hookArgs.repoSettingsKey))) {
+      return { event, status: "skipped" };
+    }
+
+    let paseo: Awaited<ReturnType<typeof readPaseoWorktreeHooks>>;
+    try {
+      paseo = await readPaseoWorktreeHooks(
+        hookArgs.checkoutPath,
+        hookArgs.sourceCheckoutPath,
+      );
+    } catch (e) {
+      return {
+        event,
+        status: "failed",
+        error: `Failed to read paseo.json: ${(e as Error).message}`,
+      };
+    }
+    const command = paseo?.config[hookArgs.hook];
+    if (!paseo || typeof command !== "string" || !command.trim()) {
+      return { event, status: "skipped" };
+    }
+
+    const env = shellEnvAssignments({
+      PASEO_HOOK: hookArgs.hook,
+      PASEO_CHECKOUT_PATH: hookArgs.checkoutPath,
+      PASEO_SOURCE_CHECKOUT_PATH: hookArgs.sourceCheckoutPath ?? "",
+      ROAMGATE_HOOK_EVENT: event,
+      ROAMGATE_HOOK_CHECKOUT_PATH: hookArgs.checkoutPath,
+      ROAMGATE_HOOK_SOURCE_CHECKOUT_PATH: hookArgs.sourceCheckoutPath ?? "",
+      HERDR_GUI_HOOK_EVENT: event,
+      HERDR_GUI_HOOK_CHECKOUT_PATH: hookArgs.checkoutPath,
+      HERDR_GUI_HOOK_SOURCE_CHECKOUT_PATH: hookArgs.sourceCheckoutPath ?? "",
+    });
+    const cwdPath = hookArgs.cwdPath ?? hookArgs.checkoutPath;
+    const script =
+      `cd ${args.shQuote(cwdPath)} && ` +
+      `${env} sh -c ${args.shQuote(command.trim())}`;
+    const host = args.sshHost();
+    const result = host
+      ? await args.runProcessWithCode(sshCommandArgv(host, script))
+      : await args.runProcessWithCode(["sh", "-c", script]);
+    const prefix = [
+      `paseo ${hookArgs.hook} hook`,
+      `config: ${paseo.path}`,
+      `checkout: ${hookArgs.checkoutPath}`,
+      cwdPath !== hookArgs.checkoutPath ? `cwd: ${cwdPath}` : "",
+      hookArgs.sourceCheckoutPath
+        ? `source: ${hookArgs.sourceCheckoutPath}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    return {
+      event,
+      status: result.code === 0 ? "succeeded" : "failed",
+      exit_code: result.code,
+      stdout: [prefix, result.stdout.trim()].filter(Boolean).join("\n"),
+      stderr: result.stderr,
+    };
+  }
+
+  async function worktreeRemoveHookContext(
+    params: Record<string, unknown>,
+  ): Promise<{
+    checkoutPath: string;
+    sourceCheckoutPath: string;
+    repoSettingsKey: string | null;
+  } | null> {
+    const workspaceId = String(params.workspace_id ?? "");
+    if (!workspaceId) return null;
+    const workspaceResult = await args.herdr.call("workspace.get", {
+      workspace_id: workspaceId,
+    });
+    const workspace = workspaceResult?.workspace;
+    const workspaceWorktree = workspace?.worktree;
+    if (!workspaceWorktree?.is_linked_worktree) {
+      return null;
+    }
+    return {
+      checkoutPath: workspaceCheckoutPath(workspace),
+      sourceCheckoutPath: workspaceSourceCheckoutPath(workspace),
+      repoSettingsKey: repoSettingsKey(workspace),
+    };
+  }
+
+  async function runWorktreeRemovedHook(
+    context: Awaited<ReturnType<typeof worktreeRemoveHookContext>>,
+  ): Promise<WorktreeHookRunResult> {
+    if (!context) return { event: "worktree.removed", status: "skipped" };
+    return runPaseoWorktreeHook({
+      hook: "removed",
+      checkoutPath: context.checkoutPath,
+      sourceCheckoutPath: context.sourceCheckoutPath,
+      cwdPath: context.sourceCheckoutPath,
+      repoSettingsKey: context.repoSettingsKey,
+    });
+  }
+
+  async function runWorktreeOpenedHook(
+    result: any,
+    sourceWorkspace: any | null,
+  ): Promise<WorktreeHookRunResult> {
+    const workspace =
+      result?.workspace ?? (await resolveCreatedWorktreeWorkspace(result));
+    if (!workspace?.worktree?.is_linked_worktree) {
+      return { event: "worktree.opened", status: "skipped" };
+    }
+    return runPaseoWorktreeHook({
+      hook: "opened",
+      checkoutPath: workspaceCheckoutPath(workspace),
+      sourceCheckoutPath: sourceWorkspace
+        ? workspaceCheckoutPath(sourceWorkspace)
+        : workspaceSourceCheckoutPath(workspace),
+      repoSettingsKey: repoSettingsKey(workspace),
+    });
+  }
+
+  // Capture the source workspace before Herdr mutates focus during creation.
+  async function sourceWorkspaceForWorktreeCreate(
+    params: Record<string, unknown>,
+  ): Promise<any | null> {
+    const workspaceId = String(params.workspace_id ?? "");
+    if (!workspaceId) return null;
+    const result = await args.herdr
+      .call("workspace.get", { workspace_id: workspaceId })
+      .catch(() => null);
+    return result?.workspace ?? null;
+  }
+
+  // Resolve the newly created workspace from Herdr's create response.
+  async function resolveCreatedWorktreeWorkspace(
+    result: any,
+  ): Promise<any | null> {
+    if (result?.workspace) return result.workspace;
+    const workspaceId =
+      result?.workspace_id ??
+      result?.worktree?.workspace_id ??
+      result?.workspace?.workspace_id;
+    if (workspaceId) {
+      const workspaceResult = await args.herdr
+        .call("workspace.get", { workspace_id: workspaceId })
+        .catch(() => null);
+      if (workspaceResult?.workspace) return workspaceResult.workspace;
+    }
+    const checkoutPath =
+      result?.worktree?.checkout_path ??
+      result?.worktree?.path ??
+      result?.checkout_path ??
+      result?.path;
+    if (typeof checkoutPath === "string" && checkoutPath) {
+      const list = await args.herdr
+        .call("workspace.list", {})
+        .catch(() => null);
+      return (
+        (list?.workspaces ?? []).find(
+          (workspace: any) => workspaceCheckoutPath(workspace) === checkoutPath,
+        ) ?? null
+      );
+    }
+    return null;
+  }
+
+  // Run paseo worktree.setup after Herdr has created and opened the worktree.
+  async function runWorktreeSetupHook(
+    result: any,
+    sourceWorkspace: any | null,
+  ): Promise<WorktreeHookRunResult> {
+    const workspace = await resolveCreatedWorktreeWorkspace(result);
+    if (!workspace?.worktree?.is_linked_worktree) {
+      return { event: "worktree.created", status: "skipped" };
+    }
+    return runPaseoWorktreeHook({
+      hook: "setup",
+      checkoutPath: workspaceCheckoutPath(workspace),
+      sourceCheckoutPath: sourceWorkspace
+        ? workspaceCheckoutPath(sourceWorkspace)
+        : workspaceSourceCheckoutPath(workspace),
+      repoSettingsKey: repoSettingsKey(workspace),
+    });
+  }
+
+  return {
+    readPaseoWorktreeHooks,
+    runPaseoWorktreeHook,
+    worktreeRemoveHookContext,
+    runWorktreeRemovedHook,
+    runWorktreeOpenedHook,
+    sourceWorkspaceForWorktreeCreate,
+    runWorktreeSetupHook,
+  };
+}

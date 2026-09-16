@@ -2,27 +2,45 @@
 
 ## Supported Versions
 
-Security fixes target the latest release and current `main`. Older commits,
-prereleases, and locally modified builds are supported only on a best-effort
-basis; this personal open-source project does not provide an SLA.
+Security fixes cover the latest release.
 
-## Reporting A Vulnerability
+## Reporting a Vulnerability
 
-Use [GitHub private vulnerability reporting](https://github.com/IvoryHeart/herdr-world/security/advisories/new).
-Please do not disclose exploitable details in a public issue.
+**Do not open a public issue.** Use a private repository security advisory with
+versions, reproduction steps, and impact. If unavailable, use the maintainer's
+GitHub-profile contact address.
 
-Include the affected revision or release, deployment shape, reproduction steps,
-impact, and any suggested mitigation. Reports and fixes are handled on a
-best-effort basis. Acknowledgement or publication timing depends on severity
-and maintainer availability.
+## Trust Model
 
-Report vulnerabilities in Herdr itself to `herdrdev/herdr` and vulnerabilities
-specific to the upstream browser application to `kcosr/herdr-web`.
+**UI access grants the Roamgate user's authority:** terminals, repository hooks,
+session data, and workspace uploads/deletions. This is privileged administration,
+not a sandbox or multi-user permission system.
 
-## Deployment Boundary
+The default bind is `127.0.0.1`. Listeners configured as `127.0.0.1`, `localhost`,
+or `::1` **bypass login even with `ROAMGATE_PASSWORD` set**. A VPN, SSH tunnel, or
+reverse proxy forwarding to loopback becomes the entire remote access boundary.
+Use an independently authenticated proxy if that boundary is insufficient.
 
-The Herdr World bridge grants admitted browsers terminal-equivalent access to
-the connected Herdr runtime. It is local-first and does not provide a complete
-authentication or authorization layer. Keep it on loopback unless access is
-restricted by a trusted network, firewall, VPN, or authenticated reverse proxy,
-and configure allowed hosts and origins explicitly.
+**Do not expose Roamgate directly to the public internet.** For non-loopback:
+
+- Set a strong `ROAMGATE_PASSWORD`; prefer it to `--password`, which exposes
+  secrets in process arguments.
+- Use HTTPS or a trusted VPN; restrict access with a firewall/reverse proxy.
+- Treat worktree hooks as executable code.
+
+The bridge checks neither browser Origin nor request Host. Any request reaching
+it and passing required authentication has full authority. Secure the outer
+access path: built-in authentication supplies no TLS, rate limiting, multi-user
+authorization, or sandboxing.
+
+Updates trust the configured HTTPS release origin (or explicit loopback test
+mirror) and its manifest/checksums. Checksums detect corruption and bind the
+archive, **not independently verify publisher identity**. Custom mirrors are
+trusted executable-code infrastructure.
+
+`HERDR_GUI_*` aliases `ROAMGATE_*`; explicit new values win, even empty ones.
+Auth-token migration preserves the old secret. Protect both copies and backups;
+see [migration and rotation](./docs/DEPLOYMENT.md#transition-from-herdr-studio--herdr-gui).
+Update requests require normal listener authentication plus `x-roamgate-update: 1`.
+Legacy `x-herdr-gui-update: 1` is accepted; the new header wins if both appear.
+Neither header replaces login.
