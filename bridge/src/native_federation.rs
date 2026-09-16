@@ -1448,14 +1448,14 @@ mod tests {
         let profile = profile();
         let sessions = RemoteSessionPlan::new(
             &profile,
-            "/home/synthetic/.local/bin/herdr",
+            "/opt/synthetic/.local/bin/herdr",
             RemoteSessionOperation::SessionList,
             None,
         )
         .unwrap();
         assert_eq!(
             sessions.remote_command(),
-            "/home/synthetic/.local/bin/herdr session list --json"
+            "/opt/synthetic/.local/bin/herdr session list --json"
         );
         let bridge = RemoteSessionPlan::new(
             &profile,
