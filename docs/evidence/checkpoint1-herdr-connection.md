@@ -1,99 +1,83 @@
-# Checkpoint 1 Herdr connection proof
+# Herdr remote connection investigation
 
-Status: **blocked**. This evidence does not mark checkpoint 1 complete.
+Status: **transport model established; World connector proof pending**.
 
-The reproducible harness is [`scripts/checkpoint1-live.mjs`](../../scripts/checkpoint1-live.mjs).
-It uses only the public Herdr CLI (`machine list`, `api schema`, and the non-mutating selector
-probe) and exits `2` when the supported surface or live prerequisites are missing. It has no
-stream driver to claim a live result, so it remains blocked until that supported capability and
-the end-to-end driver exist. The focused contract tests are
-[`scripts/checkpoint1-live.test.mjs`](../../scripts/checkpoint1-live.test.mjs).
+This record captures the investigation that changed PR #92's architecture. It does not prove the
+new World SSH connector or complete any implementation checkpoint beyond the recorded prerequisite
+work.
 
-## Pinned release runtime
+## Pinned release surface
 
-Command:
+The installed Herdr `0.9.0` baseline and compatibility source revision
+`b99002ac99b09e00b4ca692436cb15a6b0d676f1` report API protocol `22` and schema `1`. The socket API
+contains the snapshot, event, layout, pane, and agent operations used by the existing local World
+bridge. Those operations address the Herdr server reached by the connected socket; they do not take
+a machine/profile selector.
 
-```text
-node scripts/checkpoint1-live.mjs
-```
-
-Result from the installed Herdr `0.9.0` binary:
-
-| Check | Result |
-| --- | --- |
-| Herdr version | `0.9.0` |
-| Observed Herdr revision | not reported by the installed binary |
-| Compatibility source revision | `b99002ac99b09e00b4ca692436cb15a6b0d676f1` |
-| API protocol / schema | `22` / `1` |
-| Required snapshot, event, layout, pane, and agent methods in schema | present |
-| Machine-qualified raw socket request | absent |
-| Saved machine catalogue | available, `0` enabled profiles in this environment |
-| Managed plugin/service environment markers | absent for this invocation; markers alone do not prove supervisor execution |
-| `SSH_AUTH_SOCK` | present and is a Unix socket; its path is intentionally omitted |
-| Live snapshot, subscription, concurrent control, launcher | blocked |
-
-The public schema contains `session.snapshot` and `events.subscribe`, but neither request accepts
-an admitted machine/profile/endpoint ID. `api snapshot` therefore addresses the connected socket
-only. This pinned-release invocation also has no `--machine` selector. The harness did not attempt
-a remote command because this invocation had no enabled saved profile; the separate live attempt
-below exercised a disposable saved machine.
+This is expected for a client/server socket protocol. A client selects the target by choosing which
+local or relayed socket it connects to.
 
 ## Executed current-master saved-machine proof
 
 An independent live run used Herdr master commit
 `18061191fdc019498610aee81f0df93f6c2ebd31` (2026-09-16), built as a `0.9.0` binary with API
-protocol `22` and schema `1`. It used an isolated Ubuntu 24.04 Docker SSH server and an ephemeral
-SSH-agent key supplied only through `SSH_AUTH_SOCK`; no `IdentityAgent` override was used. SSH
-authentication succeeded with the agent socket and returned exit `255` when the socket was absent.
+protocol `22` and schema `1`. It used an isolated Ubuntu 24.04 SSH fixture and an ephemeral key held
+only by a real `ssh-agent`; no tracked file contains fixture addresses, usernames, paths, or key
+material.
 
-Against the same disposable saved Herdr machine, the run completed these operations sequentially:
+Against the disposable saved machine, the run:
 
-1. added the saved machine;
-2. created a remote workspace;
-3. requested `api snapshot` through `--machine <id>`.
+1. authenticated successfully through `SSH_AUTH_SOCK` and failed with SSH exit `255` when that
+   socket was removed;
+2. added the saved machine;
+3. created a remote workspace;
+4. requested a real protocol-22 snapshot through `herdr --machine <id> api snapshot`.
 
-The resulting snapshot was a real protocol-22 response containing two workspaces and two panes.
-This proves the current master's one-shot saved-machine SSH path and agent inheritance. It does
-not prove a reusable API stream: `--machine <id> api connect` was rejected with exit `2` and
-`not an API-backed machine command`, and the raw socket schema still leaves `session.snapshot`,
-`events.subscribe`, layout, pane, and agent requests bound to the connected socket.
+The snapshot contained two workspaces and two panes. This proves that an ordinary Herdr API client
+can reach a remote Herdr server through Herdr's SSH-backed relay model and that agent inheritance is
+material to the managed World service.
 
-## Current Herdr source evidence
+## Source findings
 
-The separate Herdr checkout at commit
-`18061191fdc019498610aee81f0df93f6c2ebd31` (2026-09-16 `master`) was inspected without changing
-or contributing to that repository.
+The same Herdr revision was inspected without modifying or contributing to that repository.
 
-- `src/cli/target.rs:27-54` adds the public `--machine <label-or-id>` prefix and resolves an
-  enabled saved profile by opaque ID or unique label.
-- `src/cli/target.rs:76-98` lazily starts `SavedSshApiBridge` and returns an `ApiClient` for that
-  command's local socket. The target is held in a thread-local command scope (`:7-24`), so this is
-  a per-command bridge lifetime.
-- `src/cli/target.rs:241-269` allows `--machine` to route API-backed commands, but the `api`
-  branch admits only `snapshot` (`:253`).
-- `src/remote/saved.rs:38-73` declares `SavedSshApiBridge` and its methods `pub(crate)`. The
-  bridge starts the private `remote-api-bridge` command and exposes only its local socket path to
-  Herdr's own CLI code.
-- `src/cli/api.rs:5-66` exposes only `api snapshot` and `api schema`; there is no `api connect` or
-  public long-lived stream entry point.
-- The upstream socket API documentation says `session.snapshot` is one-time and requires opening
-  `events.subscribe` on another connection first (`docs/next/website/src/content/docs/socket-api.mdx:118-127`).
-  That procedure applies to a connected local socket and provides no machine selector.
+- `src/cli/target.rs` resolves an enabled saved profile and lazily creates a `SavedSshApiBridge`.
+- `src/remote/saved.rs` starts Herdr's private remote relay and exposes a local socket path to
+  Herdr's ordinary `ApiClient`.
+- `src/cli/api.rs` publicly exposes one-shot `api snapshot` and schema operations; it does not expose
+  a long-lived `api connect` command.
+- Herdr's socket API documentation requires a separate acknowledged `events.subscribe` connection
+  before taking a snapshot so a client can buffer events and close the snapshot/subscription gap.
 
-Current Herdr master consequently improves and has now been exercised for one-shot machine command
-routing, but it still does not provide the reusable machine-qualified stream required by checkpoint
-1. A World implementation would have to invoke Herdr's private bridge or construct SSH/bootstrap
-itself, which reaches the checkpoint stop condition. The smallest upstream capability still needed
-is a supported machine-qualified long-lived API stream (for example, a versioned `api connect` entry
-point) that can remain open for the subscription while separate command/launcher calls progress.
+`herdr --machine <id> api connect` was rejected with exit `2`. The earlier PR #92 design treated
+that missing public stream as a hard blocker and required Herdr to own the complete external
+multihost interface.
+
+The revised interpretation is narrower: the server protocol is already usable and the World bridge
+is already a compatible Herdr client. World can provide a small connector that creates local
+sockets backed by independently supervised SSH relay connections. The missing public stream is an
+upstream reuse opportunity, not a server-side prerequisite. The relay command and behavior become
+part of World's pinned, reviewed Herdr compatibility surface until Herdr Web provides an equivalent
+connector.
+
+## Remaining proof
+
+This investigation did not prove a World-owned connector. Checkpoint 1 still requires a live run
+through the shipped managed service that demonstrates all of the following at once:
+
+- a complete remote snapshot;
+- an acknowledged structural subscription kept open while commands and a launcher complete;
+- independent connection progress rather than a serialized relay;
+- exact Herdr and World revisions and protocol versions;
+- real `SSH_AUTH_SOCK` availability through the supervisor;
+- bounded failure and process cleanup.
+
+Terminal-ID streams, reconnect generations, uploads, browser integration, and product acceptance
+remain later checkpoints.
 
 ## Managed service prerequisite
 
 The World plugin service environment now carries `SSH_AUTH_SOCK` alongside the existing Herdr and
-plugin state variables. The plugin regression tests cover the variable in both generated systemd
-user unit and launchd plist definitions. Those definitions and environment markers do not prove
-that a supervisor actually executed the service or that the child inherited a usable agent
-socket. The independent run above used the agent socket successfully outside the managed World
-service; a future live proof must run the bridge through that service with the same
-disposable-machine discipline and a reusable stream driver. Until the reusable stream exists, all
-live actions remain blocked and PR #92 stays draft.
+plugin state variables. Focused tests cover the variable in generated systemd-user and launchd
+definitions. Those definitions do not prove that a real supervisor executed the service or that
+the child inherited a live agent socket; the checkpoint fixture must prove that behavior.

@@ -2,38 +2,47 @@
 
 ### Requirement: Runtime authority
 
-Herdr SHALL own structural topology, agent lifecycle, terminal streams, saved machine profiles, and
-native multihost connectivity. One managed World bridge SHALL consume Herdr's supported multihost
-interface and expose its selected Local runtime and enabled saved-machine runtimes as separately
-qualified runtimes. World SHALL own browser protocol adaptation, qualification, bounded command
-admission, notes, pins, observed activity, and upload policy. The browser MAY retain explicit direct
-World bridge profiles as a compatibility path.
+Herdr SHALL remain authoritative for structural topology, agent lifecycle, commands, launchers, and
+terminal protocol behavior. One managed World bridge SHALL expose its selected Local Herdr runtime
+and enabled World-owned remote Herdr profiles as separately qualified runtimes. World SHALL own
+connector profiles, local and SSH connector lifecycle, browser protocol adaptation, qualification,
+bounded command admission, notes, pins, observed activity, and upload policy. OpenSSH SHALL remain
+authoritative for SSH target resolution, authentication material, host verification, proxying, and
+connection policy. The browser MAY retain explicit direct World bridge profiles as a compatibility
+path.
 
-#### Scenario: Saved machine becomes available
+#### Scenario: Remote Herdr profile becomes available
 
-- **WHEN** an enabled saved machine establishes compatible full API and terminal streams through the
-  Herdr multihost integration boundary
-- **THEN** the serving World bridge exposes it as a qualified runtime without requiring a World
+- **WHEN** an enabled World remote profile establishes compatible Herdr API and terminal
+  connections through its SSH connector
+- **THEN** the serving bridge exposes it as a qualified runtime without requiring a World
   installation, HTTP listener, or browser-reachable address on that machine
 
 #### Scenario: One host becomes unavailable
 
-- **WHEN** one Local, saved-machine, or direct-bridge runtime loses connectivity
+- **WHEN** one Local, SSH-backed, or direct-bridge runtime loses connectivity
 - **THEN** other runtimes remain usable and cached topology from the failed runtime is marked stale
   without admitting control
 
-#### Scenario: Saved machine is disabled or removed
+#### Scenario: Remote profile is disabled or removed
 
-- **WHEN** Herdr reports a saved machine disabled or removed
-- **THEN** the bridge retires its live generation and the browser removes it from native runtime
-  selection without stopping that machine's Herdr server or agents
+- **WHEN** an authorized user disables or removes a World remote profile
+- **THEN** the bridge retires its connector generation and removes it from runtime selection without
+  stopping the remote Herdr server or its agents
 
 #### Scenario: Local is unavailable during gateway startup
 
-- **WHEN** the managed World bridge starts or restarts while Local is unavailable and at least one
-  saved machine is healthy
+- **WHEN** the managed World bridge starts while Local is unavailable and one remote profile is
+  healthy
 - **THEN** the bridge binds its browser service, reports Local unavailable, and admits the healthy
-  saved machine without waiting for Local to recover
+  remote runtime without waiting for Local to recover
+
+#### Scenario: Every remote connector is unavailable
+
+- **WHEN** SSH, agent access, or every configured remote target is unavailable while Local is
+  healthy
+- **THEN** Local and explicit direct bridge profiles remain usable and each remote profile reports
+  only its bounded profile-local state
 
 #### Scenario: A second bridge targets the same runtime
 
@@ -44,197 +53,179 @@ World bridge profiles as a compatibility path.
 ### Requirement: Qualified admission
 
 The bridge and browser SHALL qualify actions, cached state, terminal sessions, and asynchronous
-responses by gateway identity, runtime identity, and connection generation. Each native runtime
-SHALL require the reviewed Herdr protocol and advertised capabilities before World dispatches
-control.
+responses by gateway identity, runtime identity, and connector generation. Each Herdr runtime SHALL
+pass the reviewed API and terminal compatibility checks before World dispatches control.
 
 #### Scenario: Colliding native identifiers
 
-- **WHEN** two runtimes contain the same native pane identifier
+- **WHEN** two runtimes contain the same native pane or terminal identifier
 - **THEN** an action for one runtime is sent only to that runtime and is never retried on the other
 
 #### Scenario: Unsupported protocol
 
-- **WHEN** a direct bridge reports an unsupported or malformed terminal protocol or omits a required
-  capability
-- **THEN** the browser rejects terminal attachment and control for that runtime
+- **WHEN** a Local, SSH-backed, or direct runtime reports an unsupported or malformed protocol or
+  omits a required capability
+- **THEN** World rejects the affected terminal attachment or operation for that runtime without
+  emulating it through a remote shell
 
-#### Scenario: Unsupported native capability
+#### Scenario: Remote snapshot is admitted
 
-- **WHEN** a saved machine stream omits a reviewed API, terminal, launcher, or upload capability
-  required for an operation
-- **THEN** the bridge keeps the machine independently visible with bounded incompatibility guidance
-  and does not dispatch or emulate the unsupported operation
-
-#### Scenario: Native snapshot is admitted
-
-- **WHEN** a saved machine supplies its initial snapshot and structural subscription through one
-  compatible Herdr connection generation
+- **WHEN** an SSH-backed runtime supplies its initial snapshot and buffered structural events from
+  one compatible connector generation
 - **THEN** World preserves authoritative workspaces, tabs, panes, terminal IDs, pane revisions,
   layouts, agents, and optional worktree data without inferring missing fields from client-selected
   state
 
-#### Scenario: Response from a retired connection
+#### Scenario: Response from a retired connector
 
 - **WHEN** a snapshot, event, terminal frame, upload result, or command response arrives from an
-  earlier generation after the same runtime reconnects
+  earlier generation after the same profile reconnects or changes
 - **THEN** the bridge and browser discard it without changing current state or admitting input
 
-#### Scenario: Machine API fails while its carrier remains present
+#### Scenario: Herdr API fails while SSH remains present
 
-- **WHEN** a saved machine's API or structural subscription fails while Herdr's underlying transport
-  remains present
+- **WHEN** a remote runtime's API or structural subscription fails while its SSH process remains
+  present
 - **THEN** the bridge retires that runtime generation, makes its control paths non-actionable, and
   requires a fresh subscription and snapshot before readmitting it
 
 ## ADDED Requirements
 
-### Requirement: Supported Herdr multihost dependency
+### Requirement: Herdr connector boundary
 
-World SHALL build a bounded thin native integration only after supported, versioned Herdr
-connection and terminal surfaces pass their Local and saved-machine checkpoints. World SHALL NOT
-enable, accept, or merge native saved-machine federation until the complete Herdr contract and
-product pass end-to-end acceptance. The complete interface SHALL provide bounded machine discovery,
-authoritative snapshots and subscriptions, structural commands and launchers, terminal-ID streams
-with compatible output, input, focus, resize, scroll, graphics, and bell behavior, connection
-generations, structured transport errors, and bounded remote byte delivery. The supported
-integration boundary MAY use separate entry points and SHALL NOT require one aggregate daemon.
-World SHALL NOT launch SSH, invoke a remote shell, reproduce private executable discovery or
-bootstrap, or copy a private Herdr transport to provide native federation.
-
-#### Scenario: Connection and terminal checkpoints pass
-
-- **WHEN** one exact Herdr release or commit passes the live connection and terminal checkpoints
-- **THEN** World may pin those proven surfaces and build an explicitly incomplete thin integration
-  for Local and one saved machine
-
-#### Scenario: Complete Herdr contract passes conformance
-
-- **WHEN** an exact Herdr revision preserves the proven connection and terminal surfaces and also
-  passes generation, restart, structured failure, and remote byte-delivery conformance
-- **THEN** World may update its pin and complete the remaining product work but does not accept or
-  enable the feature until final end-to-end acceptance passes
+World SHALL use one Herdr-specific connector contract for its existing local socket and remote
+SSH-backed runtimes. A connector SHALL provide independent compatible API connections, terminal
+connections opened by terminal ID, lifecycle and generation state, and bounded diagnostics. Before
+final acceptance it SHALL also provide bounded remote byte delivery. The contract SHALL preserve
+independent progress for a structural subscription, request clients, launcher operations, and
+multiple terminal streams. Connector implementation SHALL remain outside presentation-specific
+World code.
 
 #### Scenario: Long-lived operations run concurrently
 
-- **WHEN** the conformance fixture holds an event subscription and two terminal-ID streams open
-  while it dispatches structural commands and launcher operations
-- **THEN** events, commands, launchers, and both terminals make progress independently with the
-  required terminal message semantics
+- **WHEN** an SSH-backed runtime holds its structural subscription and two terminal-ID streams open
+  while World dispatches structural commands and launcher operations
+- **THEN** the subscription, commands, launchers, and both terminals make independent progress
 
-#### Scenario: Herdr contract is missing or unproven
+#### Scenario: Local and SSH connectors share the contract
 
-- **WHEN** the installed or proposed Herdr version has not passed the connection and terminal
-  checkpoints
-- **THEN** even the thin native integration remains unavailable and direct World bridge profiles
-  remain usable without World creating an SSH or private-command substitute
+- **WHEN** the runtime registry opens Local and one SSH-backed Herdr runtime
+- **THEN** the registry consumes the same connector operations and Herdr protocol model without a
+  transport-specific topology path
 
-#### Scenario: Thin integration has incomplete acceptance
+#### Scenario: Connector uses the pinned Herdr relay surface
 
-- **WHEN** the connection and terminal checkpoints pass but complete upstream or product acceptance
-  has not passed
-- **THEN** the integration remains explicitly incomplete and cannot be enabled or treated as
-  merge-ready
+- **WHEN** World launches the reviewed SSH relay for an admitted profile
+- **THEN** it uses fixed executable arguments, records the exact Herdr compatibility provenance,
+  and speaks the reviewed Herdr API or terminal protocol after the relay reaches the remote socket
 
-#### Scenario: Herdr reports a machine transport error
+#### Scenario: Connector implementation serializes clients
 
-- **WHEN** profile selection, authentication, host-key handling, remote discovery, bootstrap, or
-  connectivity fails
-- **THEN** Herdr owns the error classification and recovery guidance while World scopes the
-  resulting state to that machine
+- **WHEN** a candidate connector lets a long-lived subscription or terminal stream prevent another
+  required connection from opening or progressing
+- **THEN** the connector fails conformance and native remote federation remains disabled
 
-#### Scenario: Herdr contract version changes
+#### Scenario: Herdr compatibility baseline changes
 
-- **WHEN** World adopts a different Herdr protocol version, release, commit, or capability contract
-- **THEN** the conformance fixture passes again and World's compatibility and provenance record is
-  updated before that contract is admitted
+- **WHEN** World adopts a different Herdr release, commit, API protocol, terminal protocol, or relay
+  behavior
+- **THEN** connector conformance and live acceptance pass again and compatibility provenance is
+  updated before that baseline is admitted
 
-#### Scenario: Thin integration crosses the ownership boundary
+#### Scenario: Another server provider is considered
 
-- **WHEN** proving the integration would require World-side SSH, bootstrap, a duplicate machine
-  catalogue, browser-visible connection metadata, or a topology path outside `WorldModel`
-- **THEN** implementation stops and this design is revisited before more product code is added
+- **WHEN** a future server does not speak the Herdr API and terminal protocols
+- **THEN** it requires a separate provider-to-World adapter and SHALL NOT be treated as compatible
+  merely because SSH can reach it
 
-### Requirement: Herdr machine catalogue authority
+### Requirement: World-owned remote Herdr profiles
 
-The bridge SHALL discover native runtimes from Herdr's supported catalogue surface and use Herdr's
-opaque machine ID as their stable runtime identity. The trusted local bridge MAY consume supported
-catalogue output containing sensitive target or session metadata, but SHALL NOT persist or log those
-fields, expose them to the browser, or use them to construct or choose transport behavior. World
-SHALL NOT maintain a second target catalogue, modify Herdr profiles, accept browser-supplied targets,
-or store transport credentials. It SHALL request native connectivity from Herdr by the already
-admitted opaque machine ID.
+The World bridge SHALL maintain a bounded remote Herdr profile catalogue containing an opaque
+stable ID, label, validated OpenSSH target or alias, optional Herdr session, and enabled state. The
+catalogue SHALL NOT contain passwords, private keys, agent tickets, generated shell commands, or
+arbitrary SSH options. Mutable target and session fields SHALL NOT form runtime identity. Profile
+mutation SHALL require the same admitted configuration authority as other security-sensitive bridge
+settings.
 
-#### Scenario: Herdr catalogue changes
+#### Scenario: User adds a remote profile
 
-- **WHEN** a saved machine is added, renamed, enabled, disabled, or removed through Herdr
-- **THEN** the serving bridge reflects the new identity, label, and availability without requiring
-  an equivalent World connection profile
+- **WHEN** an authorized user supplies a valid label, OpenSSH target, and optional Herdr session
+- **THEN** World assigns an opaque runtime ID, persists only the bounded profile fields, and starts
+  the connector without accepting key material or arbitrary command text
 
-#### Scenario: Supported catalogue includes connection metadata
+#### Scenario: User selects a key
 
-- **WHEN** Herdr's supported catalogue returns target, session, or other connection metadata with an
-  admitted machine ID
-- **THEN** the trusted bridge selects the opaque ID, discards the connection metadata before
-  browser serialization, and leaves transport decisions to Herdr
+- **WHEN** the user needs a particular identity or agent for a remote profile
+- **THEN** the user selects it through normal OpenSSH configuration or `ssh-agent` and World stores
+  no copy of the key or passphrase
 
-#### Scenario: Machine requires interactive attention
+#### Scenario: Profile transport fields change
 
-- **WHEN** authentication, host-key approval, installation, update, or restart requires operator
-  attention
-- **THEN** World marks only that machine as requiring Attention and presents Herdr-owned recovery
-  guidance without answering a prompt or changing the profile
+- **WHEN** an authorized user changes a profile target or session
+- **THEN** World retires the current generation before reconnecting while preserving the opaque
+  profile ID
 
-#### Scenario: Herdr native integration surface is unavailable
+#### Scenario: Profile requires interactive attention
 
-- **WHEN** the supported Herdr catalogue or native transport entry points are unavailable while the
-  existing Local provider is healthy
-- **THEN** same-origin Local and explicit direct bridge profiles remain usable and native machine
-  discovery reports a bounded diagnostic without inventing profiles or invoking SSH
+- **WHEN** host trust, authentication, remote installation, update, or server replacement requires
+  interaction
+- **THEN** World marks only that profile as requiring Attention and directs the user to an ordinary
+  terminal without answering a prompt or modifying OpenSSH configuration
+
+#### Scenario: Remote Herdr is missing or incompatible
+
+- **WHEN** the admitted SSH target lacks the reviewed Herdr relay behavior or reports an
+  incompatible protocol
+- **THEN** World keeps the profile visible but non-actionable with bounded guidance and does not
+  install, replace, or upgrade Herdr automatically
+
+#### Scenario: Browser supplies connector control
+
+- **WHEN** a profile request includes an executable, SSH flag, private-key path, remote command,
+  upload destination, or shell text outside the bounded profile schema
+- **THEN** the bridge rejects it without starting a connector or changing the stored profile
 
 ### Requirement: Unified WorldModel ingestion
 
-The browser SHALL convert Local, saved-machine, and direct compatibility runtime sources through
-the same qualified `WorldModel` ingestion path. Tree, graph, office, and other topology
-projections SHALL consume that unified model rather than a native-machine-specific topology store.
+The browser SHALL convert Local, SSH-backed, and direct compatibility runtime sources through the
+same qualified `WorldModel` ingestion path. Tree, Graph, Office, Spaces, and other topology
+projections SHALL consume that unified model rather than connector-specific topology stores.
 
 #### Scenario: One gateway advertises multiple runtimes
 
-- **WHEN** a serving gateway advertises Local and one or more saved-machine runtimes
-- **THEN** each admitted runtime becomes a qualified source in one `WorldModel` and remains
-  independently selectable
+- **WHEN** a serving gateway advertises Local and one or more enabled remote Herdr runtimes
+- **THEN** each appears as a qualified runtime through the same runtime source and model contracts
 
-#### Scenario: Native and direct sources are both configured
+#### Scenario: SSH-backed and direct sources are both configured
 
-- **WHEN** the browser admits native runtimes and explicit direct bridge profiles together
-- **THEN** both source types use the same model ingestion and projection path while retaining their
-  distinct gateway and runtime identities
+- **WHEN** an operator retains a direct World bridge profile while enabling an SSH-backed profile
+- **THEN** both remain separately qualified by gateway and runtime identity without implicit
+  deduplication or command fallback
 
 #### Scenario: One runtime reconnects
 
-- **WHEN** one runtime advances to a new connection generation
-- **THEN** model ingestion replaces only that qualified source and does not rebuild another
-  runtime's authority from the reconnecting source
+- **WHEN** an SSH-backed runtime advances its generation
+- **THEN** the model replaces only that runtime's admitted snapshot and buffered events while
+  preserving unrelated runtime state
 
 ### Requirement: Independent browser terminal surfaces
 
-The serving bridge SHALL let bounded concurrent browser viewers observe and control different
-terminal IDs on the same or different Herdr machines through Herdr's terminal-ID streams without
-changing shared pane focus or routing another viewer's input to the wrong pane. A viewer SHALL
-become controllable only after its runtime generation and requested terminal are current.
+Each terminal viewer SHALL bind to a qualified runtime, terminal ID, viewer connection, and current
+connector generation. The connector SHALL open the remote terminal by terminal ID and SHALL NOT
+derive it from native TUI selection. World SHALL preserve the existing browser terminal behavior
+and prevent focus, resize, scroll, or input from targeting another terminal.
 
-#### Scenario: Viewers select different saved-machine panes
+#### Scenario: Viewers select different remote panes
 
-- **WHEN** two browser terminal viewers select different panes on one saved machine
+- **WHEN** two browser terminal viewers select different panes on one SSH-backed runtime
 - **THEN** each receives the requested terminal surface and its input, scroll, focus, and resize
   actions remain scoped to that pane and viewer connection
 
 #### Scenario: Native client changes focus or zoom
 
-- **WHEN** an existing native Herdr client changes pane focus or zoom in the same tab observed by a
-  World terminal viewer
-- **THEN** the World viewer remains attached to its qualified terminal ID and does not send input to
-  the newly focused native pane
+- **WHEN** a native Herdr client changes pane focus or zoom in the same remote session
+- **THEN** each World viewer remains attached to its qualified terminal ID and does not send input
+  to the newly selected native pane
 
 #### Scenario: Viewers share one terminal
 
@@ -242,46 +233,45 @@ become controllable only after its runtime generation and requested terminal are
 - **THEN** each continues receiving current output, resize arbitration remains explicit, and a
   viewer can reassert its dimensions through the existing refit behavior
 
-#### Scenario: Another client owns the terminal attachment
+#### Scenario: Terminal attachment conflicts
 
-- **WHEN** a native gateway path requests a terminal already attached through another native client
-  or direct gateway
-- **THEN** Herdr preserves the current owner, World performs only bounded conflict retries, and the
-  browser reports the terminal as attached elsewhere without silently taking it over
+- **WHEN** the pinned Herdr terminal protocol reports that another client owns or conflicts with an
+  attachment
+- **THEN** World preserves the recorded server semantics, performs only bounded retries, and does
+  not silently take over or redirect the viewer
 
 #### Scenario: Viewer reconnects
 
-- **WHEN** a terminal viewer survives a machine reconnect
+- **WHEN** a terminal viewer survives an SSH-backed runtime reconnect
 - **THEN** its previous stream stays non-actionable until a fresh compatible generation and surface
   arrive, after which the bridge reattaches it or reports a bounded failure
 
 ### Requirement: Machine-qualified World data
 
 World SHALL qualify note attachments, agent pins, observed activity, snapshot pruning, and upload
-operations by runtime and native identity. World SHALL own upload admission and policy, while bytes
-for a saved machine SHALL travel only through Herdr's supported remote-delivery capability. The
-result SHALL be a path on that machine before World inserts or reports it to the terminal, subject
-to declared bounds and stale-generation checks.
+operations by runtime and native identity. World SHALL own upload admission and policy. Remote
+bytes SHALL travel only through the admitted profile's bounded connector delivery operation and
+produce a path on that remote machine before World inserts or reports it to the terminal.
 
-#### Scenario: Upload to a saved machine
+#### Scenario: Upload to an SSH-backed runtime
 
-- **WHEN** an admitted browser uploads a supported file to a current pane on a saved machine
-- **THEN** World validates the upload, Herdr delivers the bytes to a bounded private path on that
-  machine, and only that remote path is delivered to the selected pane
+- **WHEN** an admitted browser uploads a supported file to a current remote pane
+- **THEN** World validates the upload, the connector creates a bounded private remote path, and only
+  that path is delivered to the selected pane
 
 #### Scenario: Remote upload fails
 
-- **WHEN** remote delivery, generation validation, or endpoint insertion fails
-- **THEN** World reports the failure without inserting a local path into the remote terminal or
-  silently rerouting the upload to another runtime
+- **WHEN** transfer, generation validation, or pane insertion fails
+- **THEN** World reports the failure without inserting a local path, leaking a partial destination,
+  or rerouting the upload to another runtime
 
 #### Scenario: Browser supplies a remote destination
 
-- **WHEN** an upload request includes a remote path, profile target, or shell text
-- **THEN** World rejects that field and never passes it to Herdr's remote-delivery capability
+- **WHEN** an upload request includes a remote path, SSH target, or shell text
+- **THEN** World rejects that field and does not pass it to the connector
 
-#### Scenario: Equal pane IDs on two machines
+#### Scenario: Equal pane IDs on two runtimes
 
-- **WHEN** notes, pins, or activity refer to equal native pane IDs owned by different machines
-- **THEN** each record remains associated only with its qualified machine and pane and one
-  machine's snapshot cannot prune or overwrite the other's records
+- **WHEN** notes, pins, or activity refer to equal native pane IDs owned by different runtimes
+- **THEN** each record remains associated only with its qualified runtime and pane and one runtime's
+  snapshot cannot prune or overwrite the other's records

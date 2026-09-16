@@ -4,10 +4,11 @@
 
 The serving bridge SHALL default to loopback and require explicit host admission for non-loopback
 binding. Host, Origin, and CSP policy SHALL remain distinct from optional password authentication.
-Native saved-machine traffic SHALL pass through that serving bridge and SHALL NOT require a
-browser-reachable listener, browser password, Host admission, Origin admission, or CSP destination
-on each saved machine. Explicit direct World bridge profiles SHALL retain their current destination
-and origin policy.
+SSH-backed Herdr traffic SHALL pass through that serving bridge and SHALL NOT require a World HTTP
+listener, browser password, Host admission, Origin admission, or CSP destination on each remote
+machine. Explicit direct World bridge profiles SHALL retain their current destination and origin
+policy. Remote profile mutation SHALL be treated as security-sensitive bridge configuration and
+SHALL require an admitted browser session.
 
 #### Scenario: Password-protected connection
 
@@ -15,11 +16,11 @@ and origin policy.
 - **THEN** unauthenticated protected traffic is rejected and admitted clients receive bounded
   sessions retained by the browser in tab-scoped storage
 
-#### Scenario: Browser uses a native saved machine
+#### Scenario: Browser uses an SSH-backed runtime
 
-- **WHEN** an admitted browser selects a Herdr saved machine exposed by its serving bridge
+- **WHEN** an admitted browser selects a remote Herdr runtime exposed by its serving bridge
 - **THEN** HTTP and WebSocket traffic stays on the serving bridge origin and the browser makes no
-  direct request to the saved machine or Herdr integration surfaces
+  direct request to the remote machine, its Herdr socket, or the SSH connector
 
 #### Scenario: Browser uses a direct bridge profile
 
@@ -29,37 +30,58 @@ and origin policy.
 
 #### Scenario: Android connects to an aggregate gateway
 
-- **WHEN** the Android client connects to one World gateway profile that advertises Local and saved
-  machine runtimes
+- **WHEN** the Android client connects to one World gateway profile that advertises Local and
+  SSH-backed Herdr runtimes
 - **THEN** the client discovers and operates those qualified runtimes through that one profile
-  without separate URLs for the gateway's saved machines
+  without separate URLs for the remote machines
 
 ## ADDED Requirements
 
-### Requirement: Saved-machine browser boundary
+### Requirement: Remote profile and connector boundary
 
-The bridge SHALL expose only the bounded opaque machine identity, display label, state, capability,
-and runtime data needed by World. It SHALL NOT expose credentials, connection targets, remote
-executable or session details, Herdr transport controls, or a general Herdr command surface.
-Browser operations SHALL target an already admitted opaque runtime ID and a narrow allow-listed
-World operation.
+The bridge SHALL expose a narrow, authenticated profile-management surface and a separate bounded
+runtime surface. Profile management MAY accept a validated label, OpenSSH target or alias, optional
+Herdr session, and enabled state. It SHALL NOT accept or expose passwords, private keys, arbitrary
+SSH options, executable paths, remote commands, shell text, or upload destinations. Routine runtime
+descriptors SHALL expose only opaque identity, label, state, generation, capabilities, and World
+runtime data. Browser runtime operations SHALL target an admitted opaque runtime ID and an
+allow-listed World operation.
 
-#### Scenario: Browser supplies transport details
+#### Scenario: Authorized user edits a profile
 
-- **WHEN** a browser request supplies a profile target, session, remote executable, credential,
-  transport option, or shell command instead of an admitted runtime ID and allow-listed operation
-- **THEN** the bridge rejects it without invoking Herdr transport control or modifying Herdr's
-  machine catalogue
+- **WHEN** an admitted user opens the explicit remote-profile settings surface and submits bounded
+  profile fields
+- **THEN** the bridge validates and persists those fields, retires any changed live generation, and
+  does not disclose credential material or construct a shell command
+
+#### Scenario: Runtime request supplies transport details
+
+- **WHEN** a snapshot, command, terminal, or upload runtime request supplies an SSH target, session,
+  connector option, executable, credential, remote path, or shell command instead of an admitted
+  runtime ID and allow-listed operation
+- **THEN** the bridge rejects it without starting transport, modifying a profile, or forwarding the
+  request to Herdr
 
 #### Scenario: Browser invokes an arbitrary Herdr method
 
 - **WHEN** a browser request names a Herdr method that has no corresponding allow-listed World
   operation
-- **THEN** the bridge rejects it without forwarding the request to Local or a saved machine
+- **THEN** the bridge rejects it without forwarding the request to Local or a remote runtime
+
+#### Scenario: Browser attempts a general SSH proxy
+
+- **WHEN** a browser asks the bridge to connect to an unpersisted target, relay arbitrary bytes, or
+  run a remote command
+- **THEN** the bridge rejects the request and exposes no general connector endpoint
 
 #### Scenario: Serving bridge is exposed beyond loopback
 
-- **WHEN** the operator enables non-loopback access to a serving bridge that aggregates native
-  machines
+- **WHEN** the operator enables non-loopback access to a serving bridge with enabled remote profiles
 - **THEN** the settings surface states that an admitted browser receives terminal-equivalent access
-  to every enabled native machine exposed by that bridge
+  to Local and every enabled runtime exposed by that bridge
+
+#### Scenario: Connection details appear in routine output
+
+- **WHEN** the bridge serializes runtime snapshots, model events, diagnostics, or ordinary logs
+- **THEN** OpenSSH targets, sessions, usernames, agent socket paths, environment values, and
+  credential-shaped data are omitted or redacted
