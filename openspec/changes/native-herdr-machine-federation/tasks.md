@@ -2,15 +2,22 @@
 
 - [ ] 1.1 Land and version a supported Herdr machine-qualified multihost contract that exposes a
   bounded machine catalogue, capabilities and connection generations, full session API streams,
-  terminal-ID streams, and bounded remote byte delivery while Herdr owns profile selection, SSH,
-  remote discovery and bootstrap, reconnection, and transport errors.
-- [ ] 1.2 Add an end-to-end conformance fixture for Local and a saved machine. Prove the required
+  terminal-ID streams with output, input, focus, resize, scroll, graphics and bell behavior, and
+  bounded remote byte delivery while Herdr owns profile selection, SSH, remote discovery and
+  bootstrap, reconnection, and transport errors. Allow separate supported entry points behind one
+  integration boundary; do not require an aggregate daemon.
+- [ ] 1.2 Run a first bounded live experiment for Local and a saved machine through the managed
+  plugin or service environment with its real SSH-agent availability. Keep the event subscription
+  open while issuing structural commands and launcher operations and holding two terminal-ID
+  attachments concurrently; prove those operations do not serialize behind one long-lived
+  connection.
+- [ ] 1.3 Complete the end-to-end conformance fixture before World integration. Prove required
   snapshot fields, subscribe-before-snapshot ordering, reconnect generations, layout apply/export,
   pane moves, managed agent launch, an overview action with no terminal viewer, two simultaneous
-  terminal IDs in split and zoomed layouts while a native client changes focus, non-takeover
-  attachment conflicts, remote restart, authentication and host-key Attention, and remote byte
-  delivery.
-- [ ] 1.3 Record and pin the exact Herdr release or commit, protocol and capability contract, and
+  terminal IDs in split and zoomed layouts while a native client changes focus, all required
+  terminal message semantics, non-takeover attachment conflicts, remote restart, authentication and
+  host-key Attention, and bounded remote byte delivery and cleanup.
+- [ ] 1.4 Record and pin the exact Herdr release or commit, protocol and capability contract, and
   conformance evidence in World compatibility and provenance documentation. Verify the World
   adapter needs no SSH invocation, remote shell command, private executable discovery, bootstrap
   helper, or copied Herdr transport implementation.
@@ -19,7 +26,9 @@
 
 - [ ] 2.1 Introduce a bridge-internal runtime provider around the existing local Herdr connection,
   bind the HTTP service and registry before probing Local, and verify the gateway remains available
-  when Local is absent at startup or during restart.
+  when Local is absent at startup or during restart. Verify healthy Local remains available when
+  the saved-machine catalogue or native transport entry points are unavailable, without a duplicate
+  direct profile.
 - [ ] 2.2 Add a bounded logical runtime registry and machine-qualified routes while retaining local
   route aliases. Verify stable Local/native identities, sanitized descriptors, duplicate native
   entity IDs, unknown runtime IDs, one gateway advertising multiple runtimes, and direct-profile

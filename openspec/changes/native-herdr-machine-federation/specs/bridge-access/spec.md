@@ -19,7 +19,7 @@ and origin policy.
 
 - **WHEN** an admitted browser selects a Herdr saved machine exposed by its serving bridge
 - **THEN** HTTP and WebSocket traffic stays on the serving bridge origin and the browser makes no
-  direct request to the saved machine or Herdr transport endpoint
+  direct request to the saved machine or Herdr integration surfaces
 
 #### Scenario: Browser uses a direct bridge profile
 

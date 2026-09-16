@@ -18,13 +18,18 @@ transport rather than World filling that gap.
   connectivity boundary for native federation.
 - Require that Herdr interface to expose bounded machine identity and state, authoritative session
   snapshots and subscriptions, structural commands and launchers, terminal-ID streams, connection
-  generations, and a remote byte-delivery capability for World uploads.
+  generations, the complete terminal behavior World already adapts, and a remote byte-delivery
+  capability for World uploads.
+- Treat the Herdr interface as one supported integration boundary that may contain separate
+  catalogue, API, terminal, and delivery entry points; do not require an aggregate daemon.
 - Keep saved-profile selection, SSH behavior, authentication and host-key handling, remote Herdr
   discovery and bootstrap, reconnection, and transport error classification inside Herdr.
 - Require an end-to-end Herdr conformance proof for Local and a saved machine before World runtime
   integration starts.
 - Make one World bridge adapt the proven Herdr interface into the existing machine-qualified model
   and same-origin browser gateway, with independent runtime failure and reconnect boundaries.
+- Keep the existing Local provider usable when Herdr's saved-machine catalogue or native transport
+  entry points are unavailable.
 - Feed Local, native saved-machine, and direct compatibility sources through the same qualified
   `WorldModel` ingestion path rather than adding a native-machine presentation model.
 - Preserve World ownership of runtime qualification, notes, pins, observed activity, upload policy,
@@ -61,4 +66,4 @@ documentation, and the current federation and bridge-access specifications.
 World will not implement SSH, remote shell execution, Herdr executable discovery, or server
 bootstrap for native federation. Saved remote machines will not need a World installation or HTTP
 listener. Until the Herdr contract is available and proven, current direct bridge profiles remain
-the supported multihost path.
+the supported remote multihost path and the existing same-origin Local provider remains supported.

@@ -27,7 +27,7 @@ would still leave World responsible for a second implementation of Herdr's trans
 failure model, and private bootstrap details.
 
 That evidence changes the implementation boundary, not the product contract. World will consume a
-supported Herdr multihost endpoint and will not construct the remote connection. Herdr's current
+supported Herdr multihost interface and will not construct the remote connection. Herdr's current
 reviewed release does not yet provide the complete reusable, machine-qualified stream. This change
 therefore starts with an upstream Herdr contract and end-to-end proof before any World integration.
 
@@ -37,7 +37,8 @@ therefore starts with an upstream Herdr contract and end-to-end proof before any
 
 - Give the normal desktop product one World gateway and one browser origin for Local plus Herdr
   saved machines.
-- Use one supported Herdr-owned multihost endpoint for machine discovery and remote connectivity.
+- Use one supported Herdr-owned multihost integration boundary for machine discovery and remote
+  connectivity.
 - Preserve complete World topology and layout fidelity, structural commands and launchers,
   terminal-ID isolation, runtime qualification, failure isolation, and stale-generation fencing.
 - Keep notes, pins, observed activity, browser authorization, upload policy, and browser protocol
@@ -60,12 +61,13 @@ therefore starts with an upstream Herdr contract and end-to-end proof before any
 
 ## Decisions
 
-### Require one supported Herdr multihost endpoint
+### Require one supported Herdr multihost integration boundary
 
-World depends on one local, versioned Herdr endpoint that exposes a bounded machine catalogue and
-opens machine-qualified logical streams. Herdr may implement that endpoint with a process, daemon,
-library boundary, or another internal arrangement; those details are outside the World contract.
-The supported interface must provide these observable semantics:
+World depends on one versioned Herdr integration boundary for native multihost behavior. That
+boundary may consist of separate supported catalogue, API, terminal, and delivery entry points; it
+does not require Herdr to add an aggregate daemon or shared socket. Herdr may implement those
+surfaces with processes, commands, libraries, or another internal arrangement. The supported
+interface must provide these observable semantics:
 
 | Concern | Required Herdr surface |
 | --- | --- |
@@ -73,14 +75,18 @@ The supported interface must provide these observable semantics:
 | Topology | Authoritative full session snapshot with workspaces, tabs, panes, terminal IDs, revisions, layouts, agents, and optional worktree data |
 | Change stream | Structural subscription with an ordering rule that prevents a snapshot/subscription gap |
 | Control | Machine-qualified structural commands and launcher operations with bounded typed results |
-| Terminals | Streams opened by terminal ID, including explicit non-takeover ownership behavior |
+| Terminals | Streams opened by terminal ID with output, input, focus, resize, scroll, graphics, bell, and explicit non-takeover ownership behavior |
 | Upload transport | Bounded byte delivery to a private path on the selected machine without browser-supplied shell text or destination |
 | Lifecycle | Connection generation, closure, reconnect, capability, and incompatibility events |
 | Recovery | Structured machine-local authentication, host-key, bootstrap, version, and transport errors with Herdr-owned operator guidance |
 
-The endpoint must not disclose raw SSH destinations, credentials, remote executable paths, or shell
-construction to World or the browser. Its version and capabilities are checked before World admits
-state or control.
+Supported catalogue output may include connection metadata such as target or session fields. The
+trusted local bridge treats those fields as sensitive, does not persist or log them, and discards
+them before constructing browser-facing descriptors. It uses only Herdr's opaque saved-machine ID
+to request native connectivity and does not use catalogue metadata to construct SSH, choose remote
+bootstrap behavior, or make transport decisions. Credentials and shell construction remain outside
+World, and none of these transport details reach the browser. Interface versions and capabilities
+are checked before World admits state or control.
 
 Herdr remains responsible for saved-profile selection, SSH configuration and execution,
 authentication and host-key interaction, remote executable discovery, server bootstrap, session
@@ -89,25 +95,35 @@ stderr or reproduce those decisions.
 
 ### Prove the Herdr interface before building the World adapter
 
-The upstream interface is accepted only after an end-to-end conformance fixture uses its supported
-public surface for both Local and a real saved machine. The fixture must prove:
+The first bounded live experiment uses only Herdr's supported public surface for Local and a real
+saved machine. It keeps one structural event subscription open while it issues commands and
+launcher operations and holds two terminal attachments concurrently. It runs through the same
+managed plugin or service environment World ships, including its real SSH-agent availability,
+rather than relying only on an interactive shell. This specifically rejects a transport that
+serializes one long-lived subscription, command, or terminal connection behind another.
+
+That first experiment may defer complete upload and failure-path coverage. The upstream interface is
+accepted, and World integration starts, only after the full end-to-end conformance fixture proves:
 
 - the complete snapshot fields required by World;
-- subscription establishment and snapshot ordering without an event gap;
+- subscription establishment and snapshot ordering without an event gap, with the subscription
+  remaining live while commands, launcher operations, and both terminal attachments are active;
 - connection generation change and stale-stream retirement after restart;
 - layout apply and export, pane movement, managed agent launch, and an overview action when no
   terminal viewer exists;
 - two terminal-ID streams on different panes of one split or zoomed tab while a native Herdr client
-  changes focus and zoom;
+  changes focus and zoom, including compatible output, input, focus, resize, scroll, graphics, and
+  bell behavior;
 - non-takeover attachment conflict behavior with an existing owner;
 - authentication, host-key, bootstrap, version, and server-restart failures as structured
   machine-local states; and
 - bounded remote byte delivery and cleanup for the upload lane.
 
-The proof records the exact Herdr release or commit, protocol version, advertised capabilities, and
-fixture result. A source-only adapter test, mocked SSH process, or private command invocation does
-not satisfy this gate. If the actual supported interface differs from this design, this same change
-is updated before World implementation rather than hiding the difference in adapter code.
+The proof records the exact Herdr release or commit, protocol version, advertised capabilities,
+managed execution environment, and fixture result. A source-only adapter test, mocked SSH process,
+interactive-shell-only run, or private command invocation does not satisfy this gate. If the actual
+supported interface differs from this design, this same change is updated before World
+implementation rather than hiding the difference in adapter code.
 
 ### Adapt Herdr into a World runtime registry
 
@@ -198,10 +214,14 @@ The bridge binds its HTTP service and starts the runtime registry before probing
 runtime. Local is one asynchronously supervised entry. If Local is missing or restarting, the
 gateway remains reachable and any healthy saved-machine streams remain usable.
 
+The inverse is also independent: the existing Local provider remains usable when the
+saved-machine catalogue or every native transport entry point is unavailable. Gateway startup and
+recovery tests cover both directions without requiring a duplicate direct profile for Local.
+
 The World plugin continues to install, start, stop, restart, and open one local World bridge. It may
 provide stable local lifecycle context, but it does not run remote plugins or supervise remote
-transport. Herdr owns the multihost endpoint and remote machine lifecycle. Selecting a machine in a
-Herdr client does not move the World service to that machine.
+transport. Herdr owns the multihost integration boundary and remote machine lifecycle. Selecting a
+machine in a Herdr client does not move the World service to that machine.
 
 ### Keep native machines behind one browser origin
 
@@ -225,9 +245,9 @@ non-loopback access.
   direct bridge profiles remain supported until Herdr lands and versions the complete surface.
 - **The upstream contract drifts.** World pins the proven Herdr release or commit, checks protocol
   and capabilities, and reruns the conformance fixture before updating.
-- **One upstream endpoint becomes a shared failure boundary.** Each machine still has an independent
-  logical connection and generation. World keeps unaffected runtimes usable and reports endpoint
-  failure without admitting stale control.
+- **One upstream integration boundary contains shared components.** Each machine still has an
+  independent logical connection and generation. World keeps Local and unaffected runtimes usable
+  and reports catalogue or entry-point failure without admitting stale control.
 - **Terminal ownership conflicts with native clients or direct gateways.** Non-takeover semantics
   preserve the current owner and World reports a bounded conflict.
 - **A single exposed World gateway grants broad authority.** The bridge stays loopback by default,
@@ -241,7 +261,7 @@ non-loopback access.
 
 ## Migration Plan
 
-1. Land and version the supported Herdr multihost endpoint.
+1. Land and version the supported Herdr multihost contract and its integration surfaces.
 2. Pass the Local and saved-machine conformance fixture and record the exact proven contract.
 3. Update this change if the proven public surface changes any named requirement.
 4. Pin that Herdr version in World and implement the runtime registry, state and command adapter,

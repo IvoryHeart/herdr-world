@@ -4,7 +4,7 @@
 
 Herdr SHALL own structural topology, agent lifecycle, terminal streams, saved machine profiles, and
 native multihost connectivity. One managed World bridge SHALL consume Herdr's supported multihost
-endpoint and expose its selected Local runtime and enabled saved-machine runtimes as separately
+interface and expose its selected Local runtime and enabled saved-machine runtimes as separately
 qualified runtimes. World SHALL own browser protocol adaptation, qualification, bounded command
 admission, notes, pins, observed activity, and upload policy. The browser MAY retain explicit direct
 World bridge profiles as a compatibility path.
@@ -12,7 +12,7 @@ World bridge profiles as a compatibility path.
 #### Scenario: Saved machine becomes available
 
 - **WHEN** an enabled saved machine establishes compatible full API and terminal streams through the
-  Herdr multihost endpoint
+  Herdr multihost integration boundary
 - **THEN** the serving World bridge exposes it as a qualified runtime without requiring a World
   installation, HTTP listener, or browser-reachable address on that machine
 
@@ -94,15 +94,24 @@ control.
 World SHALL implement native saved-machine federation only through a supported, versioned Herdr
 multihost interface that has passed the required Local and saved-machine conformance fixture. That
 interface SHALL provide bounded machine discovery, authoritative snapshots and subscriptions,
-structural commands and launchers, terminal-ID streams, connection generations, structured
-transport errors, and bounded remote byte delivery. World SHALL NOT launch SSH, invoke a remote
-shell, reproduce private executable discovery or bootstrap, or copy a private Herdr transport to
-provide native federation.
+structural commands and launchers, terminal-ID streams with compatible output, input, focus, resize,
+scroll, graphics, and bell behavior, connection generations, structured transport errors, and
+bounded remote byte delivery. The supported integration boundary MAY use separate entry points and
+SHALL NOT require one aggregate daemon. World SHALL NOT launch SSH, invoke a remote shell, reproduce
+private executable discovery or bootstrap, or copy a private Herdr transport to provide native
+federation.
 
 #### Scenario: Herdr contract passes conformance
 
 - **WHEN** one exact Herdr release or commit passes the required end-to-end conformance fixture
 - **THEN** World may pin that contract and start integration through only its supported surface
+
+#### Scenario: Long-lived operations run concurrently
+
+- **WHEN** the conformance fixture holds an event subscription and two terminal-ID streams open
+  while it dispatches structural commands and launcher operations
+- **THEN** events, commands, launchers, and both terminals make progress independently with the
+  required terminal message semantics
 
 #### Scenario: Herdr contract is missing or unproven
 
@@ -126,16 +135,26 @@ provide native federation.
 
 ### Requirement: Herdr machine catalogue authority
 
-The bridge SHALL discover native runtimes from the supported Herdr multihost endpoint and use
-Herdr's opaque machine ID as their stable runtime identity. World SHALL NOT maintain a second target
-catalogue, modify Herdr profiles, select a profile or session on the browser's behalf, accept
-browser-supplied targets, or store transport credentials.
+The bridge SHALL discover native runtimes from Herdr's supported catalogue surface and use Herdr's
+opaque machine ID as their stable runtime identity. The trusted local bridge MAY consume supported
+catalogue output containing sensitive target or session metadata, but SHALL NOT persist or log those
+fields, expose them to the browser, or use them to construct or choose transport behavior. World
+SHALL NOT maintain a second target catalogue, modify Herdr profiles, accept browser-supplied targets,
+or store transport credentials. It SHALL request native connectivity from Herdr by the already
+admitted opaque machine ID.
 
 #### Scenario: Herdr catalogue changes
 
 - **WHEN** a saved machine is added, renamed, enabled, disabled, or removed through Herdr
 - **THEN** the serving bridge reflects the new identity, label, and availability without requiring
   an equivalent World connection profile
+
+#### Scenario: Supported catalogue includes connection metadata
+
+- **WHEN** Herdr's supported catalogue returns target, session, or other connection metadata with an
+  admitted machine ID
+- **THEN** the trusted bridge selects the opaque ID, discards the connection metadata before
+  browser serialization, and leaves transport decisions to Herdr
 
 #### Scenario: Machine requires interactive attention
 
@@ -144,11 +163,12 @@ browser-supplied targets, or store transport credentials.
 - **THEN** World marks only that machine as requiring Attention and presents Herdr-owned recovery
   guidance without answering a prompt or changing the profile
 
-#### Scenario: Herdr endpoint is unavailable
+#### Scenario: Herdr native integration surface is unavailable
 
-- **WHEN** the supported Herdr multihost endpoint or its valid catalogue is unavailable
-- **THEN** explicit direct bridge profiles remain usable and native machine discovery reports a
-  bounded diagnostic without inventing profiles or invoking SSH
+- **WHEN** the supported Herdr catalogue or native transport entry points are unavailable while the
+  existing Local provider is healthy
+- **THEN** same-origin Local and explicit direct bridge profiles remain usable and native machine
+  discovery reports a bounded diagnostic without inventing profiles or invoking SSH
 
 ### Requirement: Unified WorldModel ingestion
 
