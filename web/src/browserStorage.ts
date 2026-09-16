@@ -1,20 +1,11 @@
-const PREFIX = "roamgate:";
-const DELETED_PREFIX = "roamgate:deleted:";
+const PREFIX = "herdr-world:foundation-v2:";
 
-/** Keep legacy originals; deletion markers prevent removed values reappearing. */
-export function roamgateStorage(storage: Storage): Storage {
-  const keys = () => [
-    ...new Set(
-      Array.from({ length: storage.length }, (_, index) => storage.key(index))
-        .filter(
-          (key): key is string =>
-            key !== null && !key.startsWith(DELETED_PREFIX),
-        )
-        .map((key) =>
-          key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key,
-        ),
-    ),
-  ];
+/** Isolate the new foundation from both old World and upstream browser state. */
+export function worldStorage(storage: Storage): Storage {
+  const keys = () =>
+    Array.from({ length: storage.length }, (_, index) => storage.key(index))
+      .filter((key): key is string => key?.startsWith(PREFIX) ?? false)
+      .map((key) => key.slice(PREFIX.length));
   return {
     get length() {
       return keys().length;
@@ -25,23 +16,12 @@ export function roamgateStorage(storage: Storage): Storage {
     getItem(key) {
       const current = storage.getItem(PREFIX + key);
       if (current !== null) return current;
-      if (storage.getItem(DELETED_PREFIX + encodeURIComponent(key)) !== null)
-        return null;
-      const legacy = storage.getItem(key);
-      if (legacy !== null) {
-        try {
-          storage.setItem(PREFIX + key, legacy);
-        } catch {
-          /* Read still works when storage is full. */
-        }
-      }
-      return legacy;
+      return null;
     },
     setItem(key, value) {
       storage.setItem(PREFIX + key, value);
     },
     removeItem(key) {
-      storage.setItem(DELETED_PREFIX + encodeURIComponent(key), "1");
       storage.removeItem(PREFIX + key);
     },
     clear() {
@@ -51,7 +31,7 @@ export function roamgateStorage(storage: Storage): Storage {
 }
 
 function browserStorage(kind: "localStorage" | "sessionStorage"): Storage {
-  const get = () => roamgateStorage(globalThis[kind]);
+  const get = () => worldStorage(globalThis[kind]);
   return {
     get length() {
       return get().length;
@@ -78,5 +58,5 @@ function browserStorage(kind: "localStorage" | "sessionStorage"): Storage {
   };
 }
 
-export const roamgateLocalStorage = browserStorage("localStorage");
-export const roamgateSessionStorage = browserStorage("sessionStorage");
+export const worldLocalStorage = browserStorage("localStorage");
+export const worldSessionStorage = browserStorage("sessionStorage");

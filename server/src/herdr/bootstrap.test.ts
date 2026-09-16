@@ -12,7 +12,7 @@ import { herdrManagedBinaryPath, VERIFIED_HERDR_VERSION } from "./release";
 
 const trash: string[] = [];
 function scratch(): string {
-  const dir = mkdtempSync(join(tmpdir(), "roamgate-herdr-bootstrap-"));
+  const dir = mkdtempSync(join(tmpdir(), "herdr-world-herdr-bootstrap-"));
   trash.push(dir);
   return dir;
 }

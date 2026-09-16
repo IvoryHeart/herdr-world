@@ -17,7 +17,7 @@ import {
   readServiceEnv,
   releaseAssetFor,
   supportsIdentityMigrationPrebuilt,
-} from "./studio-plugin";
+} from "./world-plugin";
 
 describe("plugin build commands", () => {
   const roots: string[] = [];
@@ -29,15 +29,15 @@ describe("plugin build commands", () => {
 
   function checkout() {
     const root = realpathSync(
-      mkdtempSync(join(tmpdir(), "studio-plugin-build-test-")),
+      mkdtempSync(join(tmpdir(), "world-plugin-build-test-")),
     );
     roots.push(root);
     for (const dir of ["scripts", "web", "server", "bin"]) {
       mkdirSync(join(root, dir));
     }
     copyFileSync(
-      join(import.meta.dir, "studio-plugin.ts"),
-      join(root, "scripts/studio-plugin.ts"),
+      join(import.meta.dir, "world-plugin.ts"),
+      join(root, "scripts/world-plugin.ts"),
     );
     mkdirSync(join(root, "server/src/config"), { recursive: true });
     copyFileSync(
@@ -92,7 +92,7 @@ globalThis.fetch = async (url) => {
         process.execPath,
         "--preload",
         join(root, "fetch.js"),
-        join(root, "scripts/studio-plugin.ts"),
+        join(root, "scripts/world-plugin.ts"),
         verb,
       ],
       {
@@ -142,7 +142,7 @@ globalThis.fetch = async (url) => {
       const result = invoke(root, "build", { HTTP_STATUS: status });
       expect(result.exitCode).toBe(1);
       expect(result.stderr.toString()).toContain(
-        "bun scripts/studio-plugin.ts build-source",
+        "bun scripts/world-plugin.ts build-source",
       );
       expect(result.stderr.toString()).toContain("herdr plugin link .");
       expect(result.stderr.toString()).toContain("--ref vX.Y.Z");
@@ -152,10 +152,10 @@ globalThis.fetch = async (url) => {
         .split("\n");
       expect(requests).toHaveLength(2);
       for (const url of requests) {
-        expect(url).toContain("/releases/download/v9.8.7/roamgate-");
+        expect(url).toContain("/releases/download/v9.8.7/herdr-world-");
       }
-      expect(existsSync(join(root, "server/roamgate"))).toBe(false);
-      expect(existsSync(join(root, "server/roamgate.exe"))).toBe(false);
+      expect(existsSync(join(root, "server/herdr-world"))).toBe(false);
+      expect(existsSync(join(root, "server/herdr-world.exe"))).toBe(false);
     },
   );
 });
@@ -170,16 +170,16 @@ test("prebuilt identity floor compares numeric versions", () => {
 describe("releaseAssetFor", () => {
   test("maps every supported platform to an archive and binary name", () => {
     expect(releaseAssetFor("darwin", "arm64")).toEqual({
-      asset: "roamgate-darwin-arm64",
-      binary: "roamgate",
+      asset: "herdr-world-darwin-arm64",
+      binary: "herdr-world",
     });
     expect(releaseAssetFor("linux", "x64")).toEqual({
-      asset: "roamgate-linux-x64",
-      binary: "roamgate",
+      asset: "herdr-world-linux-x64",
+      binary: "herdr-world",
     });
-    expect(releaseAssetFor("win32", "x64")?.binary).toBe("roamgate.exe");
+    expect(releaseAssetFor("win32", "x64")?.binary).toBe("herdr-world.exe");
     expect(releaseAssetFor("win32", "arm64")?.asset).toBe(
-      "roamgate-windows-arm64",
+      "herdr-world-windows-arm64",
     );
   });
 
@@ -192,7 +192,7 @@ describe("releaseAssetFor", () => {
 describe("parseSha256File", () => {
   test("extracts the digest from shasum output", () => {
     const digest = "a".repeat(64);
-    expect(parseSha256File(`${digest}  roamgate-darwin-arm64.tar.xz\n`)).toBe(
+    expect(parseSha256File(`${digest}  herdr-world-darwin-arm64.tar.xz\n`)).toBe(
       digest,
     );
   });
@@ -230,7 +230,7 @@ describe("readServiceEnv", () => {
 describe("computeUrl", () => {
   const dirs: string[] = [];
   function fixture(files: Record<string, string>): string {
-    const dir = mkdtempSync(join(tmpdir(), "studio-plugin-"));
+    const dir = mkdtempSync(join(tmpdir(), "world-plugin-"));
     dirs.push(dir);
     for (const [name, text] of Object.entries(files)) {
       writeFileSync(join(dir, name), text);
@@ -249,7 +249,7 @@ describe("computeUrl", () => {
 
   test("includes the login token only for non-loopback binds", () => {
     const dir = fixture({
-      "roamgate.env": "HOST=0.0.0.0\nPORT=8791\n",
+      "herdr-world.env": "HOST=0.0.0.0\nPORT=8791\n",
       "auth-token": "abc123\n",
     });
     expect(computeUrl(dir)).toBe("http://localhost:8791/?token=abc123");
@@ -257,7 +257,7 @@ describe("computeUrl", () => {
 
   test("ignores a stale token file on loopback binds", () => {
     const dir = fixture({
-      "roamgate.env": "HOST=127.0.0.1\nPORT=8787\n",
+      "herdr-world.env": "HOST=127.0.0.1\nPORT=8787\n",
       "auth-token": "abc123\n",
     });
     expect(computeUrl(dir)).toBe("http://127.0.0.1:8787");
@@ -265,21 +265,21 @@ describe("computeUrl", () => {
 
   test("new password values take precedence, including empty values", () => {
     const dir = fixture({
-      "roamgate.env":
-        "HOST=0.0.0.0\nHERDR_GUI_PASSWORD=old\nROAMGATE_PASSWORD=new\n",
+      "herdr-world.env":
+        "HOST=0.0.0.0\nHERDR_GUI_PASSWORD=old\nHERDR_WORLD_PASSWORD=new\n",
       "auth-token": "saved-token\n",
     });
     expect(computeUrl(dir)).toBe("http://localhost:8787");
     writeFileSync(
-      join(dir, "roamgate.env"),
-      "HOST=0.0.0.0\nHERDR_GUI_PASSWORD=old\nROAMGATE_PASSWORD=\n",
+      join(dir, "herdr-world.env"),
+      "HOST=0.0.0.0\nHERDR_GUI_PASSWORD=old\nHERDR_WORLD_PASSWORD=\n",
     );
     expect(computeUrl(dir)).toBe("http://localhost:8787/?token=saved-token");
   });
 
   test("honors exported and quoted entries without a token file", () => {
     const dir = fixture({
-      "roamgate.env": 'export HOST="0.0.0.0"\nPORT = "8799"\n',
+      "herdr-world.env": 'export HOST="0.0.0.0"\nPORT = "8799"\n',
     });
     expect(computeUrl(dir)).toBe("http://localhost:8799");
   });

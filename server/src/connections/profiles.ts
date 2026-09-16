@@ -19,7 +19,7 @@ import { defaultDataFile, publishDataFile } from "../config/data-paths";
 import { dirname, isAbsolute, join, win32 } from "node:path";
 import { validateSshDestination } from "../bridge/ssh-command";
 import { nativeSocketPath } from "../config/server-config";
-import { roamgateEnv } from "../config/environment";
+import { worldEnv } from "../config/environment";
 import { validateConnectionId } from "./protocol";
 import { LEGACY_DEFAULT_CONNECTION_ID } from "./types";
 
@@ -62,7 +62,7 @@ export type PublicConnectionProfile = ConnectionProfile & {
 };
 
 export function defaultConnectionProfilesPath(): string {
-  return roamgateEnv("CONNECTIONS_PATH") ?? defaultDataFile("connections.json");
+  return worldEnv("CONNECTIONS_PATH") ?? defaultDataFile("connections.json");
 }
 
 function assertPlainObject(
@@ -428,7 +428,7 @@ export class ConnectionProfileStore {
       if (!existsSync(this.path)) return;
       if (
         this.options.path === undefined &&
-        roamgateEnv("CONNECTIONS_PATH") === undefined
+        worldEnv("CONNECTIONS_PATH") === undefined
       ) {
         // Clearing saved profiles must not restore the old registry next launch.
         publishDataFile(`${this.path}.legacy-cleared`, "1\n");
@@ -455,7 +455,7 @@ export class ConnectionProfileStore {
   private canHardenDefaultPath(): boolean {
     return (
       this.options.path === undefined &&
-      roamgateEnv("CONNECTIONS_PATH") === undefined
+      worldEnv("CONNECTIONS_PATH") === undefined
     );
   }
 

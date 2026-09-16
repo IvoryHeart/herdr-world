@@ -33,16 +33,14 @@ function currentReleasePlatform(): string {
   );
 }
 
-function createInstallerFixture(
-  checksumName?: string,
-  product: "roamgate" | "herdr-gui" = "roamgate",
-) {
-  const root = mkdtempSync(join(tmpdir(), "roamgate-installer-test-"));
+function createInstallerFixture(checksumName?: string) {
+  const root = mkdtempSync(join(tmpdir(), "herdr-world-installer-test-"));
   temporaryRoots.push(root);
   const assets = join(root, "assets");
   const fakeBin = join(root, "bin");
   const installDir = join(root, "install");
   const platform = currentReleasePlatform();
+  const product = "herdr-world";
   const packageDir = `${product}-${platform}`;
   const archiveName = `${packageDir}.tar.xz`;
   const packagePath = join(assets, packageDir);
@@ -111,12 +109,9 @@ function runInstaller(
         ...process.env,
         PATH: `${fixture.fakeBin}:${process.env.PATH ?? ""}`,
         FIXTURE_DIR: fixture.assets,
-        HERDR_GUI_RELEASE_BASE_URL: releaseBaseUrl,
-        HERDR_GUI_INSTALL_DIR: fixture.installDir,
-        HERDR_GUI_VERSION: undefined,
-        ROAMGATE_RELEASE_BASE_URL: undefined,
-        ROAMGATE_INSTALL_DIR: undefined,
-        ROAMGATE_VERSION: undefined,
+        HERDR_WORLD_RELEASE_BASE_URL: releaseBaseUrl,
+        HERDR_WORLD_INSTALL_DIR: fixture.installDir,
+        HERDR_WORLD_VERSION: "",
         ...environment,
       },
       stdout: "pipe",
@@ -132,71 +127,23 @@ afterEach(() => {
 });
 
 describe("release installer", () => {
-  test("retains the legacy installer without replacing Roamgate", () => {
-    const fixture = createInstallerFixture(undefined, "herdr-gui");
-    mkdirSync(fixture.installDir, { recursive: true });
-    writeFileSync(join(fixture.installDir, "roamgate"), "keep Roamgate\n");
-    writeFileSync(
-      join(fixture.installDir, "herdr-gui"),
-      "previous legacy binary\n",
-    );
-    const result = runInstaller(fixture);
-    expect(result.exitCode).toBe(0);
-    const installed = Bun.spawnSync([
-      join(fixture.installDir, "herdr-gui"),
-      "--version",
-    ]);
-    expect(installed.exitCode).toBe(0);
-    expect(installed.stdout.toString().trim()).toBe("herdr-gui 9.8.7");
-    expect(
-      readFileSync(join(fixture.installDir, "herdr-gui.previous"), "utf8"),
-    ).toBe("previous legacy binary\n");
-    expect(readFileSync(join(fixture.installDir, "roamgate"), "utf8")).toBe(
-      "keep Roamgate\n",
-    );
-  });
-
-  test("legacy checksum failure preserves the existing binary", () => {
-    const fixture = createInstallerFixture(undefined, "herdr-gui");
-    mkdirSync(fixture.installDir, { recursive: true });
-    writeFileSync(
-      join(fixture.installDir, "herdr-gui"),
-      "keep legacy binary\n",
-    );
-    const archiveName = `herdr-gui-${currentReleasePlatform()}.tar.xz`;
-    writeFileSync(
-      join(fixture.assets, `${archiveName}.sha256`),
-      `${"0".repeat(64)}  ${archiveName}\n`,
-    );
-    const result = runInstaller(fixture);
-    expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toContain("package checksum mismatch");
-    expect(readFileSync(join(fixture.installDir, "herdr-gui"), "utf8")).toBe(
-      "keep legacy binary\n",
-    );
-    expect(existsSync(join(fixture.installDir, "herdr-gui.previous"))).toBe(
-      false,
-    );
-  });
-
-  test("prefers Roamgate variables, including empty VERSION for latest", () => {
+  test("accepts World variables, including empty VERSION for latest", () => {
     const fixture = createInstallerFixture();
     const installDir = join(fixture.root, "new-install");
     const result = runInstaller(fixture, "https://invalid.example/?rejected", {
-      ROAMGATE_RELEASE_BASE_URL: "http://127.0.0.1/releases",
-      ROAMGATE_INSTALL_DIR: installDir,
-      ROAMGATE_VERSION: "",
-      HERDR_GUI_VERSION: "invalid-version",
+      HERDR_WORLD_RELEASE_BASE_URL: "http://127.0.0.1/releases",
+      HERDR_WORLD_INSTALL_DIR: installDir,
+      HERDR_WORLD_VERSION: "",
     });
     expect(result.exitCode).toBe(0);
-    expect(existsSync(join(installDir, "roamgate"))).toBe(true);
+    expect(existsSync(join(installDir, "herdr-world"))).toBe(true);
     expect(existsSync(fixture.installDir)).toBe(false);
   });
 
-  test("rejects an explicitly empty Roamgate installation directory", () => {
+  test("rejects an explicitly empty Herdr World installation directory", () => {
     const fixture = createInstallerFixture();
     const result = runInstaller(fixture, undefined, {
-      ROAMGATE_INSTALL_DIR: "",
+      HERDR_WORLD_INSTALL_DIR: "",
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(
@@ -208,7 +155,7 @@ describe("release installer", () => {
   test("verifies, backs up, and installs the expected platform package", () => {
     const fixture = createInstallerFixture();
     mkdirSync(fixture.installDir, { recursive: true });
-    writeFileSync(join(fixture.installDir, "roamgate"), "previous binary\n", {
+    writeFileSync(join(fixture.installDir, "herdr-world"), "previous binary\n", {
       mode: 0o755,
     });
     writeFileSync(join(fixture.installDir, "herdr-gui"), "legacy GUI binary\n");
@@ -221,13 +168,13 @@ describe("release installer", () => {
     expect(result.stderr.toString()).toBe("");
 
     const installed = Bun.spawnSync(
-      [join(fixture.installDir, "roamgate"), "--version"],
+      [join(fixture.installDir, "herdr-world"), "--version"],
       { stdout: "pipe" },
     );
     expect(installed.exitCode).toBe(0);
-    expect(installed.stdout.toString().trim()).toBe("roamgate 9.8.7");
+    expect(installed.stdout.toString().trim()).toBe("herdr-world 9.8.7");
     expect(
-      readFileSync(join(fixture.installDir, "roamgate.previous"), "utf8"),
+      readFileSync(join(fixture.installDir, "herdr-world.previous"), "utf8"),
     ).toBe("previous binary\n");
     expect(readFileSync(join(fixture.installDir, "herdr-gui"), "utf8")).toBe(
       "legacy GUI binary\n",
@@ -249,7 +196,7 @@ describe("release installer", () => {
     mkdirSync(fixture.installDir, { recursive: true });
     const outside = join(fixture.root, "outside-binary");
     writeFileSync(outside, "outside\n", { mode: 0o755 });
-    symlinkSync(outside, join(fixture.installDir, "roamgate"));
+    symlinkSync(outside, join(fixture.installDir, "herdr-world"));
 
     const result = runInstaller(fixture);
     expect(result.exitCode).not.toBe(0);
@@ -263,7 +210,7 @@ describe("release installer", () => {
     const fixture = createInstallerFixture();
     const result = runInstaller(
       fixture,
-      "http://downloads.example.com/roamgate",
+      "http://downloads.example.com/herdr-world",
     );
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(

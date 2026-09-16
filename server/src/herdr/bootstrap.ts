@@ -20,7 +20,7 @@ export type HerdrSetupResult =
       protocol: number;
     };
 
-/** Settings that make a roamgate-managed Herdr impossible or ambiguous. */
+/** Settings that make a herdr-world-managed Herdr impossible or ambiguous. */
 export interface HerdrSetupGuard {
   sshHost?: string;
   session?: string;
@@ -80,7 +80,7 @@ export function findHerdrBinary(
   }
 
   // 2. Install locations: the official Unix default (~/.local/bin), or
-  //    Roamgate's managed directory on Windows.
+  //    Herdr World's managed directory on Windows.
   const managed = herdrManagedBinaryPath(
     homeDir,
     deps.appDataDir ?? process.env.APPDATA,

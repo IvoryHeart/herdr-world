@@ -33,16 +33,16 @@ jobs:
               with:
                   bun-version: "1.4.1"
                   no-cache: true
-            - name: Verify live Roamgate installer
+            - name: Verify live Herdr World installer
               run: |
                   set -eu
                   status=$(curl --fail --silent --show-error --location \
                     --proto '=https' --proto-redir '=https' \
                     --connect-timeout 10 --max-time 60 --output /dev/null \
                     --write-out '%{http_code}' \
-                    https://github.com/powerfooI/roamgate/releases/latest/download/install-roamgate.sh) \
+                    https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh) \
                     && [ "$status" = 200 ] \
-                    || { echo 'Publish a Roamgate release as Latest before deploying Pages.' >&2; exit 1; }
+                    || { echo 'Publish a Herdr World release as Latest before deploying Pages.' >&2; exit 1; }
             - name: Configure Pages
               uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
               with:

@@ -19,7 +19,7 @@ server/public
 server/src/public-files.gen.ts
 server/herdr-gui
 server/herdr-gui-*
-server/roamgate
-server/roamgate.exe
-server/roamgate-*
+server/herdr-world
+server/herdr-world.exe
+server/herdr-world-*
 server/*.bun-build

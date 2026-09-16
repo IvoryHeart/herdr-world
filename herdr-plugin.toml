@@ -1,64 +1,64 @@
-id = "roamgate"
-name = "Roamgate"
-version = "0.7.3"
-min_herdr_version = "0.7.2"
-description = "Web and PWA client for Herdr: workspaces, tabs, panes, agent status, session inspection, diffs, and review annotations"
+id = "ivoryheart.herdr-world"
+name = "Herdr World"
+version = "0.1.1"
+min_herdr_version = "0.9.0"
+description = "Visual control plane for Herdr agents with managed local and SSH connections."
 platforms = ["linux", "macos", "windows"]
 
-# Thin launcher: every action delegates to scripts/studio-plugin.ts, which
+# Thin launcher: every action delegates to scripts/world-plugin.ts, which
 # downloads the checksum-verified prebuilt release binary matching this
 # checkout's version on demand and forwards service verbs to it (systemd,
 # launchd, or Windows Task Scheduler). The verb set is a frozen contract; see
-# scripts/studio-plugin.ts. The shim itself runs on Bun. For an unreleased
-# checkout, run `bun scripts/studio-plugin.ts build-source`, then
+# scripts/world-plugin.ts. The shim itself runs on Bun. For an unreleased
+# checkout, run `bun scripts/world-plugin.ts build-source`, then
 # `herdr plugin link .`; see docs/DEPLOYMENT.md#herdr-plugin.
 # The panel opens as a session-modal popup in the Herdr TUI by default. Open
 # it with --placement split (or tab/zoomed/overlay) to get a regular pane
-# that other Herdr clients, including Roamgate itself, can see.
+# that other Herdr clients, including Herdr World itself, can see.
 
 [[build]]
-command = ["bun", "scripts/studio-plugin.ts", "build"]
+command = ["bun", "scripts/world-plugin.ts", "build"]
 
 [[panes]]
 id = "panel"
-title = "Roamgate"
+title = "Herdr World"
 placement = "popup"
 width = "72%"
 height = 12
-command = ["bun", "scripts/studio-plugin.ts", "panel"]
+command = ["bun", "scripts/world-plugin.ts", "panel"]
 
 [[actions]]
 id = "start"
-title = "Start Roamgate"
+title = "Start Herdr World"
 contexts = ["workspace"]
-command = ["bun", "scripts/studio-plugin.ts", "start"]
+command = ["bun", "scripts/world-plugin.ts", "start"]
 
 [[actions]]
 id = "restart"
-title = "Restart Roamgate"
+title = "Restart Herdr World"
 contexts = ["workspace"]
-command = ["bun", "scripts/studio-plugin.ts", "restart"]
+command = ["bun", "scripts/world-plugin.ts", "restart"]
 
 [[actions]]
 id = "status"
-title = "Roamgate status"
+title = "Herdr World status"
 contexts = ["workspace"]
-command = ["bun", "scripts/studio-plugin.ts", "status"]
+command = ["bun", "scripts/world-plugin.ts", "status"]
 
 [[actions]]
 id = "url"
-title = "Show Roamgate URL"
+title = "Show Herdr World URL"
 contexts = ["workspace"]
-command = ["bun", "scripts/studio-plugin.ts", "url"]
+command = ["bun", "scripts/world-plugin.ts", "url"]
 
 [[actions]]
 id = "version"
-title = "Show Roamgate version"
+title = "Show Herdr World version"
 contexts = ["workspace"]
-command = ["bun", "scripts/studio-plugin.ts", "version"]
+command = ["bun", "scripts/world-plugin.ts", "version"]
 
 [[actions]]
 id = "uninstall"
-title = "Uninstall Roamgate service"
+title = "Uninstall Herdr World service"
 contexts = ["workspace"]
-command = ["bun", "scripts/studio-plugin.ts", "uninstall"]
+command = ["bun", "scripts/world-plugin.ts", "uninstall"]

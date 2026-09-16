@@ -72,8 +72,8 @@ const MobileLayoutDialog = lazyWithReload("mobile-layout", () =>
 );
 
 const APP_VERSION = packageJson.version;
-const RELEASES_URL = "https://github.com/powerfooI/roamgate/releases";
-export const CONFIG_MENU_ID = "roamgate-config-menu";
+const RELEASES_URL = "https://github.com/IvoryHeart/herdr-world/releases";
+export const CONFIG_MENU_ID = "herdr-world-config-menu";
 
 export function reloadApplicationPage(
   target: Pick<Location, "reload"> = window.location,
@@ -259,7 +259,7 @@ export function ConfigMenu({
           >
             <div className="config-summary">
               <div>
-                <strong>Roamgate</strong>
+                <strong>Herdr World</strong>
                 <span>Version {APP_VERSION}</span>
               </div>
               <span

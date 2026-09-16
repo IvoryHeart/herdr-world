@@ -8,7 +8,7 @@ import {
 } from "./profiles";
 import { createSshProfileRuntimeConfig } from "./ssh-profile-runtime";
 
-const liveEnabled = process.env.HERDR_GUI_LIVE_SSH === "1";
+const liveEnabled = process.env.HERDR_WORLD_LIVE_SSH === "1";
 const liveTest = liveEnabled ? test : test.skip;
 
 liveTest("live OpenSSH forwards existing remote Herdr sockets", async () => {
@@ -16,9 +16,9 @@ liveTest("live OpenSSH forwards existing remote Herdr sockets", async () => {
     id: "live-ssh-smoke",
     label: "Live SSH smoke",
     type: "ssh",
-    ssh_destination: process.env.HERDR_GUI_LIVE_SSH_HOST,
-    remote_control_socket_path: process.env.HERDR_GUI_LIVE_SSH_CONTROL_SOCKET,
-    remote_client_socket_path: process.env.HERDR_GUI_LIVE_SSH_CLIENT_SOCKET,
+    ssh_destination: process.env.HERDR_WORLD_LIVE_SSH_HOST,
+    remote_control_socket_path: process.env.HERDR_WORLD_LIVE_SSH_CONTROL_SOCKET,
+    remote_client_socket_path: process.env.HERDR_WORLD_LIVE_SSH_CLIENT_SOCKET,
     auto_connect: false,
   }) as SshConnectionProfile;
   const config = createSshProfileRuntimeConfig(profile);

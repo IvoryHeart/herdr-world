@@ -1,4 +1,4 @@
-# Roamgate Features
+# Herdr World Features
 
 A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 [Install it](./docs/DEPLOYMENT.md) or follow the [tutorial](./docs/TUTORIAL.md).
@@ -158,7 +158,7 @@ repository's `paseo.json`:
 }
 ```
 
-| Paseo hook | When Roamgate runs it | Working directory |
+| Paseo hook | When Herdr World runs it | Working directory |
 | --- | --- | --- |
 | `setup` | After a new linked worktree has been created and opened | New worktree |
 | `opened` | After an existing linked worktree has been opened | Opened worktree |
@@ -176,9 +176,9 @@ Commands run through `sh -c`. The following variables are available:
 | `PASEO_HOOK` | `setup`, `opened`, `teardown`, or `removed` |
 | `PASEO_CHECKOUT_PATH` | Target worktree path, including the former path for `removed` |
 | `PASEO_SOURCE_CHECKOUT_PATH` | Parent/source checkout path when known |
-| `ROAMGATE_HOOK_EVENT` | `worktree.created`, `worktree.opened`, `worktree.before_remove`, or `worktree.removed` |
-| `ROAMGATE_HOOK_CHECKOUT_PATH` | Same target path exposed under a `ROAMGATE_`-prefixed alias |
-| `ROAMGATE_HOOK_SOURCE_CHECKOUT_PATH` | Same source path exposed under a `ROAMGATE_`-prefixed alias |
+| `HERDR_WORLD_HOOK_EVENT` | `worktree.created`, `worktree.opened`, `worktree.before_remove`, or `worktree.removed` |
+| `HERDR_WORLD_HOOK_CHECKOUT_PATH` | Same target path exposed under a `HERDR_WORLD_`-prefixed alias |
+| `HERDR_WORLD_HOOK_SOURCE_CHECKOUT_PATH` | Same source path exposed under a `HERDR_WORLD_`-prefixed alias |
 
 Legacy `HERDR_GUI_HOOK_*` aliases remain available with the same values.
 
@@ -320,7 +320,7 @@ newer work.
   asks before discarding them.
 - A bundled glyph-only Nerd Font supplies common terminal icons. Install as a
   PWA in iOS/iPadOS Safari, macOS Safari, Chrome, or Edge to remove browser chrome.
-  It still needs a reachable Roamgate process, not offline access. Use **Menu →
+  It still needs a reachable Herdr World process, not offline access. Use **Menu →
   Reload page** in the browser or PWA.
 
 Mobile shortcuts and appearance stay in this browser, not Herdr configuration.

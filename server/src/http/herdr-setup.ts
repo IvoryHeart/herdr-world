@@ -14,7 +14,7 @@ import {
   setupHerdr,
 } from "../herdr/bootstrap";
 
-const HERDR_SETUP_CONFIRMATION_HEADER = "x-roamgate-herdr-setup";
+const HERDR_SETUP_CONFIRMATION_HEADER = "x-herdr-world-herdr-setup";
 
 export function herdrSetupGuardForProfile(
   config: Pick<

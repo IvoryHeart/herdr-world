@@ -136,7 +136,7 @@ export function extractToolOutputText(
 }
 
 export function withTempDb<T>(dbPath: string, fn: (db: Database) => T): T {
-  const tempDir = mkdtempSync(join(tmpdir(), "roamgate-agy-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "herdr-world-agy-"));
   const tempDbPath = join(tempDir, basename(dbPath));
   try {
     copyFileSync(dbPath, tempDbPath);

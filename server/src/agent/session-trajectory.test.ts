@@ -74,7 +74,7 @@ describe("agent session trajectory projection", () => {
       },
     ]);
 
-    expect(trajectory.extra?.projection).toBe("roamgate-lightweight");
+    expect(trajectory.extra?.projection).toBe("herdr-world-lightweight");
     expect(trajectory.agent.name).toBe("codex");
     expect(trajectory.session_id).toBe("session");
     expect(trajectory.steps.map((step) => step.message)).toEqual([

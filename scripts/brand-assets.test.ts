@@ -7,14 +7,14 @@ const asset = async (path: string) =>
 
 test("brand icons and sharing images have the declared dimensions", async () => {
   const images: [string, number, number][] = [
-    ...[32, 180, 192, 512].map((size): [string, number, number] => [
-      `web/public/roamgate-icon-${size}.png`,
+    ...[180, 192, 512].map((size): [string, number, number] => [
+      `web/public/herdr-world-icon-${size}.png`,
       size,
       size,
     ]),
-    ["web/public/roamgate-mark-48.png", 48, 48],
-    ["web/public/roamgate-mark-72.png", 72, 72],
-    ["site/roamgate-og.png", 1200, 630],
+    ["web/public/herdr-world-icon-maskable-192.png", 192, 192],
+    ["web/public/herdr-world-icon-maskable-512.png", 512, 512],
+    ["site/herdr-world-og.png", 1200, 630],
     ["site/github-social-preview.png", 1280, 640],
   ];
   for (const [path, width, height] of images) {
@@ -27,14 +27,16 @@ test("brand icons and sharing images have the declared dimensions", async () => 
   }
 });
 
-test("legacy public image URLs serve Roamgate artwork too", async () => {
-  for (const [legacy, current] of [
-    ["web/public/herdr-icon.png", "web/public/roamgate-icon-512.png"],
-    ["site/assets/herdr-icon.png", "site/assets/roamgate-icon-96.png"],
-    ["site/assets/herdr-icon-48.png", "site/assets/roamgate-icon-48.png"],
-    ["site/assets/herdr-icon-72.png", "site/assets/roamgate-icon-72.png"],
-    ["site/og.png", "site/roamgate-og.png"],
-  ]) {
-    expect((await asset(legacy)).equals(await asset(current))).toBe(true);
-  }
+test("the application uses only World-owned brand asset paths", async () => {
+  const [index, app, manifest] = await Promise.all([
+    Bun.file(new URL("../web/index.html", import.meta.url)).text(),
+    Bun.file(new URL("../web/src/App.tsx", import.meta.url)).text(),
+    Bun.file(new URL("../web/public/manifest.json", import.meta.url)).text(),
+  ]);
+  expect(index).toContain("/herdr-world-logo.svg");
+  expect(app).toContain("/herdr-world-logo.svg");
+  expect(manifest).toContain("herdr-world-icon-maskable-512.png");
+  expect(`${index}\n${app}\n${manifest}`.toLowerCase()).not.toContain(
+    "roamgate",
+  );
 });

@@ -129,7 +129,7 @@ function createTrajectory(
     extra: {
       source_path: file.path,
       source_records: records.length,
-      projection: "roamgate-lightweight",
+      projection: "herdr-world-lightweight",
     },
   };
 }

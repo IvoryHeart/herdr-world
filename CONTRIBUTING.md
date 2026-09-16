@@ -32,8 +32,8 @@ assets required by server typechecks and process tests.
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory; its `pre-commit` hook runs `bun run precommit`.
 
-Workspace checks: `bun run --filter roamgate-web typecheck` and
-`bun run --filter roamgate-server typecheck` (builds/embeds web assets first).
+Workspace checks: `bun run --filter herdr-world-web typecheck` and
+`bun run --filter herdr-world-server typecheck` (builds/embeds web assets first).
 
 Frontend changes: `bun run build:web`. Production assets/bundling: `bun run build`.
 Releases: package and inspect every supported archive/checksum; see
@@ -83,10 +83,10 @@ bun run build:site
 
 Serve `.pages-dist/` locally and check `/tutorial/`, narrow screens, keyboard
 navigation, and JavaScript-disabled reading. Production canonical URLs, social
-images, and the sitemap use <https://roamgate.dev/>. Do not commit `.pages-dist/`.
+images, and the sitemap use <https://ivoryheart.github.io/herdr-world/>. Do not commit `.pages-dist/`.
 
 **Deploy Pages** runs on pushes to `main` (including merged PRs); manual dispatch
-remains available for retries. Both require a published Roamgate release as GitHub
+remains available for retries. Both require a published Herdr World release as GitHub
 Latest: the live installer probe blocks upload on missing assets, HTTP errors,
 or network failures. Source builds do not qualify. After repository renames,
 align the site's installer URL and workflow probe.

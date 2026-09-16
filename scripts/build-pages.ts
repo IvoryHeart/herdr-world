@@ -9,15 +9,15 @@ const outputDirectory = join(root, ".pages-dist");
 const assetDirectory = join(outputDirectory, "assets");
 
 const assets = [
-  ["docs/images/roamgate-desktop-changes.png", "roamgate-desktop-changes.png"],
-  ["docs/images/roamgate-desktop-files.png", "roamgate-desktop-files.png"],
+  ["docs/images/herdr-world-desktop-changes.png", "herdr-world-desktop-changes.png"],
+  ["docs/images/herdr-world-desktop-files.png", "herdr-world-desktop-files.png"],
   [
-    "docs/images/roamgate-desktop-annotations.png",
-    "roamgate-desktop-annotations.png",
+    "docs/images/herdr-world-desktop-annotations.png",
+    "herdr-world-desktop-annotations.png",
   ],
-  ["docs/images/roamgate-mobile-changes.png", "roamgate-mobile-changes.png"],
-  ["docs/images/roamgate-mobile-files.png", "roamgate-mobile-files.png"],
-  ["docs/images/roamgate-mobile-terminal.png", "roamgate-mobile-terminal.png"],
+  ["docs/images/herdr-world-mobile-changes.png", "herdr-world-mobile-changes.png"],
+  ["docs/images/herdr-world-mobile-files.png", "herdr-world-mobile-files.png"],
+  ["docs/images/herdr-world-mobile-terminal.png", "herdr-world-mobile-terminal.png"],
 ] as const;
 
 async function ensureFile(path: string): Promise<void> {

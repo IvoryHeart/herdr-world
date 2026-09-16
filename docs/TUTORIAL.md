@@ -3,7 +3,7 @@
 
 # From your first terminal to a workspace that travels
 
-**Start Roamgate on the Herdr host and open its URL:** follow [chapter 1](#start).
+**Start Herdr World on the Herdr host and open its URL:** follow [chapter 1](#start).
 Not installed? Use the [installation guide](./DEPLOYMENT.md#install-a-release).
 
 Practice one task: **ask an agent to improve a README, review the changes, then
@@ -14,7 +14,7 @@ check from your phone.** No Git, SSH, or networking knowledge is needed to start
 > approvals, and troubleshooting. Stop at any completion check.
 >
 > **This static Pages tutorial does not run Herdr or keep terminals alive.**
-> You still need the Roamgate process.
+> You still need the Herdr World process.
 
 ## 1. Start here: see your own work locally
 
@@ -29,15 +29,15 @@ Your browser / installed PWA
           |
           | HTTP + WebSocket
           v
-Roamgate (command: roamgate)
+Herdr World (command: herdr-world)
           |
           | Herdr control and terminal-render sockets
           v
 Herdr server -> workspace -> tab -> pane -> shell / agent
 ```
 
-**Herdr owns terminals; Roamgate supplies the browser UI; agents remain CLIs.**
-Roamgate neither provides models nor installs/signs in to Codex, Claude, Pi, or
+**Herdr owns terminals; Herdr World supplies the browser UI; agents remain CLIs.**
+Herdr World neither provides models nor installs/signs in to Codex, Claude, Pi, or
 other tools. Closing the browser leaves terminals running, but host sleep,
 shutdown, or process exit can stop work.
 
@@ -48,20 +48,20 @@ before changing an existing installation.
 ### Open your first workspace: about 5 minutes
 
 1. Start Herdr with a trusted project open. See [herdr.dev](https://herdr.dev)
-   for setup; Roamgate does not start it.
-2. [Install Roamgate](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
-   Windows uses the matching x64/ARM64 archive and `roamgate.exe`. Alternatively,
+   for setup; Herdr World does not start it.
+2. [Install Herdr World](./DEPLOYMENT.md#install-a-release). Standalone needs no Bun;
+   Windows uses the matching x64/ARM64 archive and `herdr-world.exe`. Alternatively,
    follow the [plugin setup](./DEPLOYMENT.md#herdr-plugin).
 3. Start it on that computer:
 
    **Standalone:** leave this process running:
 
    ```bash
-   roamgate
+   herdr-world
    ```
 
    **Plugin:** use its [startup action](./DEPLOYMENT.md#herdr-plugin) and obtain
-   the login URL from the panel/command log. The plugin does not add `roamgate`
+   the login URL from the panel/command log. The plugin does not add `herdr-world`
    to `PATH`; skip the standalone command.
 
 4. Open the printed URL (including any token) on **the same computer**. Standalone
@@ -72,10 +72,10 @@ before changing an existing installation.
 working before configuring remote access.
 
 > **Check the listener:** standalone defaults to loopback and bypasses login
-> even with a password configured. A new `roamgate service install` uses
+> even with a password configured. A new `herdr-world service install` uses
 > `0.0.0.0:8787` with a token; the plugin uses this service too.
 
-![Desktop workspace with project navigation on the left, live terminals in the center, and changed files on the right](./images/roamgate-desktop-changes.png)
+![Desktop workspace with project navigation on the left, live terminals in the center, and changed files on the right](./images/herdr-world-desktop-changes.png)
 
 *Find the project and active pane. Screenshot menu positions can differ by release.*
 
@@ -153,7 +153,7 @@ for History, Files, and Changes on your platform.
 
 **You are done when:** you can identify the new lines and verify the run command.
 
-![File Explorer previewing a README with raw and rendered views](./images/roamgate-desktop-files.png)
+![File Explorer previewing a README with raw and rendered views](./images/herdr-world-desktop-files.png)
 
 *File-tree search covers loaded files, not repository-wide full-text search.*
 
@@ -176,7 +176,7 @@ Right-click/long-press for file actions, drag to upload, or download a file or
 Drafts stay in this browser/checkout, not GitHub PRs or other devices. Failed
 re-anchoring marks a comment stale but retains its original quote.
 
-![Diff Viewer with a comment on selected changed lines](./images/roamgate-desktop-annotations.png)
+![Diff Viewer with a comment on selected changed lines](./images/herdr-world-desktop-annotations.png)
 
 ### 2.5 Do not rush into bulk actions
 
@@ -205,7 +205,7 @@ own checkout directory and branch.
    for this repository through **Worktree hooks** before proceeding.
 2. Open **Worktree Lifecycle** from the workspace context menu, or search for
    `worktree lifecycle` in the command menu.
-3. Create and open a documentation worktree. Roamgate starts it from the latest
+3. Create and open a documentation worktree. Herdr World starts it from the latest
    fetched `origin/main`, without carrying over the source workspace's
    uncommitted changes.
 4. In the new worktree's terminal, run `pwd` and `git status`. Confirm the
@@ -229,7 +229,7 @@ in this connection. See [update controls](../FEATURES.md#automatic-branch-update
 First complete chapter 4's [Tailscale + Serve](#tailscale) setup and access checks.
 Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer.
 
-1. Open Roamgate in the mobile browser and select your practice project and
+1. Open Herdr World in the mobile browser and select your practice project and
    agent pane. Authenticate first if your deployment requires login.
 2. Use the floating terminal panel for arrow keys, Ctrl, and other actions
    that are awkward on a touch keyboard. Customize its two shortcut rows
@@ -246,12 +246,12 @@ Use its HTTPS URL: `127.0.0.1` on a phone means the phone, not the work computer
 | Chrome / Edge | Browser menu > Install app |
 
 **You are done when:** the home-screen icon opens your project. Install the stable
-Roamgate service URL, not this tutorial's Pages URL.
+Herdr World service URL, not this tutorial's Pages URL.
 
-![Mobile terminal with touch shortcut controls](./images/roamgate-mobile-terminal.png)
+![Mobile terminal with touch shortcut controls](./images/herdr-world-mobile-terminal.png)
 
 **PWA is not offline access or background keep-alive.** Host sleep, stopped
-Roamgate, or a disconnected VPN interrupts access. Completion notifications can
+Herdr World, or a disconnected VPN interrupts access. Completion notifications can
 return to a pane, but browser permissions and OS restrictions make them unsuitable
 as reliable alerts.
 
@@ -274,9 +274,9 @@ temporary experiments between computers you control.
 
 | Your goal | Recommended route | What you need |
 | --- | --- | --- |
-| Use Roamgate on the computer running Herdr | Local Roamgate | No extra networking tool |
+| Use Herdr World on the computer running Herdr | Local Herdr World | No extra networking tool |
 | Reach the workspace from your phone away from home | Tailscale + Serve | Host and phone in the same tailnet |
-| Manage remote Herdr through local Roamgate | SSH profile / `--ssh-host` | Local Linux/macOS, Herdr already running remotely |
+| Manage remote Herdr through local Herdr World | SSH profile / `--ssh-host` | Local Linux/macOS, Herdr already running remotely |
 | Connect two computers temporarily without a tailnet | Tailcat port forwarding | Tailcat on both ends and a securely exchanged address |
 
 These external tools are **not built-in integrations**. No router forwarding,
@@ -286,23 +286,23 @@ network before relying on it.
 ### 4.1 Separate the two network hops
 
 ```text
-Hop A: Browser -> Roamgate
+Hop A: Browser -> Herdr World
        Tailscale Serve / SSH TCP forwarding / Tailcat port forwarding
 
-Hop B: Roamgate -> Herdr
-       Local sockets / a Roamgate SSH profile
+Hop B: Herdr World -> Herdr
+       Local sockets / a Herdr World SSH profile
 ```
 
-Tailscale/Tailcat solve **hop A** (browser to Roamgate); `--ssh-host` solves
-**hop B** (Roamgate to Herdr). Start with the hop you need.
+Tailscale/Tailcat solve **hop A** (browser to Herdr World); `--ssh-host` solves
+**hop B** (Herdr World to Herdr). Start with the hop you need.
 
 #### Safety checks before connecting
 
 1. Admit only fully trusted devices/people: UI access is terminal/file authority
-   as the Roamgate user.
+   as the Herdr World user.
 2. **Loopback (`127.0.0.1`, `localhost`, `::1`) bypasses login even with
-   `ROAMGATE_PASSWORD`.** A forwarding tunnel/proxy becomes the entire remote
-   access boundary, with no extra Roamgate password gate.
+   `HERDR_WORLD_PASSWORD`.** A forwarding tunnel/proxy becomes the entire remote
+   access boundary, with no extra Herdr World password gate.
 3. Use HTTPS or a trusted encrypted tunnel; restrict listeners and access policy.
    Passwords provide no TLS, rate limiting, multi-user authorization, or sandbox.
 4. Never publish passwords, token URLs, or Tailcat addresses in screenshots,
@@ -329,7 +329,7 @@ Tailscale Serve on the work computer
           |
           | HTTP, local loopback only
           v
-127.0.0.1:8787 -> Roamgate -> local Herdr
+127.0.0.1:8787 -> Herdr World -> local Herdr
 ```
 
 #### Prepare both devices: about 5-10 minutes
@@ -340,27 +340,27 @@ Tailscale Serve on the work computer
    [macOS instructions](https://tailscale.com/docs/install/mac), not a second
    client installation to fix PATH.
 3. [Restrict access](https://tailscale.com/docs/features/access-control) to intended
-   users/devices on the Roamgate node's HTTPS port 443. Check broad existing rules.
+   users/devices on the Herdr World node's HTTPS port 443. Check broad existing rules.
    Tailnet membership is not least privilege: **verify scope before enabling Serve**.
 
-#### Start Roamgate with a local-only listener
+#### Start Herdr World with a local-only listener
 
 On **the Herdr host**, ensure port 8787 is free. If a plugin/user service already
-runs Roamgate, follow the existing-service instructions below; do not duplicate it.
+runs Herdr World, follow the existing-service instructions below; do not duplicate it.
 
 ```bash
-roamgate --host 127.0.0.1 --port 8787
+herdr-world --host 127.0.0.1 --port 8787
 ```
 
-On Windows, use `roamgate.exe` (`./roamgate.exe` from its PowerShell directory).
+On Windows, use `herdr-world.exe` (`./herdr-world.exe` from its PowerShell directory).
 Leave the process running.
 
-> **No Roamgate login page:** Tailscale identity/access rules admit remote devices
+> **No Herdr World login page:** Tailscale identity/access rules admit remote devices
 > directly. HTTPS protects transport. Local processes can also access loopback.
 > Continue only if you accept this boundary.
 
-**Existing service:** edit `~/.config/roamgate/roamgate.env` (Unix) or
-`%APPDATA%\roamgate\roamgate.env` (Windows). Preserve other settings; set
+**Existing service:** edit `~/.config/herdr-world/herdr-world.env` (Unix) or
+`%APPDATA%\herdr-world\herdr-world.env` (Windows). Preserve other settings; set
 `HOST=127.0.0.1` and `PORT=8787`. **This removes the token/password gate:** Tailscale
 policy must replace it. Protect this potentially secret file; never commit it.
 Restart for your installation:
@@ -368,13 +368,13 @@ Restart for your installation:
 **Standalone installation:**
 
 ```bash
-roamgate service restart
+herdr-world service restart
 ```
 
 **Plugin installation:**
 
 ```bash
-herdr plugin action invoke roamgate.restart
+herdr plugin action invoke herdr-world.restart
 ```
 
 Plugin actions are asynchronous: confirm restart in its panel/log.
@@ -411,7 +411,7 @@ See [service configuration and logs](./DEPLOYMENT.md#run-as-a-user-service).
 cannot connect. Incognito is not an admission test; device identity stays the same.
 
 > **Serve is private; Funnel is public. Do not substitute `funnel`.** Serve identity
-> headers add no Roamgate per-person/read-only roles. Use domain root `/`; arbitrary
+> headers add no Herdr World per-person/read-only roles. Use domain root `/`; arbitrary
 > subpaths such as `/studio/` are not assured.
 
 #### Stop sharing, or make it a regular setup
@@ -424,24 +424,24 @@ tailscale serve status
 ```
 
 `tailscale serve reset` clears the device's entire Serve configuration, including
-other services. **`--bg` persists Serve, not Roamgate, and does not prevent sleep.**
-After verification, configure a [Roamgate user service](./DEPLOYMENT.md#run-as-a-user-service)
+other services. **`--bg` persists Serve, not Herdr World, and does not prevent sleep.**
+After verification, configure a [Herdr World user service](./DEPLOYMENT.md#run-as-a-user-service)
 if needed, keeping loopback and strict Tailscale policy.
 
 <a id="ssh"></a>
 
 ### 4.3 SSH: connect to Herdr, or forward the web interface
 
-#### Option A: local Roamgate, remote Herdr
+#### Option A: local Herdr World, remote Herdr
 
-Use local Roamgate with remote code/agents. **Roamgate must run on Linux/macOS**
+Use local Herdr World with remote code/agents. **Herdr World must run on Linux/macOS**
 for SSH socket forwarding; Windows supports native local profiles only.
 
 1. Verify connectivity with system SSH, confirm the host fingerprint, and check
    authentication and the already-running remote Herdr server. Put custom
    ports, jump hosts, and keys in local `~/.ssh/config`; for example, configure
    the destination as the alias `workbox`.
-2. In local Roamgate, add an SSH profile through the connection selector beside
+2. In local Herdr World, add an SSH profile through the connection selector beside
    the title. Set Destination to `workbox`, leaving the control and render
    socket paths empty for automatic resolution.
 3. Test and connect using the selector. Open the remote project and run `pwd`
@@ -450,7 +450,7 @@ for SSH socket forwarding; Windows supports native local profiles only.
 Or start a local bridge on a free port:
 
 ```bash
-roamgate --ssh-host workbox --host 127.0.0.1
+herdr-world --ssh-host workbox --host 127.0.0.1
 ```
 
 **You are done when:** the local browser controls the remote terminal/files.
@@ -461,10 +461,10 @@ override tunnel paths; stale settings can select the wrong target. Profiles
 store no passwords/keys; OpenSSH owns host verification/authentication. See
 [connections](./DEPLOYMENT.md#multiple-and-remote-herdr-connections).
 
-#### Option B: Roamgate already runs remotely; forward its web port
+#### Option B: Herdr World already runs remotely; forward its web port
 
 Both services stay remote; system SSH forwards the web port (not `--ssh-host`).
-Remote Roamgate must use loopback: login is bypassed, so SSH authentication controls
+Remote Herdr World must use loopback: login is bypassed, so SSH authentication controls
 remote admission. Visiting-computer processes can also use the forwarded port.
 This option works with Windows OpenSSH too.
 
@@ -499,13 +499,13 @@ privately exchange the server's address.
 Install supported versions on both computers from the
 [official repository](https://github.com/tailscale/tailcat#install): macOS supports
 `brew install tailcat`; other systems need the matching release architecture.
-The experimental web demo is not a general Roamgate proxy, and phones are not
+The experimental web demo is not a general Herdr World proxy, and phones are not
 assumed to support these CLIs. Use Tailscale for regular mobile access.
 
-#### Connect only the Roamgate port
+#### Connect only the Herdr World port
 
-1. Run Roamgate on the work computer at `127.0.0.1:8787` and verify its local
-   page. **This listener has no Roamgate login gate. The experiment relies
+1. Run Herdr World on the work computer at `127.0.0.1:8787` and verify its local
+   page. **This listener has no Herdr World login gate. The experiment relies
    entirely on Tailcat admission; leaking the address leaks access to the
    workspace.** Use only two computers you control, not a demo for other people.
 2. In another terminal on the work computer, start a temporary single-port
@@ -542,7 +542,7 @@ Visiting browser -> 127.0.0.1:18787 -> tailcat forward
                                  WireGuard encryption
                                  (direct or via DERP)
                                           |
-Work host: Herdr <- Roamgate :8787 <- tailcat serve
+Work host: Herdr <- Herdr World :8787 <- tailcat serve
 ```
 
 **You are done when:** the trusted computer has access without a public listener,
@@ -558,7 +558,7 @@ authentication-free SSH, or writable-directory sharing.
 | Consideration | Tailscale + Serve | Tailcat |
 | --- | --- | --- |
 | Best fit | Regular private access across your devices | A short-lived connection between your computers |
-| Who gets access | Tailnet identity and policy; no Roamgate login gate in this example | The connection address and optional client restrictions; no Roamgate login gate in this example |
+| Who gets access | Tailnet identity and policy; no Herdr World login gate in this example | The connection address and optional client restrictions; no Herdr World login gate in this example |
 | Browser entry | A private HTTPS hostname | Localhost exposed by the client CLI |
 | Ongoing responsibility | Maintain device sign-ins, policies, and services | Protect the temporary address, check versions, and stop processes |
 
@@ -571,17 +571,17 @@ does not mean encryption is disabled, but performance may differ from your LAN.
 
 ### A page will not open: check in order, about 3 minutes
 
-1. On the **Roamgate host**, probe its HTTP service:
+1. On the **Herdr World host**, probe its HTTP service:
 
    ```bash
    curl -fsS http://127.0.0.1:8787/healthz
    ```
 
    Use `curl.exe` in Windows PowerShell. This is a service probe, not proof
-   that every Herdr feature works. For a refused connection, check the Roamgate
+   that every Herdr feature works. For a refused connection, check the Herdr World
    process, port, and service status before changing the VPN.
 
-2. Open Roamgate locally on its host, authenticating first for a non-loopback
+2. Open Herdr World locally on its host, authenticating first for a non-loopback
    deployment. If the page appears but the terminal does not, check that
    Herdr is running, the selected profile, control and render socket paths,
    and connection errors in the logs.
@@ -602,14 +602,14 @@ access path and changed only that part.
 | Symptom | Check this first |
 | --- | --- |
 | Localhost on the phone does not open the computer's workspace | Localhost points to the phone. Use Serve's printed HTTPS URL. |
-| Roamgate opens directly despite a configured password | Loopback listeners skip built-in authentication. For non-loopback listeners, use a fresh incognito window to rule out an existing cookie. |
+| Herdr World opens directly despite a configured password | Loopback listeners skip built-in authentication. For non-loopback listeners, use a fresh incognito window to rule out an existing cookie. |
 | `Address already in use` | A plugin or user service may already occupy 8787. Do not start a duplicate bridge. |
 | SSH connects, but session history is empty | Check remote transcript readability and the metadata/fallback limitations in chapter 2. |
 | Image paste, clipboard access, or PWA installation is restricted | Check the HTTPS secure context, browser permissions, and platform support. Prefer the Serve HTTPS address. |
 
 See [deployment](./DEPLOYMENT.md) for token recovery, restarts, and debug logs.
 Do not disable authentication permanently or open the entire firewall. For help,
-share redacted logs, OS/Roamgate versions, and the failing step.
+share redacted logs, OS/Herdr World versions, and the failing step.
 
 ### Your first round is complete
 
@@ -620,7 +620,7 @@ Check before finishing:
 - [ ] I know which host receives file and Git operations.
 - [ ] For remote access, I checked the effective authentication boundary, listener address, allowed users, and how to stop sharing.
 
-**Next time you open Roamgate, take one small action: find an agent waiting for
+**Next time you open Herdr World, take one small action: find an agent waiting for
 you and inspect one part of its diff.**
 
 ### References and maintenance

@@ -1061,7 +1061,7 @@ export function TerminalView({
         setTerminalAttachError(
           typeof closed.reason === "string" &&
             closed.reason.includes("taken over")
-            ? "Terminal stream was taken over by another Roamgate client"
+            ? "Terminal stream was taken over by another Herdr World client"
             : "Terminal stream closed by the server",
         );
         return;

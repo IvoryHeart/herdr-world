@@ -7,9 +7,9 @@ import { connectionStorageKey } from "./connectionStorage";
 export type InspectorView = "files" | "changes" | "history";
 export type WorkspaceSurface = "terminal" | "annotations" | InspectorView;
 export const WORKSPACE_INSPECTOR_REQUEST_EVENT =
-  "roamgate:workspace-inspector-request";
+  "herdr-world:workspace-inspector-request";
 export const WORKSPACE_ANNOTATION_REQUEST_EVENT =
-  "roamgate:workspace-annotation-request";
+  "herdr-world:workspace-annotation-request";
 
 export function isWorkspaceInspectorShortcut(
   event: Pick<

@@ -1,40 +1,26 @@
 import { describe, expect, test } from "bun:test";
-import { roamgateEnv } from "./environment";
 import { isSupervisorManagedEnvironment } from "../http/update";
+import { worldEnv } from "./environment";
 
-describe("Roamgate environment compatibility", () => {
-  test("new names override legacy names without mutating the environment", () => {
-    const environment = {
-      ROAMGATE_PASSWORD: "new-secret",
-      HERDR_GUI_PASSWORD: "old-secret",
-    };
-    expect(roamgateEnv("PASSWORD", environment)).toBe("new-secret");
-    expect(environment.HERDR_GUI_PASSWORD).toBe("old-secret");
-    expect(roamgateEnv("PASSWORD", { HERDR_GUI_PASSWORD: "old-secret" })).toBe(
-      "old-secret",
+describe("Herdr World environment", () => {
+  test("reads only World-owned names and preserves explicit empty values", () => {
+    expect(worldEnv("PASSWORD", { HERDR_WORLD_PASSWORD: "secret" })).toBe(
+      "secret",
     );
-    expect(
-      roamgateEnv("PASSWORD", {
-        ROAMGATE_PASSWORD: "",
-        HERDR_GUI_PASSWORD: "old-secret",
-      }),
-    ).toBe("");
-    expect(roamgateEnv("PASSWORD", {})).toBeUndefined();
+    expect(worldEnv("PASSWORD", { HERDR_WORLD_PASSWORD: "" })).toBe("");
+    expect(worldEnv("PASSWORD", { HERDR_GUI_PASSWORD: "legacy" })).toBeUndefined();
+    expect(worldEnv("PASSWORD", {})).toBeUndefined();
   });
 
-  test("new supervisor override takes precedence over legacy settings and detection", () => {
+  test("World supervisor override controls managed detection", () => {
     expect(
       isSupervisorManagedEnvironment({
-        ROAMGATE_RESTART_SUPERVISOR: "0",
-        HERDR_GUI_RESTART_SUPERVISOR: "1",
+        HERDR_WORLD_RESTART_SUPERVISOR: "0",
         INVOCATION_ID: "service",
       }),
     ).toBe(false);
     expect(
-      isSupervisorManagedEnvironment({
-        ROAMGATE_RESTART_SUPERVISOR: "1",
-        HERDR_GUI_RESTART_SUPERVISOR: "0",
-      }),
+      isSupervisorManagedEnvironment({ HERDR_WORLD_RESTART_SUPERVISOR: "1" }),
     ).toBe(true);
   });
 });

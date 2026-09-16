@@ -1,17 +1,17 @@
 {
-  "name": "roamgate",
+  "name": "herdr-world",
   "private": true,
-  "version": "0.7.3",
-  "description": "Roamgate: an independent community Web and PWA client for Herdr.",
+  "version": "0.0.0",
+  "description": "Herdr World: a visual control plane for Herdr agents.",
   "license": "MIT",
-  "author": "Arthur",
-  "homepage": "https://roamgate.dev/",
+  "author": "IvoryHeart",
+  "homepage": "https://ivoryheart.github.io/herdr-world/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/powerfooI/roamgate.git"
+    "url": "git+https://github.com/IvoryHeart/herdr-world.git"
   },
   "bugs": {
-    "url": "https://github.com/powerfooI/roamgate/issues"
+    "url": "https://github.com/IvoryHeart/herdr-world/issues"
   },
   "engines": {
     "bun": ">=1.4.1"
@@ -21,24 +21,24 @@
     "server"
   ],
   "scripts": {
-    "dev:server": "bun run --filter roamgate-server dev",
-    "dev:web": "bun run --filter roamgate-web dev",
-    "build:web": "bun run --filter roamgate-web build",
+    "dev:server": "bun run --filter herdr-world-server dev",
+    "dev:web": "bun run --filter herdr-world-web dev",
+    "build:web": "bun run --filter herdr-world-web build",
     "build:site": "bun scripts/build-pages.ts",
-    "build:server": "bun run --filter roamgate-server compile",
+    "build:server": "bun run --filter herdr-world-server compile",
     "build": "bun run build:web && bun run build:server",
     "postbuild": "bun run clean:bun-build",
-    "build:linux-x64": "bun run build:web && bun run --filter roamgate-server compile:linux-x64",
+    "build:linux-x64": "bun run build:web && bun run --filter herdr-world-server compile:linux-x64",
     "postbuild:linux-x64": "bun run clean:bun-build",
-    "build:linux-arm64": "bun run build:web && bun run --filter roamgate-server compile:linux-arm64",
+    "build:linux-arm64": "bun run build:web && bun run --filter herdr-world-server compile:linux-arm64",
     "postbuild:linux-arm64": "bun run clean:bun-build",
-    "build:darwin-x64": "bun run build:web && bun run --filter roamgate-server compile:darwin-x64",
+    "build:darwin-x64": "bun run build:web && bun run --filter herdr-world-server compile:darwin-x64",
     "postbuild:darwin-x64": "bun run clean:bun-build",
-    "build:darwin-arm64": "bun run build:web && bun run --filter roamgate-server compile:darwin-arm64",
+    "build:darwin-arm64": "bun run build:web && bun run --filter herdr-world-server compile:darwin-arm64",
     "postbuild:darwin-arm64": "bun run clean:bun-build",
-    "build:windows-x64": "bun run build:web && bun run --filter roamgate-server compile:windows-x64",
-    "build:windows-arm64": "bun run build:web && bun run --filter roamgate-server compile:windows-arm64",
-    "build:all": "bun run build:web && bun run --filter roamgate-server compile:all",
+    "build:windows-x64": "bun run build:web && bun run --filter herdr-world-server compile:windows-x64",
+    "build:windows-arm64": "bun run build:web && bun run --filter herdr-world-server compile:windows-arm64",
+    "build:all": "bun run build:web && bun run --filter herdr-world-server compile:all",
     "postbuild:all": "bun run clean:bun-build",
     "package:linux-x64": "scripts/package-release.sh linux-x64",
     "package:linux-arm64": "scripts/package-release.sh linux-arm64",
@@ -54,13 +54,16 @@
     "test": "bun test",
     "test:quick": "bun test --path-ignore-patterns '**/{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,HerdrSetupCard}.test.ts'",
     "test:browser": "bun test ./web/src/uiScale.test.ts ./web/src/mobileTerminal.test.ts ./web/src/filePreviewNavigation.test.ts ./web/src/components/TerminalThemeDialog.test.ts ./web/src/components/VisualPreview.test.ts ./web/src/components/ThemedSelect.test.ts ./web/src/components/HerdrSetupCard.test.ts",
-    "typecheck": "tsc --noEmit && bun run --filter roamgate-web typecheck && bun run --filter roamgate-server typecheck",
+    "typecheck": "tsc --noEmit && bun run --filter herdr-world-web typecheck && bun run --filter herdr-world-server typecheck",
     "typecheck:quick": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p server/tsconfig.json",
     "precommit": "bun run format:check && bun run lint && bun run typecheck && bun run test",
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run spec:check",
     "install-hooks": "git config core.hooksPath .githooks",
     "clean:bun-build": "find server -maxdepth 1 -name '*.bun-build' -exec rm -rf {} +",
-    "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/roamgate server/roamgate.exe server/roamgate-* server/herdr-gui server/herdr-gui-* && bun run clean:bun-build",
-    "start:server": "bun run --filter roamgate-server start"
+    "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world-* server/herdr-gui server/herdr-gui-* && bun run clean:bun-build",
+    "start:server": "bun run --filter herdr-world-server start",
+    "spec": "openspec",
+    "spec:check": "openspec validate --all --strict --no-interactive"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
@@ -70,6 +73,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.7.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0"
+    "typescript-eslint": "^8.62.0",
+    "@fission-ai/openspec": "1.12.0"
   }
 }

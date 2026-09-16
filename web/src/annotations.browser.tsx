@@ -10,7 +10,7 @@ import {
   writeReviewAnnotations,
   type ReviewAnnotation,
 } from "./annotations";
-import { roamgateLocalStorage } from "./browserStorage";
+import { worldLocalStorage } from "./browserStorage";
 import { __storeTesting, store } from "./store";
 import type { ShortcutId } from "./shortcutBindings";
 import {
@@ -257,7 +257,7 @@ export async function checkAnnotationUX(
     comment: "Handle failure",
     createdAt: 1,
   };
-  writeReviewAnnotations(roamgateLocalStorage, key, [file]);
+  writeReviewAnnotations(worldLocalStorage, key, [file]);
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
@@ -317,7 +317,7 @@ export async function checkAnnotationUX(
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const draft = () => readReviewAnnotations(roamgateLocalStorage, key);
+  const draft = () => readReviewAnnotations(worldLocalStorage, key);
   const paint = () =>
     listeners.forEach((listener) =>
       listener({
@@ -724,7 +724,7 @@ export async function checkAnnotationUX(
       showAnnotations();
       click('button[aria-label="Pin annotations"]');
       check(
-        roamgateLocalStorage.getItem("annotationPanelMode") === "fixed" &&
+        worldLocalStorage.getItem("annotationPanelMode") === "fixed" &&
           !document.querySelector(".annotation-panel.is-floating"),
         "pin mode was not saved",
       );
@@ -756,9 +756,9 @@ export async function checkAnnotationUX(
     click('button[aria-label="Delete comment 3"]');
     click('button[aria-label="Delete comment 2"]');
     checkAnnotationCount(1);
-    const setItem = roamgateLocalStorage.setItem;
+    const setItem = worldLocalStorage.setItem;
     try {
-      roamgateLocalStorage.setItem = (storageKey, value) => {
+      worldLocalStorage.setItem = (storageKey, value) => {
         if (storageKey === key) throw new Error("Storage full");
         setItem(storageKey, value);
       };
@@ -801,7 +801,7 @@ export async function checkAnnotationUX(
         "reopen or new save resurrected a deleted stored comment",
       );
     } finally {
-      roamgateLocalStorage.setItem = setItem;
+      worldLocalStorage.setItem = setItem;
     }
     click('button[aria-label="Close review feedback"]');
     click('button[aria-label="Close Workspace Inspector"]');
@@ -825,7 +825,7 @@ export async function checkAnnotationUX(
     }
     // Start the selection fixture with one persisted file comment.
     flushSync(() => root.render(null));
-    writeReviewAnnotations(roamgateLocalStorage, key, [file]);
+    writeReviewAnnotations(worldLocalStorage, key, [file]);
     flushSync(() =>
       root.render(
         <StrictMode>
@@ -1298,7 +1298,7 @@ export async function checkAnnotationUX(
     const secondKey = annotationDraftStorageKey(
       resourceScopeForWorkspace(client.connectionId, secondWorkspace),
     );
-    writeReviewAnnotations(roamgateLocalStorage, secondKey, [
+    writeReviewAnnotations(worldLocalStorage, secondKey, [
       { ...file, quote: "other();", comment: "Other checkout" },
     ]);
     const switchWorkspace = async (second: boolean) => {
@@ -1358,7 +1358,7 @@ export async function checkAnnotationUX(
       "hidden Inspector preview did not complete",
     );
     check(
-      readReviewAnnotations(roamgateLocalStorage, secondKey)[0]?.stale !==
+      readReviewAnnotations(worldLocalStorage, secondKey)[0]?.stale !==
         true &&
         document.querySelector<HTMLTextAreaElement>(".annotation-card textarea")
           ?.value === "Other checkout",
@@ -1381,7 +1381,7 @@ export async function checkAnnotationUX(
     retiredScopeDelivery.resolve({});
     await settle();
     check(
-      readReviewAnnotations(roamgateLocalStorage, secondKey).length === 1 &&
+      readReviewAnnotations(worldLocalStorage, secondKey).length === 1 &&
         document.querySelector<HTMLButtonElement>(
           ".annotation-delivery-actions button:last-child",
         )!.disabled,
@@ -1390,9 +1390,9 @@ export async function checkAnnotationUX(
     delivery!.reject(new Error("Keep returned draft"));
     delivery = null;
     await settle();
-    const restoreStorage = roamgateLocalStorage.setItem;
+    const restoreStorage = worldLocalStorage.setItem;
     try {
-      roamgateLocalStorage.setItem = (storageKey, value) => {
+      worldLocalStorage.setItem = (storageKey, value) => {
         if (storageKey === secondKey) throw new Error("Storage unavailable");
         restoreStorage(storageKey, value);
       };
@@ -1414,7 +1414,7 @@ export async function checkAnnotationUX(
         "scope switching/new save resurrected unsaved delete",
       );
     } finally {
-      roamgateLocalStorage.setItem = restoreStorage;
+      worldLocalStorage.setItem = restoreStorage;
     }
     await switchWorkspace(false);
     click(".annotation-delivery-actions button:last-child");

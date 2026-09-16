@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Thin Herdr plugin shim for Roamgate. Herdr invokes the verbs below
+// Thin Herdr plugin shim for Herdr World. Herdr invokes the verbs below
 // through herdr-plugin.toml actions; the verb names and their argv mapping
 // are a frozen contract because managed installs call the action set cached
 // at install time.
@@ -31,13 +31,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   dataRoot,
-  legacyDataRoot,
   assertSafeDataPath,
 } from "../server/src/config/data-paths";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const BINARY_CANDIDATES =
-  process.platform === "win32" ? ["roamgate.exe", "roamgate"] : ["roamgate"];
+  process.platform === "win32" ? ["herdr-world.exe", "herdr-world"] : ["herdr-world"];
 
 function binaryPath(): string | null {
   for (const name of BINARY_CANDIDATES) {
@@ -54,7 +53,7 @@ function run(argv: string[], cwd = REPO_ROOT): number {
   });
   if (result.error) {
     console.error(
-      `studio-plugin: cannot run ${argv[0]}: ${result.error.message}`,
+      `world-plugin: cannot run ${argv[0]}: ${result.error.message}`,
     );
     return 1;
   }
@@ -81,16 +80,16 @@ export const PLATFORM_ASSETS: Record<
   string,
   { asset: string; binary: string }
 > = {
-  "darwin-arm64": { asset: "roamgate-darwin-arm64", binary: "roamgate" },
-  "darwin-x64": { asset: "roamgate-darwin-x64", binary: "roamgate" },
-  "linux-arm64": { asset: "roamgate-linux-arm64", binary: "roamgate" },
-  "linux-x64": { asset: "roamgate-linux-x64", binary: "roamgate" },
-  "win32-arm64": { asset: "roamgate-windows-arm64", binary: "roamgate.exe" },
-  "win32-x64": { asset: "roamgate-windows-x64", binary: "roamgate.exe" },
+  "darwin-arm64": { asset: "herdr-world-darwin-arm64", binary: "herdr-world" },
+  "darwin-x64": { asset: "herdr-world-darwin-x64", binary: "herdr-world" },
+  "linux-arm64": { asset: "herdr-world-linux-arm64", binary: "herdr-world" },
+  "linux-x64": { asset: "herdr-world-linux-x64", binary: "herdr-world" },
+  "win32-arm64": { asset: "herdr-world-windows-arm64", binary: "herdr-world.exe" },
+  "win32-x64": { asset: "herdr-world-windows-x64", binary: "herdr-world.exe" },
 };
 
-const RELEASE_REPOSITORY = "powerfooI/roamgate";
-const SOURCE_INSTALL_HINT = `For an unreleased checkout, run \`bun scripts/studio-plugin.ts build-source\` in a local clone, then \`herdr plugin link .\`. For release-only installation, select a published Roamgate tag with \`herdr plugin install ${RELEASE_REPOSITORY} --ref vX.Y.Z\`.`;
+const RELEASE_REPOSITORY = "IvoryHeart/herdr-world";
+const SOURCE_INSTALL_HINT = `For an unreleased checkout, run \`bun scripts/world-plugin.ts build-source\` in a local clone, then \`herdr plugin link .\`. For release-only installation, select a published Herdr World tag with \`herdr plugin install ${RELEASE_REPOSITORY} --ref vX.Y.Z\`.`;
 
 export function releaseAssetFor(
   platform: string,
@@ -118,20 +117,20 @@ async function downloadPrebuilt(): Promise<number> {
   const version = packageVersion();
   if (!supportsIdentityMigrationPrebuilt(version)) {
     console.error(
-      `studio-plugin: published versions through 0.7.0 use legacy service/data/plugin identities. This checkout requires a source build. ${SOURCE_INSTALL_HINT}`,
+      `world-plugin: published versions through 0.7.0 use legacy service/data/plugin identities. This checkout requires a source build. ${SOURCE_INSTALL_HINT}`,
     );
     return 1;
   }
   const target = releaseAssetFor(process.platform, process.arch);
   if (!target) {
     console.error(
-      `studio-plugin: no prebuilt binary for ${process.platform}-${process.arch}. ${SOURCE_INSTALL_HINT}`,
+      `world-plugin: no prebuilt binary for ${process.platform}-${process.arch}. ${SOURCE_INSTALL_HINT}`,
     );
     return 1;
   }
   const base = `https://github.com/${RELEASE_REPOSITORY}/releases/download/v${version}`;
   const archiveName = `${target.asset}.tar.xz`;
-  console.error(`studio-plugin: downloading ${archiveName} (v${version})`);
+  console.error(`world-plugin: downloading ${archiveName} (v${version})`);
   let tmp: string | null = null;
   try {
     const [checksumResponse, archiveResponse] = await Promise.all([
@@ -140,7 +139,7 @@ async function downloadPrebuilt(): Promise<number> {
     ]);
     if (!checksumResponse.ok || !archiveResponse.ok) {
       console.error(
-        `studio-plugin: download failed for Roamgate v${version} (checksum HTTP ${checksumResponse.status}, archive HTTP ${archiveResponse.status}). ${SOURCE_INSTALL_HINT}`,
+        `world-plugin: download failed for Herdr World v${version} (checksum HTTP ${checksumResponse.status}, archive HTTP ${archiveResponse.status}). ${SOURCE_INSTALL_HINT}`,
       );
       return 1;
     }
@@ -149,11 +148,11 @@ async function downloadPrebuilt(): Promise<number> {
     const actual = createHash("sha256").update(archive).digest("hex");
     if (!expected || actual !== expected) {
       console.error(
-        `studio-plugin: checksum mismatch (expected ${expected ?? "<none>"}, got ${actual})`,
+        `world-plugin: checksum mismatch (expected ${expected ?? "<none>"}, got ${actual})`,
       );
       return 1;
     }
-    tmp = mkdtempSync(join(tmpdir(), "studio-plugin-"));
+    tmp = mkdtempSync(join(tmpdir(), "world-plugin-"));
     const archivePath = join(tmp, archiveName);
     writeFileSync(archivePath, archive);
     const extract = spawnSync("tar", ["-xJf", archivePath, "-C", tmp], {
@@ -161,13 +160,13 @@ async function downloadPrebuilt(): Promise<number> {
     });
     if (extract.error) {
       console.error(
-        `studio-plugin: cannot run tar: ${extract.error.message} (tar with xz support is required)`,
+        `world-plugin: cannot run tar: ${extract.error.message} (tar with xz support is required)`,
       );
       return 1;
     }
     if (extract.status !== 0) {
       console.error(
-        `studio-plugin: extraction failed (exit ${extract.status}): ${extract.stderr.trim()}`,
+        `world-plugin: extraction failed (exit ${extract.status}): ${extract.stderr.trim()}`,
       );
       return 1;
     }
@@ -177,11 +176,11 @@ async function downloadPrebuilt(): Promise<number> {
     const destination = join(serverDir, target.binary);
     copyFileSync(extracted, destination);
     if (process.platform !== "win32") chmodSync(destination, 0o755);
-    console.error(`studio-plugin: installed ${target.binary} ${version}`);
+    console.error(`world-plugin: installed ${target.binary} ${version}`);
     return 0;
   } catch (error) {
     console.error(
-      `studio-plugin: download failed: ${error instanceof Error ? error.message : String(error)}. ${SOURCE_INSTALL_HINT}`,
+      `world-plugin: download failed: ${error instanceof Error ? error.message : String(error)}. ${SOURCE_INSTALL_HINT}`,
     );
     return 1;
   } finally {
@@ -202,12 +201,12 @@ function buildSource(): number {
 async function ensureBinary(): Promise<string | null> {
   const existing = binaryPath();
   if (existing) return existing;
-  console.error("studio-plugin: roamgate binary missing, downloading it first");
+  console.error("world-plugin: herdr-world binary missing, downloading it first");
   if ((await downloadPrebuilt()) !== 0) return null;
   const downloaded = binaryPath();
   if (!downloaded) {
     console.error(
-      "studio-plugin: download finished but no binary was produced",
+      "world-plugin: download finished but no binary was produced",
     );
   }
   return downloaded;
@@ -230,17 +229,11 @@ function configDir(): string {
   return dataRoot();
 }
 
-// URL/status are read-only: prefer the new file, but do not migrate on inspection.
+// URL/status are read-only and never consult another product's storage.
 function readableConfigFile(dir: string, name: string): string {
   const path = join(dir, name);
   assertSafeDataPath(path);
-  if (existsSync(path) || dir !== configDir()) return path;
-  const legacy = join(
-    legacyDataRoot(),
-    name === "roamgate.env" ? "herdr-gui.env" : name,
-  );
-  assertSafeDataPath(legacy);
-  return legacy;
+  return path;
 }
 
 // Mirrors the server's service env parser: leading whitespace, an optional
@@ -268,7 +261,7 @@ export function readServiceEnv(
 }
 
 export function computeUrl(dir = configDir()): string {
-  const envFile = readableConfigFile(dir, "roamgate.env");
+  const envFile = readableConfigFile(dir, "herdr-world.env");
   let host = "127.0.0.1";
   let port = "8787";
   let usesFixedPassword = false;
@@ -277,11 +270,7 @@ export function computeUrl(dir = configDir()): string {
     host = readServiceEnv(contents, "HOST") ?? host;
     port = readServiceEnv(contents, "PORT") ?? port;
     usesFixedPassword =
-      (
-        readServiceEnv(contents, "ROAMGATE_PASSWORD") ??
-        readServiceEnv(contents, "HERDR_GUI_PASSWORD") ??
-        ""
-      ).length > 0;
+      (readServiceEnv(contents, "HERDR_WORLD_PASSWORD") ?? "").length > 0;
   }
   const anyHost = host === "0.0.0.0" || host === "::";
   const browserHost = anyHost ? "localhost" : host;
@@ -302,10 +291,10 @@ export function computeUrl(dir = configDir()): string {
 }
 
 function printUrl(): number {
-  const envFile = readableConfigFile(configDir(), "roamgate.env");
+  const envFile = readableConfigFile(configDir(), "herdr-world.env");
   if (!existsSync(envFile)) {
     console.error(
-      `studio-plugin: no service environment at ${envFile}, showing defaults`,
+      `world-plugin: no service environment at ${envFile}, showing defaults`,
     );
   }
   console.log(computeUrl());
@@ -337,7 +326,7 @@ function statusText(): string {
 
 function renderPanel(message: string) {
   const lines = [
-    "Roamgate",
+    "Herdr World",
     "",
     `Status:  ${statusText()}`,
     `URL:     ${computeUrl()}`,
@@ -439,7 +428,7 @@ async function main(): Promise<number> {
       return panel();
     default:
       console.error(
-        "usage: studio-plugin.ts <build|build-source|start|restart|status|url|version|uninstall|panel>",
+        "usage: world-plugin.ts <build|build-source|start|restart|status|url|version|uninstall|panel>",
       );
       return process.argv[2] ? 1 : 0;
   }

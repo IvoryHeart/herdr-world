@@ -7,7 +7,7 @@ const source = readFileSync(
   "utf8",
 );
 const legacyKey = "herdr-studio-tutorial-checklist-v1";
-const currentKey = "roamgate-tutorial-checklist-v1";
+const currentKey = "herdr-world-tutorial-checklist-v1";
 
 function render(values: Map<string, string>, failWrite = false) {
   const check = {

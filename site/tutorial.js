@@ -44,7 +44,7 @@ for (const [index, code] of [
 
 const checks = [...(article?.querySelectorAll('input[type="checkbox"]') ?? [])];
 // Bump this key if the meaning or order of the final checklist changes.
-const storageKey = "roamgate-tutorial-checklist-v1";
+const storageKey = "herdr-world-tutorial-checklist-v1";
 let savedChecks = [];
 let storageAvailable = true;
 try {

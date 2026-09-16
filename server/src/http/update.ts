@@ -1,5 +1,5 @@
 import { basename } from "node:path";
-import { roamgateEnv } from "../config/environment";
+import { worldEnv } from "../config/environment";
 
 type RunProcessWithCodeTimeout = (
   argv: string[],
@@ -24,7 +24,7 @@ export interface UpdateTarget {
 
 export interface UpdateManifest {
   schema: 1;
-  name: "roamgate";
+  name: "herdr-world";
   version: string;
   platform: string;
   archive: string;
@@ -39,16 +39,13 @@ interface UpdateRuntime {
 }
 
 const DEFAULT_UPDATE_BASE_URL =
-  "https://github.com/powerfooI/roamgate/releases/latest/download";
+  "https://github.com/IvoryHeart/herdr-world/releases/latest/download";
 const UPDATE_METADATA_MAX_BYTES = 4096;
 const UPDATE_CHECK_CACHE_MS = 5 * 60 * 1000;
 const UPDATE_CHECK_TIMEOUT_MS = 15000;
 const UPDATE_INSTALL_TIMEOUT_MS = 120000;
 function hasUpdateConfirmation(req: Request): boolean {
-  return (
-    (req.headers.get("x-roamgate-update") ??
-      req.headers.get("x-herdr-gui-update")) === "1"
-  );
+  return req.headers.get("x-herdr-world-update") === "1";
 }
 export const UPDATE_HTTP_IDLE_TIMEOUT_SECONDS =
   Math.ceil((UPDATE_CHECK_TIMEOUT_MS + UPDATE_INSTALL_TIMEOUT_MS) / 1000) + 15;
@@ -64,9 +61,9 @@ export function resolveUpdateTarget(
   if (updatePlatform === undefined) return null;
   return {
     platform: updatePlatform,
-    packageDir: `roamgate-${updatePlatform}`,
-    archiveName: `roamgate-${updatePlatform}.tar.xz`,
-    manifestName: `roamgate-${updatePlatform}.update.json`,
+    packageDir: `herdr-world-${updatePlatform}`,
+    archiveName: `herdr-world-${updatePlatform}.tar.xz`,
+    manifestName: `herdr-world-${updatePlatform}.update.json`,
   };
 }
 
@@ -102,13 +99,13 @@ export function parseUpdateManifest(text: string): UpdateManifest {
   const manifest = value as Record<string, unknown>;
   if (
     manifest.schema !== 1 ||
-    manifest.name !== "roamgate" ||
+    manifest.name !== "herdr-world" ||
     typeof manifest.version !== "string" ||
     !parsedVersion(manifest.version) ||
     typeof manifest.platform !== "string" ||
     !/^[a-z0-9]+-[a-z0-9]+$/.test(manifest.platform) ||
     typeof manifest.archive !== "string" ||
-    !/^roamgate-[a-z0-9-]+\.tar\.xz$/.test(manifest.archive) ||
+    !/^herdr-world-[a-z0-9-]+\.tar\.xz$/.test(manifest.archive) ||
     typeof manifest.sha256 !== "string" ||
     !/^[0-9a-fA-F]{64}$/.test(manifest.sha256)
   ) {
@@ -116,7 +113,7 @@ export function parseUpdateManifest(text: string): UpdateManifest {
   }
   return {
     schema: 1,
-    name: "roamgate",
+    name: "herdr-world",
     version: manifest.version,
     platform: manifest.platform,
     archive: manifest.archive,
@@ -130,10 +127,10 @@ export function normalizeUpdateBaseUrl(value?: string): string {
   try {
     url = new URL(candidate);
   } catch {
-    throw new Error("ROAMGATE_UPDATE_BASE_URL must be an HTTP(S) URL");
+    throw new Error("HERDR_WORLD_UPDATE_BASE_URL must be an HTTP(S) URL");
   }
   if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new Error("ROAMGATE_UPDATE_BASE_URL must be an HTTP(S) URL");
+    throw new Error("HERDR_WORLD_UPDATE_BASE_URL must be an HTTP(S) URL");
   }
   const loopbackHttp =
     url.protocol === "http:" &&
@@ -142,15 +139,15 @@ export function normalizeUpdateBaseUrl(value?: string): string {
       /^127(?:\.\d{1,3}){3}$/.test(url.hostname));
   if (url.protocol !== "https:" && !loopbackHttp) {
     throw new Error(
-      "ROAMGATE_UPDATE_BASE_URL must use HTTPS unless the mirror is loopback",
+      "HERDR_WORLD_UPDATE_BASE_URL must use HTTPS unless the mirror is loopback",
     );
   }
   if (url.username || url.password) {
-    throw new Error("ROAMGATE_UPDATE_BASE_URL must not contain credentials");
+    throw new Error("HERDR_WORLD_UPDATE_BASE_URL must not contain credentials");
   }
   if (url.search || url.hash) {
     throw new Error(
-      "ROAMGATE_UPDATE_BASE_URL must not contain a query or fragment",
+      "HERDR_WORLD_UPDATE_BASE_URL must not contain a query or fragment",
     );
   }
   url.pathname = url.pathname.replace(/\/+$/, "");
@@ -194,7 +191,7 @@ export function compareVersion(a: string, b: string): number {
 export function isSupervisorManagedEnvironment(
   environment: Record<string, string | undefined>,
 ): boolean {
-  const override = roamgateEnv("RESTART_SUPERVISOR", environment);
+  const override = worldEnv("RESTART_SUPERVISOR", environment);
   if (override === "1") return true;
   if (override === "0") return false;
   if (environment.INVOCATION_ID) return true;
@@ -235,7 +232,7 @@ export function createUpdateHandlers({
   let updateBaseUrlError: Error | null = null;
   try {
     updateBaseUrlValue = normalizeUpdateBaseUrl(
-      roamgateEnv("UPDATE_BASE_URL", environment),
+      worldEnv("UPDATE_BASE_URL", environment),
     );
   } catch (error) {
     updateBaseUrlError = error as Error;
@@ -375,7 +372,7 @@ export function createUpdateHandlers({
       ],
       UPDATE_CHECK_TIMEOUT_MS,
     );
-    // Every Roamgate release has a manifest. Never probe legacy archives.
+    // Every Herdr World release has a manifest. Never probe legacy archives.
     if (manifestResult.code !== 0) {
       throw processFailure(manifestResult, "update manifest download");
     }
@@ -420,13 +417,13 @@ export function createUpdateHandlers({
         ...sourceDetails(),
       };
     }
-    if (roamgateEnv("DISABLE_UPDATE_CHECK", environment) === "1") {
+    if (worldEnv("DISABLE_UPDATE_CHECK", environment) === "1") {
       return {
         current_version: appVersion,
         update_available: false,
         can_auto_update: false,
         reason:
-          "Update checks are disabled by ROAMGATE_DISABLE_UPDATE_CHECK or HERDR_GUI_DISABLE_UPDATE_CHECK.",
+          "Update checks are disabled by HERDR_WORLD_DISABLE_UPDATE_CHECK.",
         platform: updateTarget.platform,
         ...sourceDetails(),
       };
@@ -521,7 +518,7 @@ export function createUpdateHandlers({
 
       const command = `
 set -eu
-tmp="$(mktemp -d "\${TMPDIR:-/tmp}/roamgate-update.XXXXXX")"
+tmp="$(mktemp -d "\${TMPDIR:-/tmp}/herdr-world-update.XXXXXX")"
 target=${shQuote(capability.targetPath)}
 target_tmp=""
 backup_tmp=""
@@ -557,10 +554,10 @@ if [ "$actual_sha256" != "$expected_sha256" ]; then
 fi
 tar -xJf "$archive" -C "$tmp" \
   ${shQuote(`${updateTarget.packageDir}/VERSION`)} \
-  ${shQuote(`${updateTarget.packageDir}/roamgate`)}
+  ${shQuote(`${updateTarget.packageDir}/herdr-world`)}
 package_dir="$tmp/${updateTarget.packageDir}"
 version_file="$package_dir/VERSION"
-binary="$package_dir/roamgate"
+binary="$package_dir/herdr-world"
 if [ ! -d "$package_dir" ] || [ -L "$package_dir" ] || \
    [ ! -f "$version_file" ] || [ -L "$version_file" ] || \
    [ ! -f "$binary" ] || [ -L "$binary" ] || [ ! -x "$binary" ]; then
@@ -573,7 +570,7 @@ actual_version=""
 actual_platform=""
 extra_version_field=""
 read -r package_name actual_version actual_platform extra_version_field < "$version_file"
-if [ "$package_name" != "roamgate" ] || \
+if [ "$package_name" != "herdr-world" ] || \
    [ "$actual_version" != "$expected_version" ] || \
    [ "$actual_platform" != ${shQuote(updateTarget.platform)} ] || \
    [ -n "$extra_version_field" ]; then
@@ -581,7 +578,7 @@ if [ "$package_name" != "roamgate" ] || \
   exit 1
 fi
 binary_version="$("$binary" --version)"
-if [ "$binary_version" != "roamgate $expected_version" ]; then
+if [ "$binary_version" != "herdr-world $expected_version" ]; then
   echo "downloaded binary version does not match update manifest" >&2
   exit 1
 fi

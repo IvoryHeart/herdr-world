@@ -21,21 +21,21 @@ function createUpdateFixture({ badDigest = false } = {}) {
     );
   }
 
-  const root = mkdtempSync(join(tmpdir(), "roamgate-update-test-"));
+  const root = mkdtempSync(join(tmpdir(), "herdr-world-update-test-"));
   const assets = join(root, "assets");
   const packagePath = join(assets, target.packageDir);
-  const installPath = join(root, "installed", "roamgate");
+  const installPath = join(root, "installed", "herdr-world");
   mkdirSync(packagePath, { recursive: true });
   mkdirSync(join(root, "installed"), { recursive: true });
   writeFileSync(installPath, "old executable\n", { mode: 0o755 });
   writeFileSync(
-    join(packagePath, "roamgate"),
-    '#!/bin/sh\n[ "${1:-}" = "--version" ] && { echo "roamgate 9.8.7"; exit 0; }\nexit 1\n',
+    join(packagePath, "herdr-world"),
+    '#!/bin/sh\n[ "${1:-}" = "--version" ] && { echo "herdr-world 9.8.7"; exit 0; }\nexit 1\n',
     { mode: 0o755 },
   );
   writeFileSync(
     join(packagePath, "VERSION"),
-    `roamgate 9.8.7 ${target.platform}\n`,
+    `herdr-world 9.8.7 ${target.platform}\n`,
   );
 
   const archive = join(assets, target.archiveName);
@@ -56,7 +56,7 @@ function createUpdateFixture({ badDigest = false } = {}) {
     join(assets, target.manifestName),
     JSON.stringify({
       schema: 1,
-      name: "roamgate",
+      name: "herdr-world",
       version: "9.8.7",
       platform: target.platform,
       archive: target.archiveName,
@@ -90,7 +90,7 @@ function createUpdateFixture({ badDigest = false } = {}) {
 function installRequest() {
   return new Request("http://localhost/api/update/install", {
     method: "POST",
-    headers: { "x-herdr-gui-update": "1" },
+    headers: { "x-herdr-world-update": "1" },
   });
 }
 
@@ -110,8 +110,8 @@ describe("automatic update installation", () => {
           argv: [fixture.installPath],
         },
         environment: {
-          HERDR_GUI_UPDATE_BASE_URL: fixture.baseUrl,
-          HERDR_GUI_RESTART_SUPERVISOR: "1",
+          HERDR_WORLD_UPDATE_BASE_URL: fixture.baseUrl,
+          HERDR_WORLD_RESTART_SUPERVISOR: "1",
         },
         scheduleProcessExit: () => {
           exitScheduled = true;
@@ -137,7 +137,7 @@ describe("automatic update installation", () => {
         })
           .stdout.toString()
           .trim(),
-      ).toBe("roamgate 9.8.7");
+      ).toBe("herdr-world 9.8.7");
     } finally {
       fixture.cleanup();
     }
@@ -158,8 +158,8 @@ describe("automatic update installation", () => {
           argv: [fixture.installPath],
         },
         environment: {
-          HERDR_GUI_UPDATE_BASE_URL: fixture.baseUrl,
-          HERDR_GUI_RESTART_SUPERVISOR: "1",
+          HERDR_WORLD_UPDATE_BASE_URL: fixture.baseUrl,
+          HERDR_WORLD_RESTART_SUPERVISOR: "1",
         },
         scheduleProcessExit: () => {
           exitScheduled = true;

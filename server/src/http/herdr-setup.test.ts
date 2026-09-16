@@ -151,7 +151,7 @@ test("download deadline aborts stalled headers and bodies and releases the setup
     const request = () =>
       new Request("http://localhost/api/herdr/setup", {
         method: "POST",
-        headers: { "x-roamgate-herdr-setup": "1" },
+        headers: { "x-herdr-world-herdr-setup": "1" },
       });
     try {
       const pending = handlers.handleHerdrSetup(request());

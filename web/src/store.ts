@@ -1,4 +1,4 @@
-import { roamgateLocalStorage, roamgateSessionStorage } from "./browserStorage";
+import { worldLocalStorage, worldSessionStorage } from "./browserStorage";
 import { withAgentActivity } from "./agentOrder";
 import {
   type EndpointAvailability,
@@ -181,8 +181,8 @@ export function emptyServerSessionState(
 }
 
 export const TASK_NOTIFICATION_ACTIVATE_EVENT =
-  "roamgate:task-notification-activate";
-export const WORKTREE_REMOVED_EVENT = "roamgate:worktree-removed";
+  "herdr-world:task-notification-activate";
+export const WORKTREE_REMOVED_EVENT = "herdr-world:worktree-removed";
 
 export interface WorktreeRemovedTarget {
   connectionId: string;
@@ -263,7 +263,7 @@ function notificationPermission(): NotificationPermission | "unsupported" {
 function storedTaskNotificationsEnabled() {
   return (
     typeof localStorage !== "undefined" &&
-    roamgateLocalStorage.getItem(TASK_NOTIFICATIONS_KEY) === "true"
+    worldLocalStorage.getItem(TASK_NOTIFICATIONS_KEY) === "true"
   );
 }
 
@@ -279,14 +279,14 @@ export function automaticUpdateChecksEnabledFromStorage(
 
 function storedAutomaticUpdateChecksEnabled(): boolean {
   return automaticUpdateChecksEnabledFromStorage(
-    typeof localStorage === "undefined" ? undefined : roamgateLocalStorage,
+    typeof localStorage === "undefined" ? undefined : worldLocalStorage,
   );
 }
 
 function storedPendingRestartVersion(): string | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
-    return roamgateSessionStorage.getItem(PENDING_UPDATE_RELOAD_KEY);
+    return worldSessionStorage.getItem(PENDING_UPDATE_RELOAD_KEY);
   } catch {
     return null;
   }
@@ -296,9 +296,9 @@ function storePendingRestartVersion(version: string | null) {
   if (typeof sessionStorage === "undefined") return;
   try {
     if (version) {
-      roamgateSessionStorage.setItem(PENDING_UPDATE_RELOAD_KEY, version);
+      worldSessionStorage.setItem(PENDING_UPDATE_RELOAD_KEY, version);
     } else {
-      roamgateSessionStorage.removeItem(PENDING_UPDATE_RELOAD_KEY);
+      worldSessionStorage.removeItem(PENDING_UPDATE_RELOAD_KEY);
     }
   } catch {
     // Storage may be unavailable in private or restricted browser contexts.
@@ -322,7 +322,7 @@ const initial: State = {
   status: "disconnected",
   connectionPaused:
     typeof localStorage !== "undefined" &&
-    roamgateLocalStorage.getItem("connectionPaused") === "true",
+    worldLocalStorage.getItem("connectionPaused") === "true",
   bridgeStatus: null,
   connections: [],
   defaultConnectionId: LEGACY_DEFAULT_CONNECTION_ID,
@@ -680,7 +680,7 @@ function reloadWhenUpdatedServerIsReady(
               pendingRestartVersion: null,
               notice: {
                 kind: "success",
-                message: `Roamgate ${expectedVersion} is running`,
+                message: `Herdr World ${expectedVersion} is running`,
                 detail:
                   "Reloading the application to use the updated frontend.",
                 loading: true,
@@ -702,7 +702,7 @@ function reloadWhenUpdatedServerIsReady(
       notice: {
         kind: "error",
         message: "Updated server did not become ready",
-        detail: `Could not verify Roamgate ${expectedVersion}. Reload the page after checking the server process.`,
+        detail: `Could not verify Herdr World ${expectedVersion}. Reload the page after checking the server process.`,
       },
     });
   })().finally(() => {
@@ -880,7 +880,7 @@ export function taskNotificationTargetIsCurrent(
 
 export function taskNotificationTag(target: TaskNotificationTarget): string {
   return JSON.stringify([
-    "roamgate-task",
+    "herdr-world-task",
     target.connectionId,
     target.runtimeGeneration,
     target.paneId,
@@ -910,7 +910,7 @@ function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
   const runtimeGeneration = state.serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const body = taskNotificationBody(pane, workspaces, tabs);
-  const title = "Roamgate task completed";
+  const title = "Herdr World task completed";
   const target = taskNotificationTarget(
     state.activeConnectionId,
     runtimeGeneration,
@@ -1354,7 +1354,7 @@ async function checkForUpdate(showErrors = false) {
   try {
     const r = await fetch("/api/update/check", {
       credentials: "same-origin",
-      headers: { "x-roamgate-update": "1" },
+      headers: { "x-herdr-world-update": "1" },
     });
     if (!r.ok) {
       if (showErrors) {
@@ -1383,7 +1383,7 @@ async function checkForUpdate(showErrors = false) {
         notice: showErrors
           ? {
               kind: "success",
-              message: "Roamgate is up to date",
+              message: "Herdr World is up to date",
               detail: info.latest_version
                 ? `Current version: ${info.current_version}`
                 : undefined,
@@ -1451,7 +1451,7 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
     state.activeConnectionId === LEGACY_DEFAULT_CONNECTION_ID &&
     typeof localStorage !== "undefined"
   ) {
-    migrateLegacyConnectionStorage(roamgateLocalStorage, connectionId);
+    migrateLegacyConnectionStorage(worldLocalStorage, connectionId);
   }
   stopPolling();
   disposeTerminalConnection(
@@ -2127,7 +2127,7 @@ export const store = {
       if (control.type === "pause_connection") {
         store.pauseConnection(
           control.reason ??
-            "Another Roamgate client paused this connection. Resume when you want this browser to sync again.",
+            "Another Herdr World client paused this connection. Resume when you want this browser to sync again.",
         );
       }
     });
@@ -2186,7 +2186,7 @@ export const store = {
     detail = "This browser will stop syncing until you resume it.",
   ) {
     connectionRecoveryIntent = null;
-    roamgateLocalStorage.setItem("connectionPaused", "true");
+    worldLocalStorage.setItem("connectionPaused", "true");
     stopPolling();
     disposeTerminalConnection(
       {
@@ -2231,7 +2231,7 @@ export const store = {
 
   resumeConnection() {
     connectionRecoveryIntent = state.connectionPaused ? "resume" : "reconnect";
-    roamgateLocalStorage.setItem("connectionPaused", "false");
+    worldLocalStorage.setItem("connectionPaused", "false");
     set({
       connectionPaused: false,
       error: null,
@@ -2935,7 +2935,7 @@ export const store = {
 
   async setTaskNotificationsEnabled(enabled: boolean) {
     if (!enabled) {
-      roamgateLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
+      worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
       set({
         taskNotificationsEnabled: false,
         taskNotificationPermission: notificationPermission(),
@@ -2949,7 +2949,7 @@ export const store = {
     }
 
     if (notificationPermission() === "unsupported") {
-      roamgateLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
+      worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
       set({
         taskNotificationsEnabled: false,
         taskNotificationPermission: "unsupported",
@@ -2969,7 +2969,7 @@ export const store = {
         permission = await Notification.requestPermission();
       }
     } catch (e) {
-      roamgateLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
+      worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
       set({
         taskNotificationsEnabled: false,
         taskNotificationPermission: notificationPermission(),
@@ -2983,7 +2983,7 @@ export const store = {
     }
 
     const granted = permission === "granted";
-    roamgateLocalStorage.setItem(
+    worldLocalStorage.setItem(
       TASK_NOTIFICATIONS_KEY,
       granted ? "true" : "false",
     );
@@ -2994,7 +2994,7 @@ export const store = {
         ? {
             kind: "success",
             message: "Task notifications enabled",
-            detail: "Roamgate will notify you when an agent task completes.",
+            detail: "Herdr World will notify you when an agent task completes.",
             autoDismissMs: 5000,
           }
         : {
@@ -3012,7 +3012,7 @@ export const store = {
 
   setAutomaticUpdateChecksEnabled(enabled: boolean) {
     try {
-      roamgateLocalStorage.setItem(
+      worldLocalStorage.setItem(
         AUTOMATIC_UPDATE_CHECKS_KEY,
         String(enabled),
       );
@@ -3065,7 +3065,7 @@ export const store = {
       const r = await fetch("/api/update/install", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "x-roamgate-update": "1" },
+        headers: { "x-herdr-world-update": "1" },
       });
       const body = await r.json().catch(() => null);
       if (!r.ok) {
@@ -3082,7 +3082,7 @@ export const store = {
             dismissedUpdateVersion: latestVersion,
             notice: {
               kind: "info",
-              message: "Restarting the Roamgate process",
+              message: "Restarting the Herdr World process",
               detail:
                 "The binary was updated. Waiting for the external process supervisor to start the new version.",
               loading: true,
@@ -3097,8 +3097,8 @@ export const store = {
           dismissedUpdateVersion: latestVersion,
           notice: {
             kind: "success",
-            message: `Roamgate ${installedVersion} installed`,
-            detail: "Restart the Roamgate process to use the new version.",
+            message: `Herdr World ${installedVersion} installed`,
+            detail: "Restart the Herdr World process to use the new version.",
           },
         });
         return;
@@ -3109,7 +3109,7 @@ export const store = {
         dismissedUpdateVersion: latestVersion,
         notice: {
           kind: "success",
-          message: "Roamgate is already up to date",
+          message: "Herdr World is already up to date",
         },
       });
     } catch (e) {

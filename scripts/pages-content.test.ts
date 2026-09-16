@@ -73,17 +73,17 @@ describe("tutorial Markdown", () => {
     const { content } = await renderTutorial(
       '# Tutorial\n\n<a id="tailscale"></a>\n\n## Networking\n\n' +
         "[Jump](#tailscale) [Deployment](./DEPLOYMENT.md#logging) [Security](../SECURITY.md)\n\n" +
-        "![Workspace](./images/roamgate-desktop-changes.png)\n\n```bash\necho '<safe>'\n```\n\n" +
+        "![Workspace](./images/herdr-world-desktop-changes.png)\n\n```bash\necho '<safe>'\n```\n\n" +
         "| Name | Purpose |\n| --- | --- |\n| Serve | Private access |\n",
     );
     expect(content).toContain('href="#tailscale"');
     expect(content).toContain(
-      'href="https://github.com/powerfooI/roamgate/blob/main/docs/DEPLOYMENT.md#logging"',
+      'href="https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#logging"',
     );
     expect(content).toContain(
-      'href="https://github.com/powerfooI/roamgate/blob/main/SECURITY.md"',
+      'href="https://github.com/IvoryHeart/herdr-world/blob/main/SECURITY.md"',
     );
-    expect(content).toContain('src="../assets/roamgate-desktop-changes.png"');
+    expect(content).toContain('src="../assets/herdr-world-desktop-changes.png"');
     expect(content).toContain('width="4998"');
     expect(content).toContain('height="2714"');
     expect(content).toContain('loading="lazy"');
@@ -102,32 +102,31 @@ describe("Pages references", () => {
       const html = await Bun.file(
         new URL(`../site/${page}`, import.meta.url),
       ).text();
-      expect(html).not.toContain("github.io/");
+      expect(html).toContain("https://ivoryheart.github.io/herdr-world/");
       expect(html).toMatch(
-        /property="og:image"\s+content="https:\/\/roamgate\.dev\/roamgate-og\.png"/,
+        /property="og:image"\s+content="https:\/\/ivoryheart\.github\.io\/herdr-world\/herdr-world-og\.png"/,
       );
       expect(html).toMatch(
-        /name="twitter:image"\s+content="https:\/\/roamgate\.dev\/roamgate-og\.png"/,
+        /name="twitter:image"\s+content="https:\/\/ivoryheart\.github\.io\/herdr-world\/herdr-world-og\.png"/,
       );
       expect(html).toContain(
         'name="twitter:card" content="summary_large_image"',
       );
-      const url = `https://roamgate.dev/${page.replace("index.html", "")}`;
+      const url = `https://ivoryheart.github.io/herdr-world/${page.replace("index.html", "")}`;
       expect(html.replace(/\s+/g, " ")).toContain(
         `rel="canonical" href="${url}"`,
       );
     }
     expect(
       await Bun.file(
-        new URL("../site/roamgate-og.png", import.meta.url),
+        new URL("../site/herdr-world-og.png", import.meta.url),
       ).exists(),
     ).toBe(true);
     for (const file of ["robots.txt", "sitemap.xml"]) {
       const content = await Bun.file(
         new URL(`../site/${file}`, import.meta.url),
       ).text();
-      expect(content).toContain("https://roamgate.dev/");
-      expect(content).not.toContain("github.io/");
+      expect(content).toContain("https://ivoryheart.github.io/herdr-world/");
     }
   });
 
@@ -140,7 +139,7 @@ describe("Pages references", () => {
         "./build-pages.ts",
       ].map((path) => Bun.file(new URL(path, import.meta.url)).text()),
     );
-    const screenshotPattern = /roamgate-(?:desktop|mobile)-[a-z-]+\.png/g;
+    const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
     expect(screenshots).toHaveLength(6);
     for (const source of [site, build]) {

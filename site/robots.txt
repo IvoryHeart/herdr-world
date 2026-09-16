@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://roamgate.dev/sitemap.xml
+Sitemap: https://ivoryheart.github.io/herdr-world/sitemap.xml

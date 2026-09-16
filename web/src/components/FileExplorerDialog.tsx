@@ -1,4 +1,4 @@
-import { roamgateLocalStorage } from "../browserStorage";
+import { worldLocalStorage } from "../browserStorage";
 import {
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -354,7 +354,7 @@ function FileExplorerContent({
     `${FILE_SHOW_HIDDEN_PREFIX}${cacheResourceKey ?? "focused"}`,
   );
   const [showHidden, setShowHidden] = useState(
-    () => roamgateLocalStorage.getItem(showHiddenStorageKey) === "true",
+    () => worldLocalStorage.getItem(showHiddenStorageKey) === "true",
   );
   const [cache, setCache] = useState<FileExplorerCache>(() =>
     readExplorerCache(
@@ -441,7 +441,7 @@ function FileExplorerContent({
     connectionClient.isCurrent() && runtimeContextRef.current === context;
 
   useEffect(() => {
-    roamgateLocalStorage.setItem(showHiddenStorageKey, String(showHidden));
+    worldLocalStorage.setItem(showHiddenStorageKey, String(showHidden));
   }, [showHidden, showHiddenStorageKey]);
 
   useEffect(() => {

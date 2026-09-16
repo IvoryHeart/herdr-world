@@ -73,7 +73,7 @@ export function HerdrSetupCard({
       const response = await fetch("/api/herdr/setup", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "x-roamgate-herdr-setup": "1" },
+        headers: { "x-herdr-world-herdr-setup": "1" },
       });
       const result = await response.json();
       if (!response.ok || result?.ok !== true) {
@@ -152,9 +152,9 @@ export function HerdrSetupCard({
         <h2 id={titleId}>{title}</h2>
         <p>
           {busy
-            ? "Keep this page open. Roamgate will reconnect when Herdr is ready."
+            ? "Keep this page open. Herdr World will reconnect when Herdr is ready."
             : confirming
-              ? "This changes the machine running Roamgate, not your browser or a remote SSH host."
+              ? "This changes the machine running Herdr World, not your browser or a remote SSH host."
               : missing
                 ? "Herdr runs your terminals and agents. Set it up once, then manage your workspace from here."
                 : "Herdr is installed but isn't running. Start it in the background to reconnect your terminals and agents."}
@@ -202,7 +202,7 @@ export function HerdrSetupCard({
             <Server size={18} aria-hidden="true" />
             <div>
               <strong>Run as a background service</strong>
-              <span>Starts at login, independently of Roamgate</span>
+              <span>Starts at login, independently of Herdr World</span>
             </div>
           </li>
         </ul>
@@ -255,7 +255,7 @@ export function HerdrSetupCard({
         )}
         <p className="herdr-setup-footnote">
           {confirming
-            ? "A user service will be registered on the Roamgate host."
+            ? "A user service will be registered on the Herdr World host."
             : "Review the details before making any changes."}
         </p>
       </div>

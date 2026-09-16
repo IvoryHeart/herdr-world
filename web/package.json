@@ -1,7 +1,7 @@
 {
-  "name": "roamgate-web",
+  "name": "herdr-world-web",
   "private": true,
-  "version": "0.7.3",
+  "version": "0.0.0",
   "license": "MIT",
   "type": "module",
   "scripts": {

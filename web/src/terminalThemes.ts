@@ -62,14 +62,14 @@ export const TERMINAL_THEME_PRESETS: readonly TerminalThemeDefinition[] = [
   {
     // Persisted preset IDs stay stable for existing theme selections/exports.
     id: "herdr-dark",
-    name: "Roamgate Dark",
+    name: "Herdr World Dark",
     variant: "dark",
     builtin: true,
     theme: DARK_TERMINAL_THEME,
   },
   {
     id: "herdr-light",
-    name: "Roamgate Light",
+    name: "Herdr World Light",
     variant: "light",
     builtin: true,
     theme: LIGHT_TERMINAL_THEME,
@@ -632,7 +632,7 @@ export function resolveTerminalThemeDefinition(
   if (fallback) return fallback;
   return {
     id: defaultTerminalThemeId(resolvedTheme),
-    name: resolvedTheme === "light" ? "Roamgate Light" : "Roamgate Dark",
+    name: resolvedTheme === "light" ? "Herdr World Light" : "Herdr World Dark",
     variant: resolvedTheme,
     builtin: true,
     theme: terminalThemeFor(resolvedTheme),

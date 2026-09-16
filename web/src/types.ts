@@ -6,7 +6,7 @@ export interface WorktreeInfo {
   repo_root: string;
   checkout_path: string;
   is_linked_worktree: boolean;
-  // Added by Roamgate when a linked worktree was created from a specific
+  // Added by Herdr World when a linked worktree was created from a specific
   // workspace. Herdr itself currently exposes repository identity only.
   parent_workspace_id?: string;
   gui_settings_key?: string;

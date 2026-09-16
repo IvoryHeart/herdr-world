@@ -14,10 +14,10 @@ function herdrHelp(): string {
   return `Install and start the local Herdr server.
 
 Usage:
-  roamgate herdr setup
-  roamgate herdr status
+  herdr-world herdr setup
+  herdr-world herdr status
 
-Setup installs the Roamgate-verified Herdr ${VERIFIED_HERDR_VERSION} release
+Setup installs the Herdr World-verified Herdr ${VERIFIED_HERDR_VERSION} release
 when no herdr binary is found, then installs and starts a user service running
 \`herdr server\` (systemd user service on Linux, launchd LaunchAgent on macOS,
 per-user Task Scheduler task on Windows). An existing herdr binary is used as
@@ -43,7 +43,7 @@ function stripHerdrArgv(action: string) {
 }
 
 /**
- * Handle `roamgate herdr ...`. Returns null when argv is not a herdr command,
+ * Handle `herdr-world herdr ...`. Returns null when argv is not a herdr command,
  * matching the runServiceCommand convention.
  */
 export async function runHerdrCommand(
@@ -66,7 +66,7 @@ export async function runHerdrCommand(
   }
   if (action !== "setup" && action !== "status") {
     error(`unknown herdr action: ${action}`);
-    error("Run `roamgate herdr --help` for usage.");
+    error("Run `herdr-world herdr --help` for usage.");
     return 1;
   }
 
@@ -93,11 +93,11 @@ export async function runHerdrCommand(
         );
       } else if (state.state === "installed") {
         log(`Herdr is installed but not running: ${state.binaryPath}`);
-        log("Run `roamgate herdr setup` to start it as a user service.");
+        log("Run `herdr-world herdr setup` to start it as a user service.");
       } else {
         log("Herdr is not installed.");
         log(
-          `Run \`roamgate herdr setup\` to install the verified Herdr ${VERIFIED_HERDR_VERSION} and start it.`,
+          `Run \`herdr-world herdr setup\` to install the verified Herdr ${VERIFIED_HERDR_VERSION} and start it.`,
         );
       }
       const service = serviceStatus();
@@ -129,8 +129,8 @@ export async function runHerdrCommand(
     }
     return 0;
   } catch (cause) {
-    error(`roamgate herdr: ${(cause as Error).message}`);
-    error("Run `roamgate herdr --help` for usage.");
+    error(`herdr-world herdr: ${(cause as Error).message}`);
+    error("Run `herdr-world herdr --help` for usage.");
     return 1;
   }
 }

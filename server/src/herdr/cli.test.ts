@@ -31,7 +31,7 @@ describe("runHerdrCommand", () => {
   test("prints help for bare or unknown herdr commands", async () => {
     const help = capture();
     expect(await runHerdrCommand(["herdr"], "0.0.0", help)).toBe(0);
-    expect(help.out.join("\n")).toContain("roamgate herdr setup");
+    expect(help.out.join("\n")).toContain("herdr-world herdr setup");
 
     const unknown = capture();
     expect(await runHerdrCommand(["herdr", "restart"], "0.0.0", unknown)).toBe(
@@ -64,7 +64,7 @@ describe("runHerdrCommand", () => {
     });
     expect(code).toBe(0);
     expect(io.out.join("\n")).toContain("not installed");
-    expect(io.out.join("\n")).toContain("roamgate herdr setup");
+    expect(io.out.join("\n")).toContain("herdr-world herdr setup");
   });
 
   test("setup prints the outcome", async () => {

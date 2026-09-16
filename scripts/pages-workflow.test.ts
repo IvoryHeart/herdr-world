@@ -17,7 +17,7 @@ const workflow = Bun.YAML.parse(
 };
 const steps = workflow.jobs.build.steps;
 const gateIndex = steps.findIndex(
-  (step) => step.name === "Verify live Roamgate installer",
+  (step) => step.name === "Verify live Herdr World installer",
 );
 const gate = steps[gateIndex]?.run ?? "";
 const roots: string[] = [];
@@ -56,9 +56,9 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       step.uses?.startsWith("actions/deploy-pages@"),
     ),
   ).toBe(true);
-  const url = gate.match(/https:\/\/\S+\/install-roamgate\.sh/)?.[0];
+  const url = gate.match(/https:\/\/\S+\/install-herdr-world\.sh/)?.[0];
   expect(url).toBe(
-    "https://github.com/powerfooI/roamgate/releases/latest/download/install-roamgate.sh",
+    "https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh",
   );
   for (const path of [
     "../site/index.html",
@@ -103,7 +103,7 @@ test("Pages installer probe requires HTTP 200 over HTTPS and fails closed on cur
     expect(result.exitCode).toBe(available ? 0 : 1);
     if (!available) {
       expect(result.stderr.toString()).toContain(
-        "Publish a Roamgate release as Latest",
+        "Publish a Herdr World release as Latest",
       );
     }
   }
@@ -117,6 +117,6 @@ test("Pages installer probe requires HTTP 200 over HTTPS and fails closed on cur
   expect(args[args.indexOf("--max-time") + 1]).toBe("60");
   expect(args[args.indexOf("--write-out") + 1]).toBe("%{http_code}");
   expect(args.at(-1)).toEndWith(
-    "/releases/latest/download/install-roamgate.sh",
+    "/releases/latest/download/install-herdr-world.sh",
   );
 });

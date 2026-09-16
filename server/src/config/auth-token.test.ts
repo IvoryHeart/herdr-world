@@ -39,7 +39,7 @@ describe("generated authentication token", () => {
     const home = join("C:", "Users", "tester");
     const appData = join(home, "AppData", "Roaming");
     expect(defaultAuthTokenPath(home, "win32", appData)).toBe(
-      join(appData, "roamgate", "auth-token"),
+      join(appData, "herdr-world", "auth-token"),
     );
   });
 

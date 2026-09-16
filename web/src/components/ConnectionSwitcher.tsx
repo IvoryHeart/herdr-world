@@ -352,7 +352,7 @@ function ProfileForm({
           checked={draft.autoConnect}
           onChange={(event) => update("autoConnect", event.target.checked)}
         />
-        Connect automatically when Roamgate starts
+        Connect automatically when Herdr World starts
       </label>
       <p className="connection-profile-security-note">
         Local profiles store socket paths only. SSH commands, credentials, keys,
@@ -517,13 +517,13 @@ function SshProfileForm({
           checked={draft.autoConnect}
           onChange={(event) => update("autoConnect", event.target.checked)}
         />
-        Connect automatically when Roamgate starts
+        Connect automatically when Herdr World starts
       </label>
       <p className="connection-profile-security-note">
-        Leave the socket paths empty and Roamgate infers the default Herdr
+        Leave the socket paths empty and Herdr World infers the default Herdr
         sockets under the remote home directory at connect time. Authentication
         comes from the bridge service user&apos;s OpenSSH config, ssh-agent, or
-        system Keychain. Establish host trust outside Roamgate. Passwords, keys,
+        system Keychain. Establish host trust outside Herdr World. Passwords, keys,
         passphrases, commands, ports, and SSH options are never stored here.
       </p>
       {feedback ? (
@@ -1015,7 +1015,7 @@ function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
           title="Remove Connection"
           message={
             removeTarget
-              ? `Remove connection "${removeTarget.label}"? This disconnects Roamgate but does not stop the Herdr server.`
+              ? `Remove connection "${removeTarget.label}"? This disconnects Herdr World but does not stop the Herdr server.`
               : "Remove this connection?"
           }
           confirmLabel="Remove"

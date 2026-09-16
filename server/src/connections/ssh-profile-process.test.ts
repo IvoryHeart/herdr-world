@@ -224,11 +224,11 @@ import { join } from "node:path";
 const args = process.argv.slice(2);
 const separator = args.lastIndexOf("--");
 const destination = separator >= 0 ? args[separator + 1] : "unknown";
-const stateDir = process.env.HERDR_GUI_FAKE_SSH_STATE_DIR;
+const stateDir = process.env.HERDR_WORLD_FAKE_SSH_STATE_DIR;
 if (!stateDir) process.exit(70);
 mkdirSync(stateDir, { recursive: true });
 if (!args.includes("-L") && (args.at(-1) || "").includes("printf %s")) {
-  console.log(process.env.HERDR_GUI_FAKE_SSH_HOME || "");
+  console.log(process.env.HERDR_WORLD_FAKE_SSH_HOME || "");
   process.exit(0);
 }
 appendFileSync(join(stateDir, destination + ".attempts"), String(process.pid) + "\\n");
@@ -307,9 +307,9 @@ process.on("SIGINT", () => void stop());
       PATH: `${bin}:${process.env.PATH ?? ""}`,
       HOST: "127.0.0.1",
       PORT: "0",
-      HERDR_GUI_CONNECTIONS_PATH: registryPath,
-      HERDR_GUI_FAKE_SSH_STATE_DIR: state,
-      HERDR_GUI_FAKE_SSH_HOME: fakeHome,
+      HERDR_WORLD_CONNECTIONS_PATH: registryPath,
+      HERDR_WORLD_FAKE_SSH_STATE_DIR: state,
+      HERDR_WORLD_FAKE_SSH_HOME: fakeHome,
       HERDR_SOCKET_PATH: undefined,
       HERDR_CLIENT_SOCKET_PATH: undefined,
       HERDR_SSH_HOST: "legacy-host",

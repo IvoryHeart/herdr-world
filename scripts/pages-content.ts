@@ -1,7 +1,7 @@
 import { stat } from "node:fs/promises";
 import { dirname, join, posix, relative, resolve } from "node:path";
 
-const repositoryRoot = "https://github.com/powerfooI/roamgate/blob/main/";
+const repositoryRoot = "https://github.com/IvoryHeart/herdr-world/blob/main/";
 
 export interface TutorialPage {
   content: string;

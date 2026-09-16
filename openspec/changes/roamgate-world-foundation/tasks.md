@@ -1,12 +1,12 @@
 ## 1. Foundation import
 
 - [x] 1.1 Record Roamgate commit `81c506e6135f5f3b47f7042252ffdac0ec2bf679` in branch ancestry, replace the active application tree with that source while retaining World planning/history, and verify the imported upstream quick suite passes unchanged
-- [ ] 1.2 Rebrand package, executable, service, environment, data-directory, browser-storage, update and UI identities to Herdr World, and verify identity audits find no executable Roamgate product surface while required attribution remains
-- [ ] 1.3 Adapt the standalone installer and Herdr plugin to install/start/status/restart/uninstall the World binary, and verify focused installer, service and plugin contract tests
+- [x] 1.2 Rebrand package, executable, service, environment, data-directory, browser-storage, update and UI identities to Herdr World, and verify identity audits find no executable Roamgate product surface while required attribution remains
+- [x] 1.3 Adapt the standalone installer and Herdr plugin to install/start/status/restart/uninstall the World binary, and verify focused installer, service and plugin contract tests
 
 ## 2. Managed runtime projection
 
-- [ ] 2.1 Preserve and characterize Roamgate local/SSH profile lifecycle, dual-socket forwarding, retry classification and generation isolation under World identities, and verify the focused connection/server suites
+- [x] 2.1 Preserve and characterize Roamgate local/SSH profile lifecycle, dual-socket forwarding, retry classification and generation isolation under World identities, and verify the focused connection/server suites
 - [ ] 2.2 Add a bounded aggregate snapshot/status/event interface for every ready connection, and verify tests cover two connections, colliding native IDs, one failed host and retired generations
 - [ ] 2.3 Add the browser aggregate runtime store with connection-qualified selection and action routing, and verify delayed or stale data cannot cross or replace another connection
 

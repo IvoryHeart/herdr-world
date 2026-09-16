@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { roamgateStorage } from "./browserStorage";
+import { worldStorage } from "./browserStorage";
 
 function memoryStorage(initial: Record<string, string> = {}): Storage {
   const values = new Map(Object.entries(initial));
@@ -25,63 +25,43 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
   };
 }
 
-test("fresh browser writes use Roamgate keys", () => {
+const prefix = "herdr-world:foundation-v2:";
+
+test("fresh browser writes use the isolated World foundation namespace", () => {
   const raw = memoryStorage();
-  const storage = roamgateStorage(raw);
+  const storage = worldStorage(raw);
   storage.setItem("theme", "dark");
-  expect(raw.getItem("roamgate:theme")).toBe("dark");
+  expect(raw.getItem(`${prefix}theme`)).toBe("dark");
+  expect(raw.getItem("herdr-world:theme")).toBeNull();
   expect(raw.getItem("theme")).toBeNull();
 });
 
-test("legacy preferences, drafts and connection selections copy once; new empty values win", () => {
-  for (const key of [
-    "theme",
-    "reviewAnnotations:resource",
-    "herdr.connection/one/filePreview",
-  ]) {
-    const raw = memoryStorage({ [key]: "saved" });
-    expect(roamgateStorage(raw).getItem(key)).toBe("saved");
-    expect(raw.getItem(`roamgate:${key}`)).toBe("saved");
-    raw.setItem(key, "stale");
-    expect(roamgateStorage(raw).getItem(key)).toBe("saved");
-    raw.setItem(`roamgate:${key}`, "");
-    expect(roamgateStorage(raw).getItem(key)).toBe("");
-    expect(raw.getItem(key)).toBe("stale");
-  }
-});
-
-test("clearing migrated values does not resurrect originals on reload", () => {
-  const raw = memoryStorage({ theme: "dark" });
-  const storage = roamgateStorage(raw);
-  expect(storage.getItem("theme")).toBe("dark");
-  storage.removeItem("theme");
-  expect(roamgateStorage(raw).getItem("theme")).toBeNull();
-  expect(raw.getItem("theme")).toBe("dark");
-  storage.setItem("theme", "light");
-  expect(storage.getItem("theme")).toBe("light");
-});
-
-test("failed migration reads saved values and can retry", () => {
-  const raw = memoryStorage({ theme: "dark" });
-  const setItem = raw.setItem;
-  raw.setItem = () => {
-    throw new Error("quota exceeded");
-  };
-  expect(roamgateStorage(raw).getItem("theme")).toBe("dark");
-  raw.setItem = setItem;
-  expect(roamgateStorage(raw).getItem("theme")).toBe("dark");
-  expect(raw.getItem("roamgate:theme")).toBe("dark");
-});
-
-test("enumeration keeps legacy connection migration working without duplicate keys", () => {
+test("old World, upstream and unscoped preferences remain untouched and unread", () => {
   const raw = memoryStorage({
-    "diffViewerSelected:one": "saved",
-    "roamgate:diffViewerSelected:one": "new",
+    theme: "unscoped",
+    "herdr-world:theme": "old-world",
+    "roamgate:theme": "upstream",
   });
-  const storage = roamgateStorage(raw);
-  expect(storage.length).toBe(1);
-  expect(storage.key(0)).toBe("diffViewerSelected:one");
+  const storage = worldStorage(raw);
+  expect(storage.getItem("theme")).toBeNull();
+  expect(storage.length).toBe(0);
+  storage.setItem("theme", "new-world");
+  expect(storage.getItem("theme")).toBe("new-world");
+  expect(raw.getItem("herdr-world:theme")).toBe("old-world");
+  expect(raw.getItem("roamgate:theme")).toBe("upstream");
+});
+
+test("enumeration and clearing affect only current World foundation keys", () => {
+  const raw = memoryStorage({
+    [`${prefix}theme`]: "dark",
+    [`${prefix}scale`]: "1",
+    "roamgate:theme": "upstream",
+  });
+  const storage = worldStorage(raw);
+  expect(new Set([storage.key(0), storage.key(1)])).toEqual(
+    new Set(["theme", "scale"]),
+  );
   storage.clear();
-  expect(storage.getItem("diffViewerSelected:one")).toBeNull();
-  expect(raw.getItem("diffViewerSelected:one")).toBe("saved");
+  expect(storage.length).toBe(0);
+  expect(raw.getItem("roamgate:theme")).toBe("upstream");
 });

@@ -165,7 +165,7 @@ async function createSyntheticDb(
 
 describe("Antigravity sessions", () => {
   test("finds the newest Antigravity session for the exact working directory", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const cwd = "/workspace/repo";
     await createSyntheticDb(root, "older-session", cwd, 1726270000);
@@ -187,7 +187,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("resolves a known session id with exact name and prefix", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     await createSyntheticDb(
       root,
@@ -225,7 +225,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("describes session path correctly and reads metadata", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const dbPath = await createSyntheticDb(
       root,
@@ -246,7 +246,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("reads and normalizes session records from database", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const dbPath = await createSyntheticDb(
       root,
@@ -294,7 +294,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("resolves Antigravity session via resolveAgentSession", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     process.env.ANTIGRAVITY_CONVERSATIONS_DIR = root;
 
@@ -324,7 +324,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("resolves Antigravity session via cwd fallback when agent_session is missing", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     process.env.ANTIGRAVITY_CONVERSATIONS_DIR = root;
 
@@ -347,7 +347,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("returns missing_session with integration command when session cannot be resolved", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     process.env.ANTIGRAVITY_CONVERSATIONS_DIR = root;
 
@@ -366,7 +366,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("extracts nested tool result protobuf and ensures content has no control characters", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const dbPath = join(root, "nested-tool-result.db");
     const db = new Database(dbPath);
@@ -434,7 +434,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("fails soft with empty history on unknown tables or future schema bump", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const dbPath = join(root, "unknown-schema-session.db");
     const db = new Database(dbPath);
@@ -461,7 +461,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("fails soft with empty records when steps table schema is altered", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const dbPath = join(root, "altered-steps-session.db");
     const db = new Database(dbPath);
@@ -474,7 +474,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("fails soft on individual malformed step rows while recovering valid ones", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const dbPath = join(root, "partial-malformed.db");
     const db = new Database(dbPath);
@@ -505,7 +505,7 @@ describe("Antigravity sessions", () => {
   });
 
   test("fails soft with empty records when file is corrupt or not an sqlite database", async () => {
-    const root = await mkdtemp(join(tmpdir(), "roamgate-agy-test-"));
+    const root = await mkdtemp(join(tmpdir(), "herdr-world-agy-test-"));
     tempRoots.push(root);
     const corruptPath = join(root, "not-a-db.db");
     await writeFile(corruptPath, "this is not an sqlite database at all");

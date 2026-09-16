@@ -1,4 +1,4 @@
-import { roamgateLocalStorage } from "../browserStorage";
+import { worldLocalStorage } from "../browserStorage";
 import {
   forwardRef,
   useCallback,
@@ -126,13 +126,13 @@ function loadDiffScope(
   connectionId = "legacy-default",
   resourceKey?: string,
 ): DiffScope {
-  const scoped = roamgateLocalStorage.getItem(
+  const scoped = worldLocalStorage.getItem(
     diffScopeStorageKey(connectionId, resourceKey),
   );
   const value =
     scoped ??
     (resourceKey
-      ? roamgateLocalStorage.getItem(diffScopeStorageKey(connectionId))
+      ? worldLocalStorage.getItem(diffScopeStorageKey(connectionId))
       : null);
   if (value === "branch-main") return "branch-main";
   if (value === "last-step") return "last-step";
@@ -368,7 +368,7 @@ function readStoredSelection(
 ): GitDiffEntry | null {
   if (!workspaceId) return null;
   try {
-    const raw = roamgateLocalStorage.getItem(
+    const raw = worldLocalStorage.getItem(
       diffSelectionStorageKey(connectionId, workspaceId, scope),
     );
     if (!raw) return null;
@@ -400,7 +400,7 @@ function writeStoredSelection(
   entry: GitDiffEntry,
 ) {
   if (!workspaceId) return;
-  roamgateLocalStorage.setItem(
+  worldLocalStorage.setItem(
     diffSelectionStorageKey(connectionId, workspaceId, scope),
     JSON.stringify(entry),
   );
@@ -409,7 +409,7 @@ function writeStoredSelection(
 export function clearDiffViewerResourceCache(
   client: Pick<ConnectionClient, "connectionId" | "generation">,
   resourceKey: string,
-  storage: Pick<Storage, "removeItem"> = roamgateLocalStorage,
+  storage: Pick<Storage, "removeItem"> = worldLocalStorage,
 ) {
   for (const scope of ["working", "branch-main", "last-step"] as const) {
     retireDiffCache(diffCacheKey(client, undefined, scope, resourceKey));
@@ -1296,7 +1296,7 @@ export const DiffViewerPanel = forwardRef<
     : undefined;
 
   useEffect(() => {
-    roamgateLocalStorage.setItem(
+    worldLocalStorage.setItem(
       diffScopeStorageKey(connectionClient.connectionId, cacheResourceKey),
       diffScope,
     );

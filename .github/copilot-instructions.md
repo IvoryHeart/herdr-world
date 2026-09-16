@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Roamgate is an independent community Web and PWA client for Herdr. It has two parts:
+Herdr World is an independent community Web and PWA client for Herdr. It has two parts:
 
 - `server/src`: Bun-powered local bridge server (HTTP + WebSocket) that talks
   to the local Herdr socket.
@@ -12,7 +12,7 @@ Roamgate is an independent community Web and PWA client for Herdr. It has two pa
 - `scripts/`: release and packaging helpers.
 
 Generated build output lives in `server/public`,
-`server/src/public-files.gen.ts`, `server/roamgate*`, legacy `server/herdr-gui*`,
+`server/src/public-files.gen.ts`, `server/herdr-world*`, legacy `server/herdr-gui*`,
 and `dist/`. These are
 build artifacts; they must not be edited or committed.
 

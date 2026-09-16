@@ -1,5 +1,5 @@
 import { checkAnnotationUX } from "./annotations.browser";
-import { roamgateLocalStorage } from "./browserStorage";
+import { worldLocalStorage } from "./browserStorage";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import App from "./App";
@@ -146,7 +146,7 @@ function link(label: string) {
 }
 function selected(workspace = workspaces[0]) {
   return readResourceFileSelection(
-    roamgateLocalStorage,
+    worldLocalStorage,
     resourceScopeForWorkspace(client.connectionId, workspace),
   );
 }

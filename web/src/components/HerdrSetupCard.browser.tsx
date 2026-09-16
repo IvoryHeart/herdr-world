@@ -27,7 +27,7 @@ window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
     posts++;
     confirmed =
       init?.method === "POST" &&
-      new Headers(init.headers).get("x-roamgate-herdr-setup") === "1";
+      new Headers(init.headers).get("x-herdr-world-herdr-setup") === "1";
     return new Promise<Response>((resolve) => {
       completeSetup = resolve;
       if (preview && params.get("outcome") === "error") {

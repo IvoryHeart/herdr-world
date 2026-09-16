@@ -4,11 +4,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Roamgate only installs this exact Herdr build. The SHA-256 values were
+ * Herdr World only installs this exact Herdr build. The SHA-256 values were
  * recorded from https://herdr.dev/latest.json when this version was verified,
  * so a replaced or tampered release asset fails verification instead of
  * installing. Bump the version and checksums together after verifying a new
- * Herdr release against Roamgate's supported protocol range
+ * Herdr release against Herdr World's supported protocol range
  * (server/src/bridge/protocol-compat.ts).
  */
 export const VERIFIED_HERDR_VERSION = "0.9.0";
@@ -72,11 +72,11 @@ export function herdrInstallRoot(
 ): string {
   if (platform === "win32") {
     // Herdr's official Windows layout is a junctioned release store under
-    // %USERPROFILE%\.herdr plus a visible bin shim; Roamgate does not
+    // %USERPROFILE%\.herdr plus a visible bin shim; Herdr World does not
     // reimplement it and keeps its own managed directory instead.
     return join(
       appDataDir ?? join(homeDir, "AppData", "Roaming"),
-      "roamgate",
+      "herdr-world",
       "herdr",
     );
   }
@@ -126,7 +126,7 @@ function powershellSingleQuotedString(value: string): string {
 }
 
 /**
- * Download the verified Herdr release into Roamgate's managed directory and
+ * Download the verified Herdr release into Herdr World's managed directory and
  * return the binary path. Idempotent: an existing managed binary is kept.
  */
 export async function installVerifiedHerdr(

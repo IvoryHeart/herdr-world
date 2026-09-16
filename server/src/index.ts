@@ -722,7 +722,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
           control: {
             type: "pause_connection",
             reason:
-              "Another Roamgate client paused this connection. Resume when you want this browser to sync again.",
+              "Another Herdr World client paused this connection. Resume when you want this browser to sync again.",
           },
         }),
         "pause-other-client",
@@ -1411,7 +1411,7 @@ function main() {
           logger.warn("Herdr not reachable yet", {
             connection: runtime.identity.id,
             error: sanitizeConnectionError(error),
-            action: "run `roamgate herdr setup`; RPCs retry per request",
+            action: "run `herdr-world herdr setup`; RPCs retry per request",
           }),
         );
     },

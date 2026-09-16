@@ -82,7 +82,7 @@ describe("terminal theme presets", () => {
     }
   });
 
-  test("keep Roamgate Dark and Roamgate Light as the per-mode defaults", () => {
+  test("keep Herdr World Dark and Herdr World Light as the per-mode defaults", () => {
     for (const mode of ["dark", "light"] as const) {
       expect(defaultTerminalThemeId(mode)).toBe(`herdr-${mode}`);
       const preset = TERMINAL_THEME_PRESETS.find(
