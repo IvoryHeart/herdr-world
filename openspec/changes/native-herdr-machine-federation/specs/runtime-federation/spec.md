@@ -129,8 +129,9 @@ process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands.
 
 - **WHEN** World launches the reviewed SSH relay for an admitted connection
 - **THEN** it verifies the exact executable/relay revision and relay capability independently from
-  API and terminal protocol compatibility, selects the admitted session deterministically, and
-  speaks the reviewed Herdr protocol after the relay reaches the remote socket
+  API and terminal protocol compatibility, resolves the configured `Default` or named selector to
+  the actual session identity, and speaks the reviewed Herdr protocol after the relay reaches that
+  session's socket
 
 #### Scenario: OpenSSH executes the fixed remote command
 
@@ -163,21 +164,33 @@ process handling SHALL NOT interpret Herdr agents, panes, layouts, or commands.
 ### Requirement: World-owned Herdr connections
 
 The World bridge SHALL maintain a bounded Herdr connection list. Each remote connection SHALL
-contain an opaque stable connection ID, opaque runtime-binding ID, label, validated OpenSSH target
-or alias, one explicit pre-provisioned Herdr session, and enabled state. The list SHALL NOT contain
-passwords, private keys, agent tickets, user-supplied shell commands, or arbitrary SSH options. The
-connection ID identifies editable configuration; the runtime-binding ID identifies persisted
-runtime entities. Target or session retargeting SHALL mint a new runtime-binding ID, while
-reconnecting the same assignment SHALL retain it. Connection mutation and target/session disclosure
-SHALL require the existing actual-loopback local-management boundary. Herdr's saved-machine
-catalogue SHALL NOT be authoritative over the World connection list.
+contain an opaque stable connection ID, label, validated OpenSSH target or alias, a Herdr session
+selector that defaults to `Default` and may instead be `Named(name)`, enabled state, and an optional
+current runtime binding. The list SHALL NOT contain passwords, private keys, agent tickets,
+user-supplied shell commands, or arbitrary SSH options. The connection ID identifies editable
+configuration. Before admission, the adapter SHALL resolve either selector to an actual
+pre-provisioned session; World SHALL then create or retain an opaque runtime-binding ID that records
+the resolved session and identifies persisted runtime entities. A connection whose selector has not
+resolved SHALL remain visible but unbound and non-actionable. Reconnects to the same target and
+resolved session SHALL retain the runtime-binding ID. A target change or a selector resolving to a
+different session SHALL mint a new runtime-binding ID.
+Connection mutation and configured/resolved target/session disclosure SHALL require the existing
+actual-loopback local-management boundary. Herdr's saved-machine catalogue SHALL NOT be
+authoritative over the World connection list.
 
 #### Scenario: User adds a remote connection
 
-- **WHEN** an actual-loopback local-management user supplies a valid label, OpenSSH target, and one
-  explicit Herdr session
-- **THEN** World assigns separate opaque connection and runtime-binding IDs, persists only the
-  bounded fields, and starts the connection without accepting key material or arbitrary command text
+- **WHEN** an actual-loopback local-management user supplies a valid label and OpenSSH target while
+  omitting the Herdr session
+- **THEN** World assigns an opaque connection ID, persists only the bounded fields with the
+  `Default` selector, and creates the runtime binding only after resolving the actual session,
+  without accepting key material or arbitrary command text
+
+#### Scenario: User names a remote session
+
+- **WHEN** an actual-loopback local-management user supplies a valid named Herdr session
+- **THEN** the adapter resolves that named selector and admits the connection only after recording
+  the actual resolved session identity
 
 #### Scenario: User selects a key
 
@@ -187,9 +200,23 @@ catalogue SHALL NOT be authoritative over the World connection list.
 
 #### Scenario: Connection target or session changes
 
-- **WHEN** a local-management user changes a connection target or session from assignment A to B
+- **WHEN** a local-management user changes a connection target or session selector and the resolved
+  assignment changes from A to B
 - **THEN** World preserves the connection ID, retires A's generation, detaches A's viewers, mints a
   new runtime-binding ID for B, and does not attach A's persisted records to B
+
+#### Scenario: Default continues to resolve to the same session
+
+- **WHEN** a connection using `Default` reconnects to the same target and resolves to the same Herdr
+  session as its current runtime binding
+- **THEN** World retains the runtime-binding ID and advances only the connection generation
+
+#### Scenario: Default resolves to another session
+
+- **WHEN** a connection using `Default` reconnects and the target's default now resolves to a
+  different Herdr session
+- **THEN** World treats the result as retargeting, retires the old generation, detaches its viewers,
+  and creates a new runtime-binding ID before admitting the new session
 
 #### Scenario: Connection label or enabled state changes
 
@@ -210,7 +237,7 @@ catalogue SHALL NOT be authoritative over the World connection list.
 - **WHEN** the admitted SSH target lacks the reviewed Herdr relay behavior or reports an
   incompatible protocol
 - **THEN** World keeps the connection visible but non-actionable with bounded guidance and does not
-  install, replace, or upgrade Herdr automatically
+  create or replace its runtime binding or install, replace, or upgrade Herdr automatically
 
 #### Scenario: Browser supplies connection control
 
@@ -228,8 +255,9 @@ catalogue SHALL NOT be authoritative over the World connection list.
 #### Scenario: A Herdr saved profile is imported
 
 - **WHEN** a later optional import copies a Herdr saved-machine entry into World
-- **THEN** World creates an independent connection for one explicit session, and later Herdr
-  catalogue edits, deletion, or unavailability do not silently retarget or remove it
+- **THEN** World creates an independent connection with its imported named selector or `Default`,
+  resolves the actual session under normal admission rules, and does not let later Herdr catalogue
+  edits, deletion, or unavailability silently retarget or remove it
 
 ### Requirement: Unified WorldModel ingestion
 

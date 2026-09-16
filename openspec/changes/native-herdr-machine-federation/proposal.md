@@ -22,8 +22,8 @@ not a generic provider framework or a requirement for separate packages or servi
 
 - Let the World bridge own a bounded connection list, browser access, routing, runtime identity,
   reconnect generations, bounded diagnostics, and World-specific data. Each connection identifies
-  one particular Herdr runtime; an SSH-backed connection therefore names a pre-provisioned Herdr
-  session rather than only a machine.
+  one particular Herdr runtime. An SSH-backed connection may select Herdr's default session or name
+  one explicitly; the adapter resolves either choice to the actual session before admitting it.
 - Keep Herdr API requests, snapshot/event ordering, capabilities, native identifiers, command and
   launcher mapping, terminal semantics, compatibility checks, and the pinned relay command inside
   one Herdr-specific adapter boundary.
@@ -47,9 +47,10 @@ not a generic provider framework or a requirement for separate packages or servi
 - Adapt Local and remote Herdr connections through the Herdr adapter into the existing qualified
   `WorldModel` through one same-origin World gateway, with independent failure and reconnect
   boundaries.
-- Give each target/session binding its own persistent runtime identity. Retargeting a connection
-  keeps its configuration identity but retires the old runtime binding, detaches viewers, and does
-  not silently associate old World data with the new server.
+- Give each resolved target/session assignment its own persistent runtime identity. If the selected
+  default later resolves to another session, World keeps the connection's configuration identity
+  but retires the old runtime binding, detaches viewers, and does not silently associate old World
+  data with the new session.
 - Keep direct World bridge profiles as a compatibility path and preserve healthy Local operation
   when remote connections or SSH are unavailable.
 - Keep the adapter and connection mechanics isolated in upstream-aligned bridge code. Track Herdr

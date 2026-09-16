@@ -41,12 +41,13 @@ remote runtime session or configured password SHALL NOT grant that authority.
 ### Requirement: Remote connection and adapter boundary
 
 The bridge SHALL expose a narrow, actual-loopback local-management surface and a separate bounded
-runtime surface. Connection management MAY accept a validated label, OpenSSH target or alias, one
-explicit Herdr session, and enabled state. It SHALL NOT accept or expose passwords, private keys,
-arbitrary SSH options, executable paths, user-supplied remote commands, shell programs, shell text,
-or upload destinations. Routine runtime descriptors SHALL expose only opaque identity, label,
-state, generation, capabilities, and World runtime data. Browser runtime operations SHALL target
-an admitted opaque runtime-binding ID and an allow-listed World operation.
+runtime surface. Connection management MAY accept a validated label, OpenSSH target or alias, an
+optional named Herdr session selector, and enabled state; omitting the session SHALL select Herdr's
+default. It SHALL NOT accept or expose passwords, private keys, arbitrary SSH options, executable
+paths, user-supplied remote commands, shell programs, shell text, or upload destinations. Routine
+runtime descriptors SHALL expose only opaque identity, label, state, generation, capabilities, and
+World runtime data. Browser runtime operations SHALL target an admitted opaque runtime-binding ID
+and an allow-listed World operation.
 
 #### Scenario: Local-management user edits a connection
 

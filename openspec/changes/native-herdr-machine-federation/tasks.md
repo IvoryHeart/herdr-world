@@ -37,26 +37,30 @@ This pull request remains draft until checkpoint 4 passes.
   - **Observable result:** The existing local socket and one SSH-backed target can each produce
     independent API connections and terminal-ID connections through one Herdr-specific adapter,
     while the World registry maintains generation state and each connection mechanism reports
-    bounded transport diagnostics. Each remote connection names one explicit pre-provisioned Herdr
-    session. Connection configuration identity remains distinct from the runtime-binding identity
-    used for persisted World entities.
+    bounded transport diagnostics. Each remote connection accepts `Default` or a named Herdr session
+    selector; the resolved pre-provisioned session is mandatory for runtime admission. Connection
+    configuration identity remains distinct from the runtime-binding identity used for persisted
+    World entities.
   - **Evidence:** Focused Rust tests cover connection validation, fixed argv construction, adapter
     and connection lifecycle, independent connection creation, local-management authority, binding
-    rotation on retarget, and redaction without a local shell or embedded secrets.
+    rotation when `Default` resolves differently or the target changes, and redaction without a
+    local shell or embedded secrets.
   - **Stop and revisit:** Stop if SSH process handling needs Herdr entity/presentation types, the
-    adapter needs World views, or the seam exposes browser-visible credentials, arbitrary SSH flags
-    or commands, or coupled connection lifetimes.
+    adapter needs World views, cannot establish the resolved session before admission, or the seam
+    exposes browser-visible credentials, arbitrary SSH flags or commands, or coupled connection
+    lifetimes.
 
 - [ ] 1.2 Implement the smallest SSH-backed socket relay against the pinned Herdr surface.
   - **Owner:** The Herdr adapter owns the pinned relay command and compatibility; World supervises
     the bounded SSH process; OpenSSH selects target/authentication; remote Herdr connects the relay
-    to the connection's explicit session socket.
+    to the session socket resolved from the connection's `Default` or named selector.
   - **Observable result:** A configured World connection establishes a compatible remote Herdr API
     connection without a remote World installation or browser-reachable listener.
   - **Evidence:** Integration tests cover the separately pinned relay-capability probe, exact Herdr
-    executable/relay revision, deterministic noninteractive lookup, selected session, stream
-    framing, remote received command/arguments, process startup, exit, timeout, cancellation,
-    malformed targets, missing agent, missing/incompatible Herdr, and bounded diagnostics.
+    executable/relay revision, deterministic noninteractive lookup, default and named selector
+    resolution, resolved session identity, stream framing, remote received command/arguments,
+    process startup, exit, timeout, cancellation, malformed targets, missing agent,
+    missing/incompatible Herdr, and bounded diagnostics.
   - **Stop and revisit:** Stop if implementation requires a local shell, user-supplied shell program
     or shell text, stored key material, interactive prompt handling, unbounded stderr, automatic
     remote bootstrap, or remote World code. A fixed encoded relay command executed by the remote
@@ -102,12 +106,15 @@ This pull request remains draft until checkpoint 4 passes.
   - **Owner:** World owns connection IDs, runtime-binding IDs, labels, targets, sessions, enabled
     state, validation, and generation retirement; OpenSSH configuration remains user-owned.
   - **Observable result:** An actual-loopback local-management user can add, edit, enable, disable,
-    and remove a remote Herdr connection for one explicit session without storing keys or exposing
-    a general SSH/command interface. Retargeting keeps the connection ID but creates a fresh runtime
-    binding and detaches old viewers. Herdr saved-profile import is not required or authoritative.
+    and remove a remote Herdr connection whose session selector defaults to `Default` and may instead
+    name a session, without storing keys or exposing a general SSH/command interface. A changed
+    target or a selector resolving to a different session keeps the connection ID but creates a
+    fresh runtime binding and detaches old viewers. Herdr saved-profile import is not required or
+    authoritative.
   - **Evidence:** Bridge, persistence, recovery, and security tests cover corrupt data, collisions,
-    hostile values, bounds, redaction, remote-admin rejection, restart, generation changes, and an
-    A-to-B retarget with colliding native IDs and persisted records.
+    hostile values, bounds, redaction, remote-admin rejection, restart, stable default reconnect,
+    changed-default rotation, generation changes, and an A-to-B retarget with colliding native IDs
+    and persisted records.
   - **Stop and revisit:** Stop if stable identity depends on mutable targets, connection input can
     alter SSH argv structure, a Herdr catalogue becomes authoritative over World connections, or
     routine runtime payloads disclose connection details.

@@ -90,20 +90,29 @@ World stores Herdr connections in its trusted bridge configuration. Each remote 
 contains:
 
 - an opaque stable connection ID;
-- an opaque runtime-binding ID for the current target/session assignment;
+- an optional opaque runtime-binding ID for the last admitted target/session assignment;
 - a user-facing label;
 - one OpenSSH target or SSH-config alias;
-- one explicit pre-provisioned Herdr session name;
+- a Herdr session selector: `Default` or `Named(name)`, defaulting to `Default`;
 - enabled state.
 
-The connection identifies a particular Herdr runtime, not merely a machine. The SSH target and
-session are connection configuration, not runtime entity identity. World does not derive the stable
-connection ID from either field. Each target/session assignment also receives a
-persistent opaque runtime-binding ID. Reconnects to the same assignment retain that binding, while
-editing either transport field retires the current generation, mints a new runtime-binding ID,
-detaches existing viewers, and reconnects as a distinct runtime. Notes, pins, activity, and cached
-references from the old binding remain associated with it and do not attach to or get pruned by the
-new server, even when native IDs collide.
+The session name is optional user configuration. Before admitting a connection, the Herdr adapter
+resolves `Default` or `Named(name)` to the actual pre-provisioned Herdr session and records that
+resolved identity with the runtime binding. A new connection remains visible but unbound and
+non-actionable until that resolution succeeds. Settings may present a successful resolution as,
+for example,
+`Default (currently product-a)`.
+
+The resolved connection identifies a particular Herdr runtime, not merely a machine. The SSH target
+and session selector are connection configuration, not runtime entity identity. World does not
+derive the stable connection ID from either field. Each resolved target/session assignment receives
+a persistent opaque runtime-binding ID. Reconnects that resolve to the same assignment retain that
+binding. A target change, or a selector that resolves to a different session, retires the current
+generation, mints a new runtime-binding ID, detaches existing viewers, and reconnects as a distinct
+runtime. Changing `Default` to `Named(name)` may retain the binding only when the target is unchanged
+and the adapter proves it resolves to the same session. Notes, pins, activity, and cached references
+from the old binding remain associated with it and do not attach to or get pruned by the new server,
+even when native IDs collide.
 
 Connections contain no passwords, private keys, agent tickets, or generated shell text. OpenSSH
 remains authoritative for hostname resolution, users, ports, key selection, agents, host keys,
@@ -111,9 +120,9 @@ proxy jumps, control sockets, and related policy. A user chooses a key through n
 configuration or `ssh-agent`, not by uploading key material into World.
 
 Herdr's saved-machine catalogue may be used later as an import convenience, but it is not
-authoritative over World's connections. An import copies an explicit target and session into a
-World connection; subsequent catalogue edits, deletion, or availability do not silently retarget,
-disable, or remove that connection. Import is not required for this delivery.
+authoritative over World's connections. An import copies a target and optional named-session
+selector into a World connection; subsequent catalogue edits, deletion, or availability do not
+silently retarget, disable, or remove that connection. Import is not required for this delivery.
 
 The bridge invokes the local OpenSSH executable directly without a local shell. OpenSSH sends one
 fixed, correctly encoded relay command that the SSH server executes through the remote user's login
@@ -127,10 +136,12 @@ separate from API and
 terminal protocol compatibility. The current `v0.9.0` compatibility source does not provide the
 required `remote-api-bridge`; the inspected Herdr master revision `18061191` does. Connection
 admission therefore requires an exact executable/relay revision, deterministic noninteractive
-executable lookup, selected session, relay capability probe, and stream framing in addition to API
-and terminal protocol checks. The API relay requires an already-running compatible session and
-must support metadata access before any terminal attachment. Adopting another Herdr revision
-requires rerunning adapter and connection conformance and updating provenance.
+executable lookup, deterministic selector resolution, the resolved session identity, relay
+capability probe, and stream framing in addition to API and terminal protocol checks. The API relay
+requires an already-running compatible session and must support metadata access before any terminal
+attachment. A connection remains non-actionable if the adapter cannot establish which session a
+default selection resolved to. Adopting another Herdr revision requires rerunning adapter and
+connection conformance and updating provenance.
 
 Remote Herdr must already be compatible and reachable. When host trust, authentication, remote
 installation, update, or server replacement requires interaction, the connection reports bounded
