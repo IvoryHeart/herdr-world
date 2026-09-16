@@ -93,43 +93,47 @@ authentication and host-key interaction, remote executable discovery, server boo
 selection, connection retry, and transport-level error classification. World does not parse SSH
 stderr or reproduce those decisions.
 
-### Prove the Herdr interface before building the World adapter
+### Advance through evidence-backed checkpoints
 
-The first bounded live experiment uses only Herdr's supported public surface for Local and a real
-saved machine. It keeps one structural event subscription open while it issues commands and
-launcher operations and holds two terminal attachments concurrently. It runs through the same
-managed plugin or service environment World ships, including its real SSH-agent availability,
-rather than relying only on an interactive shell. This specifically rejects a transport that
-serializes one long-lived subscription, command, or terminal connection behind another.
+Work proceeds through four ordered checkpoints. Each checkpoint records ownership, an observable
+result, evidence, and a stop condition. A later checkpoint cannot retroactively excuse a failed
+architectural assumption.
 
-That first experiment may defer complete upload and failure-path coverage. The upstream interface is
-accepted, and World integration starts, only after the full end-to-end conformance fixture proves:
+1. **Prove the Herdr connection.** Use only Herdr's supported public surface for Local and a real
+   saved machine. Obtain the complete snapshot, keep one structural event subscription open, and
+   complete structural commands and launcher operations concurrently. Run through the managed
+   plugin or service environment World ships, including its real SSH-agent availability. This
+   rejects an interface that works only in an interactive shell or serializes a long-lived
+   subscription behind another operation.
+2. **Prove terminal compatibility.** Hold two terminal-ID streams on different panes of one split or
+   zoomed tab while a native Herdr client changes focus and zoom. Prove output, correct input
+   routing, focus, resize, scroll, graphics, bell, and non-takeover conflict behavior. This rejects a
+   selected-surface stream or a connection helper that serializes terminal attachments.
+3. **Prove the thin World integration.** After checkpoints 1 and 2 pass, World may build a bounded,
+   explicitly incomplete adapter that admits Local and one saved machine through one browser origin
+   and the existing `WorldModel`. Commands, launchers, and terminal streams use only the proven
+   Herdr surfaces. This checkpoint must demonstrate the ownership boundary before widening the
+   implementation; it does not enable the feature or establish product acceptance.
+4. **Complete upstream and product acceptance.** Extend the supported Herdr contract and fixtures to
+   connection generations, restart and stale-stream behavior, structured authentication, host-key,
+   bootstrap and version failures, and bounded remote byte delivery and cleanup. Complete World's
+   failure isolation, generation fencing, runtime-qualified persistence, uploads, security, browser
+   behavior, and end-to-end acceptance before the change becomes ready to merge.
 
-- the complete snapshot fields required by World;
-- subscription establishment and snapshot ordering without an event gap, with the subscription
-  remaining live while commands, launcher operations, and both terminal attachments are active;
-- connection generation change and stale-stream retirement after restart;
-- layout apply and export, pane movement, managed agent launch, and an overview action when no
-  terminal viewer exists;
-- two terminal-ID streams on different panes of one split or zoomed tab while a native Herdr client
-  changes focus and zoom, including compatible output, input, focus, resize, scroll, graphics, and
-  bell behavior;
-- non-takeover attachment conflict behavior with an existing owner;
-- authentication, host-key, bootstrap, version, and server-restart failures as structured
-  machine-local states; and
-- bounded remote byte delivery and cleanup for the upload lane.
-
-The proof records the exact Herdr release or commit, protocol version, advertised capabilities,
-managed execution environment, and fixture result. A source-only adapter test, mocked SSH process,
-interactive-shell-only run, or private command invocation does not satisfy this gate. If the actual
-supported interface differs from this design, this same change is updated before World
-implementation rather than hiding the difference in adapter code.
+Every live proof records the exact Herdr release or commit, protocol version, advertised
+capabilities, managed execution environment, and fixture result. A source-only adapter test, mocked
+SSH process, interactive-shell-only run, or private command invocation is insufficient. Work stops
+and this design is revisited if any checkpoint requires World-side SSH or bootstrap logic,
+browser-visible connection metadata, a duplicate machine catalogue, a topology path outside the
+existing `WorldModel`, or serialization that prevents subscriptions, commands, launchers, and
+terminal streams from making independent progress.
 
 ### Adapt Herdr into a World runtime registry
 
-After the conformance gate passes, the serving bridge consumes Herdr's machine catalogue and
-represents Local and each enabled saved profile as a logical runtime. It exposes sanitized
-descriptors and qualified World state through one same-origin browser gateway.
+After the connection and terminal checkpoints pass, the bounded thin integration consumes Herdr's
+machine catalogue and represents Local and one saved profile as logical runtimes. It exposes
+sanitized descriptors and qualified World state through one same-origin browser gateway. Catalogue
+expansion and general availability remain part of complete delivery.
 
 The stable identity of an entity is:
 
@@ -261,15 +265,15 @@ non-loopback access.
 
 ## Migration Plan
 
-1. Land and version the supported Herdr multihost contract and its integration surfaces.
-2. Pass the Local and saved-machine conformance fixture and record the exact proven contract.
-3. Update this change if the proven public surface changes any named requirement.
-4. Pin that Herdr version in World and implement the runtime registry, state and command adapter,
-   terminal-ID adapter, generation fencing, machine-qualified World data, and upload adapter.
-5. Make one serving gateway the normal desktop and Android discovery path while retaining direct
-   bridge profiles as compatibility entries.
-6. Complete security, browser, failure, and local-plus-saved-machine acceptance checks before
-   enabling native discovery by default.
+1. Prove and record the smallest supported Herdr connection surface.
+2. Prove and record terminal-ID compatibility and concurrency.
+3. Pin those proven surfaces and implement the bounded thin World integration for Local plus one
+   saved machine.
+4. Complete and accept the remaining upstream lifecycle, error, and byte-delivery contract.
+5. Complete generation fencing, failure isolation, qualified World data, uploads, security, browser
+   behavior, and local-plus-saved-machine acceptance.
+6. Make one serving gateway the normal desktop and Android discovery path only after the complete
+   feature passes end-to-end acceptance.
 
 Rollback disables native discovery and leaves the current browser-direct federation path intact.
 Qualified records for Local remain readable, and rollback does not mutate Herdr profiles or remote

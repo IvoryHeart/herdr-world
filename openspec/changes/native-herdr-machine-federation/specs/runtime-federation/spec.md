@@ -91,20 +91,29 @@ control.
 
 ### Requirement: Supported Herdr multihost dependency
 
-World SHALL implement native saved-machine federation only through a supported, versioned Herdr
-multihost interface that has passed the required Local and saved-machine conformance fixture. That
-interface SHALL provide bounded machine discovery, authoritative snapshots and subscriptions,
-structural commands and launchers, terminal-ID streams with compatible output, input, focus, resize,
-scroll, graphics, and bell behavior, connection generations, structured transport errors, and
-bounded remote byte delivery. The supported integration boundary MAY use separate entry points and
-SHALL NOT require one aggregate daemon. World SHALL NOT launch SSH, invoke a remote shell, reproduce
-private executable discovery or bootstrap, or copy a private Herdr transport to provide native
-federation.
+World SHALL build a bounded thin native integration only after supported, versioned Herdr
+connection and terminal surfaces pass their Local and saved-machine checkpoints. World SHALL NOT
+enable, accept, or merge native saved-machine federation until the complete Herdr contract and
+product pass end-to-end acceptance. The complete interface SHALL provide bounded machine discovery,
+authoritative snapshots and subscriptions, structural commands and launchers, terminal-ID streams
+with compatible output, input, focus, resize, scroll, graphics, and bell behavior, connection
+generations, structured transport errors, and bounded remote byte delivery. The supported
+integration boundary MAY use separate entry points and SHALL NOT require one aggregate daemon.
+World SHALL NOT launch SSH, invoke a remote shell, reproduce private executable discovery or
+bootstrap, or copy a private Herdr transport to provide native federation.
 
-#### Scenario: Herdr contract passes conformance
+#### Scenario: Connection and terminal checkpoints pass
 
-- **WHEN** one exact Herdr release or commit passes the required end-to-end conformance fixture
-- **THEN** World may pin that contract and start integration through only its supported surface
+- **WHEN** one exact Herdr release or commit passes the live connection and terminal checkpoints
+- **THEN** World may pin those proven surfaces and build an explicitly incomplete thin integration
+  for Local and one saved machine
+
+#### Scenario: Complete Herdr contract passes conformance
+
+- **WHEN** an exact Herdr revision preserves the proven connection and terminal surfaces and also
+  passes generation, restart, structured failure, and remote byte-delivery conformance
+- **THEN** World may update its pin and complete the remaining product work but does not accept or
+  enable the feature until final end-to-end acceptance passes
 
 #### Scenario: Long-lived operations run concurrently
 
@@ -115,10 +124,17 @@ federation.
 
 #### Scenario: Herdr contract is missing or unproven
 
-- **WHEN** the installed or proposed Herdr version lacks the complete supported contract or has not
-  passed the fixture
-- **THEN** native saved-machine federation remains unavailable and direct World bridge profiles
+- **WHEN** the installed or proposed Herdr version has not passed the connection and terminal
+  checkpoints
+- **THEN** even the thin native integration remains unavailable and direct World bridge profiles
   remain usable without World creating an SSH or private-command substitute
+
+#### Scenario: Thin integration has incomplete acceptance
+
+- **WHEN** the connection and terminal checkpoints pass but complete upstream or product acceptance
+  has not passed
+- **THEN** the integration remains explicitly incomplete and cannot be enabled or treated as
+  merge-ready
 
 #### Scenario: Herdr reports a machine transport error
 
@@ -132,6 +148,12 @@ federation.
 - **WHEN** World adopts a different Herdr protocol version, release, commit, or capability contract
 - **THEN** the conformance fixture passes again and World's compatibility and provenance record is
   updated before that contract is admitted
+
+#### Scenario: Thin integration crosses the ownership boundary
+
+- **WHEN** proving the integration would require World-side SSH, bootstrap, a duplicate machine
+  catalogue, browser-visible connection metadata, or a topology path outside `WorldModel`
+- **THEN** implementation stops and this design is revisited before more product code is added
 
 ### Requirement: Herdr machine catalogue authority
 

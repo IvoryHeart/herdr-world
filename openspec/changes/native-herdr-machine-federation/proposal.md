@@ -24,8 +24,9 @@ transport rather than World filling that gap.
   catalogue, API, terminal, and delivery entry points; do not require an aggregate daemon.
 - Keep saved-profile selection, SSH behavior, authentication and host-key handling, remote Herdr
   discovery and bootstrap, reconnection, and transport error classification inside Herdr.
-- Require an end-to-end Herdr conformance proof for Local and a saved machine before World runtime
-  integration starts.
+- Require live Herdr connection and terminal-compatibility checkpoints before a bounded thin World
+  integration, then require complete upstream and product acceptance before enabling or accepting
+  the feature.
 - Make one World bridge adapt the proven Herdr interface into the existing machine-qualified model
   and same-origin browser gateway, with independent runtime failure and reconnect boundaries.
 - Keep the existing Local provider usable when Herdr's saved-machine catalogue or native transport
@@ -67,3 +68,7 @@ World will not implement SSH, remote shell execution, Herdr executable discovery
 bootstrap for native federation. Saved remote machines will not need a World installation or HTTP
 listener. Until the Herdr contract is available and proven, current direct bridge profiles remain
 the supported remote multihost path and the existing same-origin Local provider remains supported.
+
+This active change remains incomplete until the thin integration, remaining delivery requirements,
+and end-to-end acceptance are implemented and evidenced. Passing planning validation alone does not
+make it ready to merge.
