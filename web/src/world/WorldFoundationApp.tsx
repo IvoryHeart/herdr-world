@@ -25,10 +25,7 @@ import {
   type WorldObjectNode,
 } from "./worldObject";
 import "./world.css";
-import type {
-  OfficeCanvasAnchor,
-  OfficeConversationAnchors,
-} from "./PixelOfficeCanvas";
+import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
   floatingTerminalForNode,
   shouldRehomeDockedTerminal,
@@ -42,7 +39,7 @@ export {
 } from "./worldTerminalPresentation";
 
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
-const CheckpointTreeView = lazy(() => import("./CheckpointTreeView"));
+const ConnectedTreeView = lazy(() => import("./ConnectedTreeView"));
 const CheckpointGraphView = lazy(() => import("./CheckpointGraphView"));
 const WorldIntentProfile = lazy(() => import("./WorldIntentProfile"));
 const WorldIntentConnector = lazy(() => import("./WorldIntentConnector"));
@@ -376,10 +373,10 @@ function WorldControlPlane({
   const contextRailRef = useRef<HTMLElement | null>(null);
   const [intentOpening, setIntentOpening] = useState(false);
   const [intentError, setIntentError] = useState<string | null>(null);
-  const [selectedOfficeAnchor, setSelectedOfficeAnchor] =
+  const [selectedVisualAnchor, setSelectedVisualAnchor] =
     useState<OfficeCanvasAnchor | null>(null);
-  const [officeConversationAnchors, setOfficeConversationAnchors] =
-    useState<OfficeConversationAnchors | null>(null);
+  const [visualConversationAnchors, setVisualConversationAnchors] =
+    useState<Record<string, OfficeCanvasAnchor> | null>(null);
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
     Record<string, OfficeCanvasAnchor | null>
   >({});
@@ -402,6 +399,10 @@ function WorldControlPlane({
   const selectedId = currentSelectionGeneration
     ? (selection?.id ?? null)
     : null;
+  const floatingTerminalNodeIds = useMemo(
+    () => floatingTerminals.map(({ nodeId }) => nodeId),
+    [floatingTerminals],
+  );
   const applySelection = (
     id: string | null,
     requestedView: InspectorView | null = null,
@@ -411,7 +412,8 @@ function WorldControlPlane({
     intentRequestRef.current = requestId;
     setSelection(next);
     setIntentError(null);
-    setSelectedOfficeAnchor(null);
+    setSelectedVisualAnchor(null);
+    setVisualConversationAnchors(null);
     const intentView = next
       ? worldIntentInitialView(next, requestedView ?? readWorldIntentView())
       : null;
@@ -482,7 +484,8 @@ function WorldControlPlane({
     setIntentOpening(false);
     setIntentError(null);
     setSelection(null);
-    setSelectedOfficeAnchor(null);
+    setSelectedVisualAnchor(null);
+    setVisualConversationAnchors(null);
     window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
   };
 
@@ -542,6 +545,20 @@ function WorldControlPlane({
       onFloatingTerminalsChange([...admission.terminals]);
     },
     [floatingTerminals, onFloatingTerminalsChange],
+  );
+
+  const openTerminalById = useCallback(
+    async (id: string) => {
+      const node = world.nodeById.get(id);
+      if (!node) throw new Error("This terminal is no longer available");
+      try {
+        await popOutTerminal(node);
+      } catch (cause) {
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
+        throw cause;
+      }
+    },
+    [popOutTerminal, world],
   );
 
   useEffect(() => {
@@ -656,26 +673,11 @@ function WorldControlPlane({
                       selectedId={selectedId}
                       onSelect={selectNode}
                       floatingTerminals={floatingTerminals}
-                      onConversationAnchorsChange={setOfficeConversationAnchors}
-                      onOpenTerminal={async (id) => {
-                        const node = world.nodeById.get(id);
-                        if (!node) {
-                          throw new Error(
-                            "This terminal is no longer available",
-                          );
-                        }
-                        try {
-                          await popOutTerminal(node);
-                        } catch (cause) {
-                          setIntentError(
-                            cause instanceof Error
-                              ? cause.message
-                              : String(cause),
-                          );
-                          throw cause;
-                        }
-                      }}
-                      onSelectedAnchorChange={setSelectedOfficeAnchor}
+                      onConversationNodeAnchorsChange={
+                        setVisualConversationAnchors
+                      }
+                      onOpenTerminal={openTerminalById}
+                      onSelectedAnchorChange={setSelectedVisualAnchor}
                     />
                   </Suspense>
                 ) : view === "tree" ? (
@@ -684,10 +686,14 @@ function WorldControlPlane({
                       <div className="world-view-loading">Loading Tree…</div>
                     }
                   >
-                    <CheckpointTreeView
+                    <ConnectedTreeView
                       world={world}
                       selectedId={selectedId}
+                      conversationNodeIds={floatingTerminalNodeIds}
                       onSelect={selectNode}
+                      onOpenTerminal={openTerminalById}
+                      onSelectedAnchorChange={setSelectedVisualAnchor}
+                      onNodeAnchorsChange={setVisualConversationAnchors}
                     />
                   </Suspense>
                 ) : (
@@ -706,31 +712,25 @@ function WorldControlPlane({
               </WorldViewErrorBoundary>
             </Suspense>
           </section>
-          {view === "office" &&
-          selected?.kind === "agent" &&
-          selectedOfficeAnchor?.visible &&
+          {selected?.kind === "agent" &&
+          selectedVisualAnchor?.visible &&
           intentOverlayAnchor ? (
             <Suspense fallback={null}>
               <WorldIntentConnector
-                source={selectedOfficeAnchor}
+                source={selectedVisualAnchor}
                 target={intentOverlayAnchor}
               />
             </Suspense>
           ) : null}
-          {view === "office"
-            ? floatingTerminals.map((terminal) => {
-                const sceneAnchors =
-                  officeConversationAnchors?.[terminal.nodeId];
-                const source =
-                  sceneAnchors?.workbench ?? sceneAnchors?.agent ?? null;
-                const target = floatingWindowAnchors[terminal.nodeId] ?? null;
-                return source && target ? (
-                  <Suspense key={terminal.nodeId} fallback={null}>
-                    <WorldIntentConnector source={source} target={target} />
-                  </Suspense>
-                ) : null;
-              })
-            : null}
+          {floatingTerminals.map((terminal) => {
+            const source = visualConversationAnchors?.[terminal.nodeId];
+            const target = floatingWindowAnchors[terminal.nodeId] ?? null;
+            return source && target ? (
+              <Suspense key={terminal.nodeId} fallback={null}>
+                <WorldIntentConnector source={source} target={target} />
+              </Suspense>
+            ) : null;
+          })}
           <aside
             ref={contextRailRef}
             className={`world-context-rail ${inspectorOpen ? "has-inspector" : ""}`}

@@ -79,9 +79,9 @@
 
 ## 11. Connected Tree migration
 
-- [ ] 11.1 Move the checkpoint connected branch diagram from Graph to canonical Tree and replace the list-primary desktop composition, preserving exact host-space-agent/terminal connectors after Office acceptance
-- [ ] 11.2 Complete Tree search, independent disclosure and dense/unequal branch layout, and verify clearing search restores prior disclosure without dangling connectors or page overflow
-- [ ] 11.3 Integrate the shared selected-host Inspector context and qualified terminal conversations while retaining read-only detail for other hosts and an equivalent compact/assistive hierarchy, and verify inactive/stale actions, task summaries and keyboard/touch operation
+- [x] 11.1 Move the checkpoint connected branch diagram from Graph to canonical Tree and replace the list-primary desktop composition, preserving exact host-space-agent/terminal connectors after Office acceptance
+- [x] 11.2 Complete Tree search, independent disclosure and dense/unequal branch layout, and verify clearing search restores prior disclosure without dangling connectors or page overflow
+- [x] 11.3 Integrate the shared selected-host Inspector context and qualified terminal conversations while retaining read-only detail for other hosts and an equivalent compact/assistive hierarchy, and verify inactive/stale actions, task summaries and keyboard/touch operation
 
 ## 12. Spatial Graph migration
 

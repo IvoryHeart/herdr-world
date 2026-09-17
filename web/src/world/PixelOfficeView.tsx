@@ -58,7 +58,7 @@ export default function PixelOfficeView({
   onOpenTerminal,
   onSelectedAnchorChange,
   floatingTerminals,
-  onConversationAnchorsChange,
+  onConversationNodeAnchorsChange,
 }: {
   world: WorldObject;
   selectedId: string | null;
@@ -66,7 +66,9 @@ export default function PixelOfficeView({
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
   floatingTerminals: readonly WorldFloatingTerminal[];
-  onConversationAnchorsChange?(anchors: OfficeConversationAnchors | null): void;
+  onConversationNodeAnchorsChange?(
+    anchors: Record<string, OfficeCanvasAnchor> | null,
+  ): void;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -388,7 +390,18 @@ export default function PixelOfficeView({
             setSelectedSceneAnchor(anchor);
             onSelectedAnchorChange?.(anchor);
           }}
-          onAnchorChange={onConversationAnchorsChange}
+          onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
+            onConversationNodeAnchorsChange?.(
+              anchors
+                ? Object.fromEntries(
+                    Object.entries(anchors).flatMap(([id, value]) => {
+                      const anchor = value.workbench ?? value.agent ?? null;
+                      return anchor ? [[id, anchor]] : [];
+                    }),
+                  )
+                : null,
+            );
+          }}
           onLayoutChange={setLayout}
           onCanvasRendered={setRenderedRevision}
           roomAlignment={preferences.roomAlignment}
