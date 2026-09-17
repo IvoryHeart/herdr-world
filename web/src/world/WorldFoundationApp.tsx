@@ -30,9 +30,8 @@ const CheckpointGraphView = lazy(() => import("./CheckpointGraphView"));
 
 export type WorldView = "spaces" | "office" | "tree" | "graph";
 
-const VIEW_KEY = "worldView";
 const SELECTED_CONNECTION_KEY = "worldSelectedConnection";
-const WORLD_VIEWS: readonly WorldView[] = ["spaces", "office", "tree", "graph"];
+const WORLD_VIEWS: readonly WorldView[] = ["office", "spaces", "tree", "graph"];
 const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   spaces: "/spaces",
   office: "/office",
@@ -43,25 +42,23 @@ const WORLD_VIEW_PATHS: Record<WorldView, string> = {
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
     ? (value as WorldView)
-    : "spaces";
+    : "office";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
-  const match = Object.entries(WORLD_VIEW_PATHS).find(
-    ([, path]) => path === pathname,
-  );
-  return (match?.[0] as WorldView | undefined) ?? "spaces";
+  if (pathname === "/spaces") return "spaces";
+  if (pathname === "/tree") return "tree";
+  if (pathname === "/graph") return "graph";
+  return "office";
 }
 
 function initialView() {
-  if (window.location.pathname !== "/") {
-    return worldViewFromPath(window.location.pathname);
-  }
-  return parseWorldView(worldLocalStorage.getItem(VIEW_KEY));
+  return worldViewFromPath(window.location.pathname);
 }
 
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
+  const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
   const [inspectorPortal, setInspectorPortal] = useState<HTMLElement | null>(
     null,
   );
@@ -81,7 +78,6 @@ export default function WorldFoundationApp() {
     const onPopState = () => {
       const next = worldViewFromPath(window.location.pathname);
       setViewState(next);
-      worldLocalStorage.setItem(VIEW_KEY, next);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -89,7 +85,6 @@ export default function WorldFoundationApp() {
 
   const setView = (next: WorldView) => {
     setViewState(next);
-    worldLocalStorage.setItem(VIEW_KEY, next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[next];
@@ -102,34 +97,7 @@ export default function WorldFoundationApp() {
 
   return (
     <div className="world-foundation-shell">
-      <nav className="world-primary-nav" aria-label="World views">
-        <a
-          className="world-primary-brand"
-          href={WORLD_VIEW_PATHS.spaces}
-          aria-label="Herdr World"
-          onClick={(event) => {
-            event.preventDefault();
-            setView("spaces");
-          }}
-        >
-          <img src="/herdr-world-logo.svg" alt="" width="25" height="25" />
-          <span>World</span>
-        </a>
-        <div className="world-primary-tabs" role="tablist" aria-label="Views">
-          {WORLD_VIEWS.map((candidate) => (
-            <button
-              key={candidate}
-              type="button"
-              role="tab"
-              aria-selected={view === candidate}
-              className={view === candidate ? "is-active" : ""}
-              onClick={() => setView(candidate)}
-            >
-              {candidate[0].toUpperCase() + candidate.slice(1)}
-            </button>
-          ))}
-        </div>
-      </nav>
+      <div className="world-topbar-host" ref={setTopbarPortal} />
       <div
         className={`world-spaces-layer ${view === "spaces" ? "is-active" : ""}`}
         aria-hidden={view !== "spaces"}
@@ -137,6 +105,22 @@ export default function WorldFoundationApp() {
         <App
           operationalShortcutsEnabled={view === "spaces"}
           inspectorPortal={view === "spaces" ? null : inspectorPortal}
+          topbarPortal={topbarPortal}
+          primaryViewControl={
+            <label className="world-primary-view-select">
+              <select
+                aria-label="World view"
+                value={view}
+                onChange={(event) => setView(event.target.value as WorldView)}
+              >
+                {WORLD_VIEWS.map((candidate) => (
+                  <option key={candidate} value={candidate}>
+                    {candidate[0].toUpperCase() + candidate.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          }
           onInspectorVisibilityChange={setInspectorOpen}
         />
       </div>

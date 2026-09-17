@@ -117,6 +117,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @pierre/diffs | 1.3.6 | apache-2.0 |
 | @pierre/theme | 2.0.0 | apache-2.0 |
 | @pierre/theming | 1.0.1 | apache-2.0 |
+| @pixi/colord | 2.9.6 | MIT |
 | @profoundlogic/hogan | 3.0.4 | Apache-2.0 |
 | @radix-ui/primitive | 1.1.4 | MIT |
 | @radix-ui/react-arrow | 1.1.10 | MIT |
@@ -155,6 +156,8 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @types/babel__generator | 7.27.0 | MIT |
 | @types/babel__template | 7.4.4 | MIT |
 | @types/babel__traverse | 7.28.0 | MIT |
+| @types/css-font-loading-module | 0.0.12 | MIT |
+| @types/earcut | 2.1.4 | MIT |
 | @types/esrecurse | 4.3.1 | MIT |
 | @types/estree | 1.0.9 | MIT |
 | @types/hast | 3.0.5 | MIT |
@@ -177,6 +180,8 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @typescript-eslint/visitor-keys | 8.62.0 | MIT |
 | @ungap/structured-clone | 1.3.3 | ISC |
 | @vitejs/plugin-react | 4.7.0 | MIT |
+| @webgpu/types | 0.1.72 | BSD-3-Clause |
+| @xmldom/xmldom | 0.8.15 | MIT |
 | @xterm/addon-clipboard | 0.2.0 | MIT |
 | @xterm/addon-fit | 0.12.0-beta.301 | MIT |
 | @xterm/addon-unicode-graphemes | 0.4.0 | MIT |
@@ -219,6 +224,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | diff | 8.0.4 | BSD-3-Clause |
 | diff | 9.0.0 | BSD-3-Clause |
 | diff2html | 3.4.56 | MIT |
+| earcut | 2.2.4 | ISC |
 | electron-to-chromium | 1.5.380 | ISC |
 | elkjs | 0.11.1 | EPL-2.0 |
 | entities | 7.0.1 | BSD-2-Clause |
@@ -235,6 +241,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | esrecurse | 4.3.0 | BSD-2-Clause |
 | estraverse | 5.3.0 | BSD-2-Clause |
 | esutils | 2.0.3 | BSD-2-Clause |
+| eventemitter3 | 5.0.4 | MIT |
 | fast-deep-equal | 3.1.3 | MIT |
 | fast-glob | 3.3.3 | MIT |
 | fast-json-stable-stringify | 2.1.0 | MIT |
@@ -271,6 +278,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | is-number | 7.0.0 | MIT |
 | is-unicode-supported | 2.1.0 | MIT |
 | isexe | 2.0.0 | ISC |
+| ismobilejs | 1.1.1 | MIT |
 | js-base64 | 3.9.2 | BSD-3-Clause |
 | js-tokens | 4.0.0 | MIT |
 | jsesc | 3.1.0 | MIT |
@@ -310,11 +318,13 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | ora | 9.4.1 | MIT |
 | p-limit | 3.1.0 | MIT |
 | p-locate | 5.0.0 | MIT |
+| parse-svg-path | 0.1.2 | MIT |
 | path-exists | 4.0.0 | MIT |
 | path-key | 3.1.1 | MIT |
 | picocolors | 1.1.1 | ISC |
 | picomatch | 2.3.2 | MIT |
 | picomatch | 4.0.4 | MIT |
+| pixi.js | 8.3.4 | MIT |
 | postcss | 8.5.15 | MIT |
 | prelude-ls | 1.2.1 | MIT |
 | property-information | 7.2.0 | MIT |

@@ -36,6 +36,10 @@ retain their original Herdr Web lineage.
   `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an
   external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Restored the retained Pixi Office as the primary World surface and placed the
+  Office/Spaces/Tree/Graph selector in the existing application top bar between
+  the version and machine controls, without a second navigation bar.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
   provide tagged binary, archive and update identities at release time.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)

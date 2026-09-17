@@ -282,7 +282,11 @@ function buildHost(
             ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
             : undefined;
           return {
-            id: worldObjectId(connection.connectionId, "pane", pane.pane_id),
+            id: worldObjectId(
+              connection.connectionId,
+              "terminal",
+              pane.terminal_id,
+            ),
             kind,
             nativeId: pane.pane_id,
             parentId: spaceId,

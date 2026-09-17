@@ -15,10 +15,7 @@ export class WorldViewErrorBoundary extends Component<
       return (
         <div className="world-view-failure" role="alert">
           <h2>This view could not be rendered</h2>
-          <p>
-            Your connection, Spaces, Inspector, and terminals are still
-            available. Choose another view or retry this one.
-          </p>
+          <p>Spaces, Inspector, and terminals remain available.</p>
           <button
             type="button"
             onClick={() => this.setState({ failed: false })}

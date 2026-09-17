@@ -5,7 +5,7 @@ import { buildWorldObject } from "./worldObject";
 import {
   OFFICE_PRESENTATION_BOUNDS,
   projectWorldOffice,
-} from "./officeProjection";
+} from "./herdrOfficeProjection";
 
 describe("Pixel Office projection", () => {
   test("places agents by structured status and keeps every admitted tab as a desk", () => {
@@ -168,7 +168,157 @@ describe("Pixel Office projection", () => {
       destination: "room",
     });
   });
+
+  test("keeps agent and character identity stable when the owning pane moves", () => {
+    const project = (paneId: string) => {
+      const source = connection(
+        "local",
+        [tab("tab", 1)],
+        [
+          {
+            ...pane("tab", "working", "Codex"),
+            pane_id: paneId,
+            terminal_id: "stable-terminal",
+          },
+        ],
+      );
+      return projectWorldOffice(buildWorldObject([source], "local"), 1)
+        .roster[0].agent;
+    };
+    const first = project("old-pane");
+    const moved = project("new-pane");
+
+    expect(moved.key).toBe(first.key);
+    expect(moved.nodeId).toBe(first.nodeId);
+    expect(moved.characterIndex).toBe(first.characterIndex);
+    expect(moved.currentPaneRef.nativeId).toBe("new-pane");
+    expect(moved.currentPaneRef.nativeId).not.toBe(
+      first.currentPaneRef.nativeId,
+    );
+  });
+
+  test("enforces every scene bound while retaining complete semantic rosters", () => {
+    const office = projectWorldOffice(
+      buildWorldObject(
+        Array.from({ length: 7 }, (_, hostIndex) =>
+          boundedConnection(hostIndex),
+        ),
+        "host-0",
+      ),
+      1,
+    );
+
+    expect(office.presentationBounds).toMatchObject({
+      renderedRooms: OFFICE_PRESENTATION_BOUNDS.rooms,
+      totalRooms: 129,
+      renderedReceptionDesks: OFFICE_PRESENTATION_BOUNDS.receptionDesks,
+      totalReceptionDesks: 7,
+      renderedRoomAgents: OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+      totalRoomAgents: 18,
+      renderedWaitingAgents:
+        OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
+      totalWaitingAgents: 6,
+      renderedBarAgents: OFFICE_PRESENTATION_BOUNDS.barAgents,
+      totalBarAgents: 20,
+    });
+    expect(office.rooms).toHaveLength(128);
+    expect(office.roomRoster).toHaveLength(129);
+    expect(office.rooms[0].desks).toHaveLength(8);
+    expect(office.rooms[0].roomAgents).toHaveLength(16);
+    expect(office.receptions[0].waitingAgents).toHaveLength(4);
+    expect(office.barAgents).toHaveLength(16);
+    expect(office.roster).toHaveLength(44);
+    expect(office.coverage).toMatchObject({
+      omittedRooms: 1,
+      omittedDesks: 4,
+      omittedRoomAgents: 2,
+      omittedReceptionDesks: 1,
+      omittedWaitingAgents: 2,
+      omittedBarAgents: 4,
+    });
+  });
 });
+
+function boundedConnection(hostIndex: number): WorldRuntimeConnection {
+  const workspaces = Array.from(
+    { length: hostIndex === 0 ? 123 : 1 },
+    (_, workspaceIndex): Workspace => ({
+      workspace_id: `workspace-${hostIndex}-${workspaceIndex}`,
+      number: workspaceIndex + 1,
+      label: `Workspace ${hostIndex}-${workspaceIndex}`,
+      focused: workspaceIndex === 0,
+      pane_count: 0,
+      tab_count: 1,
+      active_tab_id: `tab-${hostIndex}-${workspaceIndex}`,
+      agent_status: "unknown",
+    }),
+  );
+  const tabs = workspaces.map(
+    (workspace, index): Tab => ({
+      tab_id: `tab-${hostIndex}-${index}`,
+      workspace_id: workspace.workspace_id,
+      number: 1,
+      label: "Tab",
+      focused: true,
+      pane_count: 0,
+      agent_status: "unknown",
+    }),
+  );
+  const panes: Pane[] = [];
+  if (hostIndex === 0) {
+    for (let index = 0; index < 10; index += 1) {
+      tabs.push({
+        tab_id: `extra-tab-${index}`,
+        workspace_id: workspaces[0].workspace_id,
+        number: index + 2,
+        label: `Extra ${index}`,
+        focused: false,
+        pane_count: 0,
+        agent_status: "unknown",
+      });
+    }
+    for (let index = 0; index < 18; index += 1) {
+      panes.push({
+        ...pane(
+          index < 9 ? `extra-tab-${index}` : "tab-0-0",
+          index % 3 === 0 ? "unknown" : "working",
+          `room-${index}`,
+          index,
+        ),
+        workspace_id: workspaces[0].workspace_id,
+      });
+    }
+    for (let index = 0; index < 6; index += 1) {
+      panes.push({
+        ...pane("tab-0-0", "blocked", `blocked-${index}`, index + 20),
+        workspace_id: workspaces[0].workspace_id,
+      });
+    }
+    for (let index = 0; index < 20; index += 1) {
+      panes.push({
+        ...pane(
+          "tab-0-0",
+          index % 2 === 0 ? "idle" : "done",
+          `bar-${index}`,
+          index + 30,
+        ),
+        workspace_id: workspaces[0].workspace_id,
+      });
+    }
+  }
+  return {
+    connectionId: `host-${hostIndex}`,
+    label: `Host ${hostIndex}`,
+    source: "saved-profile",
+    isDefault: hostIndex === 0,
+    state: "ready",
+    generation: 7,
+    snapshotGeneration: 7,
+    stale: false,
+    actionable: true,
+    snapshot: { workspaces, tabs, panes, agents: [] },
+  };
+}
 
 function connection(
   id: string,

@@ -6,7 +6,9 @@ server-managed local and SSH connections, terminals, files, changes and session 
 should adopt that stronger foundation and make its visual control plane a native part of one
 installable application instead of rebuilding the same capabilities beside it. The first complete
 visual experience SHALL be a deep Pixel Office that brings Roamgate's terminal, Files, Changes and
-Agent History context to the selected agent. Office is the first implementation milestone, but the
+Agent History context to the selected agent. Office is World's primary default surface; Roamgate's
+current terminal workspace remains available as the first-class Spaces surface. Office is the first
+implementation milestone, but the
 foundation replacement is complete only after Tree, Graph and qualified selected-host
 conversations are migrated over the same seam. The established Pixel Office implementation at
 World commit `9c8f650853ad2d598d476dac1eecdeaea16716c6` is retained source, not a design reference
@@ -27,6 +29,7 @@ recorded by this change rather than unexplained presentation rewrites.
   non-loopback service installs.
 - Make Roamgate's workspace terminal, Inspector, Files, Changes, Agent History and connection
   surfaces native World capabilities rather than a separately installed Roamgate application.
+  Present Pixel Office as the primary World surface while retaining that workspace as Spaces.
 - Project all managed Herdr connections into a shared, host-qualified World hierarchy and migrate
   Spaces, the mature Pixel Office, connected Tree and spatial Graph as complete first-class views
   with all-host observation and guarded selected-host actions. Port the established Pixel Office

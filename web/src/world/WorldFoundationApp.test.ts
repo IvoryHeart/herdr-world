@@ -19,16 +19,17 @@ describe("World view preference", () => {
     expect(parseWorldView("tree")).toBe("tree");
     expect(parseWorldView("graph")).toBe("graph");
     expect(parseWorldView("spaces")).toBe("spaces");
-    expect(parseWorldView("legacy-world")).toBe("spaces");
-    expect(parseWorldView(null)).toBe("spaces");
+    expect(parseWorldView("legacy-world")).toBe("office");
+    expect(parseWorldView(null)).toBe("office");
   });
 
   test("maps canonical paths without accepting arbitrary routes", () => {
+    expect(worldViewFromPath("/")).toBe("office");
     expect(worldViewFromPath("/spaces")).toBe("spaces");
     expect(worldViewFromPath("/office")).toBe("office");
     expect(worldViewFromPath("/tree")).toBe("tree");
     expect(worldViewFromPath("/graph")).toBe("graph");
-    expect(worldViewFromPath("/other")).toBe("spaces");
+    expect(worldViewFromPath("/other")).toBe("office");
   });
 
   test("does not implicitly activate another host while opening a World node", async () => {

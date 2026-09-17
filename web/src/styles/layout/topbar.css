@@ -162,7 +162,8 @@
   background: var(--red);
 }
 
-.app.zen .topbar {
+.app.zen .topbar,
+.topbar.is-zen {
   position: absolute;
   inset: 0 0 auto 0;
   transform: translateY(calc(-100% + 6px));
@@ -170,19 +171,23 @@
 }
 
 .app.zen .topbar:hover,
-.app.zen .topbar:focus-within {
+.app.zen .topbar:focus-within,
+.topbar.is-zen:hover,
+.topbar.is-zen:focus-within {
   transform: none;
 }
 
 /* A popover opened from the keyboard must not measure a sliding anchor, and
    its trigger must stay visible while the pointer moves to the portal. */
-.app.zen .topbar:has([data-state="open"]) {
+.app.zen .topbar:has([data-state="open"]),
+.topbar.is-zen:has([data-state="open"]) {
   transform: none;
   transition: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app.zen .topbar {
+  .app.zen .topbar,
+  .topbar.is-zen {
     transition: none;
   }
 }

@@ -83,7 +83,9 @@ describe("WorldObject", () => {
       "terminal",
     ]);
     expect(
-      world.nodeById.get(worldObjectId("remote", "pane", "shared-pane")),
+      world.nodeById.get(
+        worldObjectId("remote", "terminal", "shared-terminal"),
+      ),
     ).toMatchObject({
       connectionId: "remote",
       nativeId: "shared-pane",
@@ -119,10 +121,10 @@ describe("WorldObject", () => {
       "local",
     );
     const local = world.nodeById.get(
-      worldObjectId("local", "pane", "shared-pane"),
+      worldObjectId("local", "terminal", "shared-terminal"),
     );
     const remote = world.nodeById.get(
-      worldObjectId("remote", "pane", "shared-pane"),
+      worldObjectId("remote", "terminal", "shared-terminal"),
     );
 
     expect(local?.id).not.toBe(remote?.id);
@@ -136,6 +138,7 @@ describe("WorldObject", () => {
     if (changed.snapshot) {
       changed.snapshot.panes[0] = {
         ...changed.snapshot.panes[0],
+        pane_id: "replacement-pane",
         agent: undefined,
       };
     }
@@ -144,6 +147,7 @@ describe("WorldObject", () => {
     expect(first.kind).toBe("agent");
     expect(second.kind).toBe("terminal");
     expect(second.id).toBe(first.id);
+    expect(second.nativeId).toBe("replacement-pane");
   });
 
   test("admits bounded agent, task, state, focus, and tab metadata without inference", () => {

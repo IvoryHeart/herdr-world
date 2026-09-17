@@ -113,6 +113,15 @@ component tree, Inspector resources and terminal ownership rather than embedding
 application or maintaining a parallel runtime client. The current CSS Office, list Tree and static
 branch Graph are only foundation checkpoints and do not satisfy the view migration. The CSS Office
 must not evolve into a second renderer; it is removed when the retained Pixel Office mounts.
+Office rendering receives projection data and shell-owned callbacks and does not query or depend on
+the hidden Spaces DOM. Office is the default World surface after connection selection. Keeping
+Spaces mounted is a migration technique for its current owners, not a presentation dependency;
+Spaces remains an available first-class operational surface while a later change may reduce the
+shell after those owners have been extracted.
+
+The Roamgate-derived top bar remains the single application header. Insert the Office/Spaces/Tree/
+Graph selector between its version and machine controls, and remove the checkpoint World navigation
+bar so every view receives the rest of the viewport without duplicating shell chrome.
 
 ### Treat the pre-foundation Pixel Office as retained source
 
@@ -169,6 +178,15 @@ keyed by the selected connection, runtime generation and terminal identity. Offi
 present those sessions, but no presenter owns SSH, terminal transport, reconnect or pane lifecycle.
 Selecting the same pane through another representation focuses its existing conversation instead
 of attaching a competitor.
+
+The terminal implementation is the current Roamgate-derived `TerminalView`, bridge
+`ConnectionClient` and terminal support machinery already present in World. Do not import the
+retired Herdr Web terminal or establish it as a second application upstream. The retained World
+conversation controller, window geometry and connector code may be adapted for presentation, but
+it wraps the current terminal implementation and does not restore its former transport/runtime
+owner. While a terminal is presented in a visual conversation, mounted-but-hidden Spaces SHALL not
+mount a second `TerminalView` for that terminal; explicit handoff retires one presentation before
+the other admits the same Herdr terminal identity.
 
 The registry remains inside the inherited browser routing lease and uses the one browser WebSocket
 and existing terminal bridges; it does not create connection-independent clients, another SSH
@@ -259,6 +277,9 @@ browser keys untouched for rollback but does not read them.
 - **Embedding rich operational context in Office can duplicate Roamgate state** → Lift or reuse the
   shell-owned Inspector and terminal owners, pass one qualified context and reject any design that
   creates a second resource store, WebSocket, SSH tunnel or application instance.
+- **Reusing the retired Herdr Web terminal would create two UI upstreams** → Keep the current
+  Roamgate-derived terminal as the only implementation; adapt retained World windowing around it
+  and suppress any hidden Spaces instance that would attach to the same terminal concurrently.
 - **Aggregate visibility can make inactive hosts look operational** → Show active,
   ready-inactive, reconnecting and offline/stale states distinctly; keep entity selection read-only
   and require explicit host activation before every operational entry point.

@@ -46,7 +46,9 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import type { ITheme } from "@xterm/xterm";
 import { APP_VERSION } from "./version";
 import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal";
@@ -1107,10 +1109,14 @@ export function appShouldHandleGlobalShortcut(
 export default function App({
   operationalShortcutsEnabled = true,
   inspectorPortal = null,
+  topbarPortal = null,
+  primaryViewControl = null,
   onInspectorVisibilityChange,
 }: {
   operationalShortcutsEnabled?: boolean;
   inspectorPortal?: Element | null;
+  topbarPortal?: Element | null;
+  primaryViewControl?: ReactNode;
   onInspectorVisibilityChange?: (open: boolean) => void;
 } = {}) {
   useShortcutPreferences();
@@ -3273,60 +3279,62 @@ export default function App({
       </Suspense>
     </div>
   ) : null;
+  const topbar = (
+    <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
+      <div className="topbar-start">
+        <div className="brand">
+          <img
+            className="logo"
+            src="/herdr-world-logo.svg"
+            width={24}
+            height={24}
+            alt=""
+          />
+          <span className="brand-title">Herdr World</span>
+          <span className="brand-version">v{APP_VERSION}</span>
+        </div>
+        {primaryViewControl}
+        <ConnectionSwitcher />
+      </div>
+      <div className="topbar-actions">
+        <div className="topbar-command-group">
+          <CommandCombobox
+            key={`${resourceUiKey}:commands`}
+            operationalShortcutsEnabled={operationalShortcutsEnabled}
+            onOpenFileExplorer={openFileExplorer}
+            onOpenFile={openFileExplorerFile}
+            onOpenDiffViewer={openDiffViewer}
+          />
+          <ConfigMenu
+            key={`${resourceUiKey}:config`}
+            theme={theme}
+            accentColor={accentColor}
+            mobileTerminalShortcuts={mobileTerminalShortcuts}
+            mobileTerminalSideShortcuts={mobileTerminalSideShortcuts}
+            terminalThemeSelection={terminalThemeSelection}
+            customTerminalThemes={customTerminalThemes}
+            onThemeChange={setTheme}
+            onAccentColorChange={setAccentColor}
+            uiScale={uiScale}
+            onUiScaleChange={setUiScale}
+            zenMode={zenMode}
+            onZenModeChange={applyZenMode}
+            onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
+            onMobileTerminalSideShortcutsChange={setMobileTerminalSideShortcuts}
+            onTerminalThemeSelectionChange={setTerminalThemeSelection}
+            onCustomTerminalThemesChange={setCustomTerminalThemes}
+          />
+        </div>
+      </div>
+    </header>
+  );
   return (
     <div
       className={`app ${sidebarHidden && !mobile ? "sidebar-hidden" : ""} ${
         zenMode && !mobile ? "zen" : ""
       } ${mobileControlsCollapsed ? "mobile-controls-collapsed" : ""}`}
     >
-      <header className="topbar">
-        <div className="topbar-start">
-          <div className="brand">
-            <img
-              className="logo"
-              src="/herdr-world-logo.svg"
-              width={24}
-              height={24}
-              alt=""
-            />
-            <span className="brand-title">Herdr World</span>
-            <span className="brand-version">v{APP_VERSION}</span>
-          </div>
-          <ConnectionSwitcher />
-        </div>
-        <div className="topbar-actions">
-          <div className="topbar-command-group">
-            <CommandCombobox
-              key={`${resourceUiKey}:commands`}
-              operationalShortcutsEnabled={operationalShortcutsEnabled}
-              onOpenFileExplorer={openFileExplorer}
-              onOpenFile={openFileExplorerFile}
-              onOpenDiffViewer={openDiffViewer}
-            />
-            <ConfigMenu
-              key={`${resourceUiKey}:config`}
-              theme={theme}
-              accentColor={accentColor}
-              mobileTerminalShortcuts={mobileTerminalShortcuts}
-              mobileTerminalSideShortcuts={mobileTerminalSideShortcuts}
-              terminalThemeSelection={terminalThemeSelection}
-              customTerminalThemes={customTerminalThemes}
-              onThemeChange={setTheme}
-              onAccentColorChange={setAccentColor}
-              uiScale={uiScale}
-              onUiScaleChange={setUiScale}
-              zenMode={zenMode}
-              onZenModeChange={applyZenMode}
-              onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
-              onMobileTerminalSideShortcutsChange={
-                setMobileTerminalSideShortcuts
-              }
-              onTerminalThemeSelectionChange={setTerminalThemeSelection}
-              onCustomTerminalThemesChange={setCustomTerminalThemes}
-            />
-          </div>
-        </div>
-      </header>
+      {topbarPortal ? createPortal(topbar, topbarPortal) : topbar}
 
       <nav
         className="mobile-nav"

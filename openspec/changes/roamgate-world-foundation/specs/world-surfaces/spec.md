@@ -118,6 +118,11 @@ semantic hierarchy and operational controls without requiring precision pointer 
 ### Requirement: Common view navigation
 The native World shell SHALL offer Spaces, Office, Tree and Graph once each and SHALL keep rendered
 view, browser history and canonical paths `/spaces`, `/office`, `/tree` and `/graph` consistent.
+The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
+machine selector; World SHALL NOT stack a second view-navigation bar above the application.
+Office SHALL be the primary default surface after a valid managed profile is selected; Spaces SHALL
+remain the first-class operational workspace and profile-management surface rather than being
+removed or embedded into Office.
 The existing Spaces connection selector SHALL remain the profile-management surface; visual World
 views SHALL not introduce a second host catalogue and SHALL persistently identify the selected
 operational host and its state. Checkpoint Tree or Graph implementations SHALL not be described as
@@ -128,10 +133,20 @@ complete until their view-specific acceptance passes.
 - **THEN** the URL and rendered view return to Tree while the same shell retains terminal and
   Inspector ownership and the same selected host
 
+#### Scenario: Use the single application top bar
+- **WHEN** a user changes among Office, Spaces, Tree and Graph
+- **THEN** the view selector, version, machine selector and shell tools remain in one top bar and
+  the selected view receives all remaining vertical workspace
+
 #### Scenario: Manage a host
 - **WHEN** a user needs to add, edit, test, connect or remove a profile from a visual World view
 - **THEN** opening Spaces exposes the existing managed connection workflow without another product
   or profile store
+
+#### Scenario: Open World with a managed profile
+- **WHEN** a user opens the World root with a valid restored or default managed profile
+- **THEN** World opens Office as the primary surface and keeps Spaces available through the same
+  navigation and shell
 
 ### Requirement: Native World shell
 The Roamgate-derived workspace, terminal, connection and Inspector experience SHALL ship as native
@@ -300,6 +315,11 @@ NOT force unrelated rows to that width.
   and deterministic layout match the retained Pixel Office baseline rather than a substitute
   DOM/CSS interpretation
 
+#### Scenario: Render Office while Spaces is hidden
+- **WHEN** Office is the active route and the mounted Spaces surface is not visible
+- **THEN** the complete Office scene renders from its projection without reading or depending on
+  Spaces layout DOM, while operational callbacks continue to use shell-owned services
+
 #### Scenario: Office opens at a narrow width
 - **WHEN** the viewport cannot contain the resolved logical Office width
 - **THEN** the Office stage provides bounded internal navigation and semantic targets while the
@@ -386,6 +406,9 @@ conversation windows backed by the shell's existing terminal/session owner. Sele
 terminal through another representation SHALL focus the existing conversation instead of creating
 a competing attachment. Explicit handoff SHALL focus that same pane in mounted Spaces. Every open
 conversation SHALL belong to the one selected operational host and its current runtime generation.
+World SHALL use the current Roamgate-derived terminal component and its existing bridge connection;
+it SHALL NOT carry or synchronize a second terminal implementation from Herdr Web. Retained World
+conversation/window code MAY provide presentation around that terminal without owning transport.
 
 Desktop SHALL support up to five distinct conversations with independent bounded position, size,
 z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,
@@ -402,10 +425,20 @@ mount before the replacement becomes operational; World SHALL NOT retain simulta
 conversations from several hosts in this change. All conversations SHALL use the one World browser
 WebSocket and existing terminal owner.
 
+Mounted-but-hidden Spaces SHALL NOT keep a competing terminal attachment for a terminal currently
+presented by a visual conversation. A handoff between a visual conversation and Spaces SHALL order
+presentation teardown and admission so the same qualified Herdr terminal is never mounted twice.
+
 #### Scenario: Open the same terminal from two representations
 - **WHEN** a user opens an agent and then its occupied desk or hierarchy node
 - **THEN** World focuses one qualified conversation and does not create another transport or send
   duplicate input
+
+#### Scenario: Present a terminal while Spaces remains mounted
+- **WHEN** Office presents a qualified terminal and the Spaces application remains mounted but
+  hidden
+- **THEN** the Roamgate-derived terminal uses the existing browser connection and Spaces does not
+  attach a second terminal view for that identity
 
 #### Scenario: Move between visual views and Spaces
 - **WHEN** a live conversation exists and the user changes World views or chooses Open in Spaces
