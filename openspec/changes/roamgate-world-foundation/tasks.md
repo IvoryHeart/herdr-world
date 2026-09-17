@@ -14,7 +14,7 @@
 
 - [x] 3.1 Port the shared WorldObject projection onto the aggregate Roamgate runtime store, and verify deterministic host-space-agent-or-terminal hierarchy tests for local and SSH profiles
 - [x] 3.2 Integrate native Spaces and checkpoint World routes into the Roamgate shell without mounting a second app, and verify canonical navigation plus desktop/mobile accessibility tests
-- [ ] 3.3 Complete the Pixel Office migration in tasks 10.1–10.7 and verify the defining scene, layout, operations and responsive behavior over aggregate multi-host data with one selected operational host
+- [ ] 3.3 Complete the retained Pixel Office migration in tasks 10.1–10.8 and verify the defining scene, layout, operations and responsive behavior over aggregate multi-host data with one selected operational host
 - [x] 3.4 Characterize the checkpoint World-to-Spaces Files, Changes and Agent History handoff, and verify an aggregate selection cannot open resources from a different host or checkout
 - [ ] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
 
@@ -68,13 +68,14 @@
 
 ## 10. Pixel Office migration
 
-- [x] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify mixed-state shared tabs plus beyond-eight-desk cases seat or stand only bounded working/unknown room-local agents, keep blocked and idle/done destinations, report exact omissions and retain nonduplicated identity and ancestry
-- [ ] 10.2 Port deterministic Office geometry/publication with content-sized two-to-eight-seat rooms, title/action containment, natural row packing, alignment, logical scrolling and stale-render acknowledgement, and verify dense/long-title fixtures
-- [ ] 10.3 Port the Pixel Office renderer with CEO Office, host receptions, boards, Agent Bar, roads, rooms, desks, characters and bounded overflow presentation, and visually compare synthetic desktop fixtures with the delivered composition
-- [ ] 10.4 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact selected-host terminal inspection and retained unseen state when the host is inactive or activation fails, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity
-- [ ] 10.5 Restore capability-gated room create/rename/close and room-local seat creation only for the selected host with the eight-desk Room Full state; after admitted creation focus the exact new terminal, while cancellation/failure preserves the prior selection, focused Inspector context and every existing selected-host conversation window, and verify no action switches hosts implicitly or invents Office-only runtime state
-- [ ] 10.6 Restore optional provider configuration/health and bounded authoritative Office boards through the World service, and verify absent or failed providers leave core topology and terminals intact
-- [ ] 10.7 Verify Office at desktop and phone widths with unequal aggregate multi-host rooms, active/ready-inactive/stale host states, the selected-host Inspector, local then SSH terminal use, explicit host switching, scene scrolling and preference restoration before checking task 3.3
+- [ ] 10.1 Restore the retained Office source baseline from World commit `9c8f650853ad2d598d476dac1eecdeaea16716c6`: pinned PixiJS dependency, character assets and licence, PixelOfficeCanvas, geometry, layout publication, renderer lifecycle/resources, scene signature, selection, semantic targets, observability presentation and focused tests; verify provenance/notices and reject a second renderer implementation
+- [ ] 10.2 Adapt the retained Office projection input to WorldObject while preserving its presenter output contract, qualified rooms, tabs/desks, agents, receptions and Agent Bar placement; verify mixed-state shared tabs plus beyond-eight-desk cases seat or stand only bounded working/unknown room-local agents, keep blocked and idle/done destinations, report exact omissions and retain nonduplicated identity and ancestry
+- [ ] 10.3 Integrate the retained deterministic Office geometry/publication without redesign, preserving content-sized two-to-eight-seat rooms, title/action containment, natural row packing, alignment, logical scrolling and stale-render acknowledgement; verify the retained dense and long-title fixtures
+- [ ] 10.4 Mount the retained Pixi Office renderer in the Roamgate-derived route, remove the substitute HTML/CSS scene, and preserve CEO Office, host receptions, boards, Agent Bar, roads, rooms, desks, characters and bounded overflow presentation; compare retained scene signatures and synthetic desktop fixtures with the source baseline
+- [ ] 10.5 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact selected-host terminal inspection and retained unseen state when the host is inactive or activation fails, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity
+- [ ] 10.6 Restore capability-gated room create/rename/close and room-local seat creation only for the selected host with the eight-desk Room Full state; after admitted creation focus the exact new terminal, while cancellation/failure preserves the prior selection, focused Inspector context and every existing selected-host conversation window, and verify no action switches hosts implicitly or invents Office-only runtime state
+- [ ] 10.7 Restore optional provider configuration/health and bounded authoritative Office boards through the World service, and verify absent or failed providers leave core topology and terminals intact
+- [ ] 10.8 Verify Office at desktop and phone widths with unequal aggregate multi-host rooms, active/ready-inactive/stale host states, the selected-host Inspector, local then SSH terminal use, explicit host switching, scene scrolling and preference restoration before checking task 3.3
 
 ## 11. Connected Tree migration
 

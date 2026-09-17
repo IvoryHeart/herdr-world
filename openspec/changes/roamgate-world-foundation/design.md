@@ -111,14 +111,22 @@ types and existing selection/terminal APIs. Roamgate's existing terminal workspa
 Spaces experience. Spaces stays mounted when a visual view is selected, so World uses the same
 component tree, Inspector resources and terminal ownership rather than embedding another
 application or maintaining a parallel runtime client. The current CSS Office, list Tree and static
-branch Graph are only foundation checkpoints and do not satisfy the view migration.
+branch Graph are only foundation checkpoints and do not satisfy the view migration. The CSS Office
+must not evolve into a second renderer; it is removed when the retained Pixel Office mounts.
 
-### Migrate the retained presentation behavior, not the retired runtime boundary
+### Treat the pre-foundation Pixel Office as retained source
 
-Reuse the delivered Office projection, geometry, renderer, semantic targets, room actions,
-selected-host conversation layout and Graph layout behavior from the pre-foundation World line.
-Adapt their inputs to the connection-qualified `WorldObject` and current Roamgate-derived action,
-Inspector and terminal owners. Do not restore browser federation, the Rust bridge, simultaneous
+World commit `9c8f650853ad2d598d476dac1eecdeaea16716c6` is the source baseline for the
+established Office. Restore its pinned PixiJS dependency, character assets and licence, then port
+`PixelOfficeCanvas`, Office geometry, layout publication, renderer lifecycle/resources, scene
+signature, selection, semantic targets, observability presentation and their focused tests as
+retained modules. Preserve their deterministic behavior and provenance notices. Do not redraw that
+scene in React DOM/CSS or use the retained implementation only as a screenshot reference.
+
+Adapt the delivered projection's input to the connection-qualified `WorldObject` while preserving
+the presentation output contract consumed by the renderer. Adapt renderer callbacks at the current
+Roamgate-derived action, Inspector and terminal owners. These narrow adapters are the intended
+rewrite boundary. The migration does not restore browser federation, the Rust bridge, simultaneous
 cross-host operational contexts, a second profile catalogue or a second runtime subscription.
 
 The migration proceeds through view-local adapters, beginning with Office. An adapter may expose
@@ -245,8 +253,9 @@ browser keys untouched for rollback but does not read them.
   route boundary and accept Office first, then Tree and Graph independently at desktop and compact
   sizes before completing the replacement.
 - **A minimal presenter can satisfy shallow topology tests while deleting product behavior** → Use
-  an explicit Office feature contract, retained synthetic fixtures and rendered visual evidence;
-  do not mark Office complete from hierarchy tests alone.
+  the retained renderer and geometry source, its focused tests, an explicit Office feature
+  contract, retained synthetic fixtures and rendered visual evidence; reject a parallel DOM/CSS
+  Office and do not mark Office complete from hierarchy tests alone.
 - **Embedding rich operational context in Office can duplicate Roamgate state** → Lift or reuse the
   shell-owned Inspector and terminal owners, pass one qualified context and reject any design that
   creates a second resource store, WebSocket, SSH tunnel or application instance.
@@ -266,12 +275,14 @@ browser keys untouched for rollback but does not read them.
 1. Record the exact Roamgate source parent and import it on a branch targeting World `main`.
 2. Rebrand all runtime and release identities before producing installable artifacts.
 3. Add and test aggregate connection observation and the World projection.
-4. Enrich the shared World projection, require one selected operational host, expose one qualified
-   shell-owned Inspector context and independently accept the complete Pixel Office over aggregate
-   local plus SSH observations.
-5. Extend the existing selected-host terminal owner to bounded conversation windows, then migrate
+4. Restore the retained Pixel Office dependency, assets, projection contract, geometry, renderer,
+   semantic targets and tests before adapting its `WorldObject`, action and shell boundaries.
+5. Require one selected operational host, expose one qualified shell-owned Inspector context and
+   independently accept the complete retained Pixel Office over aggregate local plus SSH
+   observations.
+6. Extend the existing selected-host terminal owner to bounded conversation windows, then migrate
    and independently accept connected Tree and spatial Graph without reopening the runtime or
    Inspector boundaries.
-6. Update operational, lineage and release documentation; do not translate old profile stores.
-7. Deliver the complete replacement as a reviewed PR. Existing releases remain the rollback path;
+7. Update operational, lineage and release documentation; do not translate old profile stores.
+8. Deliver the complete replacement as a reviewed PR. Existing releases remain the rollback path;
    installing an older release reuses only the old release's untouched storage.

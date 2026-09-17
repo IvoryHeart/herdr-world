@@ -278,6 +278,10 @@ Agent Bar, road-separated work rooms, desks and agent characters. Work rooms SHA
 Herdr workspaces, desks SHALL represent admitted tabs, and scene relocation SHALL not change an
 entity's authoritative host or space ancestry. The Agent Bar SHALL retain its counter, rear shelf
 and one bounded occupancy cue per visible bar agent rather than becoming an ordinary work room.
+For the retained synthetic fixtures, the migrated Office SHALL preserve the established scene
+signature, geometry and visual composition from World commit
+`9c8f650853ad2d598d476dac1eecdeaea16716c6`, except where this change explicitly replaces a
+runtime or shell-owned interaction boundary.
 
 Room geometry SHALL derive from admitted content and title/action requirements. Two-to-eight-seat
 room forms, sequential natural-width row packing, left/centre/right row alignment, validated
@@ -289,6 +293,12 @@ NOT force unrelated rows to that width.
 - **WHEN** several hosts expose workspaces with different tab counts and title lengths
 - **THEN** Office presents their reception stations and content-sized work rooms without merging
   identities, clipping required headers or replacing the scene with equal-width cards
+
+#### Scenario: Compare the retained Pixel Office fixture
+- **WHEN** the approved dense synthetic Office fixture is rendered through the migrated projection
+- **THEN** its CEO Office, receptions, boards, Agent Bar, roads, rooms, desks, characters, labels
+  and deterministic layout match the retained Pixel Office baseline rather than a substitute
+  DOM/CSS interpretation
 
 #### Scenario: Office opens at a narrow width
 - **WHEN** the viewport cannot contain the resolved logical Office width

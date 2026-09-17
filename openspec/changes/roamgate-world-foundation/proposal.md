@@ -8,8 +8,11 @@ installable application instead of rebuilding the same capabilities beside it. T
 visual experience SHALL be a deep Pixel Office that brings Roamgate's terminal, Files, Changes and
 Agent History context to the selected agent. Office is the first implementation milestone, but the
 foundation replacement is complete only after Tree, Graph and qualified selected-host
-conversations are migrated over the same seam. Completion means the replacement contract defined
-below; it does not claim behavior-for-behavior parity with the former Herdr Web-based application.
+conversations are migrated over the same seam. The established Pixel Office implementation at
+World commit `9c8f650853ad2d598d476dac1eecdeaea16716c6` is retained source, not a design reference
+for a replacement scene. Completion means the replacement contract defined below; departures from
+the former Herdr Web-based application are limited to the explicit runtime and product retirements
+recorded by this change rather than unexplained presentation rewrites.
 
 ## What Changes
 
@@ -26,7 +29,10 @@ below; it does not claim behavior-for-behavior parity with the former Herdr Web-
   surfaces native World capabilities rather than a separately installed Roamgate application.
 - Project all managed Herdr connections into a shared, host-qualified World hierarchy and migrate
   Spaces, the mature Pixel Office, connected Tree and spatial Graph as complete first-class views
-  with all-host observation and guarded selected-host actions.
+  with all-host observation and guarded selected-host actions. Port the established Pixel Office
+  projection contract, Pixi renderer, geometry, layout publication, semantic targets, assets and
+  tests directly; adapt their data and action boundaries to Roamgate rather than recreating the
+  scene in DOM/CSS.
 - Keep Office visible while one selected, generation-qualified agent or workspace uses the shell's
   existing terminal and Inspector ownership. Files, Changes and Agent History SHALL open as the
   focused Office context rather than navigating away to a separately implemented resource UI.
@@ -83,8 +89,9 @@ None.
   shell-owned terminal registry. The current minimal Office cards, list-primary Tree and static
   branch Graph are implementation checkpoints, not accepted complete views, and the PR remains
   incomplete until selected-host conversations and all three view migrations pass acceptance.
-- Does not promise full compatibility with the former UI. Simultaneous cross-host terminal and
-  Inspector contexts are an approved breaking retirement; aggregate multi-host observation,
-  selected-host multi-window conversations and the explicitly listed view behavior remain required.
+- Does not preserve obsolete shell chrome or behavior explicitly retired by this change.
+  Simultaneous cross-host terminal and Inspector contexts are an approved breaking retirement;
+  the established Pixel Office presentation, aggregate multi-host observation, selected-host
+  multi-window conversations and the explicitly listed view behavior remain required.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.
