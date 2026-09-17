@@ -223,6 +223,7 @@ export function WorkspaceInspectorHost({
   onDockOut,
   onDockIn,
   controlMode = "docked",
+  windowMovable = false,
   terminalDetached = false,
   onViewChange,
   onDockChange,
@@ -251,6 +252,7 @@ export function WorkspaceInspectorHost({
   onDockOut?: () => void;
   onDockIn?: () => void;
   controlMode?: "docked" | "floating";
+  windowMovable?: boolean;
   terminalDetached?: boolean;
   onOpenDiffFile: (entry: ActiveDiffSelection["entry"]) => void;
   annotations: readonly ReviewAnnotation[];
@@ -470,14 +472,26 @@ export function WorkspaceInspectorHost({
     >
       <header
         className={`workspace-inspector-head ${
-          controlMode === "floating" ? "is-window-drag-handle" : ""
+          controlMode === "floating"
+            ? "is-window-drag-handle"
+            : windowMovable
+              ? "is-window-drag-handle is-docked-window-drag-handle"
+              : ""
         }`}
-        tabIndex={controlMode === "floating" ? 0 : undefined}
+        tabIndex={controlMode === "floating" || windowMovable ? 0 : undefined}
         aria-label={
-          controlMode === "floating" ? "Move Inspector window" : undefined
+          controlMode === "floating"
+            ? "Move Inspector window"
+            : windowMovable
+              ? "Move docked Inspector"
+              : undefined
         }
         title={
-          controlMode === "floating" ? "Drag to move Inspector" : undefined
+          controlMode === "floating"
+            ? "Drag to move Inspector"
+            : windowMovable
+              ? "Drag to move docked Inspector"
+              : undefined
         }
       >
         {agentContext ? (

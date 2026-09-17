@@ -146,7 +146,9 @@ The inherited Spaces workspace navigator, focused tab strip and review-annotatio
 remain the common frame around Spaces, Office, Tree and Graph. Changing views SHALL replace only the
 center surface. Graph SHALL not place a second workspace hierarchy beside that common navigator on
 desktop. Inspector-created review drafts SHALL remain visible and editable through the same
-workspace-qualified annotation panel in every view.
+workspace-qualified annotation panel in every view. Selecting a workspace or pane through either
+the navigator or the focused tab strip SHALL resolve through the same qualified World selection
+path and update the docked Inspector only after exact focus succeeds.
 Office SHALL be the primary default surface after a valid managed profile is selected; Spaces SHALL
 remain the first-class operational workspace and profile-management surface rather than being
 removed or embedded into Office.
@@ -266,7 +268,9 @@ the visual stage. Ordinary selection SHALL replace and close a different docked 
 than implicitly turn it into a floating window. Direct desk activation SHALL open or focus that
 entity's floating Inspector. A floating Inspector SHALL be independently movable and resizable and
 expose Dock in and × controls. The docked Inspector SHALL expose Dock out, dock-position,
-expand/restore and × controls. Docking a floating Inspector while another is docked SHALL swap their
+expand/restore and × controls and SHALL itself be movable while it remains an overlay. Choosing a
+dock position or expand/restore SHALL snap it back to that explicit dock geometry. Docking a
+floating Inspector while another is docked SHALL swap their
 presentations without discarding either context or increasing the floating-window count. Docking or
 undocking SHALL transfer the complete Inspector, including its selected tab and resource-selection
 state, rather than transfer only a terminal child.
@@ -492,8 +496,9 @@ qualified host reception, and idle or done agents in the Agent Bar. A done agent
 SHALL retain a bounded generic completion marker until that qualified completion is inspected; this
 browser-local seen state SHALL NOT represent approval or mutate Herdr.
 
-Office SHALL retain bounded hover/selection callouts, task summaries, state cues, at least 48 by 48
-CSS-pixel semantic targets and a compact Agents/Rooms/Desks chooser. Capability-gated room creation,
+Office SHALL retain bounded hover callouts, task summaries, state cues, at least 48 by 48 CSS-pixel
+semantic targets and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
+in the shared Inspector rather than a duplicate persistent scene badge. Capability-gated room creation,
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
 
@@ -517,7 +522,9 @@ distinct, nonduplicated semantic targets.
 - **WHEN** the selected host advertises the required capability and the user invokes the next desk
   action
 - **THEN** World uses the admitted launcher path for that room, shows the desk only after Herdr
-  admits the resulting tab and pane, and selects or opens that exact new qualified terminal
+  admits the resulting tab and pane, retains the live Office instance across that topology update,
+  and boundedly retries exact qualified focus until it selects or opens that new terminal or the
+  originating lease becomes invalid
 
 #### Scenario: Seat creation is cancelled or fails
 

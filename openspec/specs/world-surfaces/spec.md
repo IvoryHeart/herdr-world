@@ -327,8 +327,9 @@ qualified host reception, and idle or done agents in the Agent Bar. A done agent
 SHALL retain a bounded generic completion marker until that qualified completion is inspected; this
 browser-local seen state SHALL NOT represent approval or mutate Herdr.
 
-Office SHALL retain bounded hover/selection callouts, task summaries, state cues, at least 48 by 48
-CSS-pixel semantic targets and a compact Agents/Rooms/Desks chooser. Capability-gated room creation,
+Office SHALL retain bounded hover callouts, task summaries, state cues, at least 48 by 48 CSS-pixel
+semantic targets and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
+in the shared Inspector rather than a duplicate persistent scene badge. Capability-gated room creation,
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
 
@@ -350,7 +351,9 @@ distinct, nonduplicated semantic targets.
 - **WHEN** the selected host advertises the required capability and the user invokes the next desk
   action
 - **THEN** World uses the admitted launcher path for that room, shows the desk only after Herdr
-  admits the resulting tab and pane, and selects or opens that exact new qualified terminal
+  admits the resulting tab and pane, retains the live Office instance across that topology update,
+  and boundedly retries exact qualified focus until it selects or opens that new terminal or the
+  originating lease becomes invalid
 
 #### Scenario: Seat creation is cancelled or fails
 - **WHEN** the user cancels seat creation or the launcher fails before Herdr admits a new pane

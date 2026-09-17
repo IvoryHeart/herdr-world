@@ -7,6 +7,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
 import App, { type WorkspaceSurfaceSelection } from "../App";
@@ -75,6 +76,45 @@ const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   tree: "/tree",
   graph: "/graph",
 };
+
+type DockedInspectorGeometry = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+type DockedInspectorMove = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  geometry: DockedInspectorGeometry;
+};
+
+export function moveDockedInspectorGeometry(
+  geometry: DockedInspectorGeometry,
+  deltaX: number,
+  deltaY: number,
+  bounds: { width: number; height: number },
+): DockedInspectorGeometry {
+  return {
+    ...geometry,
+    left: Math.max(
+      0,
+      Math.min(
+        geometry.left + deltaX,
+        Math.max(0, bounds.width - geometry.width),
+      ),
+    ),
+    top: Math.max(
+      0,
+      Math.min(
+        geometry.top + deltaY,
+        Math.max(0, bounds.height - geometry.height),
+      ),
+    ),
+  };
+}
 
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
@@ -443,7 +483,15 @@ function WorldControlPlane({
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
   const intentRequestRef = useRef(0);
+  const worldViewLayoutRef = useRef<HTMLDivElement | null>(null);
   const contextRailRef = useRef<HTMLElement | null>(null);
+  const dockedInspectorMoveRef = useRef<DockedInspectorMove | null>(null);
+  const [dockedInspectorGeometry, setDockedInspectorGeometry] =
+    useState<DockedInspectorGeometry | null>(null);
+  const dockedInspectorGeometryRef = useRef<DockedInspectorGeometry | null>(
+    null,
+  );
+  const [dockedInspectorMoving, setDockedInspectorMoving] = useState(false);
   const [dockedInspectorPortal, setDockedInspectorPortal] =
     useState<HTMLElement | null>(null);
   const [floatingInspectorPortals, setFloatingInspectorPortals] = useState<
@@ -473,6 +521,8 @@ function WorldControlPlane({
   const dockedInspector = inspectorConversations.find(
     ({ nodeId }) => nodeId === dockedInspectorId,
   );
+  const dockedInspectorNodeId = dockedInspector?.nodeId ?? null;
+  const dockedInspectorExpanded = dockedInspector?.expanded ?? false;
   const floatingInspectors = useMemo(
     () =>
       inspectorConversations.filter(
@@ -484,6 +534,123 @@ function WorldControlPlane({
     () => inspectorConversations.map(({ nodeId }) => nodeId),
     [inspectorConversations],
   );
+  dockedInspectorGeometryRef.current = dockedInspectorGeometry;
+
+  useEffect(() => {
+    setDockedInspectorGeometry(null);
+    setDockedInspectorMoving(false);
+    dockedInspectorMoveRef.current = null;
+  }, [dockedInspectorId]);
+
+  useEffect(() => {
+    const rail = contextRailRef.current;
+    const layout = worldViewLayoutRef.current;
+    if (!rail || !layout || !dockedInspectorNodeId || dockedInspectorExpanded) {
+      return;
+    }
+    const interactiveSelector =
+      "button, a, input, textarea, select, [role='tab'], [role='separator']";
+    const begin = (event: PointerEvent) => {
+      if (event.button !== 0 || !(event.target instanceof Element)) return;
+      const handle = event.target.closest(
+        ".workspace-inspector-head.is-docked-window-drag-handle",
+      );
+      if (!handle || event.target.closest(interactiveSelector)) return;
+      event.preventDefault();
+      const layoutBounds = layout.getBoundingClientRect();
+      const railBounds = rail.getBoundingClientRect();
+      const geometry = {
+        left: railBounds.left - layoutBounds.left,
+        top: railBounds.top - layoutBounds.top,
+        width: railBounds.width,
+        height: railBounds.height,
+      };
+      dockedInspectorMoveRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        geometry,
+      };
+      try {
+        rail.setPointerCapture(event.pointerId);
+      } catch {
+        // Window listeners keep the drag alive when capture is unavailable.
+      }
+      setDockedInspectorMoving(true);
+    };
+    const move = (event: PointerEvent) => {
+      const current = dockedInspectorMoveRef.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const layoutBounds = layout.getBoundingClientRect();
+      setDockedInspectorGeometry(
+        moveDockedInspectorGeometry(
+          current.geometry,
+          event.clientX - current.startX,
+          event.clientY - current.startY,
+          { width: layoutBounds.width, height: layoutBounds.height },
+        ),
+      );
+    };
+    const end = (event: PointerEvent) => {
+      const current = dockedInspectorMoveRef.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      dockedInspectorMoveRef.current = null;
+      setDockedInspectorMoving(false);
+      if (rail.hasPointerCapture(event.pointerId)) {
+        rail.releasePointerCapture(event.pointerId);
+      }
+    };
+    const moveByKeyboard = (event: KeyboardEvent) => {
+      if (
+        !(event.target instanceof Element) ||
+        !event.target.matches(
+          ".workspace-inspector-head.is-docked-window-drag-handle",
+        )
+      ) {
+        return;
+      }
+      const amount = event.shiftKey ? 1 : 16;
+      const delta =
+        event.key === "ArrowLeft"
+          ? { x: -amount, y: 0 }
+          : event.key === "ArrowRight"
+            ? { x: amount, y: 0 }
+            : event.key === "ArrowUp"
+              ? { x: 0, y: -amount }
+              : event.key === "ArrowDown"
+                ? { x: 0, y: amount }
+                : null;
+      if (!delta) return;
+      event.preventDefault();
+      const layoutBounds = layout.getBoundingClientRect();
+      const railBounds = rail.getBoundingClientRect();
+      const geometry = dockedInspectorGeometryRef.current ?? {
+        left: railBounds.left - layoutBounds.left,
+        top: railBounds.top - layoutBounds.top,
+        width: railBounds.width,
+        height: railBounds.height,
+      };
+      setDockedInspectorGeometry(
+        moveDockedInspectorGeometry(geometry, delta.x, delta.y, {
+          width: layoutBounds.width,
+          height: layoutBounds.height,
+        }),
+      );
+    };
+    rail.addEventListener("pointerdown", begin, true);
+    rail.addEventListener("keydown", moveByKeyboard, true);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", end, true);
+    window.addEventListener("pointercancel", end, true);
+    return () => {
+      rail.removeEventListener("pointerdown", begin, true);
+      rail.removeEventListener("keydown", moveByKeyboard, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", end, true);
+      window.removeEventListener("pointercancel", end, true);
+    };
+  }, [dockedInspectorExpanded, dockedInspectorNodeId]);
 
   const conversationFor = (
     node: WorldObjectNode,
@@ -517,7 +684,7 @@ function WorldControlPlane({
     id: string | null,
     requestedView: InspectorView | null = null,
     focusTarget = true,
-  ) => {
+  ): Promise<boolean> => {
     const next = id ? (world.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
@@ -536,7 +703,7 @@ function WorldControlPlane({
         onDockedInspectorIdChange(null);
       }
       setIntentOpening(false);
-      return;
+      return true;
     }
     const existing = inspectorConversations.find(
       ({ nodeId }) => nodeId === next.id,
@@ -545,7 +712,7 @@ function WorldControlPlane({
       setIntentOpening(true);
       try {
         if (focusTarget) await focusWorldNode(next);
-        if (intentRequestRef.current !== requestId) return;
+        if (intentRequestRef.current !== requestId) return false;
         setSelection(next);
         const admitted =
           requestedView && existing.availableViews.includes(requestedView)
@@ -567,17 +734,18 @@ function WorldControlPlane({
             cause instanceof Error ? cause.message : String(cause),
           );
         }
+        return false;
       } finally {
         if (intentRequestRef.current === requestId) setIntentOpening(false);
       }
-      return;
+      return true;
     }
     const conversation = conversationFor(next, requestedView);
-    if (!conversation) return;
+    if (!conversation) return false;
     setIntentOpening(true);
     try {
       if (focusTarget) await focusWorldNode(next);
-      if (intentRequestRef.current !== requestId) return;
+      if (intentRequestRef.current !== requestId) return false;
       setSelection(next);
       if (dockedInspector) {
         onInspectorTerminalPortal(dockedInspector.nodeId, null);
@@ -593,11 +761,13 @@ function WorldControlPlane({
       if (intentRequestRef.current === requestId) {
         setIntentError(cause instanceof Error ? cause.message : String(cause));
       }
+      return false;
     } finally {
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
+    return true;
   };
-  const selectNode = (id: string) => void applySelection(id);
+  const selectNode = (id: string) => applySelection(id);
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => void
   >(() => {});
@@ -822,13 +992,14 @@ function WorldControlPlane({
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
+          ref={worldViewLayoutRef}
           className={`world-view-layout ${showSelectionProfile || dockedInspector ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
             <Suspense
               fallback={<div className="world-view-loading">Loading view…</div>}
             >
-              <WorldViewErrorBoundary key={`${view}:${world.nodes.length}`}>
+              <WorldViewErrorBoundary key={view}>
                 {view === "office" ? (
                   <Suspense
                     fallback={
@@ -900,6 +1071,25 @@ function WorldControlPlane({
             ref={contextRailRef}
             className={`world-context-rail ${dockedInspector ? "has-inspector" : ""}`}
             aria-label="World context"
+            data-interaction={dockedInspectorMoving ? "moving" : undefined}
+            data-free-position={
+              dockedInspectorGeometry && !dockedInspectorExpanded
+                ? "true"
+                : undefined
+            }
+            style={
+              dockedInspectorGeometry && !dockedInspectorExpanded
+                ? ({
+                    left: dockedInspectorGeometry.left,
+                    top: dockedInspectorGeometry.top,
+                    right: "auto",
+                    bottom: "auto",
+                    width: dockedInspectorGeometry.width,
+                    height: dockedInspectorGeometry.height,
+                    maxHeight: "none",
+                  } satisfies CSSProperties)
+                : undefined
+            }
           >
             {selected && showSelectionProfile ? (
               <Suspense
@@ -971,15 +1161,18 @@ function WorldControlPlane({
                 : (floatingInspectorPortals[conversation.nodeId] ?? null)
             }
             floating={conversation.nodeId !== dockedInspectorId}
-            onChange={(change) =>
+            onChange={(change) => {
+              if (change.dock !== undefined || change.expanded !== undefined) {
+                setDockedInspectorGeometry(null);
+              }
               onInspectorConversationsChange(
                 inspectorConversations.map((candidate) =>
                   candidate.nodeId === conversation.nodeId
                     ? { ...candidate, ...change }
                     : candidate,
                 ),
-              )
-            }
+              );
+            }}
             onClose={() => closeInspector(conversation)}
             onDockIn={() => dockFloatingInspector(conversation)}
             onDockOut={() => {
@@ -989,6 +1182,7 @@ function WorldControlPlane({
                 );
                 return;
               }
+              setDockedInspectorGeometry(null);
               onDockedInspectorIdChange(null);
             }}
             onFocus={

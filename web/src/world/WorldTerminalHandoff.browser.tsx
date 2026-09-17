@@ -27,32 +27,43 @@ async function until(condition: () => unknown, message: string) {
   );
 }
 
-const workspace: Workspace = {
+const workspaceBase: Workspace = {
   workspace_id: "studio",
   number: 1,
   label: "Studio",
   focused: true,
   pane_count: 2,
-  tab_count: 1,
+  tab_count: 2,
   active_tab_id: "work",
   agent_status: "working",
   cwd: "/repo",
 };
-const tab: Tab = {
-  tab_id: "work",
-  workspace_id: workspace.workspace_id,
-  number: 1,
-  label: "Work",
-  focused: true,
-  pane_count: 2,
-  agent_status: "working",
-};
+const tabs: Tab[] = [
+  {
+    tab_id: "work",
+    workspace_id: workspaceBase.workspace_id,
+    number: 1,
+    label: "Builder",
+    focused: true,
+    pane_count: 1,
+    agent_status: "working",
+  },
+  {
+    tab_id: "review",
+    workspace_id: workspaceBase.workspace_id,
+    number: 2,
+    label: "Reviewer",
+    focused: false,
+    pane_count: 1,
+    agent_status: "idle",
+  },
+];
 const panes: Pane[] = [
   {
     pane_id: "builder-pane",
     terminal_id: "builder-terminal",
-    workspace_id: workspace.workspace_id,
-    tab_id: tab.tab_id,
+    workspace_id: workspaceBase.workspace_id,
+    tab_id: tabs[0]!.tab_id,
     focused: true,
     agent: "builder",
     display_agent: "Builder",
@@ -62,8 +73,8 @@ const panes: Pane[] = [
   {
     pane_id: "reviewer-pane",
     terminal_id: "reviewer-terminal",
-    workspace_id: workspace.workspace_id,
-    tab_id: tab.tab_id,
+    workspace_id: workspaceBase.workspace_id,
+    tab_id: tabs[1]!.tab_id,
     focused: false,
     agent: "reviewer",
     display_agent: "Reviewer",
@@ -72,6 +83,8 @@ const panes: Pane[] = [
   },
 ];
 let focusedPaneId = panes[0].pane_id;
+let focusedTabId = tabs[0]!.tab_id;
+let worldRevision = 1;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
@@ -83,18 +96,36 @@ function currentPanes() {
   }));
 }
 
+function currentTabs() {
+  return tabs.map((candidate) => ({
+    ...candidate,
+    focused: candidate.tab_id === focusedTabId,
+  }));
+}
+
+function currentWorkspace() {
+  return {
+    ...workspaceBase,
+    pane_count: panes.length,
+    tab_count: tabs.length,
+    active_tab_id: focusedTabId,
+  };
+}
+
 function layout(): PaneLayout {
   return {
-    workspace_id: workspace.workspace_id,
-    tab_id: tab.tab_id,
+    workspace_id: workspaceBase.workspace_id,
+    tab_id: focusedTabId,
     zoomed: false,
     area: { x: 0, y: 0, width: 160, height: 48 },
     focused_pane_id: focusedPaneId,
-    panes: currentPanes().map((pane, index) => ({
-      pane_id: pane.pane_id,
-      focused: pane.focused,
-      rect: { x: index * 80, y: 0, width: 80, height: 48 },
-    })),
+    panes: currentPanes()
+      .filter((pane) => pane.tab_id === focusedTabId)
+      .map((pane, index) => ({
+        pane_id: pane.pane_id,
+        focused: pane.focused,
+        rect: { x: index * 80, y: 0, width: 80, height: 48 },
+      })),
     splits: [],
   };
 }
@@ -109,7 +140,7 @@ const client: ConnectionClient = {
     calls.push({ method, params });
     if (method === "world.snapshot") {
       return {
-        revision: 1,
+        revision: worldRevision,
         observed_at: Date.now(),
         truncated_connections: false,
         connections: [
@@ -124,8 +155,8 @@ const client: ConnectionClient = {
             stale: false,
             actionable: true,
             snapshot: {
-              workspaces: [workspace],
-              tabs: [tab],
+              workspaces: [currentWorkspace()],
+              tabs: currentTabs(),
               panes: currentPanes(),
               agents: [],
             },
@@ -144,19 +175,75 @@ const client: ConnectionClient = {
         throw new Error("Synthetic pane focus rejection");
       }
       const pane = panes.find((candidate) => candidate.pane_id === paneId);
-      if (pane) focusedPaneId = pane.pane_id;
+      if (pane) {
+        focusedPaneId = pane.pane_id;
+        focusedTabId = pane.tab_id;
+      }
       return pane ? { pane: { ...pane, focused: true } } : {};
     }
     if (method === "workspace.list") {
-      return { navigation_mode: "shared", workspaces: [workspace] };
+      return { navigation_mode: "shared", workspaces: [currentWorkspace()] };
     }
-    if (method === "tab.list") return { tabs: [tab] };
+    if (method === "tab.list") return { tabs: currentTabs() };
     if (method === "pane.list") return { panes: currentPanes() };
+    if (method === "tab.create") {
+      const number = tabs.length + 1;
+      const createdTab: Tab = {
+        tab_id: `created-tab-${number}`,
+        workspace_id: workspaceBase.workspace_id,
+        number,
+        label: String(number),
+        focused: true,
+        pane_count: 1,
+        agent_status: "idle",
+      };
+      const createdPane: Pane = {
+        pane_id: `created-pane-${number}`,
+        terminal_id: `created-terminal-${number}`,
+        workspace_id: workspaceBase.workspace_id,
+        tab_id: createdTab.tab_id,
+        focused: true,
+        agent_status: "idle",
+        revision: 1,
+      };
+      tabs.push(createdTab);
+      panes.push(createdPane);
+      worldRevision += 1;
+      focusedTabId = createdTab.tab_id;
+      focusedPaneId = createdPane.pane_id;
+      rejectNextPaneGetId = createdPane.pane_id;
+      return {
+        type: "tab_created",
+        tab: createdTab,
+        root_pane: createdPane,
+      };
+    }
+    if (method === "tab.rename") {
+      const renamed = tabs.find(
+        (candidate) => candidate.tab_id === String(params.tab_id ?? ""),
+      );
+      if (renamed) renamed.label = String(params.label ?? renamed.label);
+      return {};
+    }
+    if (method === "tab.focus") {
+      const tabId = String(params.tab_id ?? "");
+      const targetTab = tabs.find((candidate) => candidate.tab_id === tabId);
+      const targetPane =
+        panes.find(
+          (candidate) =>
+            candidate.tab_id === tabId && candidate.pane_id === focusedPaneId,
+        ) ?? panes.find((candidate) => candidate.tab_id === tabId);
+      if (targetTab && targetPane) {
+        focusedTabId = targetTab.tab_id;
+        focusedPaneId = targetPane.pane_id;
+      }
+      return {};
+    }
     if (method === "agent.list") return { agents: [] };
     if (method === "pane.layout") return { layout: layout() };
     if (method === "file.list") {
       return {
-        workspace_id: workspace.workspace_id,
+        workspace_id: workspaceBase.workspace_id,
         root: "/repo",
         checkout_path: "/repo",
         path: "",
@@ -165,7 +252,11 @@ const client: ConnectionClient = {
       };
     }
     if (method === "git.diff_summary") {
-      return { workspace_id: workspace.workspace_id, entries: [], counts: {} };
+      return {
+        workspace_id: workspaceBase.workspace_id,
+        entries: [],
+        counts: {},
+      };
     }
     return {};
   },
@@ -239,8 +330,8 @@ async function run() {
         generation: 7,
       },
     ],
-    workspaces: [workspace],
-    tabs: [tab],
+    workspaces: [currentWorkspace()],
+    tabs: currentTabs(),
     panes: currentPanes(),
     layout: layout(),
     selectedPaneId: focusedPaneId,
@@ -511,6 +602,66 @@ async function run() {
       store.get().selectedPaneId === "reviewer-pane",
     "shared navigator exact Reviewer focus",
   );
+  const builderTopTab = [
+    ...document.querySelectorAll<HTMLElement>(".tabbar-tab"),
+  ].find((candidate) => candidate.textContent?.includes("Builder"));
+  const reviewerTopTab = [
+    ...document.querySelectorAll<HTMLElement>(".tabbar-tab"),
+  ].find((candidate) => candidate.textContent?.includes("Reviewer"));
+  check(
+    Boolean(builderTopTab && reviewerTopTab),
+    "shared workspace tab strip omitted an agent tab",
+  );
+  builderTopTab?.click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") &&
+      store.get().selectedPaneId === "builder-pane",
+    "top workspace tab exact Builder Inspector",
+  );
+  reviewerTopTab?.click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") &&
+      store.get().selectedPaneId === "reviewer-pane",
+    "top workspace tab exact Reviewer Inspector",
+  );
+  const createSeatButton = document.querySelector<HTMLButtonElement>(
+    ".world-new-seat-canvas-action:not(:disabled)",
+  );
+  check(Boolean(createSeatButton), "Office room omitted its new-seat action");
+  createSeatButton?.click();
+  await until(
+    () => calls.some(({ method }) => method === "tab.create"),
+    "Office seat creation",
+  );
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      store.get().selectedPaneId === "created-pane-3" &&
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("terminal"),
+    "created seat exact terminal Inspector after transient focus rejection",
+  );
+  check(
+    rejectedPaneGets === 1 &&
+      calls.filter(
+        ({ method, params }) =>
+          method === "pane.get" && params.pane_id === "created-pane-3",
+      ).length === 2,
+    `created seat did not exercise its bounded exact-focus retry (${rejectedPaneGets}; pane.get=${calls.filter(({ method, params }) => method === "pane.get" && params.pane_id === "created-pane-3").length})`,
+  );
   await until(() => agentTarget("Builder"), "Builder desk target");
   flushSync(() => agentTarget("Builder")!.click());
   await until(
@@ -527,7 +678,7 @@ async function run() {
   );
   rejectNextPaneGetId = "reviewer-pane";
   flushSync(() => reviewerNavigatorRow?.click());
-  await until(() => rejectedPaneGets === 1, "rejected shared navigator focus");
+  await until(() => rejectedPaneGets === 2, "rejected shared navigator focus");
   await settle();
   check(
     document
@@ -538,6 +689,62 @@ async function run() {
   check(
     store.get().selectedPaneId === "builder-pane",
     "rejected navigator focus changed the selected pane",
+  );
+  const dockedRail = document.querySelector<HTMLElement>(
+    ".world-context-rail.has-inspector",
+  )!;
+  const dockedMoveHandle = dockedRail.querySelector<HTMLElement>(
+    ".workspace-inspector-agent-identity",
+  )!;
+  check(
+    dockedMoveHandle.closest(
+      '.workspace-inspector-head[title="Drag to move docked Inspector"]',
+    ) !== null,
+    "docked Inspector did not expose its header as a drag surface",
+  );
+  const dockedBeforeMove = dockedRail.getBoundingClientRect();
+  const paneGetsBeforeDockedMove = calls.filter(
+    ({ method }) => method === "pane.get",
+  ).length;
+  dockedMoveHandle.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+      pointerId: 19,
+      pointerType: "mouse",
+      clientX: dockedBeforeMove.left + 40,
+      clientY: dockedBeforeMove.top + 24,
+    }),
+  );
+  window.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      buttons: 1,
+      pointerId: 19,
+      pointerType: "mouse",
+      clientX: dockedBeforeMove.left,
+      clientY: dockedBeforeMove.top + 48,
+    }),
+  );
+  window.dispatchEvent(
+    new PointerEvent("pointerup", {
+      bubbles: true,
+      button: 0,
+      pointerId: 19,
+      pointerType: "mouse",
+      clientX: dockedBeforeMove.left,
+      clientY: dockedBeforeMove.top + 48,
+    }),
+  );
+  await until(
+    () => dockedRail.getBoundingClientRect().left <= dockedBeforeMove.left - 39,
+    "drag-moved docked Inspector",
+  );
+  check(
+    calls.filter(({ method }) => method === "pane.get").length ===
+      paneGetsBeforeDockedMove,
+    "moving the docked Inspector focused its terminal",
   );
   document
     .querySelector<HTMLButtonElement>(
@@ -656,11 +863,14 @@ async function run() {
     builderResizeGripBounds.width >= 32 &&
       builderResizeGripBounds.height >= 32 &&
       getComputedStyle(builderResizeGrip).cursor === "nwse-resize" &&
-      getComputedStyle(builderResizeGrip).backgroundImage !== "none",
+      builderResizeGrip.querySelector("svg") !== null,
     "floating Inspector did not expose a visible drag-to-resize handle",
   );
   const builderWindowBeforeResize =
     initialBuilderWindow.getBoundingClientRect();
+  const paneGetsBeforeResize = calls.filter(
+    ({ method }) => method === "pane.get",
+  ).length;
   const resizeDelta = { x: -40, y: -32 };
   builderResizeGrip.dispatchEvent(
     new PointerEvent("pointerdown", {
@@ -700,6 +910,11 @@ async function run() {
       resized.height <= builderWindowBeforeResize.height - 31
     );
   }, "drag-resized Builder Inspector");
+  check(
+    calls.filter(({ method }) => method === "pane.get").length ===
+      paneGetsBeforeResize,
+    "resizing the floating Inspector focused its terminal",
+  );
 
   flushSync(() => agentTarget("Reviewer")!.click());
   await until(

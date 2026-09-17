@@ -9,6 +9,7 @@ import {
   dispatchWorldInspectorRequest,
   focusWorldNode,
   hasValidSelectedConnection,
+  moveDockedInspectorGeometry,
   parseWorldView,
   selectedHostStatusLabel,
   retainWorldFloatingTerminals,
@@ -53,6 +54,22 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("World view preference", () => {
+  test("moves a docked Inspector without allowing it to leave the World stage", () => {
+    const geometry = { left: 600, top: 40, width: 320, height: 420 };
+    expect(
+      moveDockedInspectorGeometry(geometry, -180, 90, {
+        width: 1000,
+        height: 700,
+      }),
+    ).toEqual({ left: 420, top: 130, width: 320, height: 420 });
+    expect(
+      moveDockedInspectorGeometry(geometry, 400, -100, {
+        width: 1000,
+        height: 700,
+      }),
+    ).toEqual({ left: 680, top: 0, width: 320, height: 420 });
+  });
+
   test("admits only canonical native views", () => {
     expect(parseWorldView("office")).toBe("office");
     expect(parseWorldView("tree")).toBe("tree");

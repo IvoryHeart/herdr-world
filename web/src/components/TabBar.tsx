@@ -67,6 +67,7 @@ export function TabBar({
   annotationCount = 0,
   onToggleInspector,
   onToggleAnnotations,
+  onFocusSurface,
 }: {
   mobile?: boolean;
   inspectorOpen?: boolean;
@@ -75,6 +76,10 @@ export function TabBar({
   annotationCount?: number;
   onToggleInspector?: () => void;
   onToggleAnnotations?: () => void;
+  onFocusSurface?: (selection: {
+    workspaceId: string;
+    paneId?: string;
+  }) => void;
 }) {
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -95,6 +100,7 @@ export function TabBar({
   );
   const [pendingRenameTab, setPendingRenameTab] = useState<Tab | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
+  const focusSurfaceRequestRef = useRef(0);
   const focusedWs = s.workspaces.find((w) => w.focused);
   const createReason = useEndpointCreationReason(
     "tab.create",
@@ -134,6 +140,21 @@ export function TabBar({
       gitStatus.conflicted
     : 0;
 
+  const focusTab = async (tab: Tab) => {
+    const requestId = focusSurfaceRequestRef.current + 1;
+    focusSurfaceRequestRef.current = requestId;
+    const pane =
+      s.panes.find(
+        (candidate) => candidate.tab_id === tab.tab_id && candidate.focused,
+      ) ?? s.panes.find((candidate) => candidate.tab_id === tab.tab_id);
+    await store.focusTab(tab.tab_id);
+    if (focusSurfaceRequestRef.current !== requestId) return;
+    onFocusSurface?.({
+      workspaceId: tab.workspace_id,
+      ...(pane ? { paneId: pane.pane_id } : {}),
+    });
+  };
+
   useEffect(() => {
     const onRequestClose = (event: Event) => {
       const tabId = (event as CustomEvent<{ tabId?: unknown }>).detail?.tabId;
@@ -160,7 +181,7 @@ export function TabBar({
         state={menu}
         onClose={() => setMenu(null)}
         onFocus={(tab) => {
-          store.focusTab(tab.tab_id);
+          void focusTab(tab);
         }}
         onRename={(tab) => setPendingRenameTab(tab)}
         onCloseTab={(tab) => setPendingCloseTabId(tab.tab_id)}
@@ -241,7 +262,7 @@ export function TabBar({
                 key={t.tab_id}
                 className={`tabbar-tab ${t.focused ? "is-active" : ""}`}
                 onClick={() => {
-                  store.focusTab(t.tab_id);
+                  void focusTab(t);
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();

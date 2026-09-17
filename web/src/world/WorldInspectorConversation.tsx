@@ -120,7 +120,15 @@ export default function WorldInspectorConversationView({
 
   useEffect(() => {
     if (!target || !onFocus) return;
-    const focusConversation = () => focusRef.current?.();
+    const focusConversation = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(".workspace-inspector-head.is-window-drag-handle")
+      ) {
+        return;
+      }
+      focusRef.current?.();
+    };
     target.addEventListener("pointerdown", focusConversation, true);
     return () =>
       target.removeEventListener("pointerdown", focusConversation, true);
@@ -333,6 +341,7 @@ export default function WorldInspectorConversationView({
             onDockOut={floating ? undefined : onDockOut}
             onDockIn={floating ? onDockIn : undefined}
             controlMode={floating ? "floating" : "docked"}
+            windowMovable={!floating}
             onClose={onClose}
             onBack={() => {
               if (conversation.view === "files") {

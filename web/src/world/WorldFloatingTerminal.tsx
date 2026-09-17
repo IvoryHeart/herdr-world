@@ -7,6 +7,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { MoveDiagonal2 } from "lucide-react";
 import {
   clampFloatingTerminalGeometry,
   defaultFloatingTerminalGeometry,
@@ -100,12 +101,13 @@ export default function WorldFloatingInspectorWindow({
     const focusFromPointer = (event: PointerEvent) => {
       if (
         event.target instanceof Element &&
-        event.target.closest(
-          ".workspace-inspector-head.is-window-drag-handle",
-        ) &&
-        !event.target.closest(
-          "button, a, input, textarea, select, [role='tab'], [role='separator']",
-        )
+        (event.target.closest(".world-floating-terminal-resize") ||
+          (event.target.closest(
+            ".workspace-inspector-head.is-window-drag-handle",
+          ) &&
+            !event.target.closest(
+              "button, a, input, textarea, select, [role='tab'], [role='separator']",
+            )))
       ) {
         return;
       }
@@ -145,24 +147,31 @@ export default function WorldFloatingInspectorWindow({
     };
     const move = (event: PointerEvent) => {
       const current = interactionRef.current;
-      if (
-        !current ||
-        current.mode !== "moving" ||
-        current.pointerId !== event.pointerId
-      ) {
+      if (!current || current.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const deltaX = event.clientX - current.startX;
+      const deltaY = event.clientY - current.startY;
+      if (current.mode === "moving") {
+        setGeometry({
+          ...current.geometry,
+          ...moveFloatingTerminalPosition(
+            current.geometry,
+            deltaX,
+            deltaY,
+            viewportSize(),
+            current.geometry,
+          ),
+        });
         return;
       }
-      event.preventDefault();
-      setGeometry({
-        ...current.geometry,
-        ...moveFloatingTerminalPosition(
+      setGeometry(
+        resizeFloatingTerminalGeometry(
           current.geometry,
-          event.clientX - current.startX,
-          event.clientY - current.startY,
+          deltaX,
+          deltaY,
           viewportSize(),
-          current.geometry,
         ),
-      });
+      );
     };
     const end = (event: PointerEvent) => {
       const current = interactionRef.current;
@@ -195,15 +204,15 @@ export default function WorldFloatingInspectorWindow({
       });
     };
     element.addEventListener("pointerdown", beginMove, true);
-    element.addEventListener("pointermove", move, true);
-    element.addEventListener("pointerup", end, true);
-    element.addEventListener("pointercancel", end, true);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", end, true);
+    window.addEventListener("pointercancel", end, true);
     element.addEventListener("keydown", moveByKeyboard, true);
     return () => {
       element.removeEventListener("pointerdown", beginMove, true);
-      element.removeEventListener("pointermove", move, true);
-      element.removeEventListener("pointerup", end, true);
-      element.removeEventListener("pointercancel", end, true);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", end, true);
+      window.removeEventListener("pointercancel", end, true);
       element.removeEventListener("keydown", moveByKeyboard, true);
     };
   }, []);
@@ -251,47 +260,9 @@ export default function WorldFloatingInspectorWindow({
       startY: event.clientY,
       geometry: initial,
     };
+    onRaiseRef.current();
     capturePointer(element, event.pointerId);
     setInteraction(mode);
-  };
-
-  const moveInteraction = (event: ReactPointerEvent<HTMLElement>) => {
-    const current = interactionRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
-    event.preventDefault();
-    const deltaX = event.clientX - current.startX;
-    const deltaY = event.clientY - current.startY;
-    if (current.mode === "moving") {
-      setGeometry({
-        ...current.geometry,
-        ...moveFloatingTerminalPosition(
-          current.geometry,
-          deltaX,
-          deltaY,
-          viewportSize(),
-          current.geometry,
-        ),
-      });
-      return;
-    }
-    setGeometry(
-      resizeFloatingTerminalGeometry(
-        current.geometry,
-        deltaX,
-        deltaY,
-        viewportSize(),
-      ),
-    );
-  };
-
-  const endInteraction = (event: ReactPointerEvent<HTMLElement>) => {
-    const current = interactionRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
-    interactionRef.current = null;
-    setInteraction(null);
-    if (windowRef.current?.hasPointerCapture(event.pointerId)) {
-      windowRef.current.releasePointerCapture(event.pointerId);
-    }
   };
 
   const nudge = (
@@ -348,9 +319,6 @@ export default function WorldFloatingInspectorWindow({
           bottom: "auto",
         } satisfies CSSProperties
       }
-      onPointerMove={moveInteraction}
-      onPointerUp={endInteraction}
-      onPointerCancel={endInteraction}
     >
       <div ref={setPortalRef} className="world-floating-terminal-portal" />
       <button
@@ -360,7 +328,9 @@ export default function WorldFloatingInspectorWindow({
         title="Drag to resize Inspector; use arrow keys for precise sizing"
         onPointerDown={(event) => beginInteraction("resizing", event)}
         onKeyDown={(event) => nudge("resizing", event)}
-      />
+      >
+        <MoveDiagonal2 size={19} strokeWidth={2.4} aria-hidden="true" />
+      </button>
     </section>
   );
 }

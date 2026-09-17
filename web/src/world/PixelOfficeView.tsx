@@ -59,7 +59,11 @@ type PendingCreatedPane = {
   connectionId: string;
   generation: number;
   paneId: string;
+  attempt: number;
 };
+
+const CREATED_PANE_ADMISSION_RETRY_MS = 120;
+const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 
 export default function PixelOfficeView({
   world,
@@ -73,7 +77,7 @@ export default function PixelOfficeView({
 }: {
   world: WorldObject;
   selectedId: string | null;
-  onSelect(id: string): void;
+  onSelect(id: string): void | Promise<boolean>;
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
   floatingTerminals: readonly { nodeId: string }[];
@@ -90,6 +94,7 @@ export default function PixelOfficeView({
     readOfficePreferences(worldLocalStorage),
   );
   const preferencesRef = useRef(preferences);
+  const onSelectRef = useRef(onSelect);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
   const [renderedRevision, setRenderedRevision] = useState(0);
@@ -99,14 +104,13 @@ export default function PixelOfficeView({
   const [completionSeen, setCompletionSeen] = useState(() =>
     readCompletionSeen(worldLocalStorage),
   );
-  const [selectedSceneAnchor, setSelectedSceneAnchor] =
-    useState<OfficeCanvasAnchor | null>(null);
   const [sceneHover, setSceneHover] = useState<OfficeCanvasHover | null>(null);
   const [observability, setObservability] = useState<OfficeObservability>(
     EMPTY_OFFICE_OBSERVABILITY,
   );
   const [observabilityRevision, setObservabilityRevision] = useState(0);
   preferencesRef.current = preferences;
+  onSelectRef.current = onSelect;
 
   useEffect(() => {
     let disposed = false;
@@ -225,9 +229,33 @@ export default function PixelOfficeView({
         leaf.generation === pendingCreatedPane.generation,
     );
     if (!pane) return;
-    setPendingCreatedPane(null);
-    onSelect(pane.id);
-  }, [onSelect, pendingCreatedPane, world]);
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    void Promise.resolve(onSelectRef.current(pane.id)).then((admitted) => {
+      if (cancelled) return;
+      if (admitted !== false) {
+        setPendingCreatedPane(null);
+        return;
+      }
+      if (pendingCreatedPane.attempt + 1 >= CREATED_PANE_ADMISSION_ATTEMPTS) {
+        setPendingCreatedPane(null);
+        return;
+      }
+      retryTimer = window.setTimeout(
+        () =>
+          setPendingCreatedPane((current) =>
+            current?.paneId === pendingCreatedPane.paneId
+              ? { ...current, attempt: current.attempt + 1 }
+              : current,
+          ),
+        CREATED_PANE_ADMISSION_RETRY_MS,
+      );
+    });
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [pendingCreatedPane, world]);
 
   const roomForKey = (roomKey: string | null) =>
     roomKey ? (office.rooms.find(({ key }) => key === roomKey) ?? null) : null;
@@ -269,7 +297,9 @@ export default function PixelOfficeView({
     result: unknown,
   ) => {
     const paneId = createdRootPaneId(result);
-    if (paneId) setPendingCreatedPane({ connectionId, generation, paneId });
+    if (paneId) {
+      setPendingCreatedPane({ connectionId, generation, paneId, attempt: 0 });
+    }
   };
   const createSeat = async (roomKey: string) => {
     const room = roomForKey(roomKey);
@@ -444,10 +474,7 @@ export default function PixelOfficeView({
           canCreateSeat={canCreateSeat}
           onNewSeat={(roomKey) => void createSeat(roomKey)}
           onHover={setSceneHover}
-          onSelectedAnchorChange={(anchor) => {
-            setSelectedSceneAnchor(anchor);
-            onSelectedAnchorChange?.(anchor);
-          }}
+          onSelectedAnchorChange={onSelectedAnchorChange}
           onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
             onConversationNodeAnchorsChange?.(
               anchors
@@ -515,14 +542,6 @@ export default function PixelOfficeView({
           ) : null}
         </PixelOfficeCanvas>
       </div>
-      {selectedKey && selectedSceneAnchor ? (
-        <OfficeCanvasCallout
-          callout={officeCalloutForKey(office, selectedKey)}
-          left={selectedSceneAnchor.x}
-          top={selectedSceneAnchor.y}
-          persistent
-        />
-      ) : null}
       {sceneHover && sceneHover.key !== selectedKey ? (
         <OfficeCanvasCallout
           callout={officeCalloutForKey(office, sceneHover.key)}

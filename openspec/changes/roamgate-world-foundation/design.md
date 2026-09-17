@@ -136,7 +136,8 @@ surface alone changes with the selected view. The shared frame follows the selec
 workspace, while `WorldObject` continues to retain the aggregate read-only topology used by the
 visualizations. Review drafts remain workspace-qualified and synchronize between every Inspector
 presentation and the one shell annotation panel. Visual views do not clone the navigator, tab or
-annotation state.
+annotation state. Navigator rows and focused-tab choices resolve to the same qualified World entity
+and admit the docked Inspector only after the exact Herdr focus succeeds.
 
 ### Treat the pre-foundation Pixel Office as retained source
 
@@ -163,7 +164,9 @@ relocation, such as a blocked agent appearing in reception, never changes its ho
 Port the established Pixel Office composition rather than styling the checkpoint cards toward an
 approximation. The migrated scene retains the CEO Office, per-host reception stations, bounded
 status and optional-observability boards, Agent Bar, roads, content-sized work rooms, desks,
-characters, selection callouts, room/seat actions, completion markers and semantic targets.
+characters, hover callouts, room/seat actions, completion markers and semantic targets. Selection
+uses the scene state plus the shared Inspector; it does not add a persistent floating identity
+badge over the Office.
 
 Use the delivered deterministic geometry and publication boundary for room sizing, title/action
 containment, natural row packing, alignment, logical-canvas scrolling and renderer acknowledgement.
@@ -243,7 +246,9 @@ never more than one input listener or attachment for that terminal. The × contr
 Inspector entry and never creates another presentation as a side effect. Activating an Office desk
 directly opens or focuses its floating Inspector on Terminal, preserving the established desk
 interaction. Focusing a terminal tab first focuses its exact Herdr pane so the existing input gate
-remains authoritative.
+remains authoritative. The overlaid docked presentation can also be dragged within the visual
+stage; an explicit dock-position or expand/restore action clears that free position and reapplies
+its named dock geometry.
 
 Changing selection while an Inspector is docked performs an ordered replacement without asking the
 new entity to inherit the old resource state: the outgoing docked entry closes before the new

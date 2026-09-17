@@ -278,8 +278,8 @@ async function run() {
       "The compact Office target chooser is missing",
     );
     check(
-      host.querySelector(".world-canvas-callout-summary") !== null,
-      "The selected Office task-summary callout is missing",
+      host.querySelector(".world-canvas-callout-persistent") === null,
+      "The selected Office entity retained a duplicate floating badge",
     );
     const completion = host.querySelector<HTMLButtonElement>(
       ".world-completion-notices button",

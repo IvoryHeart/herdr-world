@@ -66,9 +66,10 @@ retain their original Herdr Web lineage.
   the duplicate actionable-agent card and redundant Open-in-Spaces control, and
   kept World settings visible above Office, Tree and Graph.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
-- Routed common-navigator selections into the matching visual Inspector and made
-  ordinary A-to-B selection replace the docked conversation without unexpectedly
-  floating A or mixing its terminal identity with B.
+- Routed common-navigator and focused-tab selections into the same matching visual
+  Inspector, made ordinary A-to-B selection replace the docked conversation without
+  unexpectedly floating A or mixing its terminal identity with B, and kept the live
+  Office mounted while a newly admitted seat retries exact terminal focus.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Made exact pane focus an admission requirement for World Inspectors, retained
   qualified docked and floating conversations through Spaces handoff, and raised
@@ -78,7 +79,9 @@ retain their original Herdr Web lineage.
   anchor is unavailable. A live floating Inspector can now be moved from its
   profile header without terminal focus interrupting the drag, and exposes a
   visible drag handle for pointer resizing while retaining precise keyboard
-  sizing.
+  sizing. The docked overlay can also be repositioned, move and resize gestures
+  no longer steal terminal focus, and selected identity no longer appears in a
+  duplicate persistent Office badge.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Bounded both Tree presentations with relevant-entity priority and exact
   omission reporting, scoped inactive-host action checks to their owning

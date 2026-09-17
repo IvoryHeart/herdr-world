@@ -3778,6 +3778,7 @@ export default function App({
             annotationCount={annotations.length}
             onToggleInspector={toggleWorkspaceInspector}
             onToggleAnnotations={toggleAnnotations}
+            onFocusSurface={onWorkspaceSurfaceSelect}
           />
           <div
             className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""}`}
