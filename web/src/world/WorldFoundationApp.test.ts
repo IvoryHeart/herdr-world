@@ -13,7 +13,6 @@ import {
   selectedHostStatusLabel,
   retainWorldFloatingTerminals,
   shouldCloseWorldInspector,
-  shouldRehomeDockedTerminal,
   upsertWorldFloatingTerminal,
   worldIntentInitialView,
   worldIntentViews,
@@ -709,36 +708,6 @@ describe("World view preference", () => {
         true,
       ),
     ).toBe("floating");
-  });
-
-  test("rehomes a docked terminal before selection leaves its entity", () => {
-    expect(
-      shouldRehomeDockedTerminal({
-        currentNodeId: "agent-a",
-        nextNodeId: "agent-b",
-        inspectorOpen: true,
-        inspectorView: "terminal",
-        alreadyFloating: false,
-      }),
-    ).toBe(true);
-    expect(
-      shouldRehomeDockedTerminal({
-        currentNodeId: "agent-a",
-        nextNodeId: "agent-a",
-        inspectorOpen: true,
-        inspectorView: "terminal",
-        alreadyFloating: false,
-      }),
-    ).toBe(false);
-    expect(
-      shouldRehomeDockedTerminal({
-        currentNodeId: "agent-a",
-        nextNodeId: null,
-        inspectorOpen: true,
-        inspectorView: "terminal",
-        alreadyFloating: false,
-      }),
-    ).toBe(false);
   });
 
   test("bounds floating terminals while focusing an existing conversation", () => {

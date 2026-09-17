@@ -192,24 +192,3 @@ export function floatingTerminalForNode(
     { dock: "right", expanded: false, size: 520 },
   );
 }
-
-export function shouldRehomeDockedTerminal({
-  currentNodeId,
-  nextNodeId,
-  inspectorOpen,
-  alreadyFloating,
-}: {
-  currentNodeId: string | null;
-  nextNodeId: string | null;
-  inspectorOpen: boolean;
-  inspectorView: InspectorView | null;
-  alreadyFloating: boolean;
-}) {
-  return Boolean(
-    currentNodeId &&
-      nextNodeId &&
-      currentNodeId !== nextNodeId &&
-      inspectorOpen &&
-      !alreadyFloating,
-  );
-}

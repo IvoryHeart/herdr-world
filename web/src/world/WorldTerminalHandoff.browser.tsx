@@ -169,6 +169,14 @@ function agentTarget(label: string) {
   ].find((button) => button.getAttribute("aria-label")?.includes(label));
 }
 
+function graphTarget(label: string) {
+  return [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".world-spatial-graph-select",
+    ),
+  ].find((button) => button.querySelector("strong")?.textContent === label);
+}
+
 function terminalInput(scope: ParentNode = document) {
   return scope.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
 }
@@ -310,10 +318,30 @@ async function run() {
       window.__HERDR_WORLD_RENDERER__?.ready === true && agentTarget("Builder"),
     "Office after shared-frame navigation",
   );
+  const reviewerNavigatorRow = [
+    ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
+  ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
+  check(
+    Boolean(reviewerNavigatorRow),
+    "shared navigator omitted the Reviewer agent",
+  );
+  flushSync(() => reviewerNavigatorRow?.click());
+  await settle();
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Reviewer") === true,
+    "shared navigator selection did not open the matching World Inspector",
+  );
   await until(() => agentTarget("Builder"), "Builder desk target");
   flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") &&
       document.querySelector(
         '.world-context-rail .workspace-inspector[data-view="terminal"] .workspace-inspector-terminal-portal',
       ),
@@ -572,6 +600,87 @@ async function run() {
   check(
     document.activeElement === dockedInput,
     "docked terminal did not retain keyboard focus",
+  );
+
+  flushSync(() => agentTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer"),
+    "Reviewer replacement Inspector",
+  );
+  check(
+    !document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "ordinary A-to-B selection unexpectedly floated the replaced Inspector",
+  );
+  const replacementReviewerInput = terminalInput(
+    document.querySelector(".world-context-rail") ?? document,
+  );
+  check(
+    Boolean(replacementReviewerInput),
+    "Reviewer replacement did not expose its docked terminal input",
+  );
+  if (replacementReviewerInput) {
+    const reviewerInputsBefore = calls.filter(
+      ({ method, params }) =>
+        method === "terminal.input" &&
+        params.terminal_id === "reviewer-terminal",
+    ).length;
+    replacementReviewerInput.focus();
+    sendKey(replacementReviewerInput);
+    await until(
+      () =>
+        calls.filter(
+          ({ method, params }) =>
+            method === "terminal.input" &&
+            params.terminal_id === "reviewer-terminal",
+        ).length > reviewerInputsBefore,
+      "Reviewer replacement terminal identity",
+    );
+  }
+
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector(".world-spatial-graph-shell"),
+    "Graph replacement check",
+  );
+  await until(() => graphTarget("Builder"), "Builder Graph target");
+  flushSync(() => graphTarget("Builder")!.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") &&
+      terminalInput(document.querySelector(".world-context-rail") ?? document),
+    "Builder Graph Inspector replacement",
+  );
+  check(
+    !document.querySelector('[role="dialog"][aria-label="Reviewer Inspector"]'),
+    "Graph A-to-B selection unexpectedly floated the replaced Inspector",
+  );
+  const graphBuilderInput = terminalInput(
+    document.querySelector(".world-context-rail") ?? document,
+  )!;
+  const graphBuilderInputsBefore = calls.filter(
+    ({ method, params }) =>
+      method === "terminal.input" && params.terminal_id === "builder-terminal",
+  ).length;
+  graphBuilderInput.focus();
+  sendKey(graphBuilderInput);
+  await until(
+    () =>
+      calls.filter(
+        ({ method, params }) =>
+          method === "terminal.input" &&
+          params.terminal_id === "builder-terminal",
+      ).length > graphBuilderInputsBefore,
+    "Builder Graph terminal identity",
   );
 
   root.unmount();

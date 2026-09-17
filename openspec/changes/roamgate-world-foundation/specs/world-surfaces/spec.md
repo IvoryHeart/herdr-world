@@ -260,10 +260,12 @@ stack a separate agent profile card above the resource pane. Terminal SHALL be t
 initial tab for a newly opened terminal-capable entity; changing one Inspector's active tab SHALL NOT
 change another Inspector or the default for a later entity.
 
-Selecting an actionable entity SHALL open or focus its docked Inspector without resizing, relaying
-out or otherwise taking workspace from the visual stage. Direct desk activation SHALL open or focus
-that entity's floating Inspector. A floating Inspector SHALL be independently movable and resizable
-and expose Dock in and × controls. The docked Inspector SHALL expose Dock out, dock-position,
+Selecting an actionable entity in either the common workspace navigator or the active visual SHALL
+open or focus its docked Inspector without resizing, relaying out or otherwise taking workspace from
+the visual stage. Ordinary selection SHALL replace and close a different docked conversation rather
+than implicitly turn it into a floating window. Direct desk activation SHALL open or focus that
+entity's floating Inspector. A floating Inspector SHALL be independently movable and resizable and
+expose Dock in and × controls. The docked Inspector SHALL expose Dock out, dock-position,
 expand/restore and × controls. Docking a floating Inspector while another is docked SHALL swap their
 presentations without discarding either context or increasing the floating-window count. Docking or
 undocking SHALL transfer the complete Inspector, including its selected tab and resource-selection
@@ -575,11 +577,11 @@ window. The same qualified terminal SHALL have exactly one live Terminal present
 Docking, undocking or swapping Inspectors SHALL explicitly hand off that attachment after the old
 target detaches while preserving the Inspector's selected tab and other resource state.
 
-If selection replaces a docked Inspector, World SHALL rehome the outgoing Inspector as a floating
-conversation before mounting the replacement docked context. The handoff SHALL preserve the
-qualified Inspector session and count it as the same bounded entry. If all five floating slots are
-occupied, World SHALL retain the current docked Inspector and report the limit rather than close a
-context or mount overlapping resource owners.
+If ordinary selection replaces a docked Inspector, World SHALL close the outgoing docked
+conversation before mounting the replacement context and SHALL NOT create a floating window as a
+selection side effect. Floating conversations SHALL arise only from an explicit Dock out action or
+direct Office desk activation. Explicitly docking a floating conversation into an occupied dock
+SHALL continue to swap the two retained conversations.
 
 The floating Inspector header SHALL expose Dock in and × controls. The docked Inspector SHALL
 expose Dock out and × controls plus its dock-position and expand controls. Closing either
@@ -629,8 +631,15 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 #### Scenario: Change selection while an Inspector is docked
 
 - **WHEN** entity A has the docked Inspector and the user selects entity B
-- **THEN** World rehomes A as the same floating Inspector before mounting B as docked, unless the
-  five-window bound requires the selection to remain unchanged with a visible limit message
+- **THEN** World closes A's docked conversation and mounts B as the matching docked Inspector without
+  opening an A floating window or redirecting B to A's terminal
+
+#### Scenario: Select an entity from the common navigator
+
+- **WHEN** the user selects an actionable space or agent in the common workspace navigator while
+  Office, Tree or Graph is active
+- **THEN** the matching qualified World entity opens in the docked Inspector with the same identity
+  and resources as selecting that entity inside the active visual
 
 #### Scenario: Dock into an occupied Inspector target
 

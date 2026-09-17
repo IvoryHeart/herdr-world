@@ -1097,12 +1097,18 @@ export function terminalPresentationTarget(
   return spacesOperational ? "spaces" : null;
 }
 
+export type WorkspaceSurfaceSelection = {
+  workspaceId: string;
+  paneId?: string;
+};
+
 export default function App({
   operationalShortcutsEnabled = true,
   inspectorPortal = null,
   topbarPortal = null,
   primaryViewControl = null,
   workspaceSurface = null,
+  onWorkspaceSurfaceSelect,
   worldTerminalPresentations = [],
   onInspectorVisibilityChange,
   onInspectorViewChange,
@@ -1114,6 +1120,7 @@ export default function App({
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
   workspaceSurface?: ReactNode;
+  onWorkspaceSurfaceSelect?: (selection: WorkspaceSurfaceSelection) => void;
   worldTerminalPresentations?: readonly WorldTerminalPresentation[];
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
@@ -3687,18 +3694,31 @@ export default function App({
                   : layoutPreferences.desktopSidebarOrder) === "agents-first"
               }
               key={`${resourceUiKey}:workspaces`}
-              onSelect={(workspace) =>
-                keepInspectorForWorkspace(workspace.workspace_id)
-              }
+              onSelect={(workspace) => {
+                if (onWorkspaceSurfaceSelect) {
+                  onWorkspaceSurfaceSelect({
+                    workspaceId: workspace.workspace_id,
+                  });
+                } else {
+                  keepInspectorForWorkspace(workspace.workspace_id);
+                }
+              }}
               onBrowseFiles={(workspace) =>
                 openFileExplorer(workspace.workspace_id)
               }
               onReviewChanges={(workspace) =>
                 openDiffViewer(workspace.workspace_id)
               }
-              onSelectAgent={(pane) =>
-                keepInspectorForWorkspace(pane.workspace_id, pane)
-              }
+              onSelectAgent={(pane) => {
+                if (onWorkspaceSurfaceSelect) {
+                  onWorkspaceSurfaceSelect({
+                    workspaceId: pane.workspace_id,
+                    paneId: pane.pane_id,
+                  });
+                } else {
+                  keepInspectorForWorkspace(pane.workspace_id, pane);
+                }
+              }}
               onBrowseFilesForAgent={browseFilesForPane}
               onReviewChangesForAgent={reviewChangesForPane}
               onViewAgentHistory={(pane) =>

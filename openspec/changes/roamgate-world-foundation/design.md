@@ -245,11 +245,15 @@ directly opens or focuses its floating Inspector on Terminal, preserving the est
 interaction. Focusing a terminal tab first focuses its exact Herdr pane so the existing input gate
 remains authoritative.
 
-Changing selection while an Inspector is docked performs the same ordered handoff without asking
-the new entity to inherit the old resource state. The outgoing Inspector becomes a floating entry
-before the replacement context mounts. If five floating entries already exist, World retains the
-current docked selection and reports the limit instead of silently closing a context. On compact
-layouts the registry is preserved while one active Inspector remains usable at a time.
+Changing selection while an Inspector is docked performs an ordered replacement without asking the
+new entity to inherit the old resource state: the outgoing docked entry closes before the new
+context mounts. It does not manufacture a floating window as a side effect of ordinary navigation;
+floating entries arise only through explicit Dock out or direct Office desk activation. Docking an
+existing floating entry into an occupied dock still swaps the two retained presentations. The
+common workspace navigator resolves its selected workspace or pane to the exact selected-host
+WorldObject identity and invokes this same path, so its highlighted selection and the visual
+Inspector cannot diverge. On compact layouts the registry is preserved while one active Inspector
+remains usable at a time.
 
 Every visible floating or docked Inspector connects to its qualified desk when present, otherwise
 to its agent or hierarchy node. Connectors consume published scene positions and presentation

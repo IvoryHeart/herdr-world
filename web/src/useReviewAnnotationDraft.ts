@@ -102,7 +102,9 @@ export function useReviewAnnotationDraft(runtimeKey: string) {
       }
     };
     annotationDraftListeners.add(synchronize);
-    return () => annotationDraftListeners.delete(synchronize);
+    return () => {
+      annotationDraftListeners.delete(synchronize);
+    };
   }, []);
   useLayoutEffect(() => {
     if (runtimeRef.current === runtimeKey) return;

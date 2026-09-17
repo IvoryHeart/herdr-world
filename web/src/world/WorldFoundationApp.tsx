@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -8,7 +9,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import App from "../App";
+import App, { type WorkspaceSurfaceSelection } from "../App";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, store, useStoreSelector } from "../store";
@@ -42,7 +43,6 @@ import {
 
 export {
   retainWorldFloatingTerminals,
-  shouldRehomeDockedTerminal,
   upsertWorldFloatingTerminal,
 } from "./worldTerminalPresentation";
 
@@ -154,6 +154,15 @@ export default function WorldFoundationApp() {
     Record<string, HTMLDivElement | null>
   >({});
   const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
+  const workspaceSurfaceSelectionRef = useRef<
+    ((selection: WorkspaceSurfaceSelection) => void) | null
+  >(null);
+  const registerWorkspaceSurfaceSelection = useCallback(
+    (handler: ((selection: WorkspaceSurfaceSelection) => void) | null) => {
+      workspaceSurfaceSelectionRef.current = handler;
+    },
+    [],
+  );
   const topbarRuntime = useWorldRuntime();
   const topbarConnectionId = useStoreSelector(
     (snapshot) => snapshot.activeConnectionId,
@@ -290,8 +299,16 @@ export default function WorldFoundationApp() {
                       : { ...current, [nodeId]: portal },
                   )
                 }
+                onWorkspaceSurfaceSelectionReady={
+                  registerWorkspaceSurfaceSelection
+                }
               />
             ) : null
+          }
+          onWorkspaceSurfaceSelect={
+            view !== "spaces"
+              ? (selection) => workspaceSurfaceSelectionRef.current?.(selection)
+              : undefined
           }
           worldTerminalPresentations={inspectorConversations.flatMap(
             (conversation) =>
@@ -335,6 +352,7 @@ function WorldControlPlane({
   onDockedInspectorIdChange,
   onInspectorConversationsChange,
   onInspectorTerminalPortal,
+  onWorkspaceSurfaceSelectionReady,
 }: {
   view: Exclude<WorldView, "spaces">;
   inspectorConversations: readonly WorldInspectorConversation[];
@@ -346,6 +364,9 @@ function WorldControlPlane({
   onInspectorTerminalPortal(
     nodeId: string,
     element: HTMLDivElement | null,
+  ): void;
+  onWorkspaceSurfaceSelectionReady(
+    handler: ((selection: WorkspaceSurfaceSelection) => void) | null,
   ): void;
 }) {
   const runtime = useWorldRuntime();
@@ -502,6 +523,7 @@ function WorldControlPlane({
   const applySelection = async (
     id: string | null,
     requestedView: InspectorView | null = null,
+    focusTarget = true,
   ) => {
     const next = id ? (world.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
@@ -512,13 +534,12 @@ function WorldControlPlane({
     setVisualConversationAnchors(null);
     if (!next || !next.actionable || !next.selectedHost) {
       if (dockedInspector) {
-        if (floatingInspectors.length >= 5) {
-          setIntentError(
-            "Five Inspectors are already floating. Close one before changing selection.",
-          );
-          setSelection(selection);
-          return;
-        }
+        onInspectorConversationsChange(
+          inspectorConversations.filter(
+            ({ nodeId }) => nodeId !== dockedInspector.nodeId,
+          ),
+        );
+        onInspectorTerminalPortal(dockedInspector.nodeId, null);
         onDockedInspectorIdChange(null);
       }
       setIntentOpening(false);
@@ -539,7 +560,7 @@ function WorldControlPlane({
       }
       if (existing.nodeId !== dockedInspectorId) {
         focusFloatingInspector(existing);
-      } else {
+      } else if (focusTarget) {
         void focusWorldNode(next).catch((cause) =>
           setIntentError(
             cause instanceof Error ? cause.message : String(cause),
@@ -548,20 +569,21 @@ function WorldControlPlane({
       }
       return;
     }
-    if (dockedInspector && floatingInspectors.length >= 5) {
-      setIntentError(
-        "Five Inspectors are already floating. Close one before changing selection.",
-      );
-      setSelection(selection);
-      return;
-    }
     const conversation = conversationFor(next, requestedView);
     if (!conversation) return;
     setIntentOpening(true);
     try {
-      await focusWorldNode(next);
+      if (focusTarget) await focusWorldNode(next);
       if (intentRequestRef.current !== requestId) return;
-      onInspectorConversationsChange([...inspectorConversations, conversation]);
+      if (dockedInspector) {
+        onInspectorTerminalPortal(dockedInspector.nodeId, null);
+      }
+      onInspectorConversationsChange([
+        ...inspectorConversations.filter(
+          ({ nodeId }) => nodeId !== dockedInspector?.nodeId,
+        ),
+        conversation,
+      ]);
       onDockedInspectorIdChange(conversation.nodeId);
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
@@ -572,6 +594,32 @@ function WorldControlPlane({
     }
   };
   const selectNode = (id: string) => void applySelection(id);
+  const workspaceSurfaceSelectionHandlerRef = useRef<
+    (selection: WorkspaceSurfaceSelection) => void
+  >(() => {});
+  workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
+    const node = world.nodes.find((candidate) => {
+      if (!candidate.selectedHost) return false;
+      if (surfaceSelection.paneId) {
+        return (
+          (candidate.kind === "agent" || candidate.kind === "terminal") &&
+          candidate.nativeId === surfaceSelection.paneId &&
+          candidate.workspaceId === surfaceSelection.workspaceId
+        );
+      }
+      return (
+        candidate.kind === "space" &&
+        candidate.nativeId === surfaceSelection.workspaceId
+      );
+    });
+    if (node) void applySelection(node.id, null, false);
+  };
+  useLayoutEffect(() => {
+    const handler = (surfaceSelection: WorkspaceSurfaceSelection) =>
+      workspaceSurfaceSelectionHandlerRef.current(surfaceSelection);
+    onWorkspaceSurfaceSelectionReady(handler);
+    return () => onWorkspaceSurfaceSelectionReady(null);
+  }, [onWorkspaceSurfaceSelectionReady]);
 
   const closeIntent = () => {
     intentRequestRef.current += 1;

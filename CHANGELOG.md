@@ -63,6 +63,10 @@ retain their original Herdr Web lineage.
   the duplicate actionable-agent card and redundant Open-in-Spaces control, and
   kept World settings visible above Office, Tree and Graph.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Routed common-navigator selections into the matching visual Inspector and made
+  ordinary A-to-B selection replace the docked conversation without unexpectedly
+  floating A or mixing its terminal identity with B.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Bounded both Tree presentations with relevant-entity priority and exact
   omission reporting, scoped inactive-host action checks to their owning
   branches, cancelled obsolete Pixi initialization during StrictMode replay,

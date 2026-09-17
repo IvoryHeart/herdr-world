@@ -12,7 +12,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "Office preserves independent live Inspector state across float, focus, dock swap, and close",
+  "World keeps navigator, docked, floating, and terminal identities aligned",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
