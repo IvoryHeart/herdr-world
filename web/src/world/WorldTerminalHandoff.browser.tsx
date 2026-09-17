@@ -72,6 +72,9 @@ const panes: Pane[] = [
   },
 ];
 let focusedPaneId = panes[0].pane_id;
+let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
+let rejectNextPaneGetId: string | null = null;
+let rejectedPaneGets = 0;
 
 function currentPanes() {
   return panes.map((pane) => ({
@@ -131,9 +134,16 @@ const client: ConnectionClient = {
       };
     }
     if (method === "pane.get") {
-      const pane = panes.find(
-        (candidate) => candidate.pane_id === params.pane_id,
-      );
+      const paneId = String(params.pane_id ?? "");
+      if (delayedPaneGet?.paneId === paneId) {
+        await delayedPaneGet.promise;
+      }
+      if (rejectNextPaneGetId === paneId) {
+        rejectNextPaneGetId = null;
+        rejectedPaneGets += 1;
+        throw new Error("Synthetic pane focus rejection");
+      }
+      const pane = panes.find((candidate) => candidate.pane_id === paneId);
       if (pane) focusedPaneId = pane.pane_id;
       return pane ? { pane: { ...pane, focused: true } } : {};
     }
@@ -268,6 +278,32 @@ async function run() {
     "Office did not retain the Spaces workspace navigator",
   );
   const sharedNavigator = document.querySelector(".sidebar");
+  const hideNavigatorButton = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Hide workspace navigator"]',
+  );
+  check(
+    Boolean(hideNavigatorButton),
+    "shared workspace navigator did not expose a hide control",
+  );
+  hideNavigatorButton?.click();
+  await until(
+    () =>
+      sharedNavigator && getComputedStyle(sharedNavigator).display === "none",
+    "hidden workspace navigator",
+  );
+  const showNavigatorButton = document.querySelector<HTMLButtonElement>(
+    'button[aria-label="Show workspace navigator"]',
+  );
+  check(
+    Boolean(showNavigatorButton),
+    "hidden workspace navigator did not expose a restore control",
+  );
+  showNavigatorButton?.click();
+  await until(
+    () =>
+      sharedNavigator && getComputedStyle(sharedNavigator).display !== "none",
+    "restored workspace navigator",
+  );
   const annotationsButton = [
     ...document.querySelectorAll<HTMLButtonElement>(".tabbar-utilities button"),
   ].find((button) => button.textContent?.includes("Annotations"));
@@ -325,13 +361,34 @@ async function run() {
     Boolean(reviewerNavigatorRow),
     "shared navigator omitted the Reviewer agent",
   );
+  const delayedReviewerFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "reviewer-pane",
+    promise: delayedReviewerFocus.promise,
+  };
   flushSync(() => reviewerNavigatorRow?.click());
   await settle();
   check(
-    document
+    !document
       .querySelector(".world-context-rail .workspace-inspector-agent-identity")
-      ?.textContent?.includes("Reviewer") === true,
-    "shared navigator selection did not open the matching World Inspector",
+      ?.textContent?.includes("Reviewer"),
+    "shared navigator admitted Reviewer before its exact focus completed",
+  );
+  check(
+    store.get().selectedPaneId === "builder-pane",
+    "shared navigator changed the selected pane before exact focus completed",
+  );
+  delayedReviewerFocus.resolve();
+  delayedPaneGet = null;
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") &&
+      store.get().selectedPaneId === "reviewer-pane",
+    "shared navigator exact Reviewer focus",
   );
   await until(() => agentTarget("Builder"), "Builder desk target");
   flushSync(() => agentTarget("Builder")!.click());
@@ -346,6 +403,20 @@ async function run() {
         '.world-context-rail .workspace-inspector[data-view="terminal"] .workspace-inspector-terminal-portal',
       ),
     "Builder Inspector terminal",
+  );
+  rejectNextPaneGetId = "reviewer-pane";
+  flushSync(() => reviewerNavigatorRow?.click());
+  await until(() => rejectedPaneGets === 1, "rejected shared navigator focus");
+  await settle();
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Builder") === true,
+    "rejected navigator focus replaced the admitted Builder Inspector",
+  );
+  check(
+    store.get().selectedPaneId === "builder-pane",
+    "rejected navigator focus changed the selected pane",
   );
   document
     .querySelector<HTMLButtonElement>(
@@ -439,6 +510,72 @@ async function run() {
         .querySelector(".workspace-inspector")
         ?.getAttribute("data-view") === "files",
     "Builder floating Inspector Files view",
+  );
+
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail .workspace-inspector button[aria-label="Float Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ) &&
+      !document
+        .querySelector(".world-context-rail")
+        ?.classList.contains("has-inspector"),
+    "Reviewer floating Inspector",
+  );
+  const reviewerFloatingWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Reviewer Inspector"]',
+  )!;
+  const builderTerminalTab = builderWindow.querySelector<HTMLButtonElement>(
+    '[role="tab"]:first-of-type',
+  )!;
+  builderTerminalTab.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      pointerId: 4,
+      pointerType: "mouse",
+    }),
+  );
+  builderTerminalTab.click();
+  await until(
+    () =>
+      store.get().selectedPaneId === "builder-pane" &&
+      builderInspector.getAttribute("data-view") === "terminal",
+    "background Builder Inspector control focus",
+  );
+  const builderFilesTab = builderWindow.querySelector<HTMLButtonElement>(
+    '[role="tab"]:nth-of-type(2)',
+  )!;
+  builderFilesTab.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      pointerId: 5,
+      pointerType: "mouse",
+    }),
+  );
+  builderFilesTab.click();
+  await until(
+    () => builderInspector.getAttribute("data-view") === "files",
+    "Builder Files view restoration",
+  );
+  reviewerFloatingWindow
+    .querySelector<HTMLButtonElement>('button[aria-label="Dock Inspector"]')!
+    .click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") &&
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "Reviewer redock before Inspector swap",
   );
 
   builderWindow
@@ -681,6 +818,47 @@ async function run() {
           params.terminal_id === "builder-terminal",
       ).length > graphBuilderInputsBefore,
     "Builder Graph terminal identity",
+  );
+
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail .workspace-inspector button[aria-label="Float Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "Builder floating Inspector before Spaces handoff",
+  );
+  await until(() => graphTarget("Reviewer"), "Reviewer Graph target");
+  flushSync(() => graphTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer"),
+    "Reviewer docked Inspector before Spaces handoff",
+  );
+  viewSelect.value = "spaces";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => !document.querySelector(".world-control-plane"),
+    "Spaces handoff",
+  );
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      document.querySelector(".world-spatial-graph-shell") &&
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") &&
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "qualified Inspector conversations after Spaces handoff",
   );
 
   root.unmount();

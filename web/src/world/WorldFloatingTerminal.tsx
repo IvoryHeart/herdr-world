@@ -93,12 +93,7 @@ export default function WorldFloatingInspectorWindow({
   useEffect(() => {
     const element = windowRef.current;
     if (!element) return;
-    const focusFromPointer = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest("button")) {
-        return;
-      }
-      onFocusRef.current();
-    };
+    const focusFromPointer = () => onFocusRef.current();
     // Inspector content is rendered through a portal owned by a sibling.
     // React events follow that logical tree, not this window's DOM ancestry,
     // so a native capture listener is required for clicks in its resources.

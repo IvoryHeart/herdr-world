@@ -195,6 +195,7 @@ function GitStatusBadges({
 
 export function WorkspaceTree({
   agentsFirst = false,
+  focusOnSelect = true,
   onSelect,
   onBrowseFiles,
   onReviewChanges,
@@ -204,6 +205,7 @@ export function WorkspaceTree({
   onViewAgentHistory,
 }: {
   agentsFirst?: boolean;
+  focusOnSelect?: boolean;
   onSelect?: (workspace: Workspace) => void;
   onBrowseFiles?: (workspace: Workspace) => void;
   onReviewChanges?: (workspace: Workspace) => void;
@@ -626,6 +628,7 @@ export function WorkspaceTree({
             pinnedWorkspaceKeys={pinnedWorkspaceSet}
             collapsedWorktreeGroupKeys={collapsedWorktreeGroupSet}
             onCollapsedChange={updateCollapsedWorktreeGroup}
+            focusOnSelect={focusOnSelect}
             onSelect={onSelect}
             onSelectAgent={onSelectAgent}
             onAgentContextMenu={(pane, x, y) => setAgentMenu({ pane, x, y })}
@@ -747,6 +750,7 @@ export function WorkspaceTree({
                               ? workspaceDisplayName(workspace)
                               : pane.workspace_id
                           }
+                          focusOnSelect={focusOnSelect}
                           onSelect={onSelectAgent}
                           onOpenMenu={(x, y) => setAgentMenu({ pane, x, y })}
                           drag={
@@ -796,7 +800,7 @@ export function WorkspaceTree({
         state={agentMenu}
         onClose={() => setAgentMenu(null)}
         onFocus={(pane) => {
-          void store.focusPane(pane.pane_id);
+          if (focusOnSelect) void store.focusPane(pane.pane_id);
           onSelectAgent?.(pane);
         }}
         onBrowseFiles={onBrowseFilesForAgent}
@@ -894,6 +898,7 @@ function WorkspaceRow({
   pinnedWorkspaceKeys,
   collapsedWorktreeGroupKeys,
   onCollapsedChange,
+  focusOnSelect,
   onSelect,
   onSelectAgent,
   onAgentContextMenu,
@@ -910,6 +915,7 @@ function WorkspaceRow({
   pinnedWorkspaceKeys: ReadonlySet<string>;
   collapsedWorktreeGroupKeys: ReadonlySet<string>;
   onCollapsedChange: (workspace: Workspace, collapsed: boolean) => void;
+  focusOnSelect: boolean;
   onSelect?: (workspace: Workspace) => void;
   onSelectAgent?: (pane: Pane) => void;
   onAgentContextMenu: (pane: Pane, x: number, y: number) => void;
@@ -962,7 +968,7 @@ function WorkspaceRow({
     onContextMenu(w, x, y);
   };
   const selectWorkspace = () => {
-    store.focusWorkspace(w.workspace_id);
+    if (focusOnSelect) void store.focusWorkspace(w.workspace_id);
     onSelect?.(w);
   };
 
@@ -1164,6 +1170,7 @@ function WorkspaceRow({
               selected={
                 pane.pane_id === activePaneId || (!activePaneId && pane.focused)
               }
+              focusOnSelect={focusOnSelect}
               onSelect={onSelectAgent}
               onOpenMenu={(x, y) => onAgentContextMenu(pane, x, y)}
             />
@@ -1181,6 +1188,7 @@ function WorkspaceRow({
               pinnedWorkspaceKeys={pinnedWorkspaceKeys}
               collapsedWorktreeGroupKeys={collapsedWorktreeGroupKeys}
               onCollapsedChange={onCollapsedChange}
+              focusOnSelect={focusOnSelect}
               onSelect={onSelect}
               onSelectAgent={onSelectAgent}
               onAgentContextMenu={onAgentContextMenu}

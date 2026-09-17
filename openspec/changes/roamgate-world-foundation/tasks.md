@@ -16,7 +16,7 @@
 - [ ] 3.2 Integrate native Spaces and World routes into one Roamgate-derived application frame without mounting a second app; keep the Spaces workspace navigator, focused tab strip and annotations control common to every view, replace Graph's duplicate desktop outline, place the single view selector and bounded selected-host/runtime summary between version and Machines in the inherited top bar without a stacked World navigation or status bar, and verify canonical navigation plus desktop/mobile accessibility tests
 - [ ] 3.3 Complete the retained Pixel Office migration in tasks 10.1–10.8 and verify the defining scene, layout, operations and responsive behavior over aggregate multi-host data with one selected operational host
 - [x] 3.4 Characterize the checkpoint World-to-Spaces Files, Changes and Agent History handoff, and verify an aggregate selection cannot open resources from a different host or checkout
-- [x] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
+- [ ] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
 
 ## 4. Distribution and knowledge
 

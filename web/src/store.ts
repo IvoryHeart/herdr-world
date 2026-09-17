@@ -202,6 +202,13 @@ export interface TaskNotificationTarget {
   paneId: string;
 }
 
+export interface QualifiedFocusTarget {
+  connectionId: string;
+  runtimeGeneration: number;
+  workspaceId: string;
+  paneId: string | null;
+}
+
 type ClickableNotification = Pick<Notification, "close" | "onclick">;
 
 export function isTaskNotificationTarget(
@@ -2389,6 +2396,91 @@ export const store = {
         retryOnReconnect: options.retryOnReconnect ?? true,
       },
     );
+  },
+
+  async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
+    const targetIsCurrent = () =>
+      state.activeConnectionId === target.connectionId &&
+      state.serverRuntimeGeneration === target.runtimeGeneration &&
+      taskNotificationTargetIsCurrent(state, target);
+    if (
+      !targetIsCurrent() ||
+      !state.workspaces.some(
+        (workspace) => workspace.workspace_id === target.workspaceId,
+      )
+    ) {
+      return false;
+    }
+
+    if (state.navigationMode === "browser-local") {
+      if (!target.paneId) {
+        void navigateBrowser(target.workspaceId);
+        return targetIsCurrent();
+      }
+      const result = await action(
+        async (lease) => {
+          const response = await lease.client.call("pane.get", {
+            pane_id: target.paneId,
+          });
+          const pane = (response?.pane ?? null) as Pane | null;
+          if (
+            !leaseIsCurrent(lease) ||
+            !targetIsCurrent() ||
+            pane?.pane_id !== target.paneId ||
+            pane.workspace_id !== target.workspaceId
+          ) {
+            return null;
+          }
+          return pane;
+        },
+        { refresh: "none", retryOnReconnect: false },
+      );
+      if (!result || !targetIsCurrent()) return false;
+      void navigateBrowser(result.workspace_id, result.tab_id, result.pane_id);
+      return targetIsCurrent() && state.selectedPaneId === target.paneId;
+    }
+
+    const pendingFocusSeq = stampPendingFocusWorkspace(target.workspaceId);
+    const focused = await action(
+      (lease) =>
+        enqueueFocusAction(async () => {
+          if (!leaseIsCurrent(lease) || !targetIsCurrent()) return false;
+          if (!target.paneId) {
+            await lease.client.call("workspace.focus", {
+              workspace_id: target.workspaceId,
+            });
+            return leaseIsCurrent(lease) && targetIsCurrent();
+          }
+
+          const response = await lease.client.call("pane.get", {
+            pane_id: target.paneId,
+          });
+          const pane = (response?.pane ?? null) as Pane | null;
+          if (
+            !leaseIsCurrent(lease) ||
+            !targetIsCurrent() ||
+            pane?.pane_id !== target.paneId ||
+            pane.workspace_id !== target.workspaceId ||
+            typeof pane.tab_id !== "string"
+          ) {
+            return false;
+          }
+          await lease.client.call("workspace.focus", {
+            workspace_id: target.workspaceId,
+          });
+          if (!leaseIsCurrent(lease) || !targetIsCurrent()) return false;
+          await lease.client.call("tab.focus", { tab_id: pane.tab_id });
+          if (!leaseIsCurrent(lease) || !targetIsCurrent()) return false;
+          setForConnection(lease, { selectedPaneId: target.paneId });
+          return state.selectedPaneId === target.paneId;
+        }),
+      {
+        refresh: "immediate",
+        pendingFocusWorkspaceSeq: pendingFocusSeq,
+        retryOnReconnect: false,
+      },
+    );
+    return focused === true;
   },
 
   focusTaskNotificationTarget(target: TaskNotificationTarget) {

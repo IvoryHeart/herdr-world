@@ -3685,7 +3685,7 @@ export default function App({
         className={`body mobile-view-${mobileView}`}
         style={{ gridTemplateColumns: `${sidebarWidth}px 6px minmax(0, 1fr)` }}
       >
-        <div className="sidebar">
+        <div className="sidebar" id="workspace-navigator">
           <div className="sidebar-content">
             <WorkspaceTree
               agentsFirst={
@@ -3693,6 +3693,7 @@ export default function App({
                   ? layoutPreferences.mobileSidebarOrder
                   : layoutPreferences.desktopSidebarOrder) === "agents-first"
               }
+              focusOnSelect={!onWorkspaceSurfaceSelect}
               key={`${resourceUiKey}:workspaces`}
               onSelect={(workspace) => {
                 if (onWorkspaceSurfaceSelect) {
@@ -3731,7 +3732,35 @@ export default function App({
           className="resizer"
           onPointerDown={startResize}
           title="Drag to resize sidebar"
-        />
+        >
+          {!mobile ? (
+            <button
+              type="button"
+              className="sidebar-visibility-toggle sidebar-hide"
+              aria-label="Hide workspace navigator"
+              aria-controls="workspace-navigator"
+              aria-expanded="true"
+              title="Hide workspace navigator"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={toggleSidebar}
+            >
+              <ChevronLeft size={14} aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+        {sidebarHidden && !mobile ? (
+          <button
+            type="button"
+            className="sidebar-visibility-toggle sidebar-show"
+            aria-label="Show workspace navigator"
+            aria-controls="workspace-navigator"
+            aria-expanded="false"
+            title="Show workspace navigator"
+            onClick={toggleSidebar}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        ) : null}
         <main className="main">
           <TabBar
             key={`${resourceUiKey}:tabs`}

@@ -45,7 +45,8 @@ retain their original Herdr Web lineage.
   the version and machine controls, moved the selected-host/runtime summary into
   that bar, removed the separate Visual Control Plane header, and retained the
   Spaces workspace navigator, focused tabs and annotations as the common frame
-  around every view instead of duplicating Graph navigation.
+  around every view instead of duplicating Graph navigation. The shared workspace
+  navigator can now be hidden and restored from its stage-edge controls.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Unified selected-agent identity with the shared Inspector in Office, Tree,
   Graph and Spaces; placed Terminal first and made it the default for each new
@@ -66,6 +67,10 @@ retain their original Herdr Web lineage.
 - Routed common-navigator selections into the matching visual Inspector and made
   ordinary A-to-B selection replace the docked conversation without unexpectedly
   floating A or mixing its terminal identity with B.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Made exact pane focus an admission requirement for World Inspectors, retained
+  qualified docked and floating conversations through Spaces handoff, and raised
+  a background floating Inspector when any of its tabs or controls is used.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Bounded both Tree presentations with relevant-entity priority and exact
   omission reporting, scoped inactive-host action checks to their owning

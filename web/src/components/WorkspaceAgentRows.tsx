@@ -46,6 +46,7 @@ export function AgentRow({
   showPaneId,
   variant = "nested",
   workspaceLabel,
+  focusOnSelect = true,
   onSelect,
   onOpenMenu,
   drag,
@@ -56,6 +57,7 @@ export function AgentRow({
   showPaneId: boolean;
   variant?: "nested" | "standalone";
   workspaceLabel?: string;
+  focusOnSelect?: boolean;
   onSelect?: (pane: Pane) => void;
   onOpenMenu: (x: number, y: number) => void;
   drag?: {
@@ -124,7 +126,7 @@ export function AgentRow({
           e.stopPropagation();
           return;
         }
-        void store.focusPane(pane.pane_id);
+        if (focusOnSelect) void store.focusPane(pane.pane_id);
         onSelect?.(pane);
       }}
       onKeyDown={(event) => {
@@ -154,7 +156,7 @@ export function AgentRow({
         event.preventDefault();
         event.stopPropagation();
         if (action === "activate") {
-          void store.focusPane(pane.pane_id);
+          if (focusOnSelect) void store.focusPane(pane.pane_id);
           onSelect?.(pane);
         } else {
           const point = keyboardContextMenuPoint(event.currentTarget);

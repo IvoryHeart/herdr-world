@@ -128,10 +128,10 @@ describe("World view preference", () => {
       refresh: async () => {
         refreshCalls += 1;
       },
-      focusWorkspace: async () => {
+      focusQualifiedTarget: async () => {
         focusCalls += 1;
+        return true;
       },
-      focusTaskNotificationTarget: async () => undefined,
     };
 
     await expect(focusWorldNode(space, focusStore)).rejects.toThrow(
@@ -190,8 +190,7 @@ describe("World view preference", () => {
       refresh: async () => {
         refreshCalls += 1;
       },
-      focusWorkspace: async () => undefined,
-      focusTaskNotificationTarget: async () => undefined,
+      focusQualifiedTarget: async () => true,
     };
 
     await activateWorldNodeHost(space, focusStore);
@@ -474,7 +473,7 @@ describe("World view preference", () => {
       "host-b",
     ).spaces[0];
     let activeConnectionId = "host-b";
-    let focusOptions: unknown;
+    let focusTarget: unknown;
     const focusStore = {
       get: () => ({
         activeConnectionId,
@@ -483,17 +482,22 @@ describe("World view preference", () => {
       }),
       selectConnection: () => true,
       refresh: async () => undefined,
-      focusWorkspace: async (_workspaceId: string, options?: unknown) => {
-        focusOptions = options;
+      focusQualifiedTarget: async (target: unknown) => {
+        focusTarget = target;
         activeConnectionId = "host-a";
+        return true;
       },
-      focusTaskNotificationTarget: async () => undefined,
     };
 
     await expect(focusWorldNode(space, focusStore)).rejects.toThrow(
       "The selected host changed while it was opening",
     );
-    expect(focusOptions).toEqual({ retryOnReconnect: false });
+    expect(focusTarget).toEqual({
+      connectionId: "host-b",
+      runtimeGeneration: 7,
+      workspaceId: "shared",
+      paneId: null,
+    });
   });
 
   test("dispatches an Inspector request only for the exact selected host lease", async () => {
@@ -560,8 +564,7 @@ describe("World view preference", () => {
       }),
       selectConnection: () => true,
       refresh: async () => undefined,
-      focusWorkspace: async () => undefined,
-      focusTaskNotificationTarget: async () => undefined,
+      focusQualifiedTarget: async () => true,
     };
     const target = {
       dispatchEvent: (event: Event) => {
@@ -581,6 +584,16 @@ describe("World view preference", () => {
       originPaneId: "pane-a",
       availableViews: ["terminal", "files", "changes", "history"],
     });
+
+    await expect(
+      dispatchWorldInspectorRequest(
+        node,
+        "history",
+        { ...focusStore, focusQualifiedTarget: async () => false },
+        target,
+      ),
+    ).rejects.toThrow("The selected item could not be focused");
+    expect(requests).toHaveLength(1);
   });
 
   test("admits Inspector identity only after focus and immediately before its resource request", async () => {
@@ -627,10 +640,10 @@ describe("World view preference", () => {
       }),
       selectConnection: () => true,
       refresh: async () => undefined,
-      focusWorkspace: async () => {
+      focusQualifiedTarget: async () => {
         await focus.promise;
+        return true;
       },
-      focusTaskNotificationTarget: async () => undefined,
     };
     const opening = dispatchWorldInspectorRequest(
       node,
@@ -895,10 +908,10 @@ describe("World view preference", () => {
       }),
       selectConnection: () => true,
       refresh: async () => undefined,
-      focusWorkspace: async () => {
+      focusQualifiedTarget: async () => {
         generation = 12;
+        return true;
       },
-      focusTaskNotificationTarget: async () => undefined,
     };
     const target = {
       dispatchEvent: (event: Event) => {

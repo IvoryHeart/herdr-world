@@ -8,6 +8,7 @@
 
 /* ===== main 2-column body (sidebar | resizer | main) ===== */
 .body {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -17,9 +18,45 @@
 }
 
 .resizer {
+  position: relative;
   cursor: col-resize;
   border-radius: 4px;
   transition: background 0.15s;
+}
+
+.sidebar-visibility-toggle {
+  width: 22px;
+  height: 34px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  z-index: 25;
+}
+
+.sidebar-visibility-toggle:hover,
+.sidebar-visibility-toggle:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--panel-2);
+}
+
+.sidebar-hide {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.sidebar-show {
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  transform: translateY(-50%);
 }
 
 .resizer:hover {

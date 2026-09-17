@@ -232,12 +232,6 @@ export default function WorldFoundationApp() {
   }, [view]);
 
   const setView = (next: WorldView) => {
-    if (next === "spaces") {
-      window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
-      setInspectorConversations([]);
-      setDockedInspectorId(null);
-      setInspectorTerminalPortals({});
-    }
     setViewState(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
@@ -528,11 +522,11 @@ function WorldControlPlane({
     const next = id ? (world.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
-    setSelection(next);
     setIntentError(null);
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
     if (!next || !next.actionable || !next.selectedHost) {
+      setSelection(next);
       if (dockedInspector) {
         onInspectorConversationsChange(
           inspectorConversations.filter(
@@ -549,23 +543,33 @@ function WorldControlPlane({
       ({ nodeId }) => nodeId === next.id,
     );
     if (existing) {
-      if (requestedView && existing.availableViews.includes(requestedView)) {
-        onInspectorConversationsChange(
-          inspectorConversations.map((conversation) =>
-            conversation.nodeId === existing.nodeId
-              ? { ...conversation, view: requestedView }
-              : conversation,
-          ),
-        );
-      }
-      if (existing.nodeId !== dockedInspectorId) {
-        focusFloatingInspector(existing);
-      } else if (focusTarget) {
-        void focusWorldNode(next).catch((cause) =>
+      setIntentOpening(true);
+      try {
+        if (focusTarget) await focusWorldNode(next);
+        if (intentRequestRef.current !== requestId) return;
+        setSelection(next);
+        const admitted =
+          requestedView && existing.availableViews.includes(requestedView)
+            ? { ...existing, view: requestedView }
+            : existing;
+        if (admitted !== existing) {
+          onInspectorConversationsChange(
+            inspectorConversations.map((conversation) =>
+              conversation.nodeId === existing.nodeId ? admitted : conversation,
+            ),
+          );
+        }
+        if (existing.nodeId !== dockedInspectorId) {
+          focusFloatingInspector(admitted, false);
+        }
+      } catch (cause) {
+        if (intentRequestRef.current === requestId) {
           setIntentError(
             cause instanceof Error ? cause.message : String(cause),
-          ),
-        );
+          );
+        }
+      } finally {
+        if (intentRequestRef.current === requestId) setIntentOpening(false);
       }
       return;
     }
@@ -575,6 +579,7 @@ function WorldControlPlane({
     try {
       if (focusTarget) await focusWorldNode(next);
       if (intentRequestRef.current !== requestId) return;
+      setSelection(next);
       if (dockedInspector) {
         onInspectorTerminalPortal(dockedInspector.nodeId, null);
       }
@@ -612,7 +617,7 @@ function WorldControlPlane({
         candidate.nativeId === surfaceSelection.workspaceId
       );
     });
-    if (node) void applySelection(node.id, null, false);
+    if (node) void applySelection(node.id);
   };
   useLayoutEffect(() => {
     const handler = (surfaceSelection: WorkspaceSurfaceSelection) =>
@@ -631,6 +636,7 @@ function WorldControlPlane({
   };
 
   useEffect(() => {
+    if (!hasSelectedConnection) return;
     const retained = inspectorConversations.filter((conversation) => {
       const current = world.nodeById.get(conversation.nodeId);
       return Boolean(
@@ -653,6 +659,7 @@ function WorldControlPlane({
     }
   }, [
     dockedInspectorId,
+    hasSelectedConnection,
     inspectorConversations,
     onDockedInspectorIdChange,
     onInspectorConversationsChange,
@@ -728,7 +735,10 @@ function WorldControlPlane({
     if (selected?.id === conversation.nodeId) setSelection(null);
   };
 
-  const focusFloatingInspector = (conversation: WorldInspectorConversation) => {
+  const focusFloatingInspector = (
+    conversation: WorldInspectorConversation,
+    focusTarget = true,
+  ) => {
     if (
       floatingInspectors[floatingInspectors.length - 1]?.nodeId !==
       conversation.nodeId
@@ -743,7 +753,8 @@ function WorldControlPlane({
     const target = world.nodeById.get(conversation.nodeId);
     if (!target) return;
     setSelection(target);
-    void focusWorldNode(target)
+    const focused = focusTarget ? focusWorldNode(target) : Promise.resolve();
+    void focused
       .then(() => {
         requestAnimationFrame(() => {
           floatingInspectorPortals[conversation.nodeId]
@@ -1076,16 +1087,12 @@ type WorldFocusStore = {
   };
   selectConnection(connectionId: string): boolean;
   refresh(): Promise<unknown>;
-  focusWorkspace(
-    workspaceId: string,
-    options?: { retryOnReconnect?: boolean },
-  ): Promise<unknown>;
-  focusTaskNotificationTarget(target: {
+  focusQualifiedTarget(target: {
     connectionId: string;
     runtimeGeneration: number;
     workspaceId: string;
-    paneId: string;
-  }): Promise<unknown>;
+    paneId: string | null;
+  }): Promise<boolean>;
 };
 
 type WorldEventTarget = Pick<EventTarget, "dispatchEvent">;
@@ -1169,26 +1176,20 @@ export async function focusWorldNode(
   ) {
     throw new Error("The selected host generation is no longer available");
   }
-  if (target.paneId) {
-    await focusStore.focusTaskNotificationTarget({
-      connectionId: node.connectionId,
-      runtimeGeneration: node.generation,
-      workspaceId: target.workspaceId,
-      paneId: target.paneId,
-    });
-    if (!worldNodeLeaseIsActive(node, focusStore)) {
-      throw new Error("The selected host changed while it was opening");
-    }
-  } else {
-    if (!worldNodeLeaseIsActive(node, focusStore)) {
-      throw new Error("The selected host changed while it was opening");
-    }
-    await focusStore.focusWorkspace(target.workspaceId, {
-      retryOnReconnect: false,
-    });
-    if (!worldNodeLeaseIsActive(node, focusStore)) {
-      throw new Error("The selected host changed while it was opening");
-    }
+  if (!worldNodeLeaseIsActive(node, focusStore)) {
+    throw new Error("The selected host changed while it was opening");
+  }
+  const focused = await focusStore.focusQualifiedTarget({
+    connectionId: node.connectionId,
+    runtimeGeneration: node.generation,
+    workspaceId: target.workspaceId,
+    paneId: target.paneId,
+  });
+  if (!focused) {
+    throw new Error("The selected item could not be focused");
+  }
+  if (!worldNodeLeaseIsActive(node, focusStore)) {
+    throw new Error("The selected host changed while it was opening");
   }
 }
 
