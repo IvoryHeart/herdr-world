@@ -197,7 +197,7 @@ overflow on the application page.
   that omitted entities were removed from Herdr
 
 ### Requirement: Shared entity detail drawer
-Office, Tree and Graph SHALL provide one consistent selected-entity intent overlay without creating
+Office, Tree and Graph SHALL provide one consistent selected-entity Inspector overlay without creating
 a second Inspector, terminal owner or runtime store. Selecting an agent SHALL open the overlay over
 the visual stage without resizing, relaying out or otherwise taking workspace from that stage. The
 overlay SHALL identify the selected agent with a compact icon, name and bounded status or
@@ -217,33 +217,38 @@ host detail and activation state without inventing workspace resources.
 
 The overlay SHALL expose generation-fenced resources only for the selected operational host. A
 ready-inactive or stale entity SHALL retain a bounded read-only identity and an explicit Activate
-host control without opening live resources. Missing metadata SHALL remain absent rather than being
+host control outside the Inspector without opening live resources. An actionable entity SHALL NOT
+retain a second floating profile card while its Inspector is open or after the Inspector closes.
+Missing metadata SHALL remain absent rather than being
 inferred. Authoritative cost, input-token, output-token or similar observations MAY appear in the
 compact identity area only when the provider qualifies them to that exact agent session; unavailable
 or merely host-wide observations SHALL not be shown as agent values or fabricated as zero.
 
-At most one intent/Inspector context SHALL be focused at a time. Files, Changes and Agent History
+At most one Inspector context SHALL be focused at a time. Files, Changes and Agent History
 SHALL reuse the shell's existing components and state while the visual view remains visible. The
-intent overlay SHALL remain visually connected to the represented agent whenever that agent has a
+Inspector overlay SHALL remain visually connected to the represented agent whenever that agent has a
 visible scene anchor. Switching selected entities SHALL not change the selected host, clone an
-Inspector or retain an inactive host's resources. Explicit host activation SHALL retire the
+Inspector or retain an inactive host's resources. World SHALL retire the prior entity identity and
+resource presentation before asynchronously focusing a replacement, then publish the replacement
+identity and resource request as one admitted transition; a delayed or rejected focus SHALL never
+show the new identity over the prior entity's resources. Explicit host activation SHALL retire the
 outgoing Inspector and terminal contexts through the existing connection lifecycle.
 
-#### Scenario: Open a terminal-capable intent
+#### Scenario: Open a terminal-capable Inspector
 - **WHEN** the user selects an actionable agent or non-agent terminal pane without a retained
   applicable tab preference
-- **THEN** the intent overlay opens Terminal as its initial resource while keeping Files, Changes
+- **THEN** the Inspector overlay opens Terminal as its initial resource while keeping Files, Changes
   and any admitted Agent History available as peer tabs
 
-#### Scenario: Reposition a selected-agent intent
-- **WHEN** the user docks the selected-agent intent at the side or bottom, expands it or restores it
+#### Scenario: Reposition a selected-agent Inspector
+- **WHEN** the user docks the selected-agent Inspector at the side or bottom, expands it or restores it
 - **THEN** the compact identity, resource tabs, dock/expand actions and its single close control
   remain reachable within the same overlay
 
 #### Scenario: Inspect an agent with a task summary
 - **WHEN** the user selects an admitted agent with a visible scene representation and bounded task
   summary
-- **THEN** the intent overlay opens over the unchanged visual stage, shows compact qualified agent
+- **THEN** the Inspector overlay opens over the unchanged visual stage, shows compact qualified agent
   identity, exposes its resource tabs and task summary within the relevant intent content, and draws
   a connector to that agent
 
@@ -268,6 +273,11 @@ outgoing Inspector and terminal contexts through the existing connection lifecyc
 - **WHEN** a user selects a current agent on a ready-inactive host
 - **THEN** the detail context remains available, identifies the inactive host and offers explicit
   host activation without opening terminal or Inspector resources
+
+#### Scenario: Change selection while focus is delayed or rejected
+- **WHEN** entity A owns the Inspector and selecting entity B requires asynchronous pane focus
+- **THEN** World first retires A's identity and resources, publishes B's identity only with B's
+  admitted resource request, and leaves the Inspector closed if focus is rejected
 
 #### Scenario: Selected entity becomes stale
 - **WHEN** the selected entity's host disconnects or advances beyond the observed generation
@@ -455,7 +465,7 @@ it SHALL NOT carry or synchronize a second terminal implementation from Herdr We
 conversation/window code MAY provide presentation around that terminal without owning transport.
 
 An Office desk click SHALL directly open or focus that desk's terminal as a floating conversation,
-preserving the established Office interaction. The selected-agent intent overlay SHALL also expose
+preserving the established Office interaction. The selected-agent Inspector overlay SHALL also expose
 Terminal as one of the agent's tools. A terminal MAY be docked in that overlay or popped out into a
 floating conversation, but the same qualified terminal SHALL have exactly one live presentation at
 a time; docking and popping out SHALL explicitly hand off the existing attachment rather than mount
@@ -467,17 +477,20 @@ the replacement overlay context. This automatic handoff SHALL preserve the quali
 session and count it as the same bounded conversation; it SHALL never leave the outgoing and new
 overlay contexts attached concurrently.
 
-Popping a terminal out SHALL be an explicit Terminal-toolbar action. Closing the selected-entity
-profile SHALL close its docked presentation and SHALL NOT silently create a floating conversation.
-The floating conversation header SHALL expose the inverse Dock in profile action.
+Opening a terminal window SHALL be an explicit Terminal-toolbar action. Closing the selected-entity
+Inspector SHALL close its docked presentation and SHALL NOT silently create a floating conversation.
+The floating conversation header SHALL expose the inverse Dock in Inspector action. The Inspector
+SHALL NOT expose a second Open in Spaces shortcut; Spaces remains available through the primary
+view selector without changing terminal identity or attaching another session.
 
-Desktop SHALL support up to five distinct conversations with independent bounded position, size,
+Desktop SHALL support up to five distinct conversations alongside the one Inspector, with
+independent bounded position, size,
 z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,
 refit to their real dimensions and retain usable input, selection, scrolling, uploads and mobile
 controls. Compact layouts SHALL present one active usable conversation. Spatial views SHALL connect
 each floating terminal window to its represented desk, agent or node and SHALL separately connect
-the intent overlay to its represented agent. These connectors are presentation relationships: the
-terminal window is a view of the agent's shell tool, while the intent overlay is a view of the
+the Inspector overlay to its represented agent. These connectors are presentation relationships: the
+terminal window is a view of the agent's shell tool, while the Inspector overlay is a view of the
 agent itself. They SHALL track their qualified anchors when either endpoint moves and SHALL never
 imply a different runtime ancestry or terminal identity.
 
@@ -503,9 +516,9 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 - **THEN** World directly opens or focuses its floating qualified terminal conversation and draws
   a connector to the represented desk or agent
 
-#### Scenario: Move a terminal between agent and floating presentations
-- **WHEN** a user docks a floating terminal in the selected agent's Terminal tab or pops that tab
-  out as a conversation window
+#### Scenario: Move a terminal between Inspector and floating presentations
+- **WHEN** a user docks a floating terminal in the selected agent's Terminal tab or opens that tab
+  as a conversation window
 - **THEN** World moves the one live terminal presentation, preserves its qualified session and
   input ownership, and never leaves a duplicate attachment in the previous target
 
@@ -521,9 +534,10 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
   attach a second terminal view for that identity
 
 #### Scenario: Move between visual views and Spaces
-- **WHEN** a live conversation exists and the user changes World views or chooses Open in Spaces
+- **WHEN** a live conversation exists and the user changes World views, including selecting Spaces
+  through the primary view selector
 - **THEN** terminal identity and session ownership remain stable, view-local geometry is preserved
-  where applicable and Spaces receives focus without reattaching another session
+  where applicable and Spaces does not reattach another session
 
 #### Scenario: Explicitly switch hosts with conversations open
 - **WHEN** a user explicitly activates another host while one or more conversations are open
@@ -551,6 +565,10 @@ relationships. Tree SHALL support search with complete ancestor context, indepen
 disclosure, selection, the shared entity context and qualified actions. The connected presentation
 currently used by the foundation checkpoint's Graph view SHALL become Tree; an indented list SHALL
 serve only as an equivalent compact or assistive presentation rather than the primary desktop view.
+Tree SHALL bound presentation to 128 hosts, 128 spaces globally and 16 leaves per presented space,
+using the same relevance priority as Graph. Both its connected and semantic presentations SHALL
+consume that one bounded projection and report exact omitted host, space and leaf counts globally
+and at the affected branch; search SHALL operate only over the honestly presented projection.
 
 #### Scenario: Scan an unequal multi-host hierarchy
 - **WHEN** hosts contain different numbers of spaces and leaves
@@ -566,6 +584,11 @@ serve only as an equivalent compact or assistive presentation rather than the pr
 - **WHEN** a keyboard, screen-reader or compact-layout user operates Tree
 - **THEN** the equivalent semantic hierarchy exposes the same selection, task summary, stale state
   and guarded actions
+
+#### Scenario: Tree exceeds its presentation capacity
+- **WHEN** a dense unequal hierarchy exceeds Tree's host, global-space or per-space leaf bounds
+- **THEN** Tree prioritizes selected, focused and attention-requiring entities, renders neither
+  presentation outside the shared bounds, and reports exact global and affected-branch omissions
 
 ### Requirement: Spatial Graph presentation
 Graph SHALL restore the interactive spatial canvas over the qualified host-space-agent-or-terminal

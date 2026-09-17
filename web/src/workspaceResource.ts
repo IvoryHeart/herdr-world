@@ -13,7 +13,6 @@ export interface WorkspaceInspectorContext {
   locationLabel: string;
   agent?: string;
   taskSummary?: string;
-  canOpenSpaces?: boolean;
 }
 const DEFAULT_INSPECTOR_VIEWS: readonly InspectorView[] = [
   "files",

@@ -55,6 +55,15 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
+- Prevented floating-terminal portal publication from entering a React render
+  loop, made Inspector identity/resource handoff atomic, removed the duplicate
+  actionable-agent card and redundant Open-in-Spaces control, and kept World
+  settings visible above Office, Tree and Graph.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Bounded both Tree presentations with relevant-entity priority and exact
+  omission reporting, scoped inactive-host action checks to their owning
+  branches, and removed the Office metrics browser-test timeout race.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Enforced automatic same-authority browser admission across privileged HTTP and
   WebSocket traffic with an exact loopback-proxy origin, isolated World's login
   cookie, fenced cross-host World handoffs and all hidden-view actions, made

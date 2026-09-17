@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import App from "../App";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
@@ -15,6 +16,8 @@ import { shallowEqual, store, useStoreSelector } from "../store";
 import {
   type InspectorView,
   type WorkspaceInspectorContext,
+  WORLD_OBSERVABILITY_SETTINGS_EVENT,
+  WORLD_OBSERVABILITY_UPDATED_EVENT,
   WORLD_TERMINAL_POP_OUT_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
@@ -55,6 +58,11 @@ const WorldViewErrorBoundary = lazy(() =>
 );
 const WorldFloatingTerminalWindow = lazy(
   () => import("./WorldFloatingTerminal"),
+);
+const OfficeObservabilityDialog = lazy(() =>
+  import("./PixelOfficeView").then((module) => ({
+    default: module.OfficeObservabilityDialog,
+  })),
 );
 
 export type WorldView = "spaces" | "office" | "tree" | "graph";
@@ -117,7 +125,6 @@ export function worldInspectorContext(
       : node.hostLabel,
     ...(leaf?.kind === "agent" ? { agent: leaf.pane.agent } : {}),
     ...(leaf?.taskSummary ? { taskSummary: leaf.taskSummary } : {}),
-    ...(node.capabilities.openSpaces ? { canOpenSpaces: true } : {}),
   };
 }
 
@@ -153,6 +160,7 @@ export default function WorldFoundationApp() {
   const [floatingTerminalPortals, setFloatingTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
+  const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
   const activeConversationLease = useStoreSelector(
     (snapshot) => ({
       connectionId: snapshot.activeConnectionId,
@@ -184,6 +192,13 @@ export default function WorldFoundationApp() {
   useEffect(() => {
     worldRuntimeStore.start();
     return () => worldRuntimeStore.stop();
+  }, []);
+
+  useEffect(() => {
+    const open = () => setOfficeMetricsOpen(true);
+    window.addEventListener(WORLD_OBSERVABILITY_SETTINGS_EVENT, open);
+    return () =>
+      window.removeEventListener(WORLD_OBSERVABILITY_SETTINGS_EVENT, open);
   }, []);
 
   useEffect(() => {
@@ -258,14 +273,6 @@ export default function WorldFoundationApp() {
             view === "spaces" ? undefined : setInspectorView
           }
           inspectorContext={view === "spaces" ? null : inspectorContext}
-          onInspectorOpenSpaces={
-            view === "spaces"
-              ? undefined
-              : () =>
-                  window.dispatchEvent(
-                    new Event("herdr-world:open-selection-in-spaces"),
-                  )
-          }
         />
       </div>
       {view !== "spaces" ? (
@@ -284,10 +291,24 @@ export default function WorldFoundationApp() {
               [nodeId]: portal,
             }))
           }
-          onOpenSpaces={() => setView("spaces")}
           onInspectorContextChange={setInspectorContext}
         />
       ) : null}
+      {officeMetricsOpen
+        ? createPortal(
+            <Suspense fallback={null}>
+              <OfficeObservabilityDialog
+                onClose={() => setOfficeMetricsOpen(false)}
+                onSaved={() =>
+                  window.dispatchEvent(
+                    new Event(WORLD_OBSERVABILITY_UPDATED_EVENT),
+                  )
+                }
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -302,7 +323,6 @@ function WorldControlPlane({
   onInspectorViewOpening,
   onFloatingTerminalsChange,
   onFloatingTerminalPortal,
-  onOpenSpaces,
   onInspectorContextChange,
 }: {
   view: Exclude<WorldView, "spaces">;
@@ -317,7 +337,6 @@ function WorldControlPlane({
     nodeId: string,
     element: HTMLDivElement | null,
   ): void;
-  onOpenSpaces: () => void;
   onInspectorContextChange(context: WorkspaceInspectorContext | null): void;
 }) {
   const runtime = useWorldRuntime();
@@ -432,37 +451,11 @@ function WorldControlPlane({
     () => floatingTerminals.map(({ nodeId }) => nodeId),
     [floatingTerminals],
   );
-  const selectedInspectorContext = useMemo(
-    () => (selected ? worldInspectorContext(selected) : null),
-    [selected],
+  useEffect(
+    () => () => onInspectorContextChange(null),
+    [onInspectorContextChange],
   );
 
-  useLayoutEffect(() => {
-    onInspectorContextChange(selectedInspectorContext);
-    return () => onInspectorContextChange(null);
-  }, [onInspectorContextChange, selectedInspectorContext]);
-
-  useEffect(() => {
-    const openSelectionInSpaces = () => {
-      if (!selected?.capabilities.openSpaces) return;
-      void focusWorldNode(selected)
-        .then(onOpenSpaces)
-        .catch((cause) => {
-          setIntentError(
-            cause instanceof Error ? cause.message : String(cause),
-          );
-        });
-    };
-    window.addEventListener(
-      "herdr-world:open-selection-in-spaces",
-      openSelectionInSpaces,
-    );
-    return () =>
-      window.removeEventListener(
-        "herdr-world:open-selection-in-spaces",
-        openSelectionInSpaces,
-      );
-  }, [onOpenSpaces, selected]);
   const applySelection = (
     id: string | null,
     requestedView: InspectorView | null = null,
@@ -470,6 +463,8 @@ function WorldControlPlane({
     const next = id ? (world.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
+    onInspectorContextChange(null);
+    window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
     setSelection(next);
     setIntentError(null);
     setSelectedVisualAnchor(null);
@@ -479,7 +474,6 @@ function WorldControlPlane({
       : null;
     if (!next || !next.actionable || !next.selectedHost || !intentView) {
       setIntentOpening(false);
-      window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
       return;
     }
     onInspectorViewOpening(intentView);
@@ -490,7 +484,16 @@ function WorldControlPlane({
         return window.dispatchEvent(event);
       },
     };
-    void dispatchWorldInspectorRequest(next, intentView, store, guardedTarget)
+    void dispatchWorldInspectorRequest(
+      next,
+      intentView,
+      store,
+      guardedTarget,
+      () => {
+        if (intentRequestRef.current !== requestId) return;
+        onInspectorContextChange(worldInspectorContext(next));
+      },
+    )
       .catch((cause) => {
         if (intentRequestRef.current !== requestId) return;
         setIntentError(cause instanceof Error ? cause.message : String(cause));
@@ -544,6 +547,7 @@ function WorldControlPlane({
     setIntentOpening(false);
     setIntentError(null);
     setSelection(null);
+    onInspectorContextChange(null);
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
     window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
@@ -678,9 +682,10 @@ function WorldControlPlane({
     ) {
       intentRequestRef.current += 1;
       setIntentOpening(false);
+      onInspectorContextChange(null);
       window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
     }
-  }, [currentSelectionGeneration, selected]);
+  }, [currentSelectionGeneration, onInspectorContextChange, selected]);
 
   useEffect(() => {
     const rail = contextRailRef.current;
@@ -705,6 +710,13 @@ function WorldControlPlane({
     };
   }, [inspectorOpen, selected, view]);
 
+  const showSelectionProfile = Boolean(
+    selected &&
+      (selected.kind === "host" ||
+        !currentSelectionGeneration ||
+        !selected.actionable),
+  );
+
   return (
     <main className="world-control-plane" id="world">
       <WorldStatusHeader
@@ -723,7 +735,7 @@ function WorldControlPlane({
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
-          className={`world-view-layout ${selected || inspectorOpen ? "has-context" : ""}`}
+          className={`world-view-layout ${showSelectionProfile || inspectorOpen ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
             <Suspense
@@ -778,7 +790,8 @@ function WorldControlPlane({
               </WorldViewErrorBoundary>
             </Suspense>
           </section>
-          {selected?.kind === "agent" &&
+          {inspectorOpen &&
+          selected?.kind === "agent" &&
           selectedVisualAnchor?.visible &&
           intentOverlayAnchor ? (
             <Suspense fallback={null}>
@@ -802,7 +815,7 @@ function WorldControlPlane({
             className={`world-context-rail ${inspectorOpen ? "has-inspector" : ""}`}
             aria-label="World context"
           >
-            {selected ? (
+            {selected && showSelectionProfile ? (
               <Suspense
                 fallback={
                   <div className="world-selection-panel" role="status">
@@ -824,12 +837,13 @@ function WorldControlPlane({
                     await activateWorldNodeHost(selected);
                   }}
                   onClose={closeIntent}
-                  onOpenSpaces={async () => {
-                    await focusWorldNode(selected);
-                    onOpenSpaces();
-                  }}
                 />
               </Suspense>
+            ) : null}
+            {!showSelectionProfile && intentError ? (
+              <p className="world-panel-error" role="alert">
+                {intentError}
+              </p>
             ) : null}
             <div className="world-inspector-portal" ref={onInspectorPortal} />
           </aside>
@@ -954,6 +968,7 @@ export async function dispatchWorldInspectorRequest(
   view: InspectorView,
   focusStore: WorldFocusStore = store,
   eventTarget: WorldEventTarget = window,
+  onAdmitted: () => void = () => {},
 ) {
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
@@ -972,6 +987,7 @@ export async function dispatchWorldInspectorRequest(
   ) {
     throw new Error("The browser connection changed while it was opening");
   }
+  onAdmitted();
   eventTarget.dispatchEvent(
     new CustomEvent<WorkspaceInspectorRequest>(
       WORKSPACE_INSPECTOR_REQUEST_EVENT,

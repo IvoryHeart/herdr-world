@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -53,7 +54,12 @@ export default function WorldFloatingTerminalWindow({
   const windowRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<Interaction | null>(null);
   const onAnchorChangeRef = useRef(onAnchorChange);
+  const onPortalChangeRef = useRef(onPortalChange);
   onAnchorChangeRef.current = onAnchorChange;
+  onPortalChangeRef.current = onPortalChange;
+  const setPortalRef = useCallback((element: HTMLDivElement | null) => {
+    onPortalChangeRef.current(element);
+  }, []);
   const geometryId = floatingTerminalGeometryId(conversation);
   const [interaction, setInteraction] = useState<Interaction["mode"] | null>(
     null,
@@ -244,8 +250,8 @@ export default function WorldFloatingTerminalWindow({
           <button
             type="button"
             onClick={onDock}
-            title="Dock terminal in profile"
-            aria-label="Dock terminal in profile"
+            title="Dock terminal in Inspector"
+            aria-label="Dock terminal in Inspector"
           >
             <PanelRightClose size={15} />
           </button>
@@ -259,7 +265,7 @@ export default function WorldFloatingTerminalWindow({
           </button>
         </div>
       </header>
-      <div ref={onPortalChange} className="world-floating-terminal-portal" />
+      <div ref={setPortalRef} className="world-floating-terminal-portal" />
       <button
         type="button"
         className="world-floating-terminal-resize"

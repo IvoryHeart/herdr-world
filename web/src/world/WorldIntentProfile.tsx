@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, X } from "lucide-react";
+import { X } from "lucide-react";
 import { AgentIcon } from "../components/AgentIcon";
 import type { WorldObjectNode } from "./worldObject";
 
@@ -11,7 +11,6 @@ export default function WorldIntentProfile({
   resourceError,
   onActivateHost,
   onClose,
-  onOpenSpaces,
 }: {
   node: WorldObjectNode;
   currentGeneration: boolean;
@@ -20,12 +19,10 @@ export default function WorldIntentProfile({
   resourceError: string | null;
   onActivateHost(): Promise<void>;
   onClose(): void;
-  onOpenSpaces(): Promise<void>;
 }) {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
-  const hasWorkspace = node.kind !== "host";
   const disabled = !currentGeneration || working;
   const stateLabel = !currentGeneration
     ? "Stale"
@@ -80,17 +77,6 @@ export default function WorldIntentProfile({
           </p>
         </div>
         <div className="world-intent-header-actions">
-          {hasWorkspace && currentGeneration && node.capabilities.openSpaces ? (
-            <button
-              type="button"
-              disabled={disabled}
-              title="Open in Spaces"
-              aria-label="Open in Spaces"
-              onClick={() => void run(onOpenSpaces)}
-            >
-              <ExternalLink size={15} />
-            </button>
-          ) : null}
           <button
             className="world-panel-close"
             type="button"
@@ -131,11 +117,6 @@ export default function WorldIntentProfile({
       {intentOpening ? (
         <p className="world-intent-loading" role="status">
           Opening intent…
-        </p>
-      ) : null}
-      {!intentOpening && hasWorkspace && node.actionable && !inspectorOpen ? (
-        <p className="world-intent-loading" role="status">
-          Resource view closed. Select this entity again to reopen it.
         </p>
       ) : null}
       {error || resourceError ? (

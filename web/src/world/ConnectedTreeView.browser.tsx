@@ -120,6 +120,9 @@ async function run() {
   const inactiveTerminal = world.leaves.find(
     (node) => node.connectionId === "remote" && node.kind === "terminal",
   )!;
+  const inactiveHost = world.hosts.find(
+    (node) => node.connectionId === "remote",
+  )!;
   const worldHost = world.hosts[0]!;
   let terminalOpens = 0;
   let selectedAnchor = false;
@@ -187,10 +190,17 @@ async function run() {
       hasAnchor(activePresentation, inactiveTerminal.id),
       "Tree omitted the inactive host's read-only hierarchy",
     );
+    const inactiveBranch = [
+      ...activePresentation.querySelectorAll<HTMLElement>(
+        "[data-tree-host-id]",
+      ),
+    ].find((element) => element.dataset.treeHostId === inactiveHost.id);
     check(
-      activePresentation.querySelectorAll(
-        `[aria-label="Open ${inactiveTerminal.label} terminal"]`,
-      ).length === 1,
+      inactiveBranch !== undefined,
+      "Tree omitted the inactive host branch",
+    );
+    check(
+      inactiveBranch?.querySelectorAll("[aria-label^='Open ']").length === 0,
       "Tree exposed an inactive-host terminal action",
     );
     const hostToggle = activePresentation.querySelector<HTMLButtonElement>(

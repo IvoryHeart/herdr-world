@@ -11,12 +11,13 @@ import { worldLocalStorage } from "../browserStorage";
 import { AgentIcon } from "../components/AgentIcon";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import { readTreePreferences, writeTreePreferences } from "./treePreferences";
-import type {
-  WorldHostObject,
-  WorldObject,
-  WorldObjectNode,
-  WorldSpaceObject,
-} from "./worldObject";
+import {
+  projectWorldTree,
+  type WorldTreeHost,
+  type WorldTreeProjection,
+  type WorldTreeSpace,
+} from "./treeProjection";
+import type { WorldObject, WorldObjectNode } from "./worldObject";
 
 export type WorldNodeAnchors = Record<string, OfficeCanvasAnchor>;
 
@@ -42,14 +43,15 @@ export default function ConnectedTreeView({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(readTreePreferences(worldLocalStorage).collapsedIds),
   );
+  const projection = useMemo(() => projectWorldTree(world), [world]);
   const matches = useMemo(
-    () => connectedTreeMatches(world, query),
-    [query, world],
+    () => connectedTreeMatches(projection, query),
+    [projection, query],
   );
   const searchActive = matches !== null;
   const visibleHosts = searchActive
-    ? world.hosts.filter((host) => matches.has(host.id))
-    : world.hosts;
+    ? projection.hosts.filter((host) => matches.has(host.source.id))
+    : projection.hosts;
 
   useEffect(() => {
     writeTreePreferences(worldLocalStorage, { collapsedIds: [...collapsed] });
@@ -148,6 +150,15 @@ export default function ConnectedTreeView({
             : "No Tree matches"
           : `${visibleHosts.length} host branches`}
       </p>
+      {projection.omittedHostCount ||
+      projection.omittedSpaceCount ||
+      projection.coverage.omittedLeaves ? (
+        <p className="world-tree-overflow-summary" aria-live="polite">
+          Presentation bounds omit {projection.omittedHostCount} hosts,{" "}
+          {projection.omittedSpaceCount} spaces, and{" "}
+          {projection.coverage.omittedLeaves} leaves.
+        </p>
+      ) : null}
       {visibleHosts.length ? (
         <>
           <div
@@ -157,7 +168,7 @@ export default function ConnectedTreeView({
           >
             {visibleHosts.map((host) => (
               <VisualHost
-                key={host.id}
+                key={host.source.id}
                 host={host}
                 matches={matches}
                 searchActive={searchActive}
@@ -175,7 +186,7 @@ export default function ConnectedTreeView({
           >
             {visibleHosts.map((host) => (
               <SemanticHost
-                key={host.id}
+                key={host.source.id}
                 host={host}
                 matches={matches}
                 searchActive={searchActive}
@@ -207,25 +218,30 @@ type BranchProps = {
   onOpenTerminal(id: string): void;
 };
 
-function VisualHost({
-  host,
-  ...props
-}: { host: WorldHostObject } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(host.id);
+function VisualHost({ host, ...props }: { host: WorldTreeHost } & BranchProps) {
+  const expanded = props.searchActive || !props.collapsed.has(host.source.id);
   const spaces = shownSpaces(host, props.matches);
   return (
     <section
       className="world-connected-tree-host"
       role="treeitem"
       aria-expanded={expanded}
-      data-has-children={expanded && spaces.length > 0}
+      data-tree-host-id={host.source.id}
+      data-has-children={
+        expanded && (spaces.length > 0 || host.omittedSpaceCount > 0)
+      }
     >
-      <TreeCard node={host} expanded={expanded} {...props} />
-      {expanded && spaces.length ? (
+      <TreeCard node={host.source} expanded={expanded} {...props} />
+      {expanded && (spaces.length > 0 || host.omittedSpaceCount > 0) ? (
         <div className="world-connected-tree-spaces" role="group">
           {spaces.map((space) => (
-            <VisualSpace key={space.id} space={space} {...props} />
+            <VisualSpace key={space.source.id} space={space} {...props} />
           ))}
+          {host.omittedSpaceCount ? (
+            <p className="world-connected-tree-overflow">
+              +{host.omittedSpaceCount} omitted spaces
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -235,22 +251,29 @@ function VisualHost({
 function VisualSpace({
   space,
   ...props
-}: { space: WorldSpaceObject } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(space.id);
+}: { space: WorldTreeSpace } & BranchProps) {
+  const expanded = props.searchActive || !props.collapsed.has(space.source.id);
   const leaves = shownLeaves(space, props.matches);
   return (
     <section
       className="world-connected-tree-space"
       role="treeitem"
       aria-expanded={expanded}
-      data-has-children={expanded && leaves.length > 0}
+      data-has-children={
+        expanded && (leaves.length > 0 || space.omittedChildCount > 0)
+      }
     >
-      <TreeCard node={space} expanded={expanded} {...props} />
-      {expanded && leaves.length ? (
+      <TreeCard node={space.source} expanded={expanded} {...props} />
+      {expanded && (leaves.length > 0 || space.omittedChildCount > 0) ? (
         <div className="world-connected-tree-leaves" role="group">
           {leaves.map((leaf) => (
             <TreeCard key={leaf.id} node={leaf} {...props} />
           ))}
+          {space.omittedChildCount ? (
+            <p className="world-connected-tree-overflow">
+              +{space.omittedChildCount} omitted leaves
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -326,16 +349,21 @@ function TreeCard({
 function SemanticHost({
   host,
   ...props
-}: { host: WorldHostObject } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(host.id);
+}: { host: WorldTreeHost } & BranchProps) {
+  const expanded = props.searchActive || !props.collapsed.has(host.source.id);
   return (
-    <li>
-      <SemanticNode node={host} expanded={expanded} {...props} />
+    <li data-tree-host-id={host.source.id}>
+      <SemanticNode node={host.source} expanded={expanded} {...props} />
       {expanded ? (
         <ul>
           {shownSpaces(host, props.matches).map((space) => (
-            <SemanticSpace key={space.id} space={space} {...props} />
+            <SemanticSpace key={space.source.id} space={space} {...props} />
           ))}
+          {host.omittedSpaceCount ? (
+            <li className="is-overflow">
+              +{host.omittedSpaceCount} omitted spaces
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </li>
@@ -345,11 +373,11 @@ function SemanticHost({
 function SemanticSpace({
   space,
   ...props
-}: { space: WorldSpaceObject } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(space.id);
+}: { space: WorldTreeSpace } & BranchProps) {
+  const expanded = props.searchActive || !props.collapsed.has(space.source.id);
   return (
     <li>
-      <SemanticNode node={space} expanded={expanded} {...props} />
+      <SemanticNode node={space.source} expanded={expanded} {...props} />
       {expanded ? (
         <ul>
           {shownLeaves(space, props.matches).map((leaf) => (
@@ -357,6 +385,11 @@ function SemanticSpace({
               <SemanticNode node={leaf} {...props} />
             </li>
           ))}
+          {space.omittedChildCount ? (
+            <li className="is-overflow">
+              +{space.omittedChildCount} omitted leaves
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </li>
@@ -419,25 +452,28 @@ function SemanticNode({
   );
 }
 
-export function connectedTreeMatches(world: WorldObject, rawQuery: string) {
+export function connectedTreeMatches(
+  projection: WorldTreeProjection,
+  rawQuery: string,
+) {
   const query = rawQuery.trim().toLocaleLowerCase();
   if (!query) return null;
   const matches = new Set<string>();
-  for (const host of world.hosts) {
-    if (nodeSearchText(host).includes(query)) {
+  for (const host of projection.hosts) {
+    if (nodeSearchText(host.source).includes(query)) {
       addHost(matches, host);
       continue;
     }
     for (const space of host.spaces) {
-      if (nodeSearchText(space).includes(query)) {
-        matches.add(host.id);
+      if (nodeSearchText(space.source).includes(query)) {
+        matches.add(host.source.id);
         addSpace(matches, space);
         continue;
       }
       for (const leaf of space.children) {
         if (nodeSearchText(leaf).includes(query)) {
-          matches.add(host.id);
-          matches.add(space.id);
+          matches.add(host.source.id);
+          matches.add(space.source.id);
           matches.add(leaf.id);
         }
       }
@@ -446,27 +482,24 @@ export function connectedTreeMatches(world: WorldObject, rawQuery: string) {
   return matches;
 }
 
-function addHost(matches: Set<string>, host: WorldHostObject) {
-  matches.add(host.id);
+function addHost(matches: Set<string>, host: WorldTreeHost) {
+  matches.add(host.source.id);
   for (const space of host.spaces) addSpace(matches, space);
 }
 
-function addSpace(matches: Set<string>, space: WorldSpaceObject) {
-  matches.add(space.id);
+function addSpace(matches: Set<string>, space: WorldTreeSpace) {
+  matches.add(space.source.id);
   for (const leaf of space.children) matches.add(leaf.id);
 }
 
-function shownSpaces(
-  host: WorldHostObject,
-  matches: ReadonlySet<string> | null,
-) {
+function shownSpaces(host: WorldTreeHost, matches: ReadonlySet<string> | null) {
   return matches
-    ? host.spaces.filter((space) => matches.has(space.id))
+    ? host.spaces.filter((space) => matches.has(space.source.id))
     : host.spaces;
 }
 
 function shownLeaves(
-  space: WorldSpaceObject,
+  space: WorldTreeSpace,
   matches: ReadonlySet<string> | null,
 ) {
   return matches

@@ -140,8 +140,8 @@ async function run() {
   const terminal = initialWorld.leaves.find(
     (node) => node.connectionId === "local" && node.kind === "terminal",
   )!;
-  const inactiveTerminal = initialWorld.leaves.find(
-    (node) => node.connectionId === "remote" && node.kind === "terminal",
+  const inactiveHost = initialWorld.hosts.find(
+    (node) => node.connectionId === "remote",
   )!;
   const localHost = initialWorld.hosts.find(
     ({ connectionId }) => connectionId === "local",
@@ -204,11 +204,18 @@ async function run() {
     const outline = host.querySelector<HTMLElement>(
       ".world-spatial-graph-outline",
     )!;
-    const activeTerminalActions = outline.querySelectorAll(
-      `[aria-label="Open ${inactiveTerminal.label} terminal"]`,
+    const inactiveBranch = [
+      ...outline.querySelectorAll<HTMLElement>("[data-graph-host-id]"),
+    ].find((element) => element.dataset.graphHostId === inactiveHost.id);
+    check(
+      inactiveBranch !== undefined,
+      "Graph omitted the inactive host branch",
+    );
+    const activeTerminalActions = inactiveBranch?.querySelectorAll(
+      "[aria-label^='Open ']",
     );
     check(
-      activeTerminalActions.length === 1,
+      activeTerminalActions?.length === 0,
       "Graph exposed an inactive-host terminal action",
     );
     check(

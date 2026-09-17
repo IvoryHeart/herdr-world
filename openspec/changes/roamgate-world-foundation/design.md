@@ -158,13 +158,13 @@ containment, natural row packing, alignment, logical-canvas scrolling and render
 The World shell may change the available viewport, but it does not replace those layout invariants
 with a generic responsive CSS grid.
 
-### Present one focused Inspector as an agent intent overlay
+### Present one focused Inspector as the selected-entity overlay
 
 Visual-view selection is observational. Office proves the seam first: selecting an agent opens a
 right-edge floating overlay above the unchanged Pixi stage. The header contains only compact agent
 identity and safety state; Files, Changes, Agent History and Terminal occupy the useful area and are
 visible as tabs immediately. The identity and resources are one composed Inspector surface with one
-set of dock, expand, pop-out and close controls; bottom docking does not leave a separate profile
+set of dock, expand, terminal-window and close controls; bottom docking does not leave a separate profile
 card consuming or obscuring the resource pane. Terminal is ordered first and is the initial tab for
 each newly selected terminal-capable entity; changing tabs affects the current selection without
 silently changing that default for the next entity. Full ancestry, generation, persona, model, focus and task
@@ -187,14 +187,20 @@ bounded status/activation context without a fabricated workspace scope.
 
 The Inspector remains a single shell-owned facility shared with Spaces and the visual views. Office
 does not clone its file, Git, history, preview or resource stores. Switching selected entities does
-not advance Spaces' connection or retain another host's resources. Explicit host activation uses
+not advance Spaces' connection or retain another host's resources. The transition first closes the
+outgoing identity and resources, awaits qualified pane focus, then publishes the incoming identity
+and resource request together. A delayed or failed focus therefore cannot combine the new entity's
+header with the previous entity's resource. An actionable selection has no separate profile card;
+only inactive or stale selections use a compact read-only activation context outside the Inspector.
+Explicit host activation uses
 Roamgate's normal teardown and selection lifecycle before a new Inspector context can open.
 
 Optional observations appear in the compact header only after the provider qualifies them to the
 same connection, generation and agent session. Host totals are not divided or attributed by the UI,
 and absent observations produce no zero-value placeholders. Provider configuration is a
 service-owned World setting reachable from the common settings menu in every native view and from
-the Office metrics shortcut; both entry points use the same dialog and configuration endpoint.
+the Office metrics shortcut; both entry points use one shell-level dialog above whichever view is
+active and the same configuration endpoint.
 
 ### Keep selected-host conversations on the existing terminal owner
 
@@ -215,12 +221,13 @@ mount a second `TerminalView` for that terminal; explicit handoff retires one pr
 the other admits the same Herdr terminal identity.
 
 The registry exposes two mutually exclusive presentation targets for a qualified terminal. The
-agent intent overlay can dock it as a Terminal tab; Pop out moves it into a retained floating
-conversation window, and Dock in profile moves it back. Changing targets may remount the view only
+selected-entity Inspector can dock it as a Terminal tab; Open terminal window moves it into a
+retained floating conversation window, and Dock in Inspector moves it back. Changing targets may
+remount the view only
 after the old target has detached, so there is never more than one input listener or attachment for
-that terminal. Pop out is an explicit Terminal-toolbar control; closing the profile closes its
+that terminal. Opening a window is an explicit Terminal-toolbar control; closing the Inspector closes its
 docked presentation rather than unexpectedly creating a window. Activating an Office desk bypasses
-the intent overlay and directly opens or focuses
+the Inspector overlay and directly opens or focuses
 the floating target, preserving the established desk interaction. Focusing any presentation first
 focuses its exact Herdr pane so the existing terminal input gate remains authoritative.
 
@@ -231,7 +238,7 @@ mount. The transition consumes no additional conversation slot and preserves the
 on compact layouts it remains the one conversation available through the compact presentation.
 
 Connectors also have separate semantics and anchors. A floating terminal connects to the qualified
-desk when present, otherwise to its agent or hierarchy node; the intent overlay connects to the
+desk when present, otherwise to its agent or hierarchy node; the Inspector overlay connects to the
 qualified agent. Both consume published scene positions and presentation geometry, update during
 pan, scroll, move and resize, and disappear rather than retarget when their exact anchor is not
 present. A connector never owns or changes topology, selection, transport or terminal identity.
@@ -243,9 +250,12 @@ outgoing visual and Spaces terminal mounts before the new lease becomes operatio
 never be redirected across hosts. Reconnecting the selected runtime invalidates conversations from
 its retired generation.
 
-Up to five desktop conversations from the selected host retain independent geometry and order;
-compact layouts expose one usable conversation at a time. Explicit handoff focuses the exact pane
-in mounted Spaces. A conversation survives projection refreshes and visual-view changes while its
+Up to five desktop conversations from the selected host retain independent geometry and order
+alongside the one selected-entity Inspector. This is the deliberate multi-window boundary: terminals
+support side-by-side work and copy/paste, while Files, Changes and History continue to follow one
+selection instead of cloning Inspector state. Compact layouts expose one usable conversation at a
+time. Spaces remains available from the primary view selector, without an Inspector-local Open in
+Spaces shortcut. A conversation survives projection refreshes and visual-view changes while its
 host remains selected, and closes after host switching, generation retirement or current admitted
 state confirms the qualified pane no longer exists.
 
@@ -272,6 +282,12 @@ the connected host-to-space-to-agent diagram currently labelled Graph becomes th
 presentation. It retains search, independent disclosure, visible connectors, selected-entity
 details and qualified actions. The list-style checkpoint Tree is only a compact or assistive
 fallback where the branch layout is not practical.
+
+Tree and Graph share one explicit presentation-budget policy: at most 128 hosts, 128 spaces globally
+and 16 leaves per presented space, ordered by selected/focused and attention-requiring relevance.
+Each renderer and its semantic equivalent consume one bounded projection and disclose exact global
+and affected-branch omissions. This avoids rendering the unbounded aggregate twice and makes search
+truthful about the hierarchy currently presented.
 
 ### Restore the spatial Graph after Tree
 

@@ -17,7 +17,7 @@ test.skipIf(!chrome).each([1280, 390])(
     const dir = await mkdtemp(join(tmpdir(), "pixel-office-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
-    const snapshotGate = Promise.withResolvers<void>();
+    let metricsReleased = false;
     const publicDir = join(import.meta.dir, "..", "..", "public");
     let metricsEndpoint: string | null = "http://metrics.example.test/";
     const server = Bun.serve({
@@ -30,13 +30,12 @@ test.skipIf(!chrome).each([1280, 390])(
           return new Response("ok");
         }
         if (path === "/release-metrics" && request.method === "POST") {
-          snapshotGate.resolve();
+          metricsReleased = true;
           return new Response("ok");
         }
         if (path === "/api/world/observability/snapshot") {
-          await snapshotGate.promise;
           return Response.json(
-            metricsEndpoint
+            metricsReleased && metricsEndpoint
               ? {
                   health: "available",
                   providerId: "prometheus.otel",

@@ -1,6 +1,5 @@
 import {
   ChevronLeft,
-  ExternalLink,
   FileDiff,
   FolderTree,
   GitFork,
@@ -226,7 +225,6 @@ export function WorkspaceInspectorHost({
   onClose,
   onBack,
   context,
-  onOpenSpaces,
 }: {
   state: WorkspaceInspectorState;
   onReady?: () => void;
@@ -262,7 +260,6 @@ export function WorkspaceInspectorHost({
   onClose: () => void;
   onBack: () => void;
   context?: WorkspaceInspectorContext | null;
-  onOpenSpaces?: () => void;
 }) {
   const hostRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -593,24 +590,14 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <div className="workspace-inspector-actions">
-          {context?.canOpenSpaces && onOpenSpaces ? (
-            <button
-              type="button"
-              title="Open in Spaces"
-              aria-label="Open in Spaces"
-              onClick={onOpenSpaces}
-            >
-              <ExternalLink size={15} />
-            </button>
-          ) : null}
           {state.view === "terminal" &&
           onTerminalPopOut &&
           !terminalDetached ? (
             <button
               type="button"
               className="workspace-inspector-terminal-popout-action"
-              title="Dock out terminal"
-              aria-label="Dock out terminal"
+              title="Open terminal window"
+              aria-label="Open terminal window"
               onClick={onTerminalPopOut}
             >
               <PictureInPicture2 size={15} />

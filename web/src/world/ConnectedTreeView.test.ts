@@ -1,24 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import { connectedTreeMatches } from "./ConnectedTreeView";
+import { projectWorldTree } from "./treeProjection";
 import type { WorldObject } from "./worldObject";
 
 describe("connected Tree search", () => {
   test("keeps complete ancestor context for a matching task without mutating disclosure", () => {
-    const matches = connectedTreeMatches(fixtureWorld(), "release checks");
+    const matches = connectedTreeMatches(
+      projectWorldTree(fixtureWorld()),
+      "release checks",
+    );
     expect(matches).toEqual(new Set(["host-a", "space-a", "agent-a"]));
   });
 
   test("includes a complete branch when its host or space matches", () => {
-    expect(connectedTreeMatches(fixtureWorld(), "forge")).toEqual(
-      new Set(["host-a", "space-a", "agent-a", "terminal-a"]),
-    );
-    expect(connectedTreeMatches(fixtureWorld(), "platform")).toEqual(
-      new Set(["host-a", "space-a", "agent-a", "terminal-a"]),
-    );
+    expect(
+      connectedTreeMatches(projectWorldTree(fixtureWorld()), "forge"),
+    ).toEqual(new Set(["host-a", "space-a", "agent-a", "terminal-a"]));
+    expect(
+      connectedTreeMatches(projectWorldTree(fixtureWorld()), "platform"),
+    ).toEqual(new Set(["host-a", "space-a", "agent-a", "terminal-a"]));
   });
 
   test("uses ordinary disclosure when search is clear", () => {
-    expect(connectedTreeMatches(fixtureWorld(), "  ")).toBeNull();
+    expect(
+      connectedTreeMatches(projectWorldTree(fixtureWorld()), "  "),
+    ).toBeNull();
   });
 });
 
@@ -59,6 +65,7 @@ function fixtureWorld() {
     kind: "space",
     parentId: "host-a",
     label: "Platform",
+    workspace: { focused: true },
     children: [agent, terminal],
   };
   const host = {
@@ -69,5 +76,13 @@ function fixtureWorld() {
     label: "Forge",
     spaces: [space],
   };
-  return { hosts: [host] } as unknown as WorldObject;
+  const nodes = [host, space, agent, terminal];
+  return {
+    version: 1,
+    hosts: [host],
+    spaces: [space],
+    leaves: [agent, terminal],
+    nodes,
+    nodeById: new Map(nodes.map((node) => [node.id, node])),
+  } as unknown as WorldObject;
 }

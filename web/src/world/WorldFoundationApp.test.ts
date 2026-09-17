@@ -371,7 +371,6 @@ describe("World view preference", () => {
       stateLabel: "working",
       locationLabel: "Shared · Host A",
       agent: "codex",
-      canOpenSpaces: true,
     });
     expect(worldInspectorContext(world.hosts[0])).toBeNull();
   });
@@ -553,6 +552,75 @@ describe("World view preference", () => {
       originPaneId: "pane-a",
       availableViews: ["terminal", "files", "changes", "history"],
     });
+  });
+
+  test("admits Inspector identity only after focus and immediately before its resource request", async () => {
+    const node = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 11,
+          snapshotGeneration: 11,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: true,
+                pane_count: 0,
+                tab_count: 0,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [],
+            panes: [],
+            agents: [],
+          },
+        },
+      ],
+      "host-a",
+    ).spaces[0];
+    const focus = Promise.withResolvers<void>();
+    const order: string[] = [];
+    const focusStore = {
+      get: () => ({
+        activeConnectionId: "host-a",
+        connectionGeneration: 23,
+        serverRuntimeGeneration: 11,
+        connections: [{ id: "host-a", state: "ready", generation: 11 }],
+      }),
+      selectConnection: () => true,
+      refresh: async () => undefined,
+      focusWorkspace: async () => {
+        await focus.promise;
+      },
+      focusTaskNotificationTarget: async () => undefined,
+    };
+    const opening = dispatchWorldInspectorRequest(
+      node,
+      "files",
+      focusStore,
+      {
+        dispatchEvent: () => {
+          order.push("resource");
+          return true;
+        },
+      },
+      () => order.push("identity"),
+    );
+
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    focus.resolve();
+    await opening;
+    expect(order).toEqual(["identity", "resource"]);
   });
 
   test("gives one presentation exclusive ownership of the selected terminal", () => {
@@ -809,7 +877,9 @@ describe("World view preference", () => {
     };
 
     await expect(
-      dispatchWorldInspectorRequest(node, "files", focusStore, target),
+      dispatchWorldInspectorRequest(node, "files", focusStore, target, () =>
+        requests.push(new Event("identity")),
+      ),
     ).rejects.toThrow("The selected host changed while it was opening");
     expect(requests).toHaveLength(0);
   });

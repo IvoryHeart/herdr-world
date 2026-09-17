@@ -390,7 +390,10 @@ function SemanticHost({
     ? host.spaces.filter(({ node }) => props.matches?.has(node.id))
     : host.spaces;
   return (
-    <li data-state={host.node.source.hostState}>
+    <li
+      data-state={host.node.source.hostState}
+      data-graph-host-id={host.node.id}
+    >
       <SemanticParentRow node={host.node} expanded={expanded} {...props} />
       {expanded ? (
         <ul>

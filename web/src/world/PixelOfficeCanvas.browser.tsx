@@ -224,6 +224,7 @@ async function run() {
     const diagnostics = window.__HERDR_WORLD_RENDERER__!;
     const rendersBeforeObservation = diagnostics.sceneRenders;
     await fetch("/release-metrics", { method: "POST" });
+    window.dispatchEvent(new Event(WORLD_OBSERVABILITY_UPDATED_EVENT));
     await waitFor(
       () =>
         host
