@@ -208,6 +208,7 @@ export async function createOfficeRenderer(
   onCanvasRendered: (revision: number) => void,
   roomAlignment: OfficeRoomAlignment,
   longRoomTitleMode: OfficeLongRoomTitleMode,
+  initializationSignal?: AbortSignal,
 ): Promise<OfficeRendererController> {
   officeDebug("renderer:create-start", {
     rooms: projection.rooms.length,
@@ -266,8 +267,18 @@ export async function createOfficeRenderer(
     diagnostics.activeTickers = Math.max(0, diagnostics.activeTickers - 1);
     throw error;
   }
-  if (disposed) {
+  if (disposed || initializationSignal?.aborted) {
     app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
+    diagnostics.destroys += 1;
+    diagnostics.activeApplications = Math.max(
+      0,
+      diagnostics.activeApplications - 1,
+    );
+    diagnostics.activeTickers = Math.max(0, diagnostics.activeTickers - 1);
+    if (diagnostics.activeApplications === 0) {
+      diagnostics.ready = false;
+      diagnostics.publishedLayout = null;
+    }
     throw new Error("renderer disposed");
   }
   officeDebug("renderer:pixi-ready");
@@ -287,15 +298,26 @@ export async function createOfficeRenderer(
   officeDebug("renderer:textures-ready", {
     textures: textures.filter((texture) => texture !== Texture.EMPTY).length,
   });
-  if (disposed) {
+  if (disposed || initializationSignal?.aborted) {
+    const ownsCanvas = element.contains(canvas);
     app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
     destroyTextures(textures);
+    if (ownsCanvas) {
+      element.replaceChildren();
+    }
     diagnostics.destroys += 1;
     diagnostics.activeApplications = Math.max(
       0,
       diagnostics.activeApplications - 1,
     );
     diagnostics.activeTickers = Math.max(0, diagnostics.activeTickers - 1);
+    diagnostics.canvases = document.querySelectorAll(
+      "canvas[data-office-canvas='true']",
+    ).length;
+    if (diagnostics.activeApplications === 0) {
+      diagnostics.ready = false;
+      diagnostics.publishedLayout = null;
+    }
     throw new Error("renderer disposed");
   }
 
@@ -749,8 +771,10 @@ export async function createOfficeRenderer(
       diagnostics.canvases = document.querySelectorAll(
         "canvas[data-office-canvas='true']",
       ).length;
-      diagnostics.ready = false;
-      diagnostics.publishedLayout = null;
+      if (diagnostics.activeApplications === 0) {
+        diagnostics.ready = false;
+        diagnostics.publishedLayout = null;
+      }
       onLayoutChange(null);
     },
   };

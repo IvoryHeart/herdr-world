@@ -62,7 +62,8 @@ retain their original Herdr Web lineage.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Bounded both Tree presentations with relevant-entity priority and exact
   omission reporting, scoped inactive-host action checks to their owning
-  branches, and removed the Office metrics browser-test timeout race.
+  branches, cancelled obsolete Pixi initialization during StrictMode replay,
+  and removed the Office metrics browser-test timeout race.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Enforced automatic same-authority browser admission across privileged HTTP and
   WebSocket traffic with an exact loopback-proxy origin, isolated World's login

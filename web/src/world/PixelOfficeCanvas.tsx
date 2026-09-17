@@ -239,6 +239,7 @@ export function PixelOfficeCanvas({
       return;
     }
     let disposed = false;
+    const initialization = new AbortController();
     officeDebug("renderer:mount-request", {
       rooms: latestRef.current.projection.rooms.length,
       agents: latestRef.current.projection.roster.length,
@@ -260,6 +261,7 @@ export function PixelOfficeCanvas({
       (revision) => latestRef.current.onCanvasRendered?.(revision),
       latestRef.current.roomAlignment,
       latestRef.current.longRoomTitleMode,
+      initialization.signal,
     )
       .then((controller) => {
         if (disposed) {
@@ -299,6 +301,7 @@ export function PixelOfficeCanvas({
       });
     return () => {
       disposed = true;
+      initialization.abort();
       officeDebug("renderer:destroy");
       latestRef.current.onAnchorChange?.(null);
       latestRef.current.onSelectedAnchorChange?.(null);

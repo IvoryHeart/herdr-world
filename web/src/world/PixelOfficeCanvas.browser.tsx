@@ -455,7 +455,26 @@ async function run() {
 }
 
 run()
-  .catch((error: unknown) => failures.push(String(error)))
+  .catch((error: unknown) => {
+    const diagnostics = window.__HERDR_WORLD_RENDERER__;
+    failures.push(
+      `${String(error)}; renderer=${JSON.stringify(
+        diagnostics
+          ? {
+              ready: diagnostics.ready,
+              lastError: diagnostics.lastError,
+              mounts: diagnostics.mounts,
+              destroys: diagnostics.destroys,
+              activeApplications: diagnostics.activeApplications,
+              activeTickers: diagnostics.activeTickers,
+              canvases: diagnostics.canvases,
+              frames: diagnostics.frames,
+              sceneRenders: diagnostics.sceneRenders,
+            }
+          : null,
+      )}`,
+    );
+  })
   .finally(() => {
     void fetch("/result", {
       method: "POST",
