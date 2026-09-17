@@ -2,7 +2,12 @@ import { Activity } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
-import { endpointCreationReason, store } from "../store";
+import {
+  endpointCreationReason,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
 import {
   WORLD_OBSERVABILITY_SETTINGS_EVENT,
   WORLD_OBSERVABILITY_UPDATED_EVENT,
@@ -41,6 +46,7 @@ import {
 import type { WorldObject } from "./worldObject";
 import {
   createdRootPaneId,
+  officeCreationActionState,
   officeRoomActionCapabilities,
   officeRoomKeyForSelection,
 } from "./officeRoomActions";
@@ -89,6 +95,16 @@ export default function PixelOfficeView({
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
     [world],
+  );
+  const creationSnapshot = useStoreSelector(
+    (snapshot) => ({
+      navigationMode: snapshot.navigationMode,
+      workspaces: snapshot.workspaces,
+      browserNavigation: snapshot.browserNavigation,
+      panes: snapshot.panes,
+      endpointAvailability: snapshot.endpointAvailability,
+    }),
+    shallowEqual,
   );
   const [preferences, setPreferences] = useState(() =>
     readOfficePreferences(worldLocalStorage),
@@ -259,33 +275,47 @@ export default function PixelOfficeView({
 
   const roomForKey = (roomKey: string | null) =>
     roomKey ? (office.rooms.find(({ key }) => key === roomKey) ?? null) : null;
-  const canCreateSeat = (roomKey: string) => {
+  const seatCreationState = (roomKey: string) => {
     const room = roomForKey(roomKey);
-    if (!room) return false;
-    return (
-      officeRoomActionCapabilities(world, room).createSeat &&
-      endpointCreationReason(
-        store.get(),
-        "tab.create",
-        room.workspaceRef.nativeId,
-      ) === null
+    if (!room) return officeCreationActionState(false, null);
+    const admitted = officeRoomActionCapabilities(world, room).createSeat;
+    return officeCreationActionState(
+      admitted,
+      admitted
+        ? endpointCreationReason(
+            creationSnapshot,
+            "tab.create",
+            room.workspaceRef.nativeId,
+          )
+        : null,
     );
   };
-  const canCreateRoom = (roomKey: string | null) => {
+  const showCreateSeat = (roomKey: string) =>
+    seatCreationState(roomKey).visible;
+  const canCreateSeat = (roomKey: string) => seatCreationState(roomKey).enabled;
+  const roomCreationState = (roomKey: string | null) => {
     const room = roomForKey(roomKey);
     const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
-    if (!selectedHost?.actionable || selectedHost.stale) return false;
-    if (room && room.workspaceRef.connectionId !== selectedHost.connectionId) {
-      return false;
-    }
-    return (
-      endpointCreationReason(
-        store.get(),
-        "workspace.create",
-        room?.workspaceRef.nativeId,
-      ) === null
+    const admitted = Boolean(
+      selectedHost?.actionable &&
+        !selectedHost.stale &&
+        (!room || room.workspaceRef.connectionId === selectedHost.connectionId),
+    );
+    return officeCreationActionState(
+      admitted,
+      admitted
+        ? endpointCreationReason(
+            creationSnapshot,
+            "workspace.create",
+            room?.workspaceRef.nativeId,
+          )
+        : null,
     );
   };
+  const showCreateRoom = (roomKey: string | null) =>
+    roomCreationState(roomKey).visible;
+  const canCreateRoom = (roomKey: string | null) =>
+    roomCreationState(roomKey).enabled;
   const canManageRoom = (roomKey: string, action: "rename" | "close") => {
     const room = roomForKey(roomKey);
     if (!room) return false;
@@ -471,7 +501,7 @@ export default function PixelOfficeView({
           onSelect={selectOfficeKey}
           onActivateAgent={openOfficeTerminal}
           onActivateRoom={selectOfficeKey}
-          canCreateSeat={canCreateSeat}
+          showCreateSeat={showCreateSeat}
           onNewSeat={(roomKey) => void createSeat(roomKey)}
           onHover={setSceneHover}
           onSelectedAnchorChange={onSelectedAnchorChange}
@@ -509,8 +539,10 @@ export default function PixelOfficeView({
                 projection={office}
                 renderedRevision={renderedRevision}
                 selectedRoomKey={selectedRoomKey}
+                showCreateSeat={showCreateSeat}
                 canCreateSeat={canCreateSeat}
                 onCreateSeat={(roomKey) => void createSeat(roomKey)}
+                showCreateRoom={showCreateRoom}
                 canCreateRoom={canCreateRoom}
                 onCreateRoom={(roomKey) =>
                   setRoomDialog({ mode: "create", roomKey })

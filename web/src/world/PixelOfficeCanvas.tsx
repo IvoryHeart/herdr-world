@@ -42,7 +42,7 @@ export function PixelOfficeCanvas({
   onSelect,
   onActivateAgent,
   onActivateRoom,
-  canCreateSeat,
+  showCreateSeat,
   onNewSeat,
   onHover,
   onAnchorChange,
@@ -61,7 +61,7 @@ export function PixelOfficeCanvas({
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
   onActivateRoom: (key: string) => void;
-  canCreateSeat: (roomKey: string) => boolean;
+  showCreateSeat: (roomKey: string) => boolean;
   onNewSeat: (roomKey: string) => void;
   onHover?: (hover: OfficeCanvasHover | null) => void;
   onAnchorChange?: (anchors: OfficeConversationAnchors | null) => void;
@@ -83,7 +83,7 @@ export function PixelOfficeCanvas({
     onSelect,
     onActivateAgent,
     onActivateRoom,
-    canCreateSeat,
+    showCreateSeat,
     onNewSeat,
     onHover,
     onAnchorChange,
@@ -103,7 +103,7 @@ export function PixelOfficeCanvas({
     onSelect,
     onActivateAgent,
     onActivateRoom,
-    canCreateSeat,
+    showCreateSeat,
     onNewSeat,
     onHover,
     onAnchorChange,
@@ -254,7 +254,7 @@ export function PixelOfficeCanvas({
       (key) => latestRef.current.onSelect(key),
       (key) => latestRef.current.onActivateAgent(key),
       (key) => latestRef.current.onActivateRoom(key),
-      (roomKey) => latestRef.current.canCreateSeat(roomKey),
+      (roomKey) => latestRef.current.showCreateSeat(roomKey),
       (roomKey) => latestRef.current.onNewSeat(roomKey),
       (hover) => latestRef.current.onHover?.(hover),
       (layout) => latestRef.current.onLayoutChange?.(layout),

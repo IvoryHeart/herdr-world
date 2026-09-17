@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { OfficeRoom } from "./herdrOfficeProjection";
 import {
   createdRootPaneId,
+  officeCreationActionState,
   officeRoomActionCapabilities,
   officeRoomKeyForSelection,
 } from "./officeRoomActions";
@@ -47,6 +48,23 @@ describe("Office room actions", () => {
     );
     expect(createdRootPaneId({ pane: { pane_id: "pane-other" } })).toBeNull();
     expect(createdRootPaneId({ root_pane: { pane_id: "" } })).toBeNull();
+  });
+
+  test("keeps an admitted creation affordance visible while endpoint admission is transient", () => {
+    expect(
+      officeCreationActionState(true, "Endpoint metadata is loading"),
+    ).toEqual({
+      visible: true,
+      enabled: false,
+    });
+    expect(officeCreationActionState(true, null)).toEqual({
+      visible: true,
+      enabled: true,
+    });
+    expect(officeCreationActionState(false, null)).toEqual({
+      visible: false,
+      enabled: false,
+    });
   });
 });
 

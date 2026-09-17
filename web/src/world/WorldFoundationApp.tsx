@@ -816,6 +816,13 @@ function WorldControlPlane({
     });
     if (retained.length !== inspectorConversations.length) {
       const retainedIds = new Set(retained.map(({ nodeId }) => nodeId));
+      const selectedInspectorRetired = Boolean(
+        selection &&
+          inspectorConversations.some(
+            ({ nodeId }) => nodeId === selection.id,
+          ) &&
+          !retainedIds.has(selection.id),
+      );
       for (const conversation of inspectorConversations) {
         if (!retainedIds.has(conversation.nodeId)) {
           onInspectorTerminalPortal(conversation.nodeId, null);
@@ -825,6 +832,14 @@ function WorldControlPlane({
       if (dockedInspectorId && !retainedIds.has(dockedInspectorId)) {
         onDockedInspectorIdChange(null);
       }
+      if (selectedInspectorRetired) {
+        intentRequestRef.current += 1;
+        setIntentOpening(false);
+        setIntentError(null);
+        setSelection(null);
+        setSelectedVisualAnchor(null);
+        setVisualConversationAnchors(null);
+      }
     }
   }, [
     dockedInspectorId,
@@ -833,6 +848,7 @@ function WorldControlPlane({
     onDockedInspectorIdChange,
     onInspectorConversationsChange,
     onInspectorTerminalPortal,
+    selection,
     world,
   ]);
 

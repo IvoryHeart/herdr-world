@@ -85,6 +85,7 @@ const panes: Pane[] = [
 let focusedPaneId = panes[0].pane_id;
 let focusedTabId = tabs[0]!.tab_id;
 let worldRevision = 1;
+let runtimeGeneration = 7;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
@@ -150,8 +151,8 @@ const client: ConnectionClient = {
             source: "test",
             is_default: true,
             state: "ready",
-            generation: 7,
-            snapshot_generation: 7,
+            generation: runtimeGeneration,
+            snapshot_generation: runtimeGeneration,
             stale: false,
             actionable: true,
             snapshot: {
@@ -1339,6 +1340,33 @@ async function run() {
         ?.textContent?.includes("Reviewer") &&
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "qualified Inspector conversations after Spaces handoff",
+  );
+  await until(() => graphTarget("Reviewer"), "Reviewer before retirement");
+  flushSync(() => graphTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer"),
+    "selected Reviewer before retirement",
+  );
+  await settle();
+
+  runtimeGeneration += 1;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      !document.querySelector(".workspace-inspector") &&
+      !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
+    "retired Inspector cleanup",
+  );
+  await new Promise((resolve) => window.setTimeout(resolve, 500));
+  check(
+    !document.querySelector(".world-selection-panel"),
+    "retiring an open Inspector left its stale identity profile selected",
   );
 
   root.unmount();

@@ -88,6 +88,10 @@ retain their original Herdr Web lineage.
   branches, cancelled obsolete Pixi initialization during StrictMode replay,
   and removed the Office metrics browser-test timeout race.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Closed a retired terminal's selection with its Inspector instead of leaving an
+  orphan stale profile, and kept admitted Office room/seat `+` affordances visible
+  while transient endpoint admission disables their actions.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Enforced automatic same-authority browser admission across privileged HTTP and
   WebSocket traffic with an exact loopback-proxy origin, isolated World's login
   cookie, fenced cross-host World handoffs and all hidden-view actions, made

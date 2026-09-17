@@ -907,10 +907,14 @@
   letter-spacing: 0.04em;
   pointer-events: auto;
 }
-.world-new-room-canvas-action:hover,
+.world-new-room-canvas-action:hover:not(:disabled),
 .world-new-room-canvas-action:focus-visible {
   border-color: #67d79b;
   background: color-mix(in srgb, #67d79b 24%, var(--bg, #0e1116));
+}
+.world-new-room-canvas-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
 }
 .world-renderer-fallback {
   min-height: 320px;

@@ -7,6 +7,16 @@ export type OfficeRoomActionCapabilities = {
   close: boolean;
 };
 
+export function officeCreationActionState(
+  admitted: boolean,
+  endpointReason: string | null,
+) {
+  return {
+    visible: admitted,
+    enabled: admitted && endpointReason === null,
+  };
+}
+
 export function officeSpaceForRoom(
   world: WorldObject,
   room: Pick<OfficeRoom, "hostKey" | "workspaceRef">,

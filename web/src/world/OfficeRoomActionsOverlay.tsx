@@ -66,8 +66,10 @@ export function OfficeRoomActionsOverlay({
   projection,
   renderedRevision,
   selectedRoomKey,
+  showCreateSeat,
   canCreateSeat,
   onCreateSeat,
+  showCreateRoom,
   canCreateRoom,
   onCreateRoom,
   canRenameRoom,
@@ -79,8 +81,10 @@ export function OfficeRoomActionsOverlay({
   projection: HerdrOfficeProjection;
   renderedRevision: number;
   selectedRoomKey: string | null;
+  showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
   onCreateSeat(roomKey: string): void;
+  showCreateRoom(roomKey: string | null): boolean;
   canCreateRoom(roomKey: string | null): boolean;
   onCreateRoom(roomKey: string | null): void;
   canRenameRoom(roomKey: string): boolean;
@@ -159,7 +163,7 @@ export function OfficeRoomActionsOverlay({
         const rect = layout.rooms.find(
           ({ index: roomIndex }) => roomIndex === index,
         );
-        if (!rect || !canCreateSeat(room.key)) return null;
+        if (!rect || !showCreateSeat(room.key)) return null;
         const full = room.desks.length >= OFFICE_GEOMETRY.desksPerRoom;
         const anchor = full
           ? { x: rect.x + rect.width / 2, deskY: rect.y + rect.height - 40 }
@@ -179,19 +183,19 @@ export function OfficeRoomActionsOverlay({
                 ? `${room.accessibleLabel ?? room.displayLabel} is full`
                 : `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`
             }
-            disabled={!layoutReady || full}
+            disabled={!layoutReady || full || !canCreateSeat(room.key)}
             style={{ left: anchor.x - 25, top: anchor.deskY }}
             onClick={() => onCreateSeat(room.key)}
           />
         );
       })}
-      {canCreateRoom(selectedRoomKey) ? (
+      {showCreateRoom(selectedRoomKey) ? (
         <button
           className="world-new-room-canvas-action"
           type="button"
           aria-label="New room"
           title="Create a new Herdr workspace"
-          disabled={!layoutReady}
+          disabled={!layoutReady || !canCreateRoom(selectedRoomKey)}
           style={{ left: layout.officeWidth / 2 - 28, top: roomBottom + 8 }}
           onClick={() => onCreateRoom(selectedRoomKey)}
         >

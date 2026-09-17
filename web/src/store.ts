@@ -1916,7 +1916,14 @@ function browserSelectionIsCurrent(navigation: BrowserNavigation) {
 }
 
 export function endpointCreationReason(
-  snapshot: State,
+  snapshot: Pick<
+    State,
+    | "navigationMode"
+    | "workspaces"
+    | "browserNavigation"
+    | "panes"
+    | "endpointAvailability"
+  >,
   method: "tab.create" | "workspace.create",
   workspaceId = snapshot.browserNavigation.workspaceId,
 ): string | null {

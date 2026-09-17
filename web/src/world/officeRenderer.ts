@@ -201,7 +201,7 @@ export async function createOfficeRenderer(
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
   onActivateRoom: (key: string) => void,
-  canCreateSeat: (roomKey: string) => boolean,
+  showCreateSeat: (roomKey: string) => boolean,
   onNewSeat: (roomKey: string) => void,
   onHover: (hover: OfficeCanvasHover | null) => void,
   onLayoutChange: (layout: PublishedOfficeLayout | null) => void,
@@ -440,7 +440,7 @@ export async function createOfficeRenderer(
           select,
           activateAgent,
           activateRoom,
-          canCreateSeat,
+          showCreateSeat,
           onNewSeat,
         );
       }
@@ -540,7 +540,7 @@ export async function createOfficeRenderer(
           headerMinWidth: measuredHeader.roomWidth,
           deskCount:
             room.desks.length +
-            (canCreateSeat(room.key) &&
+            (showCreateSeat(room.key) &&
             room.desks.length < OFFICE_GEOMETRY.desksPerRoom
               ? 1
               : 0),
@@ -550,7 +550,7 @@ export async function createOfficeRenderer(
           actions: {
             rename: true,
             close: true,
-            createSeat: canCreateSeat(room.key),
+            createSeat: showCreateSeat(room.key),
           },
         };
       });
@@ -1693,7 +1693,7 @@ function drawRoom(
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
   onActivateRoom: (key: string) => void,
-  canCreateSeat: (roomKey: string) => boolean,
+  showCreateSeat: (roomKey: string) => boolean,
   onNewSeat: (roomKey: string) => void,
 ) {
   const host = projection.hosts.find(({ key }) => key === room.hostKey);
@@ -1812,7 +1812,7 @@ function drawRoom(
         onActivateAgent,
       );
     });
-  if (canCreateSeat(room.key)) {
+  if (showCreateSeat(room.key)) {
     if (room.desks.length < OFFICE_GEOMETRY.desksPerRoom) {
       drawNewSeatAction(
         parent,
