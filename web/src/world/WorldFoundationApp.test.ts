@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { appShouldHandleGlobalShortcut } from "../App";
 import {
+  activateWorldNodeHost,
+  chooseWorldSelectedConnection,
+  dispatchWorldInspectorRequest,
   focusWorldNode,
+  hasValidSelectedConnection,
   parseWorldView,
+  selectedHostStatusLabel,
+  shouldCloseWorldInspector,
   worldViewFromPath,
 } from "./WorldFoundationApp";
 import { buildWorldObject } from "./worldObject";
@@ -25,38 +31,42 @@ describe("World view preference", () => {
     expect(worldViewFromPath("/other")).toBe("spaces");
   });
 
-  test("does not dispatch a space focus after the active host changes", async () => {
-    const space = buildWorldObject([
-      {
-        connectionId: "host-b",
-        label: "Host B",
-        source: "saved-profile",
-        isDefault: false,
-        state: "ready",
-        generation: 7,
-        snapshotGeneration: 7,
-        stale: false,
-        actionable: true,
-        snapshot: {
-          workspaces: [
-            {
-              workspace_id: "shared",
-              number: 1,
-              label: "Shared",
-              focused: false,
-              pane_count: 0,
-              tab_count: 0,
-              agent_status: "idle",
-            },
-          ],
-          tabs: [],
-          panes: [],
-          agents: [],
+  test("does not implicitly activate another host while opening a World node", async () => {
+    const space = buildWorldObject(
+      [
+        {
+          connectionId: "host-b",
+          label: "Host B",
+          source: "saved-profile",
+          isDefault: false,
+          state: "ready",
+          generation: 7,
+          snapshotGeneration: 7,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: false,
+                pane_count: 0,
+                tab_count: 0,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [],
+            panes: [],
+            agents: [],
+          },
         },
-      },
-    ]).spaces[0];
-    let resolveRefresh!: () => void;
-    let activeConnectionId = "host-a";
+      ],
+      "host-a",
+    ).spaces[0];
+    const activeConnectionId = "host-a";
+    let selectCalls = 0;
+    let refreshCalls = 0;
     let focusCalls = 0;
     const focusStore = {
       get: () => ({
@@ -71,59 +81,216 @@ describe("World view preference", () => {
         ],
       }),
       selectConnection: (connectionId: string) => {
-        activeConnectionId = connectionId;
+        void connectionId;
+        selectCalls += 1;
         return true;
       },
-      refresh: () =>
-        new Promise<void>((resolve) => {
-          resolveRefresh = resolve;
-        }),
+      refresh: async () => {
+        refreshCalls += 1;
+      },
       focusWorkspace: async () => {
         focusCalls += 1;
       },
       focusTaskNotificationTarget: async () => undefined,
     };
 
-    const focusing = focusWorldNode(space, focusStore);
-    activeConnectionId = "host-a";
-    resolveRefresh();
-
-    await expect(focusing).rejects.toThrow(
-      "The selected host changed while it was opening",
+    await expect(focusWorldNode(space, focusStore)).rejects.toThrow(
+      "Activate Host B before opening this item",
     );
+    expect(selectCalls).toBe(0);
+    expect(refreshCalls).toBe(0);
     expect(focusCalls).toBe(0);
   });
 
-  test("does not report a successful focus after its host lease changes", async () => {
-    const space = buildWorldObject([
-      {
-        connectionId: "host-b",
-        label: "Host B",
-        source: "saved-profile",
-        isDefault: false,
-        state: "ready",
-        generation: 7,
-        snapshotGeneration: 7,
-        stale: false,
-        actionable: true,
-        snapshot: {
-          workspaces: [
-            {
-              workspace_id: "shared",
-              number: 1,
-              label: "Shared",
-              focused: false,
-              pane_count: 0,
-              tab_count: 0,
-              agent_status: "idle",
-            },
-          ],
-          tabs: [],
-          panes: [],
-          agents: [],
+  test("activates a ready observed host only through the explicit host action", async () => {
+    const space = buildWorldObject(
+      [
+        {
+          connectionId: "host-b",
+          label: "Host B",
+          source: "saved-profile",
+          isDefault: false,
+          state: "ready",
+          generation: 7,
+          snapshotGeneration: 7,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: false,
+                pane_count: 0,
+                tab_count: 0,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [],
+            panes: [],
+            agents: [],
+          },
         },
+      ],
+      "host-a",
+    ).spaces[0];
+    let activeConnectionId = "host-a";
+    let refreshCalls = 0;
+    const focusStore = {
+      get: () => ({
+        activeConnectionId,
+        serverRuntimeGeneration: activeConnectionId === "host-b" ? 7 : null,
+        connections: [{ id: "host-b", state: "ready", generation: 7 }],
+      }),
+      selectConnection: (connectionId: string) => {
+        activeConnectionId = connectionId;
+        return true;
       },
-    ]).spaces[0];
+      refresh: async () => {
+        refreshCalls += 1;
+      },
+      focusWorkspace: async () => undefined,
+      focusTaskNotificationTarget: async () => undefined,
+    };
+
+    await activateWorldNodeHost(space, focusStore);
+
+    expect(activeConnectionId).toBe("host-b");
+    expect(refreshCalls).toBe(1);
+  });
+
+  test("requires the selected connection to belong to the managed catalogue", () => {
+    expect(
+      hasValidSelectedConnection("host-a", [
+        { id: "host-a" },
+        { id: "host-b" },
+      ]),
+    ).toBe(true);
+    expect(hasValidSelectedConnection("missing", [{ id: "host-a" }])).toBe(
+      false,
+    );
+    expect(hasValidSelectedConnection("startup-default", [])).toBe(false);
+  });
+
+  test("does not describe a reconnecting selected profile as active", () => {
+    expect(selectedHostStatusLabel(null)).toBe("No host selected");
+    expect(
+      selectedHostStatusLabel({
+        label: "Remote",
+        hostState: "reconnecting",
+      }),
+    ).toBe("Remote · Reconnecting");
+    expect(
+      selectedHostStatusLabel({ label: "Local", hostState: "active" }),
+    ).toBe("Local · Active");
+  });
+
+  test("retires the shared Inspector when selection moves to another host", () => {
+    const active = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 1,
+          snapshotGeneration: 1,
+          stale: false,
+          actionable: true,
+          snapshot: { workspaces: [], tabs: [], panes: [], agents: [] },
+        },
+        {
+          connectionId: "host-b",
+          label: "Host B",
+          source: "saved-profile",
+          isDefault: false,
+          state: "ready",
+          generation: 2,
+          snapshotGeneration: 2,
+          stale: false,
+          actionable: true,
+          snapshot: { workspaces: [], tabs: [], panes: [], agents: [] },
+        },
+      ],
+      "host-a",
+    );
+
+    expect(shouldCloseWorldInspector(active.hosts[0])).toBe(false);
+    expect(shouldCloseWorldInspector(active.hosts[1])).toBe(true);
+    expect(shouldCloseWorldInspector(null)).toBe(false);
+  });
+
+  test("restores a valid last host before the default or current profile", () => {
+    const connections = [{ id: "host-a" }, { id: "host-b" }];
+    expect(
+      chooseWorldSelectedConnection({
+        activeConnectionId: "host-a",
+        defaultConnectionId: "host-a",
+        storedConnectionId: "host-b",
+        connections,
+      }),
+    ).toBe("host-b");
+    expect(
+      chooseWorldSelectedConnection({
+        activeConnectionId: "missing",
+        defaultConnectionId: "host-a",
+        storedConnectionId: "removed",
+        connections,
+      }),
+    ).toBe("host-a");
+    expect(
+      chooseWorldSelectedConnection({
+        activeConnectionId: "host-b",
+        defaultConnectionId: "missing",
+        storedConnectionId: null,
+        connections,
+      }),
+    ).toBe("host-b");
+    expect(
+      chooseWorldSelectedConnection({
+        activeConnectionId: "missing",
+        defaultConnectionId: "missing",
+        storedConnectionId: null,
+        connections,
+      }),
+    ).toBeNull();
+  });
+
+  test("does not report a successful focus after its host lease changes", async () => {
+    const space = buildWorldObject(
+      [
+        {
+          connectionId: "host-b",
+          label: "Host B",
+          source: "saved-profile",
+          isDefault: false,
+          state: "ready",
+          generation: 7,
+          snapshotGeneration: 7,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: false,
+                pane_count: 0,
+                tab_count: 0,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [],
+            panes: [],
+            agents: [],
+          },
+        },
+      ],
+      "host-b",
+    ).spaces[0];
     let activeConnectionId = "host-b";
     let focusOptions: unknown;
     const focusStore = {
@@ -145,6 +312,132 @@ describe("World view preference", () => {
       "The selected host changed while it was opening",
     );
     expect(focusOptions).toEqual({ retryOnReconnect: false });
+  });
+
+  test("dispatches an Inspector request only for the exact selected host lease", async () => {
+    const node = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 11,
+          snapshotGeneration: 11,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: true,
+                pane_count: 0,
+                tab_count: 0,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [],
+            panes: [],
+            agents: [],
+          },
+        },
+      ],
+      "host-a",
+    ).spaces[0];
+    const requests: Event[] = [];
+    const focusStore = {
+      get: () => ({
+        activeConnectionId: "host-a",
+        connectionGeneration: 23,
+        serverRuntimeGeneration: 11,
+        connections: [{ id: "host-a", state: "ready", generation: 11 }],
+      }),
+      selectConnection: () => true,
+      refresh: async () => undefined,
+      focusWorkspace: async () => undefined,
+      focusTaskNotificationTarget: async () => undefined,
+    };
+    const target = {
+      dispatchEvent: (event: Event) => {
+        requests.push(event);
+        return true;
+      },
+    };
+
+    await dispatchWorldInspectorRequest(node, "changes", focusStore, target);
+
+    expect(requests).toHaveLength(1);
+    expect((requests[0] as CustomEvent).detail).toEqual({
+      connectionId: "host-a",
+      generation: 23,
+      workspaceId: "shared",
+      view: "changes",
+    });
+  });
+
+  test("does not dispatch Inspector work after a generation replacement", async () => {
+    const node = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 11,
+          snapshotGeneration: 11,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: true,
+                pane_count: 0,
+                tab_count: 0,
+                agent_status: "idle",
+              },
+            ],
+            tabs: [],
+            panes: [],
+            agents: [],
+          },
+        },
+      ],
+      "host-a",
+    ).spaces[0];
+    let generation = 11;
+    const requests: Event[] = [];
+    const focusStore = {
+      get: () => ({
+        activeConnectionId: "host-a",
+        connectionGeneration: 23,
+        serverRuntimeGeneration: generation,
+        connections: [{ id: "host-a", state: "ready", generation }],
+      }),
+      selectConnection: () => true,
+      refresh: async () => undefined,
+      focusWorkspace: async () => {
+        generation = 12;
+      },
+      focusTaskNotificationTarget: async () => undefined,
+    };
+    const target = {
+      dispatchEvent: (event: Event) => {
+        requests.push(event);
+        return true;
+      },
+    };
+
+    await expect(
+      dispatchWorldInspectorRequest(node, "files", focusStore, target),
+    ).rejects.toThrow("The selected host changed while it was opening");
+    expect(requests).toHaveLength(0);
   });
 
   test("suppresses App global shortcuts while Spaces is hidden", () => {

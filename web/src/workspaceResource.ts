@@ -8,6 +8,8 @@ export type InspectorView = "files" | "changes" | "history";
 export type WorkspaceSurface = "terminal" | "annotations" | InspectorView;
 export const WORKSPACE_INSPECTOR_REQUEST_EVENT =
   "herdr-world:workspace-inspector-request";
+export const WORKSPACE_INSPECTOR_CLOSE_EVENT =
+  "herdr-world:workspace-inspector-close";
 export const WORKSPACE_ANNOTATION_REQUEST_EVENT =
   "herdr-world:workspace-annotation-request";
 

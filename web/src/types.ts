@@ -82,6 +82,15 @@ export interface Pane {
   cwd?: string;
   foreground_cwd?: string;
   agent?: string;
+  /** Optional display-safe agent label supplied by Herdr. */
+  display_agent?: string;
+  /** Optional model metadata; absent when the runtime does not report it. */
+  model?: string;
+  model_name?: string;
+  /** Optional bounded task metadata produced through Herdr pane metadata. */
+  task_summary?: string;
+  /** Runtime-provided labels for known semantic agent states. */
+  state_labels?: Record<string, string>;
   agent_status: string;
   /** Herdr agent.list state-change sequence, scoped to this server lifetime. */
   state_change_seq?: number;

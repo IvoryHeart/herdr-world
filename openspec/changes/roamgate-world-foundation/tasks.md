@@ -50,11 +50,11 @@
 
 ## 8. Shared visual context, proven in Office
 
-- [ ] 8.1 Extend the qualified WorldObject presenter input with bounded admitted task summaries, agent/model and state labels, focus, tab metadata, active/ready-inactive/reconnecting/offline-stale host state and action capabilities, and verify missing metadata is never inferred
-- [ ] 8.2 Replace the checkpoint selection panel with one shell-owned selected-entity context, prove it first in Office with qualified ancestry, freshness, selected-host state, supported actions and the existing Inspector while Office remains visible, and keep the seam reusable by Tree and Graph; verify inactive, stale or generation-replaced targets remain inspectable but read-only
-- [ ] 8.3 Reuse the existing Files, Changes and Agent History components and resource state for the focused Office context without cloning an Inspector or runtime store, and verify selecting an entity on another host neither switches the connection nor retains resources from the prior selected-host context
+- [x] 8.1 Extend the qualified WorldObject presenter input with bounded admitted task summaries, agent/model and state labels, focus, tab metadata, active/ready-inactive/reconnecting/offline-stale host state and action capabilities, and verify missing metadata is never inferred
+- [x] 8.2 Replace the checkpoint selection panel with one shell-owned selected-entity context, prove it first in Office with qualified ancestry, freshness, selected-host state, supported actions and the existing Inspector while Office remains visible, and keep the seam reusable by Tree and Graph; verify inactive, stale or generation-replaced targets remain inspectable but read-only
+- [x] 8.3 Reuse the existing Files, Changes and Agent History components and resource state for the focused Office context without cloning an Inspector or runtime store, and verify selecting an entity on another host neither switches the connection nor retains resources from the prior selected-host context
 - [ ] 8.4 Require a valid restored/default managed profile before showing a visual view, expose explicit Activate host for ready-inactive observations, and route Office Inspector, terminal and Spaces actions only through the exact selected connection/generation; verify view or entity selection never changes hosts, colliding native identifiers cannot cross hosts, and activation follows the existing teardown/revalidation lifecycle
-- [ ] 8.5 Add validated Office preference storage and bounded Office error containment, and verify a malformed presenter does not stop Spaces, runtime observation, Inspector state or the current terminal
+- [x] 8.5 Add validated Office preference storage and bounded Office error containment, and verify a malformed presenter does not stop Spaces, runtime observation, Inspector state or the current terminal
 - [ ] 8.6 Port the bounded session-qualified task-summary report/update/clear producer over Herdr metadata, and verify normalization, redaction, expiry, session replacement and local/SSH presentation without requiring a remote World web service
 - [ ] 8.7 Add a bounded connection-qualified agent/pane watchlist with Pin, Unpin and Pinned-only controls distinct from workspace pins, and verify persistence, colliding IDs, stale generations and authoritative pane removal
 
@@ -68,7 +68,7 @@
 
 ## 10. Pixel Office migration
 
-- [ ] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify mixed-state shared tabs plus beyond-eight-desk cases seat or stand only bounded working/unknown room-local agents, keep blocked and idle/done destinations, report exact omissions and retain nonduplicated identity and ancestry
+- [x] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify mixed-state shared tabs plus beyond-eight-desk cases seat or stand only bounded working/unknown room-local agents, keep blocked and idle/done destinations, report exact omissions and retain nonduplicated identity and ancestry
 - [ ] 10.2 Port deterministic Office geometry/publication with content-sized two-to-eight-seat rooms, title/action containment, natural row packing, alignment, logical scrolling and stale-render acknowledgement, and verify dense/long-title fixtures
 - [ ] 10.3 Port the Pixel Office renderer with CEO Office, host receptions, boards, Agent Bar, roads, rooms, desks, characters and bounded overflow presentation, and visually compare synthetic desktop fixtures with the delivered composition
 - [ ] 10.4 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact selected-host terminal inspection and retained unseen state when the host is inactive or activation fails, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity

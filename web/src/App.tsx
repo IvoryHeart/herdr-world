@@ -49,6 +49,7 @@ import {
 } from "react";
 import type { ITheme } from "@xterm/xterm";
 import { APP_VERSION } from "./version";
+import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal";
 import {
   type AccentColor,
   normalizeAccentColor,
@@ -166,6 +167,7 @@ import {
   resourceScopeForWorkspace,
   resourceStateKey,
   sameResourceOwner,
+  WORKSPACE_INSPECTOR_CLOSE_EVENT,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   type ResourceScope,
   WORKSPACE_ANNOTATION_REQUEST_EVENT,
@@ -1104,8 +1106,12 @@ export function appShouldHandleGlobalShortcut(
 
 export default function App({
   operationalShortcutsEnabled = true,
+  inspectorPortal = null,
+  onInspectorVisibilityChange,
 }: {
   operationalShortcutsEnabled?: boolean;
+  inspectorPortal?: Element | null;
+  onInspectorVisibilityChange?: (open: boolean) => void;
 } = {}) {
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -2234,6 +2240,21 @@ export default function App({
       );
   }, [connectionClient, openInspector]);
   useEffect(() => {
+    const handleInspectorClose = () => closeInspector();
+    window.addEventListener(
+      WORKSPACE_INSPECTOR_CLOSE_EVENT,
+      handleInspectorClose,
+    );
+    return () =>
+      window.removeEventListener(
+        WORKSPACE_INSPECTOR_CLOSE_EVENT,
+        handleInspectorClose,
+      );
+  }, [closeInspector]);
+  useEffect(() => {
+    onInspectorVisibilityChange?.(inspectorState?.open === true);
+  }, [inspectorState?.open, onInspectorVisibilityChange]);
+  useEffect(() => {
     const handleAnnotationRequest = (event: Event) => {
       const detail = (event as CustomEvent<WorkspaceAnnotationRequest>).detail;
       if (
@@ -3164,6 +3185,94 @@ export default function App({
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
   };
+  const inspectorSlot = inspectorState ? (
+    <div
+      className={`workspace-inspector-slot ${
+        inspectorState.open ? "" : "is-closed"
+      }`}
+      style={
+        inspectorPortal || inspectorState.expanded
+          ? undefined
+          : inspectorState.dock === "right"
+            ? { width: inspectorState.size }
+            : { height: inspectorState.size }
+      }
+    >
+      <Suspense
+        fallback={<TerminalLoadingFallback label="Loading Inspector" />}
+      >
+        <WorkspaceInspectorHost
+          key={`${resourceUiKey}:${resourceOwnerKey(inspectorState.scope)}`}
+          state={inspectorState}
+          onReady={finishInspectorFocus}
+          annotations={readAnnotationDraft(inspectorState.scope)}
+          onCreateAnnotation={addAnnotation}
+          onReanchorFileAnnotations={reanchorFileAnnotations}
+          onReanchorDiffAnnotations={reanchorDiffAnnotations}
+          onEditAnnotation={(id) => {
+            if (!connectionClient.isCurrent()) return;
+            setAnnotationDraftScope(inspectorState.scope, true);
+            setFocusedAnnotationId(id);
+            setAnnotationsOpen(true);
+            if (mobile) setMobileView("annotations");
+          }}
+          visible={
+            inspectorPortal
+              ? true
+              : !mobile || mobileView === inspectorState.view
+          }
+          workspace={inspectorWorkspace}
+          historyPane={inspectorHistoryPane}
+          fileSelection={activeFilePreview}
+          previewRequestRef={fileQuickOpenRequestRef}
+          diffSelection={activeDiff}
+          connectionClient={connectionClient}
+          onFileSelectionChange={(selection) =>
+            handleFilePreviewChange(
+              resourceStateKey(inspectorState.scope),
+              selection,
+            )
+          }
+          onDiffSelectionChange={(selection) =>
+            handleDiffSelectionChange(
+              resourceStateKey(inspectorState.scope),
+              selection,
+            )
+          }
+          onRefreshFile={() => {
+            if (inspectorWorkspace && activeFilePreview.entry)
+              loadInspectorFilePreview(
+                inspectorWorkspace.workspace_id,
+                activeFilePreview.entry,
+                activeFilePreview.fragment,
+              );
+          }}
+          onOpenDiffFile={openDiffFileInExplorer}
+          onOpenDocument={(path, fragment) => {
+            if (inspectorWorkspace)
+              openFileExplorerFile(
+                inspectorWorkspace.workspace_id,
+                {
+                  name: path.split("/").pop() ?? path,
+                  path,
+                  type: "file",
+                  size: 0,
+                  mtime_ms: 0,
+                  hidden: false,
+                },
+                undefined,
+                fragment,
+              );
+          }}
+          onViewChange={setInspectorView}
+          onDockChange={setInspectorDock}
+          onExpandedChange={setInspectorExpanded}
+          onClose={closeInspector}
+          onBack={clearInspectorDetail}
+        />
+      </Suspense>
+    </div>
+  ) : null;
   return (
     <div
       className={`app ${sidebarHidden && !mobile ? "sidebar-hidden" : ""} ${
@@ -3551,7 +3660,7 @@ export default function App({
             className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""}`}
           >
             <div
-              ref={inspectorStageRef}
+              ref={inspectorPortal ? undefined : inspectorStageRef}
               className={`workspace-stage ${
                 inspectorState?.open
                   ? `has-inspector inspector-dock-${inspectorState.dock}`
@@ -3571,7 +3680,9 @@ export default function App({
                   onOpenWorkspaceFile={handleTerminalWorkspaceFile}
                 />
               </div>
-              {inspectorState?.open && !inspectorState.expanded ? (
+              {!inspectorPortal &&
+              inspectorState?.open &&
+              !inspectorState.expanded ? (
                 <div
                   className="workspace-inspector-resizer"
                   role="separator"
@@ -3584,92 +3695,7 @@ export default function App({
                   onPointerDown={startInspectorResize}
                 />
               ) : null}
-              {inspectorState ? (
-                <div
-                  className={`workspace-inspector-slot ${
-                    inspectorState.open ? "" : "is-closed"
-                  }`}
-                  style={
-                    inspectorState.expanded
-                      ? undefined
-                      : inspectorState.dock === "right"
-                        ? { width: inspectorState.size }
-                        : { height: inspectorState.size }
-                  }
-                >
-                  <Suspense
-                    fallback={
-                      <TerminalLoadingFallback label="Loading Inspector" />
-                    }
-                  >
-                    <WorkspaceInspectorHost
-                      key={`${resourceUiKey}:${resourceOwnerKey(inspectorState.scope)}`}
-                      state={inspectorState}
-                      onReady={finishInspectorFocus}
-                      annotations={readAnnotationDraft(inspectorState.scope)}
-                      onCreateAnnotation={addAnnotation}
-                      onReanchorFileAnnotations={reanchorFileAnnotations}
-                      onReanchorDiffAnnotations={reanchorDiffAnnotations}
-                      onEditAnnotation={(id) => {
-                        if (!connectionClient.isCurrent()) return;
-                        setAnnotationDraftScope(inspectorState.scope, true);
-                        setFocusedAnnotationId(id);
-                        setAnnotationsOpen(true);
-                        if (mobile) setMobileView("annotations");
-                      }}
-                      visible={!mobile || mobileView === inspectorState.view}
-                      workspace={inspectorWorkspace}
-                      historyPane={inspectorHistoryPane}
-                      fileSelection={activeFilePreview}
-                      previewRequestRef={fileQuickOpenRequestRef}
-                      diffSelection={activeDiff}
-                      connectionClient={connectionClient}
-                      onFileSelectionChange={(selection) =>
-                        handleFilePreviewChange(
-                          resourceStateKey(inspectorState.scope),
-                          selection,
-                        )
-                      }
-                      onDiffSelectionChange={(selection) =>
-                        handleDiffSelectionChange(
-                          resourceStateKey(inspectorState.scope),
-                          selection,
-                        )
-                      }
-                      onRefreshFile={() => {
-                        if (inspectorWorkspace && activeFilePreview.entry)
-                          loadInspectorFilePreview(
-                            inspectorWorkspace.workspace_id,
-                            activeFilePreview.entry,
-                            activeFilePreview.fragment,
-                          );
-                      }}
-                      onOpenDiffFile={openDiffFileInExplorer}
-                      onOpenDocument={(path, fragment) => {
-                        if (inspectorWorkspace)
-                          openFileExplorerFile(
-                            inspectorWorkspace.workspace_id,
-                            {
-                              name: path.split("/").pop() ?? path,
-                              path,
-                              type: "file",
-                              size: 0,
-                              mtime_ms: 0,
-                              hidden: false,
-                            },
-                            undefined,
-                            fragment,
-                          );
-                      }}
-                      onViewChange={setInspectorView}
-                      onDockChange={setInspectorDock}
-                      onExpandedChange={setInspectorExpanded}
-                      onClose={closeInspector}
-                      onBack={clearInspectorDetail}
-                    />
-                  </Suspense>
-                </div>
-              ) : null}
+              {!inspectorPortal ? inspectorSlot : null}
             </div>
             <AnnotationPanel
               key={annotationStorageKey}
@@ -3727,6 +3753,14 @@ export default function App({
           onCommit={commitPaneJump}
         />
       ) : null}
+      <WorkspaceInspectorPortal
+        target={inspectorPortal}
+        stageRef={inspectorStageRef}
+        dock={inspectorState?.dock ?? "right"}
+        expanded={inspectorState?.expanded ?? false}
+      >
+        {inspectorSlot}
+      </WorkspaceInspectorPortal>
     </div>
   );
 }
