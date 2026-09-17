@@ -13,12 +13,16 @@ shared World model plus Office, Tree and Graph.
 
 - Deliver one coherent World application based on the pinned Roamgate tree.
 - Preserve Roamgate's working product surfaces and test coverage while migrating the complete
-  defining Pixel Office onto the new native projection and navigation layer.
+  defining World views onto the new native projection and navigation layer, with Office completed
+  first as the integration proof.
 - Preserve qualified identity and failure isolation while moving federation into the service.
 - Restore the mature Pixel Office and make Roamgate's terminal, Files, Changes and Agent History
   available as one focused, shell-owned Office context.
-- Preserve all-host observation, the agent/pane watchlist and the supported task-summary reporting
-  workflow without replacing Spaces' focused-host interaction model.
+- Restore the connected Tree and spatial Graph after Office over the same qualified projection and
+  focused Inspector seam.
+- Preserve all-host observation, simultaneous host-qualified visual conversations, the agent/pane
+  watchlist and the supported task-summary reporting workflow without replacing Spaces' focused-host
+  interaction model.
 - Keep the replacement reviewable through staged commits and requirement-linked checks.
 
 **Non-Goals:**
@@ -27,15 +31,11 @@ shared World model plus Office, Tree and Graph.
 - Compatibility with old browser bridge profiles, preferences or Roamgate data directories.
 - Running Herdr Web and Roamgate bridges side by side inside World.
 - Changing Herdr core or defining a new Herdr protocol.
-- Completing the connected Tree or force-directed Graph migrations in this change. Their qualified
-  projection can be reused later after the Office seam is accepted.
-- Retaining several simultaneous visual terminal or Inspector contexts across different hosts.
-  This change deliberately follows Roamgate's one-focused-connection operational model.
 - Native Capacitor Android packaging in the foundation replacement; the responsive PWA is the
   supported mobile application in this change.
 - Bit-for-bit preservation of obsolete Herdr Web shell chrome, browser-federation settings or
-  retired profile stores. Presentation behavior and geometry that define Office remain required
-  even when their integration seam changes.
+  retired profile stores. Presentation behavior and geometry that define Office and Graph remain
+  required even when their integration seam changes.
 - Restoring the former free-form World notes store. Review annotations remain a separate workflow
   and are not described as migrated notes.
 
@@ -79,28 +79,27 @@ captures a new active lease. A World action is instead bound to the observed con
 generation and fails when either changes. Every operational entry point owned by the mounted Spaces
 tree, including its command palette and already-open palette state, follows the active-view gate.
 
-### Establish Spaces and Office as native routes over the Roamgate store
+### Establish World as native routes over the Roamgate store
 
-The shared World hierarchy and Office view are built against the aggregate snapshot types and
-existing selection/terminal APIs. Roamgate's existing terminal workspace becomes the Spaces
-experience. Spaces stays mounted when Office is selected, so World uses the same component tree,
-Inspector resources and terminal ownership rather than embedding another application or
-maintaining a parallel runtime client. The current CSS Office is only a foundation checkpoint and
-does not satisfy the Office migration.
+The shared World hierarchy and Office, Tree and Graph views are built against the aggregate snapshot
+types and existing selection/terminal APIs. Roamgate's existing terminal workspace becomes the
+Spaces experience. Spaces stays mounted when a visual view is selected, so World uses the same
+component tree, Inspector resources and terminal ownership rather than embedding another
+application or maintaining a parallel runtime client. The current CSS Office, list Tree and static
+branch Graph are only foundation checkpoints and do not satisfy the view migration.
 
 ### Migrate presentation behavior, not the retired runtime boundary
 
-Reuse the delivered Office projection, geometry, renderer, semantic targets and room actions from
-the pre-foundation World line. Adapt their inputs to the connection-qualified `WorldObject` and
-current Roamgate-derived action, Inspector and terminal owners. Do not restore browser federation,
-the Rust bridge, a second profile catalogue or a second runtime subscription.
+Reuse the delivered Office projection, geometry, renderer, semantic targets, room actions,
+conversation layout and Graph layout behavior from the pre-foundation World line. Adapt their
+inputs to the connection-qualified `WorldObject` and current Roamgate-derived action, Inspector and
+terminal owners. Do not restore browser federation, the Rust bridge, a second profile catalogue or
+a second runtime subscription.
 
-An Office adapter may expose the bounded labels, task summaries, state labels, tab metadata and
-qualified action targets expected by the presenter, but it cannot create a second authoritative
-world model. Presentation-only relocation, such as a blocked agent appearing in reception, never
-changes its host/space ancestry. Keeping this adapter independent of Office geometry leaves a
-straightforward input boundary for later Tree and Graph work without designing a generic provider
-SDK now.
+The migration proceeds through view-local adapters, beginning with Office. An adapter may expose
+the bounded labels, task summaries, state labels, tab metadata and qualified action targets
+expected by a presenter, but it cannot create a second authoritative world model. Presentation-only
+relocation, such as a blocked agent appearing in reception, never changes its host/space ancestry.
 
 ### Restore Pixel Office as the Office view
 
@@ -114,28 +113,44 @@ containment, natural row packing, alignment, logical-canvas scrolling and render
 The World shell may change the available viewport, but it does not replace those layout invariants
 with a generic responsive CSS grid.
 
-### Reuse one focused Inspector and terminal context inside Office
+### Reuse one focused Inspector inside visual views
 
-Office selection is observational. When the user explicitly opens a terminal, Files, Changes or
-Agent History, the shell creates one focused operational context containing the exact connection,
-runtime generation, workspace and optional pane/terminal identity. The action activates that
-connection through the existing selected-connection path, revalidates the target and then presents
-the existing Roamgate-derived resource or terminal component while Office remains visible. A stale
-or replaced target fails closed and never falls back to the currently active host.
+Visual-view selection is observational. Office proves the seam first: when the user explicitly
+opens a terminal, Files, Changes or Agent History, the shell creates one focused operational
+context containing the exact connection, runtime generation, workspace and optional pane/terminal
+identity. The action activates that connection through the existing selected-connection path,
+revalidates the target and then presents the existing Roamgate-derived resource or terminal
+component while the visual view remains visible. A stale or replaced target fails closed and never
+falls back to the currently active host.
 
-The Inspector remains a single shell-owned facility shared with Spaces. Office does not clone its
-file, Git, history, preview or resource stores. Switching the focused Office context may replace the
-previous Inspector or terminal context and may dispose the outgoing Spaces terminal mounts exactly
-as Roamgate does today. This is an explicit user-visible context change, not a background attempt to
-keep every host operationally active.
+The Inspector remains a single shell-owned facility shared with Spaces and the visual views. Office
+does not clone its file, Git, history, preview or resource stores. Switching the focused Inspector
+context replaces incompatible prior resource state and may advance Spaces' selected connection
+exactly as Roamgate does today. This is an explicit user-visible context change, not a background
+attempt to keep every host's resource panels active.
 
-The focused Office terminal consumes the existing terminal/session owner and one browser
-WebSocket. Opening the same selected pane focuses the existing attachment rather than creating a
-competing transport. The Office presenter owns only selection and scene association; it never owns
-SSH, terminal transport, reconnect or pane lifecycle. Retained simultaneous cross-host terminal
-windows are deferred. They may be added only after a separate bounded proof shows that
-connection-qualified browser leases can coexist without another socket, tunnel, application store
-or hidden active-connection switching.
+### Keep one terminal owner while restoring qualified conversations
+
+Office first proves that one selected qualified pane can consume the existing terminal/session owner
+without duplicating transport. The same shell owner then maintains a bounded conversation registry
+keyed by connection, runtime generation and terminal identity. Office, Tree and Graph present those
+sessions, but no presenter owns SSH, terminal transport, reconnect or pane lifecycle. Selecting the
+same pane through another representation focuses its existing conversation instead of attaching a
+competitor.
+
+The inherited browser API currently invalidates every scoped client and disposes outgoing Spaces
+terminals when its selected connection changes. The conversation registry therefore uses
+connection-qualified leases whose validity depends on the shared browser transport and owning
+runtime generation, not on the selected Spaces connection. It still uses one browser WebSocket and
+the service's existing connection-routed terminal bridges; it does not open another WebSocket, SSH
+tunnel, application store or terminal manager per host. Selecting another Spaces or Inspector host
+disposes only that focused surface's outgoing mounts. Reconnecting one runtime invalidates only
+conversations owned by that generation.
+
+Up to five desktop conversations retain independent geometry and order; compact layouts expose one
+usable conversation at a time. Explicit handoff focuses the exact pane in mounted Spaces. A
+conversation survives projection refreshes and visual-view changes, and closes only after current
+admitted state confirms the qualified pane no longer exists.
 
 ### Restore operational summaries and pane pinning at the new seam
 
@@ -148,26 +163,37 @@ that optional producer is not installed on the remote host.
 
 Port the old pane/agent watchlist into the World service with connection-qualified records and a
 bounded World-owned store. This pin means “keep this live agent or terminal in my operational
-watchlist”; it is distinct from Roamgate workspace pins and any later view-position pins. Pin, unpin and
+watchlist”; it is distinct from Roamgate workspace pins and Graph position pins. Pin, unpin and
 Pinned-only presentation revalidate the owning runtime and prune panes that are authoritatively
 gone. The former free-form notes store remains retired rather than being conflated with review
 annotations.
 
-### Defer Tree and Graph until the Office seam is proven
+### Promote the checkpoint branch diagram to Tree after Office
 
-The aggregate `WorldObject` remains suitable for later alternate projections, but this change does
-not complete or accept Tree or Graph. Checkpoint implementations may remain available to
-development, but primary product navigation does not present them as finished views. A later change
-can promote the connected branch diagram to Tree and restore the force-directed Graph without
-altering the connection manager, Office geometry or focused operational ownership established here.
+After the Office projection, focused Inspector and conversation seams pass their own acceptance,
+the connected host-to-space-to-agent diagram currently labelled Graph becomes the canonical Tree
+presentation. It retains search, independent disclosure, visible connectors, selected-entity
+details and qualified actions. The list-style checkpoint Tree is only a compact or assistive
+fallback where the branch layout is not practical.
 
-### Accept Office against preserved behavior
+### Restore the spatial Graph after Tree
 
-Office gets focused unit, mounted-browser and synthetic visual acceptance before its task is
-checked. Acceptance compares the migrated result with the delivered Office feature inventory at
-desktop and compact sizes, including dense and unequal topologies, stale hosts, colliding native
-IDs, focused terminal use and the in-Office Inspector. A green repository check alone cannot
-establish visual completeness.
+Port the delivered force-directed Graph canvas and stable host-first projection onto `WorldObject`.
+Restore deterministic seeding, topology-only reheating, node dragging/pinning, bounded pan/zoom,
+Fit, search, disclosure, saved camera/positions, status updates, terminal-window connectors and the
+equivalent semantic interface. Equal native identifiers on different hosts never merge.
+
+The selected-entity context remains shared shell behavior. It exposes only admitted details and
+delegates Files, Changes, Agent History, terminal and Spaces actions through generation-fenced
+paths; Tree and Graph do not acquire another Inspector or runtime owner.
+
+### Accept each view sequentially against preserved behavior
+
+Office receives focused unit, mounted-browser and synthetic visual acceptance first. Tree and Graph
+then receive their own acceptance over the proven projection and operational seams. Each comparison
+uses the delivered feature inventory at desktop and compact sizes, including dense and unequal
+topologies, stale hosts, colliding native IDs and live terminal continuity. A green repository check
+alone cannot establish visual completeness, and passing Office does not complete the replacement.
 
 ### Rebrand before release integration
 
@@ -190,18 +216,19 @@ browser keys untouched for rollback but does not read them.
   separate import/rebrand/projection/packaging.
 - **Aggregate World observation can leak stale or cross-host identities** → Key every record by
   connection and generation, test colliding native IDs, and reject retired results.
-- **World styles and the Office renderer can destabilize Roamgate's responsive shell** → Keep a
-  dedicated route boundary and accept Office at desktop and compact sizes before enabling it in
-  the final shell.
+- **World styles and renderers can destabilize Roamgate's responsive shell** → Keep a dedicated
+  route boundary and accept Office first, then Tree and Graph independently at desktop and compact
+  sizes before completing the replacement.
 - **A minimal presenter can satisfy shallow topology tests while deleting product behavior** → Use
   an explicit Office feature contract, retained synthetic fixtures and rendered visual evidence;
   do not mark Office complete from hierarchy tests alone.
 - **Embedding rich operational context in Office can duplicate Roamgate state** → Lift or reuse the
   shell-owned Inspector and terminal owners, pass one qualified context and reject any design that
   creates a second resource store, WebSocket, SSH tunnel or application instance.
-- **Following one focused host limits simultaneous visual conversations** → Make that limitation
-  explicit for this outcome and defer cross-host retained terminals until a bounded proof can
-  satisfy generation isolation without fighting the selected-connection lifecycle.
+- **Qualified cross-host conversations can fight the focused Spaces lifecycle** → Build the focused
+  Office terminal first, then require the registry to remain on one WebSocket with per-runtime
+  generation isolation; reject designs that duplicate the application, connection store or SSH
+  transport.
 - **Upstream Roamgate evolves quickly** → Pin and validate one exact synchronization point; future
   refreshes are explicit upstream-sync changes rather than floating dependencies.
 - **Dropping native Android changes distribution expectations** → Keep mobile/PWA behavior in
@@ -212,11 +239,11 @@ browser keys untouched for rollback but does not read them.
 1. Record the exact Roamgate source parent and import it on a branch targeting World `main`.
 2. Rebrand all runtime and release identities before producing installable artifacts.
 3. Add and test aggregate connection observation and the World projection.
-4. Enrich the shared World projection and expose one qualified shell-owned Inspector/terminal
-   context while Office remains visible.
-5. Migrate and independently accept the complete Pixel Office over local plus SSH observations and
-   the focused operational context; do not gate this outcome on Tree, Graph or simultaneous
-   cross-host conversations.
+4. Enrich the shared World projection, expose one qualified shell-owned Inspector context and
+   independently accept the complete Pixel Office over local plus SSH observations.
+5. Extend the same terminal owner to bounded qualified conversations from several ready hosts, then
+   migrate and independently accept connected Tree and spatial Graph without reopening the runtime
+   or Inspector boundaries.
 6. Update operational, lineage and release documentation; do not translate old profile stores.
 7. Deliver the complete replacement as a reviewed PR. Existing releases remain the rollback path;
    installing an older release reuses only the old release's untouched storage.

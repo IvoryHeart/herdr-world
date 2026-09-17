@@ -16,6 +16,7 @@
 - [x] 3.2 Integrate native Spaces and checkpoint World routes into the Roamgate shell without mounting a second app, and verify canonical navigation plus desktop/mobile accessibility tests
 - [ ] 3.3 Complete the Pixel Office migration in tasks 10.1–10.7 and verify the defining scene, layout, operations and responsive behavior over qualified multi-host data
 - [x] 3.4 Characterize the checkpoint World-to-Spaces Files, Changes and Agent History handoff, and verify an aggregate selection cannot open resources from a different host or checkout
+- [ ] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
 
 ## 4. Distribution and knowledge
 
@@ -28,8 +29,8 @@
 
 - [x] 5.1 Run formatting, lint, type checking, unit/integration tests and production builds through the repository's final check command and record exact results
 - [x] 5.2 Exercise the compiled World application against a local Herdr plus the deterministic SSH fixture, verifying connection management, aggregate World observation, terminal input, Files, Changes and Agent History
-- [ ] 5.3 Run final responsive browser acceptance on the completed Office at desktop and phone sizes, and publish privacy-safe synthetic captures that demonstrate the required composition and focused operational context
-- [ ] 5.4 Review the final diff and history for secrets, unrelated generated output and stale product identities; push the completed implementation and return PR #93 to ready review only with all Office-migration evidence
+- [ ] 5.3 Run final responsive browser acceptance on the completed Office, Tree and Graph at desktop and phone sizes, and publish privacy-safe synthetic captures that demonstrate the required compositions and operational contexts
+- [ ] 5.4 Review the final diff and history for secrets, unrelated generated output and stale product identities; push the completed implementation and return PR #93 to ready review only with all view-migration evidence
 
 ## 6. Review corrections
 
@@ -47,22 +48,23 @@
 - [x] 7.3 Include the deterministic `lru_map` README licence section, replace the old installation shutdown guidance with the actual target-by-target asynchronous plugin procedure, and verify notices and documentation checks
 - [x] 7.4 Run focused regressions and the complete repository check, refresh the local test service, respond to every foundation re-review thread, and record the green checkpoint
 
-## 8. Qualified Office context
+## 8. Shared visual context, proven in Office
 
 - [ ] 8.1 Extend the qualified WorldObject presenter input with bounded admitted task summaries, agent/model and state labels, focus, tab metadata and action capabilities, and verify missing metadata is never inferred
-- [ ] 8.2 Replace the checkpoint selection panel with one shell-owned Office agent context showing qualified ancestry, freshness, supported actions and the existing Inspector while Office remains visible; verify stale or generation-replaced targets become read-only
+- [ ] 8.2 Replace the checkpoint selection panel with one shell-owned selected-entity context, prove it first in Office with qualified ancestry, freshness, supported actions and the existing Inspector while Office remains visible, and keep the seam reusable by Tree and Graph; verify stale or generation-replaced targets become read-only
 - [ ] 8.3 Reuse the existing Files, Changes and Agent History components and resource state for the focused Office context without cloning an Inspector or runtime store, and verify switching agent/workspace context cannot retain resources from the prior host
 - [ ] 8.4 Route Office Inspector, terminal and Spaces actions through their exact owning connection/generation and the existing selected-connection path, and verify colliding native identifiers cannot cross hosts or fall back to the active host
 - [ ] 8.5 Add validated Office preference storage and bounded Office error containment, and verify a malformed presenter does not stop Spaces, runtime observation, Inspector state or the current terminal
 - [ ] 8.6 Port the bounded session-qualified task-summary report/update/clear producer over Herdr metadata, and verify normalization, redaction, expiry, session replacement and local/SSH presentation without requiring a remote World web service
 - [ ] 8.7 Add a bounded connection-qualified agent/pane watchlist with Pin, Unpin and Pinned-only controls distinct from workspace pins, and verify persistence, colliding IDs, stale generations and authoritative pane removal
 
-## 9. Focused Office terminal
+## 9. Shared live terminal conversations
 
 - [ ] 9.1 Present one focused Office conversation through the existing shell-owned terminal/session owner and one WebSocket, and verify repeated selection of the same qualified agent or desk focuses the existing attachment without a competing transport
-- [ ] 9.2 Bind terminal activation to the explicit Office context through the existing selected-connection lifecycle, and verify switching from a local to an SSH target retires the outgoing focused context without redirecting input or leaving a hidden attachment
-- [ ] 9.3 Restore the Office desk/agent connector and explicit handoff to the mounted Spaces pane, and verify projection refresh, resize and handoff preserve the exact qualified pane while its generation remains current
-- [ ] 9.4 Verify a stale, removed or generation-replaced target closes or disables only its focused Office context, record simultaneous cross-host conversations as deferred, and verify this outcome adds no second socket, tunnel, application store or hidden connection switch
+- [ ] 9.2 Extend the shell terminal owner with a bounded registry keyed by connection, runtime generation and terminal identity whose leases are independent of the selected Spaces host, and verify the registry adds no second WebSocket, SSH tunnel, application store or per-host terminal manager
+- [ ] 9.3 Restore up to five independent desktop conversation windows with bounded move, resize, order, close/focus, real terminal refit and validated browser-local geometry, and verify duplicate and sixth-window behavior
+- [ ] 9.4 Restore Office, Tree and Graph desk/agent/node connectors plus explicit handoff to the mounted Spaces pane, and verify connectors track scene/window movement without changing terminal identity
+- [ ] 9.5 Preserve conversations through projection refresh, visual navigation and unrelated selected-host changes; isolate one host's reconnect/removal to its own qualified sessions, and verify simultaneous local/SSH conversations plus a compact layout with one accessible usable conversation
 
 ## 10. Pixel Office migration
 
@@ -74,9 +76,22 @@
 - [ ] 10.6 Restore optional provider configuration/health and bounded authoritative Office boards through the World service, and verify absent or failed providers leave core topology and terminals intact
 - [ ] 10.7 Verify Office at desktop and phone widths with unequal multi-host rooms, stale hosts, the in-Office Inspector, focused local/SSH terminal use, scene scrolling and preference restoration before checking task 3.3
 
-## 11. Office acceptance and delivery
+## 11. Connected Tree migration
 
-- [ ] 11.1 Exercise Office against simultaneously ready local plus deterministic SSH Herdr runtimes with stale/reconnect and colliding-ID cases, and verify all hosts remain observable while the single focused Inspector/terminal context follows only the explicitly selected qualified target
-- [ ] 11.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for Office, and record its delivered feature inventory with no unexplained parity gaps
-- [ ] 11.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the completed Office, and describe Tree, Graph and simultaneous cross-host conversations only as deferred follow-up work
-- [ ] 11.4 Run the complete repository and distribution checks, obtain independent review of the final Office migration, resolve findings and return PR #93 to ready status without merging it
+- [ ] 11.1 Move the checkpoint connected branch diagram from Graph to canonical Tree and replace the list-primary desktop composition, preserving exact host-space-agent/terminal connectors after Office acceptance
+- [ ] 11.2 Complete Tree search, independent disclosure and dense/unequal branch layout, and verify clearing search restores prior disclosure without dangling connectors or page overflow
+- [ ] 11.3 Integrate the shared focused Inspector context and qualified terminal conversations while retaining an equivalent compact/assistive hierarchy, and verify stale actions, task summaries and keyboard/touch operation
+
+## 12. Spatial Graph migration
+
+- [ ] 12.1 Port the qualified host-first Graph projection and deterministic force layout with explicit host/space/leaf bounds and exact overflow counts, and verify duplicate native identifiers never merge
+- [ ] 12.2 Restore node dragging/pinning, bounded pan/zoom, Fit, search, disclosure and validated camera/position persistence, and verify status-only updates do not reset settled layout state
+- [ ] 12.3 Integrate the shared focused Inspector context, semantic hierarchy and qualified terminal conversation connectors, and verify canvas and semantic selection/actions stay synchronized
+- [ ] 12.4 Restore renderer lifecycle and performance bounds for visibility, resize, topology updates and unmount, and verify repeated view changes release work without adding subscriptions or terminal resize traffic
+
+## 13. Complete-view acceptance and delivery
+
+- [ ] 13.1 Exercise Office, Tree and Graph against simultaneously ready local plus deterministic SSH Herdr runtimes with stale/reconnect and colliding-ID cases, and verify concurrent cross-host conversations retain one qualified action/terminal owner each while Spaces and the Inspector keep one selected host
+- [ ] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the per-view feature inventory with no unexplained parity gaps
+- [ ] 13.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the completed views, and remove checkpoint language only after the implementation evidence passes
+- [ ] 13.4 Run the complete repository and distribution checks, obtain independent review of the final view migrations, resolve findings and return PR #93 to ready status without merging it

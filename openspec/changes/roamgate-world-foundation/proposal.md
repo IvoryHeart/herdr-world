@@ -6,7 +6,9 @@ server-managed local and SSH connections, terminals, files, changes and session 
 should adopt that stronger foundation and make its visual control plane a native part of one
 installable application instead of rebuilding the same capabilities beside it. The first complete
 visual experience SHALL be a deep Pixel Office that brings Roamgate's terminal, Files, Changes and
-Agent History context to the selected agent without requiring breadth across unfinished views.
+Agent History context to the selected agent. Office is the first implementation milestone, but the
+foundation replacement is complete only after Tree, Graph and qualified multi-host conversations
+are migrated over the same seam.
 
 ## What Changes
 
@@ -21,20 +23,23 @@ Agent History context to the selected agent without requiring breadth across unf
   non-loopback service installs.
 - Make Roamgate's workspace terminal, Inspector, Files, Changes, Agent History and connection
   surfaces native World capabilities rather than a separately installed Roamgate application.
-- Project all managed Herdr connections into a shared, host-qualified World hierarchy and make
-  Spaces plus the mature Pixel Office the accepted first-class views of this change.
+- Project all managed Herdr connections into a shared, host-qualified World hierarchy and migrate
+  Spaces, the mature Pixel Office, connected Tree and spatial Graph as complete first-class views
+  with guarded, connection-qualified actions.
 - Keep Office visible while one selected, generation-qualified agent or workspace uses the shell's
   existing terminal and Inspector ownership. Files, Changes and Agent History SHALL open as the
   focused Office context rather than navigating away to a separately implemented resource UI.
 - Retain the useful Roamgate-derived operational surfaces and extend the Office context with
   authoritative agent status, a supported bounded task-summary workflow, ancestry and qualified
   agent/pane pinning.
-- Follow Roamgate's one-selected-connection operational model for this outcome. Office observes all
-  ready hosts concurrently, but this change does not require retained simultaneous terminal or
-  Inspector sessions from several hosts. It SHALL use the existing one-WebSocket, explicitly
-  qualified runtime paths and SHALL NOT add parallel transports or hidden application instances.
-- Defer complete Tree and Graph migrations until the Office integration seam is proven. Checkpoint
-  implementations SHALL NOT be represented as complete primary product views.
+- Preserve Roamgate's one-selected-connection model for Spaces and the focused Inspector, while a
+  shell-owned conversation registry retains explicitly qualified terminal sessions from several
+  ready hosts over the existing one WebSocket. The Office milestone SHALL prove the focused context
+  first; retained cross-host conversations remain required before this replacement is complete and
+  SHALL NOT add parallel transports or hidden application instances.
+- Use Office as the first deep migration milestone, then promote the connected branch checkpoint to
+  Tree and restore the prior spatial Graph. Checkpoint implementations SHALL NOT be represented as
+  complete primary product views before their acceptance passes.
 - Preserve Herdr as an external runtime. World neither bundles Herdr nor introduces a generic
   provider/plugin SDK in this change.
 - Start the new foundation with fresh World connection and presentation settings. Existing
@@ -56,9 +61,9 @@ None.
   connection manager containing isolated local and SSH Herdr runtimes.
 - `bridge-access`: Replace cross-origin bridge admission with one same-origin World service and its
   trusted-single-user authentication boundary.
-- `world-surfaces`: Make the shared World projection, deep Pixel Office and focused operational
-  context native surfaces of the Roamgate-derived shell and its managed connection runtimes;
-  defer complete Tree and Graph presentations.
+- `world-surfaces`: Make the shared World projection, deep Pixel Office, connected Tree, spatial
+  Graph, focused Inspector and qualified multi-host conversations native surfaces of the
+  Roamgate-derived shell and its managed connection runtimes.
 - `distribution-boundaries`: Change upstream lineage, implementation stack, artifacts and plugin
   lifecycle from Herdr Web/Rust to the Roamgate-derived World application.
 
@@ -70,9 +75,10 @@ None.
   development commands.
 - Retires the current remote-bridge settings, browser federation, vendored `herdr-compat` crate and
   native Android build from the active product tree.
-- Re-establishes the World model and complete defining Pixel Office over connection-scoped
-  snapshots, one focused Inspector and the existing terminal owner. The current minimal Office
-  cards are an implementation checkpoint, not accepted parity; complete Tree, spatial Graph and
-  retained simultaneous cross-host conversations are follow-up outcomes.
+- Re-establishes the World model and the complete defining Office, Tree and Graph experience over
+  connection-scoped snapshots, one focused Inspector and one shell-owned terminal registry. The
+  current minimal Office cards, list-primary Tree and static branch Graph are implementation
+  checkpoints, not accepted parity, and the PR remains incomplete until qualified simultaneous
+  local/SSH conversations and all three view migrations pass acceptance.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.
