@@ -36,12 +36,14 @@ recorded by this change rather than unexplained presentation rewrites.
   projection contract, Pixi renderer, geometry, layout publication, semantic targets, assets and
   tests directly; adapt their data and action boundaries to Roamgate rather than recreating the
   scene in DOM/CSS.
-- Keep Office visible while one selected, generation-qualified agent or workspace uses the shell's
-  existing terminal and Inspector ownership. Files, Changes and Agent History SHALL open as the
-  focused Office context rather than navigating away to a separately implemented resource UI.
-- Retain the useful Roamgate-derived operational surfaces and extend the Office context with
-  authoritative agent status, a supported bounded task-summary workflow, ancestry and qualified
-  agent/pane pinning.
+- Keep Office at its full stage size while one selected, generation-qualified agent opens a
+  connected intent overlay backed by the shell's existing Inspector ownership. Files, Changes,
+  Agent History and a docked Terminal SHALL remain available in that overlay; a desk click SHALL
+  open the same shell-owned terminal in the retained floating conversation presentation rather
+  than navigating away or creating a separately implemented resource or terminal UI.
+- Retain the useful Roamgate-derived operational surfaces and extend the Office context with a
+  compact agent identity, authoritative qualified status and optional per-agent observations, a
+  supported bounded task-summary workflow, ancestry and qualified agent/pane pinning.
 - **BREAKING** Replace the former World's simultaneous cross-host terminal-conversation behavior
   with Roamgate's one-selected-connection model for every operational surface. The shared
   WorldObject SHALL continue to present all managed hosts, including ready-inactive and retained

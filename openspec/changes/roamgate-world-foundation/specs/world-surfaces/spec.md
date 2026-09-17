@@ -197,32 +197,47 @@ overflow on the application page.
   that omitted entities were removed from Herdr
 
 ### Requirement: Shared entity detail drawer
-Office, Tree and Graph SHALL provide one consistent selected-entity context without creating a
-second Inspector, terminal owner or runtime store. The context SHALL show the selected entity's
-bounded admitted identity, host and space ancestry, connection freshness, kind and actionable
-state. For agents it SHALL also show available agent/model labels, state labels, status and task
-summary. It SHALL expose generation-fenced Open terminal, Open in Spaces, Files, Changes and Agent
-History actions only for the selected operational host. A ready-inactive entity SHALL instead
-expose bounded read-only detail and an explicit Activate host control. Missing metadata SHALL remain
-absent rather than being inferred.
+Office, Tree and Graph SHALL provide one consistent selected-entity intent overlay without creating
+a second Inspector, terminal owner or runtime store. Selecting an agent SHALL open the overlay over
+the visual stage without resizing, relaying out or otherwise taking workspace from that stage. The
+overlay SHALL identify the selected agent with a compact icon, name and bounded status or
+read-only-host cue; it SHALL give the primary area to immediately visible Files, Changes, Agent
+History and Terminal tabs rather than a repeated metadata table or a set of buttons that must be
+used before those resources become visible. Agent History SHALL be the initial agent tab and the
+user's subsequent tab choice SHALL be retained as a browser-local presentation preference.
 
-At most one Inspector context SHALL be focused at a time. Files, Changes and Agent History SHALL
-reuse the shell's existing components and state while the visual view remains visible. Switching
-selected entities SHALL not change the selected host, clone an Inspector or retain an inactive
-host's resources. Explicit host activation SHALL retire the outgoing Inspector and terminal
-contexts through the existing connection lifecycle.
+The overlay SHALL expose generation-fenced resources only for the selected operational host. A
+ready-inactive or stale entity SHALL retain a bounded read-only identity and an explicit Activate
+host control without opening live resources. Missing metadata SHALL remain absent rather than being
+inferred. Authoritative cost, input-token, output-token or similar observations MAY appear in the
+compact identity area only when the provider qualifies them to that exact agent session; unavailable
+or merely host-wide observations SHALL not be shown as agent values or fabricated as zero.
+
+At most one intent/Inspector context SHALL be focused at a time. Files, Changes and Agent History
+SHALL reuse the shell's existing components and state while the visual view remains visible. The
+intent overlay SHALL remain visually connected to the represented agent whenever that agent has a
+visible scene anchor. Switching selected entities SHALL not change the selected host, clone an
+Inspector or retain an inactive host's resources. Explicit host activation SHALL retire the
+outgoing Inspector and terminal contexts through the existing connection lifecycle.
 
 #### Scenario: Inspect an agent with a task summary
-- **WHEN** an admitted agent reports a bounded task summary and the user selects it in any visual
-  view
-- **THEN** the context shows that summary, its qualified ancestry and the actions supported by its
-  current host generation
+- **WHEN** the user selects an admitted agent with a visible scene representation and bounded task
+  summary
+- **THEN** the intent overlay opens over the unchanged visual stage, shows compact qualified agent
+  identity, exposes its resource tabs and task summary within the relevant intent content, and draws
+  a connector to that agent
 
 #### Scenario: Open rich agent context
-- **WHEN** the user opens Files, Changes or Agent History for an actionable agent on the selected
-  operational host in a visual view
-- **THEN** the existing Inspector opens within that view for the exact qualified workspace and
-  session context
+- **WHEN** the user changes among Files, Changes and Agent History for an actionable agent on the
+  selected operational host
+- **THEN** the existing Inspector content remains in the overlay for the exact qualified workspace
+  and session context without reducing the visual stage or cloning its resource state
+
+#### Scenario: Inspect an agent with qualified observations
+- **WHEN** an optional observation provider reports cost or token metrics qualified to the selected
+  agent session
+- **THEN** the compact identity area may show those values, while unavailable or host-only values
+  remain absent
 
 #### Scenario: Inspect an agent on an inactive host
 - **WHEN** a user selects a current agent on a ready-inactive host
@@ -231,12 +246,14 @@ contexts through the existing connection lifecycle.
 
 #### Scenario: Selected entity becomes stale
 - **WHEN** the selected entity's host disconnects or advances beyond the observed generation
-- **THEN** the context preserves bounded inspection information, marks it stale and disables every
-  operational action
+- **THEN** the overlay preserves bounded inspection information from the selected generation,
+  marks it stale and disables every operational action without silently rebinding to an equal
+  identifier in the replacement generation
 
 #### Scenario: Agent metadata is unavailable
 - **WHEN** an agent exposes no task summary, model label or state label
-- **THEN** the context remains useful without fabricating what the agent is doing or implemented
+- **THEN** its compact identity and available resource tabs remain useful without fabricating what
+  the agent is doing or implemented
 
 ### Requirement: Qualified task-summary reporting
 World SHALL provide and document a supported producer for reporting, updating and clearing an
@@ -410,12 +427,22 @@ World SHALL use the current Roamgate-derived terminal component and its existing
 it SHALL NOT carry or synchronize a second terminal implementation from Herdr Web. Retained World
 conversation/window code MAY provide presentation around that terminal without owning transport.
 
+An Office desk click SHALL directly open or focus that desk's terminal as a floating conversation,
+preserving the established Office interaction. The selected-agent intent overlay SHALL also expose
+Terminal as one of the agent's tools. A terminal MAY be docked in that overlay or popped out into a
+floating conversation, but the same qualified terminal SHALL have exactly one live presentation at
+a time; docking and popping out SHALL explicitly hand off the existing attachment rather than mount
+two terminal components.
+
 Desktop SHALL support up to five distinct conversations with independent bounded position, size,
 z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,
 refit to their real dimensions and retain usable input, selection, scrolling, uploads and mobile
 controls. Compact layouts SHALL present one active usable conversation. Spatial views SHALL connect
-each window to its represented desk, agent or node and keep that association legible when either
-endpoint moves or leaves the visible stage.
+each floating terminal window to its represented desk, agent or node and SHALL separately connect
+the intent overlay to its represented agent. These connectors are presentation relationships: the
+terminal window is a view of the agent's shell tool, while the intent overlay is a view of the
+agent itself. They SHALL track their qualified anchors when either endpoint moves and SHALL never
+imply a different runtime ancestry or terminal identity.
 
 Conversation identity and validity SHALL be qualified by connection and runtime generation inside
 the existing selected-connection browser lease. Opening another window or navigating among views
@@ -433,6 +460,17 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 - **WHEN** a user opens an agent and then its occupied desk or hierarchy node
 - **THEN** World focuses one qualified conversation and does not create another transport or send
   duplicate input
+
+#### Scenario: Open a terminal from an Office desk
+- **WHEN** a user activates an actionable occupied or terminal desk in Office
+- **THEN** World directly opens or focuses its floating qualified terminal conversation and draws
+  a connector to the represented desk or agent
+
+#### Scenario: Move a terminal between agent and floating presentations
+- **WHEN** a user docks a floating terminal in the selected agent's Terminal tab or pops that tab
+  out as a conversation window
+- **THEN** World moves the one live terminal presentation, preserves its qualified session and
+  input ownership, and never leaves a duplicate attachment in the previous target
 
 #### Scenario: Present a terminal while Spaces remains mounted
 - **WHEN** Office presents a qualified terminal and the Spaces application remains mounted but

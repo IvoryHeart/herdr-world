@@ -155,20 +155,32 @@ containment, natural row packing, alignment, logical-canvas scrolling and render
 The World shell may change the available viewport, but it does not replace those layout invariants
 with a generic responsive CSS grid.
 
-### Reuse one focused Inspector inside visual views
+### Present one focused Inspector as an agent intent overlay
 
-Visual-view selection is observational. Office proves the seam first: when the user explicitly
-opens a terminal, Files, Changes or Agent History for an entity on the selected host, the shell
-creates one focused operational context containing the exact connection, runtime generation,
-workspace and optional pane/terminal identity. The action revalidates that target and then presents
-the existing Roamgate-derived resource or terminal component while the visual view remains visible.
-An entity on another host remains read-only until its host is explicitly activated; a stale or
-replaced target fails closed and never falls back.
+Visual-view selection is observational. Office proves the seam first: selecting an agent opens a
+right-edge floating overlay above the unchanged Pixi stage. The header contains only compact agent
+identity and safety state; Files, Changes, Agent History and Terminal occupy the useful area and are
+visible as tabs immediately. Agent History is the initial agent tab, and the last chosen tab is a
+browser-local presentation preference. Full ancestry, generation, persona, model, focus and task
+metadata are not repeated as a large profile card; appropriate admitted information remains
+available in scene callouts or the relevant resource view.
+
+The overlay receives one focused operational context containing the exact connection, observed
+runtime generation, workspace and optional pane/terminal identity. Its connector uses the retained
+scene-layout publication to join the pane edge to the selected agent anchor without affecting
+layout. The action revalidates that target and then presents the existing Roamgate-derived resource
+or terminal component while the visual view remains visible. An entity on another host remains
+read-only until its host is explicitly activated; a stale or replaced target keeps its captured
+bounded identity, fails closed and never silently rebinds by native identifier.
 
 The Inspector remains a single shell-owned facility shared with Spaces and the visual views. Office
 does not clone its file, Git, history, preview or resource stores. Switching selected entities does
 not advance Spaces' connection or retain another host's resources. Explicit host activation uses
 Roamgate's normal teardown and selection lifecycle before a new Inspector context can open.
+
+Optional observations appear in the compact header only after the provider qualifies them to the
+same connection, generation and agent session. Host totals are not divided or attributed by the UI,
+and absent observations produce no zero-value placeholders.
 
 ### Keep selected-host conversations on the existing terminal owner
 
@@ -187,6 +199,20 @@ it wraps the current terminal implementation and does not restore its former tra
 owner. While a terminal is presented in a visual conversation, mounted-but-hidden Spaces SHALL not
 mount a second `TerminalView` for that terminal; explicit handoff retires one presentation before
 the other admits the same Herdr terminal identity.
+
+The registry exposes two mutually exclusive presentation targets for a qualified terminal. The
+agent intent overlay can dock it as a Terminal tab; Pop out moves it into a retained floating
+conversation window, and Dock in profile moves it back. Changing targets may remount the view only
+after the old target has detached, so there is never more than one input listener or attachment for
+that terminal. Activating an Office desk bypasses the intent overlay and directly opens or focuses
+the floating target, preserving the established desk interaction. Focusing any presentation first
+focuses its exact Herdr pane so the existing terminal input gate remains authoritative.
+
+Connectors also have separate semantics and anchors. A floating terminal connects to the qualified
+desk when present, otherwise to its agent or hierarchy node; the intent overlay connects to the
+qualified agent. Both consume published scene positions and presentation geometry, update during
+pan, scroll, move and resize, and disappear rather than retarget when their exact anchor is not
+present. A connector never owns or changes topology, selection, transport or terminal identity.
 
 The registry remains inside the inherited browser routing lease and uses the one browser WebSocket
 and existing terminal bridges; it does not create connection-independent clients, another SSH
