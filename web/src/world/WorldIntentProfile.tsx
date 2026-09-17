@@ -46,6 +46,11 @@ export default function WorldIntentProfile({
     }
   }
 
+  // Once the Inspector owns the selected resource it also renders this
+  // identity. Keeping a second profile shell above it creates two close
+  // controls and can bury the dock controls in the bottom layout.
+  if (inspectorOpen) return null;
+
   return (
     <aside
       className="world-selection-panel world-intent-profile"

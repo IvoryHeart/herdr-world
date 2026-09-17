@@ -5,6 +5,16 @@ import type { Workspace } from "./types";
 import { connectionStorageKey } from "./connectionStorage";
 
 export type InspectorView = "files" | "changes" | "history" | "terminal";
+
+export interface WorkspaceInspectorContext {
+  kind: "space" | "agent" | "terminal";
+  label: string;
+  stateLabel: string;
+  locationLabel: string;
+  agent?: string;
+  taskSummary?: string;
+  canOpenSpaces?: boolean;
+}
 const DEFAULT_INSPECTOR_VIEWS: readonly InspectorView[] = [
   "files",
   "changes",
@@ -31,6 +41,10 @@ export const WORKSPACE_INSPECTOR_REQUEST_EVENT =
 export const WORKSPACE_INSPECTOR_CLOSE_EVENT =
   "herdr-world:workspace-inspector-close";
 export const WORLD_TERMINAL_POP_OUT_EVENT = "herdr-world:terminal-pop-out";
+export const WORLD_OBSERVABILITY_SETTINGS_EVENT =
+  "herdr-world:observability-settings";
+export const WORLD_OBSERVABILITY_UPDATED_EVENT =
+  "herdr-world:observability-updated";
 export const WORKSPACE_ANNOTATION_REQUEST_EVENT =
   "herdr-world:workspace-annotation-request";
 

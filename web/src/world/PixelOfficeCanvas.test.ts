@@ -11,9 +11,9 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome)(
-  "the retained Pixel Office mounts its complete scene and releases Pixi resources",
-  async () => {
+test.skipIf(!chrome).each([1280, 390])(
+  "the retained Pixel Office preserves its complete responsive scene at %ipx",
+  async (width) => {
     const dir = await mkdtemp(join(tmpdir(), "pixel-office-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -123,7 +123,7 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          "--window-size=1280,900",
+          `--window-size=${width},900`,
           "--enable-webgl",
           "--use-angle=swiftshader",
           "--enable-unsafe-swiftshader",

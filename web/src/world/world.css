@@ -937,9 +937,6 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .world-compact-target-chooser > summary {
-    padding-right: 58px;
-  }
   .world-compact-target-chooser {
     position: relative;
     z-index: 30;
@@ -954,7 +951,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 7px 12px;
+    padding: 7px 58px 7px 12px;
     color: var(--text, #edf2f7);
     cursor: pointer;
     touch-action: manipulation;

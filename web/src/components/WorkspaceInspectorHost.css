@@ -30,6 +30,34 @@
   gap: 1px;
 }
 
+.workspace-inspector-agent-identity {
+  grid-template-columns: 30px minmax(0, 1fr);
+  column-gap: 8px;
+}
+
+.workspace-inspector-agent-avatar {
+  grid-row: 1 / 4;
+  width: 30px;
+  height: 30px;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.workspace-inspector-agent-avatar .agent-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.workspace-inspector-agent-identity > :not(.workspace-inspector-agent-avatar) {
+  grid-column: 2;
+}
+
 .workspace-inspector-repo,
 .workspace-inspector-checkout,
 .workspace-inspector-path {

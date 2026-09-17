@@ -3,6 +3,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
 import { endpointCreationReason, store } from "../store";
+import {
+  WORLD_OBSERVABILITY_SETTINGS_EVENT,
+  WORLD_OBSERVABILITY_UPDATED_EVENT,
+} from "../workspaceResource";
 import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
 import type {
   OfficeCanvasAnchor,
@@ -12,7 +16,7 @@ import type {
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
 import { OfficeCompletionNotices } from "./OfficeCompletionNotices";
-import { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
+export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import {
   OfficeRoomActionsOverlay,
   OfficeSemanticTargetsOverlay,
@@ -65,6 +69,7 @@ export default function PixelOfficeView({
   onSelectedAnchorChange,
   floatingTerminals,
   onConversationNodeAnchorsChange,
+  onOpenObservabilitySettings,
 }: {
   world: WorldObject;
   selectedId: string | null;
@@ -75,6 +80,7 @@ export default function PixelOfficeView({
   onConversationNodeAnchorsChange?(
     anchors: Record<string, OfficeCanvasAnchor> | null,
   ): void;
+  onOpenObservabilitySettings?: () => void;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -100,8 +106,6 @@ export default function PixelOfficeView({
     EMPTY_OFFICE_OBSERVABILITY,
   );
   const [observabilityRevision, setObservabilityRevision] = useState(0);
-  const [observabilitySettingsOpen, setObservabilitySettingsOpen] =
-    useState(false);
   preferencesRef.current = preferences;
 
   useEffect(() => {
@@ -121,6 +125,13 @@ export default function PixelOfficeView({
       window.clearInterval(timer);
     };
   }, [observabilityRevision]);
+
+  useEffect(() => {
+    const refresh = () => setObservabilityRevision((value) => value + 1);
+    window.addEventListener(WORLD_OBSERVABILITY_UPDATED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(WORLD_OBSERVABILITY_UPDATED_EVENT, refresh);
+  }, []);
 
   useEffect(() => {
     const scroll = scrollRef.current;
@@ -382,7 +393,13 @@ export default function PixelOfficeView({
           data-status={observability.health}
           aria-label={`Office metrics settings (${observability.health})`}
           title={`Office metrics settings · ${observability.health}`}
-          onClick={() => setObservabilitySettingsOpen(true)}
+          onClick={() => {
+            if (onOpenObservabilitySettings) onOpenObservabilitySettings();
+            else
+              window.dispatchEvent(
+                new Event(WORLD_OBSERVABILITY_SETTINGS_EVENT),
+              );
+          }}
         >
           <Activity size={15} aria-hidden="true" />
           <span>Metrics</span>
@@ -551,12 +568,6 @@ export default function PixelOfficeView({
           }
         }}
       />
-      {observabilitySettingsOpen ? (
-        <OfficeObservabilityDialog
-          onClose={() => setObservabilitySettingsOpen(false)}
-          onSaved={() => setObservabilityRevision((value) => value + 1)}
-        />
-      ) : null}
     </div>
   );
 }

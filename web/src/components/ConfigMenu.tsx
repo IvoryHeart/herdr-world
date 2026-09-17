@@ -108,6 +108,7 @@ type ConfigMenuProps = {
   ) => void;
   onTerminalThemeSelectionChange: (selection: TerminalThemeSelection) => void;
   onCustomTerminalThemesChange: (themes: CustomTerminalTheme[]) => void;
+  onOpenOfficeMetrics?: () => void;
 };
 
 export function ConfigMenu({
@@ -127,6 +128,7 @@ export function ConfigMenu({
   onMobileTerminalSideShortcutsChange,
   onTerminalThemeSelectionChange,
   onCustomTerminalThemesChange,
+  onOpenOfficeMetrics,
 }: ConfigMenuProps) {
   const s = useStoreSelector(
     (state) => ({
@@ -487,6 +489,17 @@ export function ConfigMenu({
 
             <div className="config-section">
               <div className="config-title">Behavior & automation</div>
+              {onOpenOfficeMetrics ? (
+                <ConfigMenuItem
+                  icon={<Server size={15} />}
+                  label="OTEL economy metrics"
+                  description="Connect Prometheus to the Office Economy board"
+                  onClick={() => {
+                    setOpen(false);
+                    onOpenOfficeMetrics();
+                  }}
+                />
+              ) : null}
               <div className="config-preference-row">
                 <span className="config-item-icon">
                   <Download size={15} />

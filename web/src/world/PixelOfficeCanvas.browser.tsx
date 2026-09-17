@@ -1,9 +1,13 @@
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
+import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
+import { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import "./world.css";
 
 const failures: string[] = [];
@@ -106,10 +110,20 @@ function connection(
 }
 
 async function run() {
+  const compact = window.innerWidth <= 720;
+  worldLocalStorage.setItem(
+    OFFICE_PREFERENCES_KEY,
+    JSON.stringify({
+      roomAlignment: "right",
+      longTitleMode: "compact",
+      scrollLeft: compact ? 73 : 0,
+      scrollTop: 0,
+    }),
+  );
   document.body.style.margin = "0";
   const layoutShell = document.createElement("div");
   layoutShell.className = "world-view-layout has-context";
-  layoutShell.style.cssText = "position:relative;width:1280px;height:820px";
+  layoutShell.style.cssText = "position:relative;width:100vw;height:820px";
   const host = document.createElement("div");
   host.className = "world-view-stage";
   const context = document.createElement("aside");
@@ -119,43 +133,84 @@ async function run() {
   layoutShell.append(host, context);
   document.body.append(layoutShell);
   const root = createRoot(host);
-  const world = buildWorldObject(
-    [
-      connection("local", "Local", "alpha", [
-        "working",
-        "unknown",
-        "blocked",
-        "done",
-      ]),
-      connection("remote", "Remote", "beta", [
-        "working",
-        "unknown",
-        "blocked",
-        "idle",
-      ]),
-    ],
-    "local",
-  );
+  const local = connection("local", "Local", "alpha", [
+    "working",
+    "unknown",
+    "blocked",
+    "done",
+  ]);
+  const remote = connection("remote", "Remote", "beta", [
+    "working",
+    "unknown",
+    "blocked",
+    "idle",
+  ]);
+  if (remote.snapshot) {
+    remote.snapshot.tabs = remote.snapshot.tabs.slice(0, 1);
+    remote.snapshot.panes = remote.snapshot.panes.filter(
+      ({ tab_id }) => tab_id === "beta-working",
+    );
+    remote.snapshot.workspaces[0] = {
+      ...remote.snapshot.workspaces[0]!,
+      pane_count: 2,
+      tab_count: 1,
+    };
+  }
+  const stale = {
+    ...connection("stale", "Offline", "gamma", [
+      "working",
+      "unknown",
+      "blocked",
+      "idle",
+    ]),
+    state: "error" as const,
+    generation: 8,
+    snapshotGeneration: 7,
+    stale: true,
+    actionable: false,
+  };
+  const world = buildWorldObject([local, remote, stale], "local");
 
   try {
     let selectedAnchor = false;
     let terminalActivationAllowed = false;
+    let terminalActivations = 0;
+    function OfficeHarness() {
+      const [settingsOpen, setSettingsOpen] = useState(false);
+      return (
+        <>
+          <PixelOfficeView
+            world={world}
+            selectedId={world.leaves[0]?.id ?? null}
+            onSelect={() => {}}
+            onOpenTerminal={async () => {
+              terminalActivations += 1;
+              if (!terminalActivationAllowed) {
+                throw new Error("synthetic activation failure");
+              }
+            }}
+            floatingTerminals={[]}
+            onSelectedAnchorChange={(anchor) => {
+              selectedAnchor = anchor !== null;
+            }}
+            onOpenObservabilitySettings={() => setSettingsOpen(true)}
+          />
+          {settingsOpen ? (
+            <OfficeObservabilityDialog
+              onClose={() => setSettingsOpen(false)}
+              onSaved={() =>
+                window.dispatchEvent(
+                  new Event(WORLD_OBSERVABILITY_UPDATED_EVENT),
+                )
+              }
+            />
+          ) : null}
+        </>
+      );
+    }
     root.render(
       <StrictMode>
-        <PixelOfficeView
-          world={world}
-          selectedId={world.leaves[0]?.id ?? null}
-          onSelect={() => {}}
-          onOpenTerminal={async () => {
-            if (!terminalActivationAllowed) {
-              throw new Error("synthetic activation failure");
-            }
-          }}
-          floatingTerminals={[]}
-          onSelectedAnchorChange={(anchor) => {
-            selectedAnchor = anchor !== null;
-          }}
-        />
+        <OfficeHarness />
       </StrictMode>,
     );
     await waitFor(
@@ -206,10 +261,13 @@ async function run() {
       "Agent Bar geometry is missing",
     );
     check(
-      layout?.ceoBlocks.receptions.length === 2,
+      layout?.ceoBlocks.receptions.length === 3,
       "Host receptions are missing",
     );
-    check(layout?.rooms.length === 2, "Work rooms are missing");
+    check(
+      layout?.rooms.length === 3,
+      "Unequal multi-host work rooms are missing",
+    );
     check(
       host.querySelectorAll(".world-semantic-target").length > 0,
       "Office semantic targets are missing",
@@ -243,8 +301,13 @@ async function run() {
       "The active host room is missing its new-seat control",
     );
     check(
-      host.querySelectorAll(".world-room-overlay-action").length === 4,
+      host.querySelectorAll(".world-room-overlay-action").length === 6,
       "Room management controls are missing",
+    );
+    check(
+      host.querySelectorAll(".world-room-overlay-action:not(:disabled)")
+        .length === 2,
+      "Inactive or stale hosts exposed room mutations",
     );
     check(
       host.querySelector(".world-new-room-canvas-action") !== null,
@@ -263,6 +326,65 @@ async function run() {
       selectedAnchor,
       "The selected Office entity did not publish an anchor",
     );
+    const inactiveAgent = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].find((button) => button.getAttribute("aria-label")?.includes("Remote"));
+    const staleAgent = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].find((button) => button.getAttribute("aria-label")?.includes(", stale,"));
+    check(
+      inactiveAgent !== undefined,
+      "Ready-inactive host agents are missing",
+    );
+    check(staleAgent !== undefined, "Stale host agents are missing");
+    const activationsBeforeReadOnly = terminalActivations;
+    inactiveAgent?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    staleAgent?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    check(
+      terminalActivations === activationsBeforeReadOnly,
+      "A read-only host opened a terminal",
+    );
+
+    const stageScroll = host.querySelector<HTMLElement>(".world-stage-scroll")!;
+    const alignment = host.querySelector<HTMLSelectElement>(
+      ".world-office-toolbar select",
+    );
+    const titleMode = host.querySelectorAll<HTMLSelectElement>(
+      ".world-office-toolbar select",
+    )[1];
+    check(
+      alignment?.value === "right" && titleMode?.value === "compact",
+      "Office layout preferences were not restored",
+    );
+    if (compact) {
+      check(
+        getComputedStyle(host.querySelector(".world-compact-target-chooser")!)
+          .display !== "none",
+        "Compact Office chooser is hidden at phone width",
+      );
+      check(
+        stageScroll.scrollWidth > stageScroll.clientWidth,
+        "Phone Office lost bounded horizontal scene navigation",
+      );
+      check(
+        Math.abs(stageScroll.scrollLeft - 73) <= 1,
+        "Office scroll preference was not restored at phone width",
+      );
+      stageScroll.scrollLeft = 111;
+      stageScroll.dispatchEvent(new Event("scroll"));
+      await settle();
+      const saved = JSON.parse(
+        worldLocalStorage.getItem(OFFICE_PREFERENCES_KEY) ?? "{}",
+      ) as { scrollLeft?: number };
+      check(
+        saved.scrollLeft === 111,
+        "Office scroll preference was not persisted",
+      );
+    }
 
     const metricsButton = host.querySelector<HTMLButtonElement>(
       ".world-office-metrics-button",
@@ -327,6 +449,7 @@ async function run() {
       "Pixel Office canvas leaked after unmount",
     );
     layoutShell.remove();
+    worldLocalStorage.removeItem(OFFICE_PREFERENCES_KEY);
   }
 }
 

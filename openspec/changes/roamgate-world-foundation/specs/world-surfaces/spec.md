@@ -203,7 +203,9 @@ the visual stage without resizing, relaying out or otherwise taking workspace fr
 overlay SHALL identify the selected agent with a compact icon, name and bounded status or
 read-only-host cue; it SHALL give the primary area to immediately visible Files, Changes, Agent
 History and Terminal tabs rather than a repeated metadata table or a set of buttons that must be
-used before those resources become visible. Terminal SHALL be the initial tab for a
+used before those resources become visible. The compact identity and resources SHALL share one
+overlay lifecycle, header action set and close control in every dock position rather than stack a
+separate profile card above the Inspector. Terminal SHALL be the first tab and the initial tab for a
 terminal-capable entity when there is no retained applicable tab preference, and the user's
 subsequent tab choice SHALL be retained as a browser-local presentation preference.
 
@@ -232,6 +234,11 @@ outgoing Inspector and terminal contexts through the existing connection lifecyc
   applicable tab preference
 - **THEN** the intent overlay opens Terminal as its initial resource while keeping Files, Changes
   and any admitted Agent History available as peer tabs
+
+#### Scenario: Reposition a selected-agent intent
+- **WHEN** the user docks the selected-agent intent at the side or bottom, expands it or restores it
+- **THEN** the compact identity, resource tabs, dock/expand actions and its single close control
+  remain reachable within the same overlay
 
 #### Scenario: Inspect an agent with a task summary
 - **WHEN** the user selects an admitted agent with a visible scene representation and bounded task
@@ -366,9 +373,11 @@ NOT force unrelated rows to that width.
   not invent cost, activity or completion data
 
 #### Scenario: Configure an optional observation provider
-- **WHEN** the user saves a supported credential-free provider URL in Office settings
+- **WHEN** the user opens the World settings from any native view or the Office metrics shortcut
+  and saves a supported credential-free provider URL
 - **THEN** the World service validates and applies it, reports bounded health and updates the
-  relevant Office boards without exposing provider access or credentials to the browser
+  relevant Office boards without exposing provider access or credentials to the browser, and both
+  entry points edit the same service-owned setting
 
 ### Requirement: Office state and room operations
 Office SHALL place working and unknown agents with their owning work room, blocked agents at their

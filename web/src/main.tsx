@@ -5,8 +5,11 @@ import ReactDOM from "react-dom/client";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/vendor.css";
-import WorldFoundationApp from "./world/WorldFoundationApp";
 import { OverlayScrollbarLayer } from "./components/OverlayScrollbarLayer";
+
+const WorldFoundationApp = React.lazy(
+  () => import("./world/WorldFoundationApp"),
+);
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -43,7 +46,9 @@ initializeShortcutPreferences();
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <WorldFoundationApp />
+      <React.Suspense fallback={null}>
+        <WorldFoundationApp />
+      </React.Suspense>
       <OverlayScrollbarLayer />
     </ErrorBoundary>
   </React.StrictMode>,

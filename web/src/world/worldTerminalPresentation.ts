@@ -24,7 +24,7 @@ export function upsertWorldFloatingTerminal(
   limit = MAX_WORLD_FLOATING_TERMINALS,
 ) {
   const retained = current.filter(
-    (terminal) => terminal.terminalId !== next.terminalId,
+    (terminal) => !sameWorldTerminal(terminal, next),
   );
   if (retained.length === current.length && retained.length >= limit) {
     return { terminals: current, admitted: false } as const;
@@ -33,6 +33,29 @@ export function upsertWorldFloatingTerminal(
     terminals: [...retained, next],
     admitted: true,
   } as const;
+}
+
+export function retainWorldFloatingTerminals(
+  current: readonly WorldFloatingTerminal[],
+  lease: { connectionId: string; runtimeGeneration: number } | null,
+) {
+  if (!lease) return [];
+  return current.filter(
+    (terminal) =>
+      terminal.connectionId === lease.connectionId &&
+      terminal.runtimeGeneration === lease.runtimeGeneration,
+  );
+}
+
+function sameWorldTerminal(
+  left: WorldFloatingTerminal,
+  right: WorldFloatingTerminal,
+) {
+  return (
+    left.connectionId === right.connectionId &&
+    left.runtimeGeneration === right.runtimeGeneration &&
+    left.terminalId === right.terminalId
+  );
 }
 
 export function floatingTerminalForNode(

@@ -176,7 +176,10 @@ import {
   WORKSPACE_ANNOTATION_REQUEST_EVENT,
   type WorkspaceAnnotationRequest,
   type WorkspaceInspectorRequest,
+  type WorkspaceInspectorContext,
   type WorkspaceInspectorState,
+  WORLD_OBSERVABILITY_SETTINGS_EVENT,
+  WORLD_OBSERVABILITY_UPDATED_EVENT,
   writeInspectorPreferences,
   writeResourceFileSelection,
 } from "./workspaceResource";
@@ -196,6 +199,13 @@ const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
 const WorldTerminalPortalList = lazyWithReload(
   "world-terminal-portals",
   () => import("./world/WorldTerminalPortalList"),
+);
+const OfficeObservabilityDialog = lazyWithReload(
+  "office-observability-settings",
+  () =>
+    import("./world/PixelOfficeView").then((module) => ({
+      default: module.OfficeObservabilityDialog,
+    })),
 );
 const ViewportDebugOverlay = lazyWithReload(
   "viewport-debug-overlay",
@@ -1104,6 +1114,8 @@ export default function App({
   onInspectorVisibilityChange,
   onInspectorViewChange,
   onTerminalPopOut,
+  inspectorContext = null,
+  onInspectorOpenSpaces,
 }: {
   operationalShortcutsEnabled?: boolean;
   inspectorPortal?: Element | null;
@@ -1113,8 +1125,17 @@ export default function App({
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
+  inspectorContext?: WorkspaceInspectorContext | null;
+  onInspectorOpenSpaces?: () => void;
 } = {}) {
   useShortcutPreferences();
+  const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setOfficeMetricsOpen(true);
+    window.addEventListener(WORLD_OBSERVABILITY_SETTINGS_EVENT, open);
+    return () =>
+      window.removeEventListener(WORLD_OBSERVABILITY_SETTINGS_EVENT, open);
+  }, []);
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
@@ -3318,6 +3339,8 @@ export default function App({
           onExpandedChange={setInspectorExpanded}
           onClose={closeInspector}
           onBack={clearInspectorDetail}
+          context={inspectorContext}
+          onOpenSpaces={onInspectorOpenSpaces}
         />
       </Suspense>
     </div>
@@ -3366,6 +3389,7 @@ export default function App({
             onMobileTerminalSideShortcutsChange={setMobileTerminalSideShortcuts}
             onTerminalThemeSelectionChange={setTerminalThemeSelection}
             onCustomTerminalThemesChange={setCustomTerminalThemes}
+            onOpenOfficeMetrics={() => setOfficeMetricsOpen(true)}
           />
         </div>
       </div>
@@ -3797,6 +3821,16 @@ export default function App({
         </main>
       </div>
       <GlobalTooltip />
+      {officeMetricsOpen ? (
+        <Suspense fallback={null}>
+          <OfficeObservabilityDialog
+            onClose={() => setOfficeMetricsOpen(false)}
+            onSaved={() =>
+              window.dispatchEvent(new Event(WORLD_OBSERVABILITY_UPDATED_EVENT))
+            }
+          />
+        </Suspense>
+      ) : null}
       {viewportDebugEnabled ? (
         <Suspense fallback={null}>
           <ViewportDebugOverlay />

@@ -1,5 +1,6 @@
 import {
   ChevronLeft,
+  ExternalLink,
   FileDiff,
   FolderTree,
   GitFork,
@@ -45,7 +46,9 @@ import {
   type InspectorSplitView,
   type InspectorView,
   type WorkspaceInspectorState,
+  type WorkspaceInspectorContext,
 } from "../workspaceResource";
+import { AgentIcon } from "./AgentIcon";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
 import { paneHasAgentHistory } from "./agentSession";
 import {
@@ -222,6 +225,8 @@ export function WorkspaceInspectorHost({
   onExpandedChange,
   onClose,
   onBack,
+  context,
+  onOpenSpaces,
 }: {
   state: WorkspaceInspectorState;
   onReady?: () => void;
@@ -256,6 +261,8 @@ export function WorkspaceInspectorHost({
   onExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
   onBack: () => void;
+  context?: WorkspaceInspectorContext | null;
+  onOpenSpaces?: () => void;
 }) {
   const hostRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -362,6 +369,7 @@ export function WorkspaceInspectorHost({
   const historyAvailable =
     availableViews.includes("history") && paneHasAgentHistory(historyPane);
   const terminalAvailable = availableViews.includes("terminal");
+  const agentContext = context ?? inspectorAgentContext(historyPane, workspace);
   const detailAvailable =
     state.view === "files"
       ? !!fileSelection.entry
@@ -456,28 +464,80 @@ export function WorkspaceInspectorHost({
       data-view={state.view}
     >
       <header className="workspace-inspector-head">
-        <div className="workspace-inspector-identity">
-          <span className="workspace-inspector-repo">
-            {workspace?.worktree?.repo_name || workspace?.label || "Workspace"}
-          </span>
-          <span className="workspace-inspector-checkout">
-            {checkoutLabel(workspace)}
-            {workspace?.worktree?.is_linked_worktree ? (
-              <span className="workspace-inspector-wt" title="Linked worktree">
-                <GitFork size={11} aria-hidden="true" /> Worktree
-              </span>
-            ) : null}
-          </span>
-          {workspace?.worktree?.checkout_path || workspace?.cwd ? (
-            <code
-              className="workspace-inspector-path"
-              title={workspace.worktree?.checkout_path ?? workspace.cwd}
+        {agentContext ? (
+          <div className="workspace-inspector-identity workspace-inspector-agent-identity">
+            <span
+              className="workspace-inspector-agent-avatar"
+              aria-hidden="true"
             >
-              {workspace.worktree?.checkout_path ?? workspace.cwd}
-            </code>
-          ) : null}
-        </div>
+              {agentContext.kind === "agent" ? (
+                <AgentIcon
+                  agent={agentContext.agent ?? agentContext.label}
+                  compact
+                />
+              ) : agentContext.kind === "terminal" ? (
+                <SquareTerminal size={16} />
+              ) : (
+                <FolderTree size={16} />
+              )}
+            </span>
+            <span className="workspace-inspector-repo">
+              {agentContext.kind} · {agentContext.stateLabel}
+            </span>
+            <span className="workspace-inspector-checkout">
+              {agentContext.label}
+            </span>
+            <span
+              className="workspace-inspector-path"
+              title={agentContext.taskSummary ?? agentContext.locationLabel}
+            >
+              {agentContext.locationLabel}
+              {agentContext.taskSummary ? ` · ${agentContext.taskSummary}` : ""}
+            </span>
+          </div>
+        ) : (
+          <div className="workspace-inspector-identity">
+            <span className="workspace-inspector-repo">
+              {workspace?.worktree?.repo_name ||
+                workspace?.label ||
+                "Workspace"}
+            </span>
+            <span className="workspace-inspector-checkout">
+              {checkoutLabel(workspace)}
+              {workspace?.worktree?.is_linked_worktree ? (
+                <span
+                  className="workspace-inspector-wt"
+                  title="Linked worktree"
+                >
+                  <GitFork size={11} aria-hidden="true" /> Worktree
+                </span>
+              ) : null}
+            </span>
+            {workspace?.worktree?.checkout_path || workspace?.cwd ? (
+              <code
+                className="workspace-inspector-path"
+                title={workspace.worktree?.checkout_path ?? workspace.cwd}
+              >
+                {workspace.worktree?.checkout_path ?? workspace.cwd}
+              </code>
+            ) : null}
+          </div>
+        )}
         <div className="workspace-inspector-tabs" role="tablist">
+          {terminalAvailable ? (
+            <button
+              ref={terminalTabRef}
+              type="button"
+              role="tab"
+              aria-selected={state.view === "terminal"}
+              tabIndex={state.view === "terminal" ? 0 : -1}
+              className={state.view === "terminal" ? "is-active" : ""}
+              onClick={() => onViewChange("terminal")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <SquareTerminal size={14} /> Terminal
+            </button>
+          ) : null}
           {filesAvailable ? (
             <button
               ref={filesTabRef}
@@ -531,22 +591,18 @@ export function WorkspaceInspectorHost({
               <History size={14} /> History
             </button>
           ) : null}
-          {terminalAvailable ? (
-            <button
-              ref={terminalTabRef}
-              type="button"
-              role="tab"
-              aria-selected={state.view === "terminal"}
-              tabIndex={state.view === "terminal" ? 0 : -1}
-              className={state.view === "terminal" ? "is-active" : ""}
-              onClick={() => onViewChange("terminal")}
-              onKeyDown={handleTabKeyDown}
-            >
-              <SquareTerminal size={14} /> Terminal
-            </button>
-          ) : null}
         </div>
         <div className="workspace-inspector-actions">
+          {context?.canOpenSpaces && onOpenSpaces ? (
+            <button
+              type="button"
+              title="Open in Spaces"
+              aria-label="Open in Spaces"
+              onClick={onOpenSpaces}
+            >
+              <ExternalLink size={15} />
+            </button>
+          ) : null}
           {state.view === "terminal" &&
           onTerminalPopOut &&
           !terminalDetached ? (
@@ -882,4 +938,22 @@ export function WorkspaceInspectorHost({
       )}
     </aside>
   );
+}
+
+function inspectorAgentContext(
+  pane: Pane | undefined,
+  workspace: Workspace | undefined,
+): WorkspaceInspectorContext | null {
+  if (!pane?.agent) return null;
+  const status = pane.agent_status || "unknown";
+  return {
+    kind: "agent",
+    label: pane.display_agent?.trim() || pane.agent,
+    stateLabel: pane.state_labels?.[status]?.trim() || status,
+    locationLabel: workspace?.label || "Workspace",
+    agent: pane.agent,
+    ...(pane.task_summary?.trim()
+      ? { taskSummary: pane.task_summary.trim() }
+      : {}),
+  };
 }

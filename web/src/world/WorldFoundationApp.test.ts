@@ -11,11 +11,13 @@ import {
   hasValidSelectedConnection,
   parseWorldView,
   selectedHostStatusLabel,
+  retainWorldFloatingTerminals,
   shouldCloseWorldInspector,
   shouldRehomeDockedTerminal,
   upsertWorldFloatingTerminal,
   worldIntentInitialView,
   worldIntentViews,
+  worldInspectorContext,
   worldSelectionIsCurrent,
   worldViewFromPath,
 } from "./WorldFoundationApp";
@@ -350,19 +352,28 @@ describe("World view preference", () => {
     expect(worldIntentViews(world.hosts[0])).toEqual([]);
     expect(worldIntentViews(world.spaces[0])).toEqual(["files", "changes"]);
     expect(worldIntentViews(agent)).toEqual([
+      "terminal",
       "files",
       "changes",
       "history",
-      "terminal",
     ]);
     expect(worldIntentViews(terminal)).toEqual([
+      "terminal",
       "files",
       "changes",
-      "terminal",
     ]);
     expect(worldIntentInitialView(agent, null)).toBe("terminal");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
     expect(worldIntentInitialView(terminal, "history")).toBe("terminal");
+    expect(worldInspectorContext(agent)).toMatchObject({
+      kind: "agent",
+      label: "codex",
+      stateLabel: "working",
+      locationLabel: "Shared · Host A",
+      agent: "codex",
+      canOpenSpaces: true,
+    });
+    expect(worldInspectorContext(world.hosts[0])).toBeNull();
   });
 
   test("restores a valid last host before the default or current profile", () => {
@@ -540,7 +551,7 @@ describe("World view preference", () => {
       workspaceId: "shared",
       view: "history",
       originPaneId: "pane-a",
-      availableViews: ["files", "changes", "history", "terminal"],
+      availableViews: ["terminal", "files", "changes", "history"],
     });
   });
 
@@ -663,6 +674,82 @@ describe("World view preference", () => {
         terminalId: "terminal-new",
       }),
     ).toEqual({ terminals, admitted: false });
+  });
+
+  test("keys conversations by connection, runtime generation, and terminal identity", () => {
+    const local = {
+      nodeId: "local-node",
+      connectionId: "local",
+      runtimeGeneration: 4,
+      paneId: "shared-pane",
+      terminalId: "shared-terminal",
+      label: "Local",
+      hostLabel: "Local",
+      spaceLabel: "Studio",
+    };
+    const remote = {
+      ...local,
+      nodeId: "remote-node",
+      connectionId: "remote",
+      label: "Remote",
+      hostLabel: "Remote",
+    };
+    const replacement = { ...local, nodeId: "new-node", runtimeGeneration: 5 };
+
+    expect(upsertWorldFloatingTerminal([local], remote).terminals).toEqual([
+      local,
+      remote,
+    ]);
+    expect(upsertWorldFloatingTerminal([local], replacement).terminals).toEqual(
+      [local, replacement],
+    );
+    expect(
+      upsertWorldFloatingTerminal([local], { ...local, label: "Focused" })
+        .terminals,
+    ).toEqual([{ ...local, label: "Focused" }]);
+  });
+
+  test("retires conversations outside the exact active runtime lease", () => {
+    const conversations = [
+      {
+        nodeId: "local-current",
+        connectionId: "local",
+        runtimeGeneration: 4,
+        paneId: "pane-a",
+        terminalId: "terminal-a",
+        label: "Current",
+        hostLabel: "Local",
+        spaceLabel: "Studio",
+      },
+      {
+        nodeId: "local-old",
+        connectionId: "local",
+        runtimeGeneration: 3,
+        paneId: "pane-b",
+        terminalId: "terminal-b",
+        label: "Old",
+        hostLabel: "Local",
+        spaceLabel: "Studio",
+      },
+      {
+        nodeId: "remote",
+        connectionId: "remote",
+        runtimeGeneration: 8,
+        paneId: "pane-c",
+        terminalId: "terminal-c",
+        label: "Remote",
+        hostLabel: "Remote",
+        spaceLabel: "Review",
+      },
+    ];
+
+    expect(
+      retainWorldFloatingTerminals(conversations, {
+        connectionId: "local",
+        runtimeGeneration: 4,
+      }),
+    ).toEqual([conversations[0]]);
+    expect(retainWorldFloatingTerminals(conversations, null)).toEqual([]);
   });
 
   test("does not dispatch Inspector work after a generation replacement", async () => {

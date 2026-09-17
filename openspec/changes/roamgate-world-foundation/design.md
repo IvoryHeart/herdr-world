@@ -163,7 +163,10 @@ with a generic responsive CSS grid.
 Visual-view selection is observational. Office proves the seam first: selecting an agent opens a
 right-edge floating overlay above the unchanged Pixi stage. The header contains only compact agent
 identity and safety state; Files, Changes, Agent History and Terminal occupy the useful area and are
-visible as tabs immediately. Terminal is the initial tab for terminal-capable entities when no
+visible as tabs immediately. The identity and resources are one composed Inspector surface with one
+set of dock, expand, pop-out and close controls; bottom docking does not leave a separate profile
+card consuming or obscuring the resource pane. Terminal is ordered first and is the initial tab for
+terminal-capable entities when no
 applicable tab preference has been retained, and the last chosen tab remains a browser-local
 presentation preference. Full ancestry, generation, persona, model, focus and task
 metadata are not repeated as a large profile card; appropriate admitted information remains
@@ -190,7 +193,9 @@ Roamgate's normal teardown and selection lifecycle before a new Inspector contex
 
 Optional observations appear in the compact header only after the provider qualifies them to the
 same connection, generation and agent session. Host totals are not divided or attributed by the UI,
-and absent observations produce no zero-value placeholders.
+and absent observations produce no zero-value placeholders. Provider configuration is a
+service-owned World setting reachable from the common settings menu in every native view and from
+the Office metrics shortcut; both entry points use the same dialog and configuration endpoint.
 
 ### Keep selected-host conversations on the existing terminal owner
 

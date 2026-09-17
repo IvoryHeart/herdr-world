@@ -3,6 +3,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,6 +14,7 @@ import { worldLocalStorage } from "../browserStorage";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
   type InspectorView,
+  type WorkspaceInspectorContext,
   WORLD_TERMINAL_POP_OUT_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
@@ -26,14 +28,18 @@ import {
 } from "./worldObject";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import WorldIntentProfile from "./WorldIntentProfile";
+import { WorldConnectionRequired, WorldStatusHeader } from "./WorldStatus";
 import {
   floatingTerminalForNode,
+  retainWorldFloatingTerminals,
   shouldRehomeDockedTerminal,
   upsertWorldFloatingTerminal,
   type WorldFloatingTerminal,
 } from "./worldTerminalPresentation";
 
 export {
+  retainWorldFloatingTerminals,
   shouldRehomeDockedTerminal,
   upsertWorldFloatingTerminal,
 } from "./worldTerminalPresentation";
@@ -41,18 +47,7 @@ export {
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
 const ConnectedTreeView = lazy(() => import("./ConnectedTreeView"));
 const SpatialGraphView = lazy(() => import("./SpatialGraphView"));
-const WorldIntentProfile = lazy(() => import("./WorldIntentProfile"));
 const WorldIntentConnector = lazy(() => import("./WorldIntentConnector"));
-const WorldStatusHeader = lazy(() =>
-  import("./WorldStatus").then((module) => ({
-    default: module.WorldStatusHeader,
-  })),
-);
-const WorldConnectionRequired = lazy(() =>
-  import("./WorldStatus").then((module) => ({
-    default: module.WorldConnectionRequired,
-  })),
-);
 const WorldViewErrorBoundary = lazy(() =>
   import("./WorldViewErrorBoundary").then((module) => ({
     default: module.WorldViewErrorBoundary,
@@ -97,13 +92,34 @@ export function worldSelectionIsCurrent(
 export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
   if (node.kind === "host") return [];
   return [
+    ...(node.capabilities.openTerminal ? (["terminal"] as const) : []),
     ...(node.capabilities.files ? (["files"] as const) : []),
     ...(node.capabilities.changes ? (["changes"] as const) : []),
     ...(node.kind === "agent" && node.capabilities.agentHistory
       ? (["history"] as const)
       : []),
-    ...(node.capabilities.openTerminal ? (["terminal"] as const) : []),
   ];
+}
+
+export function worldInspectorContext(
+  node: WorldObjectNode,
+): WorkspaceInspectorContext | null {
+  if (node.kind === "host") return null;
+  const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
+  const statusLabel = leaf
+    ? (leaf.stateLabels[leaf.status] ?? leaf.status)
+    : hostStateLabel(node.hostState);
+  return {
+    kind: node.kind,
+    label: node.label,
+    stateLabel: statusLabel,
+    locationLabel: leaf
+      ? `${leaf.spaceLabel} · ${node.hostLabel}`
+      : node.hostLabel,
+    ...(leaf?.kind === "agent" ? { agent: leaf.pane.agent } : {}),
+    ...(leaf?.taskSummary ? { taskSummary: leaf.taskSummary } : {}),
+    ...(node.capabilities.openSpaces ? { canOpenSpaces: true } : {}),
+  };
 }
 
 export function worldIntentInitialView(
@@ -152,12 +168,41 @@ export default function WorldFoundationApp() {
   const [inspectorView, setInspectorView] = useState<InspectorView | null>(
     null,
   );
+  const [inspectorContext, setInspectorContext] =
+    useState<WorkspaceInspectorContext | null>(null);
   const [floatingTerminals, setFloatingTerminals] = useState<
     WorldFloatingTerminal[]
   >([]);
   const [floatingTerminalPortals, setFloatingTerminalPortals] = useState<
     Record<string, HTMLDivElement | null>
   >({});
+  const activeConversationLease = useStoreSelector(
+    (snapshot) => ({
+      connectionId: snapshot.activeConnectionId,
+      runtimeGeneration: snapshot.serverRuntimeGeneration,
+    }),
+    shallowEqual,
+  );
+
+  useLayoutEffect(() => {
+    const lease =
+      activeConversationLease.connectionId &&
+      activeConversationLease.runtimeGeneration !== null
+        ? {
+            connectionId: activeConversationLease.connectionId,
+            runtimeGeneration: activeConversationLease.runtimeGeneration,
+          }
+        : null;
+    const retained = retainWorldFloatingTerminals(floatingTerminals, lease);
+    if (retained.length === floatingTerminals.length) return;
+    const retainedIds = new Set(retained.map(({ nodeId }) => nodeId));
+    setFloatingTerminals(retained);
+    setFloatingTerminalPortals((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([nodeId]) => retainedIds.has(nodeId)),
+      ),
+    );
+  }, [activeConversationLease, floatingTerminals]);
 
   useEffect(() => {
     worldRuntimeStore.start();
@@ -240,6 +285,15 @@ export default function WorldFoundationApp() {
                   writeWorldIntentView(next);
                 }
           }
+          inspectorContext={view === "spaces" ? null : inspectorContext}
+          onInspectorOpenSpaces={
+            view === "spaces"
+              ? undefined
+              : () =>
+                  window.dispatchEvent(
+                    new Event("herdr-world:open-selection-in-spaces"),
+                  )
+          }
         />
       </div>
       {view !== "spaces" ? (
@@ -259,6 +313,7 @@ export default function WorldFoundationApp() {
             }))
           }
           onOpenSpaces={() => setView("spaces")}
+          onInspectorContextChange={setInspectorContext}
         />
       ) : null}
     </div>
@@ -276,6 +331,7 @@ function WorldControlPlane({
   onFloatingTerminalsChange,
   onFloatingTerminalPortal,
   onOpenSpaces,
+  onInspectorContextChange,
 }: {
   view: Exclude<WorldView, "spaces">;
   inspectorOpen: boolean;
@@ -290,6 +346,7 @@ function WorldControlPlane({
     element: HTMLDivElement | null,
   ): void;
   onOpenSpaces: () => void;
+  onInspectorContextChange(context: WorkspaceInspectorContext | null): void;
 }) {
   const runtime = useWorldRuntime();
   const connectionSelection = useStoreSelector(
@@ -403,6 +460,37 @@ function WorldControlPlane({
     () => floatingTerminals.map(({ nodeId }) => nodeId),
     [floatingTerminals],
   );
+  const selectedInspectorContext = useMemo(
+    () => (selected ? worldInspectorContext(selected) : null),
+    [selected],
+  );
+
+  useLayoutEffect(() => {
+    onInspectorContextChange(selectedInspectorContext);
+    return () => onInspectorContextChange(null);
+  }, [onInspectorContextChange, selectedInspectorContext]);
+
+  useEffect(() => {
+    const openSelectionInSpaces = () => {
+      if (!selected?.capabilities.openSpaces) return;
+      void focusWorldNode(selected)
+        .then(onOpenSpaces)
+        .catch((cause) => {
+          setIntentError(
+            cause instanceof Error ? cause.message : String(cause),
+          );
+        });
+    };
+    window.addEventListener(
+      "herdr-world:open-selection-in-spaces",
+      openSelectionInSpaces,
+    );
+    return () =>
+      window.removeEventListener(
+        "herdr-world:open-selection-in-spaces",
+        openSelectionInSpaces,
+      );
+  }, [onOpenSpaces, selected]);
   const applySelection = (
     id: string | null,
     requestedView: InspectorView | null = null,
@@ -603,6 +691,14 @@ function WorldControlPlane({
     onFloatingTerminalsChange([...admission.terminals]);
   };
 
+  const retireFloatingTerminals = () => {
+    pendingSelectionRef.current = null;
+    for (const terminal of floatingTerminals) {
+      onFloatingTerminalPortal(terminal.nodeId, null);
+    }
+    onFloatingTerminalsChange([]);
+  };
+
   useEffect(() => {
     if (
       selected &&
@@ -748,7 +844,13 @@ function WorldControlPlane({
                   inspectorOpen={inspectorOpen}
                   intentOpening={intentOpening}
                   resourceError={intentError}
-                  onActivateHost={() => activateWorldNodeHost(selected)}
+                  onActivateHost={async () => {
+                    window.dispatchEvent(
+                      new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT),
+                    );
+                    retireFloatingTerminals();
+                    await activateWorldNodeHost(selected);
+                  }}
                   onClose={closeIntent}
                   onOpenSpaces={async () => {
                     await focusWorldNode(selected);
