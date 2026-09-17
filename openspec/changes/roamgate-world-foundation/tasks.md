@@ -40,3 +40,10 @@
 - [x] 6.4 Generate platform-independent dependency inventory plus bundled copyright and licence texts, and verify release archives contain them
 - [x] 6.5 Inject the reviewed build version into the frontend and document the replacement installer cutover plus intentionally retired and deferred visual workflows
 - [x] 6.6 Run focused regressions, the complete repository check and packaged-distribution inspection; respond to every review thread and keep PR #93 ready
+
+## 7. Re-review corrections
+
+- [x] 7.1 Extend automatic browser admission across privileged HTTP and WebSocket traffic, add one exact loopback-proxy public origin plus a World-owned auth cookie, and verify unit and production-process coverage
+- [x] 7.2 Bind World-to-Spaces focus to its original host without cross-host reconnect retry, close and disable the mounted Spaces command palette while hidden, and verify store and Chromium regressions
+- [x] 7.3 Include the deterministic `lru_map` README licence section, replace the old installation shutdown guidance with the actual target-by-target asynchronous plugin procedure, and verify notices and documentation checks
+- [ ] 7.4 Run focused regressions and the complete repository check, refresh the local test service, respond to every re-review thread, and keep PR #93 ready

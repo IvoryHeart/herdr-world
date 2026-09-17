@@ -174,6 +174,53 @@ async function waitForHealth(port: number): Promise<void> {
   throw new Error("profile process fixture did not become healthy");
 }
 
+test("production HTTP admission preserves an exact loopback proxy origin", async () => {
+  if (process.platform === "win32") return;
+  const root = join(tmpdir(), `world-http-admission-${crypto.randomUUID()}`);
+  roots.push(root);
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const env: Record<string, string | undefined> = {
+    ...process.env,
+    HOST: "127.0.0.1",
+    PORT: "0",
+    HERDR_WORLD_PUBLIC_ORIGIN: "https://world.example",
+    HERDR_WORLD_CONNECTIONS_PATH: join(root, "connections.json"),
+    HERDR_SOCKET_PATH: join(root, "missing-control.sock"),
+    HERDR_CLIENT_SOCKET_PATH: join(root, "missing-render.sock"),
+  };
+  delete env.HERDR_SSH_HOST;
+  delete env.HERDR_SESSION;
+  const child = Bun.spawn(worldServerCommand(), {
+    cwd: join(import.meta.dir, "../../.."),
+    env,
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  try {
+    const port = await bridgeListeningPort(child.stdout);
+    await waitForHealth(port);
+    const privileged = `http://127.0.0.1:${port}/api/health`;
+    const request = (host: string, origin: string) =>
+      fetch(privileged, { headers: { host, origin } });
+
+    expect(
+      (await request(`127.0.0.1:${port}`, `http://127.0.0.1:${port}`)).status,
+    ).toBe(200);
+    expect(
+      (await request("world.example", "https://world.example")).status,
+    ).toBe(200);
+    expect(
+      (await request("hostile.example", "https://hostile.example")).status,
+    ).toBe(403);
+    expect(
+      (await request("world.example", "http://world.example")).status,
+    ).toBe(403);
+  } finally {
+    child.kill("SIGTERM");
+    await child.exited;
+  }
+}, 10_000);
+
 test("production dispatcher isolates two local profiles and profile CRUD", async () => {
   if (process.platform === "win32") return;
   const root = join(

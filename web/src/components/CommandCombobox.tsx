@@ -232,10 +232,12 @@ export function runCommandNumberShortcut<T>(
 }
 
 export function CommandCombobox({
+  operationalShortcutsEnabled = true,
   onOpenFileExplorer,
   onOpenFile,
   onOpenDiffViewer,
 }: {
+  operationalShortcutsEnabled?: boolean;
   onOpenFileExplorer?: (workspaceId?: string) => void;
   onOpenFile?: (workspaceId: string, entry: FileExplorerEntry) => void;
   onOpenDiffViewer?: (workspaceId?: string) => void;
@@ -275,6 +277,23 @@ export function CommandCombobox({
   const [pendingClosePane, setPendingClosePane] = useState<Pane | null>(null);
   const [pendingRemoveWorktree, setPendingRemoveWorktree] =
     useState<Workspace | null>(null);
+
+  useEffect(() => {
+    if (operationalShortcutsEnabled) return;
+    setOpen(false);
+    setSearch("");
+    setSelectedActionValue("");
+    setSelectedActionSearch("");
+    setCreateWorkspaceOpen(false);
+    setOpenWorktreeWorkspaceId(null);
+    setWorktreeHooksWorkspaceId(null);
+    setLifecycleWorkspaceId(null);
+    setTextAction(null);
+    setPendingCloseWorkspace(null);
+    setPendingCloseTab(null);
+    setPendingClosePane(null);
+    setPendingRemoveWorktree(null);
+  }, [operationalShortcutsEnabled]);
 
   const composerDraftWarningFor = (paneIds: string[]) =>
     terminalComposerCloseWarning(
@@ -333,6 +352,7 @@ export function CommandCombobox({
     [focusedWorkspace, s.workspaces],
   );
   useEffect(() => {
+    if (!operationalShortcutsEnabled) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector(".modal-backdrop"))
         return;
@@ -352,15 +372,17 @@ export function CommandCombobox({
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
+  }, [operationalShortcutsEnabled]);
 
   const run = (fn: () => void) => {
     setOpen(false);
     setSearch("");
+    if (!operationalShortcutsEnabled) return;
     fn();
   };
 
   const submitTextAction = (value: string) => {
+    if (!operationalShortcutsEnabled) return;
     const action = textAction;
     const trimmed = value.trim();
     if (!action) return;
@@ -980,16 +1002,21 @@ export function CommandCombobox({
   }, [firstDisplayedActionValue, normalizedSearch, open]);
 
   const setCommandOpen = (next: boolean) => {
+    if (next && !operationalShortcutsEnabled) return;
     setOpen(next);
     if (!next) setSearch("");
   };
 
   return (
     <>
-      <Popover open={open} onOpenChange={setCommandOpen}>
+      <Popover
+        open={operationalShortcutsEnabled && open}
+        onOpenChange={setCommandOpen}
+      >
         <PopoverTrigger asChild>
           <button
             type="button"
+            disabled={!operationalShortcutsEnabled}
             className={`topbar-button command-trigger ${open ? "is-active" : ""}`}
             aria-label="Open command menu"
             title={shortcutTitle("Open command menu", "command.menu")}
@@ -1003,6 +1030,7 @@ export function CommandCombobox({
           className="command-popover"
           align="end"
           onKeyDownCapture={(event) => {
+            if (!operationalShortcutsEnabled) return;
             runCommandNumberShortcut(
               event,
               numberedActions,
@@ -1043,7 +1071,11 @@ export function CommandCombobox({
                       danger={action.danger}
                       disabledReason={action.disabledReason}
                       onSelect={() => {
-                        if (!action.disabledReason) run(action.run);
+                        if (
+                          operationalShortcutsEnabled &&
+                          !action.disabledReason
+                        )
+                          run(action.run);
                       }}
                     />
                   ))}
@@ -1055,26 +1087,26 @@ export function CommandCombobox({
       </Popover>
 
       <CreateWorkspaceDialog
-        open={createWorkspaceOpen}
+        open={operationalShortcutsEnabled && createWorkspaceOpen}
         onClose={() => setCreateWorkspaceOpen(false)}
       />
       <WorktreeOpenDialog
-        open={!!openWorktreeWorkspaceId}
+        open={operationalShortcutsEnabled && !!openWorktreeWorkspaceId}
         workspaceId={openWorktreeWorkspaceId}
         onClose={() => setOpenWorktreeWorkspaceId(null)}
       />
       <WorktreeHooksDialog
-        open={!!worktreeHooksWorkspaceId}
+        open={operationalShortcutsEnabled && !!worktreeHooksWorkspaceId}
         workspaceId={worktreeHooksWorkspaceId ?? undefined}
         onClose={() => setWorktreeHooksWorkspaceId(null)}
       />
       <WorktreeLifecycleDialog
-        open={!!lifecycleWorkspaceId}
+        open={operationalShortcutsEnabled && !!lifecycleWorkspaceId}
         workspaceId={lifecycleWorkspaceId}
         onClose={() => setLifecycleWorkspaceId(null)}
       />
       <ConfirmDialog
-        open={!!pendingCloseWorkspace}
+        open={operationalShortcutsEnabled && !!pendingCloseWorkspace}
         title="Close Workspace"
         message={
           pendingCloseWorkspace
@@ -1092,7 +1124,7 @@ export function CommandCombobox({
         danger
         onClose={() => setPendingCloseWorkspace(null)}
         onConfirm={() => {
-          if (pendingCloseWorkspace) {
+          if (operationalShortcutsEnabled && pendingCloseWorkspace) {
             clearComposerDraftsFor(
               s.panes
                 .filter(
@@ -1106,7 +1138,7 @@ export function CommandCombobox({
         }}
       />
       <ConfirmDialog
-        open={!!pendingCloseTab}
+        open={operationalShortcutsEnabled && !!pendingCloseTab}
         title="Close Tab"
         message={
           pendingCloseTab
@@ -1121,7 +1153,7 @@ export function CommandCombobox({
         danger
         onClose={() => setPendingCloseTab(null)}
         onConfirm={() => {
-          if (pendingCloseTab) {
+          if (operationalShortcutsEnabled && pendingCloseTab) {
             clearComposerDraftsFor(
               s.panes
                 .filter((pane) => pane.tab_id === pendingCloseTab.tab_id)
@@ -1132,7 +1164,7 @@ export function CommandCombobox({
         }}
       />
       <ConfirmDialog
-        open={!!pendingClosePane}
+        open={operationalShortcutsEnabled && !!pendingClosePane}
         title="Close Pane"
         message={
           pendingClosePane
@@ -1145,14 +1177,14 @@ export function CommandCombobox({
         danger
         onClose={() => setPendingClosePane(null)}
         onConfirm={() => {
-          if (pendingClosePane) {
+          if (operationalShortcutsEnabled && pendingClosePane) {
             clearComposerDraftsFor([pendingClosePane.pane_id]);
             store.closePane(pendingClosePane.pane_id);
           }
         }}
       />
       <ConfirmDialog
-        open={!!pendingRemoveWorktree}
+        open={operationalShortcutsEnabled && !!pendingRemoveWorktree}
         title="Remove Worktree"
         message={
           pendingRemoveWorktree
@@ -1163,14 +1195,14 @@ export function CommandCombobox({
         danger
         onClose={() => setPendingRemoveWorktree(null)}
         onConfirm={() => {
-          if (pendingRemoveWorktree) {
+          if (operationalShortcutsEnabled && pendingRemoveWorktree) {
             store.removeWorktree(pendingRemoveWorktree.workspace_id, false);
           }
         }}
       />
       {textDialogProps ? (
         <TextInputDialog
-          open={!!textAction}
+          open={operationalShortcutsEnabled && !!textAction}
           {...textDialogProps}
           onClose={() => setTextAction(null)}
           onSubmit={submitTextAction}

@@ -72,7 +72,7 @@ import { createShutdownController } from "./connections/shutdown";
 import { bindListenerBeforeConnectionStart } from "./connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "./connections/types";
 import { createAuthHandlers, unauthenticatedLoginRedirect } from "./http/auth";
-import { browserWebSocketAdmissionError } from "./http/browser-admission";
+import { browserRequestAdmissionError } from "./http/browser-admission";
 import { serveStatic } from "./http/static-files";
 import {
   createUpdateHandlers,
@@ -1298,12 +1298,14 @@ function main() {
             return new Response("unauthorized", { status: 401 });
           }
 
+          const admissionError = browserRequestAdmissionError(
+            req,
+            config.host,
+            config.publicOrigin,
+          );
+          if (admissionError) return admissionError;
+
           if (url.pathname === "/ws") {
-            const admissionError = browserWebSocketAdmissionError(
-              req,
-              config.host,
-            );
-            if (admissionError) return admissionError;
             if (server.upgrade(req)) return undefined;
             return new Response("websocket upgrade failed", { status: 400 });
           }

@@ -12,9 +12,11 @@ installable application instead of rebuilding the same capabilities beside it.
   distributed solely under Herdr World executable, service, package and plugin identities.
 - Move connection ownership into the World service: users add, test, connect, disconnect, edit and
   remove local or SSH Herdr profiles from the UI while the browser talks only to the World origin.
-- Remove browser-to-bridge federation and its World-specific Host, Origin and cross-origin CSP
-  configuration. Adopt the Roamgate trusted-single-user access model: loopback by default and
-  token/password protection for managed non-loopback service installs.
+- Remove browser-to-bridge federation and its multi-host/multi-origin allow-list and cross-origin
+  CSP configuration. Adopt the Roamgate trusted-single-user access model: loopback by default,
+  automatic same-authority admission for privileged browser traffic, one optional exact public
+  origin for an authenticated reverse proxy, and token/password protection for managed
+  non-loopback service installs.
 - Make Roamgate's workspace terminal, Inspector, Files, Changes, Agent History and connection
   surfaces native World capabilities rather than a separately installed Roamgate application.
 - Project all managed Herdr connections into a shared, host-qualified World hierarchy and establish

@@ -831,7 +831,10 @@ type WorldFocusStore = {
   };
   selectConnection(connectionId: string): boolean;
   refresh(): Promise<unknown>;
-  focusWorkspace(workspaceId: string): Promise<unknown>;
+  focusWorkspace(
+    workspaceId: string,
+    options?: { retryOnReconnect?: boolean },
+  ): Promise<unknown>;
   focusTaskNotificationTarget(target: {
     connectionId: string;
     runtimeGeneration: number;
@@ -894,7 +897,9 @@ export async function focusWorldNode(
     if (!worldNodeLeaseIsActive(node, focusStore)) {
       throw new Error("The selected host changed while it was opening");
     }
-    await focusStore.focusWorkspace(target.workspaceId);
+    await focusStore.focusWorkspace(target.workspaceId, {
+      retryOnReconnect: false,
+    });
     if (!worldNodeLeaseIsActive(node, focusStore)) {
       throw new Error("The selected host changed while it was opening");
     }

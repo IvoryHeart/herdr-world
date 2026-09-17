@@ -29,4 +29,10 @@ test("includes exact bundled dependency licence and copyright texts", async () =
     "Copyright (c) 2026 Lucide Icons and Contributors",
   );
   expect(generated.licenses).toContain("Copyright (c) 2013-present Cole Bemis");
+  expect(generated.licenses).toContain(
+    "Copyright (c) 2010-2016 Rasmus Andersson",
+  );
+  expect(generated.licenses).toContain(
+    "`lru_map@0.4.1` — `README.md#MIT license`",
+  );
 });

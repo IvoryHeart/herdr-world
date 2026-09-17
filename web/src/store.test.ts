@@ -1229,6 +1229,51 @@ describe("pending workspace focus settlement", () => {
     return structuredClone(partitionState().workspaces);
   }
 
+  test("does not retry a qualified workspace focus on a newly selected host", async () => {
+    const originalConnection = bridge.connection;
+    const originalSetActiveConnection = bridge.setActiveConnection;
+    const firstAttempt = Promise.withResolvers<unknown>();
+    const calls: string[] = [];
+    let activeConnectionId = "alpha";
+    let browserGeneration = 10;
+    bridge.connection = ((connectionId = activeConnectionId) => {
+      const generation = browserGeneration;
+      return {
+        connectionId,
+        generation,
+        isCurrent: () =>
+          connectionId === activeConnectionId &&
+          generation === browserGeneration,
+        call: (async (method: string) => {
+          if (method !== "workspace.focus") return {};
+          calls.push(connectionId);
+          return connectionId === "alpha" ? firstAttempt.promise : {};
+        }) as ConnectionClient["call"],
+      };
+    }) as typeof bridge.connection;
+    bridge.setActiveConnection = ((connectionId: string) => {
+      activeConnectionId = connectionId;
+      browserGeneration += 1;
+      return browserGeneration;
+    }) as typeof bridge.setActiveConnection;
+    try {
+      __storeTesting.replaceState(partitionState());
+      const focusing = store.focusWorkspace("same-workspace", {
+        retryOnReconnect: false,
+      });
+      while (!calls.length) await Bun.sleep(0);
+      expect(store.selectConnection("beta")).toBe(true);
+      firstAttempt.reject(new Error("connection changed during request"));
+      await focusing;
+      expect(calls).toEqual(["alpha"]);
+    } finally {
+      firstAttempt.resolve({});
+      bridge.connection = originalConnection;
+      bridge.setActiveConnection = originalSetActiveConnection;
+      __storeTesting.replaceState(partitionState());
+    }
+  });
+
   test("releases a settled pending focus that a fresh observation still misses", async () => {
     const mock = mockFocusConnection(unfocusedWorkspaces);
     try {

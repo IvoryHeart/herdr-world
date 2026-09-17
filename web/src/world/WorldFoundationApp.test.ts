@@ -125,6 +125,7 @@ describe("World view preference", () => {
       },
     ]).spaces[0];
     let activeConnectionId = "host-b";
+    let focusOptions: unknown;
     const focusStore = {
       get: () => ({
         activeConnectionId,
@@ -133,7 +134,8 @@ describe("World view preference", () => {
       }),
       selectConnection: () => true,
       refresh: async () => undefined,
-      focusWorkspace: async () => {
+      focusWorkspace: async (_workspaceId: string, options?: unknown) => {
+        focusOptions = options;
         activeConnectionId = "host-a";
       },
       focusTaskNotificationTarget: async () => undefined,
@@ -142,6 +144,7 @@ describe("World view preference", () => {
     await expect(focusWorldNode(space, focusStore)).rejects.toThrow(
       "The selected host changed while it was opening",
     );
+    expect(focusOptions).toEqual({ retryOnReconnect: false });
   });
 
   test("suppresses App global shortcuts while Spaces is hidden", () => {

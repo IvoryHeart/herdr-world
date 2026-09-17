@@ -32,7 +32,7 @@ const LOGIN_HTML = `<!doctype html>
   btn.onclick=go; pw.onkeydown=e=>{if(e.key==='Enter')go()};
 </script></body></html>`;
 
-const AUTH_COOKIE = "herdr_auth";
+const AUTH_COOKIE = "herdr_world_auth";
 const AUTH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 function base64UrlEncode(value: string) {

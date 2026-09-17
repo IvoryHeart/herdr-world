@@ -3189,6 +3189,7 @@ export default function App({
           <div className="topbar-command-group">
             <CommandCombobox
               key={`${resourceUiKey}:commands`}
+              operationalShortcutsEnabled={operationalShortcutsEnabled}
               onOpenFileExplorer={openFileExplorer}
               onOpenFile={openFileExplorerFile}
               onOpenDiffViewer={openDiffViewer}

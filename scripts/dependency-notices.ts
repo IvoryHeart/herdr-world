@@ -26,6 +26,37 @@ type InstalledPackage = {
   directory: string;
 };
 
+const EMBEDDED_LICENSE_SECTIONS: Record<
+  string,
+  { file: string; heading: string }
+> = {
+  "lru_map@0.4.1": { file: "README.md", heading: "MIT license" },
+};
+
+function markdownSection(text: string, heading: string): string | null {
+  const lines = text.replaceAll("\r\n", "\n").split("\n");
+  const expected = heading.trim().toLowerCase();
+  const start = lines.findIndex((line) => {
+    const match = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
+    return match?.[2]?.trim().toLowerCase() === expected;
+  });
+  if (start < 0) return null;
+  const level = lines[start].match(/^#+/)?.[0].length ?? 1;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    const nextLevel = lines[index].match(/^(#{1,6})\s+/)?.[1].length;
+    if (nextLevel !== undefined && nextLevel <= level) {
+      end = index;
+      break;
+    }
+  }
+  return lines
+    .slice(start + 1, end)
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+}
+
 function licenseLabel(value: unknown, packageId: string): string {
   if (typeof value === "string" && value.trim()) return value.trim();
   if (Array.isArray(value)) {
@@ -136,7 +167,7 @@ async function packageLicenseFiles(pkg: InstalledPackage) {
     )
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
-  return Promise.all(
+  const files = await Promise.all(
     names.map(async (name) => ({
       name,
       text: (await Bun.file(join(pkg.directory, name)).text())
@@ -147,6 +178,23 @@ async function packageLicenseFiles(pkg: InstalledPackage) {
         .trimEnd(),
     })),
   );
+  const embedded = EMBEDDED_LICENSE_SECTIONS[pkg.id];
+  if (!embedded) return files;
+  const source = Bun.file(join(pkg.directory, embedded.file));
+  if (!(await source.exists())) {
+    throw new Error(`${pkg.id} is missing ${embedded.file}`);
+  }
+  const text = markdownSection(await source.text(), embedded.heading);
+  if (!text) {
+    throw new Error(
+      `${pkg.id} is missing the ${embedded.heading} section in ${embedded.file}`,
+    );
+  }
+  files.push({
+    name: `${embedded.file}#${embedded.heading}`,
+    text,
+  });
+  return files;
 }
 
 function renderNotices(packages: InstalledPackage[]): string {

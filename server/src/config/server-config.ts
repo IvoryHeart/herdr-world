@@ -8,6 +8,7 @@ import { assertSshTunnelPlatformSupported } from "../bridge/ssh-tunnel";
 import { defaultAuthTokenPath, loadOrCreateAuthToken } from "./auth-token";
 import { worldEnv } from "./environment";
 import { type LogLevel, parseLogLevel, serverLogger } from "../utils/logger";
+import { normalizePublicOrigin } from "../http/browser-admission";
 
 type CliArgs = Partial<{
   host: string;
@@ -18,6 +19,7 @@ type CliArgs = Partial<{
   "ssh-host": string;
   session: string;
   "public-dir": string;
+  "public-origin": string;
   "log-level": string;
   open: boolean;
   help: boolean;
@@ -35,6 +37,7 @@ export type ServerConfig = {
   socketPath: string;
   clientSocketPath: string;
   publicDir: string;
+  publicOrigin?: string;
   sshHost?: string;
   session?: string;
   openBrowserRequested: boolean;
@@ -52,6 +55,7 @@ const cliOptions = {
   "ssh-host": { type: "string" },
   session: { type: "string" },
   "public-dir": { type: "string" },
+  "public-origin": { type: "string" },
   "log-level": { type: "string" },
   open: { type: "boolean" },
   help: { type: "boolean" },
@@ -103,6 +107,7 @@ Options (flags override HERDR_WORLD_* environment variables):
   --ssh-host <user@host>     remote Herdr over SSH (env HERDR_SSH_HOST)
   --session <name>           named herdr session   (env HERDR_SESSION)
   --public-dir <path>        static assets dir     (env PUBLIC_DIR,      default: embedded)
+  --public-origin <origin>   exact reverse-proxy origin (env HERDR_WORLD_PUBLIC_ORIGIN)
   --log-level <level>        error|warn|info|debug  (env HERDR_WORLD_LOG_LEVEL, default: info)
   --open                     open browser on start (env OPEN_BROWSER=1)
   -V, --version              show version
@@ -117,8 +122,12 @@ Options (flags override HERDR_WORLD_* environment variables):
   }
 
   let logLevel: LogLevel;
+  let publicOrigin: string | undefined;
   try {
     logLevel = resolveServerLogLevel(args["log-level"], worldEnv("LOG_LEVEL"));
+    publicOrigin = normalizePublicOrigin(
+      args["public-origin"] ?? worldEnv("PUBLIC_ORIGIN"),
+    );
   } catch (error) {
     console.error(`[bridge] ${(error as Error).message}`);
     process.exit(2);
@@ -181,6 +190,7 @@ Options (flags override HERDR_WORLD_* environment variables):
     socketPath,
     clientSocketPath,
     publicDir: resolvePublicDir(args),
+    publicOrigin,
     sshHost,
     session,
     openBrowserRequested:

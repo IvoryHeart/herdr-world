@@ -46,19 +46,39 @@ Stop the old World service before installing this foundation so it does not reta
 port 8787. Use the removal path for the channel you previously installed:
 
 ```bash
-# Run this while the old command is still installed, if it managed a user service.
-herdr-world service uninstall
-
-# Then choose only the package-manager command that applies.
+# For a foreground or operator-managed standalone installation, stop that process
+# first. Herdr World 0.1.1 did not provide a `service` subcommand. Then choose only
+# the package-manager command that applies.
 npm uninstall --global @ivoryheart/herdr-world
 brew uninstall herdr-world
 ```
 
-For a Herdr-managed installation, stop and unregister the old plugin before installing
-the replacement:
+The old Herdr plugin is different: its actions are asynchronous and target-scoped. For
+the default target, invoke `stop`, use its returned `log_id` to wait until the action
+log reports `status: succeeded`, then invoke `status` and wait for that action to report
+success with output saying the bridge is not running:
 
 ```bash
-herdr plugin action invoke ivoryheart.herdr-world.stop
+herdr plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr plugin action invoke status --plugin ivoryheart.herdr-world
+herdr plugin log list --plugin ivoryheart.herdr-world --limit 100
+```
+
+Repeat the same stop/log/status/log sequence for every named Herdr target that ran the
+old plugin, replacing `NAME` each time:
+
+```bash
+herdr --session NAME plugin action invoke stop --plugin ivoryheart.herdr-world
+herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
+herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
+herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
+```
+
+Only after every target is confirmed stopped should the old controller be removed and
+the replacement installed:
+
+```bash
 herdr plugin uninstall ivoryheart.herdr-world
 herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
@@ -177,18 +197,27 @@ is authoritative.
 | `--ssh-host <alias>` | `HERDR_SSH_HOST` | Disabled |
 | `--session <name>` | `HERDR_SESSION` | Default session |
 | `--public-dir <path>` | `PUBLIC_DIR` | Embedded frontend |
+| `--public-origin <origin>` | `HERDR_WORLD_PUBLIC_ORIGIN` | Disabled |
 | `--log-level <level>` | `HERDR_WORLD_LOG_LEVEL` | `info` |
 | `--open` | `OPEN_BROWSER=1` | Disabled |
 
 Loopback listeners intentionally bypass login. A managed non-loopback service creates
 a persistent login token unless `HERDR_WORLD_PASSWORD` is set. A token URL establishes
-an HttpOnly session and removes the token from the address bar. Privileged browser
-WebSocket admission automatically requires the browser Origin authority to equal the
-request Host authority; loopback listeners also reject non-loopback Host authorities.
-There is no user-managed Host or Origin allow-list. An HTTPS reverse proxy must preserve
-the public Host header. The listener, authentication, firewall/VPN, and TLS proxy remain
-the broader access boundary. Read [SECURITY.md](../SECURITY.md) before exposing the
-listener beyond loopback.
+an HttpOnly session and removes the token from the address bar. Privileged browser HTTP
+and WebSocket admission automatically requires the browser Origin authority to equal
+the request Host authority; loopback listeners also reject non-loopback Host
+authorities. There is no user-managed Host or Origin allow-list. To place an
+independently authenticated HTTPS reverse proxy in front of a loopback listener, set
+its one exact external origin and preserve the public Host header:
+
+```bash
+HERDR_WORLD_PUBLIC_ORIGIN=https://world.example herdr-world
+```
+
+The proxy must forward `Host: world.example`; World accepts only that configured origin
+in addition to its loopback authority. The listener, proxy authentication, firewall/VPN,
+and TLS remain the broader access boundary. Read [SECURITY.md](../SECURITY.md) before
+exposing the listener beyond loopback.
 
 World is a trusted single-user administration tool. It does not provide TLS,
 rate-limiting, multi-user roles, or a sandbox.

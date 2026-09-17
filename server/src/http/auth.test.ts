@@ -119,10 +119,13 @@ describe("generated token login", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(cookieHeader(response)).toStartWith("herdr_world_auth=");
     expect(
       handlers.isAuthed(
         new Request("http://example.test/", {
-          headers: { cookie: cookieHeader(response) },
+          headers: {
+            cookie: `${cookieHeader(response)}; herdr_auth=roamgate-session`,
+          },
         }),
       ),
     ).toBe(true);

@@ -299,11 +299,13 @@ permission system. Authenticated browsers can control terminals, change files,
 manage shared profiles, and execute trusted repository hooks. It provides neither
 TLS termination nor rate limiting; see [SECURITY.md](../SECURITY.md).
 
-The service automatically admits a browser WebSocket only when its Origin authority
-equals the request Host authority; loopback listeners additionally require a loopback
-Host. This preserves automatic same-origin use without user-maintained network-policy
-lists. Originless native clients remain possible, and listener access plus any required
-authentication still determine authority. Secure the outer access path as described in
+The service automatically admits privileged browser HTTP and WebSocket traffic only
+when its Origin authority equals the request Host authority; loopback listeners
+additionally require a loopback Host. An operator can name one exact public HTTP(S)
+origin for an independently authenticated reverse proxy to loopback. This preserves
+automatic same-origin use without user-maintained network-policy lists. Originless
+native clients remain possible, and listener access plus any required authentication
+still determine authority. Secure the outer access path as described in
 [SECURITY.md](../SECURITY.md#trust-model), including for forwarded loopback listeners.
 The browser accepts one valid unscoped bridge hello before other messages.
 Replies/events have validated, exclusive message kinds; downstream events cannot inject

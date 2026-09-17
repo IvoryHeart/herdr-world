@@ -42,11 +42,12 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
-- Enforced automatic same-authority browser admission, fenced cross-host World
-  handoffs and hidden-view shortcuts, made disconnected observations read-only,
-  bundled deterministic dependency licence texts, displayed the reviewed release
-  version in the frontend, and admitted the recognized pre-foundation launcher
-  symlink during installer cutover.
+- Enforced automatic same-authority browser admission across privileged HTTP and
+  WebSocket traffic with an exact loopback-proxy origin, isolated World's login
+  cookie, fenced cross-host World handoffs and all hidden-view actions, made
+  disconnected observations read-only, bundled deterministic dependency licence
+  texts, displayed the reviewed release version in the frontend, and admitted the
+  recognized pre-foundation launcher symlink during installer cutover.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Removed

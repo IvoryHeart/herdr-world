@@ -46,6 +46,13 @@ RPC/WebSocket origin. World does not port the former bridge Host, Origin and cro
 configuration; it retains the upstream trusted-single-user loopback and authenticated non-loopback
 service model.
 
+The browser boundary applies to privileged HTTP resources as well as the WebSocket transport.
+Loopback requests normally retain loopback authority; an operator placing an independently
+authenticated HTTPS proxy in front of a loopback listener can configure one exact public origin.
+That is a single deployment identity rather than the retired arbitrary Host/Origin allow-lists.
+World uses its own cookie name so a separately running Roamgate installation on another port cannot
+replace its authenticated session.
+
 ### Extend the existing connection manager for aggregate observation
 
 Roamgate currently keeps multiple runtimes but gives each browser one selected connection. The
@@ -53,6 +60,11 @@ workspace/Inspector surface retains that focused-connection model. A bounded agg
 path publishes status and snapshots for all ready profiles into a browser store keyed by connection
 ID and generation. WorldObject is projected from that store. Mutations, resource requests and
 terminal attachments always resolve back to one qualified runtime and never fall back.
+
+World-to-Spaces handoff disables the focused-store reconnect retry because that generic convenience
+captures a new active lease. A World action is instead bound to the observed connection and runtime
+generation and fails when either changes. Every operational entry point owned by the mounted Spaces
+tree, including its command palette and already-open palette state, follows the active-view gate.
 
 ### Establish World as native routes over the Roamgate store
 

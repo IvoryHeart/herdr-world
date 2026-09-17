@@ -2366,7 +2366,10 @@ export const store = {
     );
   },
 
-  focusWorkspace(workspaceId: string) {
+  focusWorkspace(
+    workspaceId: string,
+    options: { retryOnReconnect?: boolean } = {},
+  ) {
     if (state.navigationMode === "browser-local") {
       return state.workspaces.some(
         (workspace) => workspace.workspace_id === workspaceId,
@@ -2383,7 +2386,7 @@ export const store = {
       {
         refresh: "immediate",
         pendingFocusWorkspaceSeq: pendingFocusSeq,
-        retryOnReconnect: true,
+        retryOnReconnect: options.retryOnReconnect ?? true,
       },
     );
   },

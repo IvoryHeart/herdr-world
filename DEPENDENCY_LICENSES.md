@@ -17,11 +17,36 @@ Manifest author metadata is retained here when provided.
 - `esrecurse@4.3.0`
 - `imurmurhash@0.1.4` — Jens Taylor <jensyt@gmail.com> (https://github.com/homebrewing)
 - `keyv@4.5.4` — Jared Wray <me@jaredwray.com> (http://jaredwray.com)
-- `lru_map@0.4.1` — Rasmus Andersson <me@rsms.me>
 - `natural-compare@1.4.0` — Lauri Rooden (https://github.com/litejs/natural-compare-lite)
 - `react-remove-scroll-bar@2.3.8` — Anton Korzunov <thekashey@gmail.com>
 
 ## Distributed texts
+
+### 036f4dfe23c604c6
+
+Sources:
+
+- `lru_map@0.4.1` — `README.md#MIT license`
+
+    Copyright (c) 2010-2016 Rasmus Andersson <https://rsms.me/>
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
 
 ### 058972da33a1c7ea
 

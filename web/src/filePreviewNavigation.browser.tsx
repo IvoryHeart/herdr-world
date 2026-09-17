@@ -491,8 +491,22 @@ async function run() {
   );
 
   calledMethods.length = 0;
+  flushSync(() => window.dispatchEvent(commandMenuEvent()));
+  await until(
+    () => document.querySelector(".command-popover"),
+    "active Spaces command menu",
+  );
   flushSync(() => root.render(<App operationalShortcutsEnabled={false} />));
+  await until(
+    () => !document.querySelector(".command-popover"),
+    "hidden Spaces command menu closed",
+  );
+  flushSync(() => window.dispatchEvent(commandMenuEvent()));
   await settle();
+  check(
+    !document.querySelector(".command-popover"),
+    "hidden Spaces opened the command menu",
+  );
   flushSync(() => window.dispatchEvent(tabCreateEvent()));
   await settle();
   check(

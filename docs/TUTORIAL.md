@@ -394,10 +394,22 @@ See [service configuration and logs](./DEPLOYMENT.md#run-as-a-user-service).
    Approve the first-run HTTPS certificate consent link as an authorized admin.
    Hostnames appear in public certificate transparency logs: avoid sensitive names.
 
-3. On your Tailscale-connected phone, open the printed address, shaped like
+3. Configure the printed HTTPS address as World's one proxy origin and restart World.
+   For a foreground process, stop it with <kbd>Ctrl</kbd>+<kbd>C</kbd> and restart it:
+
+   ```bash
+   HERDR_WORLD_PUBLIC_ORIGIN=https://machine-name.tailnet-name.ts.net \
+     herdr-world --host 127.0.0.1 --port 8787
+   ```
+
+   For an existing service, add the same `HERDR_WORLD_PUBLIC_ORIGIN=...` line to
+   its environment file and repeat the standalone or plugin restart command above.
+   Use the exact origin printed by Tailscale, without a path or trailing slash.
+
+4. On your Tailscale-connected phone, open the printed address, shaped like
    `https://machine-name.tailnet-name.ts.net`. **Use the printed HTTPS hostname,
    not a bare IP address or localhost on your phone.**
-4. Run `pwd` in an idle shell pane to verify terminal interaction. Test that a
+5. Run `pwd` in an idle shell pane to verify terminal interaction. Test that a
    tailnet device excluded by your access rules cannot connect; if you have
    no suitable test device, at least verify the denial using policy tests.
    With Tailscale disconnected and no other access path, the HTTPS endpoint

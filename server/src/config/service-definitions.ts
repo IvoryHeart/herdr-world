@@ -22,6 +22,10 @@ PORT=8787
 # Optional fixed password. By default, service install creates a generated token.
 # HERDR_WORLD_PASSWORD=replace-with-a-strong-password
 
+# When an authenticated HTTPS reverse proxy forwards to this listener, set its
+# one exact public origin (for example https://world.example).
+# HERDR_WORLD_PUBLIC_ORIGIN=https://world.example
+
 # Operational logs default to info. Use debug only while diagnosing an issue.
 # HERDR_WORLD_LOG_LEVEL=info
 
