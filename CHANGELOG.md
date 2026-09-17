@@ -73,6 +73,12 @@ retain their original Herdr Web lineage.
 - Made exact pane focus an admission requirement for World Inspectors, retained
   qualified docked and floating conversations through Spaces handoff, and raised
   a background floating Inspector when any of its tabs or controls is used.
+  Office connectors now run from the agent centre to the Inspector's right edge
+  and curve in the actual direction, with desk fallback only when an agent
+  anchor is unavailable. A live floating Inspector can now be moved from its
+  profile header without terminal focus interrupting the drag, and exposes a
+  visible drag handle for pointer resizing while retaining precise keyboard
+  sizing.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Bounded both Tree presentations with relevant-entity priority and exact
   omission reporting, scoped inactive-host action checks to their owning

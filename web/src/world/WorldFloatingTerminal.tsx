@@ -18,7 +18,7 @@ import type {
   WorldFloatingTerminal,
   WorldInspectorConversation,
 } from "./worldTerminalPresentation";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import { worldLocalStorage } from "../browserStorage";
 import {
   floatingTerminalGeometryId,
@@ -39,6 +39,7 @@ export default function WorldFloatingInspectorWindow({
   cascadeIndex,
   compactActive,
   onFocus,
+  onRaise,
   onAnchorChange,
   onPortalChange,
 }: {
@@ -46,16 +47,19 @@ export default function WorldFloatingInspectorWindow({
   cascadeIndex: number;
   compactActive: boolean;
   onFocus(): void;
-  onAnchorChange(anchor: OfficeCanvasAnchor | null): void;
+  onRaise(): void;
+  onAnchorChange(anchor: WorldConnectorTargetBounds | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
 }) {
   const windowRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<Interaction | null>(null);
   const onAnchorChangeRef = useRef(onAnchorChange);
   const onFocusRef = useRef(onFocus);
+  const onRaiseRef = useRef(onRaise);
   const onPortalChangeRef = useRef(onPortalChange);
   onAnchorChangeRef.current = onAnchorChange;
   onFocusRef.current = onFocus;
+  onRaiseRef.current = onRaise;
   onPortalChangeRef.current = onPortalChange;
   const setPortalRef = useCallback((element: HTMLDivElement | null) => {
     onPortalChangeRef.current(element);
@@ -93,7 +97,20 @@ export default function WorldFloatingInspectorWindow({
   useEffect(() => {
     const element = windowRef.current;
     if (!element) return;
-    const focusFromPointer = () => onFocusRef.current();
+    const focusFromPointer = (event: PointerEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          ".workspace-inspector-head.is-window-drag-handle",
+        ) &&
+        !event.target.closest(
+          "button, a, input, textarea, select, [role='tab'], [role='separator']",
+        )
+      ) {
+        return;
+      }
+      onFocusRef.current();
+    };
     // Inspector content is rendered through a portal owned by a sibling.
     // React events follow that logical tree, not this window's DOM ancestry,
     // so a native capture listener is required for clicks in its resources.
@@ -115,7 +132,6 @@ export default function WorldFloatingInspectorWindow({
       if (!header || event.target.closest(interactiveSelector)) return;
       event.preventDefault();
       const initial = geometryRef.current;
-      element.setPointerCapture(event.pointerId);
       interactionRef.current = {
         mode: "moving",
         pointerId: event.pointerId,
@@ -123,6 +139,8 @@ export default function WorldFloatingInspectorWindow({
         startY: event.clientY,
         geometry: initial,
       };
+      onRaiseRef.current();
+      capturePointer(element, event.pointerId);
       setInteraction("moving");
     };
     const move = (event: PointerEvent) => {
@@ -192,10 +210,10 @@ export default function WorldFloatingInspectorWindow({
 
   useEffect(() => {
     onAnchorChangeRef.current({
-      x: geometry.left + geometry.width / 2,
-      y: geometry.top,
-      visible: true,
-      edge: null,
+      left: geometry.left,
+      top: geometry.top,
+      right: geometry.left + geometry.width,
+      bottom: geometry.top + geometry.height,
     });
   }, [geometry]);
 
@@ -226,7 +244,6 @@ export default function WorldFloatingInspectorWindow({
     const element = windowRef.current;
     if (!element) return;
     event.preventDefault();
-    element.setPointerCapture(event.pointerId);
     interactionRef.current = {
       mode,
       pointerId: event.pointerId,
@@ -234,6 +251,7 @@ export default function WorldFloatingInspectorWindow({
       startY: event.clientY,
       geometry: initial,
     };
+    capturePointer(element, event.pointerId);
     setInteraction(mode);
   };
 
@@ -339,6 +357,7 @@ export default function WorldFloatingInspectorWindow({
         type="button"
         className="world-floating-terminal-resize"
         aria-label="Resize Inspector window"
+        title="Drag to resize Inspector; use arrow keys for precise sizing"
         onPointerDown={(event) => beginInteraction("resizing", event)}
         onKeyDown={(event) => nudge("resizing", event)}
       />
@@ -356,4 +375,13 @@ function arrowDelta(key: string, amount: number) {
   if (key === "ArrowUp") return { x: 0, y: -amount };
   if (key === "ArrowDown") return { x: 0, y: amount };
   return null;
+}
+
+function capturePointer(element: HTMLElement, pointerId: number) {
+  try {
+    element.setPointerCapture(pointerId);
+  } catch {
+    // Some embedded browsers reject capture for synthetic or already-ended
+    // pointers. The interaction remains usable while events stay in-window.
+  }
 }

@@ -49,6 +49,7 @@ import {
   readCompletionSeen,
   writeCompletionSeen,
 } from "./completionSeenState";
+import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 
 type RoomDialog =
   | { mode: "create"; roomKey: string | null }
@@ -452,7 +453,7 @@ export default function PixelOfficeView({
               anchors
                 ? Object.fromEntries(
                     Object.entries(anchors).flatMap(([id, value]) => {
-                      const anchor = value.workbench ?? value.agent ?? null;
+                      const anchor = preferredOfficeConnectorAnchor(value);
                       return anchor ? [[id, anchor]] : [];
                     }),
                   )

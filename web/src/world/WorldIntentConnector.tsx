@@ -1,19 +1,24 @@
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import {
+  type WorldConnectorTargetBounds,
+  worldConnectorPath,
+  worldConnectorTargetPoint,
+} from "./worldConnectorGeometry";
 
 export default function WorldIntentConnector({
   source,
   target,
 }: {
   source: OfficeCanvasAnchor;
-  target: { x: number; y: number };
+  target: WorldConnectorTargetBounds;
 }) {
-  const distance = Math.max(48, Math.min(180, (target.x - source.x) * 0.45));
-  const path = `M ${source.x} ${source.y} C ${source.x + distance} ${source.y}, ${target.x - distance} ${target.y}, ${target.x} ${target.y}`;
+  const targetPoint = worldConnectorTargetPoint(target);
+  const path = worldConnectorPath(source, targetPoint);
   return (
     <svg className="world-intent-connector" aria-hidden="true">
       <path d={path} />
       <circle cx={source.x} cy={source.y} r="3" />
-      <circle cx={target.x} cy={target.y} r="3" />
+      <circle cx={targetPoint.x} cy={targetPoint.y} r="3" />
     </svg>
   );
 }

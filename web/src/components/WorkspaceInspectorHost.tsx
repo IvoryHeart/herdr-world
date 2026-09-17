@@ -476,6 +476,9 @@ export function WorkspaceInspectorHost({
         aria-label={
           controlMode === "floating" ? "Move Inspector window" : undefined
         }
+        title={
+          controlMode === "floating" ? "Drag to move Inspector" : undefined
+        }
       >
         {agentContext ? (
           <div className="workspace-inspector-identity workspace-inspector-agent-identity">

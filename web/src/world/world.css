@@ -432,9 +432,14 @@
 
 .world-floating-inspector-content
   .workspace-inspector-head.is-window-drag-handle {
-  cursor: move;
+  cursor: grab;
   user-select: none;
   touch-action: none;
+}
+
+.world-floating-terminal[data-interaction="moving"]
+  .workspace-inspector-head.is-window-drag-handle {
+  cursor: grabbing;
 }
 
 .world-floating-terminal-portal > .terminal-shell {
@@ -447,22 +452,49 @@
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: 8px 0 11px 0;
   background: linear-gradient(
     135deg,
-    transparent 0 58%,
-    color-mix(in srgb, var(--text, #fff) 35%, transparent) 59% 64%,
-    transparent 65% 72%,
-    color-mix(in srgb, var(--text, #fff) 55%, transparent) 73% 78%,
-    transparent 79%
+    transparent 0 45%,
+    color-mix(in srgb, var(--panel-2, #161b24) 82%, var(--accent, #79a6ff) 18%)
+      46% 100%
   );
+  color: color-mix(in srgb, var(--text, #fff) 72%, transparent);
   cursor: nwse-resize;
   touch-action: none;
   z-index: 2;
+}
+
+.world-floating-terminal-resize::after {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 14px;
+  height: 14px;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    currentcolor 3px 5px
+  );
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  content: "";
+}
+
+.world-floating-terminal-resize:hover,
+.world-floating-terminal-resize:focus-visible,
+.world-floating-terminal[data-interaction="resizing"]
+  .world-floating-terminal-resize {
+  color: var(--accent, #79a6ff);
+  background-color: color-mix(in srgb, var(--accent, #79a6ff) 14%, transparent);
+}
+
+.world-floating-terminal-resize:focus-visible {
+  outline: 2px solid var(--accent, #79a6ff);
+  outline-offset: -4px;
 }
 
 @media (max-width: 720px) {

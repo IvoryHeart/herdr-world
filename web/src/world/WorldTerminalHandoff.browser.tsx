@@ -549,13 +549,157 @@ async function run() {
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "Builder floating Inspector",
   );
+  await until(
+    () =>
+      document.querySelectorAll(".world-intent-connector circle").length === 2,
+    "Builder Inspector connector",
+  );
   await settle();
+  const initialBuilderWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Builder Inspector"]',
+  )!;
+  const builderAgentBounds = agentTarget("Builder")!.getBoundingClientRect();
+  const initialBuilderWindowBounds =
+    initialBuilderWindow.getBoundingClientRect();
+  const builderConnectorPoints = [
+    ...document.querySelectorAll<SVGCircleElement>(
+      ".world-intent-connector circle",
+    ),
+  ].map((circle) => ({
+    x: Number(circle.getAttribute("cx")),
+    y: Number(circle.getAttribute("cy")),
+  }));
+  check(
+    Math.abs(
+      builderConnectorPoints[0].x -
+        (builderAgentBounds.left + builderAgentBounds.right) / 2,
+    ) <= 2 &&
+      Math.abs(
+        builderConnectorPoints[0].y -
+          (builderAgentBounds.top + builderAgentBounds.bottom) / 2,
+      ) <= 3,
+    "floating Inspector connector did not start at the agent centre",
+  );
+  check(
+    Math.abs(builderConnectorPoints[1].x - initialBuilderWindowBounds.right) <=
+      2 &&
+      Math.abs(
+        builderConnectorPoints[1].y -
+          (initialBuilderWindowBounds.top + initialBuilderWindowBounds.bottom) /
+            2,
+      ) <= 2,
+    "floating Inspector connector did not meet the window on its facing right edge",
+  );
   check(
     !document
       .querySelector(".world-context-rail")
       ?.classList.contains("has-inspector"),
     "floating the Inspector left its docked shell visible",
   );
+  const builderMoveHandle = initialBuilderWindow.querySelector<HTMLElement>(
+    ".workspace-inspector-agent-identity",
+  )!;
+  check(
+    builderMoveHandle.closest<HTMLElement>(
+      '.workspace-inspector-head[title="Drag to move Inspector"]',
+    ) !== null,
+    "floating Inspector did not expose its header as a drag-to-move surface",
+  );
+  const builderWindowBeforeMove = initialBuilderWindow.getBoundingClientRect();
+  const moveDelta = {
+    x: builderWindowBeforeMove.right + 32 <= window.innerWidth - 8 ? 32 : -32,
+    y: builderWindowBeforeMove.top >= 32 ? -24 : 24,
+  };
+  builderMoveHandle.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+      pointerId: 7,
+      pointerType: "mouse",
+      clientX: builderWindowBeforeMove.left + 40,
+      clientY: builderWindowBeforeMove.top + 24,
+    }),
+  );
+  initialBuilderWindow.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      buttons: 1,
+      pointerId: 7,
+      pointerType: "mouse",
+      clientX: builderWindowBeforeMove.left + 40 + moveDelta.x,
+      clientY: builderWindowBeforeMove.top + 24 + moveDelta.y,
+    }),
+  );
+  initialBuilderWindow.dispatchEvent(
+    new PointerEvent("pointerup", {
+      bubbles: true,
+      button: 0,
+      pointerId: 7,
+      pointerType: "mouse",
+      clientX: builderWindowBeforeMove.left + 40 + moveDelta.x,
+      clientY: builderWindowBeforeMove.top + 24 + moveDelta.y,
+    }),
+  );
+  await until(() => {
+    const moved = initialBuilderWindow.getBoundingClientRect();
+    return (
+      Math.abs(moved.left - builderWindowBeforeMove.left - moveDelta.x) <= 1 &&
+      Math.abs(moved.top - builderWindowBeforeMove.top - moveDelta.y) <= 1
+    );
+  }, "drag-moved live Builder Inspector");
+  const builderResizeGrip = initialBuilderWindow.querySelector<HTMLElement>(
+    'button[aria-label="Resize Inspector window"]',
+  )!;
+  const builderResizeGripBounds = builderResizeGrip.getBoundingClientRect();
+  check(
+    builderResizeGripBounds.width >= 32 &&
+      builderResizeGripBounds.height >= 32 &&
+      getComputedStyle(builderResizeGrip).cursor === "nwse-resize" &&
+      getComputedStyle(builderResizeGrip).backgroundImage !== "none",
+    "floating Inspector did not expose a visible drag-to-resize handle",
+  );
+  const builderWindowBeforeResize =
+    initialBuilderWindow.getBoundingClientRect();
+  const resizeDelta = { x: -40, y: -32 };
+  builderResizeGrip.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+      pointerId: 6,
+      pointerType: "mouse",
+      clientX: builderWindowBeforeResize.right - 2,
+      clientY: builderWindowBeforeResize.bottom - 2,
+    }),
+  );
+  initialBuilderWindow.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      buttons: 1,
+      pointerId: 6,
+      pointerType: "mouse",
+      clientX: builderWindowBeforeResize.right - 2 + resizeDelta.x,
+      clientY: builderWindowBeforeResize.bottom - 2 + resizeDelta.y,
+    }),
+  );
+  initialBuilderWindow.dispatchEvent(
+    new PointerEvent("pointerup", {
+      bubbles: true,
+      button: 0,
+      pointerId: 6,
+      pointerType: "mouse",
+      clientX: builderWindowBeforeResize.right - 2 + resizeDelta.x,
+      clientY: builderWindowBeforeResize.bottom - 2 + resizeDelta.y,
+    }),
+  );
+  await until(() => {
+    const resized = initialBuilderWindow.getBoundingClientRect();
+    return (
+      resized.width <= builderWindowBeforeResize.width - 39 &&
+      resized.height <= builderWindowBeforeResize.height - 31
+    );
+  }, "drag-resized Builder Inspector");
 
   flushSync(() => agentTarget("Reviewer")!.click());
   await until(

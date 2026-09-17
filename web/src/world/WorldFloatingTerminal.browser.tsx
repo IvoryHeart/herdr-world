@@ -61,6 +61,7 @@ function Fixture() {
         cascadeIndex={0}
         compactActive
         onFocus={() => {}}
+        onRaise={() => {}}
         onAnchorChange={() => {}}
         onPortalChange={(element) =>
           setPortals((current) => ({

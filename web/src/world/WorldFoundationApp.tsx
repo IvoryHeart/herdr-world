@@ -32,6 +32,7 @@ import {
 } from "./worldObject";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import WorldIntentProfile from "./WorldIntentProfile";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
@@ -454,12 +455,10 @@ function WorldControlPlane({
   const [visualConversationAnchors, setVisualConversationAnchors] =
     useState<Record<string, OfficeCanvasAnchor> | null>(null);
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
-    Record<string, OfficeCanvasAnchor | null>
+    Record<string, WorldConnectorTargetBounds | null>
   >({});
-  const [intentOverlayAnchor, setIntentOverlayAnchor] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
+  const [intentOverlayAnchor, setIntentOverlayAnchor] =
+    useState<WorldConnectorTargetBounds | null>(null);
   const currentSelection = selection
     ? (world.nodeById.get(selection.id) ?? null)
     : null;
@@ -794,8 +793,10 @@ function WorldControlPlane({
     const update = () => {
       const bounds = rail.getBoundingClientRect();
       setIntentOverlayAnchor({
-        x: bounds.left,
-        y: Math.min(bounds.bottom - 28, bounds.top + 62),
+        left: bounds.left,
+        top: bounds.top,
+        right: bounds.right,
+        bottom: bounds.bottom,
       });
     };
     update();
@@ -945,6 +946,7 @@ function WorldControlPlane({
             cascadeIndex={index}
             compactActive={index === floatingInspectors.length - 1}
             onFocus={() => focusFloatingInspector(conversation)}
+            onRaise={() => focusFloatingInspector(conversation, false)}
             onAnchorChange={(anchor) =>
               setFloatingWindowAnchors((current) => ({
                 ...current,
