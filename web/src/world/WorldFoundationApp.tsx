@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import App from "../App";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import { AgentIcon } from "../components/AgentIcon";
 import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
@@ -22,6 +23,7 @@ import {
   type WorldObjectNode,
 } from "./worldObject";
 import "./world.css";
+import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import { WorldViewErrorBoundary } from "./WorldViewErrorBoundary";
 
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
@@ -31,6 +33,7 @@ const CheckpointGraphView = lazy(() => import("./CheckpointGraphView"));
 export type WorldView = "spaces" | "office" | "tree" | "graph";
 
 const SELECTED_CONNECTION_KEY = "worldSelectedConnection";
+const WORLD_INTENT_VIEW_KEY = "worldIntentView";
 const WORLD_VIEWS: readonly WorldView[] = ["office", "spaces", "tree", "graph"];
 const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   spaces: "/spaces",
@@ -57,6 +60,46 @@ export function worldSelectionIsCurrent(
   current: WorldObjectNode | null | undefined,
 ) {
   return selected !== null && current?.generation === selected.generation;
+}
+
+export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
+  if (node.kind === "host") return [];
+  return [
+    ...(node.capabilities.files ? (["files"] as const) : []),
+    ...(node.capabilities.changes ? (["changes"] as const) : []),
+    ...(node.kind === "agent" && node.capabilities.agentHistory
+      ? (["history"] as const)
+      : []),
+  ];
+}
+
+export function worldIntentInitialView(
+  node: WorldObjectNode,
+  preferred: InspectorView | null,
+): InspectorView | null {
+  const views = worldIntentViews(node);
+  if (preferred && views.includes(preferred)) return preferred;
+  if (node.kind === "agent" && views.includes("history")) return "history";
+  return views[0] ?? null;
+}
+
+function readWorldIntentView(): InspectorView | null {
+  try {
+    const value = worldLocalStorage.getItem(WORLD_INTENT_VIEW_KEY);
+    return value === "files" || value === "changes" || value === "history"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeWorldIntentView(view: InspectorView) {
+  try {
+    worldLocalStorage.setItem(WORLD_INTENT_VIEW_KEY, view);
+  } catch {
+    // The current overlay still works when browser persistence is unavailable.
+  }
 }
 
 function initialView() {
@@ -129,6 +172,9 @@ export default function WorldFoundationApp() {
             </label>
           }
           onInspectorVisibilityChange={setInspectorOpen}
+          onInspectorViewChange={
+            view === "spaces" ? undefined : writeWorldIntentView
+          }
         />
       </div>
       {view !== "spaces" ? (
@@ -232,6 +278,16 @@ function WorldControlPlane({
     ],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
+  const intentRequestRef = useRef(0);
+  const contextRailRef = useRef<HTMLElement | null>(null);
+  const [intentOpening, setIntentOpening] = useState(false);
+  const [intentError, setIntentError] = useState<string | null>(null);
+  const [selectedOfficeAnchor, setSelectedOfficeAnchor] =
+    useState<OfficeCanvasAnchor | null>(null);
+  const [intentOverlayAnchor, setIntentOverlayAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const currentSelection = selection
     ? (world.nodeById.get(selection.id) ?? null)
     : null;
@@ -243,17 +299,80 @@ function WorldControlPlane({
   const selectedId = currentSelectionGeneration
     ? (selection?.id ?? null)
     : null;
-  const selectNode = (id: string) =>
-    setSelection(world.nodeById.get(id) ?? null);
+  const selectNode = (id: string) => {
+    const next = world.nodeById.get(id) ?? null;
+    const requestId = intentRequestRef.current + 1;
+    intentRequestRef.current = requestId;
+    setSelection(next);
+    setIntentError(null);
+    setSelectedOfficeAnchor(null);
+    const intentView = next
+      ? worldIntentInitialView(next, readWorldIntentView())
+      : null;
+    if (!next || !next.actionable || !next.selectedHost || !intentView) {
+      setIntentOpening(false);
+      window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+      return;
+    }
+    setIntentOpening(true);
+    const guardedTarget: WorldEventTarget = {
+      dispatchEvent(event) {
+        if (intentRequestRef.current !== requestId) return false;
+        return window.dispatchEvent(event);
+      },
+    };
+    void dispatchWorldInspectorRequest(next, intentView, store, guardedTarget)
+      .catch((cause) => {
+        if (intentRequestRef.current !== requestId) return;
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
+      })
+      .finally(() => {
+        if (intentRequestRef.current === requestId) setIntentOpening(false);
+      });
+  };
+
+  const closeIntent = () => {
+    intentRequestRef.current += 1;
+    setIntentOpening(false);
+    setIntentError(null);
+    setSelection(null);
+    setSelectedOfficeAnchor(null);
+    window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+  };
 
   useEffect(() => {
     if (
       selected &&
       (!currentSelectionGeneration || shouldCloseWorldInspector(selected))
     ) {
+      intentRequestRef.current += 1;
+      setIntentOpening(false);
       window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
     }
   }, [currentSelectionGeneration, selected]);
+
+  useEffect(() => {
+    const rail = contextRailRef.current;
+    if (view !== "office" || selected?.kind !== "agent" || !rail) {
+      setIntentOverlayAnchor(null);
+      return;
+    }
+    const update = () => {
+      const bounds = rail.getBoundingClientRect();
+      setIntentOverlayAnchor({
+        x: bounds.left,
+        y: Math.min(bounds.bottom - 28, bounds.top + 62),
+      });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(rail);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [inspectorOpen, selected, view]);
 
   return (
     <main className="world-control-plane" id="world">
@@ -282,6 +401,7 @@ function WorldControlPlane({
                     world={world}
                     selectedId={selectedId}
                     onSelect={selectNode}
+                    onSelectedAnchorChange={setSelectedOfficeAnchor}
                   />
                 </Suspense>
               ) : view === "tree" ? (
@@ -311,12 +431,28 @@ function WorldControlPlane({
               )}
             </WorldViewErrorBoundary>
           </section>
-          <aside className="world-context-rail" aria-label="World context">
+          {view === "office" &&
+          selected?.kind === "agent" &&
+          selectedOfficeAnchor?.visible &&
+          intentOverlayAnchor ? (
+            <WorldIntentConnector
+              source={selectedOfficeAnchor}
+              target={intentOverlayAnchor}
+            />
+          ) : null}
+          <aside
+            ref={contextRailRef}
+            className={`world-context-rail ${inspectorOpen ? "has-inspector" : ""}`}
+            aria-label="World context"
+          >
             {selected ? (
               <WorldSelectionPanel
                 node={selected}
                 currentGeneration={currentSelectionGeneration}
-                onClose={() => setSelection(null)}
+                inspectorOpen={inspectorOpen}
+                intentOpening={intentOpening}
+                resourceError={intentError}
+                onClose={closeIntent}
                 onOpenSpaces={onOpenSpaces}
               />
             ) : null}
@@ -422,6 +558,24 @@ function WorldStatusHeader({
   );
 }
 
+function WorldIntentConnector({
+  source,
+  target,
+}: {
+  source: OfficeCanvasAnchor;
+  target: { x: number; y: number };
+}) {
+  const distance = Math.max(48, Math.min(180, (target.x - source.x) * 0.45));
+  const path = `M ${source.x} ${source.y} C ${source.x + distance} ${source.y}, ${target.x - distance} ${target.y}, ${target.x} ${target.y}`;
+  return (
+    <svg className="world-intent-connector" aria-hidden="true">
+      <path d={path} />
+      <circle cx={source.x} cy={source.y} r="3" />
+      <circle cx={target.x} cy={target.y} r="3" />
+    </svg>
+  );
+}
+
 export function selectedHostStatusLabel(
   host: Pick<WorldHostObject, "label" | "hostState"> | null,
 ) {
@@ -437,11 +591,17 @@ export function shouldCloseWorldInspector(node: WorldObjectNode | null) {
 function WorldSelectionPanel({
   node,
   currentGeneration,
+  inspectorOpen,
+  intentOpening,
+  resourceError,
   onClose,
   onOpenSpaces,
 }: {
   node: WorldObjectNode;
   currentGeneration: boolean;
+  inspectorOpen: boolean;
+  intentOpening: boolean;
+  resourceError: string | null;
   onClose(): void;
   onOpenSpaces(): void;
 }) {
@@ -450,18 +610,19 @@ function WorldSelectionPanel({
   const workspace = workspaceTarget(node);
   const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
   const disabled = !currentGeneration || working;
+  const stateLabel = !currentGeneration
+    ? "Stale"
+    : leaf?.kind === "agent"
+      ? (leaf.stateLabels[leaf.status] ?? leaf.status)
+      : hostStateLabel(node.hostState);
 
-  async function activate(view?: InspectorView) {
+  async function openSpaces() {
     if (disabled || !workspace || !node.actionable) return;
     setWorking(true);
     setError(null);
     try {
-      if (view) {
-        await dispatchWorldInspectorRequest(node, view);
-      } else {
-        await focusWorldNode(node);
-        onOpenSpaces();
-      }
+      await focusWorldNode(node);
+      onOpenSpaces();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -470,80 +631,42 @@ function WorldSelectionPanel({
   }
 
   return (
-    <aside className="world-selection-panel" aria-label="World selection">
-      <button
-        className="world-panel-close"
-        type="button"
-        onClick={onClose}
-        aria-label="Close"
-      >
-        ×
-      </button>
-      <p className="world-eyebrow">{node.kind}</p>
-      <h2>{node.label}</h2>
-      <dl>
-        <div>
-          <dt>Host</dt>
-          <dd>{node.hostLabel}</dd>
+    <aside
+      className="world-selection-panel world-intent-profile"
+      aria-label="World selection"
+      data-kind={node.kind}
+    >
+      <header className="world-intent-profile-header">
+        <span className="world-intent-avatar" aria-hidden="true">
+          {node.kind === "agent" ? (
+            <AgentIcon agent={node.pane.agent} compact />
+          ) : node.kind === "terminal" ? (
+            ">_"
+          ) : node.kind === "space" ? (
+            "S"
+          ) : (
+            "H"
+          )}
+        </span>
+        <div className="world-intent-identity">
+          <p className="world-eyebrow">
+            {node.kind} · {stateLabel}
+          </p>
+          <h2>{node.label}</h2>
+          <p className="world-intent-context">
+            {leaf ? `${leaf.spaceLabel} · ` : ""}
+            {node.hostLabel}
+          </p>
         </div>
-        {node.kind === "agent" || node.kind === "terminal" ? (
-          <>
-            <div>
-              <dt>Space</dt>
-              <dd>{node.spaceLabel}</dd>
-            </div>
-            {node.tabLabel ? (
-              <div>
-                <dt>Tab</dt>
-                <dd>
-                  {node.tabLabel}
-                  {node.tabNumber === undefined ? "" : ` · ${node.tabNumber}`}
-                </dd>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <div>
-          <dt>Generation</dt>
-          <dd>{node.generation}</dd>
-        </div>
-        <div>
-          <dt>State</dt>
-          <dd>
-            {currentGeneration ? hostStateLabel(node.hostState) : "Stale"}
-          </dd>
-        </div>
-        {leaf ? (
-          <>
-            <div>
-              <dt>{leaf.kind === "agent" ? "Agent" : "Terminal"}</dt>
-              <dd>
-                {leaf.kind === "agent"
-                  ? (leaf.stateLabels[leaf.status] ?? leaf.status)
-                  : leaf.nativeId}
-              </dd>
-            </div>
-            {leaf.agentLabel ? (
-              <div>
-                <dt>Persona</dt>
-                <dd>{leaf.agentLabel}</dd>
-              </div>
-            ) : null}
-            {leaf.modelLabel ? (
-              <div>
-                <dt>Model</dt>
-                <dd>{leaf.modelLabel}</dd>
-              </div>
-            ) : null}
-            {leaf.focused ? (
-              <div>
-                <dt>Focus</dt>
-                <dd>Focused</dd>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </dl>
+        <button
+          className="world-panel-close"
+          type="button"
+          onClick={onClose}
+          aria-label="Close intent"
+        >
+          ×
+        </button>
+      </header>
       {leaf?.taskSummary ? (
         <section className="world-task-summary" aria-label="Current task">
           <span>Current task</span>
@@ -561,50 +684,39 @@ function WorldSelectionPanel({
           </button>
         </div>
       ) : null}
-      {workspace ? (
+      {workspace && currentGeneration && node.capabilities.openSpaces ? (
         <div className="world-panel-actions">
           <button
             type="button"
-            disabled={disabled || !node.capabilities.openSpaces}
-            onClick={() => void activate()}
+            disabled={disabled}
+            onClick={() => void openSpaces()}
           >
             Open in Spaces
           </button>
-          <button
-            type="button"
-            disabled={disabled || !node.capabilities.files}
-            onClick={() => void activate("files")}
-          >
-            Files
-          </button>
-          <button
-            type="button"
-            disabled={disabled || !node.capabilities.changes}
-            onClick={() => void activate("changes")}
-          >
-            Changes
-          </button>
-          {leaf?.kind === "agent" ? (
-            <button
-              type="button"
-              disabled={disabled || !node.capabilities.agentHistory}
-              onClick={() => void activate("history")}
-            >
-              Agent History
-            </button>
-          ) : null}
         </div>
       ) : null}
-      {!node.actionable ? (
+      {!currentGeneration || !node.actionable ? (
         <p className="world-panel-warning">
-          {node.capabilities.activateHost
-            ? `This observation is read-only. Activate ${node.hostLabel} to use its operational tools.`
-            : "This observation is read-only until its host is ready again."}
+          {!currentGeneration
+            ? "This selection belongs to a retired runtime generation. Select its current observation to use operational tools."
+            : node.capabilities.activateHost
+              ? `This observation is read-only. Activate ${node.hostLabel} to use its operational tools.`
+              : "This observation is read-only until its host is ready again."}
         </p>
       ) : null}
-      {error ? (
+      {intentOpening ? (
+        <p className="world-intent-loading" role="status">
+          Opening intent…
+        </p>
+      ) : null}
+      {!intentOpening && workspace && node.actionable && !inspectorOpen ? (
+        <p className="world-intent-loading" role="status">
+          Resource view closed. Select this entity again to reopen it.
+        </p>
+      ) : null}
+      {error || resourceError ? (
         <p className="world-panel-error" role="alert">
-          {error}
+          {error ?? resourceError}
         </p>
       ) : null}
     </aside>
@@ -681,6 +793,10 @@ export async function dispatchWorldInspectorRequest(
 ) {
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
+  const availableViews = worldIntentViews(node);
+  if (!availableViews.includes(view)) {
+    throw new Error(`${view} is not available for this selection`);
+  }
   await focusWorldNode(node, focusStore);
   if (!worldNodeLeaseIsActive(node, focusStore)) {
     throw new Error("The selected host changed while it was opening");
@@ -701,6 +817,8 @@ export async function dispatchWorldInspectorRequest(
           generation: connectionGeneration,
           workspaceId: target.workspaceId,
           view,
+          ...(target.paneId ? { originPaneId: target.paneId } : {}),
+          availableViews,
         },
       },
     ),

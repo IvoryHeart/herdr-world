@@ -147,15 +147,14 @@
 }
 
 .world-view-layout {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-}
-.world-view-layout.has-context {
-  grid-template-columns: minmax(0, 1fr) minmax(360px, min(46vw, 720px));
+  overflow: hidden;
 }
 .world-view-stage {
+  width: 100%;
+  height: 100%;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -164,26 +163,35 @@
 .world-selection-panel {
   position: relative;
   min-width: 0;
-  overflow: auto;
-  padding: 24px 20px;
-  background: color-mix(in srgb, var(--bg, #0e1116) 90%, #172131);
+  flex: 0 0 auto;
+  overflow: hidden;
+  padding: 12px;
+  border-bottom: 1px solid var(--border, #343942);
+  background: color-mix(in srgb, var(--bg, #0e1116) 84%, #172131);
 }
 .world-context-rail {
+  position: absolute;
+  z-index: 32;
+  top: 12px;
+  right: 12px;
+  width: min(640px, calc(100% - 24px));
+  max-height: calc(100% - 24px);
   min-width: 0;
   min-height: 0;
   display: none;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid var(--border, #343942);
-  background: color-mix(in srgb, var(--bg, #0e1116) 90%, #172131);
+  border: 1px solid color-mix(in srgb, var(--border, #343942) 88%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg, #0e1116) 92%, #172131);
+  box-shadow: 0 18px 52px rgb(0 0 0 / 42%);
+  backdrop-filter: blur(14px);
 }
 .world-view-layout.has-context .world-context-rail {
   display: flex;
 }
-.world-context-rail > .world-selection-panel {
-  flex: 0 1 auto;
-  max-height: 45%;
-  border-bottom: 1px solid var(--border, #343942);
+.world-context-rail.has-inspector {
+  bottom: 12px;
 }
 .world-inspector-portal {
   min-width: 0;
@@ -207,15 +215,50 @@
   max-height: none;
   flex: 1 1 auto;
 }
-.world-selection-panel h2 {
-  margin: 0 32px 20px 0;
-  font-size: 19px;
+.world-intent-profile-header {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 10px;
+}
+.world-intent-avatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent, #79a6ff) 46%, transparent);
+  border-radius: 10px;
+  color: var(--accent, #79a6ff);
+  background: color-mix(in srgb, var(--accent, #79a6ff) 12%, transparent);
+  font: 800 12px / 1 var(--mono-font, monospace);
+}
+.world-intent-profile[data-kind="agent"] .world-intent-avatar {
+  color: #67d79b;
+  border-color: rgb(103 215 155 / 38%);
+  background: rgb(103 215 155 / 10%);
+}
+.world-intent-identity {
+  min-width: 0;
+}
+.world-intent-identity .world-eyebrow {
+  margin-bottom: 2px;
+}
+.world-intent-identity h2 {
+  margin: 0;
+  font-size: 15px;
   overflow-wrap: anywhere;
 }
+.world-intent-context {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted, #9da7b4);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .world-panel-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
+  position: static;
   width: 30px;
   height: 30px;
   border: 0;
@@ -229,29 +272,11 @@
   color: inherit;
   background: rgb(255 255 255 / 7%);
 }
-.world-selection-panel dl {
-  display: grid;
-  gap: 9px;
-  margin: 0 0 22px;
-}
-.world-selection-panel dl div {
-  display: grid;
-  grid-template-columns: 82px 1fr;
-  gap: 10px;
-}
-.world-selection-panel dt {
-  color: var(--muted, #9da7b4);
-  font-size: 11px;
-}
-.world-selection-panel dd {
-  margin: 0;
-  font-size: 11px;
-  overflow-wrap: anywhere;
-}
 .world-panel-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  justify-content: flex-end;
   gap: 8px;
+  margin-top: 10px;
 }
 .world-panel-actions button {
   min-height: 34px;
@@ -263,7 +288,6 @@
   cursor: pointer;
 }
 .world-panel-actions button:first-child {
-  grid-column: 1 / -1;
   color: #0c1725;
   border-color: transparent;
   background: var(--accent, #7daaff);
@@ -274,8 +298,9 @@
   cursor: not-allowed;
 }
 .world-panel-warning,
-.world-panel-error {
-  margin-top: 16px;
+.world-panel-error,
+.world-intent-loading {
+  margin: 10px 0 0;
   color: #e6ae6b;
   font-size: 12px;
   line-height: 1.5;
@@ -283,9 +308,12 @@
 .world-panel-error {
   color: #ef9b85;
 }
+.world-intent-loading {
+  color: var(--muted, #9da7b4);
+}
 .world-task-summary {
-  margin: -4px 0 18px;
-  padding: 11px 12px;
+  margin: 10px 0 0;
+  padding: 8px 10px;
   border: 1px solid color-mix(in srgb, var(--accent, #79a6ff) 24%, transparent);
   border-radius: 8px;
   background: color-mix(in srgb, var(--accent, #79a6ff) 7%, transparent);
@@ -302,6 +330,26 @@
   font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+.world-intent-connector {
+  position: fixed;
+  z-index: 31;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+.world-intent-connector path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent, #79a6ff) 68%, transparent);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.world-intent-connector circle {
+  fill: var(--accent, #79a6ff);
+  stroke: color-mix(in srgb, var(--bg, #0e1116) 86%, transparent);
+  stroke-width: 2;
 }
 
 .world-empty {
@@ -703,34 +751,24 @@
   .world-status-summary span:not(.world-live-dot):nth-of-type(n + 4) {
     display: none;
   }
-  .world-view-layout.has-context {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
   .world-context-rail {
-    max-height: 48vh;
-    border-left: 0;
-    border-top: 1px solid var(--border, #343942);
+    top: 8px;
+    right: 8px;
+    left: 8px;
+    width: auto;
+    max-height: calc(100% - 16px);
   }
-  .world-context-rail > .world-selection-panel {
-    max-height: 42vh;
+  .world-context-rail.has-inspector {
+    bottom: 8px;
   }
   .world-inspector-portal:not(:empty) {
-    min-height: 42vh;
+    min-height: min(62vh, 560px);
   }
   .world-view-stage {
     padding: 12px;
   }
   .world-selection-panel {
-    max-height: 42vh;
-    border-left: 0;
-    padding: 16px 14px;
-  }
-  .world-selection-panel dl {
-    display: none;
-  }
-  .world-selection-panel h2 {
-    margin-bottom: 12px;
+    padding: 10px;
   }
   .world-tree [role="group"] {
     margin-left: 10px;

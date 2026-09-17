@@ -5,6 +5,22 @@ import type { Workspace } from "./types";
 import { connectionStorageKey } from "./connectionStorage";
 
 export type InspectorView = "files" | "changes" | "history";
+const INSPECTOR_VIEWS: readonly InspectorView[] = [
+  "files",
+  "changes",
+  "history",
+];
+
+export function normalizeInspectorViews(value: unknown): InspectorView[] {
+  if (!Array.isArray(value)) return [...INSPECTOR_VIEWS];
+  const admitted = value.filter(
+    (candidate, index): candidate is InspectorView =>
+      INSPECTOR_VIEWS.includes(candidate as InspectorView) &&
+      value.indexOf(candidate) === index,
+  );
+  return admitted.length ? admitted : [...INSPECTOR_VIEWS];
+}
+
 export type WorkspaceSurface = "terminal" | "annotations" | InspectorView;
 export const WORKSPACE_INSPECTOR_REQUEST_EVENT =
   "herdr-world:workspace-inspector-request";
@@ -28,6 +44,8 @@ export interface WorkspaceInspectorRequest {
   generation: number;
   workspaceId: string;
   view: InspectorView;
+  originPaneId?: string;
+  availableViews?: InspectorView[];
 }
 
 export interface WorkspaceAnnotationRequest {
@@ -99,6 +117,7 @@ export interface WorkspaceInspectorState {
   scope: ResourceScope;
   open: boolean;
   view: InspectorView;
+  availableViews?: InspectorView[];
   dock: InspectorDock;
   size: number;
   expanded: boolean;

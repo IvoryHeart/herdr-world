@@ -161,6 +161,7 @@ import {
   type InspectorView,
   inspectorMaximumSize,
   isWorkspaceInspectorShortcut,
+  normalizeInspectorViews,
   readInspectorPreferences,
   readResourceFileSelection,
   relativePathWithinCheckout,
@@ -285,6 +286,7 @@ type OpenInspectorOptions = {
   initialDirectory?: string;
   originPaneId?: string;
   focusInspector?: boolean;
+  availableViews?: InspectorView[];
 };
 
 function normalizeSidebarWidth(value: number): number {
@@ -1112,12 +1114,14 @@ export default function App({
   topbarPortal = null,
   primaryViewControl = null,
   onInspectorVisibilityChange,
+  onInspectorViewChange,
 }: {
   operationalShortcutsEnabled?: boolean;
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
   onInspectorVisibilityChange?: (open: boolean) => void;
+  onInspectorViewChange?: (view: InspectorView) => void;
 } = {}) {
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -1524,6 +1528,10 @@ export default function App({
       options: OpenInspectorOptions = {},
     ) => {
       const snapshot = store.get();
+      const availableViews = normalizeInspectorViews(options.availableViews);
+      const admittedView = availableViews.includes(view)
+        ? view
+        : availableViews[0];
       const workspace = workspaceId
         ? snapshot.workspaces.find(
             (candidate) => candidate.workspace_id === workspaceId,
@@ -1593,7 +1601,8 @@ export default function App({
       const nextState: WorkspaceInspectorState = {
         scope,
         open: true,
-        view,
+        view: admittedView,
+        ...(options.availableViews ? { availableViews } : {}),
         dock,
         size,
         expanded: sameOwner ? current.expanded : preferences.expanded,
@@ -1613,19 +1622,19 @@ export default function App({
         : null;
       commitInspectorState(nextState);
       writeInspectorPreferences(worldLocalStorage, nextState);
-      if (mobile) setMobileView(view);
+      if (mobile) setMobileView(admittedView);
       if (focusInspector) requestAnimationFrame(finishInspectorFocus);
 
       const selectedPath =
         options.path ??
-        (view === "files" && options.initialDirectory === undefined
+        (admittedView === "files" && options.initialDirectory === undefined
           ? readResourceFileSelection(worldLocalStorage, scope)
           : undefined);
-      if (view === "files" && !selectedPath) {
+      if (admittedView === "files" && !selectedPath) {
         fileQuickOpenRequestRef.current += 1;
         setActiveFilePreview(emptyActiveFilePreviewSelection());
       }
-      if (view !== "files" || !selectedPath) return;
+      if (admittedView !== "files" || !selectedPath) return;
       const entry =
         options.entry ??
         ({
@@ -2233,7 +2242,10 @@ export default function App({
         return;
       }
       pendingInspectorRequestRef.current = null;
-      openInspector(detail.view, detail.workspaceId);
+      openInspector(detail.view, detail.workspaceId, {
+        originPaneId: detail.originPaneId,
+        availableViews: detail.availableViews,
+      });
     };
     window.addEventListener(
       WORKSPACE_INSPECTOR_REQUEST_EVENT,
@@ -2337,7 +2349,10 @@ export default function App({
       return;
     }
     pendingInspectorRequestRef.current = null;
-    openInspector(pending.view, pending.workspaceId);
+    openInspector(pending.view, pending.workspaceId, {
+      originPaneId: pending.originPaneId,
+      availableViews: pending.availableViews,
+    });
   }, [connectionClient, openInspector, s.workspaces]);
   useEffect(() => {
     const handleWorktreeRemoved = (event: Event) => {
@@ -3042,6 +3057,12 @@ export default function App({
   const setInspectorView = (view: InspectorView) => {
     const current = inspectorStateRef.current;
     if (!current) return;
+    if (
+      current.availableViews &&
+      !normalizeInspectorViews(current.availableViews).includes(view)
+    ) {
+      return;
+    }
     if (view === "history" && !paneHasAgentHistory(inspectorHistoryPane)) {
       return;
     }
@@ -3056,6 +3077,7 @@ export default function App({
     };
     commitInspectorState(next);
     writeInspectorPreferences(worldLocalStorage, next);
+    onInspectorViewChange?.(view);
     if (mobile) setMobileView(view);
   };
   const setInspectorDock = (dock: InspectorDock) => {

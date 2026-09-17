@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
+import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
   projectWorldOffice,
   type HerdrOfficeProjection,
@@ -23,10 +24,12 @@ export default function PixelOfficeView({
   world,
   selectedId,
   onSelect,
+  onSelectedAnchorChange,
 }: {
   world: WorldObject;
   selectedId: string | null;
   onSelect(id: string): void;
+  onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -150,6 +153,7 @@ export default function PixelOfficeView({
           onActivateRoom={selectOfficeKey}
           canCreateSeat={roomCannotCreateSeat}
           onNewSeat={ignoreNewSeat}
+          onSelectedAnchorChange={onSelectedAnchorChange}
           roomAlignment={preferences.roomAlignment}
           longRoomTitleMode={preferences.longTitleMode}
         />

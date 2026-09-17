@@ -13,6 +13,7 @@ import {
   inspectorNavigationRatioAtPosition,
   isWorkspaceInspectorShortcut as resolveShortcut,
   INSPECTOR_SEPARATOR_SIZE,
+  normalizeInspectorViews,
   readInspectorPreferences,
   readResourceFileSelection,
   relativePathWithinCheckout,
@@ -96,6 +97,25 @@ describe("workspace inspector shortcuts", () => {
       ),
     ).toBe(false);
     expect(isWorkspaceInspectorShortcut(event({ repeat: true }))).toBe(false);
+  });
+});
+
+describe("workspace inspector view admission", () => {
+  test("keeps only unique supported views and falls back to the full Inspector", () => {
+    expect(normalizeInspectorViews(["changes", "files", "changes"])).toEqual([
+      "changes",
+      "files",
+    ]);
+    expect(normalizeInspectorViews(["terminal", null])).toEqual([
+      "files",
+      "changes",
+      "history",
+    ]);
+    expect(normalizeInspectorViews(undefined)).toEqual([
+      "files",
+      "changes",
+      "history",
+    ]);
   });
 });
 

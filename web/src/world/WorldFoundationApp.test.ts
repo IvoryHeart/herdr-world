@@ -9,6 +9,8 @@ import {
   parseWorldView,
   selectedHostStatusLabel,
   shouldCloseWorldInspector,
+  worldIntentInitialView,
+  worldIntentViews,
   worldSelectionIsCurrent,
   worldViewFromPath,
 } from "./WorldFoundationApp";
@@ -274,6 +276,81 @@ describe("World view preference", () => {
     });
   });
 
+  test("opens only applicable intent resources and remembers an admitted tab", () => {
+    const world = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 11,
+          snapshotGeneration: 11,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "shared",
+                number: 1,
+                label: "Shared",
+                focused: true,
+                pane_count: 2,
+                tab_count: 1,
+                agent_status: "working",
+              },
+            ],
+            tabs: [
+              {
+                tab_id: "tab-a",
+                workspace_id: "shared",
+                number: 1,
+                label: "Work",
+                focused: true,
+                pane_count: 2,
+                agent_status: "working",
+              },
+            ],
+            panes: [
+              {
+                pane_id: "agent-pane",
+                terminal_id: "agent-terminal",
+                workspace_id: "shared",
+                tab_id: "tab-a",
+                focused: true,
+                agent: "codex",
+                agent_status: "working",
+                revision: 1,
+              },
+              {
+                pane_id: "shell-pane",
+                terminal_id: "shell-terminal",
+                workspace_id: "shared",
+                tab_id: "tab-a",
+                focused: false,
+                agent_status: "unknown",
+                revision: 1,
+              },
+            ],
+            agents: [],
+          },
+        },
+      ],
+      "host-a",
+    );
+    const agent = world.leaves.find(({ kind }) => kind === "agent")!;
+    const terminal = world.leaves.find(({ kind }) => kind === "terminal")!;
+
+    expect(worldIntentViews(world.hosts[0])).toEqual([]);
+    expect(worldIntentViews(world.spaces[0])).toEqual(["files", "changes"]);
+    expect(worldIntentViews(agent)).toEqual(["files", "changes", "history"]);
+    expect(worldIntentViews(terminal)).toEqual(["files", "changes"]);
+    expect(worldIntentInitialView(agent, null)).toBe("history");
+    expect(worldIntentInitialView(agent, "changes")).toBe("changes");
+    expect(worldIntentInitialView(terminal, "history")).toBe("files");
+  });
+
   test("restores a valid last host before the default or current profile", () => {
     const connections = [{ id: "host-a" }, { id: "host-b" }];
     expect(
@@ -386,19 +463,40 @@ describe("World view preference", () => {
                 number: 1,
                 label: "Shared",
                 focused: true,
-                pane_count: 0,
-                tab_count: 0,
-                agent_status: "idle",
+                pane_count: 1,
+                tab_count: 1,
+                agent_status: "working",
               },
             ],
-            tabs: [],
-            panes: [],
+            tabs: [
+              {
+                tab_id: "tab-a",
+                workspace_id: "shared",
+                number: 1,
+                label: "Agent",
+                focused: true,
+                pane_count: 1,
+                agent_status: "working",
+              },
+            ],
+            panes: [
+              {
+                pane_id: "pane-a",
+                terminal_id: "terminal-a",
+                workspace_id: "shared",
+                tab_id: "tab-a",
+                focused: true,
+                agent: "codex",
+                agent_status: "working",
+                revision: 1,
+              },
+            ],
             agents: [],
           },
         },
       ],
       "host-a",
-    ).spaces[0];
+    ).leaves[0];
     const requests: Event[] = [];
     const focusStore = {
       get: () => ({
@@ -419,14 +517,16 @@ describe("World view preference", () => {
       },
     };
 
-    await dispatchWorldInspectorRequest(node, "changes", focusStore, target);
+    await dispatchWorldInspectorRequest(node, "history", focusStore, target);
 
     expect(requests).toHaveLength(1);
     expect((requests[0] as CustomEvent).detail).toEqual({
       connectionId: "host-a",
       generation: 23,
       workspaceId: "shared",
-      view: "changes",
+      view: "history",
+      originPaneId: "pane-a",
+      availableViews: ["files", "changes", "history"],
     });
   });
 

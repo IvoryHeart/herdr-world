@@ -34,6 +34,7 @@ import type { GitDiffEntry, Pane, Workspace } from "../types";
 import {
   DEFAULT_INSPECTOR_NAVIGATION_RATIO,
   inspectorNavigationRatioAtPosition,
+  normalizeInspectorViews,
   readInspectorPreferences,
   resourceOwnerKey,
   resourceStateKey,
@@ -345,7 +346,11 @@ export function WorkspaceInspectorHost({
       "--workspace-inspector-navigation-width": `${navigationRatios[view] * 100}%`,
     }) as CSSProperties;
   const changeCount = changedCount(workspace);
-  const historyAvailable = paneHasAgentHistory(historyPane);
+  const availableViews = normalizeInspectorViews(state.availableViews);
+  const filesAvailable = availableViews.includes("files");
+  const changesAvailable = availableViews.includes("changes");
+  const historyAvailable =
+    availableViews.includes("history") && paneHasAgentHistory(historyPane);
   const detailAvailable =
     state.view === "files"
       ? !!fileSelection.entry
@@ -386,9 +391,9 @@ export function WorkspaceInspectorHost({
       }
       return;
     }
-    const views: InspectorView[] = historyAvailable
-      ? ["files", "changes", "history"]
-      : ["files", "changes"];
+    const views = availableViews.filter(
+      (view) => view !== "history" || historyAvailable,
+    );
     const currentIndex = Math.max(0, views.indexOf(state.view));
     const nextView: InspectorView | undefined =
       event.key === "Home"
@@ -461,53 +466,59 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <div className="workspace-inspector-tabs" role="tablist">
-          <button
-            ref={filesTabRef}
-            type="button"
-            role="tab"
-            aria-selected={state.view === "files"}
-            tabIndex={state.view === "files" ? 0 : -1}
-            className={state.view === "files" ? "is-active" : ""}
-            onClick={() => onViewChange("files")}
-            onKeyDown={handleTabKeyDown}
-          >
-            <FolderTree size={14} /> Files
-          </button>
-          <button
-            ref={changesTabRef}
-            type="button"
-            role="tab"
-            aria-selected={state.view === "changes"}
-            tabIndex={state.view === "changes" ? 0 : -1}
-            className={state.view === "changes" ? "is-active" : ""}
-            onClick={() => onViewChange("changes")}
-            onKeyDown={handleTabKeyDown}
-          >
-            <FileDiff size={14} /> Changes
-            {changeCount > 0 ? (
-              <span className="workspace-inspector-count">{changeCount}</span>
-            ) : null}
-          </button>
-          <button
-            ref={historyTabRef}
-            type="button"
-            role="tab"
-            aria-selected={state.view === "history"}
-            tabIndex={state.view === "history" ? 0 : -1}
-            className={state.view === "history" ? "is-active" : ""}
-            title={
-              historyAvailable
-                ? "Agent history"
-                : "Select an active agent pane to view history"
-            }
-            disabled={!historyAvailable && state.view !== "history"}
-            onClick={() => {
-              if (historyAvailable) onViewChange("history");
-            }}
-            onKeyDown={handleTabKeyDown}
-          >
-            <History size={14} /> History
-          </button>
+          {filesAvailable ? (
+            <button
+              ref={filesTabRef}
+              type="button"
+              role="tab"
+              aria-selected={state.view === "files"}
+              tabIndex={state.view === "files" ? 0 : -1}
+              className={state.view === "files" ? "is-active" : ""}
+              onClick={() => onViewChange("files")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FolderTree size={14} /> Files
+            </button>
+          ) : null}
+          {changesAvailable ? (
+            <button
+              ref={changesTabRef}
+              type="button"
+              role="tab"
+              aria-selected={state.view === "changes"}
+              tabIndex={state.view === "changes" ? 0 : -1}
+              className={state.view === "changes" ? "is-active" : ""}
+              onClick={() => onViewChange("changes")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <FileDiff size={14} /> Changes
+              {changeCount > 0 ? (
+                <span className="workspace-inspector-count">{changeCount}</span>
+              ) : null}
+            </button>
+          ) : null}
+          {availableViews.includes("history") ? (
+            <button
+              ref={historyTabRef}
+              type="button"
+              role="tab"
+              aria-selected={state.view === "history"}
+              tabIndex={state.view === "history" ? 0 : -1}
+              className={state.view === "history" ? "is-active" : ""}
+              title={
+                historyAvailable
+                  ? "Agent history"
+                  : "Select an active agent pane to view history"
+              }
+              disabled={!historyAvailable && state.view !== "history"}
+              onClick={() => {
+                if (historyAvailable) onViewChange("history");
+              }}
+              onKeyDown={handleTabKeyDown}
+            >
+              <History size={14} /> History
+            </button>
+          ) : null}
         </div>
         <div className="workspace-inspector-actions">
           <button

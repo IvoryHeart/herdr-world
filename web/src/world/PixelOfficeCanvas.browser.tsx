@@ -98,10 +98,17 @@ function connection(
 
 async function run() {
   document.body.style.margin = "0";
+  const layoutShell = document.createElement("div");
+  layoutShell.className = "world-view-layout has-context";
+  layoutShell.style.cssText = "position:relative;width:1280px;height:820px";
   const host = document.createElement("div");
   host.className = "world-view-stage";
-  host.style.cssText = "width:1280px;height:820px;overflow:hidden";
-  document.body.append(host);
+  const context = document.createElement("aside");
+  context.className = "world-context-rail";
+  context.innerHTML =
+    '<div class="world-selection-panel">Selected agent</div><div class="world-inspector-portal">Inspector</div>';
+  layoutShell.append(host, context);
+  document.body.append(layoutShell);
   const root = createRoot(host);
   const world = buildWorldObject(
     [
@@ -122,12 +129,16 @@ async function run() {
   );
 
   try {
+    let selectedAnchor = false;
     root.render(
       <StrictMode>
         <PixelOfficeView
           world={world}
           selectedId={world.leaves[0]?.id ?? null}
           onSelect={() => {}}
+          onSelectedAnchorChange={(anchor) => {
+            selectedAnchor = anchor !== null;
+          }}
         />
       </StrictMode>,
     );
@@ -170,6 +181,15 @@ async function run() {
       (canvas?.width ?? 0) > 0 && (canvas?.height ?? 0) > 0,
       "Pixel Office canvas collapsed",
     );
+    check(
+      Math.round(host.getBoundingClientRect().width) ===
+        Math.round(layoutShell.getBoundingClientRect().width),
+      "The intent overlay reduced the Office stage width",
+    );
+    check(
+      selectedAnchor,
+      "The selected Office entity did not publish an anchor",
+    );
   } finally {
     root.unmount();
     await waitFor(
@@ -185,7 +205,7 @@ async function run() {
         0,
       "Pixel Office canvas leaked after unmount",
     );
-    host.remove();
+    layoutShell.remove();
   }
 }
 
