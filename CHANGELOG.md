@@ -26,6 +26,10 @@ retain their original Herdr Web lineage.
 - Added native Spaces, Office, Tree and Graph views with canonical navigation,
   qualified terminal handoff and Files, Changes and Agent History routing.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Added optional service-owned Prometheus metrics for the Office Economy board,
+  with UI configuration, bounded fixed queries, provider health and no dependency
+  from core topology or terminals.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Added World-owned standalone archives, installer, user services and the
   `ivoryheart.herdr-world` Herdr plugin for Linux, macOS and Windows.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)

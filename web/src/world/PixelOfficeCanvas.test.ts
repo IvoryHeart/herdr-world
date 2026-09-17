@@ -17,7 +17,9 @@ test.skipIf(!chrome)(
     const dir = await mkdtemp(join(tmpdir(), "pixel-office-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
+    const snapshotGate = Promise.withResolvers<void>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
+    let metricsEndpoint: string | null = "http://metrics.example.test/";
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -26,6 +28,68 @@ test.skipIf(!chrome)(
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
+        }
+        if (path === "/release-metrics" && request.method === "POST") {
+          snapshotGate.resolve();
+          return new Response("ok");
+        }
+        if (path === "/api/world/observability/snapshot") {
+          await snapshotGate.promise;
+          return Response.json(
+            metricsEndpoint
+              ? {
+                  health: "available",
+                  providerId: "prometheus.otel",
+                  sourceCount: 1,
+                  configuredSourceCount: 1,
+                  failedSourceCount: 0,
+                  observedAt: 1_700_000_000_000,
+                  windowSeconds: 86_400,
+                  models: [
+                    {
+                      provider: "openai",
+                      model: "gpt-example",
+                      usage: { input: 120, output: 30 },
+                      costUsd: null,
+                      costKind: null,
+                    },
+                  ],
+                  totalCostUsd: null,
+                  totalUsage: 150,
+                }
+              : {
+                  health: "unavailable",
+                  providerId: null,
+                  sourceCount: 0,
+                  configuredSourceCount: 0,
+                  failedSourceCount: 0,
+                  observedAt: 0,
+                  windowSeconds: null,
+                  models: [],
+                  totalCostUsd: null,
+                  totalUsage: 0,
+                },
+          );
+        }
+        if (path === "/api/world/observability/configuration") {
+          if (request.method === "PUT") {
+            const body = (await request.json()) as {
+              prometheus_url: string | null;
+            };
+            metricsEndpoint = body.prometheus_url
+              ? `${body.prometheus_url.replace(/\/+$/u, "")}/`
+              : null;
+          }
+          return Response.json({
+            providerId: metricsEndpoint ? "prometheus.otel" : "none",
+            configured: metricsEndpoint !== null,
+            endpoint: metricsEndpoint,
+            source: "settings",
+            health: metricsEndpoint ? "available" : "unavailable",
+            healthReason: null,
+            observedAt: metricsEndpoint ? 1_700_000_000_000 : 0,
+            lastSuccessAt: metricsEndpoint ? 1_700_000_000_000 : null,
+          });
         }
         const asset = assets.get(path);
         if (asset) return new Response(asset);

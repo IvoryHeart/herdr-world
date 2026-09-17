@@ -42,3 +42,8 @@ resource and mutation work through the qualified focused-runtime path.
 
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
 [knowledge map](knowledge-map.md).
+
+The optional Office Economy provider is service-owned. For local testing, set
+`HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the Office metrics dialog;
+do not add browser-to-Prometheus requests. The provider intentionally accepts only a
+base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-office-metrics).

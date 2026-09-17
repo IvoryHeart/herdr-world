@@ -48,6 +48,29 @@ export type OfficeObservability = {
   totalUsage: number;
 };
 
+export type OfficeObservabilityConfiguration = {
+  providerId: string;
+  configured: boolean;
+  endpoint: string | null;
+  source: "environment" | "settings" | "none";
+  health: ObservabilityHealth;
+  healthReason: "provider_query_failed" | null;
+  observedAt: number;
+  lastSuccessAt: number | null;
+};
+
+type FetchLike = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
+const OBSERVABILITY_CONFIG_PATH = "/api/world/observability/configuration";
+const OBSERVABILITY_SNAPSHOT_PATH = "/api/world/observability/snapshot";
+const MAX_MODELS = 128;
+const MAX_TEXT_LENGTH = 160;
+const MAX_USAGE_FIELDS = 32;
+const MAX_METRIC_VALUE = 1e18;
+
 export const EMPTY_OFFICE_OBSERVABILITY: OfficeObservability = {
   health: "unavailable",
   providerId: null,
@@ -60,6 +83,123 @@ export const EMPTY_OFFICE_OBSERVABILITY: OfficeObservability = {
   totalCostUsd: null,
   totalUsage: 0,
 };
+
+export async function fetchOfficeObservability(
+  fetchImpl: FetchLike = fetch,
+): Promise<OfficeObservability> {
+  const response = await fetchImpl(OBSERVABILITY_SNAPSHOT_PATH, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(7_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return parseOfficeObservability(await response.json());
+}
+
+export async function fetchOfficeObservabilityConfiguration(
+  fetchImpl: FetchLike = fetch,
+): Promise<OfficeObservabilityConfiguration> {
+  const response = await fetchImpl(OBSERVABILITY_CONFIG_PATH, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(7_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return parseOfficeObservabilityConfiguration(await response.json());
+}
+
+export async function updateOfficeObservabilityConfiguration(
+  endpoint: string | null,
+  fetchImpl: FetchLike = fetch,
+): Promise<OfficeObservabilityConfiguration> {
+  const response = await fetchImpl(OBSERVABILITY_CONFIG_PATH, {
+    method: "PUT",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ prometheus_url: endpoint }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return parseOfficeObservabilityConfiguration(await response.json());
+}
+
+export function parseOfficeObservability(value: unknown): OfficeObservability {
+  const data = requiredRecord(value, "Office observability response");
+  const rawModels = data.models;
+  if (!Array.isArray(rawModels) || rawModels.length > MAX_MODELS) {
+    throw new Error("Office observability model list is invalid");
+  }
+  const models = rawModels.map((raw) => {
+    const model = requiredRecord(raw, "Office observability model");
+    const usageRecord = requiredRecord(
+      model.usage,
+      "Office observability usage",
+    );
+    if (Object.keys(usageRecord).length > MAX_USAGE_FIELDS) {
+      throw new Error("Office observability usage is too large");
+    }
+    const usage: Record<string, number> = {};
+    for (const [name, amount] of Object.entries(usageRecord)) {
+      if (!isSafeText(name, 64) || !safeMetric(amount)) {
+        throw new Error("Office observability usage is invalid");
+      }
+      usage[name] = amount;
+    }
+    return {
+      provider: requiredText(model.provider, "provider"),
+      model: requiredText(model.model, "model"),
+      usage,
+      costUsd: nullableMetric(model.costUsd, "cost"),
+      costKind: model.costKind === "reported" ? ("reported" as const) : null,
+    };
+  });
+  return {
+    health: parseHealth(data.health),
+    providerId: nullableText(data.providerId, "provider"),
+    sourceCount: safeCount(data.sourceCount, "source count"),
+    configuredSourceCount: safeCount(
+      data.configuredSourceCount,
+      "configured source count",
+    ),
+    failedSourceCount: safeCount(data.failedSourceCount, "failed source count"),
+    observedAt: safeCount(data.observedAt, "observation time"),
+    windowSeconds:
+      data.windowSeconds === null
+        ? null
+        : safeCount(data.windowSeconds, "window"),
+    models,
+    totalCostUsd: nullableMetric(data.totalCostUsd, "total cost"),
+    totalUsage: safeMetric(data.totalUsage)
+      ? data.totalUsage
+      : invalid("Office observability total usage is invalid"),
+  };
+}
+
+export function parseOfficeObservabilityConfiguration(
+  value: unknown,
+): OfficeObservabilityConfiguration {
+  const data = requiredRecord(value, "Office observability configuration");
+  const source = data.source;
+  if (source !== "environment" && source !== "settings" && source !== "none") {
+    throw new Error("Office observability configuration source is invalid");
+  }
+  if (typeof data.configured !== "boolean") {
+    throw new Error("Office observability configuration state is invalid");
+  }
+  return {
+    providerId: requiredText(data.providerId, "provider"),
+    configured: data.configured,
+    endpoint: nullableText(data.endpoint, "endpoint", 2_048),
+    source,
+    health: parseHealth(data.health),
+    healthReason:
+      data.healthReason === "provider_query_failed"
+        ? "provider_query_failed"
+        : null,
+    observedAt: safeCount(data.observedAt, "observation time"),
+    lastSuccessAt:
+      data.lastSuccessAt === null
+        ? null
+        : safeCount(data.lastSuccessAt, "last success time"),
+  };
+}
 
 export function aggregateOfficeObservability(
   results: ReadonlyArray<
@@ -283,4 +423,85 @@ export function formatOfficeModelName(model: string) {
     .replace(/^claude-/u, "")
     .replace(/^gpt-[\d.-]+-/u, "")
     .replace(/^codex-/u, "");
+}
+
+async function responseError(response: Response) {
+  const fallback = `Office observability request failed: ${response.status}`;
+  try {
+    const text = (await response.text()).slice(0, 4_096);
+    const value = JSON.parse(text) as { error?: unknown };
+    return typeof value.error === "string" && value.error.trim()
+      ? value.error.trim().slice(0, 300)
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseHealth(value: unknown): ObservabilityHealth {
+  if (
+    value === "available" ||
+    value === "degraded" ||
+    value === "unavailable"
+  ) {
+    return value;
+  }
+  throw new Error("Office observability health is invalid");
+}
+
+function requiredRecord(value: unknown, label: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} is invalid`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function isSafeText(
+  value: unknown,
+  maximum = MAX_TEXT_LENGTH,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    [...value].length <= maximum
+  );
+}
+
+function requiredText(value: unknown, label: string, maximum?: number) {
+  if (!isSafeText(value, maximum)) {
+    throw new Error(`Office observability ${label} is invalid`);
+  }
+  return value.trim();
+}
+
+function nullableText(value: unknown, label: string, maximum?: number) {
+  return value === null ? null : requiredText(value, label, maximum);
+}
+
+function safeMetric(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= MAX_METRIC_VALUE
+  );
+}
+
+function nullableMetric(value: unknown, label: string) {
+  if (value === null) return null;
+  if (!safeMetric(value)) {
+    throw new Error(`Office observability ${label} is invalid`);
+  }
+  return value;
+}
+
+function safeCount(value: unknown, label: string) {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new Error(`Office observability ${label} is invalid`);
+  }
+  return value as number;
+}
+
+function invalid(message: string): never {
+  throw new Error(message);
 }

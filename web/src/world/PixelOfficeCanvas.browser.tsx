@@ -20,6 +20,14 @@ async function waitFor(condition: () => boolean, message: string) {
   throw new Error(message);
 }
 
+function enterText(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set?.call(input, value);
+  input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+}
+
 function workspace(id: string, label: string, paneCount: number): Workspace {
   return {
     workspace_id: id,
@@ -159,6 +167,19 @@ async function run() {
       "Pixel Office overlays did not become ready",
     );
     const diagnostics = window.__HERDR_WORLD_RENDERER__!;
+    const rendersBeforeObservation = diagnostics.sceneRenders;
+    await fetch("/release-metrics", { method: "POST" });
+    await waitFor(
+      () =>
+        host
+          .querySelector(".world-office-metrics-button")
+          ?.getAttribute("data-status") === "available",
+      "Office did not apply the service-owned observability snapshot",
+    );
+    check(
+      diagnostics.sceneRenders > rendersBeforeObservation,
+      "The Economy board did not redraw after observability arrived",
+    );
     const layout = diagnostics.publishedLayout;
     const canvas = host.querySelector<HTMLCanvasElement>(
       "canvas[data-office-canvas='true']",
@@ -241,6 +262,54 @@ async function run() {
     check(
       selectedAnchor,
       "The selected Office entity did not publish an anchor",
+    );
+
+    const metricsButton = host.querySelector<HTMLButtonElement>(
+      ".world-office-metrics-button",
+    );
+    metricsButton?.click();
+    await waitFor(
+      () =>
+        document.querySelector(
+          '[role="dialog"][aria-label="Office metrics settings"]',
+        ) !== null,
+      "Office metrics settings did not open",
+    );
+    const metricsDialog = document.querySelector<HTMLElement>(
+      '[role="dialog"][aria-label="Office metrics settings"]',
+    )!;
+    const prometheusInput =
+      metricsDialog.querySelector<HTMLInputElement>('input[type="url"]')!;
+    await waitFor(
+      () => !prometheusInput.disabled,
+      "Office metrics settings did not finish loading",
+    );
+    check(
+      prometheusInput.value === "http://metrics.example.test/",
+      "Office metrics settings did not show the service configuration",
+    );
+    enterText(prometheusInput, "http://replacement.example.test");
+    if (metricsDialog instanceof HTMLFormElement) metricsDialog.requestSubmit();
+    await waitFor(
+      () =>
+        metricsDialog.textContent?.includes("Prometheus provider saved.") ===
+        true,
+      "Office metrics settings did not save through the World service",
+    );
+    metricsDialog
+      .querySelector<HTMLButtonElement>(".world-observability-actions .ghost")
+      ?.click();
+    await waitFor(
+      () =>
+        metricsDialog.textContent?.includes(
+          "Not configured; Economy shows no provider data.",
+        ) === true,
+      "Office metrics settings did not disable the provider",
+    );
+    check(
+      host.querySelector("canvas[data-office-canvas='true']") !== null &&
+        host.querySelector(".world-semantic-target") !== null,
+      "Disabling optional observability disrupted the Office topology",
     );
   } finally {
     root.unmount();

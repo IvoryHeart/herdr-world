@@ -552,6 +552,77 @@
   background: #172534;
   font: 10px monospace;
 }
+.world-office-metrics-button {
+  position: relative;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid #3a5065;
+  border-radius: 4px;
+  color: var(--text, #e8edf4);
+  background: #172534;
+  font-size: 10px;
+  cursor: pointer;
+}
+.world-office-metrics-button::after {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6d7580;
+  content: "";
+}
+.world-office-metrics-button[data-status="available"]::after {
+  background: #54c88b;
+}
+.world-office-metrics-button[data-status="degraded"]::after {
+  background: #ef9b85;
+}
+.world-office-metrics-button:hover,
+.world-office-metrics-button:focus-visible {
+  border-color: var(--accent, #79a6ff);
+  background: color-mix(in srgb, #172534 82%, var(--accent, #79a6ff));
+}
+.world-observability-dialog {
+  width: min(520px, 100%);
+}
+.world-observability-help {
+  margin: 0;
+  color: var(--muted, #9da7b4);
+  font-size: 12px;
+  line-height: 1.55;
+}
+.world-observability-field-help {
+  margin: 6px 0 0;
+  color: var(--muted, #9da7b4);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.world-observability-health {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--border, #343942);
+  border-radius: 7px;
+  color: var(--muted, #9da7b4);
+  background: rgb(255 255 255 / 3%);
+  font-size: 12px;
+}
+.world-observability-health[data-status="available"] {
+  border-color: color-mix(in srgb, #54c88b 45%, var(--border, #343942));
+  color: #83d9aa;
+}
+.world-observability-health[data-status="degraded"] {
+  border-color: color-mix(in srgb, #ef9b85 45%, var(--border, #343942));
+  color: #efad9c;
+}
+.world-observability-actions {
+  justify-content: space-between;
+}
 .world-view-loading,
 .world-view-failure {
   min-height: 50%;
@@ -839,7 +910,35 @@
 
 @media (max-width: 720px) {
   .world-office-toolbar {
+    position: absolute;
+    z-index: 34;
+    top: 4px;
+    right: 5px;
+    display: flex;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .world-office-toolbar label {
     display: none;
+  }
+  .world-office-metrics-button {
+    width: 42px;
+    min-height: 40px;
+    justify-content: center;
+    padding: 0;
+  }
+  .world-office-metrics-button > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .world-compact-target-chooser > summary {
+    padding-right: 58px;
   }
   .world-compact-target-chooser {
     position: relative;

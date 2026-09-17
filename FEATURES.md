@@ -18,18 +18,18 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ### Foundation cutover boundaries
 
-The draft Roamgate-derived foundation checkpoint keeps the complete Spaces terminal, Files,
-Changes, annotations, worktrees, Agent History, profile management, and essential
-multi-host Office/Tree/Graph hierarchy. It is not the accepted replacement yet:
+The draft Roamgate-derived foundation restores the retained Pixi Office, connected
+Tree and spatial Graph over the same multi-host WorldObject. Office includes its CEO
+room, receptions, boards, Agent Bar, rooms, room actions, completion cues and live
+floating or profile-docked terminal conversations. Optional Prometheus data reaches
+the Economy board through bounded World-service queries; Office and terminals remain
+independent of that provider.
 
-- Rich Office/Graph canvas behavior, persisted visual layouts, completion scenery, and
-  simultaneous multi-host in-scene terminal conversations remain undone and are required in this
-  PR. Use **Open in Spaces** only while testing this incomplete checkpoint.
-- The bounded `task-summary` publishing path and qualified agent/pane Pin, Unpin and Pinned-only
-  watchlist also remain undone and required. The former World-owned free-form notes store alone is
-  retired; review annotations remain available as a separate workflow.
-- Browser-federated bridge URLs, native Capacitor Android packaging, and old visual
-  preference keys are retired. The responsive installable PWA is the mobile client.
+This is still a draft replacement pending complete selected-host lifecycle, local/SSH
+and responsive acceptance. The qualified agent/pane Pin, Unpin and Pinned-only
+watchlist also remains required. Browser-federated bridge URLs, native Capacitor
+Android packaging and old visual preference keys are retired; the responsive
+installable PWA is the mobile client.
 
 ## Workspace, Tab, and Pane Navigation
 

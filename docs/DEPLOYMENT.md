@@ -149,6 +149,27 @@ herdr-world --socket-path /path/to/herdr.sock \
 herdr-world --ssh-host workbox
 ```
 
+## Optional Office metrics
+
+Office can populate its Economy board from a Prometheus-compatible HTTP API. Open
+**Office metrics** from the Office toolbar and save an HTTP or HTTPS base URL, or set
+the service startup default:
+
+```bash
+HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9090 herdr-world
+```
+
+The saved setting takes precedence over the environment, including an explicit
+Disable choice, and is stored in World's owner-only `settings.json`. URLs with embedded
+credentials, queries or fragments are rejected. Put authentication and network policy
+outside this credential-free integration if the provider is not local.
+
+The browser never contacts Prometheus. The World service polls fixed, bounded 24-hour
+queries every 30 seconds for Codex token counters and Claude token/reported-cost
+counters, caps response size and model rows, and does not estimate missing prices.
+Provider failure appears as degraded or unavailable Economy data; connections,
+topology, terminal conversations and Inspector operations continue normally.
+
 ## Herdr plugin
 
 The plugin ID is `ivoryheart.herdr-world`. For an unreleased checkout, build the

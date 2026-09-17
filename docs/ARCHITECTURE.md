@@ -22,7 +22,8 @@ terminal traffic. Browser RPC uses `{ id, method, params }` and returns either
 traffic. Subscribed Herdr events are pushed as `{ event: ... }`.
 
 The bridge owns socket access, local/SSH runtimes, file/Git/worktree/hook/session
-operations, terminal and clipboard relay, authentication, health, and updates.
+operations, terminal and clipboard relay, optional observability-provider access,
+authentication, health, and updates.
 React owns presentation and browser-local preferences. xterm displays Herdr's
 server-rendered output rather than reconstructing a PTY in the bridge.
 
@@ -31,6 +32,13 @@ Spaces keeps one selected connection for operational work. The bridge-global
 qualifies that data by connection and generation into one WorldObject used by Office,
 Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
 Files, Changes, or Agent History revalidates and switches to the exact owning runtime.
+
+Office observability is optional and separate from Herdr runtime authority. The World
+service validates one credential-free Prometheus base URL, issues only fixed bounded
+24-hour token and reported-cost queries, and returns a bounded same-origin snapshot to
+the browser. Provider responses cannot add topology or target actions. No provider, a
+timeout or a malformed response produces unavailable/degraded board health without
+affecting WorldObject refreshes, terminal routing or Inspector work.
 
 ## Agent activity
 

@@ -1,3 +1,4 @@
+import { Activity } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
@@ -11,6 +12,7 @@ import type {
 import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
 import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
 import { OfficeCompletionNotices } from "./OfficeCompletionNotices";
+import { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import {
   OfficeRoomActionsOverlay,
   OfficeSemanticTargetsOverlay,
@@ -20,7 +22,11 @@ import {
   type OfficeAgent,
   type HerdrOfficeProjection,
 } from "./herdrOfficeProjection";
-import { EMPTY_OFFICE_OBSERVABILITY } from "./officeObservability";
+import {
+  EMPTY_OFFICE_OBSERVABILITY,
+  fetchOfficeObservability,
+  type OfficeObservability,
+} from "./officeObservability";
 import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
 import type { PublishedOfficeLayout } from "./officeLayout";
 import {
@@ -90,7 +96,31 @@ export default function PixelOfficeView({
   const [selectedSceneAnchor, setSelectedSceneAnchor] =
     useState<OfficeCanvasAnchor | null>(null);
   const [sceneHover, setSceneHover] = useState<OfficeCanvasHover | null>(null);
+  const [observability, setObservability] = useState<OfficeObservability>(
+    EMPTY_OFFICE_OBSERVABILITY,
+  );
+  const [observabilityRevision, setObservabilityRevision] = useState(0);
+  const [observabilitySettingsOpen, setObservabilitySettingsOpen] =
+    useState(false);
   preferencesRef.current = preferences;
+
+  useEffect(() => {
+    let disposed = false;
+    const refresh = async () => {
+      const next = await fetchOfficeObservability().catch(() => ({
+        ...EMPTY_OFFICE_OBSERVABILITY,
+        health: "degraded" as const,
+        observedAt: Date.now(),
+      }));
+      if (!disposed) setObservability(next);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [observabilityRevision]);
 
   useEffect(() => {
     const scroll = scrollRef.current;
@@ -346,6 +376,17 @@ export default function PixelOfficeView({
             <option value="right">Right</option>
           </select>
         </label>
+        <button
+          type="button"
+          className="world-office-metrics-button"
+          data-status={observability.health}
+          aria-label={`Office metrics settings (${observability.health})`}
+          title={`Office metrics settings · ${observability.health}`}
+          onClick={() => setObservabilitySettingsOpen(true)}
+        >
+          <Activity size={15} aria-hidden="true" />
+          <span>Metrics</span>
+        </button>
         <label>
           <span>Long room titles</span>
           <select
@@ -378,7 +419,7 @@ export default function PixelOfficeView({
           projection={office}
           selectedKey={selectedKey}
           completionSeenKeys={completionSeenKeys}
-          observability={EMPTY_OFFICE_OBSERVABILITY}
+          observability={observability}
           conversationTargets={conversationTargets}
           onSelect={selectOfficeKey}
           onActivateAgent={openOfficeTerminal}
@@ -510,6 +551,12 @@ export default function PixelOfficeView({
           }
         }}
       />
+      {observabilitySettingsOpen ? (
+        <OfficeObservabilityDialog
+          onClose={() => setObservabilitySettingsOpen(false)}
+          onSaved={() => setObservabilityRevision((value) => value + 1)}
+        />
+      ) : null}
     </div>
   );
 }

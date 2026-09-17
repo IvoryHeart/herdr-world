@@ -14,6 +14,7 @@ import {
   openBrowser,
   withLoginToken,
 } from "./config/server-config";
+import { readGuiSettings, updateGuiSettings } from "./config/gui-settings";
 import {
   runServiceCommand,
   SERVICE_COMMAND_CONTINUE,
@@ -89,6 +90,12 @@ import { rpcLogLevel } from "./utils/rpc-logging";
 import { syncWorktreeBase } from "./worktree/create";
 import { WorldSnapshotService } from "./world/snapshot";
 import {
+  createOfficeObservabilityHttpHandler,
+  resolveOfficeObservabilityBootstrap,
+  withOfficeObservabilityEndpoint,
+} from "./world/observability-http";
+import { OfficeObservabilityService } from "./world/observability";
+import {
   removeWorktreeWithRecovery,
   WORKTREE_REMOVE_TIMEOUT_MS,
 } from "./worktree/remove";
@@ -111,6 +118,23 @@ if (herdrCommandResult !== null) {
 const config = loadServerConfig(APP_VERSION);
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
+const officeObservabilityBootstrap = await readGuiSettings()
+  .then((settings) => resolveOfficeObservabilityBootstrap(settings))
+  .catch(() => {
+    logger.warn("invalid Office observability configuration was disabled");
+    return { endpoint: null, source: "none" as const };
+  });
+const officeObservability = new OfficeObservabilityService(
+  officeObservabilityBootstrap,
+);
+const handleOfficeObservability = createOfficeObservabilityHttpHandler({
+  service: officeObservability,
+  persist: async (endpoint) => {
+    await updateGuiSettings((settings) =>
+      withOfficeObservabilityEndpoint(settings, endpoint),
+    );
+  },
+});
 const downstreamConnectionConfig = {
   socketPath: config.socketPath,
   clientSocketPath: config.clientSocketPath,
@@ -1334,6 +1358,11 @@ function main() {
             server.timeout(req, UPDATE_HTTP_IDLE_TIMEOUT_SECONDS);
             return handleHerdrSetup(req);
           }
+          const officeObservabilityResponse = await handleOfficeObservability(
+            req,
+            url.pathname,
+          );
+          if (officeObservabilityResponse) return officeObservabilityResponse;
           const connectionRoute = parseConnectionHttpRoute(
             requestPathname,
             req.method,
