@@ -14,7 +14,7 @@
 
 - [x] 3.1 Port the shared WorldObject projection onto the aggregate Roamgate runtime store, and verify deterministic host-space-agent-or-terminal hierarchy tests for local and SSH profiles
 - [x] 3.2 Integrate native Spaces and checkpoint World routes into the Roamgate shell without mounting a second app, and verify canonical navigation plus desktop/mobile accessibility tests
-- [ ] 3.3 Complete the Pixel Office migration in tasks 10.1–10.7 and verify the defining scene, layout, operations and responsive behavior over qualified multi-host data
+- [ ] 3.3 Complete the Pixel Office migration in tasks 10.1–10.7 and verify the defining scene, layout, operations and responsive behavior over aggregate multi-host data with one selected operational host
 - [x] 3.4 Characterize the checkpoint World-to-Spaces Files, Changes and Agent History handoff, and verify an aggregate selection cannot open resources from a different host or checkout
 - [ ] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
 
@@ -50,48 +50,48 @@
 
 ## 8. Shared visual context, proven in Office
 
-- [ ] 8.1 Extend the qualified WorldObject presenter input with bounded admitted task summaries, agent/model and state labels, focus, tab metadata and action capabilities, and verify missing metadata is never inferred
-- [ ] 8.2 Replace the checkpoint selection panel with one shell-owned selected-entity context, prove it first in Office with qualified ancestry, freshness, supported actions and the existing Inspector while Office remains visible, and keep the seam reusable by Tree and Graph; verify stale or generation-replaced targets become read-only
-- [ ] 8.3 Reuse the existing Files, Changes and Agent History components and resource state for the focused Office context without cloning an Inspector or runtime store, and verify switching agent/workspace context cannot retain resources from the prior host
-- [ ] 8.4 Route Office Inspector, terminal and Spaces actions through their exact owning connection/generation and the existing selected-connection path, and verify colliding native identifiers cannot cross hosts or fall back to the active host
+- [ ] 8.1 Extend the qualified WorldObject presenter input with bounded admitted task summaries, agent/model and state labels, focus, tab metadata, active/ready-inactive/reconnecting/offline-stale host state and action capabilities, and verify missing metadata is never inferred
+- [ ] 8.2 Replace the checkpoint selection panel with one shell-owned selected-entity context, prove it first in Office with qualified ancestry, freshness, selected-host state, supported actions and the existing Inspector while Office remains visible, and keep the seam reusable by Tree and Graph; verify inactive, stale or generation-replaced targets remain inspectable but read-only
+- [ ] 8.3 Reuse the existing Files, Changes and Agent History components and resource state for the focused Office context without cloning an Inspector or runtime store, and verify selecting an entity on another host neither switches the connection nor retains resources from the prior selected-host context
+- [ ] 8.4 Require a valid restored/default managed profile before showing a visual view, expose explicit Activate host for ready-inactive observations, and route Office Inspector, terminal and Spaces actions only through the exact selected connection/generation; verify view or entity selection never changes hosts, colliding native identifiers cannot cross hosts, and activation follows the existing teardown/revalidation lifecycle
 - [ ] 8.5 Add validated Office preference storage and bounded Office error containment, and verify a malformed presenter does not stop Spaces, runtime observation, Inspector state or the current terminal
 - [ ] 8.6 Port the bounded session-qualified task-summary report/update/clear producer over Herdr metadata, and verify normalization, redaction, expiry, session replacement and local/SSH presentation without requiring a remote World web service
 - [ ] 8.7 Add a bounded connection-qualified agent/pane watchlist with Pin, Unpin and Pinned-only controls distinct from workspace pins, and verify persistence, colliding IDs, stale generations and authoritative pane removal
 
 ## 9. Shared live terminal conversations
 
-- [ ] 9.1 Present one focused Office conversation through the existing shell-owned terminal/session owner and one WebSocket, and verify repeated selection of the same qualified agent or desk focuses the existing attachment without a competing transport
-- [ ] 9.2 Extend the shell terminal owner with a bounded registry keyed by connection, runtime generation and terminal identity whose leases are independent of the selected Spaces host, and verify the registry adds no second WebSocket, SSH tunnel, application store or per-host terminal manager
-- [ ] 9.3 Restore up to five independent desktop conversation windows with bounded move, resize, order, close/focus, real terminal refit and validated browser-local geometry, and verify duplicate and sixth-window behavior
+- [ ] 9.1 Present one focused Office conversation for the selected operational host through the existing shell-owned terminal/session owner and one WebSocket, and verify repeated selection of the same qualified agent or desk focuses the existing attachment without a competing transport
+- [ ] 9.2 Extend the shell terminal owner with a bounded registry keyed by selected connection, runtime generation and terminal identity inside the inherited browser routing lease, and verify the registry adds no connection-independent client, second WebSocket, SSH tunnel, application store or per-host terminal manager
+- [ ] 9.3 Restore up to five independent selected-host desktop conversation windows with bounded move, resize, order, close/focus, real terminal refit and validated browser-local geometry, and verify duplicate and sixth-window behavior
 - [ ] 9.4 Restore Office, Tree and Graph desk/agent/node connectors plus explicit handoff to the mounted Spaces pane, and verify connectors track scene/window movement without changing terminal identity
-- [ ] 9.5 Preserve conversations through projection refresh, visual navigation and unrelated selected-host changes; isolate one host's reconnect/removal to its own qualified sessions, and verify simultaneous local/SSH conversations plus a compact layout with one accessible usable conversation
+- [ ] 9.5 Preserve selected-host conversations through projection refresh and visual navigation, retire every outgoing conversation before explicit host switching or generation replacement, and verify local then SSH operation without cross-host input redirection plus a compact layout with one accessible usable conversation
 
 ## 10. Pixel Office migration
 
 - [ ] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify mixed-state shared tabs plus beyond-eight-desk cases seat or stand only bounded working/unknown room-local agents, keep blocked and idle/done destinations, report exact omissions and retain nonduplicated identity and ancestry
 - [ ] 10.2 Port deterministic Office geometry/publication with content-sized two-to-eight-seat rooms, title/action containment, natural row packing, alignment, logical scrolling and stale-render acknowledgement, and verify dense/long-title fixtures
 - [ ] 10.3 Port the Pixel Office renderer with CEO Office, host receptions, boards, Agent Bar, roads, rooms, desks, characters and bounded overflow presentation, and visually compare synthetic desktop fixtures with the delivered composition
-- [ ] 10.4 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact terminal inspection and retained unseen state on failed activation, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity
-- [ ] 10.5 Restore capability-gated room create/rename/close and room-local seat creation with the eight-desk Room Full state; after admitted creation focus the exact new terminal, while cancellation/failure preserves the prior selection, focused Inspector context and every existing qualified conversation window—including background local/SSH sessions when the action temporarily activates another connection—and verify no action invents Office-only runtime state
+- [ ] 10.4 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact selected-host terminal inspection and retained unseen state when the host is inactive or activation fails, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity
+- [ ] 10.5 Restore capability-gated room create/rename/close and room-local seat creation only for the selected host with the eight-desk Room Full state; after admitted creation focus the exact new terminal, while cancellation/failure preserves the prior selection, focused Inspector context and every existing selected-host conversation window, and verify no action switches hosts implicitly or invents Office-only runtime state
 - [ ] 10.6 Restore optional provider configuration/health and bounded authoritative Office boards through the World service, and verify absent or failed providers leave core topology and terminals intact
-- [ ] 10.7 Verify Office at desktop and phone widths with unequal multi-host rooms, stale hosts, the in-Office Inspector, focused local/SSH terminal use, scene scrolling and preference restoration before checking task 3.3
+- [ ] 10.7 Verify Office at desktop and phone widths with unequal aggregate multi-host rooms, active/ready-inactive/stale host states, the selected-host Inspector, local then SSH terminal use, explicit host switching, scene scrolling and preference restoration before checking task 3.3
 
 ## 11. Connected Tree migration
 
 - [ ] 11.1 Move the checkpoint connected branch diagram from Graph to canonical Tree and replace the list-primary desktop composition, preserving exact host-space-agent/terminal connectors after Office acceptance
 - [ ] 11.2 Complete Tree search, independent disclosure and dense/unequal branch layout, and verify clearing search restores prior disclosure without dangling connectors or page overflow
-- [ ] 11.3 Integrate the shared focused Inspector context and qualified terminal conversations while retaining an equivalent compact/assistive hierarchy, and verify stale actions, task summaries and keyboard/touch operation
+- [ ] 11.3 Integrate the shared selected-host Inspector context and qualified terminal conversations while retaining read-only detail for other hosts and an equivalent compact/assistive hierarchy, and verify inactive/stale actions, task summaries and keyboard/touch operation
 
 ## 12. Spatial Graph migration
 
 - [ ] 12.1 Port the qualified host-first Graph projection and deterministic force layout with explicit host/space/leaf bounds and exact overflow counts, and verify duplicate native identifiers never merge
 - [ ] 12.2 Restore node dragging/pinning, bounded pan/zoom, Fit, search, disclosure and validated camera/position persistence, and verify status-only updates do not reset settled layout state
-- [ ] 12.3 Integrate the shared focused Inspector context, semantic hierarchy and qualified terminal conversation connectors, and verify canvas and semantic selection/actions stay synchronized
+- [ ] 12.3 Integrate the shared selected-host Inspector context, semantic hierarchy and qualified terminal conversation connectors while retaining read-only inactive-host selection, and verify canvas and semantic selection/actions stay synchronized
 - [ ] 12.4 Restore renderer lifecycle and performance bounds for visibility, resize, topology updates and unmount, and verify repeated view changes release work without adding subscriptions or terminal resize traffic
 
 ## 13. Complete-view acceptance and delivery
 
-- [ ] 13.1 Exercise Office, Tree and Graph against simultaneously ready local plus deterministic SSH Herdr runtimes with stale/reconnect and colliding-ID cases, and verify concurrent cross-host conversations retain one qualified action/terminal owner each while Spaces and the Inspector keep one selected host
+- [ ] 13.1 Exercise Office, Tree and Graph against simultaneously ready local plus deterministic SSH Herdr runtimes with active/ready-inactive/stale/reconnect and colliding-ID cases, and verify aggregate observation remains intact while actions and up to five conversations belong only to the selected host; explicit switching SHALL retire outgoing contexts before admitting the other host
 - [ ] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the per-view feature inventory with no unexplained parity gaps
 - [ ] 13.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the completed views, and remove checkpoint language only after the implementation evidence passes
 - [ ] 13.4 Run the complete repository and distribution checks, obtain independent review of the final view migrations, resolve findings and return PR #93 to ready status without merging it

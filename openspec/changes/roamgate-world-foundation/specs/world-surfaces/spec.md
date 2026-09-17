@@ -11,13 +11,19 @@ when its agent classification, label, status or focus changes.
 Spaces, Office, Tree and Graph SHALL consume the same connection and generation identities. The
 Spaces terminal workspace SHALL remain mounted while another view is visible so changing views
 does not create another application or competing runtime store. Selection SHALL not itself mutate
-Herdr. Explicit terminal, Spaces or Inspector actions SHALL revalidate the exact connection and
-runtime generation and SHALL be unavailable for stale observations.
+Herdr or change the selected connection.
 
-Spaces and the shell-owned Inspector SHALL keep Roamgate's one-selected-connection operational
-model. That focused selection SHALL NOT limit the shared visual conversation owner to one host:
-Office, Tree and Graph SHALL retain qualified terminal conversations from several concurrently
-ready runtimes over the one World browser transport.
+Office, Tree and Graph SHALL retain every managed host in the shared WorldObject, including current
+ready-inactive hosts and explicitly stale cached topology. The shell SHALL restore a valid
+last/default managed profile as the selected operational host or present the existing connection
+workflow before showing a visual view when no managed profile is selected. View navigation SHALL
+not change that selection.
+
+Terminal, Spaces, Inspector, room and launcher actions SHALL be available only when their target
+belongs to the selected host and its current runtime generation. Selecting an entity on another
+host SHALL remain useful and read-only. A ready-inactive host SHALL be labelled distinctly from an
+offline or stale host and MAY expose an explicit Activate host control; entity selection or an
+attempted operation SHALL NOT activate it implicitly.
 
 #### Scenario: Move between Spaces and a visual view
 - **WHEN** a user opens a qualified terminal in Spaces, visits Office, Tree or Graph and returns
@@ -28,6 +34,22 @@ ready runtimes over the one World browser transport.
 - **WHEN** Office, Tree or Graph is active and a Spaces operational shortcut is pressed
 - **THEN** the mounted Spaces application does not create, focus, close or otherwise mutate a pane
   or workspace
+
+#### Scenario: No managed host is selected
+- **WHEN** the shell cannot restore a selected profile from the managed catalogue
+- **THEN** World presents the existing connection workflow before Office, Tree or Graph and does
+  not invent an operational host
+
+#### Scenario: Inspect an entity on a ready-inactive host
+- **WHEN** a user selects an entity on a ready host other than the selected operational host
+- **THEN** World preserves its bounded detail, identifies the host as ready-inactive, leaves every
+  operational control disabled and does not change the selected host
+
+#### Scenario: Explicitly activate an observed host
+- **WHEN** a user invokes Activate host for a ready-inactive host
+- **THEN** World uses the existing selected-connection lifecycle, retires the outgoing host's
+  scoped terminal and resource contexts, and enables actions only after the new host and generation
+  are current
 
 #### Scenario: Active host changes during an Office action
 - **WHEN** the active connection or runtime generation changes while an Office entity is opening
@@ -52,8 +74,8 @@ ready runtimes over the one World browser transport.
 
 #### Scenario: Two hosts contain equal identifiers
 - **WHEN** two managed hosts report equal workspace, pane or terminal identifiers
-- **THEN** the hierarchy contains distinct connection-qualified subtrees and every action resolves
-  only through the selected entity's owning connection
+- **THEN** the hierarchy contains distinct connection-qualified subtrees and an action is admitted
+  only after its entity's owning connection is the selected operational host
 
 #### Scenario: Two hosts contain equal space and terminal identifiers
 - **WHEN** two managed hosts report equal native space or terminal identifiers
@@ -86,8 +108,8 @@ semantic hierarchy and operational controls without requiring precision pointer 
 
 #### Scenario: Navigate without pointer precision
 - **WHEN** a user traverses World controls with a keyboard or assistive technology
-- **THEN** view, selection, stale state and available actions are exposed by semantics and text
-  rather than color or motion alone
+- **THEN** view, selection, stale state and available actions are exposed by semantics
+  and text rather than color or motion alone
 
 #### Scenario: Scene navigation without pointer precision
 - **WHEN** a user selects an entity through semantic keyboard or assistive navigation
@@ -97,13 +119,14 @@ semantic hierarchy and operational controls without requiring precision pointer 
 The native World shell SHALL offer Spaces, Office, Tree and Graph once each and SHALL keep rendered
 view, browser history and canonical paths `/spaces`, `/office`, `/tree` and `/graph` consistent.
 The existing Spaces connection selector SHALL remain the profile-management surface; visual World
-views SHALL not introduce a second host catalogue. Checkpoint Tree or Graph implementations SHALL
-not be described as complete until their view-specific acceptance passes.
+views SHALL not introduce a second host catalogue and SHALL persistently identify the selected
+operational host and its state. Checkpoint Tree or Graph implementations SHALL not be described as
+complete until their view-specific acceptance passes.
 
 #### Scenario: Browser history across views
 - **WHEN** a user selects Tree, selects Graph and then navigates Back
 - **THEN** the URL and rendered view return to Tree while the same shell retains terminal and
-  Inspector ownership
+  Inspector ownership and the same selected host
 
 #### Scenario: Manage a host
 - **WHEN** a user needs to add, edit, test, connect or remove a profile from a visual World view
@@ -122,16 +145,15 @@ SHALL not embed or launch a separately branded Roamgate application.
   and complete World visual views are available without installing Roamgate or another web bridge
 
 #### Scenario: Use the Inspector without leaving a visual view
-- **WHEN** a user selects an actionable space or pane in Office, Tree or Graph and opens Files,
-  Changes or Agent History
+- **WHEN** a user selects an actionable space or pane on the selected operational host in Office,
+  Tree or Graph and opens Files, Changes or Agent History
 - **THEN** the selected visual view remains visible and the shell-owned Inspector uses only that
   entity's owning connection, runtime generation, workspace and optional pane context
 
-#### Scenario: Change focused host from Office
-- **WHEN** the user explicitly opens an operational context for an Office entity on another ready
-  host
-- **THEN** the shell activates and revalidates that exact host through its existing focused
-  connection lifecycle and does not keep the prior host's resources as the new context
+#### Scenario: Activate a host from a visual view
+- **WHEN** the user explicitly activates the ready-inactive host of a selected visual entity
+- **THEN** the shell changes and revalidates the selected host through its existing connection
+  lifecycle without treating the original entity selection as an operation
 
 ### Requirement: Bounded World view composition
 Office, Tree and Graph SHALL each present their complete view-specific composition over the shared
@@ -164,13 +186,16 @@ Office, Tree and Graph SHALL provide one consistent selected-entity context with
 second Inspector, terminal owner or runtime store. The context SHALL show the selected entity's
 bounded admitted identity, host and space ancestry, connection freshness, kind and actionable
 state. For agents it SHALL also show available agent/model labels, state labels, status and task
-summary. It SHALL expose only relevant generation-fenced Open terminal, Open in Spaces, Files,
-Changes and Agent History actions. Missing metadata SHALL remain absent rather than being inferred.
+summary. It SHALL expose generation-fenced Open terminal, Open in Spaces, Files, Changes and Agent
+History actions only for the selected operational host. A ready-inactive entity SHALL instead
+expose bounded read-only detail and an explicit Activate host control. Missing metadata SHALL remain
+absent rather than being inferred.
 
 At most one Inspector context SHALL be focused at a time. Files, Changes and Agent History SHALL
 reuse the shell's existing components and state while the visual view remains visible. Switching
-context SHALL replace incompatible prior resource state rather than cloning an Inspector for each
-host. This focused Inspector limit SHALL NOT detach qualified visual terminal conversations.
+selected entities SHALL not change the selected host, clone an Inspector or retain an inactive
+host's resources. Explicit host activation SHALL retire the outgoing Inspector and terminal
+contexts through the existing connection lifecycle.
 
 #### Scenario: Inspect an agent with a task summary
 - **WHEN** an admitted agent reports a bounded task summary and the user selects it in any visual
@@ -179,9 +204,15 @@ host. This focused Inspector limit SHALL NOT detach qualified visual terminal co
   current host generation
 
 #### Scenario: Open rich agent context
-- **WHEN** the user opens Files, Changes or Agent History for an actionable agent in a visual view
+- **WHEN** the user opens Files, Changes or Agent History for an actionable agent on the selected
+  operational host in a visual view
 - **THEN** the existing Inspector opens within that view for the exact qualified workspace and
   session context
+
+#### Scenario: Inspect an agent on an inactive host
+- **WHEN** a user selects a current agent on a ready-inactive host
+- **THEN** the detail context remains available, identifies the inactive host and offers explicit
+  host activation without opening terminal or Inspector resources
 
 #### Scenario: Selected entity becomes stale
 - **WHEN** the selected entity's host disconnects or advances beyond the observed generation
@@ -222,10 +253,9 @@ SHALL NOT make task summaries mandatory for local or SSH operation.
 World SHALL let a user Pin and Unpin an exact connection-qualified live agent or terminal pane and
 filter the relevant agent/pane presentation to Pinned only. The bounded World-owned watchlist SHALL
 survive browser refresh, SHALL remain distinct from workspace pins and Graph position pins, and
-SHALL never use a native
-pane identifier without its connection identity. A stale pinned item MAY retain bounded inspection
-context and be unpinned, but SHALL NOT admit runtime actions. World SHALL remove a pin after current
-authoritative state confirms that exact pane no longer exists.
+SHALL never use a native pane identifier without its connection identity. A stale pinned item MAY
+retain bounded inspection context and be unpinned, but SHALL NOT admit runtime actions. World SHALL
+remove a pin after current authoritative state confirms that exact pane no longer exists.
 
 #### Scenario: Pin colliding pane identifiers
 - **WHEN** two hosts expose the same native pane identifier and the user pins one
@@ -309,7 +339,7 @@ distinct, nonduplicated semantic targets.
 #### Scenario: Seat creation is cancelled or fails
 - **WHEN** the user cancels seat creation or the launcher fails before Herdr admits a new pane
 - **THEN** Office preserves the prior selection, focused Inspector context and every existing
-  qualified conversation window without detaching or redirecting a background local or SSH session
+  qualified conversation window for the selected host without detaching or redirecting input
 
 #### Scenario: Mixed-state agents share a tab or exceed the desk bound
 - **WHEN** working or unknown agents share a tab or belong to a ninth or later tab while blocked,
@@ -325,7 +355,7 @@ distinct, nonduplicated semantic targets.
   after activation succeeds
 
 #### Scenario: Completion activation is unavailable
-- **WHEN** a completion target is stale, incompatible or cannot be opened
+- **WHEN** a completion target is on an inactive host, stale, incompatible or cannot be opened
 - **THEN** Office retains its unseen marker and bounded notice, explains that inspection is
   unavailable and does not treat selection as acknowledgement
 
@@ -335,7 +365,8 @@ distinct, nonduplicated semantic targets.
   individually targetable presentation for the distinct unseen completions
 
 #### Scenario: Room action is unavailable
-- **WHEN** a room is stale, full or its host lacks the required capability
+- **WHEN** a room belongs to an inactive host, is stale or full, or its host lacks the required
+  capability
 - **THEN** the corresponding control remains understandable but cannot create an Office-only room,
   desk or mutation
 
@@ -343,7 +374,8 @@ distinct, nonduplicated semantic targets.
 Office, Tree and Graph SHALL open qualified agents, occupied desks and terminal nodes in live
 conversation windows backed by the shell's existing terminal/session owner. Selecting the same
 terminal through another representation SHALL focus the existing conversation instead of creating
-a competing attachment. Explicit handoff SHALL focus that same pane in mounted Spaces.
+a competing attachment. Explicit handoff SHALL focus that same pane in mounted Spaces. Every open
+conversation SHALL belong to the one selected operational host and its current runtime generation.
 
 Desktop SHALL support up to five distinct conversations with independent bounded position, size,
 z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,
@@ -352,12 +384,13 @@ controls. Compact layouts SHALL present one active usable conversation. Spatial 
 each window to its represented desk, agent or node and keep that association legible when either
 endpoint moves or leaves the visible stage.
 
-Conversation identity and validity SHALL be qualified by connection and runtime generation rather
-than by the currently selected Spaces or Inspector host. Changing the selected connection, opening
-another World window or navigating among views SHALL NOT detach, redirect or duplicate conversations
-owned by other ready hosts. Reconnecting one host SHALL invalidate only that host's retired
-generation. All conversations SHALL use the one World browser WebSocket and the existing
-connection-routed terminal owner.
+Conversation identity and validity SHALL be qualified by connection and runtime generation inside
+the existing selected-connection browser lease. Opening another window or navigating among views
+SHALL NOT detach, redirect or duplicate conversations while that host and generation remain
+selected. Explicitly activating another host SHALL retire every outgoing visual and Spaces terminal
+mount before the replacement becomes operational; World SHALL NOT retain simultaneous terminal
+conversations from several hosts in this change. All conversations SHALL use the one World browser
+WebSocket and existing terminal owner.
 
 #### Scenario: Open the same terminal from two representations
 - **WHEN** a user opens an agent and then its occupied desk or hierarchy node
@@ -369,16 +402,15 @@ connection-routed terminal owner.
 - **THEN** terminal identity and session ownership remain stable, view-local geometry is preserved
   where applicable and Spaces receives focus without reattaching another session
 
-#### Scenario: Keep conversations from two hosts
-- **WHEN** a user opens one local and one SSH conversation whose native terminal identifiers may
-  collide, then changes the selected Spaces or Inspector host
-- **THEN** both original conversations remain attached to their exact connection and runtime
-  generation without redirect, detach or duplicate input
+#### Scenario: Explicitly switch hosts with conversations open
+- **WHEN** a user explicitly activates another host while one or more conversations are open
+- **THEN** World retires every outgoing conversation before admitting the new selected-host lease
+  and never redirects input to a colliding terminal on the replacement host
 
-#### Scenario: One conversation host reconnects
-- **WHEN** one host reconnects while conversations from that and another host are open
-- **THEN** World retires only the replaced host generation and leaves the unrelated host's terminal
-  session usable
+#### Scenario: Selected conversation host reconnects
+- **WHEN** the selected host reconnects while one or more conversations are open
+- **THEN** World retires every conversation from the replaced generation and enables a new
+  attachment only after the current generation is admitted
 
 #### Scenario: Conversation target temporarily disappears
 - **WHEN** a snapshot refresh or reconnect temporarily omits a conversation target

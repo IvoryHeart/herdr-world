@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Preserve Herdr runtime authority while one World service qualifies and manages local and SSH
-connections. See [architecture](../../../docs/ARCHITECTURE.md) and
+Preserve Herdr runtime authority while one World service qualifies and manages aggregate local and
+SSH observation with exactly one selected operational connection. See
+[architecture](../../../docs/ARCHITECTURE.md) and
 [deployment](../../../docs/DEPLOYMENT.md).
 
 ## Requirements
@@ -46,6 +47,11 @@ with that World service rather than connecting to independently deployed bridges
 ### Requirement: Qualified admission
 The service and client SHALL qualify snapshots, events, actions, resources and terminal sessions by
 connection and runtime generation, and SHALL require compatible capabilities before dispatch.
+The browser SHALL maintain exactly one selected operational connection. Aggregate observation MAY
+describe every managed runtime, but a mutation, resource request or terminal attachment SHALL be
+admitted only when its target belongs to the selected connection and its current runtime generation.
+Selecting an observed entity SHALL NOT change the operational connection; host activation SHALL be
+an explicit use of the existing managed-connection workflow.
 
 #### Scenario: Colliding native identifiers
 - **WHEN** two hosts contain the same native pane identifier
@@ -61,6 +67,18 @@ connection and runtime generation, and SHALL require compatible capabilities bef
 - **THEN** World rejects terminal attach and control for that host without blocking profile
   management or compatible hosts
 
+#### Scenario: Select an entity on an inactive ready host
+- **WHEN** a user selects an observed entity whose ready host is not the selected operational
+  connection
+- **THEN** World preserves its bounded observational detail but does not dispatch an operation or
+  change the selected connection
+
+#### Scenario: Explicitly activate another host
+- **WHEN** a user explicitly activates another managed host
+- **THEN** World advances through the existing selected-connection lifecycle, retires scoped
+  requests and terminals from the outgoing lease, and admits new operations only after the target
+  host and runtime generation are current
+
 ### Requirement: Managed connection catalogue
 World SHALL provide one UI-managed catalogue of local and SSH Herdr profiles. A user SHALL be able
 to add, test, connect, disconnect, edit and remove profiles without installing a remote World or
@@ -75,5 +93,5 @@ store passwords, private keys, passphrases or arbitrary SSH options.
 #### Scenario: Several hosts are connected
 - **WHEN** two or more compatible profiles are ready
 - **THEN** the service keeps their isolated runtimes connected concurrently and World can present
-  all qualified entities while Spaces and its connection-specific workspace tools continue to
-  operate on exactly one selected profile
+  all qualified entities while every connection-specific operational surface continues to operate
+  on exactly one selected profile

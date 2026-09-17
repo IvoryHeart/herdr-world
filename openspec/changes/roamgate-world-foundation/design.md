@@ -20,8 +20,8 @@ shared World model plus Office, Tree and Graph.
   available as one focused, shell-owned Office context.
 - Restore the connected Tree and spatial Graph after Office over the same qualified projection and
   focused Inspector seam.
-- Preserve all-host observation, simultaneous host-qualified visual conversations, the agent/pane
-  watchlist and the supported task-summary reporting workflow without replacing Spaces' focused-host
+- Preserve all-host observation, selected-host visual conversations, the agent/pane watchlist and
+  the supported task-summary reporting workflow without replacing Roamgate's focused-host
   interaction model.
 - Keep the replacement reviewable through staged commits and requirement-linked checks.
 
@@ -38,6 +38,9 @@ shared World model plus Office, Tree and Graph.
   required even when their integration seam changes.
 - Restoring the former free-form World notes store. Review annotations remain a separate workflow
   and are not described as migrated notes.
+- Retaining terminal or Inspector contexts from several hosts simultaneously. Multi-host operation
+  can be introduced later by deliberately replacing the selected-connection browser lease; it is
+  not hidden inside this foundation migration.
 
 ## Decisions
 
@@ -71,13 +74,28 @@ multiple local or SSH runtimes ready concurrently while giving each browser one 
 for workspace/Inspector interaction. The workspace/Inspector surface retains that focused
 connection model. A bounded aggregate observation path publishes status and snapshots for all
 ready profiles into a browser store keyed by connection ID and generation. WorldObject is projected
-from that store. Mutations, resource requests and terminal attachments always resolve back to one
-qualified runtime and never fall back.
+from that store. Ready-inactive hosts remain current observations; unavailable hosts may retain
+explicitly stale topology. Those states are distinct from the selected operational host.
 
-World-to-Spaces handoff disables the focused-store reconnect retry because that generic convenience
-captures a new active lease. A World action is instead bound to the observed connection and runtime
-generation and fails when either changes. Every operational entry point owned by the mounted Spaces
-tree, including its command palette and already-open palette state, follows the active-view gate.
+Mutations, resource requests and terminal attachments use only the selected connection and its
+current runtime generation. Selecting a World entity is observational and never changes that
+connection. An inactive ready host exposes an explicit Activate host action; after activation the
+shell uses Roamgate's existing connection-change lifecycle and revalidates the target before any
+operation. Every operational entry point owned by the mounted Spaces tree, including its command
+palette and already-open palette state, follows the active-view gate.
+
+### Require one selected operational host without narrowing observation
+
+The shell restores the existing last/default profile when it still belongs to the managed
+catalogue. When no profile is selected, Spaces' connection workflow is shown before Office, Tree or
+Graph is presented. The selected host remains stable while the user changes views. Visual surfaces
+continue to show the full WorldObject and label hosts as active, ready-inactive, reconnecting or
+offline/stale rather than describing every inactive host as disconnected.
+
+Selecting an entity on a ready-inactive or stale host opens bounded read-only detail. Terminal,
+Files, Changes, Agent History, room and launcher controls remain unavailable until that exact host
+is explicitly activated and its current generation is admitted. Activation is a host-level action,
+not a side effect of entity selection or an attempted operation.
 
 ### Establish World as native routes over the Roamgate store
 
@@ -116,41 +134,39 @@ with a generic responsive CSS grid.
 ### Reuse one focused Inspector inside visual views
 
 Visual-view selection is observational. Office proves the seam first: when the user explicitly
-opens a terminal, Files, Changes or Agent History, the shell creates one focused operational
-context containing the exact connection, runtime generation, workspace and optional pane/terminal
-identity. The action activates that connection through the existing selected-connection path,
-revalidates the target and then presents the existing Roamgate-derived resource or terminal
-component while the visual view remains visible. A stale or replaced target fails closed and never
-falls back to the currently active host.
+opens a terminal, Files, Changes or Agent History for an entity on the selected host, the shell
+creates one focused operational context containing the exact connection, runtime generation,
+workspace and optional pane/terminal identity. The action revalidates that target and then presents
+the existing Roamgate-derived resource or terminal component while the visual view remains visible.
+An entity on another host remains read-only until its host is explicitly activated; a stale or
+replaced target fails closed and never falls back.
 
 The Inspector remains a single shell-owned facility shared with Spaces and the visual views. Office
-does not clone its file, Git, history, preview or resource stores. Switching the focused Inspector
-context replaces incompatible prior resource state and may advance Spaces' selected connection
-exactly as Roamgate does today. This is an explicit user-visible context change, not a background
-attempt to keep every host's resource panels active.
+does not clone its file, Git, history, preview or resource stores. Switching selected entities does
+not advance Spaces' connection or retain another host's resources. Explicit host activation uses
+Roamgate's normal teardown and selection lifecycle before a new Inspector context can open.
 
-### Keep one terminal owner while restoring qualified conversations
+### Keep selected-host conversations on the existing terminal owner
 
 Office first proves that one selected qualified pane can consume the existing terminal/session owner
 without duplicating transport. The same shell owner then maintains a bounded conversation registry
-keyed by connection, runtime generation and terminal identity. Office, Tree and Graph present those
-sessions, but no presenter owns SSH, terminal transport, reconnect or pane lifecycle. Selecting the
-same pane through another representation focuses its existing conversation instead of attaching a
-competitor.
+keyed by the selected connection, runtime generation and terminal identity. Office, Tree and Graph
+present those sessions, but no presenter owns SSH, terminal transport, reconnect or pane lifecycle.
+Selecting the same pane through another representation focuses its existing conversation instead
+of attaching a competitor.
 
-The inherited browser API currently invalidates every scoped client and disposes outgoing Spaces
-terminals when its selected connection changes. The conversation registry therefore uses
-connection-qualified leases whose validity depends on the shared browser transport and owning
-runtime generation, not on the selected Spaces connection. It still uses one browser WebSocket and
-the service's existing connection-routed terminal bridges; it does not open another WebSocket, SSH
-tunnel, application store or terminal manager per host. Selecting another Spaces or Inspector host
-disposes only that focused surface's outgoing mounts. Reconnecting one runtime invalidates only
-conversations owned by that generation.
+The registry remains inside the inherited browser routing lease and uses the one browser WebSocket
+and existing terminal bridges; it does not create connection-independent clients, another SSH
+tunnel, application store or terminal manager. Changing the selected host deliberately retires all
+outgoing visual and Spaces terminal mounts before the new lease becomes operational, so input can
+never be redirected across hosts. Reconnecting the selected runtime invalidates conversations from
+its retired generation.
 
-Up to five desktop conversations retain independent geometry and order; compact layouts expose one
-usable conversation at a time. Explicit handoff focuses the exact pane in mounted Spaces. A
-conversation survives projection refreshes and visual-view changes, and closes only after current
-admitted state confirms the qualified pane no longer exists.
+Up to five desktop conversations from the selected host retain independent geometry and order;
+compact layouts expose one usable conversation at a time. Explicit handoff focuses the exact pane
+in mounted Spaces. A conversation survives projection refreshes and visual-view changes while its
+host remains selected, and closes after host switching, generation retirement or current admitted
+state confirms the qualified pane no longer exists.
 
 ### Restore operational summaries and pane pinning at the new seam
 
@@ -225,10 +241,12 @@ browser keys untouched for rollback but does not read them.
 - **Embedding rich operational context in Office can duplicate Roamgate state** → Lift or reuse the
   shell-owned Inspector and terminal owners, pass one qualified context and reject any design that
   creates a second resource store, WebSocket, SSH tunnel or application instance.
-- **Qualified cross-host conversations can fight the focused Spaces lifecycle** → Build the focused
-  Office terminal first, then require the registry to remain on one WebSocket with per-runtime
-  generation isolation; reject designs that duplicate the application, connection store or SSH
-  transport.
+- **Aggregate visibility can make inactive hosts look operational** → Show active,
+  ready-inactive, reconnecting and offline/stale states distinctly; keep entity selection read-only
+  and require explicit host activation before every operational entry point.
+- **Switching hosts retires live conversation windows** → Keep view changes separate from host
+  changes, expose the selected host persistently and use the existing teardown path so no terminal
+  input can be redirected to the replacement host.
 - **Upstream Roamgate evolves quickly** → Pin and validate one exact synchronization point; future
   refreshes are explicit upstream-sync changes rather than floating dependencies.
 - **Dropping native Android changes distribution expectations** → Keep mobile/PWA behavior in
@@ -239,11 +257,12 @@ browser keys untouched for rollback but does not read them.
 1. Record the exact Roamgate source parent and import it on a branch targeting World `main`.
 2. Rebrand all runtime and release identities before producing installable artifacts.
 3. Add and test aggregate connection observation and the World projection.
-4. Enrich the shared World projection, expose one qualified shell-owned Inspector context and
-   independently accept the complete Pixel Office over local plus SSH observations.
-5. Extend the same terminal owner to bounded qualified conversations from several ready hosts, then
-   migrate and independently accept connected Tree and spatial Graph without reopening the runtime
-   or Inspector boundaries.
+4. Enrich the shared World projection, require one selected operational host, expose one qualified
+   shell-owned Inspector context and independently accept the complete Pixel Office over aggregate
+   local plus SSH observations.
+5. Extend the existing selected-host terminal owner to bounded conversation windows, then migrate
+   and independently accept connected Tree and spatial Graph without reopening the runtime or
+   Inspector boundaries.
 6. Update operational, lineage and release documentation; do not translate old profile stores.
 7. Deliver the complete replacement as a reviewed PR. Existing releases remain the rollback path;
    installing an older release reuses only the old release's untouched storage.
