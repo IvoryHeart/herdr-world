@@ -102,11 +102,10 @@ describe("workspace inspector shortcuts", () => {
 
 describe("workspace inspector view admission", () => {
   test("keeps only unique supported views and falls back to the full Inspector", () => {
-    expect(normalizeInspectorViews(["changes", "files", "changes"])).toEqual([
-      "changes",
-      "files",
-    ]);
-    expect(normalizeInspectorViews(["terminal", null])).toEqual([
+    expect(
+      normalizeInspectorViews(["terminal", "changes", "terminal"]),
+    ).toEqual(["terminal", "changes"]);
+    expect(normalizeInspectorViews(["unsupported", null])).toEqual([
       "files",
       "changes",
       "history",

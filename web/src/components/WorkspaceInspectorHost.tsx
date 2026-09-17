@@ -8,6 +8,7 @@ import {
   Minimize2,
   PanelBottom,
   PanelRight,
+  SquareTerminal,
   X,
 } from "lucide-react";
 import {
@@ -212,6 +213,7 @@ export function WorkspaceInspectorHost({
   onEditAnnotation,
   onOpenDocument,
   onRefreshFile,
+  onTerminalPortalChange,
   onViewChange,
   onDockChange,
   onExpandedChange,
@@ -233,6 +235,7 @@ export function WorkspaceInspectorHost({
   onDiffSelectionChange: DiffViewerPanelProps["onSelectionChange"];
   onOpenDocument: (path: string, fragment?: string) => void;
   onRefreshFile: () => void;
+  onTerminalPortalChange?: (element: HTMLDivElement | null) => void;
   onOpenDiffFile: (entry: ActiveDiffSelection["entry"]) => void;
   annotations: readonly ReviewAnnotation[];
   onCreateAnnotation: (input: NewReviewAnnotation) => void;
@@ -256,6 +259,7 @@ export function WorkspaceInspectorHost({
   const filesTabRef = useRef<HTMLButtonElement | null>(null);
   const changesTabRef = useRef<HTMLButtonElement | null>(null);
   const historyTabRef = useRef<HTMLButtonElement | null>(null);
+  const terminalTabRef = useRef<HTMLButtonElement | null>(null);
   const diffViewerRef = useRef<DiffViewerPanelHandle | null>(null);
   const splitId = useId();
   const [hostWidth, setHostWidth] = useState(0);
@@ -269,6 +273,7 @@ export function WorkspaceInspectorHost({
     files: state.view === "files" && !!fileSelection.entry,
     changes: false,
     history: false,
+    terminal: false,
   }));
   const resourceKey = resourceOwnerKey(state.scope);
   const contentResourceKey = resourceStateKey(state.scope);
@@ -351,6 +356,7 @@ export function WorkspaceInspectorHost({
   const changesAvailable = availableViews.includes("changes");
   const historyAvailable =
     availableViews.includes("history") && paneHasAgentHistory(historyPane);
+  const terminalAvailable = availableViews.includes("terminal");
   const detailAvailable =
     state.view === "files"
       ? !!fileSelection.entry
@@ -412,6 +418,7 @@ export function WorkspaceInspectorHost({
       files: filesTabRef,
       changes: changesTabRef,
       history: historyTabRef,
+      terminal: terminalTabRef,
     };
     refs[nextView].current?.focus();
   };
@@ -517,6 +524,20 @@ export function WorkspaceInspectorHost({
               onKeyDown={handleTabKeyDown}
             >
               <History size={14} /> History
+            </button>
+          ) : null}
+          {terminalAvailable ? (
+            <button
+              ref={terminalTabRef}
+              type="button"
+              role="tab"
+              aria-selected={state.view === "terminal"}
+              tabIndex={state.view === "terminal" ? 0 : -1}
+              className={state.view === "terminal" ? "is-active" : ""}
+              onClick={() => onViewChange("terminal")}
+              onKeyDown={handleTabKeyDown}
+            >
+              <SquareTerminal size={14} /> Terminal
             </button>
           ) : null}
         </div>
@@ -818,6 +839,20 @@ export function WorkspaceInspectorHost({
               </div>
             )}
           </div>
+          {terminalAvailable ? (
+            <div
+              className={`workspace-inspector-resource inspector-terminal-resource ${
+                state.view === "terminal" ? "" : "is-hidden"
+              }`}
+            >
+              {state.view === "terminal" ? (
+                <div
+                  ref={onTerminalPortalChange}
+                  className="workspace-inspector-terminal-portal"
+                />
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
     </aside>

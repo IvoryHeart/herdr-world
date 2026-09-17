@@ -213,6 +213,27 @@
   display: none;
 }
 
+.workspace-inspector-resource.inspector-terminal-resource {
+  display: flex;
+  padding: 8px;
+}
+
+.workspace-inspector-resource.inspector-terminal-resource.is-hidden {
+  display: none;
+}
+
+.workspace-inspector-terminal-portal {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  overflow: hidden;
+}
+
+.workspace-inspector-terminal-portal > .terminal-shell {
+  flex: 1 1 auto;
+}
+
 .workspace-inspector-navigation,
 .workspace-inspector-detail {
   min-width: 0;
@@ -309,6 +330,10 @@
 
 .workspace-inspector.is-compact
   .workspace-inspector-resource.inspector-history-resource {
+  padding: 0;
+}
+
+.workspace-inspector-resource.inspector-terminal-resource {
   padding: 0;
 }
 

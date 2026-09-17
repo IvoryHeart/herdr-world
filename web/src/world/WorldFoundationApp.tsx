@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import App from "../App";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
-import { AgentIcon } from "../components/AgentIcon";
 import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
@@ -29,6 +28,7 @@ import { WorldViewErrorBoundary } from "./WorldViewErrorBoundary";
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
 const CheckpointTreeView = lazy(() => import("./CheckpointTreeView"));
 const CheckpointGraphView = lazy(() => import("./CheckpointGraphView"));
+const WorldIntentProfile = lazy(() => import("./WorldIntentProfile"));
 
 export type WorldView = "spaces" | "office" | "tree" | "graph";
 
@@ -70,6 +70,7 @@ export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
     ...(node.kind === "agent" && node.capabilities.agentHistory
       ? (["history"] as const)
       : []),
+    ...(node.capabilities.openTerminal ? (["terminal"] as const) : []),
   ];
 }
 
@@ -86,7 +87,10 @@ export function worldIntentInitialView(
 function readWorldIntentView(): InspectorView | null {
   try {
     const value = worldLocalStorage.getItem(WORLD_INTENT_VIEW_KEY);
-    return value === "files" || value === "changes" || value === "history"
+    return value === "files" ||
+      value === "changes" ||
+      value === "history" ||
+      value === "terminal"
       ? value
       : null;
   } catch {
@@ -134,6 +138,9 @@ export default function WorldFoundationApp() {
   }, [view]);
 
   const setView = (next: WorldView) => {
+    if (next === "spaces") {
+      window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+    }
     setViewState(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
@@ -446,15 +453,27 @@ function WorldControlPlane({
             aria-label="World context"
           >
             {selected ? (
-              <WorldSelectionPanel
-                node={selected}
-                currentGeneration={currentSelectionGeneration}
-                inspectorOpen={inspectorOpen}
-                intentOpening={intentOpening}
-                resourceError={intentError}
-                onClose={closeIntent}
-                onOpenSpaces={onOpenSpaces}
-              />
+              <Suspense
+                fallback={
+                  <div className="world-selection-panel" role="status">
+                    Opening intent…
+                  </div>
+                }
+              >
+                <WorldIntentProfile
+                  node={selected}
+                  currentGeneration={currentSelectionGeneration}
+                  inspectorOpen={inspectorOpen}
+                  intentOpening={intentOpening}
+                  resourceError={intentError}
+                  onActivateHost={() => activateWorldNodeHost(selected)}
+                  onClose={closeIntent}
+                  onOpenSpaces={async () => {
+                    await focusWorldNode(selected);
+                    onOpenSpaces();
+                  }}
+                />
+              </Suspense>
             ) : null}
             <div className="world-inspector-portal" ref={onInspectorPortal} />
           </aside>
@@ -586,154 +605,6 @@ export function selectedHostStatusLabel(
 
 export function shouldCloseWorldInspector(node: WorldObjectNode | null) {
   return node !== null && (!node.selectedHost || !node.actionable);
-}
-
-function WorldSelectionPanel({
-  node,
-  currentGeneration,
-  inspectorOpen,
-  intentOpening,
-  resourceError,
-  onClose,
-  onOpenSpaces,
-}: {
-  node: WorldObjectNode;
-  currentGeneration: boolean;
-  inspectorOpen: boolean;
-  intentOpening: boolean;
-  resourceError: string | null;
-  onClose(): void;
-  onOpenSpaces(): void;
-}) {
-  const [working, setWorking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const workspace = workspaceTarget(node);
-  const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
-  const disabled = !currentGeneration || working;
-  const stateLabel = !currentGeneration
-    ? "Stale"
-    : leaf?.kind === "agent"
-      ? (leaf.stateLabels[leaf.status] ?? leaf.status)
-      : hostStateLabel(node.hostState);
-
-  async function openSpaces() {
-    if (disabled || !workspace || !node.actionable) return;
-    setWorking(true);
-    setError(null);
-    try {
-      await focusWorldNode(node);
-      onOpenSpaces();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  return (
-    <aside
-      className="world-selection-panel world-intent-profile"
-      aria-label="World selection"
-      data-kind={node.kind}
-    >
-      <header className="world-intent-profile-header">
-        <span className="world-intent-avatar" aria-hidden="true">
-          {node.kind === "agent" ? (
-            <AgentIcon agent={node.pane.agent} compact />
-          ) : node.kind === "terminal" ? (
-            ">_"
-          ) : node.kind === "space" ? (
-            "S"
-          ) : (
-            "H"
-          )}
-        </span>
-        <div className="world-intent-identity">
-          <p className="world-eyebrow">
-            {node.kind} · {stateLabel}
-          </p>
-          <h2>{node.label}</h2>
-          <p className="world-intent-context">
-            {leaf ? `${leaf.spaceLabel} · ` : ""}
-            {node.hostLabel}
-          </p>
-        </div>
-        <button
-          className="world-panel-close"
-          type="button"
-          onClick={onClose}
-          aria-label="Close intent"
-        >
-          ×
-        </button>
-      </header>
-      {leaf?.taskSummary ? (
-        <section className="world-task-summary" aria-label="Current task">
-          <span>Current task</span>
-          <p>{leaf.taskSummary}</p>
-        </section>
-      ) : null}
-      {currentGeneration && node.capabilities.activateHost ? (
-        <div className="world-panel-actions">
-          <button
-            type="button"
-            disabled={working}
-            onClick={() => void activateHost()}
-          >
-            Activate {node.hostLabel}
-          </button>
-        </div>
-      ) : null}
-      {workspace && currentGeneration && node.capabilities.openSpaces ? (
-        <div className="world-panel-actions">
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => void openSpaces()}
-          >
-            Open in Spaces
-          </button>
-        </div>
-      ) : null}
-      {!currentGeneration || !node.actionable ? (
-        <p className="world-panel-warning">
-          {!currentGeneration
-            ? "This selection belongs to a retired runtime generation. Select its current observation to use operational tools."
-            : node.capabilities.activateHost
-              ? `This observation is read-only. Activate ${node.hostLabel} to use its operational tools.`
-              : "This observation is read-only until its host is ready again."}
-        </p>
-      ) : null}
-      {intentOpening ? (
-        <p className="world-intent-loading" role="status">
-          Opening intent…
-        </p>
-      ) : null}
-      {!intentOpening && workspace && node.actionable && !inspectorOpen ? (
-        <p className="world-intent-loading" role="status">
-          Resource view closed. Select this entity again to reopen it.
-        </p>
-      ) : null}
-      {error || resourceError ? (
-        <p className="world-panel-error" role="alert">
-          {error ?? resourceError}
-        </p>
-      ) : null}
-    </aside>
-  );
-
-  async function activateHost() {
-    if (!node.capabilities.activateHost || working) return;
-    setWorking(true);
-    setError(null);
-    try {
-      await activateWorldNodeHost(node);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
-    } finally {
-      setWorking(false);
-    }
-  }
 }
 
 function hostStateLabel(state: WorldObjectNode["hostState"]) {

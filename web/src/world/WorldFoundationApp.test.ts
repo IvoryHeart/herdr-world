@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { appShouldHandleGlobalShortcut } from "../App";
+import {
+  appShouldHandleGlobalShortcut,
+  terminalPresentationTarget,
+} from "../App";
 import {
   activateWorldNodeHost,
   chooseWorldSelectedConnection,
@@ -344,8 +347,17 @@ describe("World view preference", () => {
 
     expect(worldIntentViews(world.hosts[0])).toEqual([]);
     expect(worldIntentViews(world.spaces[0])).toEqual(["files", "changes"]);
-    expect(worldIntentViews(agent)).toEqual(["files", "changes", "history"]);
-    expect(worldIntentViews(terminal)).toEqual(["files", "changes"]);
+    expect(worldIntentViews(agent)).toEqual([
+      "files",
+      "changes",
+      "history",
+      "terminal",
+    ]);
+    expect(worldIntentViews(terminal)).toEqual([
+      "files",
+      "changes",
+      "terminal",
+    ]);
     expect(worldIntentInitialView(agent, null)).toBe("history");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
     expect(worldIntentInitialView(terminal, "history")).toBe("files");
@@ -526,8 +538,39 @@ describe("World view preference", () => {
       workspaceId: "shared",
       view: "history",
       originPaneId: "pane-a",
-      availableViews: ["files", "changes", "history"],
+      availableViews: ["files", "changes", "history", "terminal"],
     });
+  });
+
+  test("gives one presentation exclusive ownership of the selected terminal", () => {
+    expect(terminalPresentationTarget(true, null)).toBe("spaces");
+    expect(
+      terminalPresentationTarget(false, {
+        open: true,
+        view: "terminal",
+        originPaneId: "pane-a",
+      }),
+    ).toBe("inspector");
+    expect(
+      terminalPresentationTarget(true, {
+        open: true,
+        view: "terminal",
+        originPaneId: "pane-a",
+      }),
+    ).toBe("inspector");
+    expect(
+      terminalPresentationTarget(false, {
+        open: true,
+        view: "files",
+        originPaneId: "pane-a",
+      }),
+    ).toBeNull();
+    expect(
+      terminalPresentationTarget(false, {
+        open: true,
+        view: "terminal",
+      }),
+    ).toBeNull();
   });
 
   test("does not dispatch Inspector work after a generation replacement", async () => {

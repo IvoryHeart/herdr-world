@@ -1108,6 +1108,23 @@ export function appShouldHandleGlobalShortcut(
   );
 }
 
+export function terminalPresentationTarget(
+  spacesOperational: boolean,
+  inspector: Pick<
+    WorkspaceInspectorState,
+    "open" | "view" | "originPaneId"
+  > | null,
+): "spaces" | "inspector" | null {
+  if (
+    inspector?.open &&
+    inspector.view === "terminal" &&
+    inspector.originPaneId
+  ) {
+    return "inspector";
+  }
+  return spacesOperational ? "spaces" : null;
+}
+
 export default function App({
   operationalShortcutsEnabled = true,
   inspectorPortal = null,
@@ -1270,6 +1287,8 @@ export default function App({
     null,
   );
   const inspectorStageRef = useRef<HTMLDivElement | null>(null);
+  const [inspectorTerminalPortal, setInspectorTerminalPortal] =
+    useState<HTMLDivElement | null>(null);
   const inspectorResizeFrameRef = useRef<number | null>(null);
   const [activeDiff, setActiveDiff] = useState<ActiveDiffSelection>(
     emptyActiveDiffSelection,
@@ -1364,6 +1383,15 @@ export default function App({
     inspectorWorkspace?.workspace_id
       ? inspectorHistoryPaneCandidate
       : undefined;
+  const inspectorTerminalPane =
+    inspectorState?.view === "terminal" &&
+    inspectorOriginPane?.workspace_id === inspectorWorkspace?.workspace_id
+      ? inspectorOriginPane
+      : undefined;
+  const terminalPresentation = terminalPresentationTarget(
+    operationalShortcutsEnabled,
+    inspectorState,
+  );
   const inspectorResourceStateKey = inspectorState
     ? resourceStateKey(inspectorState.scope)
     : null;
@@ -3292,6 +3320,7 @@ export default function App({
                 fragment,
               );
           }}
+          onTerminalPortalChange={setInspectorTerminalPortal}
           onViewChange={setInspectorView}
           onDockChange={setInspectorDock}
           onExpandedChange={setInspectorExpanded}
@@ -3698,17 +3727,19 @@ export default function App({
               } ${inspectorState?.open && inspectorState.expanded ? "is-inspector-expanded" : ""}`}
             >
               <div className="workspace-terminal-surface">
-                <TerminalPaneLayout
-                  terminalTheme={terminalTheme}
-                  uiScale={uiScale}
-                  mobileShortcuts={mobileTerminalShortcuts}
-                  mobileSideShortcuts={mobileTerminalSideShortcuts}
-                  composerOpen={terminalComposerOpen}
-                  onComposerOpenChange={setTerminalComposerOpen}
-                  agentHistoryOpen={agentHistoryOpen}
-                  onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
-                  onOpenWorkspaceFile={handleTerminalWorkspaceFile}
-                />
+                {terminalPresentation === "spaces" ? (
+                  <TerminalPaneLayout
+                    terminalTheme={terminalTheme}
+                    uiScale={uiScale}
+                    mobileShortcuts={mobileTerminalShortcuts}
+                    mobileSideShortcuts={mobileTerminalSideShortcuts}
+                    composerOpen={terminalComposerOpen}
+                    onComposerOpenChange={setTerminalComposerOpen}
+                    agentHistoryOpen={agentHistoryOpen}
+                    onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
+                    onOpenWorkspaceFile={handleTerminalWorkspaceFile}
+                  />
+                ) : null}
               </div>
               {!inspectorPortal &&
               inspectorState?.open &&
@@ -3791,6 +3822,31 @@ export default function App({
       >
         {inspectorSlot}
       </WorkspaceInspectorPortal>
+      {terminalPresentation === "inspector" &&
+      inspectorTerminalPortal &&
+      inspectorTerminalPane
+        ? createPortal(
+            <TerminalView
+              key={terminalMountKey(
+                {
+                  connectionId: s.activeConnectionId,
+                  generation: s.connectionGeneration,
+                },
+                inspectorTerminalPane.pane_id,
+                inspectorTerminalPane.terminal_id,
+              )}
+              paneId={inspectorTerminalPane.pane_id}
+              terminalTheme={terminalTheme}
+              uiScale={uiScale}
+              mobileShortcuts={mobileTerminalShortcuts}
+              mobileSideShortcuts={mobileTerminalSideShortcuts}
+              composerOpen={terminalComposerOpen}
+              onComposerOpenChange={setTerminalComposerOpen}
+              onOpenWorkspaceFile={handleTerminalWorkspaceFile}
+            />,
+            inspectorTerminalPortal,
+          )
+        : null}
     </div>
   );
 }
