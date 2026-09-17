@@ -4,9 +4,9 @@ Herdr World's browser-federated Herdr Web foundation makes every additional host
 installed and configured web bridge, while Roamgate already provides a cohesive Herdr client with
 server-managed local and SSH connections, terminals, files, changes and session inspection. World
 should adopt that stronger foundation and make its visual control plane a native part of one
-installable application instead of rebuilding the same capabilities beside it. That replacement is
-not complete if it removes the Pixel Office, live visual-view terminals or spatial Graph that define
-the product; those views must be migrated deliberately over the stronger foundation.
+installable application instead of rebuilding the same capabilities beside it. The first complete
+visual experience SHALL be a deep Pixel Office that brings Roamgate's terminal, Files, Changes and
+Agent History context to the selected agent without requiring breadth across unfinished views.
 
 ## What Changes
 
@@ -21,19 +21,20 @@ the product; those views must be migrated deliberately over the stronger foundat
   non-loopback service installs.
 - Make Roamgate's workspace terminal, Inspector, Files, Changes, Agent History and connection
   surfaces native World capabilities rather than a separately installed Roamgate application.
-- Project all managed Herdr connections into a shared, host-qualified World hierarchy and migrate
-  Spaces, Office, Tree and Graph as complete first-class native views with guarded,
-  connection-qualified actions. The mature Pixel Office, live conversation windows and interactive
-  Graph are product behavior, not optional polish, and SHALL be restored over the new foundation
-  before this replacement is complete.
-- Retain the useful Roamgate-derived selected-entity detail drawer and operational Inspector flows,
-  extending them with authoritative agent status, a supported bounded task-summary reporting
-  workflow, ancestry and qualified agent/pane pinning instead of discarding those workflows while
-  the visual views are migrated.
-- Adopt the connected host-space-agent branch presentation currently implemented as Graph as the
-  canonical Tree direction. Restore the prior force-directed canvas as Graph; keep a bounded
-  semantic hierarchy for accessibility and compact use rather than treating the list as the main
-  desktop Tree experience.
+- Project all managed Herdr connections into a shared, host-qualified World hierarchy and make
+  Spaces plus the mature Pixel Office the accepted first-class views of this change.
+- Keep Office visible while one selected, generation-qualified agent or workspace uses the shell's
+  existing terminal and Inspector ownership. Files, Changes and Agent History SHALL open as the
+  focused Office context rather than navigating away to a separately implemented resource UI.
+- Retain the useful Roamgate-derived operational surfaces and extend the Office context with
+  authoritative agent status, a supported bounded task-summary workflow, ancestry and qualified
+  agent/pane pinning.
+- Follow Roamgate's one-selected-connection operational model for this outcome. Office observes all
+  ready hosts concurrently, but this change does not require retained simultaneous terminal or
+  Inspector sessions from several hosts. It SHALL use the existing one-WebSocket, explicitly
+  qualified runtime paths and SHALL NOT add parallel transports or hidden application instances.
+- Defer complete Tree and Graph migrations until the Office integration seam is proven. Checkpoint
+  implementations SHALL NOT be represented as complete primary product views.
 - Preserve Herdr as an external runtime. World neither bundles Herdr nor introduces a generic
   provider/plugin SDK in this change.
 - Start the new foundation with fresh World connection and presentation settings. Existing
@@ -55,8 +56,9 @@ None.
   connection manager containing isolated local and SSH Herdr runtimes.
 - `bridge-access`: Replace cross-origin bridge admission with one same-origin World service and its
   trusted-single-user authentication boundary.
-- `world-surfaces`: Make the shared World projection and visual surfaces native views of the
-  Roamgate-derived shell and its managed connection runtimes.
+- `world-surfaces`: Make the shared World projection, deep Pixel Office and focused operational
+  context native surfaces of the Roamgate-derived shell and its managed connection runtimes;
+  defer complete Tree and Graph presentations.
 - `distribution-boundaries`: Change upstream lineage, implementation stack, artifacts and plugin
   lifecycle from Herdr Web/Rust to the Roamgate-derived World application.
 
@@ -68,9 +70,9 @@ None.
   development commands.
 - Retires the current remote-bridge settings, browser federation, vendored `herdr-compat` crate and
   native Android build from the active product tree.
-- Re-establishes the World model and the complete defining Office, Tree and Graph experience over
-  connection-scoped snapshots and one terminal owner that can retain simultaneous qualified
-  conversations from several ready hosts. The current minimal Office cards, list-primary Tree and
-  static branch Graph are an implementation checkpoint, not accepted parity.
+- Re-establishes the World model and complete defining Pixel Office over connection-scoped
+  snapshots, one focused Inspector and the existing terminal owner. The current minimal Office
+  cards are an implementation checkpoint, not accepted parity; complete Tree, spatial Graph and
+  retained simultaneous cross-host conversations are follow-up outcomes.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.
