@@ -206,6 +206,12 @@ History and Terminal tabs rather than a repeated metadata table or a set of butt
 used before those resources become visible. Agent History SHALL be the initial agent tab and the
 user's subsequent tab choice SHALL be retained as a browser-local presentation preference.
 
+Selecting an actionable space or non-agent terminal pane SHALL use the same overlay and shell-owned
+resource state with compact entity identity and only the tabs applicable to that entity. A space
+SHALL expose Files and Changes. A non-agent terminal pane SHALL expose Files, Changes and Terminal.
+Agent History SHALL appear only for an admitted agent session. Selecting a host SHALL retain bounded
+host detail and activation state without inventing workspace resources.
+
 The overlay SHALL expose generation-fenced resources only for the selected operational host. A
 ready-inactive or stale entity SHALL retain a bounded read-only identity and an explicit Activate
 host control without opening live resources. Missing metadata SHALL remain absent rather than being
@@ -232,6 +238,11 @@ outgoing Inspector and terminal contexts through the existing connection lifecyc
   selected operational host
 - **THEN** the existing Inspector content remains in the overlay for the exact qualified workspace
   and session context without reducing the visual stage or cloning its resource state
+
+#### Scenario: Inspect a non-agent World entity
+- **WHEN** the user selects an actionable space or non-agent terminal pane in Office, Tree or Graph
+- **THEN** the same overlay presents its compact qualified identity and applicable shell-owned
+  Files, Changes or Terminal tabs without fabricating Agent History or changing the selected host
 
 #### Scenario: Inspect an agent with qualified observations
 - **WHEN** an optional observation provider reports cost or token metrics qualified to the selected
@@ -434,6 +445,12 @@ floating conversation, but the same qualified terminal SHALL have exactly one li
 a time; docking and popping out SHALL explicitly hand off the existing attachment rather than mount
 two terminal components.
 
+If selection leaves an agent whose terminal is docked, World SHALL first detach that terminal from
+the outgoing overlay and rehome the same registry entry as a floating conversation before mounting
+the replacement overlay context. This automatic handoff SHALL preserve the qualified terminal
+session and count it as the same bounded conversation; it SHALL never leave the outgoing and new
+overlay contexts attached concurrently.
+
 Desktop SHALL support up to five distinct conversations with independent bounded position, size,
 z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,
 refit to their real dimensions and retain usable input, selection, scrolling, uploads and mobile
@@ -471,6 +488,11 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
   out as a conversation window
 - **THEN** World moves the one live terminal presentation, preserves its qualified session and
   input ownership, and never leaves a duplicate attachment in the previous target
+
+#### Scenario: Change selection while a terminal is docked
+- **WHEN** agent A has a docked terminal and the user selects agent B, a space or a non-agent pane
+- **THEN** World detaches A from the outgoing overlay, rehomes that same qualified conversation in
+  its floating presentation, and only then mounts the newly selected entity context
 
 #### Scenario: Present a terminal while Spaces remains mounted
 - **WHEN** Office presents a qualified terminal and the Spaces application remains mounted but

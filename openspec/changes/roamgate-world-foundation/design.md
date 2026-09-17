@@ -38,6 +38,9 @@ shared World model plus Office, Tree and Graph.
   required even when their integration seam changes.
 - Restoring the former free-form World notes store. Review annotations remain a separate workflow
   and are not described as migrated notes.
+- Enabling the existing Spaces-focused Actions palette unchanged on a visual route. It remains
+  unavailable there until a follow-up after the Office interaction seam can provide explicit,
+  generation-qualified visual context instead of silently targeting hidden Spaces focus.
 - Retaining terminal or Inspector contexts from several hosts simultaneously. Multi-host operation
   can be introduced later by deliberately replacing the selected-connection browser lease; it is
   not hidden inside this foundation migration. This intentionally retires behavior delivered by
@@ -173,6 +176,12 @@ or terminal component while the visual view remains visible. An entity on anothe
 read-only until its host is explicitly activated; a stale or replaced target keeps its captured
 bounded identity, fails closed and never silently rebinds by native identifier.
 
+Spaces and non-agent terminal panes reuse the same overlay shell rather than losing the earlier
+Inspector contract or masquerading as agent profiles. Their compact header names the actual entity;
+their tab set is capability-derived, with Files and Changes for spaces, Files, Changes and Terminal
+for terminal panes, and Agent History only for an admitted agent session. Host selection remains a
+bounded status/activation context without a fabricated workspace scope.
+
 The Inspector remains a single shell-owned facility shared with Spaces and the visual views. Office
 does not clone its file, Git, history, preview or resource stores. Switching selected entities does
 not advance Spaces' connection or retain another host's resources. Explicit host activation uses
@@ -207,6 +216,12 @@ after the old target has detached, so there is never more than one input listene
 that terminal. Activating an Office desk bypasses the intent overlay and directly opens or focuses
 the floating target, preserving the established desk interaction. Focusing any presentation first
 focuses its exact Herdr pane so the existing terminal input gate remains authoritative.
+
+Changing selection while a terminal is docked performs the same ordered handoff without asking the
+new entity to inherit the old terminal. The outgoing overlay detaches first, its registry entry is
+re-presented as the same floating conversation, and only then can the replacement entity context
+mount. The transition consumes no additional conversation slot and preserves the terminal session;
+on compact layouts it remains the one conversation available through the compact presentation.
 
 Connectors also have separate semantics and anchors. A floating terminal connects to the qualified
 desk when present, otherwise to its agent or hierarchy node; the intent overlay connects to the

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { Pane, Tab, Workspace } from "../types";
-import type { WorldRuntimeConnection } from "./runtimeStore";
-import { buildWorldObject } from "./worldObject";
 import {
   OFFICE_PRESENTATION_BOUNDS,
   projectWorldOffice,
 } from "./herdrOfficeProjection";
+import type { WorldRuntimeConnection } from "./runtimeStore";
+import { buildWorldObject } from "./worldObject";
 
 describe("Pixel Office projection", () => {
   test("places agents by structured status and keeps every admitted tab as a desk", () => {
@@ -236,6 +236,48 @@ describe("Pixel Office projection", () => {
       omittedWaitingAgents: 2,
       omittedBarAgents: 4,
     });
+  });
+
+  test("reserves bounded room and reception capacity for the selected host", () => {
+    const office = projectWorldOffice(
+      buildWorldObject(
+        Array.from({ length: 7 }, (_, hostIndex) =>
+          boundedConnection(hostIndex),
+        ),
+        "host-6",
+      ),
+      1,
+    );
+    const selectedHost = office.hosts.find(({ selected }) => selected);
+
+    expect(selectedHost).toBeDefined();
+    expect(
+      office.rooms.some(({ hostKey }) => hostKey === selectedHost?.key),
+    ).toBe(true);
+    expect(
+      office.receptions.some(({ hostKey }) => hostKey === selectedHost?.key),
+    ).toBe(true);
+    expect(office.coverage).toMatchObject({
+      omittedRooms: 1,
+      omittedReceptionDesks: 1,
+    });
+  });
+
+  test("publishes only the admitted bounded tab label to Office desks", () => {
+    const source = connection(
+      "local",
+      [{ ...tab("work", 1), label: `  Work\u0000${" item".repeat(100)}  ` }],
+      [pane("work", "working", "Codex")],
+    );
+    const world = buildWorldObject([source], "local");
+    const office = projectWorldOffice(world, 1);
+
+    expect(office.rooms[0].desks[0].displayLabel.length).toBeLessThanOrEqual(
+      100,
+    );
+    expect(office.rooms[0].desks[0].displayLabel).not.toMatch(
+      /[\u0000-\u001f]/u,
+    );
   });
 });
 

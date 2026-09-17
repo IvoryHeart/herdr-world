@@ -5,6 +5,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "./worldObject";
+import { boundedOptionalText } from "./worldObject";
 
 export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   rooms: 128,
@@ -226,77 +227,75 @@ export function projectWorldOffice(
   const allRooms = world.spaces
     .map((space) => projectRoom(space, hostById.get(space.parentId)!))
     .sort(compareRooms);
-  const presentedRoomKeys = new Set(
-    allRooms
-      .slice(0, OFFICE_PRESENTATION_BOUNDS.rooms)
-      .map(({ room }) => room.key),
+  const presentedRooms = boundedWithPriority(
+    allRooms,
+    OFFICE_PRESENTATION_BOUNDS.rooms,
+    ({ host }) => host.selected,
   );
+  const presentedRoomKeys = new Set(presentedRooms.map(({ room }) => room.key));
   const allAgents = allRooms.flatMap(({ agents }) => agents);
   const allDesks = allRooms.flatMap(({ desks }) => desks);
-  const rooms = allRooms
-    .slice(0, OFFICE_PRESENTATION_BOUNDS.rooms)
-    .map((entry) => {
-      const desks = entry.desks.slice(
+  const rooms = presentedRooms.map((entry) => {
+    const desks = entry.desks.slice(0, OFFICE_PRESENTATION_BOUNDS.desksPerRoom);
+    const seated = new Set(
+      desks.flatMap(({ occupantAgentKey }) =>
+        occupantAgentKey ? [occupantAgentKey] : [],
+      ),
+    );
+    const roomAgents = entry.agents
+      .filter(({ destination }) => destination === "room")
+      .map((agent) => ({
+        ...agent,
+        placement: seated.has(agent.key)
+          ? ("seated" as const)
+          : ("standing" as const),
+      }))
+      .sort((left, right) => compareRoomAgents(left, right, desks));
+    return {
+      ...entry.room,
+      desks,
+      roomAgents: roomAgents.slice(
         0,
-        OFFICE_PRESENTATION_BOUNDS.desksPerRoom,
-      );
-      const seated = new Set(
-        desks.flatMap(({ occupantAgentKey }) =>
-          occupantAgentKey ? [occupantAgentKey] : [],
-        ),
-      );
-      const roomAgents = entry.agents
-        .filter(({ destination }) => destination === "room")
-        .map((agent) => ({
-          ...agent,
-          placement: seated.has(agent.key)
-            ? ("seated" as const)
-            : ("standing" as const),
-        }))
-        .sort((left, right) => compareRoomAgents(left, right, desks));
-      return {
-        ...entry.room,
-        desks,
-        roomAgents: roomAgents.slice(
-          0,
-          OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
-        ),
-        omittedDeskCount: Math.max(0, entry.desks.length - desks.length),
-        omittedAgentCount: Math.max(
-          0,
-          roomAgents.length - OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
-        ),
-        observedDeskCount: entry.desks.length,
-        observedAgentCount: entry.agents.length,
-      };
-    });
+        OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+      ),
+      omittedDeskCount: Math.max(0, entry.desks.length - desks.length),
+      omittedAgentCount: Math.max(
+        0,
+        roomAgents.length - OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+      ),
+      observedDeskCount: entry.desks.length,
+      observedAgentCount: entry.agents.length,
+    };
+  });
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));
-  const receptions = hosts
-    .slice(0, OFFICE_PRESENTATION_BOUNDS.receptionDesks)
-    .map((host): OfficeReception => {
-      const waitingAgents = allAgents
-        .filter(
-          (agent) =>
-            agent.hostKey === host.key && agent.destination === "reception",
-        )
-        .sort(compareAgents);
-      return {
-        key: `reception:${host.key}`,
-        hostKey: host.key,
-        hostLabel: host.displayLabel,
-        stale: host.stale,
-        waitingAgents: waitingAgents.slice(
-          0,
+  const receptions = boundedWithPriority(
+    hosts,
+    OFFICE_PRESENTATION_BOUNDS.receptionDesks,
+    ({ selected }) => selected,
+  ).map((host): OfficeReception => {
+    const waitingAgents = allAgents
+      .filter(
+        (agent) =>
+          agent.hostKey === host.key && agent.destination === "reception",
+      )
+      .sort(compareAgents);
+    return {
+      key: `reception:${host.key}`,
+      hostKey: host.key,
+      hostLabel: host.displayLabel,
+      stale: host.stale,
+      waitingAgents: waitingAgents.slice(
+        0,
+        OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
+      ),
+      observedWaitingAgentCount: waitingAgents.length,
+      overflowCount: Math.max(
+        0,
+        waitingAgents.length -
           OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
-        ),
-        observedWaitingAgentCount: waitingAgents.length,
-        overflowCount: Math.max(
-          0,
-          waitingAgents.length -
-            OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
-        ),
-      };
-    });
+      ),
+    };
+  });
   const barCandidates = allAgents
     .filter(({ destination }) => destination === "bar")
     .sort(compareBarAgents);
@@ -474,7 +473,8 @@ function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
           .map(({ id }) => id)
           .sort(),
         observedGeneration: space.generation,
-        displayLabel: tab.label.trim() || `Tab ${tab.number}`,
+        displayLabel:
+          boundedOptionalText(tab.label, 100) ?? `Tab ${tab.number}`,
         order: tab.number,
         stale: space.stale,
         canOpenInSpaces: operational,
@@ -588,6 +588,21 @@ function compareRooms(left: ProjectedRoom, right: ProjectedRoom) {
     left.source.workspace.number - right.source.workspace.number ||
     left.room.key.localeCompare(right.room.key)
   );
+}
+
+function boundedWithPriority<T>(
+  values: readonly T[],
+  limit: number,
+  priority: (value: T) => boolean,
+) {
+  if (values.length <= limit) return [...values];
+  const admitted = new Set(
+    [
+      ...values.filter(priority),
+      ...values.filter((value) => !priority(value)),
+    ].slice(0, limit),
+  );
+  return values.filter((value) => admitted.has(value));
 }
 
 function compareAgents(left: OfficeAgent, right: OfficeAgent) {

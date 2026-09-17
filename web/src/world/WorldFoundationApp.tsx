@@ -5,15 +5,15 @@ import { worldLocalStorage } from "../browserStorage";
 import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
+  type InspectorView,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
-  type InspectorView,
   type WorkspaceInspectorRequest,
 } from "../workspaceResource";
 import {
   useWorldRuntime,
-  worldRuntimeStore,
   type WorldRuntimeState,
+  worldRuntimeStore,
 } from "./runtimeStore";
 import {
   buildWorldObject,
@@ -50,6 +50,13 @@ export function worldViewFromPath(pathname: string): WorldView {
   if (pathname === "/tree") return "tree";
   if (pathname === "/graph") return "graph";
   return "office";
+}
+
+export function worldSelectionIsCurrent(
+  selected: WorldObjectNode | null,
+  current: WorldObjectNode | null | undefined,
+) {
+  return selected !== null && current?.generation === selected.generation;
 }
 
 function initialView() {
@@ -224,17 +231,29 @@ function WorldControlPlane({
       runtime.connections,
     ],
   );
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = selectedId ? (world.nodeById.get(selectedId) ?? null) : null;
+  const [selection, setSelection] = useState<WorldObjectNode | null>(null);
+  const currentSelection = selection
+    ? (world.nodeById.get(selection.id) ?? null)
+    : null;
+  const currentSelectionGeneration = worldSelectionIsCurrent(
+    selection,
+    currentSelection,
+  );
+  const selected = currentSelectionGeneration ? currentSelection : selection;
+  const selectedId = currentSelectionGeneration
+    ? (selection?.id ?? null)
+    : null;
+  const selectNode = (id: string) =>
+    setSelection(world.nodeById.get(id) ?? null);
 
   useEffect(() => {
-    if (selectedId && !world.nodeById.has(selectedId)) setSelectedId(null);
-  }, [selectedId, world]);
-
-  useEffect(() => {
-    if (!shouldCloseWorldInspector(selected)) return;
-    window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
-  }, [selected]);
+    if (
+      selected &&
+      (!currentSelectionGeneration || shouldCloseWorldInspector(selected))
+    ) {
+      window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+    }
+  }, [currentSelectionGeneration, selected]);
 
   return (
     <main className="world-control-plane" id="world">
@@ -262,7 +281,7 @@ function WorldControlPlane({
                   <PixelOfficeView
                     world={world}
                     selectedId={selectedId}
-                    onSelect={setSelectedId}
+                    onSelect={selectNode}
                   />
                 </Suspense>
               ) : view === "tree" ? (
@@ -274,7 +293,7 @@ function WorldControlPlane({
                   <CheckpointTreeView
                     world={world}
                     selectedId={selectedId}
-                    onSelect={setSelectedId}
+                    onSelect={selectNode}
                   />
                 </Suspense>
               ) : (
@@ -286,7 +305,7 @@ function WorldControlPlane({
                   <CheckpointGraphView
                     world={world}
                     selectedId={selectedId}
-                    onSelect={setSelectedId}
+                    onSelect={selectNode}
                   />
                 </Suspense>
               )}
@@ -296,7 +315,8 @@ function WorldControlPlane({
             {selected ? (
               <WorldSelectionPanel
                 node={selected}
-                onClose={() => setSelectedId(null)}
+                currentGeneration={currentSelectionGeneration}
+                onClose={() => setSelection(null)}
                 onOpenSpaces={onOpenSpaces}
               />
             ) : null}
@@ -411,15 +431,17 @@ export function selectedHostStatusLabel(
 }
 
 export function shouldCloseWorldInspector(node: WorldObjectNode | null) {
-  return node !== null && !node.selectedHost;
+  return node !== null && (!node.selectedHost || !node.actionable);
 }
 
 function WorldSelectionPanel({
   node,
+  currentGeneration,
   onClose,
   onOpenSpaces,
 }: {
   node: WorldObjectNode;
+  currentGeneration: boolean;
   onClose(): void;
   onOpenSpaces(): void;
 }) {
@@ -427,9 +449,10 @@ function WorldSelectionPanel({
   const [error, setError] = useState<string | null>(null);
   const workspace = workspaceTarget(node);
   const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
+  const disabled = !currentGeneration || working;
 
   async function activate(view?: InspectorView) {
-    if (!workspace || !node.actionable || working) return;
+    if (disabled || !workspace || !node.actionable) return;
     setWorking(true);
     setError(null);
     try {
@@ -486,7 +509,9 @@ function WorldSelectionPanel({
         </div>
         <div>
           <dt>State</dt>
-          <dd>{hostStateLabel(node.hostState)}</dd>
+          <dd>
+            {currentGeneration ? hostStateLabel(node.hostState) : "Stale"}
+          </dd>
         </div>
         {leaf ? (
           <>
@@ -525,7 +550,7 @@ function WorldSelectionPanel({
           <p>{leaf.taskSummary}</p>
         </section>
       ) : null}
-      {node.capabilities.activateHost ? (
+      {currentGeneration && node.capabilities.activateHost ? (
         <div className="world-panel-actions">
           <button
             type="button"
@@ -540,21 +565,21 @@ function WorldSelectionPanel({
         <div className="world-panel-actions">
           <button
             type="button"
-            disabled={!node.capabilities.openSpaces || working}
+            disabled={disabled || !node.capabilities.openSpaces}
             onClick={() => void activate()}
           >
             Open in Spaces
           </button>
           <button
             type="button"
-            disabled={!node.capabilities.files || working}
+            disabled={disabled || !node.capabilities.files}
             onClick={() => void activate("files")}
           >
             Files
           </button>
           <button
             type="button"
-            disabled={!node.capabilities.changes || working}
+            disabled={disabled || !node.capabilities.changes}
             onClick={() => void activate("changes")}
           >
             Changes
@@ -562,7 +587,7 @@ function WorldSelectionPanel({
           {leaf?.kind === "agent" ? (
             <button
               type="button"
-              disabled={!node.capabilities.agentHistory || working}
+              disabled={disabled || !node.capabilities.agentHistory}
               onClick={() => void activate("history")}
             >
               Agent History

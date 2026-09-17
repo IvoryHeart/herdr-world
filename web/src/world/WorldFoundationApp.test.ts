@@ -9,6 +9,7 @@ import {
   parseWorldView,
   selectedHostStatusLabel,
   shouldCloseWorldInspector,
+  worldSelectionIsCurrent,
   worldViewFromPath,
 } from "./WorldFoundationApp";
 import { buildWorldObject } from "./worldObject";
@@ -221,6 +222,56 @@ describe("World view preference", () => {
     expect(shouldCloseWorldInspector(active.hosts[0])).toBe(false);
     expect(shouldCloseWorldInspector(active.hosts[1])).toBe(true);
     expect(shouldCloseWorldInspector(null)).toBe(false);
+  });
+
+  test("keeps a selected entity on its observed generation after reconnect", () => {
+    const generation = (value: number, label: string) =>
+      buildWorldObject(
+        [
+          {
+            connectionId: "host-a",
+            label: "Host A",
+            source: "saved-profile" as const,
+            isDefault: true,
+            state: "ready" as const,
+            generation: value,
+            snapshotGeneration: value,
+            stale: false,
+            actionable: true,
+            snapshot: {
+              workspaces: [
+                {
+                  workspace_id: "shared",
+                  number: 1,
+                  label,
+                  focused: true,
+                  pane_count: 0,
+                  tab_count: 0,
+                  agent_status: "idle",
+                },
+              ],
+              tabs: [],
+              panes: [],
+              agents: [],
+            },
+          },
+        ],
+        "host-a",
+      );
+    const original = generation(11, "Original");
+    const replacement = generation(12, "Replacement");
+    const selection = original.spaces[0];
+    const replacementNode = replacement.nodeById.get(selection.id);
+
+    expect(worldSelectionIsCurrent(selection, replacementNode)).toBe(false);
+    expect(selection).toMatchObject({
+      label: "Original",
+      generation: 11,
+    });
+    expect(replacementNode).toMatchObject({
+      label: "Replacement",
+      generation: 12,
+    });
   });
 
   test("restores a valid last host before the default or current profile", () => {

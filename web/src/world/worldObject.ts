@@ -103,7 +103,7 @@ function boundedLabel(value: unknown, fallback: string) {
   return normalized ? normalized.slice(0, 100) : fallback;
 }
 
-function boundedOptionalText(
+export function boundedOptionalText(
   value: unknown,
   limit: number,
 ): string | undefined {
@@ -112,7 +112,7 @@ function boundedOptionalText(
     .replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
-  return normalized ? normalized.slice(0, limit) : undefined;
+  return normalized ? normalized.slice(0, limit).trimEnd() : undefined;
 }
 
 function status(value: unknown): WorldAgentStatus {
@@ -252,6 +252,7 @@ function buildHost(
           const kind = isAgent ? "agent" : "terminal";
           const capabilities = actionCapabilities(kind, connectionHostState);
           const tab = tabsById.get(pane.tab_id);
+          const tabLabel = boundedOptionalText(tab?.label, 100);
           const agentMetadata = isAgent
             ? matchingAgentMetadata(connection.snapshot?.agents ?? [], pane)
             : null;
@@ -312,9 +313,7 @@ function buildHost(
               workspace.label,
               `Space ${workspace.number ?? ""}`,
             ),
-            ...(boundedOptionalText(tab?.label, 100)
-              ? { tabLabel: boundedOptionalText(tab?.label, 100) }
-              : {}),
+            ...(tabLabel ? { tabLabel } : {}),
             ...(Number.isSafeInteger(tab?.number)
               ? { tabNumber: tab?.number }
               : {}),
