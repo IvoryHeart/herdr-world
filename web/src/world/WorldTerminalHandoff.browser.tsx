@@ -265,6 +265,30 @@ async function run() {
     Boolean(document.querySelector(".world-topbar-status")),
     "World status was not moved into the inherited top bar",
   );
+  const topbarHost = document.querySelector<HTMLElement>(
+    ".connection-switcher",
+  );
+  const topbarView = document.querySelector<HTMLElement>(
+    ".world-primary-view-select",
+  );
+  const topbarDetails = document.querySelector<HTMLElement>(
+    ".world-topbar-status",
+  );
+  const topbarActions = document.querySelector<HTMLElement>(".command-trigger");
+  const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
+  const precedes = (left: Element | null, right: Element | null) =>
+    Boolean(
+      left &&
+        right &&
+        left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  check(
+    precedes(topbarHost, topbarView) &&
+      precedes(topbarView, topbarDetails) &&
+      precedes(topbarDetails, topbarActions) &&
+      precedes(topbarActions, topbarMenu),
+    "top bar did not order host, view, details, Actions and Menu",
+  );
   check(
     document
       .querySelector(".world-control-plane")
@@ -277,7 +301,7 @@ async function run() {
       100,
     "Office did not retain the Spaces workspace navigator",
   );
-  const sharedNavigator = document.querySelector(".sidebar");
+  const sharedNavigator = document.querySelector<HTMLElement>(".sidebar");
   const hideNavigatorButton = document.querySelector<HTMLButtonElement>(
     'button[aria-label="Hide workspace navigator"]',
   );
@@ -303,6 +327,103 @@ async function run() {
     () =>
       sharedNavigator && getComputedStyle(sharedNavigator).display !== "none",
     "restored workspace navigator",
+  );
+  topbarMenu?.click();
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Zen mode"]',
+      ),
+    "Zen mode setting",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Zen mode"]')
+    ?.click();
+  await until(
+    () => document.querySelector(".app")?.classList.contains("zen"),
+    "Zen mode",
+  );
+  await settle();
+  check(
+    Boolean(
+      sharedNavigator && getComputedStyle(sharedNavigator).position === "fixed",
+    ),
+    "Zen mode did not detach the shared workspace navigator as an overlay",
+  );
+  if (sharedNavigator) sharedNavigator.style.top = "2000px";
+  await until(
+    () =>
+      Boolean(
+        sharedNavigator && sharedNavigator.getBoundingClientRect().right <= 8,
+      ),
+    "collapsed Zen workspace navigator",
+  );
+  check(
+    Boolean(
+      sharedNavigator && sharedNavigator.getBoundingClientRect().right <= 8,
+    ),
+    "Zen mode did not collapse the workspace navigator to its left-edge reveal target",
+  );
+  check(
+    !document.querySelector('button[aria-label="Show workspace navigator"]'),
+    "Zen mode exposed the ordinary navigator restore control",
+  );
+  sharedNavigator?.style.removeProperty("top");
+  document.querySelector<HTMLElement>(".workspace-tree-panel")?.focus();
+  await until(
+    () =>
+      Boolean(
+        sharedNavigator &&
+          sharedNavigator.getBoundingClientRect().left >= -1 &&
+          sharedNavigator.getBoundingClientRect().width > 100,
+      ),
+    "focused Zen workspace navigator",
+  );
+  check(
+    Boolean(
+      sharedNavigator &&
+        sharedNavigator.getBoundingClientRect().left >= -1 &&
+        sharedNavigator.getBoundingClientRect().width > 100,
+    ),
+    "the Zen workspace navigator did not reveal from the left edge on focus",
+  );
+  document.body.tabIndex = -1;
+  document.body.focus();
+  if (sharedNavigator) sharedNavigator.style.top = "2000px";
+  await until(
+    () =>
+      Boolean(
+        sharedNavigator && sharedNavigator.getBoundingClientRect().right <= 8,
+      ),
+    "recollapsed Zen workspace navigator",
+  );
+  check(
+    Boolean(
+      sharedNavigator && sharedNavigator.getBoundingClientRect().right <= 8,
+    ),
+    "the Zen workspace navigator did not collapse after losing focus",
+  );
+  sharedNavigator?.style.removeProperty("top");
+  topbarMenu?.click();
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        'button[aria-label="Zen mode"]',
+      ),
+    "Zen mode setting while active",
+  );
+  document
+    .querySelector<HTMLButtonElement>('button[aria-label="Zen mode"]')
+    ?.click();
+  await until(
+    () => !document.querySelector(".app")?.classList.contains("zen"),
+    "leaving Zen mode",
+  );
+  check(
+    Boolean(
+      sharedNavigator && getComputedStyle(sharedNavigator).display !== "none",
+    ),
+    "leaving Zen mode did not restore the prior navigator state",
   );
   const annotationsButton = [
     ...document.querySelectorAll<HTMLButtonElement>(".tabbar-utilities button"),

@@ -22,6 +22,36 @@
   overflow: hidden;
 }
 
+/* Zen keeps the navigator out of the stage layout while preserving a narrow
+   left-edge reveal target, parallel to the topbar's top-edge reveal. */
+.app.zen.sidebar-hidden .sidebar {
+  position: fixed;
+  z-index: 110;
+  top: 6px;
+  bottom: 0;
+  left: 0;
+  max-width: calc(100vw - 24px);
+  padding: 12px 8px 12px 12px;
+  display: flex;
+  box-sizing: border-box;
+  border-right: 1px solid var(--shell-border);
+  background: var(--shell-panel);
+  box-shadow: var(--shadow-lg);
+  transform: translateX(calc(-100% + 6px));
+  transition: transform 0.15s ease;
+}
+
+.app.zen.sidebar-hidden .sidebar:hover,
+.app.zen.sidebar-hidden .sidebar:focus-within {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app.zen.sidebar-hidden .sidebar {
+    transition: none;
+  }
+}
+
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
   .sidebar {

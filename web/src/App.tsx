@@ -3339,6 +3339,7 @@ export default function App({
       </Suspense>
     </div>
   ) : null;
+  const desktopSidebarHidden = !mobile && (sidebarHidden || zenMode);
   const topbar = (
     <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
       <div className="topbar-start">
@@ -3353,8 +3354,8 @@ export default function App({
           <span className="brand-title">Herdr World</span>
           <span className="brand-version">v{APP_VERSION}</span>
         </div>
-        {primaryViewControl}
         <ConnectionSwitcher />
+        {primaryViewControl}
       </div>
       <div className="topbar-actions">
         <div className="topbar-command-group">
@@ -3395,7 +3396,7 @@ export default function App({
   );
   return (
     <div
-      className={`app ${sidebarHidden && !mobile ? "sidebar-hidden" : ""} ${
+      className={`app ${desktopSidebarHidden ? "sidebar-hidden" : ""} ${
         zenMode && !mobile ? "zen" : ""
       } ${mobileControlsCollapsed ? "mobile-controls-collapsed" : ""}`}
     >
@@ -3685,7 +3686,11 @@ export default function App({
         className={`body mobile-view-${mobileView}`}
         style={{ gridTemplateColumns: `${sidebarWidth}px 6px minmax(0, 1fr)` }}
       >
-        <div className="sidebar" id="workspace-navigator">
+        <div
+          className="sidebar"
+          id="workspace-navigator"
+          style={!mobile ? { width: sidebarWidth } : undefined}
+        >
           <div className="sidebar-content">
             <WorkspaceTree
               agentsFirst={
@@ -3748,7 +3753,7 @@ export default function App({
             </button>
           ) : null}
         </div>
-        {sidebarHidden && !mobile ? (
+        {desktopSidebarHidden && !zenMode ? (
           <button
             type="button"
             className="sidebar-visibility-toggle sidebar-show"

@@ -144,10 +144,9 @@
   padding-left: 0;
 }
 
-/* Zen mode leaves only the terminal on screen. The topbar keeps a thin edge
-   so the connection switcher, command menu, and settings stay reachable with
-   the pointer without leaving Zen; the shortcut and the Appearance switch
-   remain the keyboard and menu paths back. */
+/* Zen mode leaves the stage unobstructed. The topbar and workspace navigator
+   keep thin top/left reveal edges so their controls stay reachable without
+   leaving Zen. */
 .app.zen {
   position: relative;
 }

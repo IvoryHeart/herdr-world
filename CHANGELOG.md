@@ -41,12 +41,14 @@ retain their original Herdr Web lineage.
   external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Restored the retained Pixi Office as the primary World surface and placed the
-  Office/Spaces/Tree/Graph selector in the existing application top bar between
-  the version and machine controls, moved the selected-host/runtime summary into
-  that bar, removed the separate Visual Control Plane header, and retained the
-  Spaces workspace navigator, focused tabs and annotations as the common frame
-  around every view instead of duplicating Graph navigation. The shared workspace
-  navigator can now be hidden and restored from its stage-edge controls.
+  machine selector, Office/Spaces/Tree/Graph selector, selected-host/runtime
+  summary, Actions and Menu in that order in the existing application top bar,
+  removed the separate Visual Control Plane header, and retained the Spaces
+  workspace navigator, focused tabs and annotations as the common frame around
+  every view instead of duplicating Graph navigation. The shared workspace
+  navigator can now be hidden and restored from its stage-edge controls; Zen
+  mode removes it from the stage layout and reveals it as an overlay from a thin
+  left-edge target, parallel to the top bar.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Unified selected-agent identity with the shared Inspector in Office, Tree,
   Graph and Spaces; placed Terminal first and made it the default for each new
