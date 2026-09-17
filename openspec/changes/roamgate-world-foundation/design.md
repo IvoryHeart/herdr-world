@@ -158,18 +158,19 @@ containment, natural row packing, alignment, logical-canvas scrolling and render
 The World shell may change the available viewport, but it does not replace those layout invariants
 with a generic responsive CSS grid.
 
-### Present one focused Inspector as the selected-entity overlay
+### Present one Inspector surface in docked or floating form
 
-Visual-view selection is observational. Office proves the seam first: selecting an agent opens a
-right-edge floating overlay above the unchanged Pixi stage. The header contains only compact agent
-identity and safety state; Files, Changes, Agent History and Terminal occupy the useful area and are
-visible as tabs immediately. The identity and resources are one composed Inspector surface with one
-set of dock, expand, terminal-window and close controls; bottom docking does not leave a separate profile
-card consuming or obscuring the resource pane. Terminal is ordered first and is the initial tab for
-each newly selected terminal-capable entity; changing tabs affects the current selection without
-silently changing that default for the next entity. Full ancestry, generation, persona, model, focus and task
-metadata are not repeated as a large profile card; appropriate admitted information remains
-available in scene callouts or the relevant resource view.
+Visual-view selection is observational. Office proves the seam first: selecting an agent opens the
+one docked Inspector overlay above the unchanged Pixi stage, while direct desk activation opens or
+focuses that entity's movable Inspector window. Both are presentations of the same reusable
+Inspector surface. The header contains only compact identity and safety state; Files, Changes,
+Agent History and Terminal occupy the useful area and are visible as tabs immediately. The identity
+and resources have one lifecycle and close control. A floating Inspector exposes Dock in and a
+docked Inspector exposes Dock out plus dock-position and expand controls. Terminal is ordered first
+and is the initial tab for each newly opened terminal-capable entity; changing a window's tab does
+not silently change another entity's state or the default for the next entity. Full ancestry,
+generation, persona, model, focus and task metadata are not repeated as a large profile card;
+appropriate admitted information remains available in scene callouts or the relevant resource view.
 
 The overlay receives one focused operational context containing the exact connection, observed
 runtime generation, workspace and optional pane/terminal identity. Its connector uses the retained
@@ -179,21 +180,23 @@ or terminal component while the visual view remains visible. An entity on anothe
 read-only until its host is explicitly activated; a stale or replaced target keeps its captured
 bounded identity, fails closed and never silently rebinds by native identifier.
 
-Spaces and non-agent terminal panes reuse the same overlay shell rather than losing the earlier
-Inspector contract or masquerading as agent profiles. Their compact header names the actual entity;
-their tab set is capability-derived, with Files and Changes for spaces, Files, Changes and Terminal
-for terminal panes, and Agent History only for an admitted agent session. Host selection remains a
+Spaces and non-agent terminal panes reuse the same Inspector surface rather than losing the earlier
+contract or masquerading as agent profiles. Their compact header names the actual entity; their tab
+set is capability-derived, with Files and Changes for spaces, Files, Changes and Terminal for
+terminal panes, and Agent History only for an admitted agent session. Host selection remains a
 bounded status/activation context without a fabricated workspace scope.
 
-The Inspector remains a single shell-owned facility shared with Spaces and the visual views. Office
-does not clone its file, Git, history, preview or resource stores. Switching selected entities does
-not advance Spaces' connection or retain another host's resources. The transition first closes the
-outgoing identity and resources, awaits qualified pane focus, then publishes the incoming identity
-and resource request together. A delayed or failed focus therefore cannot combine the new entity's
-header with the previous entity's resource. An actionable selection has no separate profile card;
-only inactive or stale selections use a compact read-only activation context outside the Inspector.
-Explicit host activation uses
-Roamgate's normal teardown and selection lifecycle before a new Inspector context can open.
+The Inspector implementation remains shell-owned and shared with Spaces and the visual views, but
+its presentation state becomes a bounded registry keyed by qualified entity identity. Each entry
+owns only independent Inspector UI state—active tab, file/diff selection, history presentation and
+geometry—while reusing the existing resource components, connection client, caches and terminal
+owner. It does not create another application store, runtime observer or transport. Switching or
+opening entities does not advance Spaces' connection or retain another host's resources. Admission
+awaits qualified pane focus before publishing identity and resources, so delayed or failed focus
+cannot combine one entity's header with another entity's content. An actionable entity has no
+separate profile card; only inactive or stale selections use a compact read-only activation context
+outside the Inspector. Explicit host activation uses Roamgate's normal teardown and selection
+lifecycle before a new Inspector context can open.
 
 Optional observations appear in the compact header only after the provider qualifies them to the
 same connection, generation and agent session. Host totals are not divided or attributed by the UI,
@@ -202,62 +205,61 @@ service-owned World setting reachable from the common settings menu in every nat
 the Office metrics shortcut; both entry points use one shell-level dialog above whichever view is
 active and the same configuration endpoint.
 
-### Keep selected-host conversations on the existing terminal owner
+### Keep selected-host Inspector conversations on existing resource owners
 
-Office first proves that one selected qualified pane can consume the existing terminal/session owner
-without duplicating transport. The same shell owner then maintains a bounded conversation registry
-keyed by the selected connection, runtime generation and terminal identity. Office, Tree and Graph
-present those sessions, but no presenter owns SSH, terminal transport, reconnect or pane lifecycle.
-Selecting the same pane through another representation focuses its existing conversation instead
-of attaching a competitor.
+Office first proves that qualified entities can consume the existing Inspector resources and
+terminal/session owner without duplicating transport. The shell maintains one docked Inspector and
+a bounded floating registry keyed by selected connection, runtime generation and entity identity.
+Office, Tree and Graph present those contexts, but no presenter owns SSH, terminal transport,
+reconnect or pane lifecycle. Selecting the same entity through another representation focuses its
+existing Inspector instead of opening a competitor.
 
-The terminal implementation is the current Roamgate-derived `TerminalView`, bridge
+The terminal implementation remains the current Roamgate-derived `TerminalView`, bridge
 `ConnectionClient` and terminal support machinery already present in World. Do not import the
-retired Herdr Web terminal or establish it as a second application upstream. The retained World
-conversation controller, window geometry and connector code may be adapted for presentation, but
-it wraps the current terminal implementation and does not restore its former transport/runtime
-owner. While a terminal is presented in a visual conversation, mounted-but-hidden Spaces SHALL not
-mount a second `TerminalView` for that terminal; explicit handoff retires one presentation before
-the other admits the same Herdr terminal identity.
+retired Herdr Web terminal or establish it as a second application upstream. Retained World window
+geometry and connector code wraps the complete Inspector surface, not a terminal-only card. While
+a terminal tab is live in an Inspector conversation, mounted-but-hidden Spaces does not mount a
+second `TerminalView` for that terminal; handoff retires one presentation before another admits the
+same Herdr terminal identity.
 
-The registry exposes two mutually exclusive presentation targets for a qualified terminal. The
-selected-entity Inspector can dock it as a Terminal tab; Open terminal window moves it into a
-retained floating conversation window, and Dock in Inspector moves it back. Changing targets may
-remount the view only
-after the old target has detached, so there is never more than one input listener or attachment for
-that terminal. Opening a window is an explicit Terminal-toolbar control; closing the Inspector closes its
-docked presentation rather than unexpectedly creating a window. Activating an Office desk bypasses
-the Inspector overlay and directly opens or focuses
-the floating target, preserving the established desk interaction. Focusing any presentation first
-focuses its exact Herdr pane so the existing terminal input gate remains authoritative.
+The registry exposes mutually exclusive docked and floating targets for each qualified Inspector.
+Dock out transfers the whole docked Inspector—including its selected tab and resource state—into a
+movable, resizable window. Dock in performs the inverse. When another Inspector is already docked,
+the two entries swap presentations so no context is discarded and the floating-window count does
+not increase. A transfer may remount a live terminal only after its old target detaches, so there is
+never more than one input listener or attachment for that terminal. The × control closes only that
+Inspector entry and never creates another presentation as a side effect. Activating an Office desk
+directly opens or focuses its floating Inspector on Terminal, preserving the established desk
+interaction. Focusing a terminal tab first focuses its exact Herdr pane so the existing input gate
+remains authoritative.
 
-Changing selection while a terminal is docked performs the same ordered handoff without asking the
-new entity to inherit the old terminal. The outgoing overlay detaches first, its registry entry is
-re-presented as the same floating conversation, and only then can the replacement entity context
-mount. The transition consumes no additional conversation slot and preserves the terminal session;
-on compact layouts it remains the one conversation available through the compact presentation.
+Changing selection while an Inspector is docked performs the same ordered handoff without asking
+the new entity to inherit the old resource state. The outgoing Inspector becomes a floating entry
+before the replacement context mounts. If five floating entries already exist, World retains the
+current docked selection and reports the limit instead of silently closing a context. On compact
+layouts the registry is preserved while one active Inspector remains usable at a time.
 
-Connectors also have separate semantics and anchors. A floating terminal connects to the qualified
-desk when present, otherwise to its agent or hierarchy node; the Inspector overlay connects to the
-qualified agent. Both consume published scene positions and presentation geometry, update during
-pan, scroll, move and resize, and disappear rather than retarget when their exact anchor is not
-present. A connector never owns or changes topology, selection, transport or terminal identity.
+Every visible floating or docked Inspector connects to its qualified desk when present, otherwise
+to its agent or hierarchy node. Connectors consume published scene positions and presentation
+geometry, update during pan, scroll, move and resize, and disappear rather than retarget when their
+exact anchor is absent. A connector never owns or changes topology, selection, resource state,
+transport or terminal identity.
 
-The registry remains inside the inherited browser routing lease and uses the one browser WebSocket
-and existing terminal bridges; it does not create connection-independent clients, another SSH
-tunnel, application store or terminal manager. Changing the selected host deliberately retires all
-outgoing visual and Spaces terminal mounts before the new lease becomes operational, so input can
-never be redirected across hosts. Reconnecting the selected runtime invalidates conversations from
-its retired generation.
+The registry remains inside the inherited browser routing lease and uses the one browser WebSocket,
+resource clients and existing terminal bridges; it does not create connection-independent clients,
+another SSH tunnel, application store or terminal manager. Changing the selected host deliberately
+retires all outgoing Inspector resources and terminal mounts before the new lease becomes
+operational, so actions cannot be redirected across hosts. Reconnecting the selected runtime
+invalidates conversations from its retired generation.
 
-Up to five desktop conversations from the selected host retain independent geometry and order
-alongside the one selected-entity Inspector. This is the deliberate multi-window boundary: terminals
-support side-by-side work and copy/paste, while Files, Changes and History continue to follow one
-selection instead of cloning Inspector state. Compact layouts expose one usable conversation at a
-time. Spaces remains available from the primary view selector, without an Inspector-local Open in
-Spaces shortcut. A conversation survives projection refreshes and visual-view changes while its
-host remains selected, and closes after host switching, generation retirement or current admitted
-state confirms the qualified pane no longer exists.
+Up to five floating desktop Inspectors from the selected host retain independent geometry, order,
+tab and resource-selection state alongside the one docked Inspector. This is the deliberate
+multi-window boundary: users can compare terminals, files, changes and histories across qualified
+entities without cloning runtime ownership. Compact layouts expose one usable Inspector at a time.
+Spaces remains available from the primary view selector, without an Inspector-local Open in Spaces
+shortcut. A conversation survives projection refreshes and visual-view changes while its host
+remains selected, and closes after host switching, generation retirement or current admitted state
+confirms the qualified entity no longer exists.
 
 ### Restore operational summaries and pane pinning at the new seam
 
@@ -293,7 +295,7 @@ truthful about the hierarchy currently presented.
 
 Port the delivered force-directed Graph canvas and stable host-first projection onto `WorldObject`.
 Restore deterministic seeding, topology-only reheating, node dragging/pinning, bounded pan/zoom,
-Fit, search, disclosure, saved camera/positions, status updates, terminal-window connectors and the
+Fit, search, disclosure, saved camera/positions, status updates, Inspector-window connectors and the
 equivalent semantic interface. Equal native identifiers on different hosts never merge.
 
 The selected-entity context remains shared shell behavior. It exposes only admitted details and
@@ -362,10 +364,10 @@ browser keys untouched for rollback but does not read them.
 3. Add and test aggregate connection observation and the World projection.
 4. Restore the retained Pixel Office dependency, assets, projection contract, geometry, renderer,
    semantic targets and tests before adapting its `WorldObject`, action and shell boundaries.
-5. Require one selected operational host, expose one qualified shell-owned Inspector context and
+5. Require one selected operational host, expose the qualified shell-owned Inspector registry and
    independently accept the complete retained Pixel Office over aggregate local plus SSH
    observations.
-6. Extend the existing selected-host terminal owner to bounded conversation windows, then migrate
+6. Extend the existing selected-host Inspector and terminal owners to bounded conversation windows, then migrate
    and independently accept connected Tree and spatial Graph without reopening the runtime or
    Inspector boundaries.
 7. Update operational, lineage and release documentation; do not translate old profile stores.

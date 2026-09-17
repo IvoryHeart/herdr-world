@@ -197,53 +197,66 @@ overflow on the application page.
   that omitted entities were removed from Herdr
 
 ### Requirement: Shared entity detail drawer
-Office, Tree and Graph SHALL provide one consistent selected-entity Inspector overlay without creating
-a second Inspector, terminal owner or runtime store. Selecting an agent SHALL open the overlay over
-the visual stage without resizing, relaying out or otherwise taking workspace from that stage. The
-overlay SHALL identify the selected agent with a compact icon, name and bounded status or
-read-only-host cue; it SHALL give the primary area to immediately visible Files, Changes, Agent
-History and Terminal tabs rather than a repeated metadata table or a set of buttons that must be
-used before those resources become visible. The compact identity and resources SHALL share one
-overlay lifecycle, header action set and close control in every dock position rather than stack a
-separate profile card above the Inspector. Terminal SHALL be the first tab and the initial tab for a
-newly selected terminal-capable entity; changing resources for the current selection SHALL NOT
-silently change that default for the next selected entity.
+Office, Tree and Graph SHALL provide one consistent shell-owned Inspector surface that can appear as
+the one docked overlay or as one of up to five movable desktop windows. Every Inspector SHALL
+identify its qualified entity with a compact icon, name and bounded status or read-only-host cue and
+SHALL give its primary area to immediately visible applicable Terminal, Files, Changes and Agent
+History tabs. Identity and resources SHALL share one lifecycle, header and close control rather than
+stack a separate agent profile card above the resource pane. Terminal SHALL be the first tab and the
+initial tab for a newly opened terminal-capable entity; changing one Inspector's active tab SHALL NOT
+change another Inspector or the default for a later entity.
 
-Selecting an actionable space or non-agent terminal pane SHALL use the same overlay and shell-owned
-resource state with compact entity identity and only the tabs applicable to that entity. A space
-SHALL expose Files and Changes. A non-agent terminal pane SHALL expose Files, Changes and Terminal.
-Agent History SHALL appear only for an admitted agent session. Selecting a host SHALL retain bounded
-host detail and activation state without inventing workspace resources.
+Selecting an actionable entity SHALL open or focus its docked Inspector without resizing, relaying
+out or otherwise taking workspace from the visual stage. Direct desk activation SHALL open or focus
+that entity's floating Inspector. A floating Inspector SHALL be independently movable and resizable
+and expose Dock in and × controls. The docked Inspector SHALL expose Dock out, dock-position,
+expand/restore and × controls. Docking a floating Inspector while another is docked SHALL swap their
+presentations without discarding either context or increasing the floating-window count. Docking or
+undocking SHALL transfer the complete Inspector, including its selected tab and resource-selection
+state, rather than transfer only a terminal child.
 
-The overlay SHALL expose generation-fenced resources only for the selected operational host. A
+Selecting an actionable space or non-agent terminal pane SHALL use the same Inspector surface with
+compact entity identity and only the tabs applicable to that entity. A space SHALL expose Files and
+Changes. A non-agent terminal pane SHALL expose Files, Changes and Terminal. Agent History SHALL
+appear only for an admitted agent session. Selecting a host SHALL retain bounded host detail and
+activation state without inventing workspace resources.
+
+Every Inspector SHALL expose generation-fenced resources only for the selected operational host. A
 ready-inactive or stale entity SHALL retain a bounded read-only identity and an explicit Activate
 host control outside the Inspector without opening live resources. An actionable entity SHALL NOT
-retain a second floating profile card while its Inspector is open or after the Inspector closes.
-Missing metadata SHALL remain absent rather than being
-inferred. Authoritative cost, input-token, output-token or similar observations MAY appear in the
-compact identity area only when the provider qualifies them to that exact agent session; unavailable
-or merely host-wide observations SHALL not be shown as agent values or fabricated as zero.
+retain a separate floating profile card. Missing metadata SHALL remain absent rather than inferred.
+Authoritative cost, input-token, output-token or similar observations MAY appear in the compact
+identity area only when the provider qualifies them to that exact agent session; unavailable or
+merely host-wide observations SHALL not be shown as agent values or fabricated as zero.
 
-At most one Inspector context SHALL be focused at a time. Files, Changes and Agent History
-SHALL reuse the shell's existing components and state while the visual view remains visible. The
-Inspector overlay SHALL remain visually connected to the represented agent whenever that agent has a
-visible scene anchor. Switching selected entities SHALL not change the selected host, clone an
-Inspector or retain an inactive host's resources. World SHALL retire the prior entity identity and
-resource presentation before asynchronously focusing a replacement, then publish the replacement
-identity and resource request as one admitted transition; a delayed or rejected focus SHALL never
-show the new identity over the prior entity's resources. Explicit host activation SHALL retire the
-outgoing Inspector and terminal contexts through the existing connection lifecycle.
+Inspector instances SHALL reuse the shell's existing resource components, connection client,
+caches and terminal owner while retaining independent active-tab, file/diff selection, history and
+geometry state. They SHALL NOT create another application store, runtime observer, WebSocket, SSH
+tunnel or terminal implementation. Opening the same qualified entity through another visual
+representation SHALL focus its existing Inspector instead of creating a duplicate context.
+
+Each Inspector SHALL remain visually connected to its represented agent, desk or hierarchy node
+whenever that exact qualified anchor is visible. Opening or focusing an Inspector SHALL not change
+the selected host. World SHALL admit identity and resource content together after qualified pane
+focus; a delayed or rejected focus SHALL never show a new identity over another entity's resources.
+Explicit host activation SHALL retire every outgoing Inspector and terminal context through the
+existing connection lifecycle.
 
 #### Scenario: Open a terminal-capable Inspector
-- **WHEN** the user selects an actionable agent or non-agent terminal pane without a retained
-  applicable tab preference
-- **THEN** the Inspector overlay opens Terminal as its initial resource while keeping Files, Changes
+- **WHEN** the user selects an actionable agent or non-agent terminal pane without an existing
+  Inspector context or retained applicable tab preference
+- **THEN** its docked Inspector opens Terminal as the initial resource while keeping Files, Changes
   and any admitted Agent History available as peer tabs
 
 #### Scenario: Reposition a selected-agent Inspector
-- **WHEN** the user docks the selected-agent Inspector at the side or bottom, expands it or restores it
-- **THEN** the compact identity, resource tabs, dock/expand actions and its single close control
-  remain reachable within the same overlay
+- **WHEN** the user docks, undocks, moves, resizes, expands or restores a selected-agent Inspector
+- **THEN** compact identity, selected resource state, applicable tabs and the controls for that
+  presentation remain reachable within the same Inspector
+
+#### Scenario: Dock while another Inspector is docked
+- **WHEN** Inspector A is docked and the user invokes Dock in on floating Inspector B
+- **THEN** B becomes docked, A takes B's floating presentation, both retain their independent
+  resource state and no additional floating slot is consumed
 
 #### Scenario: Inspect an agent with a task summary
 - **WHEN** the user selects an admitted agent with a visible scene representation and bounded task
@@ -253,10 +266,10 @@ outgoing Inspector and terminal contexts through the existing connection lifecyc
   a connector to that agent
 
 #### Scenario: Open rich agent context
-- **WHEN** the user changes among Files, Changes and Agent History for an actionable agent on the
-  selected operational host
-- **THEN** the existing Inspector content remains in the overlay for the exact qualified workspace
-  and session context without reducing the visual stage or cloning its resource state
+- **WHEN** the user changes among Files, Changes and Agent History in two actionable agent
+  Inspectors on the selected operational host
+- **THEN** each Inspector retains its own tab and resource selection for the exact qualified
+  workspace and session while reusing the shell's existing resource implementations
 
 #### Scenario: Inspect a non-agent World entity
 - **WHEN** the user selects an actionable space or non-agent terminal pane in Office, Tree or Graph
@@ -275,15 +288,15 @@ outgoing Inspector and terminal contexts through the existing connection lifecyc
   host activation without opening terminal or Inspector resources
 
 #### Scenario: Change selection while focus is delayed or rejected
-- **WHEN** entity A owns the Inspector and selecting entity B requires asynchronous pane focus
-- **THEN** World first retires A's identity and resources, publishes B's identity only with B's
-  admitted resource request, and leaves the Inspector closed if focus is rejected
+- **WHEN** opening or focusing entity B requires asynchronous pane focus
+- **THEN** World publishes B's identity only with B's admitted resources, leaves every existing
+  Inspector bound to its original entity and opens no B context if focus is rejected
 
 #### Scenario: Selected entity becomes stale
-- **WHEN** the selected entity's host disconnects or advances beyond the observed generation
-- **THEN** the overlay preserves bounded inspection information from the selected generation,
-  marks it stale and disables every operational action without silently rebinding to an equal
-  identifier in the replacement generation
+- **WHEN** an Inspector entity's host disconnects or advances beyond the observed generation
+- **THEN** World preserves bounded inspection information from the selected generation, marks or
+  closes the retired context according to current admitted state, disables every operational action
+  and never rebinds it to an equal identifier in the replacement generation
 
 #### Scenario: Agent metadata is unavailable
 - **WHEN** an agent exposes no task summary, model label or state label
@@ -456,43 +469,40 @@ distinct, nonduplicated semantic targets.
 
 ### Requirement: Shared live terminal conversations
 Office, Tree and Graph SHALL open qualified agents, occupied desks and terminal nodes in live
-conversation windows backed by the shell's existing terminal/session owner. Selecting the same
-terminal through another representation SHALL focus the existing conversation instead of creating
-a competing attachment. Explicit handoff SHALL focus that same pane in mounted Spaces. Every open
+Inspector conversations backed by the shell's existing resource and terminal/session owners.
+Selecting the same qualified entity through another representation SHALL focus its existing
+Inspector instead of creating a competing resource context or terminal attachment. Every open
 conversation SHALL belong to the one selected operational host and its current runtime generation.
-World SHALL use the current Roamgate-derived terminal component and its existing bridge connection;
-it SHALL NOT carry or synchronize a second terminal implementation from Herdr Web. Retained World
-conversation/window code MAY provide presentation around that terminal without owning transport.
+World SHALL use the current Roamgate-derived terminal, Files, Changes and Agent History components
+and existing bridge connection; it SHALL NOT carry or synchronize replacement implementations from
+Herdr Web. Retained World window code MAY provide presentation around the complete Inspector
+without owning resource or terminal transport.
 
-An Office desk click SHALL directly open or focus that desk's terminal as a floating conversation,
-preserving the established Office interaction. The selected-agent Inspector overlay SHALL also expose
-Terminal as one of the agent's tools. A terminal MAY be docked in that overlay or popped out into a
-floating conversation, but the same qualified terminal SHALL have exactly one live presentation at
-a time; docking and popping out SHALL explicitly hand off the existing attachment rather than mount
-two terminal components.
+An Office desk activation SHALL directly open or focus that entity's floating Inspector on its
+Terminal tab, preserving the established Office interaction without creating a terminal-only
+window. The same qualified terminal SHALL have exactly one live Terminal presentation at a time.
+Docking, undocking or swapping Inspectors SHALL explicitly hand off that attachment after the old
+target detaches while preserving the Inspector's selected tab and other resource state.
 
-If selection leaves an agent whose terminal is docked, World SHALL first detach that terminal from
-the outgoing overlay and rehome the same registry entry as a floating conversation before mounting
-the replacement overlay context. This automatic handoff SHALL preserve the qualified terminal
-session and count it as the same bounded conversation; it SHALL never leave the outgoing and new
-overlay contexts attached concurrently.
+If selection replaces a docked Inspector, World SHALL rehome the outgoing Inspector as a floating
+conversation before mounting the replacement docked context. The handoff SHALL preserve the
+qualified Inspector session and count it as the same bounded entry. If all five floating slots are
+occupied, World SHALL retain the current docked Inspector and report the limit rather than close a
+context or mount overlapping resource owners.
 
-Opening a terminal window SHALL be an explicit Terminal-toolbar action. Closing the selected-entity
-Inspector SHALL close its docked presentation and SHALL NOT silently create a floating conversation.
-The floating conversation header SHALL expose the inverse Dock in Inspector action. The Inspector
-SHALL NOT expose a second Open in Spaces shortcut; Spaces remains available through the primary
-view selector without changing terminal identity or attaching another session.
+The floating Inspector header SHALL expose Dock in and × controls. The docked Inspector SHALL
+expose Dock out and × controls plus its dock-position and expand controls. Closing either
+presentation SHALL close only that qualified Inspector and SHALL NOT silently open another window.
+The Inspector SHALL NOT expose a second Open in Spaces shortcut; Spaces remains available through
+the primary view selector without changing terminal identity or attaching another session.
 
-Desktop SHALL support up to five distinct conversations alongside the one Inspector, with
-independent bounded position, size,
-z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,
-refit to their real dimensions and retain usable input, selection, scrolling, uploads and mobile
-controls. Compact layouts SHALL present one active usable conversation. Spatial views SHALL connect
-each floating terminal window to its represented desk, agent or node and SHALL separately connect
-the Inspector overlay to its represented agent. These connectors are presentation relationships: the
-terminal window is a view of the agent's shell tool, while the Inspector overlay is a view of the
-agent itself. They SHALL track their qualified anchors when either endpoint moves and SHALL never
-imply a different runtime ancestry or terminal identity.
+Desktop SHALL support up to five floating Inspector conversations alongside the one docked
+Inspector, with independent bounded position, size, z-order, selected tab, resource selection and
+close/focus behavior. Terminal tabs SHALL keep text at configured metrics, refit to real dimensions
+and retain usable input, selection, scrolling, uploads and mobile controls. Compact layouts SHALL
+present one active usable Inspector. Spatial views SHALL connect every visible Inspector to its
+represented desk, agent or node. These connectors SHALL track qualified anchors when either endpoint
+moves and SHALL never imply a different runtime ancestry, resource scope or terminal identity.
 
 Conversation identity and validity SHALL be qualified by connection and runtime generation inside
 the existing selected-connection browser lease. Opening another window or navigating among views
@@ -508,28 +518,32 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 
 #### Scenario: Open the same terminal from two representations
 - **WHEN** a user opens an agent and then its occupied desk or hierarchy node
-- **THEN** World focuses one qualified conversation and does not create another transport or send
-  duplicate input
+- **THEN** World focuses one qualified Inspector conversation and does not create another resource
+  context, transport or duplicate input path
 
 #### Scenario: Open a terminal from an Office desk
 - **WHEN** a user activates an actionable occupied or terminal desk in Office
-- **THEN** World directly opens or focuses its floating qualified terminal conversation and draws
-  a connector to the represented desk or agent
+- **THEN** World directly opens or focuses its floating qualified Inspector on Terminal and draws a
+  connector to the represented desk or agent
 
-#### Scenario: Move a terminal between Inspector and floating presentations
-- **WHEN** a user docks a floating terminal in the selected agent's Terminal tab or opens that tab
-  as a conversation window
-- **THEN** World moves the one live terminal presentation, preserves its qualified session and
-  input ownership, and never leaves a duplicate attachment in the previous target
+#### Scenario: Move an Inspector between docked and floating presentations
+- **WHEN** a user invokes Dock in or Dock out on an Inspector with Terminal, Files, Changes or
+  History selected
+- **THEN** World transfers the complete Inspector and its resource state, preserves any qualified
+  terminal session and never leaves duplicate content or input ownership in the previous target
 
-#### Scenario: Change selection while a terminal is docked
-- **WHEN** agent A has a docked terminal and the user selects agent B, a space or a non-agent pane
-- **THEN** World detaches A from the outgoing overlay, rehomes that same qualified conversation in
-  its floating presentation, and only then mounts the newly selected entity context
+#### Scenario: Change selection while an Inspector is docked
+- **WHEN** entity A has the docked Inspector and the user selects entity B
+- **THEN** World rehomes A as the same floating Inspector before mounting B as docked, unless the
+  five-window bound requires the selection to remain unchanged with a visible limit message
+
+#### Scenario: Dock into an occupied Inspector target
+- **WHEN** entity A is docked and the user docks floating Inspector B
+- **THEN** World swaps A into B's floating presentation and B into the dock without losing either
+  resource context or increasing the floating-window count
 
 #### Scenario: Present a terminal while Spaces remains mounted
-- **WHEN** Office presents a qualified terminal and the Spaces application remains mounted but
-  hidden
+- **WHEN** a visual Inspector presents a qualified Terminal tab and Spaces remains mounted but hidden
 - **THEN** the Roamgate-derived terminal uses the existing browser connection and Spaces does not
   attach a second terminal view for that identity
 
@@ -556,7 +570,8 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 
 #### Scenario: Desktop conversation limit is reached
 - **WHEN** five distinct conversations are open and the user requests a sixth
-- **THEN** World keeps the existing conversations and reports the bounded limit visibly
+- **THEN** World keeps the existing floating and docked Inspectors and reports the bounded limit
+  visibly
 
 ### Requirement: Connected Tree presentation
 Tree SHALL use a deterministic connected branch presentation with hosts, spaces and agent or

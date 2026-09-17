@@ -36,11 +36,12 @@ recorded by this change rather than unexplained presentation rewrites.
   projection contract, Pixi renderer, geometry, layout publication, semantic targets, assets and
   tests directly; adapt their data and action boundaries to Roamgate rather than recreating the
   scene in DOM/CSS.
-- Keep Office at its full stage size while one selected, generation-qualified agent opens a
-  connected intent overlay backed by the shell's existing Inspector ownership. Files, Changes,
-  Agent History and a docked Terminal SHALL remain available in that overlay; a desk click SHALL
-  open the same shell-owned terminal in the retained floating conversation presentation rather
-  than navigating away or creating a separately implemented resource or terminal UI.
+- Keep Office at its full stage size while selected, generation-qualified entities open the
+  shell's complete Inspector as either the one docked overlay or one of up to five movable desktop
+  windows. Every presentation SHALL retain compact identity plus its applicable Terminal, Files,
+  Changes and Agent History tabs; desk activation SHALL open or focus that entity's floating
+  Inspector on Terminal rather than create a terminal-only shell or a separately implemented
+  resource UI.
 - Retain the useful Roamgate-derived operational surfaces and extend the Office context with a
   compact agent identity, authoritative qualified status and optional per-agent observations, a
   supported bounded task-summary workflow, ancestry and qualified agent/pane pinning.
@@ -48,9 +49,10 @@ recorded by this change rather than unexplained presentation rewrites.
   with Roamgate's one-selected-connection model for every operational surface. The shared
   WorldObject SHALL continue to present all managed hosts, including ready-inactive and retained
   stale topology, while terminal, Files, Changes, Agent History, room and launcher actions remain
-  disabled outside the explicitly selected host. Up to five conversations from that host SHALL use
-  the existing one WebSocket and terminal owner; selecting an entity SHALL never switch hosts, and
-  explicitly activating another host SHALL retire the outgoing terminal and Inspector contexts.
+  disabled outside the explicitly selected host. Up to five floating Inspector conversations from
+  that host, plus the one docked Inspector, SHALL use the existing one WebSocket and terminal owner;
+  selecting an entity SHALL never switch hosts, and explicitly activating another host SHALL retire
+  the outgoing terminal and Inspector contexts.
 - Use Office as the first deep migration milestone, then promote the connected branch checkpoint to
   Tree and restore the prior spatial Graph. Checkpoint implementations SHALL NOT be represented as
   complete primary product views before their acceptance passes.
@@ -90,13 +92,13 @@ None.
 - Retires the current remote-bridge settings, browser federation, vendored `herdr-compat` crate and
   native Android build from the active product tree.
 - Re-establishes the World model and the complete defining Office, Tree and Graph experience over
-  connection-scoped snapshots, one selected operational host, one focused Inspector and one
-  shell-owned terminal registry. The current minimal Office cards, list-primary Tree and static
+  connection-scoped snapshots, one selected operational host, one docked Inspector, a bounded
+  registry of floating Inspector conversations and one shell-owned terminal registry. The current minimal Office cards, list-primary Tree and static
   branch Graph are implementation checkpoints, not accepted complete views, and the PR remains
   incomplete until selected-host conversations and all three view migrations pass acceptance.
 - Does not preserve obsolete shell chrome or behavior explicitly retired by this change.
   Simultaneous cross-host terminal and Inspector contexts are an approved breaking retirement;
   the established Pixel Office presentation, aggregate multi-host observation, selected-host
-  multi-window conversations and the explicitly listed view behavior remain required.
+  multi-Inspector conversations and the explicitly listed view behavior remain required.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.
