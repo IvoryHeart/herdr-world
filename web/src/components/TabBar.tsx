@@ -62,6 +62,7 @@ export function requestClosePane(paneId: string) {
 export function TabBar({
   mobile = false,
   inspectorOpen = false,
+  showInspector = true,
   annotationsOpen = false,
   annotationCount = 0,
   onToggleInspector,
@@ -69,6 +70,7 @@ export function TabBar({
 }: {
   mobile?: boolean;
   inspectorOpen?: boolean;
+  showInspector?: boolean;
   annotationsOpen?: boolean;
   annotationCount?: number;
   onToggleInspector?: () => void;
@@ -301,24 +303,26 @@ export function TabBar({
           </button>
           <span className="tabbar-spacer" />
           <div className="tabbar-utilities">
-            <button
-              type="button"
-              className={inspectorOpen ? "is-active" : ""}
-              aria-expanded={inspectorOpen}
-              title={shortcutTitle(
-                inspectorOpen
-                  ? "Close Workspace Inspector"
-                  : "Open Workspace Inspector",
-                "inspector.toggle",
-              )}
-              onClick={onToggleInspector}
-            >
-              <PanelRight size={14} />
-              <span>Inspector</span>
-              {changedCount > 0 ? (
-                <span className="tabbar-change-count">{changedCount}</span>
-              ) : null}
-            </button>
+            {showInspector ? (
+              <button
+                type="button"
+                className={inspectorOpen ? "is-active" : ""}
+                aria-expanded={inspectorOpen}
+                title={shortcutTitle(
+                  inspectorOpen
+                    ? "Close Workspace Inspector"
+                    : "Open Workspace Inspector",
+                  "inspector.toggle",
+                )}
+                onClick={onToggleInspector}
+              >
+                <PanelRight size={14} />
+                <span>Inspector</span>
+                {changedCount > 0 ? (
+                  <span className="tabbar-change-count">{changedCount}</span>
+                ) : null}
+              </button>
+            ) : null}
             <button
               type="button"
               className={annotationsOpen ? "is-active" : ""}

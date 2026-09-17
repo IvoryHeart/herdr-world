@@ -124,7 +124,19 @@ shell after those owners have been extracted.
 
 The Roamgate-derived top bar remains the single application header. Insert the Office/Spaces/Tree/
 Graph selector between its version and machine controls, and remove the checkpoint World navigation
-bar so every view receives the rest of the viewport without duplicating shell chrome.
+bar and the separate Visual Control Plane/status header so every view receives the rest of the
+viewport without duplicating shell chrome. Keep the selected host/runtime state and bounded
+ready/space/agent/stale summary in the inherited top bar, with compact layouts progressively hiding
+counts before they hide the selected host state.
+
+The workspace frame below that header is shared too. Keep the existing Spaces workspace navigator,
+focused tab strip and review-annotations control mounted around Office, Tree and Graph; replace the
+Graph-specific desktop outline rather than showing two competing left hierarchies. The center
+surface alone changes with the selected view. The shared frame follows the selected Herdr host and
+workspace, while `WorldObject` continues to retain the aggregate read-only topology used by the
+visualizations. Review drafts remain workspace-qualified and synchronize between every Inspector
+presentation and the one shell annotation panel. Visual views do not clone the navigator, tab or
+annotation state.
 
 ### Treat the pre-foundation Pixel Office as retained source
 

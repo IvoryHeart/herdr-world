@@ -39,7 +39,6 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import type { WorldObject } from "./worldObject";
-import type { WorldFloatingTerminal } from "./worldTerminalPresentation";
 import {
   createdRootPaneId,
   officeRoomActionCapabilities,
@@ -76,7 +75,7 @@ export default function PixelOfficeView({
   onSelect(id: string): void;
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
-  floatingTerminals: readonly WorldFloatingTerminal[];
+  floatingTerminals: readonly { nodeId: string }[];
   onConversationNodeAnchorsChange?(
     anchors: Record<string, OfficeCanvasAnchor> | null,
   ): void;

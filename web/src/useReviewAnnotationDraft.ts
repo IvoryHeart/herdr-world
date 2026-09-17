@@ -11,6 +11,15 @@ import { sameResourceOwner, type ResourceScope } from "./workspaceResource";
 
 const EMPTY_ANNOTATIONS: ReviewAnnotation[] = [];
 
+type ReviewAnnotationDraftSync = {
+  key: string;
+  annotations: ReviewAnnotation[];
+  source: object;
+};
+const annotationDraftListeners = new Set<
+  (change: ReviewAnnotationDraftSync) => void
+>();
+
 // Memory is authoritative for visited drafts, including failed writes and deletes.
 // Every mutation names its owner: hidden Inspector callbacks cannot edit another draft.
 export function useReviewAnnotationDraft(runtimeKey: string) {
@@ -20,6 +29,7 @@ export function useReviewAnnotationDraft(runtimeKey: string) {
   const [, refresh] = useState(0);
   const storageFailed = useRef(false);
   const sessionRef = useRef<object | null>(null);
+  const syncSourceRef = useRef({});
   const runtimeRef = useRef(runtimeKey);
 
   const read = useCallback((owner: ResourceScope) => {
@@ -72,10 +82,28 @@ export function useReviewAnnotationDraft(runtimeKey: string) {
       }
       storageFailed.current = !persisted;
       refresh((value) => value + 1);
+      const sync = {
+        key,
+        annotations: next,
+        source: syncSourceRef.current,
+      };
+      for (const listener of annotationDraftListeners) listener(sync);
     },
     [read],
   );
 
+  useLayoutEffect(() => {
+    const synchronize = (change: ReviewAnnotationDraftSync) => {
+      if (change.source === syncSourceRef.current) return;
+      drafts.current.set(change.key, change.annotations);
+      const selected = scopeRef.current;
+      if (selected && annotationDraftStorageKey(selected) === change.key) {
+        refresh((value) => value + 1);
+      }
+    };
+    annotationDraftListeners.add(synchronize);
+    return () => annotationDraftListeners.delete(synchronize);
+  }, []);
   useLayoutEffect(() => {
     if (runtimeRef.current === runtimeKey) return;
     runtimeRef.current = runtimeKey;

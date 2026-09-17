@@ -7,7 +7,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { PanelRightClose, X } from "lucide-react";
 import {
   clampFloatingTerminalGeometry,
   defaultFloatingTerminalGeometry,
@@ -15,7 +14,10 @@ import {
   resizeFloatingTerminalGeometry,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
-import type { WorldFloatingTerminal } from "./worldTerminalPresentation";
+import type {
+  WorldFloatingTerminal,
+  WorldInspectorConversation,
+} from "./worldTerminalPresentation";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import { worldLocalStorage } from "../browserStorage";
 import {
@@ -32,21 +34,17 @@ type Interaction = {
   geometry: FloatingTerminalGeometry;
 };
 
-export default function WorldFloatingTerminalWindow({
+export default function WorldFloatingInspectorWindow({
   conversation,
   cascadeIndex,
   compactActive,
-  onClose,
-  onDock,
   onFocus,
   onAnchorChange,
   onPortalChange,
 }: {
-  conversation: WorldFloatingTerminal;
+  conversation: WorldInspectorConversation | WorldFloatingTerminal;
   cascadeIndex: number;
   compactActive: boolean;
-  onClose(): void;
-  onDock(): void;
   onFocus(): void;
   onAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
@@ -54,8 +52,10 @@ export default function WorldFloatingTerminalWindow({
   const windowRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<Interaction | null>(null);
   const onAnchorChangeRef = useRef(onAnchorChange);
+  const onFocusRef = useRef(onFocus);
   const onPortalChangeRef = useRef(onPortalChange);
   onAnchorChangeRef.current = onAnchorChange;
+  onFocusRef.current = onFocus;
   onPortalChangeRef.current = onPortalChange;
   const setPortalRef = useCallback((element: HTMLDivElement | null) => {
     onPortalChangeRef.current(element);
@@ -73,6 +73,8 @@ export default function WorldFloatingTerminalWindow({
       viewport,
     );
   });
+  const geometryRef = useRef(geometry);
+  geometryRef.current = geometry;
 
   useEffect(() => {
     writeFloatingTerminalGeometry(worldLocalStorage, geometryId, geometry);
@@ -86,6 +88,111 @@ export default function WorldFloatingTerminalWindow({
     };
     window.addEventListener("resize", clampToViewport);
     return () => window.removeEventListener("resize", clampToViewport);
+  }, []);
+
+  useEffect(() => {
+    const element = windowRef.current;
+    if (!element) return;
+    const focusFromPointer = (event: PointerEvent) => {
+      if (event.target instanceof Element && event.target.closest("button")) {
+        return;
+      }
+      onFocusRef.current();
+    };
+    // Inspector content is rendered through a portal owned by a sibling.
+    // React events follow that logical tree, not this window's DOM ancestry,
+    // so a native capture listener is required for clicks in its resources.
+    element.addEventListener("pointerdown", focusFromPointer, true);
+    return () =>
+      element.removeEventListener("pointerdown", focusFromPointer, true);
+  }, []);
+
+  useEffect(() => {
+    const element = windowRef.current;
+    if (!element) return;
+    const interactiveSelector =
+      "button, a, input, textarea, select, [role='tab'], [role='separator']";
+    const beginMove = (event: PointerEvent) => {
+      if (event.button !== 0 || !(event.target instanceof Element)) return;
+      const header = event.target.closest(
+        ".workspace-inspector-head.is-window-drag-handle",
+      );
+      if (!header || event.target.closest(interactiveSelector)) return;
+      event.preventDefault();
+      const initial = geometryRef.current;
+      element.setPointerCapture(event.pointerId);
+      interactionRef.current = {
+        mode: "moving",
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        geometry: initial,
+      };
+      setInteraction("moving");
+    };
+    const move = (event: PointerEvent) => {
+      const current = interactionRef.current;
+      if (
+        !current ||
+        current.mode !== "moving" ||
+        current.pointerId !== event.pointerId
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setGeometry({
+        ...current.geometry,
+        ...moveFloatingTerminalPosition(
+          current.geometry,
+          event.clientX - current.startX,
+          event.clientY - current.startY,
+          viewportSize(),
+          current.geometry,
+        ),
+      });
+    };
+    const end = (event: PointerEvent) => {
+      const current = interactionRef.current;
+      if (!current || current.pointerId !== event.pointerId) return;
+      interactionRef.current = null;
+      setInteraction(null);
+      if (element.hasPointerCapture(event.pointerId)) {
+        element.releasePointerCapture(event.pointerId);
+      }
+    };
+    const moveByKeyboard = (event: KeyboardEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const header = event.target.closest(
+        ".workspace-inspector-head.is-window-drag-handle",
+      );
+      if (!header || event.target !== header) return;
+      const delta = arrowDelta(event.key, event.shiftKey ? 1 : 16);
+      if (!delta) return;
+      event.preventDefault();
+      const current = geometryRef.current;
+      setGeometry({
+        ...current,
+        ...moveFloatingTerminalPosition(
+          current,
+          delta.x,
+          delta.y,
+          viewportSize(),
+          current,
+        ),
+      });
+    };
+    element.addEventListener("pointerdown", beginMove, true);
+    element.addEventListener("pointermove", move, true);
+    element.addEventListener("pointerup", end, true);
+    element.addEventListener("pointercancel", end, true);
+    element.addEventListener("keydown", moveByKeyboard, true);
+    return () => {
+      element.removeEventListener("pointerdown", beginMove, true);
+      element.removeEventListener("pointermove", move, true);
+      element.removeEventListener("pointerup", end, true);
+      element.removeEventListener("pointercancel", end, true);
+      element.removeEventListener("keydown", moveByKeyboard, true);
+    };
   }, []);
 
   useEffect(() => {
@@ -215,7 +322,7 @@ export default function WorldFloatingTerminalWindow({
       className="world-floating-terminal"
       role="dialog"
       aria-modal="false"
-      aria-label={`${conversation.label} terminal`}
+      aria-label={`${conversation.label} Inspector`}
       data-compact-active={compactActive}
       data-interaction={interaction ?? undefined}
       style={
@@ -228,48 +335,15 @@ export default function WorldFloatingTerminalWindow({
           bottom: "auto",
         } satisfies CSSProperties
       }
-      onPointerDownCapture={onFocus}
       onPointerMove={moveInteraction}
       onPointerUp={endInteraction}
       onPointerCancel={endInteraction}
     >
-      <header
-        className="world-floating-terminal-header"
-        tabIndex={0}
-        aria-label="Move terminal window"
-        onPointerDown={(event) => beginInteraction("moving", event)}
-        onKeyDown={(event) => nudge("moving", event)}
-      >
-        <div>
-          <strong>{conversation.label}</strong>
-          <span>
-            {conversation.hostLabel} · {conversation.spaceLabel}
-          </span>
-        </div>
-        <div className="world-floating-terminal-actions">
-          <button
-            type="button"
-            onClick={onDock}
-            title="Dock terminal in Inspector"
-            aria-label="Dock terminal in Inspector"
-          >
-            <PanelRightClose size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            title="Close terminal"
-            aria-label="Close terminal"
-          >
-            <X size={15} />
-          </button>
-        </div>
-      </header>
       <div ref={setPortalRef} className="world-floating-terminal-portal" />
       <button
         type="button"
         className="world-floating-terminal-resize"
-        aria-label="Resize terminal window"
+        aria-label="Resize Inspector window"
         onPointerDown={(event) => beginInteraction("resizing", event)}
         onKeyDown={(event) => nudge("resizing", event)}
       />

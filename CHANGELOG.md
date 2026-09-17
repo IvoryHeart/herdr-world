@@ -42,12 +42,15 @@ retain their original Herdr Web lineage.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Restored the retained Pixi Office as the primary World surface and placed the
   Office/Spaces/Tree/Graph selector in the existing application top bar between
-  the version and machine controls, without a second navigation bar.
+  the version and machine controls, moved the selected-host/runtime summary into
+  that bar, removed the separate Visual Control Plane header, and retained the
+  Spaces workspace navigator, focused tabs and annotations as the common frame
+  around every view instead of duplicating Graph navigation.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Unified selected-agent identity with the shared Inspector in Office, Tree,
   Graph and Spaces; placed Terminal first and made it the default for each new
-  terminal-capable selection, while preserving compact dock, expand, pop-out,
-  handoff and close controls in every dock.
+  terminal-capable selection, with one docked and up to five independently
+  movable/resizable full Inspectors that retain their own tabs and resources.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
   provide tagged binary, archive and update identities at release time.
@@ -55,10 +58,10 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
-- Prevented floating-terminal portal publication from entering a React render
-  loop, made Inspector identity/resource handoff atomic, removed the duplicate
-  actionable-agent card and redundant Open-in-Spaces control, and kept World
-  settings visible above Office, Tree and Graph.
+- Prevented Inspector portal publication from entering a React render loop, made
+  whole-Inspector docking, swapping and identity/resource handoff atomic, removed
+  the duplicate actionable-agent card and redundant Open-in-Spaces control, and
+  kept World settings visible above Office, Tree and Graph.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Bounded both Tree presentations with relevant-entity priority and exact
   omission reporting, scoped inactive-host action checks to their owning

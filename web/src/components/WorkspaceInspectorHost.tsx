@@ -8,6 +8,8 @@ import {
   Minimize2,
   PanelBottom,
   PanelRight,
+  PanelRightClose,
+  PanelRightOpen,
   PictureInPicture2,
   SquareTerminal,
   X,
@@ -218,6 +220,9 @@ export function WorkspaceInspectorHost({
   onRefreshFile,
   onTerminalPortalChange,
   onTerminalPopOut,
+  onDockOut,
+  onDockIn,
+  controlMode = "docked",
   terminalDetached = false,
   onViewChange,
   onDockChange,
@@ -243,6 +248,9 @@ export function WorkspaceInspectorHost({
   onRefreshFile: () => void;
   onTerminalPortalChange?: (element: HTMLDivElement | null) => void;
   onTerminalPopOut?: () => void;
+  onDockOut?: () => void;
+  onDockIn?: () => void;
+  controlMode?: "docked" | "floating";
   terminalDetached?: boolean;
   onOpenDiffFile: (entry: ActiveDiffSelection["entry"]) => void;
   annotations: readonly ReviewAnnotation[];
@@ -460,7 +468,15 @@ export function WorkspaceInspectorHost({
       aria-label="Workspace Inspector"
       data-view={state.view}
     >
-      <header className="workspace-inspector-head">
+      <header
+        className={`workspace-inspector-head ${
+          controlMode === "floating" ? "is-window-drag-handle" : ""
+        }`}
+        tabIndex={controlMode === "floating" ? 0 : undefined}
+        aria-label={
+          controlMode === "floating" ? "Move Inspector window" : undefined
+        }
+      >
         {agentContext ? (
           <div className="workspace-inspector-identity workspace-inspector-agent-identity">
             <span
@@ -590,9 +606,19 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <div className="workspace-inspector-actions">
-          {state.view === "terminal" &&
-          onTerminalPopOut &&
-          !terminalDetached ? (
+          {controlMode === "docked" && onDockOut ? (
+            <button
+              type="button"
+              className="workspace-inspector-popout-action"
+              title="Float Inspector"
+              aria-label="Float Inspector"
+              onClick={onDockOut}
+            >
+              <PanelRightOpen size={15} />
+            </button>
+          ) : state.view === "terminal" &&
+            onTerminalPopOut &&
+            !terminalDetached ? (
             <button
               type="button"
               className="workspace-inspector-terminal-popout-action"
@@ -603,48 +629,81 @@ export function WorkspaceInspectorHost({
               <PictureInPicture2 size={15} />
             </button>
           ) : null}
-          <button
-            type="button"
-            className="workspace-inspector-dock-action"
-            title={state.dock === "right" ? "Dock at bottom" : "Dock at right"}
-            aria-label={
-              state.dock === "right"
-                ? "Dock Inspector at bottom"
-                : "Dock Inspector at right"
-            }
-            onClick={() =>
-              onDockChange(state.dock === "right" ? "bottom" : "right")
-            }
-          >
-            {state.dock === "right" ? (
-              <PanelBottom size={15} />
-            ) : (
-              <PanelRight size={15} />
-            )}
-          </button>
-          <button
-            type="button"
-            className="workspace-inspector-expand-action"
-            title={shortcutTitle(
-              state.expanded ? "Restore Inspector dock" : "Expand Inspector",
-              "inspector.expand",
-            )}
-            aria-label={
-              state.expanded ? "Restore Inspector dock" : "Expand Inspector"
-            }
-            aria-pressed={state.expanded}
-            onClick={() => onExpandedChange(!state.expanded)}
-          >
-            {state.expanded ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
-          <button
-            type="button"
-            title="Close Inspector"
-            aria-label="Close Workspace Inspector"
-            onClick={onClose}
-          >
-            <X size={16} />
-          </button>
+          {controlMode === "floating" ? (
+            <>
+              {onDockIn ? (
+                <button
+                  type="button"
+                  title="Dock Inspector"
+                  aria-label="Dock Inspector"
+                  onClick={onDockIn}
+                >
+                  <PanelRightClose size={15} />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                title="Close Inspector"
+                aria-label="Close floating Inspector"
+                onClick={onClose}
+              >
+                <X size={16} />
+              </button>
+            </>
+          ) : controlMode === "docked" ? (
+            <>
+              <button
+                type="button"
+                className="workspace-inspector-dock-action"
+                title={
+                  state.dock === "right" ? "Dock at bottom" : "Dock at right"
+                }
+                aria-label={
+                  state.dock === "right"
+                    ? "Dock Inspector at bottom"
+                    : "Dock Inspector at right"
+                }
+                onClick={() =>
+                  onDockChange(state.dock === "right" ? "bottom" : "right")
+                }
+              >
+                {state.dock === "right" ? (
+                  <PanelBottom size={15} />
+                ) : (
+                  <PanelRight size={15} />
+                )}
+              </button>
+              <button
+                type="button"
+                className="workspace-inspector-expand-action"
+                title={shortcutTitle(
+                  state.expanded
+                    ? "Restore Inspector dock"
+                    : "Expand Inspector",
+                  "inspector.expand",
+                )}
+                aria-label={
+                  state.expanded ? "Restore Inspector dock" : "Expand Inspector"
+                }
+                aria-pressed={state.expanded}
+                onClick={() => onExpandedChange(!state.expanded)}
+              >
+                {state.expanded ? (
+                  <Minimize2 size={15} />
+                ) : (
+                  <Maximize2 size={15} />
+                )}
+              </button>
+              <button
+                type="button"
+                title="Close Inspector"
+                aria-label="Close Workspace Inspector"
+                onClick={onClose}
+              >
+                <X size={16} />
+              </button>
+            </>
+          ) : null}
         </div>
       </header>
 

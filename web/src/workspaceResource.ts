@@ -1,4 +1,4 @@
-import type { TerminalReviewAnnotation } from "./annotations";
+import type { ReviewAnnotation } from "./annotations";
 import { getShortcutSnapshot } from "./shortcutPreferences";
 import { matchesShortcut, type ShortcutBindings } from "./shortcutBindings";
 import type { Workspace } from "./types";
@@ -70,7 +70,7 @@ export interface WorkspaceAnnotationRequest {
   connectionId: string;
   generation: number;
   workspaceId: string;
-  annotation: TerminalReviewAnnotation;
+  annotation: ReviewAnnotation;
 }
 export type InspectorDock = "right" | "bottom";
 

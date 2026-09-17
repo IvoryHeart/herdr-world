@@ -1102,6 +1102,7 @@ export default function App({
   inspectorPortal = null,
   topbarPortal = null,
   primaryViewControl = null,
+  workspaceSurface = null,
   worldTerminalPresentations = [],
   onInspectorVisibilityChange,
   onInspectorViewChange,
@@ -1112,12 +1113,14 @@ export default function App({
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
+  workspaceSurface?: ReactNode;
   worldTerminalPresentations?: readonly WorldTerminalPresentation[];
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
   inspectorContext?: WorkspaceInspectorContext | null;
 } = {}) {
+  const hasWorkspaceSurface = workspaceSurface !== null;
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
@@ -2312,22 +2315,24 @@ export default function App({
         );
       if (
         !annotation ||
-        annotation.source !== "terminal" ||
         !workspace ||
-        !store
-          .get()
-          .panes.some(
-            (pane) =>
-              pane.pane_id === annotation.paneId &&
-              pane.workspace_id === detail.workspaceId,
-          )
+        (annotation.source === "terminal" &&
+          !store
+            .get()
+            .panes.some(
+              (pane) =>
+                pane.pane_id === annotation.paneId &&
+                pane.workspace_id === detail.workspaceId,
+            ))
       )
         return;
       const scope = resourceScopeForWorkspace(
         connectionClient.connectionId,
         workspace,
       );
-      setAnnotationDraftScope(scope, true, annotation.paneId);
+      const preferredPaneId =
+        annotation.source === "terminal" ? annotation.paneId : undefined;
+      setAnnotationDraftScope(scope, true, preferredPaneId);
       updateAnnotationDraft(scope, (current) =>
         current.some((item) => item.id === annotation.id)
           ? current
@@ -3711,7 +3716,10 @@ export default function App({
           <TabBar
             key={`${resourceUiKey}:tabs`}
             mobile={mobile}
-            inspectorOpen={inspectorState?.open === true}
+            inspectorOpen={
+              !hasWorkspaceSurface && inspectorState?.open === true
+            }
+            showInspector={!hasWorkspaceSurface}
             annotationsOpen={annotationsOpen}
             annotationCount={annotations.length}
             onToggleInspector={toggleWorkspaceInspector}
@@ -3723,13 +3731,21 @@ export default function App({
             <div
               ref={inspectorPortal ? undefined : inspectorStageRef}
               className={`workspace-stage ${
-                inspectorState?.open
+                !hasWorkspaceSurface && inspectorState?.open
                   ? `has-inspector inspector-dock-${inspectorState.dock}`
                   : ""
-              } ${inspectorState?.open && inspectorState.expanded ? "is-inspector-expanded" : ""}`}
+              } ${
+                !hasWorkspaceSurface &&
+                inspectorState?.open &&
+                inspectorState.expanded
+                  ? "is-inspector-expanded"
+                  : ""
+              }`}
             >
               <div className="workspace-terminal-surface">
-                {terminalPresentation === "spaces" ? (
+                {hasWorkspaceSurface ? (
+                  workspaceSurface
+                ) : terminalPresentation === "spaces" ? (
                   <TerminalPaneLayout
                     terminalTheme={terminalTheme}
                     uiScale={uiScale}
@@ -3743,7 +3759,8 @@ export default function App({
                   />
                 ) : null}
               </div>
-              {!inspectorPortal &&
+              {!hasWorkspaceSurface &&
+              !inspectorPortal &&
               inspectorState?.open &&
               !inspectorState.expanded ? (
                 <div
@@ -3758,7 +3775,7 @@ export default function App({
                   onPointerDown={startInspectorResize}
                 />
               ) : null}
-              {!inspectorPortal ? inspectorSlot : null}
+              {!hasWorkspaceSurface && !inspectorPortal ? inspectorSlot : null}
             </div>
             <AnnotationPanel
               key={annotationStorageKey}

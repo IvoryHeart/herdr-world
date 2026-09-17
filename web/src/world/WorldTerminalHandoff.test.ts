@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -12,11 +12,12 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "a floating Inspector keeps one portal through parent selection renders",
+  "Office preserves independent live Inspector state across float, focus, dock swap, and close",
   async () => {
-    const dir = await mkdtemp(join(tmpdir(), "world-floating-terminal-"));
+    const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
-    const result = Promise.withResolvers<Record<string, unknown>>();
+    const result = Promise.withResolvers<unknown>();
+    const publicDir = join(import.meta.dir, "..", "..", "public");
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -28,8 +29,12 @@ test.skipIf(!chrome)(
         }
         const asset = assets.get(path);
         if (asset) return new Response(asset);
+        if (path.startsWith("/world/") || path.endsWith(".svg")) {
+          const file = Bun.file(join(publicDir, path.slice(1)));
+          if (await file.exists()) return new Response(file);
+        }
         return new Response(
-          '<body><script type="module" src="/WorldFloatingTerminal.browser.js"></script></body>',
+          '<head><link rel="stylesheet" href="/WorldTerminalHandoff.browser.css"></head><body><script type="module" src="/WorldTerminalHandoff.browser.js"></script></body>',
           { headers: { "Content-Type": "text/html" } },
         );
       },
@@ -38,10 +43,31 @@ test.skipIf(!chrome)(
     try {
       const build = await Bun.build({
         entrypoints: [
-          join(import.meta.dir, "WorldFloatingTerminal.browser.tsx"),
+          join(import.meta.dir, "WorldTerminalHandoff.browser.tsx"),
         ],
         outdir: dir,
         target: "browser",
+        plugins: [
+          {
+            name: "vite-raw-svg",
+            setup(builder) {
+              builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
+                path: Bun.resolveSync(
+                  args.path.slice(0, -"?raw".length),
+                  dirname(args.importer),
+                ),
+                namespace: "vite-raw-svg",
+              }));
+              builder.onLoad(
+                { filter: /.*/, namespace: "vite-raw-svg" },
+                async (args) => ({
+                  contents: `export default ${JSON.stringify(await Bun.file(args.path).text())}`,
+                  loader: "js",
+                }),
+              );
+            },
+          },
+        ],
       });
       expect(build.success).toBe(true);
       for (const output of build.outputs) {
@@ -52,13 +78,15 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          "--window-size=1280,900",
-          "--disable-gpu",
+          "--window-size=1440,1000",
+          "--enable-webgl",
+          "--use-angle=swiftshader",
+          "--enable-unsafe-swiftshader",
           "--disable-background-networking",
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          server.url.href,
+          `${server.url.href}office`,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
@@ -71,23 +99,17 @@ test.skipIf(!chrome)(
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () =>
-              reject(new Error("Floating Inspector browser check timed out")),
-            10_000,
+            () => reject(new Error("World terminal handoff timed out")),
+            35_000,
           ),
         ),
       ]);
-      expect(observed).toEqual({
-        failures: [],
-        portal: "ready",
-        inspectorLabel: "Reviewer Inspector",
-        windows: 1,
-      });
+      expect(observed).toEqual([]);
     } finally {
       browser?.kill();
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }
   },
-  15_000,
+  45_000,
 );

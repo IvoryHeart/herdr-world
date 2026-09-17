@@ -22,6 +22,18 @@
   flex: 0 0 auto;
 }
 
+.world-topbar-control-plane,
+.world-topbar-status {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.world-topbar-control-plane {
+  gap: 10px;
+  overflow: hidden;
+}
+
 .world-primary-view-select select {
   height: 30px;
   min-width: 92px;
@@ -62,16 +74,6 @@
     var(--bg, #0e1116);
 }
 
-.world-status-header {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 24px 14px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--border, #343942) 60%, transparent);
-}
 .world-eyebrow {
   margin: 0 0 4px;
   color: var(--accent, #79a6ff);
@@ -80,20 +82,20 @@
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
-.world-status-header h1 {
-  margin: 0;
-  font-size: 21px;
-  letter-spacing: -0.025em;
-}
-.world-status-summary {
+.world-topbar-status {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: end;
-  gap: 7px 13px;
+  gap: 9px;
+  overflow: hidden;
   color: var(--muted, #9da7b4);
-  font-size: 11px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.world-topbar-status > span:not(.world-live-dot) {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .world-live-dot {
+  flex: 0 0 auto;
   width: 8px;
   height: 8px;
   margin-top: 3px;
@@ -388,24 +390,10 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--accent, #79a6ff) 55%, transparent);
+  border: 0;
   border-radius: 12px;
-  background: var(--bg, #0e1116);
-  box-shadow: 0 20px 64px rgb(0 0 0 / 45%);
-}
-
-.world-floating-terminal-header {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px 8px 14px;
-  border-bottom: 1px solid
-    color-mix(in srgb, var(--text, #fff) 14%, transparent);
-  cursor: move;
-  user-select: none;
-  touch-action: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .world-floating-terminal[data-interaction="moving"],
@@ -413,43 +401,40 @@
   user-select: none;
 }
 
-.world-floating-terminal-header > div:first-child {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.world-floating-terminal-header strong,
-.world-floating-terminal-header span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.world-floating-terminal-header span {
-  color: var(--text-secondary, #9ba7b7);
-  font-size: 11px;
-}
-
-.world-floating-terminal-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.world-floating-terminal-actions button {
-  width: 32px;
-  height: 32px;
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-}
-
 .world-floating-terminal-portal {
+  width: 100%;
   min-width: 0;
   min-height: 0;
   flex: 1;
   display: flex;
+}
+
+.world-floating-inspector-content,
+.world-floating-inspector-content > .workspace-inspector-slot {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  display: flex;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.world-floating-inspector-content .workspace-inspector {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  flex: 1;
+}
+
+.world-floating-inspector-content
+  .workspace-inspector-head.is-window-drag-handle {
+  cursor: move;
+  user-select: none;
+  touch-action: none;
 }
 
 .world-floating-terminal-portal > .terminal-shell {
@@ -477,6 +462,7 @@
   );
   cursor: nwse-resize;
   touch-action: none;
+  z-index: 2;
 }
 
 @media (max-width: 720px) {
@@ -488,10 +474,6 @@
     inset: 8px;
     width: auto;
     height: auto;
-  }
-
-  .world-floating-terminal-header {
-    align-items: flex-start;
   }
 }
 
@@ -1446,6 +1428,17 @@
   display: grid;
   grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
 }
+
+@media (min-width: 721px) {
+  .world-foundation-shell .world-spatial-graph-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .world-foundation-shell .world-spatial-graph-outline {
+    display: none;
+  }
+}
+
 .world-spatial-graph-outline {
   min-width: 0;
   min-height: 0;
@@ -1668,14 +1661,7 @@
     padding: 0 4px;
     font-size: 11px;
   }
-  .world-status-header {
-    align-items: start;
-    padding: 13px 14px 11px;
-  }
-  .world-status-header h1 {
-    font-size: 17px;
-  }
-  .world-status-summary span:not(.world-live-dot):nth-of-type(n + 4) {
+  .world-topbar-status > span:not(.world-live-dot):nth-of-type(n + 3) {
     display: none;
   }
   .world-context-rail {

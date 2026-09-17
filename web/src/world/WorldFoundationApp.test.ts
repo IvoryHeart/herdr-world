@@ -22,6 +22,36 @@ import {
   worldViewFromPath,
 } from "./WorldFoundationApp";
 import { buildWorldObject } from "./worldObject";
+import {
+  retainWorldInspectorConversations,
+  upsertWorldInspectorConversation,
+  type WorldInspectorConversation,
+} from "./worldTerminalPresentation";
+
+function inspectorConversation(index: number): WorldInspectorConversation {
+  return {
+    nodeId: `node-${index}`,
+    connectionId: "local",
+    runtimeGeneration: 4,
+    workspaceId: "studio",
+    paneId: `pane-${index}`,
+    terminalId: `terminal-${index}`,
+    label: `Agent ${index}`,
+    hostLabel: "Local",
+    spaceLabel: "Studio",
+    context: {
+      kind: "agent",
+      label: `Agent ${index}`,
+      stateLabel: "Working",
+      locationLabel: "Studio · Local",
+    },
+    availableViews: ["terminal", "files", "changes", "history"],
+    view: "terminal",
+    dock: "right",
+    expanded: false,
+    size: 520,
+  };
+}
 
 describe("World view preference", () => {
   test("admits only canonical native views", () => {
@@ -818,6 +848,38 @@ describe("World view preference", () => {
       }),
     ).toEqual([conversations[0]]);
     expect(retainWorldFloatingTerminals(conversations, null)).toEqual([]);
+  });
+
+  test("bounds independently stateful floating Inspector conversations", () => {
+    const conversations = Array.from({ length: 5 }, (_, index) =>
+      inspectorConversation(index),
+    );
+    expect(
+      upsertWorldInspectorConversation(conversations, {
+        ...conversations[0]!,
+        view: "files",
+      }),
+    ).toEqual({
+      conversations: [
+        ...conversations.slice(1),
+        { ...conversations[0]!, view: "files" },
+      ],
+      admitted: true,
+    });
+    expect(
+      upsertWorldInspectorConversation(conversations, inspectorConversation(6)),
+    ).toEqual({ conversations, admitted: false });
+  });
+
+  test("retires whole Inspectors outside their exact runtime lease", () => {
+    const current = inspectorConversation(0);
+    const old = { ...inspectorConversation(1), runtimeGeneration: 3 };
+    expect(
+      retainWorldInspectorConversations([current, old], {
+        connectionId: "local",
+        runtimeGeneration: 4,
+      }),
+    ).toEqual([current]);
   });
 
   test("does not dispatch Inspector work after a generation replacement", async () => {

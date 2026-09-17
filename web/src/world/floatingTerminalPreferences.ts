@@ -3,7 +3,7 @@ import {
   type FloatingTerminalGeometry,
   type FloatingTerminalSize,
 } from "./floatingTerminalGeometry";
-import type { WorldFloatingTerminal } from "./worldTerminalPresentation";
+import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 
 export const FLOATING_TERMINAL_GEOMETRY_KEY =
   "worldFloatingTerminalGeometry:v1";
@@ -13,9 +13,15 @@ type GeometryStorage = Pick<Storage, "getItem" | "setItem">;
 type SavedGeometry = { id: string; geometry: FloatingTerminalGeometry };
 
 export function floatingTerminalGeometryId(
-  terminal: Pick<WorldFloatingTerminal, "connectionId" | "terminalId">,
+  inspector: Pick<WorldInspectorConversation, "connectionId"> & {
+    nodeId?: string;
+    terminalId?: string;
+  },
 ) {
-  return JSON.stringify([terminal.connectionId, terminal.terminalId]);
+  return JSON.stringify([
+    inspector.connectionId,
+    inspector.nodeId ?? inspector.terminalId,
+  ]);
 }
 
 export function readFloatingTerminalGeometry(

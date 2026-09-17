@@ -1,7 +1,7 @@
 import { StrictMode, useState } from "react";
 import { createRoot } from "react-dom/client";
 import WorldFloatingTerminalWindow from "./WorldFloatingTerminal";
-import type { WorldFloatingTerminal } from "./worldTerminalPresentation";
+import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import "./world.css";
 
 const failures: string[] = [];
@@ -11,7 +11,7 @@ window.addEventListener("error", (event) => {
   );
 });
 
-const first: WorldFloatingTerminal = {
+const first: WorldInspectorConversation = {
   nodeId: "agent:local:one",
   connectionId: "local",
   runtimeGeneration: 4,
@@ -20,6 +20,18 @@ const first: WorldFloatingTerminal = {
   label: "Builder",
   hostLabel: "Local",
   spaceLabel: "Studio",
+  workspaceId: "studio",
+  context: {
+    kind: "agent",
+    label: "Builder",
+    stateLabel: "Working",
+    locationLabel: "Studio · Local",
+  },
+  availableViews: ["terminal", "files", "changes", "history"],
+  view: "terminal",
+  dock: "right",
+  expanded: false,
+  size: 520,
 };
 
 function Fixture() {
@@ -48,8 +60,6 @@ function Fixture() {
         conversation={conversation}
         cascadeIndex={0}
         compactActive
-        onClose={() => {}}
-        onDock={() => {}}
         onFocus={() => {}}
         onAnchorChange={() => {}}
         onPortalChange={(element) =>
@@ -80,8 +90,9 @@ setTimeout(() => {
     const result = {
       failures,
       portal: host.querySelector('[data-testid="portal-state"]')?.textContent,
-      terminalLabel: host.querySelector(".world-floating-terminal strong")
-        ?.textContent,
+      inspectorLabel: host
+        .querySelector(".world-floating-terminal")
+        ?.getAttribute("aria-label"),
       windows: host.querySelectorAll(".world-floating-terminal").length,
     };
     void fetch("/result", {

@@ -2,7 +2,7 @@ import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import type { WorldRuntimeState } from "./runtimeStore";
 import type { WorldObject } from "./worldObject";
 
-export function WorldStatusHeader({
+export function WorldTopbarStatus({
   runtime,
   world,
   selectedHostLabel,
@@ -17,27 +17,27 @@ export function WorldStatusHeader({
   ).length;
   const stale = world.hosts.filter((host) => host.stale).length;
   return (
-    <header className="world-status-header">
-      <div>
-        <p className="world-eyebrow">Visual control plane</p>
-        <h1>Your agent world</h1>
-      </div>
-      <div className="world-status-summary" aria-live="polite">
-        <span className="world-live-dot" data-status={runtime.status} />
-        <span>{ready} ready</span>
-        <span className="world-selected-host">{selectedHostLabel}</span>
-        <span>{world.spaces.length} spaces</span>
-        <span>
-          {world.leaves.filter((leaf) => leaf.kind === "agent").length} agents
+    <div
+      className="world-topbar-status"
+      aria-label="World status"
+      aria-live="polite"
+    >
+      <span className="world-live-dot" data-status={runtime.status} />
+      <span className="world-selected-host">{selectedHostLabel}</span>
+      <span title={`${ready} ready hosts`}>{ready} ready</span>
+      <span title={`${world.spaces.length} spaces`}>
+        {world.spaces.length} spaces
+      </span>
+      <span title="Visible agents">
+        {world.leaves.filter((leaf) => leaf.kind === "agent").length} agents
+      </span>
+      {stale ? <span className="world-stale-count">{stale} stale</span> : null}
+      {runtime.error ? (
+        <span className="world-runtime-error" title={runtime.error}>
+          World error
         </span>
-        {stale ? (
-          <span className="world-stale-count">{stale} stale</span>
-        ) : null}
-        {runtime.error ? (
-          <span className="world-runtime-error">{runtime.error}</span>
-        ) : null}
-      </div>
-    </header>
+      ) : null}
+    </div>
   );
 }
 
