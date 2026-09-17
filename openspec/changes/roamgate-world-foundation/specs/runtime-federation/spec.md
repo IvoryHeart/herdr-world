@@ -68,5 +68,6 @@ store passwords, private keys, passphrases or arbitrary SSH options.
 
 #### Scenario: Several hosts are connected
 - **WHEN** two or more compatible profiles are ready
-- **THEN** World can present all of their qualified entities concurrently while connection-specific
-  workspace tools continue to operate on exactly one selected profile
+- **THEN** the service keeps their isolated runtimes connected concurrently and World can present
+  all qualified entities while Spaces and its connection-specific workspace tools continue to
+  operate on exactly one selected profile

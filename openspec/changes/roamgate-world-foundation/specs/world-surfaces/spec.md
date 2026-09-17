@@ -14,6 +14,11 @@ does not create a competing terminal attachment. Selection SHALL not itself muta
 handoff or Inspector actions SHALL revalidate the exact connection and runtime generation and
 SHALL be unavailable for stale observations.
 
+Spaces SHALL keep its Roamgate-derived one-selected-connection interaction model. That selection
+SHALL NOT limit the shared visual conversation owner to one host: Office, Tree and Graph SHALL
+support retained qualified terminal conversations from several concurrently ready runtimes over
+the one World browser transport.
+
 #### Scenario: Move between Spaces and a visual view
 - **WHEN** a user opens a qualified terminal in Spaces, visits Office, Tree or Graph and returns
 - **THEN** the same Spaces application and terminal ownership remain available without another
@@ -191,6 +196,53 @@ actions. Missing metadata SHALL remain absent rather than being inferred.
 - **WHEN** an agent exposes no task summary, model label or state label
 - **THEN** the drawer remains useful without fabricating what the agent is doing or implemented
 
+### Requirement: Qualified task-summary reporting
+World SHALL provide and document a supported producer for reporting, updating and clearing an
+optional task summary through the owning Herdr runtime's metadata API. A report SHALL be bound to
+the pane's active agent session, normalized, limited to 160 Unicode characters, filtered for
+obvious credential-shaped values and assigned a bounded expiry no longer than 24 hours. The
+default expiry SHALL be 15 minutes. Reporting SHALL NOT require the World web service to start and
+SHALL NOT make task summaries mandatory for local or SSH operation.
+
+#### Scenario: Harness publishes and updates current work
+- **WHEN** a harness reports a task summary for a pane with an active agent session and later
+  reports a replacement
+- **THEN** World presents only the latest bounded summary for that exact qualified pane and session
+
+#### Scenario: Harness clears current work
+- **WHEN** the producer clears the task summary for its exact pane and active session
+- **THEN** the summary disappears after Herdr admits the metadata update without restarting World
+
+#### Scenario: Summary expires or the session changes
+- **WHEN** a reported summary reaches its expiry or its bound agent session is replaced
+- **THEN** World stops presenting it and never carries it to another pane, session or host
+
+#### Scenario: Remote host has no summary producer
+- **WHEN** an SSH-connected Herdr runtime has no optional task-summary producer installed
+- **THEN** its topology, agents, terminals and actions remain usable and World does not infer a
+  summary
+
+### Requirement: Operational agent and pane watchlist
+World SHALL let a user Pin and Unpin an exact connection-qualified live agent or terminal pane and
+filter the relevant agent/pane presentation to Pinned only. The bounded World-owned watchlist SHALL
+survive browser refresh, SHALL remain distinct from workspace pins and Graph position pins, and
+SHALL never use a native pane identifier without its connection identity. A stale pinned item MAY
+retain bounded inspection context and be unpinned, but SHALL NOT admit runtime actions. World SHALL
+remove a pin after current authoritative state confirms that exact pane no longer exists.
+
+#### Scenario: Pin colliding pane identifiers
+- **WHEN** two hosts expose the same native pane identifier and the user pins one
+- **THEN** only the selected qualified pane is pinned and Pinned only does not include the other
+
+#### Scenario: Pinned host disconnects
+- **WHEN** a pinned pane's host becomes stale or reconnects into a new runtime generation
+- **THEN** the pin never redirects to a colliding pane, runtime actions remain unavailable until
+  the exact target is re-admitted, and the user can remove the watchlist entry
+
+#### Scenario: Pinned pane is authoritatively removed
+- **WHEN** a current admitted snapshot confirms that the exact pinned pane no longer exists
+- **THEN** World prunes its pin rather than retaining an actionable orphan
+
 ### Requirement: Pixel Office scene
 Office SHALL preserve the established Pixel Office composition rather than replace it with generic
 workspace cards. It SHALL present a CEO Office with the user/CEO, one qualified reception station
@@ -237,6 +289,12 @@ CSS-pixel semantic targets and a compact Agents/Rooms/Desks chooser. Capability-
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
 
+When several agents share one tab, Office SHALL choose at most one deterministic seated occupant
+using the established state/focus priority and SHALL present the remaining agents standing in their
+owning room. Agents belonging to tabs omitted beyond the eight-desk presentation bound SHALL also
+remain present as standing agents. Desks and agents SHALL keep distinct, nonduplicated semantic
+targets.
+
 #### Scenario: Agent status changes location
 - **WHEN** an admitted agent changes from working to blocked and later to done
 - **THEN** the same qualified agent moves from its room to reception and then the Agent Bar while
@@ -245,8 +303,32 @@ room at eight desks SHALL retain a disabled Room Full affordance rather than hid
 #### Scenario: Create a seat in a room
 - **WHEN** the selected host advertises the required capability and the user invokes the next desk
   action
-- **THEN** World uses the admitted launcher path for that room and shows the desk only after Herdr
-  admits the resulting tab
+- **THEN** World uses the admitted launcher path for that room, shows the desk only after Herdr
+  admits the resulting tab and pane, and selects or opens that exact new qualified terminal
+
+#### Scenario: Seat creation is cancelled or fails
+- **WHEN** the user cancels seat creation or the launcher fails before Herdr admits a new pane
+- **THEN** Office preserves the prior selection and every existing conversation window
+
+#### Scenario: Several agents share a tab or exceed the desk bound
+- **WHEN** several agents occupy one tab or an agent belongs to a ninth or later tab
+- **THEN** Office presents one deterministic occupant per visible desk, keeps every other admitted
+  agent standing in the owning room and exposes no duplicate semantic target
+
+#### Scenario: User inspects a completion
+- **WHEN** the user selects a completion marker, originating desk, notice or corresponding agent
+- **THEN** Office opens or focuses the exact qualified terminal and marks that completion seen only
+  after activation succeeds
+
+#### Scenario: Completion activation is unavailable
+- **WHEN** a completion target is stale, incompatible or cannot be opened
+- **THEN** Office retains its unseen marker and bounded notice, explains that inspection is
+  unavailable and does not treat selection as acknowledgement
+
+#### Scenario: Several completions arrive
+- **WHEN** several distinct completions are admitted before the user inspects them
+- **THEN** Office deduplicates repeated evidence for the same completion and retains a bounded,
+  individually targetable presentation for the distinct unseen completions
 
 #### Scenario: Room action is unavailable
 - **WHEN** a room is stale, full or its host lacks the required capability
@@ -266,6 +348,12 @@ controls. Compact layouts SHALL present one active usable conversation. Spatial 
 each window to its represented desk, agent or node and keep that association legible when either
 endpoint moves or leaves the visible stage.
 
+Conversation identity and validity SHALL be qualified by connection and runtime generation rather
+than by the currently selected Spaces host. Changing the selected Spaces connection, opening
+another World window or navigating among views SHALL NOT detach, redirect or duplicate conversations
+owned by other ready hosts. Reconnecting one host SHALL invalidate only that host's retired
+generation.
+
 #### Scenario: Open the same terminal from two representations
 - **WHEN** a user opens an agent and then its occupied desk or hierarchy node
 - **THEN** World focuses one qualified conversation and does not create another transport or send
@@ -275,6 +363,17 @@ endpoint moves or leaves the visible stage.
 - **WHEN** a live conversation exists and the user changes World views or chooses Open in Spaces
 - **THEN** terminal identity and session ownership remain stable, view-local geometry is preserved
   where applicable and Spaces receives focus without reattaching another session
+
+#### Scenario: Keep conversations from two hosts
+- **WHEN** a user opens one local and one SSH conversation whose native terminal identifiers may
+  collide, then changes the selected Spaces host or opens another visual conversation
+- **THEN** both original conversations remain attached to their exact connection and runtime
+  generation without redirect, detach or duplicate input
+
+#### Scenario: One conversation host reconnects
+- **WHEN** one host reconnects while conversations from that and another host are open
+- **THEN** World retires only the replaced host generation and leaves the unrelated host's terminal
+  session usable
 
 #### Scenario: Conversation target temporarily disappears
 - **WHEN** a snapshot refresh or reconnect temporarily omits a conversation target

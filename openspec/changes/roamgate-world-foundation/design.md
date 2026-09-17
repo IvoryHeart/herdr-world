@@ -17,6 +17,8 @@ shared World model plus Office, Tree and Graph.
 - Preserve qualified identity and failure isolation while moving federation into the service.
 - Restore the mature Pixel Office, live visual-view terminal windows and force-directed Graph;
   adopt the new connected branch diagram as Tree and retain the useful selected-entity drawer.
+- Preserve simultaneous host-qualified visual conversations, the agent/pane watchlist and the
+  supported task-summary reporting workflow without changing Spaces' focused-host interaction.
 - Keep the replacement reviewable through staged commits and requirement-linked checks.
 
 **Non-Goals:**
@@ -30,6 +32,8 @@ shared World model plus Office, Tree and Graph.
 - Bit-for-bit preservation of obsolete Herdr Web shell chrome, browser-federation settings or
   retired profile stores. Presentation behavior and geometry that define Office and Graph remain
   required even when their integration seam changes.
+- Restoring the former free-form World notes store. Review annotations remain a separate workflow
+  and are not described as migrated notes.
 
 ## Decisions
 
@@ -58,11 +62,13 @@ replace its authenticated session.
 
 ### Extend the existing connection manager for aggregate observation
 
-Roamgate currently keeps multiple runtimes but gives each browser one selected connection. The
-workspace/Inspector surface retains that focused-connection model. A bounded aggregate observation
-path publishes status and snapshots for all ready profiles into a browser store keyed by connection
-ID and generation. WorldObject is projected from that store. Mutations, resource requests and
-terminal attachments always resolve back to one qualified runtime and never fall back.
+The pinned Roamgate source, and upstream main as rechecked during specification review, keep
+multiple local or SSH runtimes ready concurrently while giving each browser one selected connection
+for workspace/Inspector interaction. The workspace/Inspector surface retains that focused
+connection model. A bounded aggregate observation path publishes status and snapshots for all
+ready profiles into a browser store keyed by connection ID and generation. WorldObject is projected
+from that store. Mutations, resource requests and terminal attachments always resolve back to one
+qualified runtime and never fall back.
 
 World-to-Spaces handoff disables the focused-store reconnect retry because that generic convenience
 captures a new active lease. A World action is instead bound to the observed connection and runtime
@@ -114,10 +120,35 @@ competing transport. Up to five desktop conversations retain independent geometr
 compact layouts expose one usable conversation at a time. Explicit handoff moves focus to the
 already-mounted Spaces experience without changing the terminal identity.
 
+The inherited browser API currently invalidates every scoped client and disposes the outgoing
+Spaces terminals when its selected connection changes. World conversations therefore use
+shell-owned, connection-qualified leases whose validity depends on the shared browser transport and
+the owning runtime generation, not on the selected Spaces connection. They still use the single
+browser WebSocket and the service's existing connection-routed terminal bridges; World does not
+open a WebSocket, SSH tunnel or terminal attachment manager per host. Selecting another Spaces host
+disposes only the outgoing Spaces mounts. Reconnecting one runtime invalidates only conversations
+owned by that runtime and cannot redirect or detach another host's conversations.
+
 The presenter owns only window geometry, z-order and scene connectors. It never owns terminal
-transport, pane lifecycle or reconnect authority. A conversation survives projection refreshes and
-temporary reconnect state, and closes automatically only after current admitted state confirms the
-qualified pane no longer exists.
+transport, pane lifecycle or reconnect authority. A conversation survives projection refreshes,
+visual-view changes and selection of another Spaces host, and closes automatically only after
+current admitted state confirms the qualified pane no longer exists.
+
+### Restore operational summaries and pane pinning at the new seam
+
+Task summaries remain optional Herdr pane metadata, but optional data needs a supported producer.
+Port the bounded report/update/clear command as a World CLI mode that talks directly to the owning
+Herdr metadata API and does not require the World web service to start. It remains bound to the
+pane's active agent session, expires, normalizes and redacts content, and can run wherever the
+owning local or remote Herdr socket is reachable. SSH display and control remain fully usable when
+that optional producer is not installed on the remote host.
+
+Port the old pane/agent watchlist into the World service with connection-qualified records and a
+bounded World-owned store. This pin means “keep this live agent or terminal in my operational
+watchlist”; it is distinct from Roamgate workspace pins and Graph position pins. Pin, unpin and
+Pinned-only presentation revalidate the owning runtime and prune panes that are authoritatively
+gone. The former free-form notes store remains retired rather than being conflated with review
+annotations.
 
 ### Promote the checkpoint branch diagram to Tree
 
@@ -179,8 +210,8 @@ browser keys untouched for rollback but does not read them.
   explicit per-view feature contracts, retained synthetic fixtures and rendered visual evidence;
   do not mark a view complete from hierarchy tests alone.
 - **Porting the old terminal component can create duplicate pane attachments** → Keep transport and
-  reconnect ownership in the new shell and test that repeated selections and view changes preserve
-  one qualified session.
+  reconnect ownership in the new shell and test that repeated selections, selected-host changes and
+  view changes preserve one qualified session per terminal across several hosts.
 - **Upstream Roamgate evolves quickly** → Pin and validate one exact synchronization point; future
   refreshes are explicit upstream-sync changes rather than floating dependencies.
 - **Dropping native Android changes distribution expectations** → Keep mobile/PWA behavior in

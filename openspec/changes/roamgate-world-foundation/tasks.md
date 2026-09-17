@@ -54,21 +54,23 @@
 - [ ] 8.2 Replace the checkpoint selection panel with one shared Office/Tree/Graph detail drawer showing qualified ancestry, freshness and supported actions, and verify stale or generation-replaced targets become read-only
 - [ ] 8.3 Route drawer Files, Changes, Agent History, terminal and Spaces actions through their exact owning connection/generation, and verify colliding native identifiers cannot cross hosts
 - [ ] 8.4 Add view-local validated preference namespaces and bounded view error containment, and verify one failed or malformed presenter does not stop Spaces, runtime observation or existing terminals
+- [ ] 8.5 Port the bounded session-qualified task-summary report/update/clear producer over Herdr metadata, and verify normalization, redaction, expiry, session replacement and local/SSH presentation without requiring a remote World web service
+- [ ] 8.6 Add a bounded connection-qualified agent/pane watchlist with Pin, Unpin and Pinned-only controls distinct from workspace and Graph-position pins, and verify persistence, colliding IDs, stale generations and authoritative pane removal
 
 ## 9. Shared live terminal conversations
 
-- [ ] 9.1 Add a shell-owned qualified conversation registry over the existing terminal/session owner, and verify repeated agent, desk and hierarchy selections focus one session without a competing attachment
+- [ ] 9.1 Add a shell-owned qualified conversation registry over the existing one-WebSocket terminal/session owner whose per-connection leases are independent of the selected Spaces host, and verify repeated agent, desk and hierarchy selections focus one session without a competing attachment
 - [ ] 9.2 Restore up to five independent desktop conversation windows with bounded move, resize, order, close/focus, real terminal refit and validated browser-local geometry, and verify duplicate and sixth-window behavior
 - [ ] 9.3 Restore view-specific desk/agent/node connectors plus explicit handoff to the mounted Spaces pane, and verify connectors track scene/window movement without changing terminal identity
-- [ ] 9.4 Preserve conversations through projection refresh and temporary reconnect state until current admitted state confirms pane removal, and verify compact layouts expose one accessible usable conversation
+- [ ] 9.4 Preserve conversations through projection refresh, visual navigation and unrelated selected-host changes; isolate one host's reconnect/removal to its own qualified sessions, and verify simultaneous local/SSH conversations plus a compact layout with one accessible usable conversation
 
 ## 10. Pixel Office migration
 
-- [ ] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify working/unknown, blocked, idle and done transitions retain identity and ancestry
+- [ ] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify working/unknown, blocked, idle and done transitions plus shared-tab and beyond-eight-desk agents retain one deterministic, nonduplicated identity and ancestry
 - [ ] 10.2 Port deterministic Office geometry/publication with content-sized two-to-eight-seat rooms, title/action containment, natural row packing, alignment, logical scrolling and stale-render acknowledgement, and verify dense/long-title fixtures
 - [ ] 10.3 Port the Pixel Office renderer with CEO Office, host receptions, boards, Agent Bar, roads, rooms, desks, characters and bounded overflow presentation, and visually compare synthetic desktop fixtures with the delivered composition
-- [ ] 10.4 Restore task-summary callouts, completion rendezvous markers, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity
-- [ ] 10.5 Restore capability-gated room create/rename/close and room-local seat creation with the eight-desk Room Full state, and verify no action invents Office-only runtime state
+- [ ] 10.4 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact terminal inspection and retained unseen state on failed activation, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity
+- [ ] 10.5 Restore capability-gated room create/rename/close and room-local seat creation with the eight-desk Room Full state; after admitted creation open the exact new terminal, while cancellation/failure preserves selection and windows, and verify no action invents Office-only runtime state
 - [ ] 10.6 Restore optional provider configuration/health and bounded authoritative Office boards through the World service, and verify absent or failed providers leave core topology and terminals intact
 - [ ] 10.7 Verify Office at desktop and phone widths with unequal multi-host rooms, stale hosts, live conversations, scene scrolling and preference restoration before checking task 3.3
 
@@ -87,7 +89,7 @@
 
 ## 13. Complete-view acceptance and delivery
 
-- [ ] 13.1 Exercise Office, Tree and Graph against local plus deterministic SSH Herdr runtimes with stale/reconnect and colliding-ID cases, and verify one qualified action/terminal owner throughout
+- [ ] 13.1 Exercise Office, Tree and Graph against simultaneously ready local plus deterministic SSH Herdr runtimes with stale/reconnect and colliding-ID cases, and verify concurrent cross-host conversations retain one qualified action/terminal owner each while Spaces keeps one selected host
 - [ ] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the per-view feature inventory with no unexplained parity gaps
 - [ ] 13.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the completed views, and remove checkpoint/deferred language only after the implementation evidence passes
 - [ ] 13.4 Run the complete repository and distribution checks, obtain independent review of the final view migrations, resolve findings and return PR #93 to ready status without merging it

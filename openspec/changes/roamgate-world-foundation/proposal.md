@@ -27,8 +27,9 @@ the product; those views must be migrated deliberately over the stronger foundat
   Graph are product behavior, not optional polish, and SHALL be restored over the new foundation
   before this replacement is complete.
 - Retain the useful Roamgate-derived selected-entity detail drawer and operational Inspector flows,
-  extending them with authoritative agent status, task summary and ancestry instead of discarding
-  them while the visual views are migrated.
+  extending them with authoritative agent status, a supported bounded task-summary reporting
+  workflow, ancestry and qualified agent/pane pinning instead of discarding those workflows while
+  the visual views are migrated.
 - Adopt the connected host-space-agent branch presentation currently implemented as Graph as the
   canonical Tree direction. Restore the prior force-directed canvas as Graph; keep a bounded
   semantic hierarchy for accessibility and compact use rather than treating the list as the main
@@ -36,7 +37,9 @@ the product; those views must be migrated deliberately over the stronger foundat
 - Preserve Herdr as an external runtime. World neither bundles Herdr nor introduces a generic
   provider/plugin SDK in this change.
 - Start the new foundation with fresh World connection and presentation settings. Existing
-  browser bridge URLs, Android preferences and Roamgate settings are not migrated.
+  browser bridge URLs, Android preferences and Roamgate settings are not migrated. The former
+  free-form World notes store remains explicitly retired; review annotations do not masquerade as
+  migrated notes.
 - Use the Roamgate PWA/mobile web experience for this foundation change; native Capacitor Android
   packaging is deferred rather than maintaining two application foundations during cutover.
 
@@ -66,7 +69,8 @@ None.
 - Retires the current remote-bridge settings, browser federation, vendored `herdr-compat` crate and
   native Android build from the active product tree.
 - Re-establishes the World model and the complete defining Office, Tree and Graph experience over
-  connection-scoped snapshots and one terminal owner. The current minimal Office cards,
-  list-primary Tree and static branch Graph are an implementation checkpoint, not accepted parity.
+  connection-scoped snapshots and one terminal owner that can retain simultaneous qualified
+  conversations from several ready hosts. The current minimal Office cards, list-primary Tree and
+  static branch Graph are an implementation checkpoint, not accepted parity.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.
