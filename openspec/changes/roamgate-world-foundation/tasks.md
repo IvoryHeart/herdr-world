@@ -92,6 +92,6 @@
 ## 13. Complete-view acceptance and delivery
 
 - [ ] 13.1 Exercise Office, Tree and Graph against simultaneously ready local plus deterministic SSH Herdr runtimes with active/ready-inactive/stale/reconnect and colliding-ID cases, and verify aggregate observation remains intact while actions and up to five conversations belong only to the selected host; explicit switching SHALL retire outgoing contexts before admitting the other host
-- [ ] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the per-view feature inventory with no unexplained parity gaps
+- [ ] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the retained per-view feature inventory with no unexplained gaps against this change's requirements and every approved breaking retirement identified explicitly
 - [ ] 13.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the completed views, and remove checkpoint language only after the implementation evidence passes
 - [ ] 13.4 Run the complete repository and distribution checks, obtain independent review of the final view migrations, resolve findings and return PR #93 to ready status without merging it

@@ -8,7 +8,8 @@ installable application instead of rebuilding the same capabilities beside it. T
 visual experience SHALL be a deep Pixel Office that brings Roamgate's terminal, Files, Changes and
 Agent History context to the selected agent. Office is the first implementation milestone, but the
 foundation replacement is complete only after Tree, Graph and qualified selected-host
-conversations are migrated over the same seam.
+conversations are migrated over the same seam. Completion means the replacement contract defined
+below; it does not claim behavior-for-behavior parity with the former Herdr Web-based application.
 
 ## What Changes
 
@@ -32,11 +33,13 @@ conversations are migrated over the same seam.
 - Retain the useful Roamgate-derived operational surfaces and extend the Office context with
   authoritative agent status, a supported bounded task-summary workflow, ancestry and qualified
   agent/pane pinning.
-- Preserve Roamgate's one-selected-connection model for every operational surface. The shared
+- **BREAKING** Replace the former World's simultaneous cross-host terminal-conversation behavior
+  with Roamgate's one-selected-connection model for every operational surface. The shared
   WorldObject SHALL continue to present all managed hosts, including ready-inactive and retained
   stale topology, while terminal, Files, Changes, Agent History, room and launcher actions remain
   disabled outside the explicitly selected host. Up to five conversations from that host SHALL use
-  the existing one WebSocket and terminal owner; selecting an entity SHALL never switch hosts.
+  the existing one WebSocket and terminal owner; selecting an entity SHALL never switch hosts, and
+  explicitly activating another host SHALL retire the outgoing terminal and Inspector contexts.
 - Use Office as the first deep migration milestone, then promote the connected branch checkpoint to
   Tree and restore the prior spatial Graph. Checkpoint implementations SHALL NOT be represented as
   complete primary product views before their acceptance passes.
@@ -78,7 +81,10 @@ None.
 - Re-establishes the World model and the complete defining Office, Tree and Graph experience over
   connection-scoped snapshots, one selected operational host, one focused Inspector and one
   shell-owned terminal registry. The current minimal Office cards, list-primary Tree and static
-  branch Graph are implementation checkpoints, not accepted parity, and the PR remains incomplete
-  until selected-host conversations and all three view migrations pass acceptance.
+  branch Graph are implementation checkpoints, not accepted complete views, and the PR remains
+  incomplete until selected-host conversations and all three view migrations pass acceptance.
+- Does not promise full compatibility with the former UI. Simultaneous cross-host terminal and
+  Inspector contexts are an approved breaking retirement; aggregate multi-host observation,
+  selected-host multi-window conversations and the explicitly listed view behavior remain required.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.

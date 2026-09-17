@@ -40,7 +40,9 @@ shared World model plus Office, Tree and Graph.
   and are not described as migrated notes.
 - Retaining terminal or Inspector contexts from several hosts simultaneously. Multi-host operation
   can be introduced later by deliberately replacing the selected-connection browser lease; it is
-  not hidden inside this foundation migration.
+  not hidden inside this foundation migration. This intentionally retires behavior delivered by
+  the former World implementation, so this change does not claim complete behavioral parity with
+  that application.
 
 ## Decisions
 
@@ -97,6 +99,11 @@ Files, Changes, Agent History, room and launcher controls remain unavailable unt
 is explicitly activated and its current generation is admitted. Activation is a host-level action,
 not a side effect of entity selection or an attempted operation.
 
+This is an accepted product boundary, not a claim that the former World lacked cross-host terminal
+windows. The former implementation could retain conversations from several hosts concurrently;
+this replacement deliberately gives those operational contexts the same selected-host lifetime as
+Roamgate's browser lease while preserving multi-host topology for observation.
+
 ### Establish World as native routes over the Roamgate store
 
 The shared World hierarchy and Office, Tree and Graph views are built against the aggregate snapshot
@@ -106,13 +113,13 @@ component tree, Inspector resources and terminal ownership rather than embedding
 application or maintaining a parallel runtime client. The current CSS Office, list Tree and static
 branch Graph are only foundation checkpoints and do not satisfy the view migration.
 
-### Migrate presentation behavior, not the retired runtime boundary
+### Migrate the retained presentation behavior, not the retired runtime boundary
 
 Reuse the delivered Office projection, geometry, renderer, semantic targets, room actions,
-conversation layout and Graph layout behavior from the pre-foundation World line. Adapt their
-inputs to the connection-qualified `WorldObject` and current Roamgate-derived action, Inspector and
-terminal owners. Do not restore browser federation, the Rust bridge, a second profile catalogue or
-a second runtime subscription.
+selected-host conversation layout and Graph layout behavior from the pre-foundation World line.
+Adapt their inputs to the connection-qualified `WorldObject` and current Roamgate-derived action,
+Inspector and terminal owners. Do not restore browser federation, the Rust bridge, simultaneous
+cross-host operational contexts, a second profile catalogue or a second runtime subscription.
 
 The migration proceeds through view-local adapters, beginning with Office. An adapter may expose
 the bounded labels, task summaries, state labels, tab metadata and qualified action targets
@@ -203,13 +210,15 @@ The selected-entity context remains shared shell behavior. It exposes only admit
 delegates Files, Changes, Agent History, terminal and Spaces actions through generation-fenced
 paths; Tree and Graph do not acquire another Inspector or runtime owner.
 
-### Accept each view sequentially against preserved behavior
+### Accept each view sequentially against the retained view contract
 
 Office receives focused unit, mounted-browser and synthetic visual acceptance first. Tree and Graph
 then receive their own acceptance over the proven projection and operational seams. Each comparison
-uses the delivered feature inventory at desktop and compact sizes, including dense and unequal
-topologies, stale hosts, colliding native IDs and live terminal continuity. A green repository check
-alone cannot establish visual completeness, and passing Office does not complete the replacement.
+uses the feature inventory retained by this change at desktop and compact sizes, including dense and
+unequal topologies, stale hosts, colliding native IDs and selected-host terminal continuity. The
+explicitly retired behavior is recorded as a product boundary rather than an unexplained parity
+gap. A green repository check alone cannot establish visual completeness, and passing Office does
+not complete the replacement.
 
 ### Rebrand before release integration
 
