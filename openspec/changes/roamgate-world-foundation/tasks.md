@@ -66,7 +66,7 @@
 
 ## 10. Pixel Office migration
 
-- [ ] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify working/unknown, blocked, idle and done transitions plus shared-tab and beyond-eight-desk agents retain one deterministic, nonduplicated identity and ancestry
+- [ ] 10.1 Port the Office projection onto WorldObject with qualified rooms, tabs/desks, agents, reception and Agent Bar placement, and verify mixed-state shared tabs plus beyond-eight-desk cases seat or stand only bounded working/unknown room-local agents, keep blocked and idle/done destinations, report exact omissions and retain nonduplicated identity and ancestry
 - [ ] 10.2 Port deterministic Office geometry/publication with content-sized two-to-eight-seat rooms, title/action containment, natural row packing, alignment, logical scrolling and stale-render acknowledgement, and verify dense/long-title fixtures
 - [ ] 10.3 Port the Pixel Office renderer with CEO Office, host receptions, boards, Agent Bar, roads, rooms, desks, characters and bounded overflow presentation, and visually compare synthetic desktop fixtures with the delivered composition
 - [ ] 10.4 Restore task-summary callouts, bounded completion rendezvous markers/notices with exact terminal inspection and retained unseen state on failed activation, 48px semantic targets and compact Agents/Rooms/Desks selection, and verify pointer, keyboard, touch and screen-reader parity

@@ -289,11 +289,14 @@ CSS-pixel semantic targets and a compact Agents/Rooms/Desks chooser. Capability-
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
 
-When several agents share one tab, Office SHALL choose at most one deterministic seated occupant
-using the established state/focus priority and SHALL present the remaining agents standing in their
-owning room. Agents belonging to tabs omitted beyond the eight-desk presentation bound SHALL also
-remain present as standing agents. Desks and agents SHALL keep distinct, nonduplicated semantic
-targets.
+When several working or unknown room-destination agents share one tab, Office SHALL choose at most
+one deterministic seated occupant using the established state/focus priority and SHALL present
+remaining room-local agents as standing only within the tested per-room agent bound. Working or
+unknown room-destination agents belonging to tabs omitted beyond the eight-desk presentation bound
+SHALL remain eligible for that bounded standing presentation. Blocked agents SHALL remain at their
+qualified reception, idle or done agents SHALL remain in the Agent Bar, and every bounded omission
+SHALL contribute to the exact relevant omitted count. Presented desks and agents SHALL keep
+distinct, nonduplicated semantic targets.
 
 #### Scenario: Agent status changes location
 - **WHEN** an admitted agent changes from working to blocked and later to done
@@ -310,10 +313,13 @@ targets.
 - **WHEN** the user cancels seat creation or the launcher fails before Herdr admits a new pane
 - **THEN** Office preserves the prior selection and every existing conversation window
 
-#### Scenario: Several agents share a tab or exceed the desk bound
-- **WHEN** several agents occupy one tab or an agent belongs to a ninth or later tab
-- **THEN** Office presents one deterministic occupant per visible desk, keeps every other admitted
-  agent standing in the owning room and exposes no duplicate semantic target
+#### Scenario: Mixed-state agents share a tab or exceed the desk bound
+- **WHEN** working or unknown agents share a tab or belong to a ninth or later tab while blocked,
+  idle or done agents occupy the same tab or overflow range
+- **THEN** Office seats at most one deterministic room-local occupant per visible desk, presents
+  remaining room-local agents as standing only within the tested bound, keeps blocked agents at
+  reception and idle or done agents in the Agent Bar, reports exact omissions and exposes no
+  duplicate semantic target
 
 #### Scenario: User inspects a completion
 - **WHEN** the user selects a completion marker, originating desk, notice or corresponding agent
