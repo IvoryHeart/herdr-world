@@ -308,7 +308,8 @@ distinct, nonduplicated semantic targets.
 
 #### Scenario: Seat creation is cancelled or fails
 - **WHEN** the user cancels seat creation or the launcher fails before Herdr admits a new pane
-- **THEN** Office preserves the prior selection and focused operational context
+- **THEN** Office preserves the prior selection, focused Inspector context and every existing
+  qualified conversation window without detaching or redirecting a background local or SSH session
 
 #### Scenario: Mixed-state agents share a tab or exceed the desk bound
 - **WHEN** working or unknown agents share a tab or belong to a ninth or later tab while blocked,
