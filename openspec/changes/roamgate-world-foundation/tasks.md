@@ -46,4 +46,4 @@
 - [x] 7.1 Extend automatic browser admission across privileged HTTP and WebSocket traffic, add one exact loopback-proxy public origin plus a World-owned auth cookie, and verify unit and production-process coverage
 - [x] 7.2 Bind World-to-Spaces focus to its original host without cross-host reconnect retry, close and disable the mounted Spaces command palette while hidden, and verify store and Chromium regressions
 - [x] 7.3 Include the deterministic `lru_map` README licence section, replace the old installation shutdown guidance with the actual target-by-target asynchronous plugin procedure, and verify notices and documentation checks
-- [ ] 7.4 Run focused regressions and the complete repository check, refresh the local test service, respond to every re-review thread, and keep PR #93 ready
+- [x] 7.4 Run focused regressions and the complete repository check, refresh the local test service, respond to every re-review thread, and keep PR #93 ready
