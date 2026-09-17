@@ -9,11 +9,19 @@ import {
 import { PanelRightClose, X } from "lucide-react";
 import {
   clampFloatingTerminalGeometry,
+  defaultFloatingTerminalGeometry,
   moveFloatingTerminalPosition,
   resizeFloatingTerminalGeometry,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import type { WorldFloatingTerminal } from "./worldTerminalPresentation";
+import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import { worldLocalStorage } from "../browserStorage";
+import {
+  floatingTerminalGeometryId,
+  readFloatingTerminalGeometry,
+  writeFloatingTerminalGeometry,
+} from "./floatingTerminalPreferences";
 
 type Interaction = {
   mode: "moving" | "resizing";
@@ -25,47 +33,73 @@ type Interaction = {
 
 export default function WorldFloatingTerminalWindow({
   conversation,
+  cascadeIndex,
+  compactActive,
   onClose,
   onDock,
+  onFocus,
+  onAnchorChange,
   onPortalChange,
 }: {
   conversation: WorldFloatingTerminal;
+  cascadeIndex: number;
+  compactActive: boolean;
   onClose(): void;
   onDock(): void;
+  onFocus(): void;
+  onAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
 }) {
   const windowRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<Interaction | null>(null);
+  const onAnchorChangeRef = useRef(onAnchorChange);
+  onAnchorChangeRef.current = onAnchorChange;
+  const geometryId = floatingTerminalGeometryId(conversation);
   const [interaction, setInteraction] = useState<Interaction["mode"] | null>(
     null,
   );
-  const [geometry, setGeometry] = useState<FloatingTerminalGeometry | null>(
-    null,
-  );
+  const [geometry, setGeometry] = useState<FloatingTerminalGeometry>(() => {
+    const viewport = viewportSize();
+    return readFloatingTerminalGeometry(
+      worldLocalStorage,
+      geometryId,
+      defaultFloatingTerminalGeometry(cascadeIndex, viewport),
+      viewport,
+    );
+  });
+
+  useEffect(() => {
+    writeFloatingTerminalGeometry(worldLocalStorage, geometryId, geometry);
+  }, [geometry, geometryId]);
 
   useEffect(() => {
     const clampToViewport = () => {
       setGeometry((current) =>
-        current
-          ? clampFloatingTerminalGeometry(current, viewportSize())
-          : current,
+        clampFloatingTerminalGeometry(current, viewportSize()),
       );
     };
     window.addEventListener("resize", clampToViewport);
     return () => window.removeEventListener("resize", clampToViewport);
   }, []);
 
+  useEffect(() => {
+    onAnchorChangeRef.current({
+      x: geometry.left + geometry.width / 2,
+      y: geometry.top,
+      visible: true,
+      edge: null,
+    });
+  }, [geometry]);
+
+  useEffect(
+    () => () => {
+      onAnchorChangeRef.current(null);
+    },
+    [],
+  );
+
   const currentGeometry = () => {
-    if (geometry) return geometry;
-    const rect = windowRef.current?.getBoundingClientRect();
-    return rect
-      ? {
-          left: rect.left,
-          top: rect.top,
-          width: rect.width,
-          height: rect.height,
-        }
-      : null;
+    return geometry;
   };
 
   const beginInteraction = (
@@ -82,7 +116,7 @@ export default function WorldFloatingTerminalWindow({
     }
     const initial = currentGeometry();
     const element = windowRef.current;
-    if (!initial || !element) return;
+    if (!element) return;
     event.preventDefault();
     element.setPointerCapture(event.pointerId);
     interactionRef.current = {
@@ -176,19 +210,19 @@ export default function WorldFloatingTerminalWindow({
       role="dialog"
       aria-modal="false"
       aria-label={`${conversation.label} terminal`}
+      data-compact-active={compactActive}
       data-interaction={interaction ?? undefined}
       style={
-        geometry
-          ? ({
-              left: geometry.left,
-              top: geometry.top,
-              width: geometry.width,
-              height: geometry.height,
-              right: "auto",
-              bottom: "auto",
-            } satisfies CSSProperties)
-          : undefined
+        {
+          left: geometry.left,
+          top: geometry.top,
+          width: geometry.width,
+          height: geometry.height,
+          right: "auto",
+          bottom: "auto",
+        } satisfies CSSProperties
       }
+      onPointerDownCapture={onFocus}
       onPointerMove={moveInteraction}
       onPointerUp={endInteraction}
       onPointerCancel={endInteraction}

@@ -3,14 +3,25 @@ import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
 import { endpointCreationReason, store } from "../store";
 import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
-import { OfficeRoomActionsOverlay } from "./OfficeRoomActionsOverlay";
+import type {
+  OfficeCanvasAnchor,
+  OfficeCanvasHover,
+  OfficeConversationAnchors,
+} from "./PixelOfficeCanvas";
+import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
+import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
+import { OfficeCompletionNotices } from "./OfficeCompletionNotices";
+import {
+  OfficeRoomActionsOverlay,
+  OfficeSemanticTargetsOverlay,
+} from "./OfficeRoomActionsOverlay";
 import {
   projectWorldOffice,
+  type OfficeAgent,
   type HerdrOfficeProjection,
 } from "./herdrOfficeProjection";
 import { EMPTY_OFFICE_OBSERVABILITY } from "./officeObservability";
-import { officePresentationKey } from "./officeSelection";
+import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
 import type { PublishedOfficeLayout } from "./officeLayout";
 import {
   readOfficePreferences,
@@ -18,14 +29,18 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import type { WorldObject } from "./worldObject";
+import type { WorldFloatingTerminal } from "./worldTerminalPresentation";
 import {
   createdRootPaneId,
   officeRoomActionCapabilities,
   officeRoomKeyForSelection,
 } from "./officeRoomActions";
+import {
+  officeCompletionIdentity,
+  readCompletionSeen,
+  writeCompletionSeen,
+} from "./completionSeenState";
 
-const NO_COMPLETIONS = new Set<string>();
-const NO_CONVERSATIONS: never[] = [];
 type RoomDialog =
   | { mode: "create"; roomKey: string | null }
   | { mode: "rename" | "close"; roomKey: string; label: string };
@@ -42,12 +57,16 @@ export default function PixelOfficeView({
   onSelect,
   onOpenTerminal,
   onSelectedAnchorChange,
+  floatingTerminals,
+  onConversationAnchorsChange,
 }: {
   world: WorldObject;
   selectedId: string | null;
   onSelect(id: string): void;
-  onOpenTerminal(id: string): void;
+  onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
+  floatingTerminals: readonly WorldFloatingTerminal[];
+  onConversationAnchorsChange?(anchors: OfficeConversationAnchors | null): void;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -63,6 +82,12 @@ export default function PixelOfficeView({
   const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
   const [pendingCreatedPane, setPendingCreatedPane] =
     useState<PendingCreatedPane | null>(null);
+  const [completionSeen, setCompletionSeen] = useState(() =>
+    readCompletionSeen(worldLocalStorage),
+  );
+  const [selectedSceneAnchor, setSelectedSceneAnchor] =
+    useState<OfficeCanvasAnchor | null>(null);
+  const [sceneHover, setSceneHover] = useState<OfficeCanvasHover | null>(null);
   preferencesRef.current = preferences;
 
   useEffect(() => {
@@ -98,7 +123,48 @@ export default function PixelOfficeView({
   }
 
   const selectedKey = officePresentationKey(office, selectedId);
+  const completionSeenKeys = useMemo(
+    () =>
+      new Set(
+        office.roster.flatMap(({ agent }) =>
+          completionSeen.has(officeCompletionIdentity(agent))
+            ? [agent.key]
+            : [],
+        ),
+      ),
+    [completionSeen, office],
+  );
+  const unseenCompletions = useMemo(
+    () =>
+      office.roster
+        .map(({ agent }) => agent)
+        .filter(
+          (agent) =>
+            agent.semanticStatus === "done" &&
+            agent.deskKey !== null &&
+            !completionSeenKeys.has(agent.key),
+        )
+        .sort(
+          (left, right) =>
+            Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
+            left.displayLabel.localeCompare(right.displayLabel) ||
+            left.key.localeCompare(right.key),
+        ),
+    [completionSeenKeys, office],
+  );
   const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
+  const conversationTargets = floatingTerminals.flatMap((terminal) => {
+    const targetKey = officePresentationKey(office, terminal.nodeId);
+    return targetKey
+      ? [
+          {
+            id: terminal.nodeId,
+            selectedKey: targetKey,
+            targetKey,
+          },
+        ]
+      : [];
+  });
 
   useEffect(() => {
     if (!pendingCreatedPane) return;
@@ -138,7 +204,9 @@ export default function PixelOfficeView({
     const room = roomForKey(roomKey);
     const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
     if (!selectedHost?.actionable || selectedHost.stale) return false;
-    if (room && room.hostKey !== selectedHost.connectionId) return false;
+    if (room && room.workspaceRef.connectionId !== selectedHost.connectionId) {
+      return false;
+    }
     return (
       endpointCreationReason(
         store.get(),
@@ -166,7 +234,11 @@ export default function PixelOfficeView({
     const result = await store.createTab(room.workspaceRef.nativeId, {
       numberedLabel: true,
     });
-    rememberCreatedPane(room.hostKey, room.observedGeneration, result);
+    rememberCreatedPane(
+      room.workspaceRef.connectionId,
+      room.observedGeneration,
+      result,
+    );
   };
   const submitCreateRoom = async (label: string) => {
     const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
@@ -214,10 +286,19 @@ export default function PixelOfficeView({
     }
     onSelect(key);
   };
-  const openOfficeTerminal = (key: string) => {
+  const markCompletionSeen = (agent: OfficeAgent) => {
+    setCompletionSeen((current) => {
+      const next = new Set(current);
+      next.add(officeCompletionIdentity(agent));
+      writeCompletionSeen(worldLocalStorage, next);
+      return next;
+    });
+  };
+  const inspectOfficeTerminal = async (key: string) => {
     const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
     if (agent) {
-      onOpenTerminal(agent.nodeId);
+      await onOpenTerminal(agent.nodeId);
+      if (agent.semanticStatus === "done") markCompletionSeen(agent);
       return;
     }
     const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
@@ -228,7 +309,10 @@ export default function PixelOfficeView({
         )?.agent
       : null;
     const nodeId = occupant?.nodeId ?? desk.terminalSelectionKeys[0];
-    if (nodeId) onOpenTerminal(nodeId);
+    if (nodeId) await onOpenTerminal(nodeId);
+  };
+  const openOfficeTerminal = (key: string) => {
+    void inspectOfficeTerminal(key).catch(() => undefined);
   };
 
   if (!world.hosts.length) {
@@ -276,62 +360,105 @@ export default function PixelOfficeView({
           </select>
         </label>
       </div>
+      <OfficeCompactTargetChooser
+        projection={office}
+        selectedKey={selectedKey}
+        onSelect={selectOfficeKey}
+        onActivateAgent={openOfficeTerminal}
+        onActivateDesk={openOfficeTerminal}
+      />
+      <OfficeCompletionNotices
+        agents={unseenCompletions}
+        onInspect={(agent) => openOfficeTerminal(agent.key)}
+      />
       <div ref={scrollRef} className="world-stage-scroll">
         <PixelOfficeCanvas
           projection={office}
           selectedKey={selectedKey}
-          completionSeenKeys={NO_COMPLETIONS}
+          completionSeenKeys={completionSeenKeys}
           observability={EMPTY_OFFICE_OBSERVABILITY}
-          conversationTargets={NO_CONVERSATIONS}
+          conversationTargets={conversationTargets}
           onSelect={selectOfficeKey}
           onActivateAgent={openOfficeTerminal}
           onActivateRoom={selectOfficeKey}
           canCreateSeat={canCreateSeat}
           onNewSeat={(roomKey) => void createSeat(roomKey)}
-          onSelectedAnchorChange={onSelectedAnchorChange}
+          onHover={setSceneHover}
+          onSelectedAnchorChange={(anchor) => {
+            setSelectedSceneAnchor(anchor);
+            onSelectedAnchorChange?.(anchor);
+          }}
+          onAnchorChange={onConversationAnchorsChange}
           onLayoutChange={setLayout}
           onCanvasRendered={setRenderedRevision}
           roomAlignment={preferences.roomAlignment}
           longRoomTitleMode={preferences.longTitleMode}
         >
           {layout ? (
-            <OfficeRoomActionsOverlay
-              layout={layout}
-              projection={office}
-              renderedRevision={renderedRevision}
-              selectedRoomKey={selectedRoomKey}
-              canCreateSeat={canCreateSeat}
-              onCreateSeat={(roomKey) => void createSeat(roomKey)}
-              canCreateRoom={canCreateRoom}
-              onCreateRoom={(roomKey) =>
-                setRoomDialog({ mode: "create", roomKey })
-              }
-              canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
-              onRenameRoom={(roomKey) => {
-                const room = roomForKey(roomKey);
-                if (room) {
-                  setRoomDialog({
-                    mode: "rename",
-                    roomKey,
-                    label: room.displayLabel,
-                  });
+            <>
+              <OfficeSemanticTargetsOverlay
+                layout={layout}
+                projection={office}
+                renderedRevision={renderedRevision}
+                selectedKey={selectedKey}
+                onSelect={selectOfficeKey}
+                onActivateAgent={openOfficeTerminal}
+                onActivateDesk={openOfficeTerminal}
+                onActivateRoom={selectOfficeKey}
+              />
+              <OfficeRoomActionsOverlay
+                layout={layout}
+                projection={office}
+                renderedRevision={renderedRevision}
+                selectedRoomKey={selectedRoomKey}
+                canCreateSeat={canCreateSeat}
+                onCreateSeat={(roomKey) => void createSeat(roomKey)}
+                canCreateRoom={canCreateRoom}
+                onCreateRoom={(roomKey) =>
+                  setRoomDialog({ mode: "create", roomKey })
                 }
-              }}
-              canCloseRoom={(roomKey) => canManageRoom(roomKey, "close")}
-              onCloseRoom={(roomKey) => {
-                const room = roomForKey(roomKey);
-                if (room) {
-                  setRoomDialog({
-                    mode: "close",
-                    roomKey,
-                    label: room.displayLabel,
-                  });
-                }
-              }}
-            />
+                canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
+                onRenameRoom={(roomKey) => {
+                  const room = roomForKey(roomKey);
+                  if (room) {
+                    setRoomDialog({
+                      mode: "rename",
+                      roomKey,
+                      label: room.displayLabel,
+                    });
+                  }
+                }}
+                canCloseRoom={(roomKey) => canManageRoom(roomKey, "close")}
+                onCloseRoom={(roomKey) => {
+                  const room = roomForKey(roomKey);
+                  if (room) {
+                    setRoomDialog({
+                      mode: "close",
+                      roomKey,
+                      label: room.displayLabel,
+                    });
+                  }
+                }}
+              />
+            </>
           ) : null}
         </PixelOfficeCanvas>
       </div>
+      {selectedKey && selectedSceneAnchor ? (
+        <OfficeCanvasCallout
+          callout={officeCalloutForKey(office, selectedKey)}
+          left={selectedSceneAnchor.x}
+          top={selectedSceneAnchor.y}
+          persistent
+        />
+      ) : null}
+      {sceneHover && sceneHover.key !== selectedKey ? (
+        <OfficeCanvasCallout
+          callout={officeCalloutForKey(office, sceneHover.key)}
+          left={sceneHover.clientX}
+          top={sceneHover.clientY}
+        />
+      ) : null}
       <TextInputDialog
         open={roomDialog?.mode === "create"}
         title="Create room"

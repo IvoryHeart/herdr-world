@@ -25,6 +25,7 @@ describe("Office semantic targets", () => {
     const targets = officeSemanticTargets(projection, layout);
 
     expect(targets.map(({ key }) => key)).toEqual([
+      "agent-done",
       "room-a",
       "agent-seated",
       "desk-empty",
@@ -38,6 +39,9 @@ describe("Office semantic targets", () => {
     });
     expect(targets.find(({ key }) => key === "desk-empty")?.label).toBe(
       "Empty desk Review, Platform, Forge",
+    );
+    expect(targets.find(({ key }) => key === "desk-empty")?.canActivate).toBe(
+      true,
     );
     expect(
       targets.every(
@@ -70,12 +74,22 @@ describe("Office semantic targets", () => {
       taskSummary: undefined,
       placement: "standing",
     };
+    const done = {
+      ...seated,
+      key: "agent-done",
+      deskKey: null,
+      displayLabel: "Gemini",
+      taskSummary: "Completed review",
+      semanticStatus: "done",
+      placement: "bar",
+    };
     const buildDesk = {
       key: "desk-build",
       hostKey: "host-a",
       roomKey: "room-a",
       displayLabel: "Build",
       occupantAgentKey: seated.key,
+      canOpenInSpaces: true,
     };
     const emptyDesk = {
       ...buildDesk,
@@ -98,7 +112,7 @@ describe("Office semantic targets", () => {
         },
       ],
       receptions: [],
-      barAgents: [],
+      barAgents: [done],
       roomRoster: [
         { key: "room-a", hostLabel: "Forge", displayLabel: "Platform" },
       ],
@@ -109,6 +123,7 @@ describe("Office semantic targets", () => {
       roster: [
         { agent: seated, roomLabel: "Platform", hostLabel: "Forge" },
         { agent: standing, roomLabel: "Platform", hostLabel: "Forge" },
+        { agent: done, roomLabel: "Platform", hostLabel: "Forge" },
       ],
       unresolved: [],
       coverage: {},

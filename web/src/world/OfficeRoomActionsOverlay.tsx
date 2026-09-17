@@ -2,6 +2,64 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import type { PublishedOfficeLayout } from "./officeLayout";
+import { officeSemanticTargets } from "./officeSemanticTargets";
+
+export function OfficeSemanticTargetsOverlay({
+  layout,
+  projection,
+  renderedRevision,
+  selectedKey,
+  onSelect,
+  onActivateAgent,
+  onActivateDesk,
+  onActivateRoom,
+}: {
+  layout: PublishedOfficeLayout;
+  projection: HerdrOfficeProjection;
+  renderedRevision: number;
+  selectedKey: string | null;
+  onSelect(key: string): void;
+  onActivateAgent(key: string): void;
+  onActivateDesk(key: string): void;
+  onActivateRoom(key: string): void;
+}) {
+  const interactive =
+    layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
+  return (
+    <div
+      className="world-semantic-targets-overlay"
+      aria-label="Office scene targets"
+      aria-hidden={!interactive}
+    >
+      {officeSemanticTargets(projection, layout).map((target) => (
+        <button
+          key={`${target.kind}:${target.key}`}
+          className="world-semantic-target"
+          type="button"
+          data-kind={target.kind}
+          data-target-key={target.key}
+          aria-label={target.label}
+          aria-pressed={selectedKey === target.key}
+          disabled={!interactive}
+          title={target.label}
+          style={{
+            left: target.rect.x,
+            top: target.rect.y,
+            width: target.rect.width,
+            height: target.rect.height,
+          }}
+          onClick={() => onSelect(target.key)}
+          onDoubleClick={() => {
+            if (!target.canActivate) return;
+            if (target.kind === "agent") onActivateAgent(target.key);
+            if (target.kind === "desk") onActivateDesk(target.key);
+            if (target.kind === "room") onActivateRoom(target.key);
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 export function OfficeRoomActionsOverlay({
   layout,

@@ -16,6 +16,25 @@ export type WorldTerminalPresentation = WorldFloatingTerminal & {
   portal: Element | null;
 };
 
+export const MAX_WORLD_FLOATING_TERMINALS = 5;
+
+export function upsertWorldFloatingTerminal(
+  current: readonly WorldFloatingTerminal[],
+  next: WorldFloatingTerminal,
+  limit = MAX_WORLD_FLOATING_TERMINALS,
+) {
+  const retained = current.filter(
+    (terminal) => terminal.terminalId !== next.terminalId,
+  );
+  if (retained.length === current.length && retained.length >= limit) {
+    return { terminals: current, admitted: false } as const;
+  }
+  return {
+    terminals: [...retained, next],
+    admitted: true,
+  } as const;
+}
+
 export function floatingTerminalForNode(
   node: WorldObjectNode,
 ): WorldFloatingTerminal | null {

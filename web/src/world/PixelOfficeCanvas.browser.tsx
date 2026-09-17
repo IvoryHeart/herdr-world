@@ -60,6 +60,7 @@ function pane(
     focused: index === 0,
     agent,
     agent_status: status,
+    task_summary: agent ? `Working on ${suffix} ${index + 1}` : undefined,
     revision: 1,
   };
 }
@@ -130,13 +131,19 @@ async function run() {
 
   try {
     let selectedAnchor = false;
+    let terminalActivationAllowed = false;
     root.render(
       <StrictMode>
         <PixelOfficeView
           world={world}
           selectedId={world.leaves[0]?.id ?? null}
           onSelect={() => {}}
-          onOpenTerminal={() => {}}
+          onOpenTerminal={async () => {
+            if (!terminalActivationAllowed) {
+              throw new Error("synthetic activation failure");
+            }
+          }}
+          floatingTerminals={[]}
           onSelectedAnchorChange={(anchor) => {
             selectedAnchor = anchor !== null;
           }}
@@ -146,6 +153,10 @@ async function run() {
     await waitFor(
       () => window.__HERDR_WORLD_RENDERER__?.ready === true,
       "Pixel Office renderer did not become ready",
+    );
+    await waitFor(
+      () => host.querySelector(".world-semantic-target") !== null,
+      "Pixel Office overlays did not become ready",
     );
     const diagnostics = window.__HERDR_WORLD_RENDERER__!;
     const layout = diagnostics.publishedLayout;
@@ -178,6 +189,46 @@ async function run() {
       "Host receptions are missing",
     );
     check(layout?.rooms.length === 2, "Work rooms are missing");
+    check(
+      host.querySelectorAll(".world-semantic-target").length > 0,
+      "Office semantic targets are missing",
+    );
+    check(
+      host.querySelector(".world-compact-target-chooser") !== null,
+      "The compact Office target chooser is missing",
+    );
+    check(
+      host.querySelector(".world-canvas-callout-summary") !== null,
+      "The selected Office task-summary callout is missing",
+    );
+    const completion = host.querySelector<HTMLButtonElement>(
+      ".world-completion-notices button",
+    );
+    check(completion !== null, "The unseen completion notice is missing");
+    completion?.click();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    check(
+      host.querySelector(".world-completion-notices button") !== null,
+      "Failed completion inspection was incorrectly acknowledged",
+    );
+    terminalActivationAllowed = true;
+    completion?.click();
+    await waitFor(
+      () => host.querySelector(".world-completion-notices button") === null,
+      "Successful completion inspection did not acknowledge the marker",
+    );
+    check(
+      host.querySelectorAll(".world-new-seat-canvas-action").length === 1,
+      "The active host room is missing its new-seat control",
+    );
+    check(
+      host.querySelectorAll(".world-room-overlay-action").length === 4,
+      "Room management controls are missing",
+    );
+    check(
+      host.querySelector(".world-new-room-canvas-action") !== null,
+      "The selected host is missing its new-room control",
+    );
     check(
       (canvas?.width ?? 0) > 0 && (canvas?.height ?? 0) > 0,
       "Pixel Office canvas collapsed",

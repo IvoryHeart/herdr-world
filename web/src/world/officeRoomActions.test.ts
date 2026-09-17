@@ -53,7 +53,7 @@ describe("Office room actions", () => {
 function room(connectionId: string, workspaceId: string): OfficeRoom {
   return {
     key: JSON.stringify([connectionId, "space", workspaceId]),
-    hostKey: connectionId,
+    hostKey: JSON.stringify([connectionId, "host", connectionId]),
     workspaceRef: {
       connectionId,
       generation: 1,

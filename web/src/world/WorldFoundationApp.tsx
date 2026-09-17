@@ -25,14 +25,21 @@ import {
   type WorldObjectNode,
 } from "./worldObject";
 import "./world.css";
-import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import type {
+  OfficeCanvasAnchor,
+  OfficeConversationAnchors,
+} from "./PixelOfficeCanvas";
 import {
   floatingTerminalForNode,
   shouldRehomeDockedTerminal,
+  upsertWorldFloatingTerminal,
   type WorldFloatingTerminal,
 } from "./worldTerminalPresentation";
 
-export { shouldRehomeDockedTerminal } from "./worldTerminalPresentation";
+export {
+  shouldRehomeDockedTerminal,
+  upsertWorldFloatingTerminal,
+} from "./worldTerminalPresentation";
 
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
 const CheckpointTreeView = lazy(() => import("./CheckpointTreeView"));
@@ -148,10 +155,12 @@ export default function WorldFoundationApp() {
   const [inspectorView, setInspectorView] = useState<InspectorView | null>(
     null,
   );
-  const [floatingTerminal, setFloatingTerminal] =
-    useState<WorldFloatingTerminal | null>(null);
-  const [floatingTerminalPortal, setFloatingTerminalPortal] =
-    useState<HTMLDivElement | null>(null);
+  const [floatingTerminals, setFloatingTerminals] = useState<
+    WorldFloatingTerminal[]
+  >([]);
+  const [floatingTerminalPortals, setFloatingTerminalPortals] = useState<
+    Record<string, HTMLDivElement | null>
+  >({});
 
   useEffect(() => {
     worldRuntimeStore.start();
@@ -175,8 +184,8 @@ export default function WorldFoundationApp() {
   const setView = (next: WorldView) => {
     if (next === "spaces") {
       window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
-      setFloatingTerminal(null);
-      setFloatingTerminalPortal(null);
+      setFloatingTerminals([]);
+      setFloatingTerminalPortals({});
     }
     setViewState(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
@@ -215,11 +224,10 @@ export default function WorldFoundationApp() {
               </select>
             </label>
           }
-          worldTerminalPresentation={
-            floatingTerminal
-              ? { ...floatingTerminal, portal: floatingTerminalPortal }
-              : null
-          }
+          worldTerminalPresentations={floatingTerminals.map((terminal) => ({
+            ...terminal,
+            portal: floatingTerminalPortals[terminal.nodeId] ?? null,
+          }))}
           onInspectorVisibilityChange={setInspectorOpen}
           onTerminalPopOut={
             view === "spaces"
@@ -242,12 +250,17 @@ export default function WorldFoundationApp() {
           view={view}
           inspectorOpen={inspectorOpen}
           inspectorView={inspectorView}
-          floatingTerminal={floatingTerminal}
-          floatingTerminalPortal={floatingTerminalPortal}
+          floatingTerminals={floatingTerminals}
+          floatingTerminalPortals={floatingTerminalPortals}
           onInspectorPortal={setInspectorPortal}
           onInspectorViewOpening={setInspectorView}
-          onFloatingTerminalChange={setFloatingTerminal}
-          onFloatingTerminalPortal={setFloatingTerminalPortal}
+          onFloatingTerminalsChange={setFloatingTerminals}
+          onFloatingTerminalPortal={(nodeId, portal) =>
+            setFloatingTerminalPortals((current) => ({
+              ...current,
+              [nodeId]: portal,
+            }))
+          }
           onOpenSpaces={() => setView("spaces")}
         />
       ) : null}
@@ -259,23 +272,26 @@ function WorldControlPlane({
   view,
   inspectorOpen,
   inspectorView,
-  floatingTerminal,
-  floatingTerminalPortal,
+  floatingTerminals,
+  floatingTerminalPortals,
   onInspectorPortal,
   onInspectorViewOpening,
-  onFloatingTerminalChange,
+  onFloatingTerminalsChange,
   onFloatingTerminalPortal,
   onOpenSpaces,
 }: {
   view: Exclude<WorldView, "spaces">;
   inspectorOpen: boolean;
   inspectorView: InspectorView | null;
-  floatingTerminal: WorldFloatingTerminal | null;
-  floatingTerminalPortal: HTMLDivElement | null;
+  floatingTerminals: readonly WorldFloatingTerminal[];
+  floatingTerminalPortals: Readonly<Record<string, HTMLDivElement | null>>;
   onInspectorPortal(element: HTMLElement | null): void;
   onInspectorViewOpening(view: InspectorView): void;
-  onFloatingTerminalChange(terminal: WorldFloatingTerminal | null): void;
-  onFloatingTerminalPortal(element: HTMLDivElement | null): void;
+  onFloatingTerminalsChange(terminals: WorldFloatingTerminal[]): void;
+  onFloatingTerminalPortal(
+    nodeId: string,
+    element: HTMLDivElement | null,
+  ): void;
   onOpenSpaces: () => void;
 }) {
   const runtime = useWorldRuntime();
@@ -362,12 +378,18 @@ function WorldControlPlane({
   const [intentError, setIntentError] = useState<string | null>(null);
   const [selectedOfficeAnchor, setSelectedOfficeAnchor] =
     useState<OfficeCanvasAnchor | null>(null);
+  const [officeConversationAnchors, setOfficeConversationAnchors] =
+    useState<OfficeConversationAnchors | null>(null);
+  const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
+    Record<string, OfficeCanvasAnchor | null>
+  >({});
   const [intentOverlayAnchor, setIntentOverlayAnchor] = useState<{
     x: number;
     y: number;
   } | null>(null);
   const pendingSelectionRef = useRef<{
     id: string | null;
+    waitingForNodeId: string;
   } | null>(null);
   const currentSelection = selection
     ? (world.nodeById.get(selection.id) ?? null)
@@ -426,14 +448,29 @@ function WorldControlPlane({
         nextNodeId: id,
         inspectorOpen,
         inspectorView,
-        alreadyFloating: floatingTerminal?.nodeId === selected.id,
+        alreadyFloating: floatingTerminals.some(
+          (terminal) => terminal.nodeId === selected.id,
+        ),
       })
     ) {
       const outgoing = floatingTerminalForNode(selected);
       if (outgoing) {
+        const admission = upsertWorldFloatingTerminal(
+          floatingTerminals,
+          outgoing,
+        );
+        if (!admission.admitted) {
+          setIntentError(
+            "Five terminals are already open. Close one before changing selection.",
+          );
+          return;
+        }
         window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
-        pendingSelectionRef.current = { id };
-        onFloatingTerminalChange(outgoing);
+        pendingSelectionRef.current = {
+          id,
+          waitingForNodeId: outgoing.nodeId,
+        };
+        onFloatingTerminalsChange([...admission.terminals]);
         return;
       }
     }
@@ -451,29 +488,37 @@ function WorldControlPlane({
 
   useEffect(() => {
     const pending = pendingSelectionRef.current;
-    if (!pending || !floatingTerminalPortal) return;
+    if (!pending || !floatingTerminalPortals[pending.waitingForNodeId]) {
+      return;
+    }
     pendingSelectionRef.current = null;
     const frame = requestAnimationFrame(() => {
       applySelectionRef.current(pending.id);
     });
     return () => cancelAnimationFrame(frame);
-  }, [floatingTerminal?.nodeId, floatingTerminalPortal]);
+  }, [floatingTerminalPortals]);
 
   useEffect(() => {
-    if (!floatingTerminal) return;
-    const current = world.nodeById.get(floatingTerminal.nodeId);
-    if (
-      !current ||
-      current.generation !== floatingTerminal.runtimeGeneration ||
-      floatingTerminalForNode(current)?.terminalId !==
-        floatingTerminal.terminalId
-    ) {
-      onFloatingTerminalChange(null);
-      onFloatingTerminalPortal(null);
+    const retained = floatingTerminals.filter((terminal) => {
+      const current = world.nodeById.get(terminal.nodeId);
+      return Boolean(
+        current &&
+          current.generation === terminal.runtimeGeneration &&
+          floatingTerminalForNode(current)?.terminalId === terminal.terminalId,
+      );
+    });
+    if (retained.length !== floatingTerminals.length) {
+      const retainedIds = new Set(retained.map(({ nodeId }) => nodeId));
+      for (const terminal of floatingTerminals) {
+        if (!retainedIds.has(terminal.nodeId)) {
+          onFloatingTerminalPortal(terminal.nodeId, null);
+        }
+      }
+      onFloatingTerminalsChange(retained);
     }
   }, [
-    floatingTerminal,
-    onFloatingTerminalChange,
+    floatingTerminals,
+    onFloatingTerminalsChange,
     onFloatingTerminalPortal,
     world,
   ]);
@@ -485,9 +530,18 @@ function WorldControlPlane({
         throw new Error("This terminal is no longer available");
       }
       await focusWorldNode(node);
-      onFloatingTerminalChange(conversation);
+      const admission = upsertWorldFloatingTerminal(
+        floatingTerminals,
+        conversation,
+      );
+      if (!admission.admitted) {
+        throw new Error(
+          "Five terminals are already open. Close one before opening another.",
+        );
+      }
+      onFloatingTerminalsChange([...admission.terminals]);
     },
-    [onFloatingTerminalChange],
+    [floatingTerminals, onFloatingTerminalsChange],
   );
 
   useEffect(() => {
@@ -502,25 +556,34 @@ function WorldControlPlane({
       window.removeEventListener(WORLD_TERMINAL_POP_OUT_EVENT, handlePopOut);
   }, [popOutTerminal, selected]);
 
-  const dockFloatingTerminal = () => {
-    if (!floatingTerminal) return;
-    const target = world.nodeById.get(floatingTerminal.nodeId);
+  const dockFloatingTerminal = (terminal: WorldFloatingTerminal) => {
+    const target = world.nodeById.get(terminal.nodeId);
     if (!target || !floatingTerminalForNode(target)) {
-      onFloatingTerminalChange(null);
+      onFloatingTerminalsChange(
+        floatingTerminals.filter(({ nodeId }) => nodeId !== terminal.nodeId),
+      );
       return;
     }
     window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
-    onFloatingTerminalChange(null);
-    onFloatingTerminalPortal(null);
+    onFloatingTerminalsChange(
+      floatingTerminals.filter(({ nodeId }) => nodeId !== terminal.nodeId),
+    );
+    onFloatingTerminalPortal(terminal.nodeId, null);
     requestAnimationFrame(() => {
       applySelectionRef.current(target.id, "terminal");
     });
   };
 
-  const closeFloatingTerminal = () => {
-    window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
-    onFloatingTerminalChange(null);
-    onFloatingTerminalPortal(null);
+  const closeFloatingTerminal = (terminal: WorldFloatingTerminal) => {
+    onFloatingTerminalsChange(
+      floatingTerminals.filter(({ nodeId }) => nodeId !== terminal.nodeId),
+    );
+    onFloatingTerminalPortal(terminal.nodeId, null);
+  };
+
+  const focusFloatingTerminal = (terminal: WorldFloatingTerminal) => {
+    const admission = upsertWorldFloatingTerminal(floatingTerminals, terminal);
+    onFloatingTerminalsChange([...admission.terminals]);
   };
 
   useEffect(() => {
@@ -592,16 +655,25 @@ function WorldControlPlane({
                       world={world}
                       selectedId={selectedId}
                       onSelect={selectNode}
-                      onOpenTerminal={(id) => {
+                      floatingTerminals={floatingTerminals}
+                      onConversationAnchorsChange={setOfficeConversationAnchors}
+                      onOpenTerminal={async (id) => {
                         const node = world.nodeById.get(id);
-                        if (!node) return;
-                        void popOutTerminal(node).catch((cause) => {
+                        if (!node) {
+                          throw new Error(
+                            "This terminal is no longer available",
+                          );
+                        }
+                        try {
+                          await popOutTerminal(node);
+                        } catch (cause) {
                           setIntentError(
                             cause instanceof Error
                               ? cause.message
                               : String(cause),
                           );
-                        });
+                          throw cause;
+                        }
                       }}
                       onSelectedAnchorChange={setSelectedOfficeAnchor}
                     />
@@ -645,6 +717,20 @@ function WorldControlPlane({
               />
             </Suspense>
           ) : null}
+          {view === "office"
+            ? floatingTerminals.map((terminal) => {
+                const sceneAnchors =
+                  officeConversationAnchors?.[terminal.nodeId];
+                const source =
+                  sceneAnchors?.workbench ?? sceneAnchors?.agent ?? null;
+                const target = floatingWindowAnchors[terminal.nodeId] ?? null;
+                return source && target ? (
+                  <Suspense key={terminal.nodeId} fallback={null}>
+                    <WorldIntentConnector source={source} target={target} />
+                  </Suspense>
+                ) : null;
+              })
+            : null}
           <aside
             ref={contextRailRef}
             className={`world-context-rail ${inspectorOpen ? "has-inspector" : ""}`}
@@ -677,16 +763,28 @@ function WorldControlPlane({
           </aside>
         </div>
       )}
-      {floatingTerminal ? (
-        <Suspense fallback={null}>
+      <Suspense fallback={null}>
+        {floatingTerminals.map((terminal, index) => (
           <WorldFloatingTerminalWindow
-            conversation={floatingTerminal}
-            onClose={closeFloatingTerminal}
-            onDock={dockFloatingTerminal}
-            onPortalChange={onFloatingTerminalPortal}
+            key={terminal.nodeId}
+            conversation={terminal}
+            cascadeIndex={index}
+            compactActive={index === floatingTerminals.length - 1}
+            onFocus={() => focusFloatingTerminal(terminal)}
+            onClose={() => closeFloatingTerminal(terminal)}
+            onDock={() => dockFloatingTerminal(terminal)}
+            onAnchorChange={(anchor) =>
+              setFloatingWindowAnchors((current) => ({
+                ...current,
+                [terminal.nodeId]: anchor,
+              }))
+            }
+            onPortalChange={(portal) =>
+              onFloatingTerminalPortal(terminal.nodeId, portal)
+            }
           />
-        </Suspense>
-      ) : null}
+        ))}
+      </Suspense>
     </main>
   );
 }

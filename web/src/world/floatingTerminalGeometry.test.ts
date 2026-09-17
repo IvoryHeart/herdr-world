@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import {
   clampFloatingTerminalPosition,
+  defaultFloatingTerminalGeometry,
   moveFloatingTerminalPosition,
   resizeFloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 
 describe("floating terminal geometry", () => {
+  test("cascades new windows from the lower-left inside the viewport", () => {
+    expect(
+      defaultFloatingTerminalGeometry(2, { width: 1200, height: 900 }),
+    ).toEqual({ left: 88, top: 308, width: 760, height: 520 });
+  });
+
   test("moves inside the viewport without allowing the window to escape", () => {
     expect(
       moveFloatingTerminalPosition(

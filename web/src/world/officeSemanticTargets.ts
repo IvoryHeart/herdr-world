@@ -5,6 +5,7 @@ import type {
   OfficeRoom,
 } from "./herdrOfficeProjection";
 import {
+  agentBarSlot,
   deskAnchor,
   OFFICE_GEOMETRY,
   receptionAgentAnchor,
@@ -56,6 +57,22 @@ export function officeSemanticTargets(
     });
   });
 
+  projection.barAgents.forEach((agent, index) => {
+    const slot = agentBarSlot(layout.ceoBlocks, index);
+    targets.push(
+      agentTarget(
+        projection,
+        agent,
+        touchRect(
+          slot.x,
+          slot.rowY - 5,
+          Math.max(MIN_OFFICE_TOUCH_TARGET, 52),
+          slot.characterFeetY - slot.rowY + 10,
+        ),
+      ),
+    );
+  });
+
   projection.rooms.forEach((room, roomIndex) => {
     const rect = layout.rooms.find(({ index }) => index === roomIndex);
     if (!rect) {
@@ -105,7 +122,7 @@ export function officeSemanticTargets(
               kind: "desk",
               label: deskTargetLabel(projection, desk),
               rect: stationRect,
-              canActivate: false,
+              canActivate: desk.canOpenInSpaces,
             },
       );
     });

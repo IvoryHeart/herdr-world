@@ -300,6 +300,8 @@ export function PixelOfficeCanvas({
     return () => {
       disposed = true;
       officeDebug("renderer:destroy");
+      latestRef.current.onAnchorChange?.(null);
+      latestRef.current.onSelectedAnchorChange?.(null);
       controllerRef.current?.destroy();
       controllerRef.current = null;
     };

@@ -14,7 +14,8 @@ export function officeSpaceForRoom(
   return (
     world.spaces.find(
       (space) =>
-        space.connectionId === room.hostKey &&
+        space.parentId === room.hostKey &&
+        space.connectionId === room.workspaceRef.connectionId &&
         space.nativeId === room.workspaceRef.nativeId,
     ) ?? null
   );

@@ -13,6 +13,7 @@ import {
   selectedHostStatusLabel,
   shouldCloseWorldInspector,
   shouldRehomeDockedTerminal,
+  upsertWorldFloatingTerminal,
   worldIntentInitialView,
   worldIntentViews,
   worldSelectionIsCurrent,
@@ -629,6 +630,39 @@ describe("World view preference", () => {
         alreadyFloating: false,
       }),
     ).toBe(false);
+  });
+
+  test("bounds floating terminals while focusing an existing conversation", () => {
+    const terminals = Array.from({ length: 5 }, (_, index) => ({
+      nodeId: `node-${index}`,
+      connectionId: "local",
+      runtimeGeneration: 1,
+      paneId: `pane-${index}`,
+      terminalId: `terminal-${index}`,
+      label: `Terminal ${index}`,
+      hostLabel: "Local",
+      spaceLabel: "Studio",
+    }));
+    expect(
+      upsertWorldFloatingTerminal(terminals, {
+        ...terminals[0]!,
+        label: "Focused",
+      }),
+    ).toEqual({
+      terminals: [
+        ...terminals.slice(1),
+        { ...terminals[0]!, label: "Focused" },
+      ],
+      admitted: true,
+    });
+    expect(
+      upsertWorldFloatingTerminal(terminals, {
+        ...terminals[0]!,
+        nodeId: "node-new",
+        paneId: "pane-new",
+        terminalId: "terminal-new",
+      }),
+    ).toEqual({ terminals, admitted: false });
   });
 
   test("does not dispatch Inspector work after a generation replacement", async () => {

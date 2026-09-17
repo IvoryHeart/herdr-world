@@ -193,6 +193,15 @@ const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   })),
 );
 
+const WorldTerminalPortalList = lazyWithReload(
+  "world-terminal-portals",
+  () => import("./world/WorldTerminalPortalList"),
+);
+const ViewportDebugOverlay = lazyWithReload(
+  "viewport-debug-overlay",
+  () => import("./components/ViewportDebugOverlay"),
+);
+
 const MIN_SIDEBAR = 180;
 const MAX_SIDEBAR = 560;
 const DEFAULT_SIDEBAR = 284;
@@ -402,48 +411,6 @@ const keyboardInsetTrim =
         ) || 0,
       )
     : 0;
-
-function ViewportDebugOverlay() {
-  const [lines, setLines] = useState<string[]>([]);
-  useEffect(() => {
-    const probe = document.createElement("div");
-    probe.style.cssText =
-      "position:fixed;left:0;top:0;width:0;padding-bottom:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none";
-    document.body.appendChild(probe);
-    const update = () => {
-      const vv = window.visualViewport;
-      const cs = getComputedStyle(document.documentElement);
-      setLines([
-        `mode ${
-          window.matchMedia("(display-mode: standalone)").matches
-            ? "standalone"
-            : "browser"
-        }`,
-        `inner ${window.innerHeight} outer ${window.outerHeight}`,
-        `vv ${vv ? `${Math.round(vv.height)} @${Math.round(vv.offsetTop)}` : "n/a"}`,
-        `appH ${cs.getPropertyValue("--app-height") || "-"}`,
-        `kbd ${cs.getPropertyValue("--keyboard-inset-bottom") || "-"}`,
-        `lift ${cs.getPropertyValue("--keyboard-inset-content") || "-"}`,
-        `safe-bottom ${probe.offsetHeight}`,
-      ]);
-    };
-    update();
-    const timer = window.setInterval(update, 400);
-    window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
-    return () => {
-      window.clearInterval(timer);
-      window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
-      probe.remove();
-    };
-  }, []);
-  return (
-    <pre className="viewport-debug-overlay" aria-hidden="true">
-      {lines.join("\n")}
-    </pre>
-  );
-}
 
 function useVisualViewportCssVars(uiScale: number) {
   useEffect(() => {
@@ -1133,7 +1100,7 @@ export default function App({
   inspectorPortal = null,
   topbarPortal = null,
   primaryViewControl = null,
-  worldTerminalPresentation = null,
+  worldTerminalPresentations = [],
   onInspectorVisibilityChange,
   onInspectorViewChange,
   onTerminalPopOut,
@@ -1142,7 +1109,7 @@ export default function App({
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
-  worldTerminalPresentation?: WorldTerminalPresentation | null;
+  worldTerminalPresentations?: readonly WorldTerminalPresentation[];
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
@@ -1396,32 +1363,25 @@ export default function App({
     inspectorOriginPane?.workspace_id === inspectorWorkspace?.workspace_id
       ? inspectorOriginPane
       : undefined;
-  const floatingTerminalPane =
-    worldTerminalPresentation &&
-    worldTerminalPresentation.connectionId === s.activeConnectionId &&
-    worldTerminalPresentation.runtimeGeneration === s.serverRuntimeGeneration &&
-    s.panes.find(
-      (pane) =>
-        pane.pane_id === worldTerminalPresentation.paneId &&
-        pane.terminal_id === worldTerminalPresentation.terminalId,
-    );
+  const inspectorFloatingTerminal = inspectorTerminalPane
+    ? worldTerminalPresentations.some(
+        (presentation) =>
+          presentation.connectionId === s.activeConnectionId &&
+          presentation.runtimeGeneration === s.serverRuntimeGeneration &&
+          presentation.paneId === inspectorTerminalPane.pane_id &&
+          presentation.terminalId === inspectorTerminalPane.terminal_id &&
+          Boolean(presentation.portal),
+      )
+    : false;
   const terminalPresentation = terminalPresentationTarget(
     operationalShortcutsEnabled,
     inspectorState,
-    Boolean(floatingTerminalPane),
+    Boolean(inspectorFloatingTerminal),
   );
   const presentedTerminalPane =
-    terminalPresentation === "floating"
-      ? floatingTerminalPane
-      : terminalPresentation === "inspector"
-        ? inspectorTerminalPane
-        : undefined;
+    terminalPresentation === "inspector" ? inspectorTerminalPane : undefined;
   const presentedTerminalPortal =
-    terminalPresentation === "floating"
-      ? worldTerminalPresentation?.portal
-      : terminalPresentation === "inspector"
-        ? inspectorTerminalPortal
-        : null;
+    terminalPresentation === "inspector" ? inspectorTerminalPortal : null;
   const inspectorResourceStateKey = inspectorState
     ? resourceStateKey(inspectorState.scope)
     : null;
@@ -3352,7 +3312,7 @@ export default function App({
           }}
           onTerminalPortalChange={setInspectorTerminalPortal}
           onTerminalPopOut={onTerminalPopOut}
-          terminalDetached={terminalPresentation === "floating"}
+          terminalDetached={Boolean(inspectorFloatingTerminal)}
           onViewChange={setInspectorView}
           onDockChange={setInspectorDock}
           onExpandedChange={setInspectorExpanded}
@@ -3837,7 +3797,11 @@ export default function App({
         </main>
       </div>
       <GlobalTooltip />
-      {viewportDebugEnabled ? <ViewportDebugOverlay /> : null}
+      {viewportDebugEnabled ? (
+        <Suspense fallback={null}>
+          <ViewportDebugOverlay />
+        </Suspense>
+      ) : null}
       {paneJumpOpen ? (
         <PaneJumpOverlay
           entries={paneJumpOptions}
@@ -3854,8 +3818,7 @@ export default function App({
       >
         {inspectorSlot}
       </WorkspaceInspectorPortal>
-      {(terminalPresentation === "inspector" ||
-        terminalPresentation === "floating") &&
+      {terminalPresentation === "inspector" &&
       presentedTerminalPortal &&
       presentedTerminalPane
         ? createPortal(
@@ -3880,6 +3843,22 @@ export default function App({
             presentedTerminalPortal,
           )
         : null}
+      {worldTerminalPresentations.length ? (
+        <Suspense fallback={null}>
+          <WorldTerminalPortalList
+            presentations={worldTerminalPresentations}
+            panes={s.panes}
+            activeConnectionId={s.activeConnectionId}
+            connectionGeneration={s.connectionGeneration}
+            runtimeGeneration={s.serverRuntimeGeneration}
+            terminalTheme={terminalTheme}
+            uiScale={uiScale}
+            mobileShortcuts={mobileTerminalShortcuts}
+            mobileSideShortcuts={mobileTerminalSideShortcuts}
+            onOpenWorkspaceFile={handleTerminalWorkspaceFile}
+          />
+        </Suspense>
+      ) : null}
     </div>
   );
 }

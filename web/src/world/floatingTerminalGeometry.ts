@@ -7,6 +7,26 @@ const WINDOW_MARGIN = 8;
 const MIN_WIDTH = 420;
 const MIN_HEIGHT = 280;
 
+export function defaultFloatingTerminalGeometry(
+  cascadeIndex: number,
+  viewport: FloatingTerminalSize,
+): FloatingTerminalGeometry {
+  const width = Math.min(760, Math.max(0, viewport.width - WINDOW_MARGIN * 2));
+  const height = Math.min(
+    520,
+    Math.max(0, viewport.height - WINDOW_MARGIN * 2),
+  );
+  return clampFloatingTerminalGeometry(
+    {
+      left: 24 + Math.max(0, cascadeIndex) * 32,
+      top: viewport.height - 24 - height - Math.max(0, cascadeIndex) * 24,
+      width,
+      height,
+    },
+    viewport,
+  );
+}
+
 export function clampFloatingTerminalPosition(
   position: FloatingTerminalPosition,
   viewport: FloatingTerminalSize,
