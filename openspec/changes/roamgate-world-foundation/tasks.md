@@ -16,7 +16,7 @@
 - [x] 3.2 Integrate native Spaces and checkpoint World routes into the Roamgate shell without mounting a second app, place their single selector between version and Machines in the inherited top bar without a stacked World navigation bar, and verify canonical navigation plus desktop/mobile accessibility tests
 - [ ] 3.3 Complete the retained Pixel Office migration in tasks 10.1–10.8 and verify the defining scene, layout, operations and responsive behavior over aggregate multi-host data with one selected operational host
 - [x] 3.4 Characterize the checkpoint World-to-Spaces Files, Changes and Agent History handoff, and verify an aggregate selection cannot open resources from a different host or checkout
-- [ ] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
+- [x] 3.5 Complete the connected Tree and spatial Graph migrations in tasks 11.1–12.4 and verify both distinct presentations, guarded actions and compact/accessibility equivalents after the Office seam passes
 
 ## 4. Distribution and knowledge
 
@@ -63,7 +63,7 @@
 - [x] 9.1 Present one focused Office terminal through the current Roamgate-derived `TerminalView` in either the intent overlay's Terminal tab or a floating conversation target, suppress a competing mounted-but-hidden Spaces view, expose explicit icon controls for Pop out and Dock in profile, make profile close close rather than pop out, and verify selection away from a docked agent detaches the old target before mounting its replacement while preserving one qualified attachment without duplicate input or transport
 - [x] 9.2 Extend that terminal owner with a bounded registry keyed by selected connection, runtime generation and terminal identity inside the inherited browser routing lease, and verify the registry adds no Herdr Web terminal implementation, connection-independent client, second WebSocket, SSH tunnel, application store or per-host terminal manager
 - [x] 9.3 Restore direct Office desk activation and up to five independent selected-host desktop conversation windows with bounded move, resize, order, close/focus, real terminal refit and validated browser-local geometry, and verify a desk opens or focuses its floating terminal plus duplicate and sixth-window behavior
-- [ ] 9.4 Restore separate qualified connectors from floating terminals to their desk/agent/node anchors and from the intent overlay to its agent anchor, plus explicit handoff to the mounted Spaces pane; verify connectors track scene, overlay and window movement without changing topology, selection or terminal identity
+- [x] 9.4 Restore separate qualified connectors from floating terminals to their desk/agent/node anchors and from the intent overlay to its agent anchor, plus explicit handoff to the mounted Spaces pane; verify connectors track scene, overlay and window movement without changing topology, selection or terminal identity
 - [ ] 9.5 Preserve selected-host conversations through projection refresh and visual navigation, retire every outgoing conversation before explicit host switching or generation replacement, and verify local then SSH operation without cross-host input redirection plus a compact layout with one accessible usable conversation
 
 ## 10. Pixel Office migration
@@ -85,10 +85,10 @@
 
 ## 12. Spatial Graph migration
 
-- [ ] 12.1 Port the qualified host-first Graph projection and deterministic force layout with explicit host/space/leaf bounds and exact overflow counts, and verify duplicate native identifiers never merge
-- [ ] 12.2 Restore node dragging/pinning, bounded pan/zoom, Fit, search, disclosure and validated camera/position persistence, and verify status-only updates do not reset settled layout state
-- [ ] 12.3 Integrate the shared selected-host Inspector context, semantic hierarchy and qualified terminal conversation connectors while retaining read-only inactive-host selection, and verify canvas and semantic selection/actions stay synchronized
-- [ ] 12.4 Restore renderer lifecycle and performance bounds for visibility, resize, topology updates and unmount, and verify repeated view changes release work without adding subscriptions or terminal resize traffic
+- [x] 12.1 Port the qualified host-first Graph projection and deterministic force layout with explicit host/space/leaf bounds and exact overflow counts, and verify duplicate native identifiers never merge
+- [x] 12.2 Restore node dragging/pinning, bounded pan/zoom, Fit, search, disclosure and validated camera/position persistence, and verify status-only updates do not reset settled layout state
+- [x] 12.3 Integrate the shared selected-host Inspector context, semantic hierarchy and qualified terminal conversation connectors while retaining read-only inactive-host selection, and verify canvas and semantic selection/actions stay synchronized
+- [x] 12.4 Restore renderer lifecycle and performance bounds for visibility, resize, topology updates and unmount, and verify repeated view changes release work without adding subscriptions or terminal resize traffic
 
 ## 13. Complete-view acceptance and delivery
 

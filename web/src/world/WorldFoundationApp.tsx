@@ -40,7 +40,7 @@ export {
 
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
 const ConnectedTreeView = lazy(() => import("./ConnectedTreeView"));
-const CheckpointGraphView = lazy(() => import("./CheckpointGraphView"));
+const SpatialGraphView = lazy(() => import("./SpatialGraphView"));
 const WorldIntentProfile = lazy(() => import("./WorldIntentProfile"));
 const WorldIntentConnector = lazy(() => import("./WorldIntentConnector"));
 const WorldStatusHeader = lazy(() =>
@@ -697,17 +697,15 @@ function WorldControlPlane({
                     />
                   </Suspense>
                 ) : (
-                  <Suspense
-                    fallback={
-                      <div className="world-view-loading">Loading Graph…</div>
-                    }
-                  >
-                    <CheckpointGraphView
-                      world={world}
-                      selectedId={selectedId}
-                      onSelect={selectNode}
-                    />
-                  </Suspense>
+                  <SpatialGraphView
+                    world={world}
+                    selectedId={selectedId}
+                    conversationNodeIds={floatingTerminalNodeIds}
+                    onSelect={selectNode}
+                    onOpenTerminal={openTerminalById}
+                    onSelectedAnchorChange={setSelectedVisualAnchor}
+                    onNodeAnchorsChange={setVisualConversationAnchors}
+                  />
                 )}
               </WorldViewErrorBoundary>
             </Suspense>

@@ -4,12 +4,13 @@ import process from "node:process";
 import { fileURLToPath, URL } from "node:url";
 
 const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
-// The retained Pixel Office adds lazy renderer/environment entry points. Keep
-// total bytes and eager JS constrained while allowing those optional chunks.
+// The retained Pixel Office and spatial Graph add lazy renderer/environment
+// entry points. Keep total bytes and eager JS constrained while allowing the
+// shared visual-view ownership wiring in the shell.
 const maxFileCount = 170;
 const maxTotalBytes = 12 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
-const maxInitialJsGzipBytes = 201 * 1024;
+const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
 
 /** Follow eager imports only; dynamic imports belong to feature budgets. */
