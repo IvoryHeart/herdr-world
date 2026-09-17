@@ -45,8 +45,8 @@ retain their original Herdr Web lineage.
   the version and machine controls, without a second navigation bar.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Unified selected-agent identity with the shared Inspector in Office, Tree,
-  Graph and Spaces; placed Terminal first and made it the default when no
-  applicable preference exists, while preserving compact dock, expand, pop-out,
+  Graph and Spaces; placed Terminal first and made it the default for each new
+  terminal-capable selection, while preserving compact dock, expand, pop-out,
   handoff and close controls in every dock.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now

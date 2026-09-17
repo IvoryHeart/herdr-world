@@ -166,9 +166,8 @@ identity and safety state; Files, Changes, Agent History and Terminal occupy the
 visible as tabs immediately. The identity and resources are one composed Inspector surface with one
 set of dock, expand, pop-out and close controls; bottom docking does not leave a separate profile
 card consuming or obscuring the resource pane. Terminal is ordered first and is the initial tab for
-terminal-capable entities when no
-applicable tab preference has been retained, and the last chosen tab remains a browser-local
-presentation preference. Full ancestry, generation, persona, model, focus and task
+each newly selected terminal-capable entity; changing tabs affects the current selection without
+silently changing that default for the next entity. Full ancestry, generation, persona, model, focus and task
 metadata are not repeated as a large profile card; appropriate admitted information remains
 available in scene callouts or the relevant resource view.
 

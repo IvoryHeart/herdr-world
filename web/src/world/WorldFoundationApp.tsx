@@ -60,7 +60,6 @@ const WorldFloatingTerminalWindow = lazy(
 export type WorldView = "spaces" | "office" | "tree" | "graph";
 
 const SELECTED_CONNECTION_KEY = "worldSelectedConnection";
-const WORLD_INTENT_VIEW_KEY = "worldIntentView";
 const WORLD_VIEWS: readonly WorldView[] = ["office", "spaces", "tree", "graph"];
 const WORLD_VIEW_PATHS: Record<WorldView, string> = {
   spaces: "/spaces",
@@ -130,28 +129,6 @@ export function worldIntentInitialView(
   if (preferred && views.includes(preferred)) return preferred;
   if (views.includes("terminal")) return "terminal";
   return views[0] ?? null;
-}
-
-function readWorldIntentView(): InspectorView | null {
-  try {
-    const value = worldLocalStorage.getItem(WORLD_INTENT_VIEW_KEY);
-    return value === "files" ||
-      value === "changes" ||
-      value === "history" ||
-      value === "terminal"
-      ? value
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeWorldIntentView(view: InspectorView) {
-  try {
-    worldLocalStorage.setItem(WORLD_INTENT_VIEW_KEY, view);
-  } catch {
-    // The current overlay still works when browser persistence is unavailable.
-  }
 }
 
 function initialView() {
@@ -278,12 +255,7 @@ export default function WorldFoundationApp() {
                   window.dispatchEvent(new Event(WORLD_TERMINAL_POP_OUT_EVENT))
           }
           onInspectorViewChange={
-            view === "spaces"
-              ? undefined
-              : (next) => {
-                  setInspectorView(next);
-                  writeWorldIntentView(next);
-                }
+            view === "spaces" ? undefined : setInspectorView
           }
           inspectorContext={view === "spaces" ? null : inspectorContext}
           onInspectorOpenSpaces={
@@ -503,7 +475,7 @@ function WorldControlPlane({
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
     const intentView = next
-      ? worldIntentInitialView(next, requestedView ?? readWorldIntentView())
+      ? worldIntentInitialView(next, requestedView)
       : null;
     if (!next || !next.actionable || !next.selectedHost || !intentView) {
       setIntentOpening(false);

@@ -206,8 +206,8 @@ History and Terminal tabs rather than a repeated metadata table or a set of butt
 used before those resources become visible. The compact identity and resources SHALL share one
 overlay lifecycle, header action set and close control in every dock position rather than stack a
 separate profile card above the Inspector. Terminal SHALL be the first tab and the initial tab for a
-terminal-capable entity when there is no retained applicable tab preference, and the user's
-subsequent tab choice SHALL be retained as a browser-local presentation preference.
+newly selected terminal-capable entity; changing resources for the current selection SHALL NOT
+silently change that default for the next selected entity.
 
 Selecting an actionable space or non-agent terminal pane SHALL use the same overlay and shell-owned
 resource state with compact entity identity and only the tabs applicable to that entity. A space

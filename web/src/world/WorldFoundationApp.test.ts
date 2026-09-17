@@ -283,7 +283,7 @@ describe("World view preference", () => {
     });
   });
 
-  test("opens only applicable intent resources and remembers an admitted tab", () => {
+  test("defaults intent to Terminal while admitting explicit resource requests", () => {
     const world = buildWorldObject(
       [
         {
