@@ -1949,10 +1949,10 @@ function drawTabDesk(
   tabPlate
     .roundRect(anchor.x - plateWidth / 2, anchor.nameY, plateWidth, 16, 4)
     .stroke({ width: deskSelected ? 2 : 1, color: accent, alpha: 0.82 });
-  makeInteractive(tabPlate, desk.key, onSelect);
+  makeInteractive(tabPlate, desk.key, onSelect, onActivateAgent);
   parent.addChild(tabPlate);
   tabName.position.set(anchor.x, anchor.nameY + 8);
-  makeInteractive(tabName, desk.key, onSelect);
+  makeInteractive(tabName, desk.key, onSelect, onActivateAgent);
   parent.addChild(tabName);
 
   const chairY = anchor.characterFeetY - OFFICE_GEOMETRY.characterHeight * 0.18;
@@ -2026,7 +2026,7 @@ function drawTabDesk(
     animated,
     deskSelected,
   );
-  makeInteractive(deskNode, desk.key, onSelect);
+  makeInteractive(deskNode, desk.key, onSelect, onActivateAgent);
   if (desk.completionAgentKeys.some((key) => !completionSeenKeys.has(key))) {
     drawCompletionMarker(
       parent,

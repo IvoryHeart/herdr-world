@@ -185,6 +185,7 @@ import "./styles/layout/topbar.css";
 import "./styles/layout/sidebar.css";
 import "./styles/layout/toast.css";
 import "./styles/layout/mobile-nav.css";
+import type { WorldTerminalPresentation } from "./world/worldTerminalPresentation";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   import("./components/WorkspaceInspectorHost").then((module) => ({
@@ -1114,7 +1115,9 @@ export function terminalPresentationTarget(
     WorkspaceInspectorState,
     "open" | "view" | "originPaneId"
   > | null,
-): "spaces" | "inspector" | null {
+  floating: boolean,
+): "spaces" | "inspector" | "floating" | null {
+  if (floating) return "floating";
   if (
     inspector?.open &&
     inspector.view === "terminal" &&
@@ -1130,21 +1133,26 @@ export default function App({
   inspectorPortal = null,
   topbarPortal = null,
   primaryViewControl = null,
+  worldTerminalPresentation = null,
   onInspectorVisibilityChange,
   onInspectorViewChange,
+  onTerminalPopOut,
 }: {
   operationalShortcutsEnabled?: boolean;
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
+  worldTerminalPresentation?: WorldTerminalPresentation | null;
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
+  onTerminalPopOut?: () => void;
 } = {}) {
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
       connectionGeneration: state.connectionGeneration,
+      serverRuntimeGeneration: state.serverRuntimeGeneration,
       lastRefresh: state.lastRefresh,
       layout: state.layout,
       notice: state.notice,
@@ -1388,10 +1396,32 @@ export default function App({
     inspectorOriginPane?.workspace_id === inspectorWorkspace?.workspace_id
       ? inspectorOriginPane
       : undefined;
+  const floatingTerminalPane =
+    worldTerminalPresentation &&
+    worldTerminalPresentation.connectionId === s.activeConnectionId &&
+    worldTerminalPresentation.runtimeGeneration === s.serverRuntimeGeneration &&
+    s.panes.find(
+      (pane) =>
+        pane.pane_id === worldTerminalPresentation.paneId &&
+        pane.terminal_id === worldTerminalPresentation.terminalId,
+    );
   const terminalPresentation = terminalPresentationTarget(
     operationalShortcutsEnabled,
     inspectorState,
+    Boolean(floatingTerminalPane),
   );
+  const presentedTerminalPane =
+    terminalPresentation === "floating"
+      ? floatingTerminalPane
+      : terminalPresentation === "inspector"
+        ? inspectorTerminalPane
+        : undefined;
+  const presentedTerminalPortal =
+    terminalPresentation === "floating"
+      ? worldTerminalPresentation?.portal
+      : terminalPresentation === "inspector"
+        ? inspectorTerminalPortal
+        : null;
   const inspectorResourceStateKey = inspectorState
     ? resourceStateKey(inspectorState.scope)
     : null;
@@ -3321,6 +3351,8 @@ export default function App({
               );
           }}
           onTerminalPortalChange={setInspectorTerminalPortal}
+          onTerminalPopOut={onTerminalPopOut}
+          terminalDetached={terminalPresentation === "floating"}
           onViewChange={setInspectorView}
           onDockChange={setInspectorDock}
           onExpandedChange={setInspectorExpanded}
@@ -3822,9 +3854,10 @@ export default function App({
       >
         {inspectorSlot}
       </WorkspaceInspectorPortal>
-      {terminalPresentation === "inspector" &&
-      inspectorTerminalPortal &&
-      inspectorTerminalPane
+      {(terminalPresentation === "inspector" ||
+        terminalPresentation === "floating") &&
+      presentedTerminalPortal &&
+      presentedTerminalPane
         ? createPortal(
             <TerminalView
               key={terminalMountKey(
@@ -3832,10 +3865,10 @@ export default function App({
                   connectionId: s.activeConnectionId,
                   generation: s.connectionGeneration,
                 },
-                inspectorTerminalPane.pane_id,
-                inspectorTerminalPane.terminal_id,
+                presentedTerminalPane.pane_id,
+                presentedTerminalPane.terminal_id,
               )}
-              paneId={inspectorTerminalPane.pane_id}
+              paneId={presentedTerminalPane.pane_id}
               terminalTheme={terminalTheme}
               uiScale={uiScale}
               mobileShortcuts={mobileTerminalShortcuts}
@@ -3844,7 +3877,7 @@ export default function App({
               onComposerOpenChange={setTerminalComposerOpen}
               onOpenWorkspaceFile={handleTerminalWorkspaceFile}
             />,
-            inspectorTerminalPortal,
+            presentedTerminalPortal,
           )
         : null}
     </div>

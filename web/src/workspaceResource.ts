@@ -30,6 +30,7 @@ export const WORKSPACE_INSPECTOR_REQUEST_EVENT =
   "herdr-world:workspace-inspector-request";
 export const WORKSPACE_INSPECTOR_CLOSE_EVENT =
   "herdr-world:workspace-inspector-close";
+export const WORLD_TERMINAL_POP_OUT_EVENT = "herdr-world:terminal-pop-out";
 export const WORKSPACE_ANNOTATION_REQUEST_EVENT =
   "herdr-world:workspace-annotation-request";
 

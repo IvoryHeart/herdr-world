@@ -230,6 +230,15 @@
   overflow: hidden;
 }
 
+.workspace-inspector-terminal-detached {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
 .workspace-inspector-terminal-portal > .terminal-shell {
   flex: 1 1 auto;
 }

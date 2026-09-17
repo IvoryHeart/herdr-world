@@ -163,8 +163,9 @@ with a generic responsive CSS grid.
 Visual-view selection is observational. Office proves the seam first: selecting an agent opens a
 right-edge floating overlay above the unchanged Pixi stage. The header contains only compact agent
 identity and safety state; Files, Changes, Agent History and Terminal occupy the useful area and are
-visible as tabs immediately. Agent History is the initial agent tab, and the last chosen tab is a
-browser-local presentation preference. Full ancestry, generation, persona, model, focus and task
+visible as tabs immediately. Terminal is the initial tab for terminal-capable entities when no
+applicable tab preference has been retained, and the last chosen tab remains a browser-local
+presentation preference. Full ancestry, generation, persona, model, focus and task
 metadata are not repeated as a large profile card; appropriate admitted information remains
 available in scene callouts or the relevant resource view.
 
@@ -213,7 +214,9 @@ The registry exposes two mutually exclusive presentation targets for a qualified
 agent intent overlay can dock it as a Terminal tab; Pop out moves it into a retained floating
 conversation window, and Dock in profile moves it back. Changing targets may remount the view only
 after the old target has detached, so there is never more than one input listener or attachment for
-that terminal. Activating an Office desk bypasses the intent overlay and directly opens or focuses
+that terminal. Pop out is an explicit Terminal-toolbar control; closing the profile closes its
+docked presentation rather than unexpectedly creating a window. Activating an Office desk bypasses
+the intent overlay and directly opens or focuses
 the floating target, preserving the established desk interaction. Focusing any presentation first
 focuses its exact Herdr pane so the existing terminal input gate remains authoritative.
 

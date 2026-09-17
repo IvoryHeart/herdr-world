@@ -203,8 +203,9 @@ the visual stage without resizing, relaying out or otherwise taking workspace fr
 overlay SHALL identify the selected agent with a compact icon, name and bounded status or
 read-only-host cue; it SHALL give the primary area to immediately visible Files, Changes, Agent
 History and Terminal tabs rather than a repeated metadata table or a set of buttons that must be
-used before those resources become visible. Agent History SHALL be the initial agent tab and the
-user's subsequent tab choice SHALL be retained as a browser-local presentation preference.
+used before those resources become visible. Terminal SHALL be the initial tab for a
+terminal-capable entity when there is no retained applicable tab preference, and the user's
+subsequent tab choice SHALL be retained as a browser-local presentation preference.
 
 Selecting an actionable space or non-agent terminal pane SHALL use the same overlay and shell-owned
 resource state with compact entity identity and only the tabs applicable to that entity. A space
@@ -225,6 +226,12 @@ intent overlay SHALL remain visually connected to the represented agent whenever
 visible scene anchor. Switching selected entities SHALL not change the selected host, clone an
 Inspector or retain an inactive host's resources. Explicit host activation SHALL retire the
 outgoing Inspector and terminal contexts through the existing connection lifecycle.
+
+#### Scenario: Open a terminal-capable intent
+- **WHEN** the user selects an actionable agent or non-agent terminal pane without a retained
+  applicable tab preference
+- **THEN** the intent overlay opens Terminal as its initial resource while keeping Files, Changes
+  and any admitted Agent History available as peer tabs
 
 #### Scenario: Inspect an agent with a task summary
 - **WHEN** the user selects an admitted agent with a visible scene representation and bounded task
@@ -450,6 +457,10 @@ the outgoing overlay and rehome the same registry entry as a floating conversati
 the replacement overlay context. This automatic handoff SHALL preserve the qualified terminal
 session and count it as the same bounded conversation; it SHALL never leave the outgoing and new
 overlay contexts attached concurrently.
+
+Popping a terminal out SHALL be an explicit Terminal-toolbar action. Closing the selected-entity
+profile SHALL close its docked presentation and SHALL NOT silently create a floating conversation.
+The floating conversation header SHALL expose the inverse Dock in profile action.
 
 Desktop SHALL support up to five distinct conversations with independent bounded position, size,
 z-order and close/focus behavior. Windows SHALL keep terminal text at its configured metrics,

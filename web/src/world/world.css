@@ -193,6 +193,19 @@
 .world-context-rail.has-inspector {
   bottom: 12px;
 }
+.world-context-rail:has(.world-inspector-stage.inspector-dock-bottom) {
+  top: auto;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  width: auto;
+  max-height: min(72%, 720px);
+}
+.world-context-rail:has(.world-inspector-stage.is-inspector-expanded) {
+  inset: 12px;
+  width: auto;
+  max-height: none;
+}
 .world-inspector-portal {
   min-width: 0;
   min-height: 0;
@@ -218,9 +231,34 @@
 .world-intent-profile-header {
   min-width: 0;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr) 30px;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
+}
+.world-intent-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.world-intent-header-actions button {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  color: var(--muted, #9da7b4);
+  background: transparent;
+  cursor: pointer;
+}
+.world-intent-header-actions button:hover:not(:disabled) {
+  color: inherit;
+  background: rgb(255 255 255 / 7%);
+}
+.world-intent-header-actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .world-intent-avatar {
   width: 42px;
@@ -259,18 +297,6 @@
 }
 .world-panel-close {
   position: static;
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 7px;
-  color: var(--muted, #9da7b4);
-  background: transparent;
-  font-size: 22px;
-  cursor: pointer;
-}
-.world-panel-close:hover {
-  color: inherit;
-  background: rgb(255 255 255 / 7%);
 }
 .world-panel-actions {
   display: flex;
@@ -350,6 +376,119 @@
   fill: var(--accent, #79a6ff);
   stroke: color-mix(in srgb, var(--bg, #0e1116) 86%, transparent);
   stroke-width: 2;
+}
+
+.world-floating-terminal {
+  position: fixed;
+  z-index: 46;
+  left: 24px;
+  bottom: 24px;
+  width: min(760px, calc(100vw - 48px));
+  height: min(520px, calc(100vh - 72px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent, #79a6ff) 55%, transparent);
+  border-radius: 12px;
+  background: var(--bg, #0e1116);
+  box-shadow: 0 20px 64px rgb(0 0 0 / 45%);
+}
+
+.world-floating-terminal-header {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--text, #fff) 14%, transparent);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.world-floating-terminal[data-interaction="moving"],
+.world-floating-terminal[data-interaction="resizing"] {
+  user-select: none;
+}
+
+.world-floating-terminal-header > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.world-floating-terminal-header strong,
+.world-floating-terminal-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.world-floating-terminal-header span {
+  color: var(--text-secondary, #9ba7b7);
+  font-size: 11px;
+}
+
+.world-floating-terminal-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.world-floating-terminal-actions button {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.world-floating-terminal-portal {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  display: flex;
+}
+
+.world-floating-terminal-portal > .terminal-shell {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.world-floating-terminal-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0 58%,
+    color-mix(in srgb, var(--text, #fff) 35%, transparent) 59% 64%,
+    transparent 65% 72%,
+    color-mix(in srgb, var(--text, #fff) 55%, transparent) 73% 78%,
+    transparent 79%
+  );
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+@media (max-width: 720px) {
+  .world-floating-terminal {
+    inset: 8px;
+    width: auto;
+    height: auto;
+  }
+
+  .world-floating-terminal-header {
+    align-items: flex-start;
+  }
 }
 
 .world-empty {
@@ -485,6 +624,82 @@
   top: 0;
   display: block;
   max-width: none;
+}
+.world-room-actions-overlay {
+  position: absolute;
+  z-index: 9;
+  inset: 0;
+  pointer-events: none;
+}
+.world-room-actions {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+.world-room-actions-stale {
+  visibility: hidden;
+}
+.world-room-overlay-action {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, #f0c878 55%, #394758);
+  border-radius: 3px;
+  color: var(--text, #edf2f7);
+  background: color-mix(in srgb, #3c2c1d 86%, var(--bg, #0e1116));
+  pointer-events: auto;
+}
+.world-room-overlay-action:hover:not(:disabled),
+.world-room-overlay-action:focus-visible {
+  border-color: #f0c878;
+  background: color-mix(in srgb, #f0c878 20%, var(--bg, #0e1116));
+}
+.world-room-overlay-action-danger:not(:disabled) {
+  color: #f38ba8;
+}
+.world-room-overlay-action:disabled {
+  visibility: hidden;
+}
+.world-new-seat-canvas-action {
+  position: absolute;
+  width: 50px;
+  height: 27px;
+  padding: 0;
+  border: 0;
+  color: transparent;
+  background: transparent;
+  pointer-events: auto;
+}
+.world-new-seat-canvas-action:focus-visible {
+  outline: 2px solid var(--accent, #79a6ff);
+  outline-offset: 2px;
+}
+.world-new-seat-canvas-action-full {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.world-new-room-canvas-action {
+  position: absolute;
+  width: 56px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 3px 4px;
+  border: 1px solid color-mix(in srgb, #67d79b 72%, #394758);
+  border-radius: 5px;
+  color: var(--text, #edf2f7);
+  background: color-mix(in srgb, #67d79b 12%, var(--bg, #0e1116));
+  font-size: 7px;
+  letter-spacing: 0.04em;
+  pointer-events: auto;
+}
+.world-new-room-canvas-action:hover,
+.world-new-room-canvas-action:focus-visible {
+  border-color: #67d79b;
+  background: color-mix(in srgb, #67d79b 24%, var(--bg, #0e1116));
 }
 .world-renderer-fallback {
   min-height: 320px;
@@ -760,6 +975,12 @@
   }
   .world-context-rail.has-inspector {
     bottom: 8px;
+  }
+  .world-context-rail:has(.world-inspector-stage.inspector-dock-bottom),
+  .world-context-rail:has(.world-inspector-stage.is-inspector-expanded) {
+    inset: 8px;
+    width: auto;
+    max-height: none;
   }
   .world-inspector-portal:not(:empty) {
     min-height: min(62vh, 560px);

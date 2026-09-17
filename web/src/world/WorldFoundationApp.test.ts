@@ -12,6 +12,7 @@ import {
   parseWorldView,
   selectedHostStatusLabel,
   shouldCloseWorldInspector,
+  shouldRehomeDockedTerminal,
   worldIntentInitialView,
   worldIntentViews,
   worldSelectionIsCurrent,
@@ -358,9 +359,9 @@ describe("World view preference", () => {
       "changes",
       "terminal",
     ]);
-    expect(worldIntentInitialView(agent, null)).toBe("history");
+    expect(worldIntentInitialView(agent, null)).toBe("terminal");
     expect(worldIntentInitialView(agent, "changes")).toBe("changes");
-    expect(worldIntentInitialView(terminal, "history")).toBe("files");
+    expect(worldIntentInitialView(terminal, "history")).toBe("terminal");
   });
 
   test("restores a valid last host before the default or current profile", () => {
@@ -543,34 +544,91 @@ describe("World view preference", () => {
   });
 
   test("gives one presentation exclusive ownership of the selected terminal", () => {
-    expect(terminalPresentationTarget(true, null)).toBe("spaces");
+    expect(terminalPresentationTarget(true, null, false)).toBe("spaces");
     expect(
-      terminalPresentationTarget(false, {
-        open: true,
-        view: "terminal",
-        originPaneId: "pane-a",
-      }),
+      terminalPresentationTarget(
+        false,
+        {
+          open: true,
+          view: "terminal",
+          originPaneId: "pane-a",
+        },
+        false,
+      ),
     ).toBe("inspector");
     expect(
-      terminalPresentationTarget(true, {
-        open: true,
-        view: "terminal",
-        originPaneId: "pane-a",
-      }),
+      terminalPresentationTarget(
+        true,
+        {
+          open: true,
+          view: "terminal",
+          originPaneId: "pane-a",
+        },
+        false,
+      ),
     ).toBe("inspector");
     expect(
-      terminalPresentationTarget(false, {
-        open: true,
-        view: "files",
-        originPaneId: "pane-a",
-      }),
+      terminalPresentationTarget(
+        false,
+        {
+          open: true,
+          view: "files",
+          originPaneId: "pane-a",
+        },
+        false,
+      ),
     ).toBeNull();
     expect(
-      terminalPresentationTarget(false, {
-        open: true,
-        view: "terminal",
-      }),
+      terminalPresentationTarget(
+        false,
+        {
+          open: true,
+          view: "terminal",
+        },
+        false,
+      ),
     ).toBeNull();
+    expect(
+      terminalPresentationTarget(
+        true,
+        {
+          open: true,
+          view: "terminal",
+          originPaneId: "pane-a",
+        },
+        true,
+      ),
+    ).toBe("floating");
+  });
+
+  test("rehomes a docked terminal before selection leaves its entity", () => {
+    expect(
+      shouldRehomeDockedTerminal({
+        currentNodeId: "agent-a",
+        nextNodeId: "agent-b",
+        inspectorOpen: true,
+        inspectorView: "terminal",
+        alreadyFloating: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldRehomeDockedTerminal({
+        currentNodeId: "agent-a",
+        nextNodeId: "agent-a",
+        inspectorOpen: true,
+        inspectorView: "terminal",
+        alreadyFloating: false,
+      }),
+    ).toBe(false);
+    expect(
+      shouldRehomeDockedTerminal({
+        currentNodeId: "agent-a",
+        nextNodeId: null,
+        inspectorOpen: true,
+        inspectorView: "terminal",
+        alreadyFloating: false,
+      }),
+    ).toBe(false);
   });
 
   test("does not dispatch Inspector work after a generation replacement", async () => {

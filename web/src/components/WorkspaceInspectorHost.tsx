@@ -8,6 +8,7 @@ import {
   Minimize2,
   PanelBottom,
   PanelRight,
+  PictureInPicture2,
   SquareTerminal,
   X,
 } from "lucide-react";
@@ -214,6 +215,8 @@ export function WorkspaceInspectorHost({
   onOpenDocument,
   onRefreshFile,
   onTerminalPortalChange,
+  onTerminalPopOut,
+  terminalDetached = false,
   onViewChange,
   onDockChange,
   onExpandedChange,
@@ -236,6 +239,8 @@ export function WorkspaceInspectorHost({
   onOpenDocument: (path: string, fragment?: string) => void;
   onRefreshFile: () => void;
   onTerminalPortalChange?: (element: HTMLDivElement | null) => void;
+  onTerminalPopOut?: () => void;
+  terminalDetached?: boolean;
   onOpenDiffFile: (entry: ActiveDiffSelection["entry"]) => void;
   annotations: readonly ReviewAnnotation[];
   onCreateAnnotation: (input: NewReviewAnnotation) => void;
@@ -542,6 +547,19 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <div className="workspace-inspector-actions">
+          {state.view === "terminal" &&
+          onTerminalPopOut &&
+          !terminalDetached ? (
+            <button
+              type="button"
+              className="workspace-inspector-terminal-popout-action"
+              title="Dock out terminal"
+              aria-label="Dock out terminal"
+              onClick={onTerminalPopOut}
+            >
+              <PictureInPicture2 size={15} />
+            </button>
+          ) : null}
           <button
             type="button"
             className="workspace-inspector-dock-action"
@@ -845,7 +863,14 @@ export function WorkspaceInspectorHost({
                 state.view === "terminal" ? "" : "is-hidden"
               }`}
             >
-              {state.view === "terminal" ? (
+              {state.view === "terminal" && terminalDetached ? (
+                <div
+                  className="workspace-inspector-terminal-detached"
+                  role="status"
+                >
+                  Terminal is floating.
+                </div>
+              ) : state.view === "terminal" ? (
                 <div
                   ref={onTerminalPortalChange}
                   className="workspace-inspector-terminal-portal"

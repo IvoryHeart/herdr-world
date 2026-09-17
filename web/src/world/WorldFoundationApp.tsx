@@ -1,34 +1,62 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import App from "../App";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
-import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
   type InspectorView,
+  WORLD_TERMINAL_POP_OUT_EVENT,
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   type WorkspaceInspectorRequest,
 } from "../workspaceResource";
-import {
-  useWorldRuntime,
-  type WorldRuntimeState,
-  worldRuntimeStore,
-} from "./runtimeStore";
+import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import {
   buildWorldObject,
   type WorldHostObject,
-  type WorldObject,
   type WorldObjectNode,
 } from "./worldObject";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
-import { WorldViewErrorBoundary } from "./WorldViewErrorBoundary";
+import {
+  floatingTerminalForNode,
+  shouldRehomeDockedTerminal,
+  type WorldFloatingTerminal,
+} from "./worldTerminalPresentation";
+
+export { shouldRehomeDockedTerminal } from "./worldTerminalPresentation";
 
 const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
 const CheckpointTreeView = lazy(() => import("./CheckpointTreeView"));
 const CheckpointGraphView = lazy(() => import("./CheckpointGraphView"));
 const WorldIntentProfile = lazy(() => import("./WorldIntentProfile"));
+const WorldIntentConnector = lazy(() => import("./WorldIntentConnector"));
+const WorldStatusHeader = lazy(() =>
+  import("./WorldStatus").then((module) => ({
+    default: module.WorldStatusHeader,
+  })),
+);
+const WorldConnectionRequired = lazy(() =>
+  import("./WorldStatus").then((module) => ({
+    default: module.WorldConnectionRequired,
+  })),
+);
+const WorldViewErrorBoundary = lazy(() =>
+  import("./WorldViewErrorBoundary").then((module) => ({
+    default: module.WorldViewErrorBoundary,
+  })),
+);
+const WorldFloatingTerminalWindow = lazy(
+  () => import("./WorldFloatingTerminal"),
+);
 
 export type WorldView = "spaces" | "office" | "tree" | "graph";
 
@@ -80,7 +108,7 @@ export function worldIntentInitialView(
 ): InspectorView | null {
   const views = worldIntentViews(node);
   if (preferred && views.includes(preferred)) return preferred;
-  if (node.kind === "agent" && views.includes("history")) return "history";
+  if (views.includes("terminal")) return "terminal";
   return views[0] ?? null;
 }
 
@@ -117,6 +145,13 @@ export default function WorldFoundationApp() {
     null,
   );
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorView, setInspectorView] = useState<InspectorView | null>(
+    null,
+  );
+  const [floatingTerminal, setFloatingTerminal] =
+    useState<WorldFloatingTerminal | null>(null);
+  const [floatingTerminalPortal, setFloatingTerminalPortal] =
+    useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     worldRuntimeStore.start();
@@ -140,6 +175,8 @@ export default function WorldFoundationApp() {
   const setView = (next: WorldView) => {
     if (next === "spaces") {
       window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+      setFloatingTerminal(null);
+      setFloatingTerminalPortal(null);
     }
     setViewState(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
@@ -178,9 +215,25 @@ export default function WorldFoundationApp() {
               </select>
             </label>
           }
+          worldTerminalPresentation={
+            floatingTerminal
+              ? { ...floatingTerminal, portal: floatingTerminalPortal }
+              : null
+          }
           onInspectorVisibilityChange={setInspectorOpen}
+          onTerminalPopOut={
+            view === "spaces"
+              ? undefined
+              : () =>
+                  window.dispatchEvent(new Event(WORLD_TERMINAL_POP_OUT_EVENT))
+          }
           onInspectorViewChange={
-            view === "spaces" ? undefined : writeWorldIntentView
+            view === "spaces"
+              ? undefined
+              : (next) => {
+                  setInspectorView(next);
+                  writeWorldIntentView(next);
+                }
           }
         />
       </div>
@@ -188,7 +241,13 @@ export default function WorldFoundationApp() {
         <WorldControlPlane
           view={view}
           inspectorOpen={inspectorOpen}
+          inspectorView={inspectorView}
+          floatingTerminal={floatingTerminal}
+          floatingTerminalPortal={floatingTerminalPortal}
           onInspectorPortal={setInspectorPortal}
+          onInspectorViewOpening={setInspectorView}
+          onFloatingTerminalChange={setFloatingTerminal}
+          onFloatingTerminalPortal={setFloatingTerminalPortal}
           onOpenSpaces={() => setView("spaces")}
         />
       ) : null}
@@ -199,12 +258,24 @@ export default function WorldFoundationApp() {
 function WorldControlPlane({
   view,
   inspectorOpen,
+  inspectorView,
+  floatingTerminal,
+  floatingTerminalPortal,
   onInspectorPortal,
+  onInspectorViewOpening,
+  onFloatingTerminalChange,
+  onFloatingTerminalPortal,
   onOpenSpaces,
 }: {
   view: Exclude<WorldView, "spaces">;
   inspectorOpen: boolean;
+  inspectorView: InspectorView | null;
+  floatingTerminal: WorldFloatingTerminal | null;
+  floatingTerminalPortal: HTMLDivElement | null;
   onInspectorPortal(element: HTMLElement | null): void;
+  onInspectorViewOpening(view: InspectorView): void;
+  onFloatingTerminalChange(terminal: WorldFloatingTerminal | null): void;
+  onFloatingTerminalPortal(element: HTMLDivElement | null): void;
   onOpenSpaces: () => void;
 }) {
   const runtime = useWorldRuntime();
@@ -295,6 +366,9 @@ function WorldControlPlane({
     x: number;
     y: number;
   } | null>(null);
+  const pendingSelectionRef = useRef<{
+    id: string | null;
+  } | null>(null);
   const currentSelection = selection
     ? (world.nodeById.get(selection.id) ?? null)
     : null;
@@ -306,21 +380,25 @@ function WorldControlPlane({
   const selectedId = currentSelectionGeneration
     ? (selection?.id ?? null)
     : null;
-  const selectNode = (id: string) => {
-    const next = world.nodeById.get(id) ?? null;
+  const applySelection = (
+    id: string | null,
+    requestedView: InspectorView | null = null,
+  ) => {
+    const next = id ? (world.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
     setSelection(next);
     setIntentError(null);
     setSelectedOfficeAnchor(null);
     const intentView = next
-      ? worldIntentInitialView(next, readWorldIntentView())
+      ? worldIntentInitialView(next, requestedView ?? readWorldIntentView())
       : null;
     if (!next || !next.actionable || !next.selectedHost || !intentView) {
       setIntentOpening(false);
       window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
       return;
     }
+    onInspectorViewOpening(intentView);
     setIntentOpening(true);
     const guardedTarget: WorldEventTarget = {
       dispatchEvent(event) {
@@ -337,6 +415,30 @@ function WorldControlPlane({
         if (intentRequestRef.current === requestId) setIntentOpening(false);
       });
   };
+  const applySelectionRef = useRef(applySelection);
+  applySelectionRef.current = applySelection;
+
+  const selectNode = (id: string) => {
+    if (
+      selected &&
+      shouldRehomeDockedTerminal({
+        currentNodeId: selected.id,
+        nextNodeId: id,
+        inspectorOpen,
+        inspectorView,
+        alreadyFloating: floatingTerminal?.nodeId === selected.id,
+      })
+    ) {
+      const outgoing = floatingTerminalForNode(selected);
+      if (outgoing) {
+        window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+        pendingSelectionRef.current = { id };
+        onFloatingTerminalChange(outgoing);
+        return;
+      }
+    }
+    applySelection(id);
+  };
 
   const closeIntent = () => {
     intentRequestRef.current += 1;
@@ -345,6 +447,80 @@ function WorldControlPlane({
     setSelection(null);
     setSelectedOfficeAnchor(null);
     window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+  };
+
+  useEffect(() => {
+    const pending = pendingSelectionRef.current;
+    if (!pending || !floatingTerminalPortal) return;
+    pendingSelectionRef.current = null;
+    const frame = requestAnimationFrame(() => {
+      applySelectionRef.current(pending.id);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [floatingTerminal?.nodeId, floatingTerminalPortal]);
+
+  useEffect(() => {
+    if (!floatingTerminal) return;
+    const current = world.nodeById.get(floatingTerminal.nodeId);
+    if (
+      !current ||
+      current.generation !== floatingTerminal.runtimeGeneration ||
+      floatingTerminalForNode(current)?.terminalId !==
+        floatingTerminal.terminalId
+    ) {
+      onFloatingTerminalChange(null);
+      onFloatingTerminalPortal(null);
+    }
+  }, [
+    floatingTerminal,
+    onFloatingTerminalChange,
+    onFloatingTerminalPortal,
+    world,
+  ]);
+
+  const popOutTerminal = useCallback(
+    async (node: WorldObjectNode) => {
+      const conversation = floatingTerminalForNode(node);
+      if (!conversation) {
+        throw new Error("This terminal is no longer available");
+      }
+      await focusWorldNode(node);
+      onFloatingTerminalChange(conversation);
+    },
+    [onFloatingTerminalChange],
+  );
+
+  useEffect(() => {
+    const handlePopOut = () => {
+      if (!selected) return;
+      void popOutTerminal(selected).catch((cause) => {
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
+      });
+    };
+    window.addEventListener(WORLD_TERMINAL_POP_OUT_EVENT, handlePopOut);
+    return () =>
+      window.removeEventListener(WORLD_TERMINAL_POP_OUT_EVENT, handlePopOut);
+  }, [popOutTerminal, selected]);
+
+  const dockFloatingTerminal = () => {
+    if (!floatingTerminal) return;
+    const target = world.nodeById.get(floatingTerminal.nodeId);
+    if (!target || !floatingTerminalForNode(target)) {
+      onFloatingTerminalChange(null);
+      return;
+    }
+    window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+    onFloatingTerminalChange(null);
+    onFloatingTerminalPortal(null);
+    requestAnimationFrame(() => {
+      applySelectionRef.current(target.id, "terminal");
+    });
+  };
+
+  const closeFloatingTerminal = () => {
+    window.dispatchEvent(new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT));
+    onFloatingTerminalChange(null);
+    onFloatingTerminalPortal(null);
   };
 
   useEffect(() => {
@@ -386,9 +562,14 @@ function WorldControlPlane({
       <WorldStatusHeader
         runtime={runtime}
         world={world}
-        selectedConnectionId={
-          hasSelectedConnection ? connectionSelection.activeConnectionId : null
-        }
+        selectedHostLabel={selectedHostStatusLabel(
+          hasSelectedConnection
+            ? (world.hosts.find(
+                (host) =>
+                  host.connectionId === connectionSelection.activeConnectionId,
+              ) ?? null)
+            : null,
+        )}
       />
       {!hasSelectedConnection ? (
         <WorldConnectionRequired status={connectionSelection.status} />
@@ -397,55 +578,72 @@ function WorldControlPlane({
           className={`world-view-layout ${selected || inspectorOpen ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
-            <WorldViewErrorBoundary key={`${view}:${world.nodes.length}`}>
-              {view === "office" ? (
-                <Suspense
-                  fallback={
-                    <div className="world-view-loading">Loading Office…</div>
-                  }
-                >
-                  <PixelOfficeView
-                    world={world}
-                    selectedId={selectedId}
-                    onSelect={selectNode}
-                    onSelectedAnchorChange={setSelectedOfficeAnchor}
-                  />
-                </Suspense>
-              ) : view === "tree" ? (
-                <Suspense
-                  fallback={
-                    <div className="world-view-loading">Loading Tree…</div>
-                  }
-                >
-                  <CheckpointTreeView
-                    world={world}
-                    selectedId={selectedId}
-                    onSelect={selectNode}
-                  />
-                </Suspense>
-              ) : (
-                <Suspense
-                  fallback={
-                    <div className="world-view-loading">Loading Graph…</div>
-                  }
-                >
-                  <CheckpointGraphView
-                    world={world}
-                    selectedId={selectedId}
-                    onSelect={selectNode}
-                  />
-                </Suspense>
-              )}
-            </WorldViewErrorBoundary>
+            <Suspense
+              fallback={<div className="world-view-loading">Loading view…</div>}
+            >
+              <WorldViewErrorBoundary key={`${view}:${world.nodes.length}`}>
+                {view === "office" ? (
+                  <Suspense
+                    fallback={
+                      <div className="world-view-loading">Loading Office…</div>
+                    }
+                  >
+                    <PixelOfficeView
+                      world={world}
+                      selectedId={selectedId}
+                      onSelect={selectNode}
+                      onOpenTerminal={(id) => {
+                        const node = world.nodeById.get(id);
+                        if (!node) return;
+                        void popOutTerminal(node).catch((cause) => {
+                          setIntentError(
+                            cause instanceof Error
+                              ? cause.message
+                              : String(cause),
+                          );
+                        });
+                      }}
+                      onSelectedAnchorChange={setSelectedOfficeAnchor}
+                    />
+                  </Suspense>
+                ) : view === "tree" ? (
+                  <Suspense
+                    fallback={
+                      <div className="world-view-loading">Loading Tree…</div>
+                    }
+                  >
+                    <CheckpointTreeView
+                      world={world}
+                      selectedId={selectedId}
+                      onSelect={selectNode}
+                    />
+                  </Suspense>
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="world-view-loading">Loading Graph…</div>
+                    }
+                  >
+                    <CheckpointGraphView
+                      world={world}
+                      selectedId={selectedId}
+                      onSelect={selectNode}
+                    />
+                  </Suspense>
+                )}
+              </WorldViewErrorBoundary>
+            </Suspense>
           </section>
           {view === "office" &&
           selected?.kind === "agent" &&
           selectedOfficeAnchor?.visible &&
           intentOverlayAnchor ? (
-            <WorldIntentConnector
-              source={selectedOfficeAnchor}
-              target={intentOverlayAnchor}
-            />
+            <Suspense fallback={null}>
+              <WorldIntentConnector
+                source={selectedOfficeAnchor}
+                target={intentOverlayAnchor}
+              />
+            </Suspense>
           ) : null}
           <aside
             ref={contextRailRef}
@@ -479,6 +677,16 @@ function WorldControlPlane({
           </aside>
         </div>
       )}
+      {floatingTerminal ? (
+        <Suspense fallback={null}>
+          <WorldFloatingTerminalWindow
+            conversation={floatingTerminal}
+            onClose={closeFloatingTerminal}
+            onDock={dockFloatingTerminal}
+            onPortalChange={onFloatingTerminalPortal}
+          />
+        </Suspense>
+      ) : null}
     </main>
   );
 }
@@ -508,91 +716,6 @@ export function chooseWorldSelectedConnection({
   if (ids.has(defaultConnectionId)) return defaultConnectionId;
   if (ids.has(activeConnectionId)) return activeConnectionId;
   return null;
-}
-
-function WorldConnectionRequired({
-  status,
-}: {
-  status: "connecting" | "connected" | "disconnected";
-}) {
-  return (
-    <section
-      className="world-connection-required"
-      aria-labelledby="world-connection-title"
-    >
-      <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-      <p className="world-eyebrow">Connection required</p>
-      <h2 id="world-connection-title">Choose a Herdr host first</h2>
-      <p>
-        Office, Tree and Graph keep your selected host stable. Choose or add a
-        connection before opening a visual view.
-      </p>
-      <ConnectionSwitcher />
-      {status !== "connected" ? <small>World service: {status}</small> : null}
-    </section>
-  );
-}
-
-function WorldStatusHeader({
-  runtime,
-  world,
-  selectedConnectionId,
-}: {
-  runtime: WorldRuntimeState;
-  world: WorldObject;
-  selectedConnectionId: string | null;
-}) {
-  const ready = world.hosts.filter(
-    (host) =>
-      host.hostState === "active" || host.hostState === "ready-inactive",
-  ).length;
-  const stale = world.hosts.filter((host) => host.stale).length;
-  const selectedHost = selectedConnectionId
-    ? world.hosts.find((host) => host.connectionId === selectedConnectionId)
-    : null;
-  return (
-    <header className="world-status-header">
-      <div>
-        <p className="world-eyebrow">Visual control plane</p>
-        <h1>Your agent world</h1>
-      </div>
-      <div className="world-status-summary" aria-live="polite">
-        <span className="world-live-dot" data-status={runtime.status} />
-        <span>{ready} ready</span>
-        <span className="world-selected-host">
-          {selectedHostStatusLabel(selectedHost ?? null)}
-        </span>
-        <span>{world.spaces.length} spaces</span>
-        <span>
-          {world.leaves.filter((leaf) => leaf.kind === "agent").length} agents
-        </span>
-        {stale ? (
-          <span className="world-stale-count">{stale} stale</span>
-        ) : null}
-        {runtime.error ? (
-          <span className="world-runtime-error">{runtime.error}</span>
-        ) : null}
-      </div>
-    </header>
-  );
-}
-
-function WorldIntentConnector({
-  source,
-  target,
-}: {
-  source: OfficeCanvasAnchor;
-  target: { x: number; y: number };
-}) {
-  const distance = Math.max(48, Math.min(180, (target.x - source.x) * 0.45));
-  const path = `M ${source.x} ${source.y} C ${source.x + distance} ${source.y}, ${target.x - distance} ${target.y}, ${target.x} ${target.y}`;
-  return (
-    <svg className="world-intent-connector" aria-hidden="true">
-      <path d={path} />
-      <circle cx={source.x} cy={source.y} r="3" />
-      <circle cx={target.x} cy={target.y} r="3" />
-    </svg>
-  );
 }
 
 export function selectedHostStatusLabel(

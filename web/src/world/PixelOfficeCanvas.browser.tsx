@@ -136,6 +136,7 @@ async function run() {
           world={world}
           selectedId={world.leaves[0]?.id ?? null}
           onSelect={() => {}}
+          onOpenTerminal={() => {}}
           onSelectedAnchorChange={(anchor) => {
             selectedAnchor = anchor !== null;
           }}

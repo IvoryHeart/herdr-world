@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ExternalLink, X } from "lucide-react";
 import { AgentIcon } from "../components/AgentIcon";
 import type { WorldObjectNode } from "./worldObject";
 
@@ -73,14 +74,28 @@ export default function WorldIntentProfile({
             {node.hostLabel}
           </p>
         </div>
-        <button
-          className="world-panel-close"
-          type="button"
-          onClick={onClose}
-          aria-label="Close intent"
-        >
-          ×
-        </button>
+        <div className="world-intent-header-actions">
+          {hasWorkspace && currentGeneration && node.capabilities.openSpaces ? (
+            <button
+              type="button"
+              disabled={disabled}
+              title="Open in Spaces"
+              aria-label="Open in Spaces"
+              onClick={() => void run(onOpenSpaces)}
+            >
+              <ExternalLink size={15} />
+            </button>
+          ) : null}
+          <button
+            className="world-panel-close"
+            type="button"
+            onClick={onClose}
+            title="Close profile"
+            aria-label="Close profile"
+          >
+            <X size={16} />
+          </button>
+        </div>
       </header>
       {leaf?.taskSummary ? (
         <section className="world-task-summary" aria-label="Current task">
@@ -96,17 +111,6 @@ export default function WorldIntentProfile({
             onClick={() => void run(onActivateHost, false)}
           >
             Activate {node.hostLabel}
-          </button>
-        </div>
-      ) : null}
-      {hasWorkspace && currentGeneration && node.capabilities.openSpaces ? (
-        <div className="world-panel-actions">
-          <button
-            type="button"
-            disabled={disabled}
-            onClick={() => void run(onOpenSpaces)}
-          >
-            Open in Spaces
           </button>
         </div>
       ) : null}
