@@ -331,28 +331,54 @@ export default function PixelOfficeView({
       setPendingCreatedPane({ connectionId, generation, paneId, attempt: 0 });
     }
   };
+  const reportRoomActionFailure = (action: string, cause: unknown) => {
+    store.notify({
+      kind: "error",
+      message: `${action} failed`,
+      detail: cause instanceof Error ? cause.message : String(cause),
+    });
+  };
   const createSeat = async (roomKey: string) => {
     const room = roomForKey(roomKey);
     if (!room || !canCreateSeat(roomKey)) return;
-    const result = await store.createTab(room.workspaceRef.nativeId, {
-      numberedLabel: true,
-    });
-    rememberCreatedPane(
-      room.workspaceRef.connectionId,
-      room.observedGeneration,
-      result,
-    );
+    try {
+      const result = await store.createQualifiedTab(
+        {
+          connectionId: room.workspaceRef.connectionId,
+          runtimeGeneration: room.observedGeneration,
+        },
+        room.workspaceRef.nativeId,
+        { numberedLabel: true },
+      );
+      rememberCreatedPane(
+        room.workspaceRef.connectionId,
+        room.observedGeneration,
+        result,
+      );
+    } catch (cause) {
+      reportRoomActionFailure("Seat creation", cause);
+    }
   };
   const submitCreateRoom = async (label: string) => {
     const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
     if (!selectedHost || !canCreateRoom(roomDialog?.roomKey ?? null)) return;
     setRoomDialog(null);
-    const result = await store.createWorkspace(label.trim() || undefined);
-    rememberCreatedPane(
-      selectedHost.connectionId,
-      selectedHost.generation,
-      result,
-    );
+    try {
+      const result = await store.createQualifiedWorkspace(
+        {
+          connectionId: selectedHost.connectionId,
+          runtimeGeneration: selectedHost.generation,
+        },
+        label.trim() || undefined,
+      );
+      rememberCreatedPane(
+        selectedHost.connectionId,
+        selectedHost.generation,
+        result,
+      );
+    } catch (cause) {
+      reportRoomActionFailure("Room creation", cause);
+    }
   };
   const submitRenameRoom = async (label: string) => {
     if (
@@ -366,7 +392,34 @@ export default function PixelOfficeView({
     setRoomDialog(null);
     const value = label.trim();
     if (value && value !== roomDialog.label) {
-      await store.renameWorkspace(room.workspaceRef.nativeId, value);
+      try {
+        await store.renameQualifiedWorkspace(
+          {
+            connectionId: room.workspaceRef.connectionId,
+            runtimeGeneration: room.observedGeneration,
+          },
+          room.workspaceRef.nativeId,
+          value,
+        );
+      } catch (cause) {
+        reportRoomActionFailure("Room rename", cause);
+      }
+    }
+  };
+  const closeRoom = async (roomKey: string) => {
+    const room = roomForKey(roomKey);
+    if (!room || !canManageRoom(roomKey, "close")) return;
+    setRoomDialog(null);
+    try {
+      await store.closeQualifiedWorkspace(
+        {
+          connectionId: room.workspaceRef.connectionId,
+          runtimeGeneration: room.observedGeneration,
+        },
+        room.workspaceRef.nativeId,
+      );
+    } catch (cause) {
+      reportRoomActionFailure("Room close", cause);
     }
   };
   const selectOfficeKey = (key: string) => {
@@ -610,12 +663,8 @@ export default function PixelOfficeView({
         danger
         onClose={() => setRoomDialog(null)}
         onConfirm={() => {
-          if (
-            roomDialog?.mode === "close" &&
-            canManageRoom(roomDialog.roomKey, "close")
-          ) {
-            const room = roomForKey(roomDialog.roomKey);
-            if (room) void store.closeWorkspace(room.workspaceRef.nativeId);
+          if (roomDialog?.mode === "close") {
+            void closeRoom(roomDialog.roomKey);
           }
         }}
       />

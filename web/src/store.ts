@@ -209,6 +209,11 @@ export interface QualifiedFocusTarget {
   paneId: string | null;
 }
 
+export interface QualifiedRuntimeTarget {
+  connectionId: string;
+  runtimeGeneration: number;
+}
+
 type ClickableNotification = Pick<Notification, "close" | "onclick">;
 
 export function isTaskNotificationTarget(
@@ -1782,6 +1787,61 @@ async function action<T>(
   return outcome.value;
 }
 
+function qualifiedRuntimeTargetIsCurrent(
+  target: QualifiedRuntimeTarget,
+): boolean {
+  const connection = state.connections.find(
+    (candidate) => candidate.id === target.connectionId,
+  );
+  return (
+    !state.connectionPaused &&
+    state.status === "connected" &&
+    state.activeConnectionId === target.connectionId &&
+    state.serverRuntimeGeneration === target.runtimeGeneration &&
+    connection?.state === "ready" &&
+    connection.generation === target.runtimeGeneration
+  );
+}
+
+function qualifiedLeaseIsCurrent(
+  target: QualifiedRuntimeTarget,
+  lease: StoreConnectionLease,
+): boolean {
+  return (
+    lease.connectionId === target.connectionId &&
+    lease.client.acceptsServerGeneration(target.runtimeGeneration) &&
+    leaseIsCurrent(lease) &&
+    qualifiedRuntimeTargetIsCurrent(target)
+  );
+}
+
+function assertQualifiedLeaseCurrent(
+  target: QualifiedRuntimeTarget,
+  lease?: StoreConnectionLease,
+) {
+  const current = lease
+    ? qualifiedLeaseIsCurrent(target, lease)
+    : qualifiedRuntimeTargetIsCurrent(target);
+  if (!current) {
+    throw new Error(
+      "The selected host changed before the Office action completed",
+    );
+  }
+}
+
+async function qualifiedAction<T>(
+  target: QualifiedRuntimeTarget,
+  fn: (lease: StoreConnectionLease) => Promise<T>,
+): Promise<T> {
+  assertQualifiedLeaseCurrent(target);
+  const lease = captureConnectionLease();
+  assertQualifiedLeaseCurrent(target, lease);
+  const result = await fn(lease);
+  assertQualifiedLeaseCurrent(target, lease);
+  scheduleRefresh(lease);
+  return result;
+}
+
 function hookEventLabel(event: WorktreeHookEvent): string {
   switch (event) {
     case "worktree.before_remove":
@@ -2370,6 +2430,38 @@ export const store = {
     );
   },
 
+  createQualifiedTab(
+    target: QualifiedRuntimeTarget,
+    workspaceId: string,
+    options: { numberedLabel?: boolean } = {},
+  ) {
+    const navigation = state.browserNavigation;
+    return qualifiedAction(target, async (lease) => {
+      const reason = endpointCreationReason(state, "tab.create", workspaceId);
+      if (reason) throw new Error(reason);
+      const result: unknown = await lease.client.call("tab.create", {
+        workspace_id: workspaceId,
+        focus: state.navigationMode !== "browser-local",
+        ...(state.navigationMode === "browser-local"
+          ? { browser_source: browserCreationSource(workspaceId) }
+          : {}),
+      });
+      assertQualifiedLeaseCurrent(target, lease);
+      if (browserSelectionIsCurrent(navigation)) {
+        adoptBrowserTarget(lease, result);
+      }
+      if (!options.numberedLabel) return result;
+
+      const rename = numberedCreatedTabRename(result);
+      if (!rename) return result;
+      await lease.client.call("tab.rename", {
+        tab_id: rename.tabId,
+        label: rename.label,
+      });
+      return result;
+    });
+  },
+
   closeTab(tabId: string) {
     return action((lease) => lease.client.call("tab.close", { tab_id: tabId }));
   },
@@ -2596,8 +2688,50 @@ export const store = {
     );
   },
 
+  createQualifiedWorkspace(
+    target: QualifiedRuntimeTarget,
+    label?: string,
+    cwd?: string,
+  ) {
+    const navigation = state.browserNavigation;
+    return qualifiedAction(target, async (lease) => {
+      const reason = endpointCreationReason(state, "workspace.create");
+      if (reason) throw new Error(reason);
+      const result = await lease.client.call("workspace.create", {
+        label,
+        cwd,
+        focus: state.navigationMode !== "browser-local",
+        ...(state.navigationMode === "browser-local"
+          ? {
+              browser_source: browserCreationSource(
+                state.browserNavigation.workspaceId,
+              ),
+            }
+          : {}),
+      });
+      assertQualifiedLeaseCurrent(target, lease);
+      if (browserSelectionIsCurrent(navigation)) {
+        adoptBrowserTarget(lease, result);
+      }
+      return result;
+    });
+  },
+
   renameWorkspace(workspaceId: string, label: string) {
     return action((lease) =>
+      lease.client.call("workspace.rename", {
+        workspace_id: workspaceId,
+        label,
+      }),
+    );
+  },
+
+  renameQualifiedWorkspace(
+    target: QualifiedRuntimeTarget,
+    workspaceId: string,
+    label: string,
+  ) {
+    return qualifiedAction(target, (lease) =>
       lease.client.call("workspace.rename", {
         workspace_id: workspaceId,
         label,
@@ -2620,6 +2754,12 @@ export const store = {
             : error.message,
         }),
       },
+    );
+  },
+
+  closeQualifiedWorkspace(target: QualifiedRuntimeTarget, workspaceId: string) {
+    return qualifiedAction(target, (lease) =>
+      lease.client.call("workspace.close", { workspace_id: workspaceId }),
     );
   },
 

@@ -59,6 +59,14 @@
   height: 100%;
 }
 
+.world-terminal-owner {
+  display: contents;
+}
+
+.world-terminal-parking {
+  display: none;
+}
+
 .world-control-plane {
   flex: 1 1 auto;
   min-height: 0;
@@ -72,6 +80,18 @@
       transparent 46%
     ),
     var(--bg, #0e1116);
+}
+.world-control-plane[data-active="false"] {
+  position: absolute;
+  z-index: 30;
+  inset: 0;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+}
+.world-control-plane[data-active="false"] .world-context-rail,
+.world-control-plane[data-active="false"] .world-floating-terminal {
+  pointer-events: auto;
 }
 
 .world-eyebrow {

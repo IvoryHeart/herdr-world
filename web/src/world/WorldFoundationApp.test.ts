@@ -18,6 +18,7 @@ import {
   worldIntentInitialView,
   worldIntentViews,
   worldInspectorContext,
+  worldNodeForWorkspaceSurfaceSelection,
   worldSelectionIsCurrent,
   worldViewFromPath,
 } from "./WorldFoundationApp";
@@ -86,6 +87,92 @@ describe("World view preference", () => {
     expect(worldViewFromPath("/tree")).toBe("tree");
     expect(worldViewFromPath("/graph")).toBe("graph");
     expect(worldViewFromPath("/other")).toBe("office");
+  });
+
+  test("rejects a stale top-tab selection after a host switch with colliding IDs", () => {
+    const snapshot = (label: string) => ({
+      workspaces: [
+        {
+          workspace_id: "shared",
+          number: 1,
+          label: "Shared",
+          focused: true,
+          pane_count: 1,
+          tab_count: 1,
+          agent_status: "working",
+        },
+      ],
+      tabs: [
+        {
+          tab_id: "same-tab",
+          workspace_id: "shared",
+          number: 1,
+          label,
+          focused: true,
+          pane_count: 1,
+          agent_status: "working",
+        },
+      ],
+      panes: [
+        {
+          pane_id: "same-pane",
+          terminal_id: "same-terminal",
+          workspace_id: "shared",
+          tab_id: "same-tab",
+          focused: true,
+          agent: label,
+          agent_status: "working",
+          revision: 1,
+        },
+      ],
+      agents: [],
+    });
+    const world = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 4,
+          snapshotGeneration: 4,
+          stale: false,
+          actionable: true,
+          snapshot: snapshot("Agent A"),
+        },
+        {
+          connectionId: "host-b",
+          label: "Host B",
+          source: "saved-profile",
+          isDefault: false,
+          state: "ready",
+          generation: 9,
+          snapshotGeneration: 9,
+          stale: false,
+          actionable: true,
+          snapshot: snapshot("Agent B"),
+        },
+      ],
+      "host-b",
+    );
+
+    expect(
+      worldNodeForWorkspaceSurfaceSelection(world, {
+        connectionId: "host-a",
+        runtimeGeneration: 4,
+        workspaceId: "shared",
+        paneId: "same-pane",
+      }),
+    ).toBeNull();
+    expect(
+      worldNodeForWorkspaceSurfaceSelection(world, {
+        connectionId: "host-b",
+        runtimeGeneration: 9,
+        workspaceId: "shared",
+        paneId: "same-pane",
+      })?.connectionId,
+    ).toBe("host-b");
   });
 
   test("does not implicitly activate another host while opening a World node", async () => {

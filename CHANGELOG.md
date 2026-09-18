@@ -72,8 +72,9 @@ retain their original Herdr Web lineage.
   Office mounted while a newly admitted seat retries exact terminal focus.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Made exact pane focus an admission requirement for World Inspectors, retained
-  qualified docked and floating conversations through Spaces handoff, and raised
-  a background floating Inspector when any of its tabs or controls is used.
+  qualified docked and floating conversations and terminal ownership through
+  Spaces handoff without attachment churn, and raised a background floating
+  Inspector when any of its tabs or controls is used.
   Office connectors now run from the agent centre to the Inspector's right edge
   and curve in the actual direction, with desk fallback only when an agent
   anchor is unavailable. A live floating Inspector can now be moved from its
@@ -90,7 +91,8 @@ retain their original Herdr Web lineage.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Closed a retired terminal's selection with its Inspector instead of leaving an
   orphan stale profile, and kept admitted Office room/seat `+` affordances visible
-  while transient endpoint admission disables their actions.
+  while transient endpoint admission disables their actions. Visual tab focus and
+  Office room mutations are now fenced to the exact selected host generation.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Enforced automatic same-authority browser admission across privileged HTTP and
   WebSocket traffic with an exact loopback-proxy origin, isolated World's login

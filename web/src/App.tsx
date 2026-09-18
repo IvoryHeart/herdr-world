@@ -810,6 +810,7 @@ function TerminalPaneLayout({
   agentHistoryOpen,
   onAgentHistoryOpenChange,
   onOpenWorkspaceFile,
+  excludedPaneIds = new Set(),
 }: {
   terminalTheme: ITheme;
   uiScale: number;
@@ -820,6 +821,7 @@ function TerminalPaneLayout({
   agentHistoryOpen: boolean;
   onAgentHistoryOpenChange: (open: boolean) => void;
   onOpenWorkspaceFile: (request: TerminalWorkspaceFileRequest) => void;
+  excludedPaneIds?: ReadonlySet<string>;
 }) {
   const s = useStoreSelector(
     (state) => ({
@@ -835,8 +837,10 @@ function TerminalPaneLayout({
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const layout = s.layout;
   const visiblePanes =
-    layout?.panes.filter((lp) =>
-      s.panes.some((pane) => pane.pane_id === lp.pane_id),
+    layout?.panes.filter(
+      (lp) =>
+        s.panes.some((pane) => pane.pane_id === lp.pane_id) &&
+        !excludedPaneIds.has(lp.pane_id),
     ) ?? [];
   const fallbackPaneId = visiblePanes[0]?.pane_id ?? null;
   const activePaneId =
@@ -856,6 +860,14 @@ function TerminalPaneLayout({
       terminalId,
     );
   };
+
+  if (layout && visiblePanes.length === 0 && excludedPaneIds.size > 0) {
+    return (
+      <div className="terminal-empty" role="status">
+        This terminal remains open in its World Inspector.
+      </div>
+    );
+  }
 
   if (!layout || layout.zoomed || visiblePanes.length <= 1) {
     return (
@@ -1098,6 +1110,8 @@ export function terminalPresentationTarget(
 }
 
 export type WorkspaceSurfaceSelection = {
+  connectionId: string;
+  runtimeGeneration: number;
   workspaceId: string;
   paneId?: string;
 };
@@ -1108,6 +1122,7 @@ export default function App({
   topbarPortal = null,
   primaryViewControl = null,
   workspaceSurface = null,
+  workspaceSurfaceVisible = true,
   onWorkspaceSurfaceSelect,
   worldTerminalPresentations = [],
   onInspectorVisibilityChange,
@@ -1120,14 +1135,18 @@ export default function App({
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
   workspaceSurface?: ReactNode;
-  onWorkspaceSurfaceSelect?: (selection: WorkspaceSurfaceSelection) => void;
+  workspaceSurfaceVisible?: boolean;
+  onWorkspaceSurfaceSelect?: (
+    selection: WorkspaceSurfaceSelection,
+  ) => void | Promise<unknown>;
   worldTerminalPresentations?: readonly WorldTerminalPresentation[];
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
   inspectorContext?: WorkspaceInspectorContext | null;
 } = {}) {
-  const hasWorkspaceSurface = workspaceSurface !== null;
+  const hasWorkspaceSurface =
+    workspaceSurface !== null && workspaceSurfaceVisible;
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
@@ -1148,6 +1167,22 @@ export default function App({
       workspaces: state.workspaces,
     }),
     shallowEqual,
+  );
+  const worldOwnedPaneIds = useMemo(
+    () =>
+      new Set(
+        worldTerminalPresentations.flatMap((presentation) =>
+          presentation.connectionId === s.activeConnectionId &&
+          presentation.runtimeGeneration === s.serverRuntimeGeneration
+            ? [presentation.paneId]
+            : [],
+        ),
+      ),
+    [
+      s.activeConnectionId,
+      s.serverRuntimeGeneration,
+      worldTerminalPresentations,
+    ],
   );
   const connectionClient = useConnectionClient();
   const { mobile, preferences: layoutPreferences } = useLayoutPreferences();
@@ -3702,7 +3737,10 @@ export default function App({
               key={`${resourceUiKey}:workspaces`}
               onSelect={(workspace) => {
                 if (onWorkspaceSurfaceSelect) {
-                  onWorkspaceSurfaceSelect({
+                  if (s.serverRuntimeGeneration === null) return;
+                  void onWorkspaceSurfaceSelect({
+                    connectionId: s.activeConnectionId,
+                    runtimeGeneration: s.serverRuntimeGeneration,
                     workspaceId: workspace.workspace_id,
                   });
                 } else {
@@ -3717,7 +3755,10 @@ export default function App({
               }
               onSelectAgent={(pane) => {
                 if (onWorkspaceSurfaceSelect) {
-                  onWorkspaceSurfaceSelect({
+                  if (s.serverRuntimeGeneration === null) return;
+                  void onWorkspaceSurfaceSelect({
+                    connectionId: s.activeConnectionId,
+                    runtimeGeneration: s.serverRuntimeGeneration,
                     workspaceId: pane.workspace_id,
                     paneId: pane.pane_id,
                   });
@@ -3798,9 +3839,14 @@ export default function App({
               }`}
             >
               <div className="workspace-terminal-surface">
-                {hasWorkspaceSurface ? (
-                  workspaceSurface
-                ) : terminalPresentation === "spaces" ? (
+                {workspaceSurface !== null ? (
+                  <div
+                    className={`workspace-surface-owner ${hasWorkspaceSurface ? "is-active" : "is-inactive"}`}
+                  >
+                    {workspaceSurface}
+                  </div>
+                ) : null}
+                {!hasWorkspaceSurface && terminalPresentation === "spaces" ? (
                   <TerminalPaneLayout
                     terminalTheme={terminalTheme}
                     uiScale={uiScale}
@@ -3811,6 +3857,7 @@ export default function App({
                     agentHistoryOpen={agentHistoryOpen}
                     onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
                     onOpenWorkspaceFile={handleTerminalWorkspaceFile}
+                    excludedPaneIds={worldOwnedPaneIds}
                   />
                 ) : null}
               </div>

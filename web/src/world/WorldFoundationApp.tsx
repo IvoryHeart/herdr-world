@@ -29,6 +29,7 @@ import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
 import {
   buildWorldObject,
   type WorldHostObject,
+  type WorldObject,
   type WorldObjectNode,
 } from "./worldObject";
 import "./world.css";
@@ -136,6 +137,34 @@ export function worldSelectionIsCurrent(
   return selected !== null && current?.generation === selected.generation;
 }
 
+export function worldNodeForWorkspaceSurfaceSelection(
+  world: WorldObject,
+  selection: WorkspaceSurfaceSelection,
+): WorldObjectNode | null {
+  return (
+    world.nodes.find((candidate) => {
+      if (
+        !candidate.selectedHost ||
+        candidate.connectionId !== selection.connectionId ||
+        candidate.generation !== selection.runtimeGeneration
+      ) {
+        return false;
+      }
+      if (selection.paneId) {
+        return (
+          (candidate.kind === "agent" || candidate.kind === "terminal") &&
+          candidate.nativeId === selection.paneId &&
+          candidate.workspaceId === selection.workspaceId
+        );
+      }
+      return (
+        candidate.kind === "space" &&
+        candidate.nativeId === selection.workspaceId
+      );
+    }) ?? null
+  );
+}
+
 export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
   if (node.kind === "host") return [];
   return [
@@ -184,6 +213,12 @@ function initialView() {
 
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
+  const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
+    () => {
+      const initial = initialView();
+      return initial === "spaces" ? "office" : initial;
+    },
+  );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
   const [inspectorConversations, setInspectorConversations] = useState<
     WorldInspectorConversation[]
@@ -196,10 +231,14 @@ export default function WorldFoundationApp() {
   >({});
   const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
   const workspaceSurfaceSelectionRef = useRef<
-    ((selection: WorkspaceSurfaceSelection) => void) | null
+    ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
   >(null);
   const registerWorkspaceSurfaceSelection = useCallback(
-    (handler: ((selection: WorkspaceSurfaceSelection) => void) | null) => {
+    (
+      handler:
+        | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
+        | null,
+    ) => {
       workspaceSurfaceSelectionRef.current = handler;
     },
     [],
@@ -267,6 +306,7 @@ export default function WorldFoundationApp() {
     const onPopState = () => {
       const next = worldViewFromPath(window.location.pathname);
       setViewState(next);
+      if (next !== "spaces") setVisualView(next);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -274,6 +314,7 @@ export default function WorldFoundationApp() {
 
   const setView = (next: WorldView) => {
     setViewState(next);
+    if (next !== "spaces") setVisualView(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
       url.pathname = WORLD_VIEW_PATHS[next];
@@ -320,29 +361,31 @@ export default function WorldFoundationApp() {
             </div>
           }
           workspaceSurface={
-            view !== "spaces" ? (
-              <WorldControlPlane
-                view={view}
-                inspectorConversations={inspectorConversations}
-                dockedInspectorId={dockedInspectorId}
-                onDockedInspectorIdChange={setDockedInspectorId}
-                onInspectorConversationsChange={setInspectorConversations}
-                onInspectorTerminalPortal={(nodeId, portal) =>
-                  setInspectorTerminalPortals((current) =>
-                    current[nodeId] === portal
-                      ? current
-                      : { ...current, [nodeId]: portal },
-                  )
-                }
-                onWorkspaceSurfaceSelectionReady={
-                  registerWorkspaceSurfaceSelection
-                }
-              />
-            ) : null
+            <WorldControlPlane
+              view={visualView}
+              active={view !== "spaces"}
+              inspectorConversations={inspectorConversations}
+              dockedInspectorId={dockedInspectorId}
+              onDockedInspectorIdChange={setDockedInspectorId}
+              onInspectorConversationsChange={setInspectorConversations}
+              onInspectorTerminalPortal={(nodeId, portal) =>
+                setInspectorTerminalPortals((current) =>
+                  current[nodeId] === portal
+                    ? current
+                    : { ...current, [nodeId]: portal },
+                )
+              }
+              onWorkspaceSurfaceSelectionReady={
+                registerWorkspaceSurfaceSelection
+              }
+            />
           }
+          workspaceSurfaceVisible={view !== "spaces"}
           onWorkspaceSurfaceSelect={
             view !== "spaces"
-              ? (selection) => workspaceSurfaceSelectionRef.current?.(selection)
+              ? (selection) =>
+                  workspaceSurfaceSelectionRef.current?.(selection) ??
+                  Promise.resolve(false)
               : undefined
           }
           worldTerminalPresentations={inspectorConversations.flatMap(
@@ -382,6 +425,7 @@ export default function WorldFoundationApp() {
 
 function WorldControlPlane({
   view,
+  active,
   inspectorConversations,
   dockedInspectorId,
   onDockedInspectorIdChange,
@@ -390,6 +434,7 @@ function WorldControlPlane({
   onWorkspaceSurfaceSelectionReady,
 }: {
   view: Exclude<WorldView, "spaces">;
+  active: boolean;
   inspectorConversations: readonly WorldInspectorConversation[];
   dockedInspectorId: string | null;
   onDockedInspectorIdChange(nodeId: string | null): void;
@@ -401,7 +446,9 @@ function WorldControlPlane({
     element: HTMLDivElement | null,
   ): void;
   onWorkspaceSurfaceSelectionReady(
-    handler: ((selection: WorkspaceSurfaceSelection) => void) | null,
+    handler:
+      | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
+      | null,
   ): void;
 }) {
   const runtime = useWorldRuntime();
@@ -507,6 +554,10 @@ function WorldControlPlane({
   >({});
   const [intentOverlayAnchor, setIntentOverlayAnchor] =
     useState<WorldConnectorTargetBounds | null>(null);
+  const inspectorConversationsRef = useRef(inspectorConversations);
+  const dockedInspectorIdRef = useRef(dockedInspectorId);
+  inspectorConversationsRef.current = inspectorConversations;
+  dockedInspectorIdRef.current = dockedInspectorId;
   const currentSelection = selection
     ? (world.nodeById.get(selection.id) ?? null)
     : null;
@@ -769,24 +820,11 @@ function WorldControlPlane({
   };
   const selectNode = (id: string) => applySelection(id);
   const workspaceSurfaceSelectionHandlerRef = useRef<
-    (selection: WorkspaceSurfaceSelection) => void
-  >(() => {});
+    (selection: WorkspaceSurfaceSelection) => Promise<boolean>
+  >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
-    const node = world.nodes.find((candidate) => {
-      if (!candidate.selectedHost) return false;
-      if (surfaceSelection.paneId) {
-        return (
-          (candidate.kind === "agent" || candidate.kind === "terminal") &&
-          candidate.nativeId === surfaceSelection.paneId &&
-          candidate.workspaceId === surfaceSelection.workspaceId
-        );
-      }
-      return (
-        candidate.kind === "space" &&
-        candidate.nativeId === surfaceSelection.workspaceId
-      );
-    });
-    if (node) void applySelection(node.id);
+    const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
+    return node ? applySelection(node.id) : Promise.resolve(false);
   };
   useLayoutEffect(() => {
     const handler = (surfaceSelection: WorkspaceSurfaceSelection) =>
@@ -863,9 +901,17 @@ function WorldControlPlane({
             "Five Inspectors are already floating. Close one before floating another.",
           );
         }
-        onDockedInspectorIdChange(null);
+        if (!(await focusFloatingInspector(existing))) {
+          throw new Error("Inspector activation was superseded");
+        }
+        if (dockedInspectorIdRef.current === existing.nodeId) {
+          onDockedInspectorIdChange(null);
+        }
+        return;
       }
-      focusFloatingInspector(existing);
+      if (!(await focusFloatingInspector(existing))) {
+        throw new Error("Inspector activation was superseded");
+      }
       return;
     }
     if (floatingInspectors.length >= 5) {
@@ -875,8 +921,23 @@ function WorldControlPlane({
     }
     const conversation = conversationFor(node, "terminal");
     if (!conversation) throw new Error("This Inspector is no longer available");
-    await focusWorldNode(node);
-    onInspectorConversationsChange([...inspectorConversations, conversation]);
+    const requestId = intentRequestRef.current + 1;
+    intentRequestRef.current = requestId;
+    setIntentError(null);
+    setIntentOpening(true);
+    try {
+      await focusWorldNode(node);
+      if (intentRequestRef.current !== requestId) {
+        throw new Error("Inspector activation was superseded");
+      }
+      setSelection(node);
+      onInspectorConversationsChange([
+        ...inspectorConversationsRef.current,
+        conversation,
+      ]);
+    } finally {
+      if (intentRequestRef.current === requestId) setIntentOpening(false);
+    }
   };
 
   const openTerminalById = async (id: string) => {
@@ -890,17 +951,37 @@ function WorldControlPlane({
     }
   };
 
-  const dockFloatingInspector = (conversation: WorldInspectorConversation) => {
+  const dockFloatingInspector = async (
+    conversation: WorldInspectorConversation,
+  ) => {
     const target = world.nodeById.get(conversation.nodeId);
     if (!target) {
       closeInspector(conversation);
-      return;
+      return false;
     }
-    onDockedInspectorIdChange(conversation.nodeId);
-    setSelection(target);
-    requestAnimationFrame(() => {
-      void focusWorldNode(target);
-    });
+    const requestId = intentRequestRef.current + 1;
+    intentRequestRef.current = requestId;
+    setIntentError(null);
+    setIntentOpening(true);
+    try {
+      await focusWorldNode(target);
+      if (intentRequestRef.current !== requestId) return false;
+      setSelection(target);
+      onDockedInspectorIdChange(conversation.nodeId);
+      requestAnimationFrame(() => {
+        contextRailRef.current
+          ?.querySelector<HTMLElement>(".xterm-helper-textarea")
+          ?.focus({ preventScroll: true });
+      });
+      return true;
+    } catch (cause) {
+      if (intentRequestRef.current === requestId) {
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
+      }
+      return false;
+    } finally {
+      if (intentRequestRef.current === requestId) setIntentOpening(false);
+    }
   };
 
   const closeInspector = (conversation: WorldInspectorConversation) => {
@@ -920,36 +1001,56 @@ function WorldControlPlane({
     if (selected?.id === conversation.nodeId) setSelection(null);
   };
 
-  const focusFloatingInspector = (
+  const focusFloatingInspector = async (
     conversation: WorldInspectorConversation,
     focusTarget = true,
-  ) => {
-    if (
-      floatingInspectors[floatingInspectors.length - 1]?.nodeId !==
-      conversation.nodeId
-    ) {
-      onInspectorConversationsChange([
-        ...inspectorConversations.filter(
-          ({ nodeId }) => nodeId !== conversation.nodeId,
-        ),
-        conversation,
-      ]);
-    }
+  ): Promise<boolean> => {
     const target = world.nodeById.get(conversation.nodeId);
-    if (!target) return;
-    setSelection(target);
-    const focused = focusTarget ? focusWorldNode(target) : Promise.resolve();
-    void focused
-      .then(() => {
-        requestAnimationFrame(() => {
-          floatingInspectorPortals[conversation.nodeId]
-            ?.querySelector<HTMLElement>(".xterm-helper-textarea")
-            ?.focus({ preventScroll: true });
-        });
-      })
-      .catch((cause) => {
-        setIntentError(cause instanceof Error ? cause.message : String(cause));
+    if (!target) throw new Error("This Inspector is no longer available");
+    const requestId = focusTarget
+      ? intentRequestRef.current + 1
+      : intentRequestRef.current;
+    if (focusTarget) {
+      intentRequestRef.current = requestId;
+      setIntentError(null);
+      setIntentOpening(true);
+    }
+    try {
+      if (focusTarget) await focusWorldNode(target);
+      if (intentRequestRef.current !== requestId) return false;
+      const current = inspectorConversationsRef.current;
+      const currentConversation =
+        current.find(({ nodeId }) => nodeId === conversation.nodeId) ??
+        conversation;
+      const currentFloating = current.filter(
+        ({ nodeId }) => nodeId !== dockedInspectorIdRef.current,
+      );
+      if (
+        currentFloating[currentFloating.length - 1]?.nodeId !==
+        conversation.nodeId
+      ) {
+        onInspectorConversationsChange([
+          ...current.filter(({ nodeId }) => nodeId !== conversation.nodeId),
+          currentConversation,
+        ]);
+      }
+      setSelection(target);
+      requestAnimationFrame(() => {
+        floatingInspectorPortals[conversation.nodeId]
+          ?.querySelector<HTMLElement>(".xterm-helper-textarea")
+          ?.focus({ preventScroll: true });
       });
+      return true;
+    } catch (cause) {
+      if (intentRequestRef.current === requestId) {
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
+      }
+      throw cause;
+    } finally {
+      if (focusTarget && intentRequestRef.current === requestId) {
+        setIntentOpening(false);
+      }
+    }
   };
 
   const retireInspectors = () => {
@@ -1003,7 +1104,11 @@ function WorldControlPlane({
   );
 
   return (
-    <main className="world-control-plane" id="world">
+    <main
+      className="world-control-plane"
+      id="world"
+      data-active={active ? "true" : "false"}
+    >
       {!hasSelectedConnection ? (
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
@@ -1012,35 +1117,51 @@ function WorldControlPlane({
           className={`world-view-layout ${showSelectionProfile || dockedInspector ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
-            <Suspense
-              fallback={<div className="world-view-loading">Loading view…</div>}
-            >
-              <WorldViewErrorBoundary key={view}>
-                {view === "office" ? (
-                  <Suspense
-                    fallback={
-                      <div className="world-view-loading">Loading Office…</div>
-                    }
-                  >
-                    <PixelOfficeView
-                      world={world}
-                      selectedId={selectedId}
-                      onSelect={selectNode}
-                      floatingTerminals={inspectorConversations}
-                      onConversationNodeAnchorsChange={
-                        setVisualConversationAnchors
+            {active ? (
+              <Suspense
+                fallback={
+                  <div className="world-view-loading">Loading view…</div>
+                }
+              >
+                <WorldViewErrorBoundary key={view}>
+                  {view === "office" ? (
+                    <Suspense
+                      fallback={
+                        <div className="world-view-loading">
+                          Loading Office…
+                        </div>
                       }
-                      onOpenTerminal={openTerminalById}
-                      onSelectedAnchorChange={setSelectedVisualAnchor}
-                    />
-                  </Suspense>
-                ) : view === "tree" ? (
-                  <Suspense
-                    fallback={
-                      <div className="world-view-loading">Loading Tree…</div>
-                    }
-                  >
-                    <ConnectedTreeView
+                    >
+                      <PixelOfficeView
+                        world={world}
+                        selectedId={selectedId}
+                        onSelect={selectNode}
+                        floatingTerminals={inspectorConversations}
+                        onConversationNodeAnchorsChange={
+                          setVisualConversationAnchors
+                        }
+                        onOpenTerminal={openTerminalById}
+                        onSelectedAnchorChange={setSelectedVisualAnchor}
+                      />
+                    </Suspense>
+                  ) : view === "tree" ? (
+                    <Suspense
+                      fallback={
+                        <div className="world-view-loading">Loading Tree…</div>
+                      }
+                    >
+                      <ConnectedTreeView
+                        world={world}
+                        selectedId={selectedId}
+                        conversationNodeIds={conversationNodeIds}
+                        onSelect={selectNode}
+                        onOpenTerminal={openTerminalById}
+                        onSelectedAnchorChange={setSelectedVisualAnchor}
+                        onNodeAnchorsChange={setVisualConversationAnchors}
+                      />
+                    </Suspense>
+                  ) : (
+                    <SpatialGraphView
                       world={world}
                       selectedId={selectedId}
                       conversationNodeIds={conversationNodeIds}
@@ -1049,20 +1170,10 @@ function WorldControlPlane({
                       onSelectedAnchorChange={setSelectedVisualAnchor}
                       onNodeAnchorsChange={setVisualConversationAnchors}
                     />
-                  </Suspense>
-                ) : (
-                  <SpatialGraphView
-                    world={world}
-                    selectedId={selectedId}
-                    conversationNodeIds={conversationNodeIds}
-                    onSelect={selectNode}
-                    onOpenTerminal={openTerminalById}
-                    onSelectedAnchorChange={setSelectedVisualAnchor}
-                    onNodeAnchorsChange={setVisualConversationAnchors}
-                  />
-                )}
-              </WorldViewErrorBoundary>
-            </Suspense>
+                  )}
+                </WorldViewErrorBoundary>
+              </Suspense>
+            ) : null}
           </section>
           {dockedInspector &&
           visualConversationAnchors?.[dockedInspector.nodeId] &&
@@ -1151,8 +1262,12 @@ function WorldControlPlane({
             conversation={conversation}
             cascadeIndex={index}
             compactActive={index === floatingInspectors.length - 1}
-            onFocus={() => focusFloatingInspector(conversation)}
-            onRaise={() => focusFloatingInspector(conversation, false)}
+            onFocus={() => {
+              void focusFloatingInspector(conversation).catch(() => undefined);
+            }}
+            onRaise={() => {
+              void focusFloatingInspector(conversation, false);
+            }}
             onAnchorChange={(anchor) =>
               setFloatingWindowAnchors((current) => ({
                 ...current,
@@ -1190,7 +1305,9 @@ function WorldControlPlane({
               );
             }}
             onClose={() => closeInspector(conversation)}
-            onDockIn={() => dockFloatingInspector(conversation)}
+            onDockIn={() => {
+              void dockFloatingInspector(conversation);
+            }}
             onDockOut={() => {
               if (floatingInspectors.length >= 5) {
                 setIntentError(

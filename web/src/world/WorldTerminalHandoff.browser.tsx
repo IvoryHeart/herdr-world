@@ -1,6 +1,6 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { bridge, type ConnectionClient } from "../api";
+import { bridge, type ConnectionClient, type TerminalPush } from "../api";
 import { initializeLayoutPreferences } from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
@@ -89,6 +89,7 @@ let runtimeGeneration = 7;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
+const terminalListeners = new Set<(push: TerminalPush) => void>();
 
 function currentPanes() {
   return panes.map((pane) => ({
@@ -259,6 +260,21 @@ const client: ConnectionClient = {
         counts: {},
       };
     }
+    if (method === "terminal.attach") {
+      const terminalId = String(params.terminal_id ?? "");
+      for (const listener of terminalListeners) {
+        listener({
+          connection_id: client.connectionId,
+          connection_generation: runtimeGeneration,
+          terminal_id: terminalId,
+          width: Number(params.cols ?? 96),
+          height: Number(params.rows ?? 26),
+          full: true,
+          bytes: btoa(`${terminalId}\r\n`),
+        });
+      }
+      return {};
+    }
     return {};
   },
 };
@@ -309,7 +325,10 @@ async function run() {
   };
   bridge.onControl = () => () => {};
   bridge.onEvent = () => () => {};
-  bridge.onTerminal = () => () => {};
+  bridge.onTerminal = (listener) => {
+    terminalListeners.add(listener);
+    return () => terminalListeners.delete(listener);
+  };
   bridge.onTerminalClipboard = () => () => {};
   bridge.onTerminalClosed = () => () => {};
   await worldRuntimeStore.refresh();
@@ -384,8 +403,7 @@ async function run() {
   check(
     document
       .querySelector(".world-control-plane")
-      ?.parentElement?.classList.contains("workspace-terminal-surface") ===
-      true,
+      ?.closest(".workspace-terminal-surface") !== null,
     "Office did not reuse the Spaces workspace frame",
   );
   check(
@@ -613,6 +631,9 @@ async function run() {
     Boolean(builderTopTab && reviewerTopTab),
     "shared workspace tab strip omitted an agent tab",
   );
+  const tabFocusBeforeBuilder = calls.filter(
+    ({ method }) => method === "tab.focus",
+  ).length;
   builderTopTab?.click();
   await until(
     () =>
@@ -624,6 +645,14 @@ async function run() {
       store.get().selectedPaneId === "builder-pane",
     "top workspace tab exact Builder Inspector",
   );
+  check(
+    calls.filter(({ method }) => method === "tab.focus").length ===
+      tabFocusBeforeBuilder + 1,
+    "top workspace tab ran an unqualified focus before World admission",
+  );
+  const tabFocusBeforeReviewer = calls.filter(
+    ({ method }) => method === "tab.focus",
+  ).length;
   reviewerTopTab?.click();
   await until(
     () =>
@@ -634,6 +663,11 @@ async function run() {
         ?.textContent?.includes("Reviewer") &&
       store.get().selectedPaneId === "reviewer-pane",
     "top workspace tab exact Reviewer Inspector",
+  );
+  check(
+    calls.filter(({ method }) => method === "tab.focus").length ===
+      tabFocusBeforeReviewer + 1,
+    "second top workspace tab ran an unqualified focus before World admission",
   );
   const createSeatButton = document.querySelector<HTMLButtonElement>(
     ".world-new-seat-canvas-action:not(:disabled)",
@@ -677,9 +711,13 @@ async function run() {
       ),
     "Builder Inspector terminal",
   );
+  const rejectedBeforeNavigator = rejectedPaneGets;
   rejectNextPaneGetId = "reviewer-pane";
   flushSync(() => reviewerNavigatorRow?.click());
-  await until(() => rejectedPaneGets === 2, "rejected shared navigator focus");
+  await until(
+    () => rejectedPaneGets === rejectedBeforeNavigator + 1,
+    "rejected shared navigator focus",
+  );
   await settle();
   check(
     document
@@ -933,6 +971,35 @@ async function run() {
   const builderInspector = builderWindow.querySelector<HTMLElement>(
     ".workspace-inspector",
   )!;
+  panes[1]!.agent_status = "done";
+  panes[1]!.revision += 1;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => document.querySelector(".world-completion-notices button"),
+    "Reviewer completion for existing Inspector",
+  );
+  const rejectedBeforeCompletion = rejectedPaneGets;
+  rejectNextPaneGetId = "reviewer-pane";
+  document
+    .querySelector<HTMLButtonElement>(".world-completion-notices button")!
+    .click();
+  await until(
+    () => rejectedPaneGets === rejectedBeforeCompletion + 1,
+    "existing Inspector completion focus rejection",
+  );
+  check(
+    document.querySelector(".world-completion-notices button") !== null,
+    "failed existing-Inspector activation acknowledged its completion",
+  );
+  panes[1]!.agent_status = "idle";
+  panes[1]!.revision += 1;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => document.querySelector(".world-completion-notices button") === null,
+    "Reviewer completion reset",
+  );
   check(
     builderWindow.querySelectorAll(".workspace-inspector-head").length === 1,
     "floating Inspector rendered more than one header",
@@ -1058,6 +1125,15 @@ async function run() {
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "Reviewer redock before Inspector swap",
   );
+  await settle();
+  const terminalLifecycleBeforeSwap = calls.filter(
+    ({ method }) =>
+      method === "terminal.attach" || method === "terminal.detach",
+  ).length;
+  const paneFocusBeforeSwap = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
 
   builderWindow
     .querySelector<HTMLButtonElement>('button[aria-label="Dock Inspector"]')!
@@ -1158,6 +1234,21 @@ async function run() {
           params.terminal_id === "reviewer-terminal",
       ),
     "swapped Reviewer Inspector terminal input",
+  );
+  check(
+    calls.filter(
+      ({ method }) =>
+        method === "terminal.attach" || method === "terminal.detach",
+    ).length === terminalLifecycleBeforeSwap,
+    "docked Inspector swap recreated a terminal owner",
+  );
+  check(
+    calls.filter(
+      ({ method, params }) =>
+        method === "pane.get" && params.pane_id === "builder-pane",
+    ).length ===
+      paneFocusBeforeSwap + 1,
+    "docked Inspector swap did not admit its exact pane once",
   );
   reviewerWindow
     .querySelector<HTMLButtonElement>(
@@ -1322,11 +1413,44 @@ async function run() {
         ?.textContent?.includes("Reviewer"),
     "Reviewer docked Inspector before Spaces handoff",
   );
+  await settle();
+  const persistentControlPlane = document.querySelector(".world-control-plane");
+  const persistentReviewerInspector = document.querySelector(
+    ".world-context-rail .workspace-inspector",
+  );
+  const terminalAttachesBeforeSpaces = calls.filter(
+    ({ method }) => method === "terminal.attach",
+  ).length;
+  const terminalDetachesBeforeSpaces = calls.filter(
+    ({ method }) => method === "terminal.detach",
+  ).length;
   viewSelect.value = "spaces";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
-    () => !document.querySelector(".world-control-plane"),
+    () =>
+      document
+        .querySelector(".workspace-surface-owner")
+        ?.classList.contains("is-inactive") &&
+      document.querySelector(".terminal-empty"),
     "Spaces handoff",
+  );
+  await settle();
+  check(
+    document.querySelector(".world-control-plane") === persistentControlPlane &&
+      document.querySelector(".world-context-rail .workspace-inspector") ===
+        persistentReviewerInspector,
+    "Spaces handoff destroyed the live Inspector owner",
+  );
+  check(
+    persistentReviewerInspector?.getBoundingClientRect().height !== 0,
+    "Spaces handoff hid the retained Inspector",
+  );
+  check(
+    calls.filter(({ method }) => method === "terminal.attach").length ===
+      terminalAttachesBeforeSpaces &&
+      calls.filter(({ method }) => method === "terminal.detach").length ===
+        terminalDetachesBeforeSpaces,
+    "Spaces handoff reattached or detached an Inspector terminal",
   );
   viewSelect.value = "graph";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1340,6 +1464,15 @@ async function run() {
         ?.textContent?.includes("Reviewer") &&
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "qualified Inspector conversations after Spaces handoff",
+  );
+  await settle();
+  check(
+    document.querySelector(".world-control-plane") === persistentControlPlane &&
+      calls.filter(({ method }) => method === "terminal.attach").length ===
+        terminalAttachesBeforeSpaces &&
+      calls.filter(({ method }) => method === "terminal.detach").length ===
+        terminalDetachesBeforeSpaces,
+    "returning from Spaces replaced the Inspector terminal owner",
   );
   await until(() => graphTarget("Reviewer"), "Reviewer before retirement");
   flushSync(() => graphTarget("Reviewer")!.click());

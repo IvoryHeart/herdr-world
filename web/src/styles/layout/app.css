@@ -119,6 +119,10 @@
   overflow: hidden;
 }
 
+.workspace-surface-owner {
+  display: contents;
+}
+
 .workspace-terminal-surface > .terminal-shell,
 .workspace-terminal-surface > .pane-layout,
 .workspace-terminal-surface > .pane-switcher-layout {

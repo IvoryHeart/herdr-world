@@ -77,15 +77,18 @@ export function TabBar({
   onToggleInspector?: () => void;
   onToggleAnnotations?: () => void;
   onFocusSurface?: (selection: {
+    connectionId: string;
+    runtimeGeneration: number;
     workspaceId: string;
     paneId?: string;
-  }) => void;
+  }) => void | Promise<unknown>;
 }) {
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
       connectionGeneration: state.connectionGeneration,
+      serverRuntimeGeneration: state.serverRuntimeGeneration,
       panes: state.panes,
       tabs: state.tabs,
       workspaces: state.workspaces,
@@ -100,7 +103,6 @@ export function TabBar({
   );
   const [pendingRenameTab, setPendingRenameTab] = useState<Tab | null>(null);
   const [menu, setMenu] = useState<TabMenuState | null>(null);
-  const focusSurfaceRequestRef = useRef(0);
   const focusedWs = s.workspaces.find((w) => w.focused);
   const createReason = useEndpointCreationReason(
     "tab.create",
@@ -141,18 +143,21 @@ export function TabBar({
     : 0;
 
   const focusTab = async (tab: Tab) => {
-    const requestId = focusSurfaceRequestRef.current + 1;
-    focusSurfaceRequestRef.current = requestId;
     const pane =
       s.panes.find(
         (candidate) => candidate.tab_id === tab.tab_id && candidate.focused,
       ) ?? s.panes.find((candidate) => candidate.tab_id === tab.tab_id);
+    if (onFocusSurface) {
+      if (s.serverRuntimeGeneration === null) return;
+      await onFocusSurface({
+        connectionId: s.activeConnectionId,
+        runtimeGeneration: s.serverRuntimeGeneration,
+        workspaceId: tab.workspace_id,
+        ...(pane ? { paneId: pane.pane_id } : {}),
+      });
+      return;
+    }
     await store.focusTab(tab.tab_id);
-    if (focusSurfaceRequestRef.current !== requestId) return;
-    onFocusSurface?.({
-      workspaceId: tab.workspace_id,
-      ...(pane ? { paneId: pane.pane_id } : {}),
-    });
   };
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 import type { ITheme } from "@xterm/xterm";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { TerminalWorkspaceFileRequest } from "../components/TerminalView";
 import { TerminalView } from "../components/TerminalView";
@@ -33,43 +34,85 @@ export default function WorldTerminalPortalList({
   mobileSideShortcuts: MobileTerminalSideShortcuts;
   onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
 }) {
-  return presentations.flatMap((presentation) => {
-    const { portal } = presentation;
-    if (
-      presentation.connectionId !== activeConnectionId ||
-      presentation.runtimeGeneration !== runtimeGeneration ||
-      !portal
-    ) {
-      return [];
-    }
-    const pane = panes.find(
-      (candidate) =>
-        candidate.pane_id === presentation.paneId &&
-        candidate.terminal_id === presentation.terminalId,
-    );
-    return pane
-      ? [
-          createPortal(
+  const [parking, setParking] = useState<HTMLDivElement | null>(null);
+  return (
+    <>
+      <div
+        ref={setParking}
+        className="world-terminal-parking"
+        aria-hidden="true"
+      />
+      {presentations.map((presentation) => {
+        if (
+          presentation.connectionId !== activeConnectionId ||
+          presentation.runtimeGeneration !== runtimeGeneration
+        ) {
+          return null;
+        }
+        const pane = panes.find(
+          (candidate) =>
+            candidate.pane_id === presentation.paneId &&
+            candidate.terminal_id === presentation.terminalId,
+        );
+        return pane ? (
+          <WorldTerminalPortalOwner
+            key={terminalMountKey(
+              {
+                connectionId: activeConnectionId,
+                generation: connectionGeneration,
+              },
+              pane.pane_id,
+              pane.terminal_id,
+            )}
+            portal={presentation.portal}
+            parking={parking}
+          >
             <TerminalView
-              key={terminalMountKey(
-                {
-                  connectionId: activeConnectionId,
-                  generation: connectionGeneration,
-                },
-                pane.pane_id,
-                pane.terminal_id,
-              )}
               paneId={pane.pane_id}
               terminalTheme={terminalTheme}
               uiScale={uiScale}
               mobileShortcuts={mobileShortcuts}
               mobileSideShortcuts={mobileSideShortcuts}
               onOpenWorkspaceFile={onOpenWorkspaceFile}
-            />,
-            portal,
-            pane.terminal_id,
-          ),
-        ]
-      : [];
-  });
+            />
+          </WorldTerminalPortalOwner>
+        ) : null;
+      })}
+    </>
+  );
+}
+
+function WorldTerminalPortalOwner({
+  portal,
+  parking,
+  children,
+}: {
+  portal: Element | null;
+  parking: Element | null;
+  children: ReactNode;
+}) {
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  if (!mountRef.current) {
+    mountRef.current = document.createElement("div");
+    mountRef.current.className = "world-terminal-owner";
+  }
+  const mount = mountRef.current;
+
+  useLayoutEffect(() => {
+    const target = portal ?? parking;
+    if (target && mount.parentElement !== target) target.appendChild(mount);
+    return () => {
+      if (parking && mount.parentElement !== parking)
+        parking.appendChild(mount);
+    };
+  }, [mount, parking, portal]);
+
+  useLayoutEffect(
+    () => () => {
+      mount.remove();
+    },
+    [mount],
+  );
+
+  return createPortal(children, mount);
 }

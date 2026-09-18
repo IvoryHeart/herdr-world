@@ -102,6 +102,7 @@ export default function WorldFloatingInspectorWindow({
       if (
         event.target instanceof Element &&
         (event.target.closest(".world-floating-terminal-resize") ||
+          event.target.closest(".workspace-inspector-actions") ||
           (event.target.closest(
             ".workspace-inspector-head.is-window-drag-handle",
           ) &&

@@ -758,6 +758,91 @@ describe("connection-partitioned store state", () => {
     expect(tracker.update("alpha", [pane("alpha", "done")])).toEqual([]);
   });
 
+  test("fences every Office room mutation before dispatch and after completion", async () => {
+    const previousState = store.get();
+    const originalConnection = bridge.connection;
+    const target = { connectionId: "alpha", runtimeGeneration: 1 };
+    const mutations: Array<{
+      method: string;
+      run: () => Promise<unknown>;
+    }> = [
+      {
+        method: "tab.create",
+        run: () => store.createQualifiedTab(target, "same-workspace"),
+      },
+      {
+        method: "workspace.create",
+        run: () => store.createQualifiedWorkspace(target, "New room"),
+      },
+      {
+        method: "workspace.rename",
+        run: () =>
+          store.renameQualifiedWorkspace(target, "same-workspace", "Renamed"),
+      },
+      {
+        method: "workspace.close",
+        run: () => store.closeQualifiedWorkspace(target, "same-workspace"),
+      },
+    ];
+
+    try {
+      const preDispatchCalls: string[] = [];
+      bridge.connection = (() => ({
+        connectionId: "beta",
+        generation: 11,
+        serverRuntimeGeneration: 1,
+        call: async (method: string) => {
+          preDispatchCalls.push(method);
+          return {};
+        },
+        isCurrent: () => true,
+        acceptsServerGeneration: (generation: unknown) => generation === 1,
+      })) as typeof bridge.connection;
+      __storeTesting.replaceState(
+        activateConnectionState(partitionState(), "beta", 11),
+      );
+      for (const mutation of mutations) {
+        await expect(mutation.run()).rejects.toThrow("selected host changed");
+      }
+      expect(preDispatchCalls).toEqual([]);
+
+      for (const mutation of mutations) {
+        __storeTesting.replaceState(partitionState());
+        const gate = Promise.withResolvers<void>();
+        const started = Promise.withResolvers<void>();
+        const calls: Array<{ connectionId: string; method: string }> = [];
+        bridge.connection = ((connectionId = "alpha") => ({
+          connectionId,
+          generation: 10,
+          serverRuntimeGeneration: 1,
+          call: async (method: string) => {
+            calls.push({ connectionId, method });
+            started.resolve();
+            await gate.promise;
+            return {};
+          },
+          isCurrent: () => true,
+          acceptsServerGeneration: (generation: unknown) => generation === 1,
+        })) as typeof bridge.connection;
+
+        const pending = mutation.run();
+        await started.promise;
+        __storeTesting.replaceState(
+          activateConnectionState(partitionState(), "beta", 11),
+        );
+        gate.resolve();
+
+        await expect(pending).rejects.toThrow("selected host changed");
+        expect(calls).toEqual([
+          { connectionId: "alpha", method: mutation.method },
+        ]);
+      }
+    } finally {
+      bridge.connection = originalConnection;
+      __storeTesting.replaceState(previousState);
+    }
+  });
+
   test("carries runtime identity in browser and toast activation targets", () => {
     const target = {
       connectionId: "alpha",
