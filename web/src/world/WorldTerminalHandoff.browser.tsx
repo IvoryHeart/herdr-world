@@ -140,6 +140,51 @@ function layout(): PaneLayout {
   };
 }
 
+function currentWorldCoverage() {
+  const currentPaneRecords = currentPanes();
+  const status = {
+    working: 0,
+    idle: 0,
+    blocked: 0,
+    done: 0,
+    unknown: 0,
+  };
+  let agentPanes = 0;
+  for (const pane of currentPaneRecords) {
+    if (!pane.agent) continue;
+    agentPanes += 1;
+    const semantic =
+      pane.agent_status === "working" ||
+      pane.agent_status === "busy" ||
+      pane.agent_status === "running"
+        ? "working"
+        : pane.agent_status === "idle" || pane.agent_status === "waiting"
+          ? "idle"
+          : pane.agent_status === "blocked" || pane.agent_status === "error"
+            ? "blocked"
+            : pane.agent_status === "done" || pane.agent_status === "completed"
+              ? "done"
+              : "unknown";
+    status[semantic] += 1;
+  }
+  return {
+    workspaces: 1,
+    tabs: currentTabs().length,
+    panes: currentPaneRecords.length,
+    agent_panes: agentPanes,
+    status,
+    by_workspace: [
+      {
+        workspace_id: workspaceBase.workspace_id,
+        tabs: currentTabs().length,
+        panes: currentPaneRecords.length,
+        agent_panes: agentPanes,
+        status,
+      },
+    ],
+  };
+}
+
 const client: ConnectionClient = {
   connectionId: "local",
   generation: 1,
@@ -168,6 +213,7 @@ const client: ConnectionClient = {
               tabs: currentTabs(),
               panes: currentPanes(),
               agents,
+              coverage: currentWorldCoverage(),
             },
           },
         ],

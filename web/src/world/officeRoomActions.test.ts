@@ -175,6 +175,14 @@ function space(
         spaceLabel: workspaceId,
       },
     ],
+    coverage: {
+      spaces: 1,
+      tabs: 0,
+      leaves: 1,
+      agents: 0,
+      shells: 1,
+      status: { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 },
+    },
   };
 }
 
@@ -187,5 +195,29 @@ function worldWith(...spaces: WorldSpaceObject[]): WorldObject {
     leaves: spaces.flatMap((space) => space.children),
     nodes,
     nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage: spaces.reduce(
+      (total, space) => ({
+        spaces: total.spaces + space.coverage.spaces,
+        tabs: total.tabs + space.coverage.tabs,
+        leaves: total.leaves + space.coverage.leaves,
+        agents: total.agents + space.coverage.agents,
+        shells: total.shells + space.coverage.shells,
+        status: {
+          working: total.status.working + space.coverage.status.working,
+          idle: total.status.idle + space.coverage.status.idle,
+          blocked: total.status.blocked + space.coverage.status.blocked,
+          done: total.status.done + space.coverage.status.done,
+          unknown: total.status.unknown + space.coverage.status.unknown,
+        },
+      }),
+      {
+        spaces: 0,
+        tabs: 0,
+        leaves: 0,
+        agents: 0,
+        shells: 0,
+        status: { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 },
+      },
+    ),
   };
 }

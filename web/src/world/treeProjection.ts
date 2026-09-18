@@ -83,8 +83,8 @@ export function projectWorldTree(
     return {
       source: host,
       spaces,
-      observedSpaceCount: host.spaces.length,
-      omittedSpaceCount: Math.max(0, host.spaces.length - spaces.length),
+      observedSpaceCount: host.coverage.spaces,
+      omittedSpaceCount: Math.max(0, host.coverage.spaces - spaces.length),
     } satisfies WorldTreeHost;
   });
   const presentedLeafCount = hosts.reduce(
@@ -102,12 +102,12 @@ export function projectWorldTree(
     omittedHostCount: Math.max(0, world.hosts.length - hosts.length),
     omittedSpaceCount: Math.max(
       0,
-      world.spaces.length - presentedSpaces.length,
+      world.coverage.spaces - presentedSpaces.length,
     ),
     coverage: {
-      observedLeaves: world.leaves.length,
+      observedLeaves: world.coverage.leaves,
       presentedLeaves: presentedLeafCount,
-      omittedLeaves: Math.max(0, world.leaves.length - presentedLeafCount),
+      omittedLeaves: Math.max(0, world.coverage.leaves - presentedLeafCount),
     },
     presentationBounds: TREE_PRESENTATION_BOUNDS,
   };
@@ -125,8 +125,8 @@ function projectSpace(
   return {
     source: space,
     children,
-    observedChildCount: space.children.length,
-    omittedChildCount: Math.max(0, space.children.length - children.length),
+    observedChildCount: space.coverage.leaves,
+    omittedChildCount: Math.max(0, space.coverage.leaves - children.length),
   };
 }
 

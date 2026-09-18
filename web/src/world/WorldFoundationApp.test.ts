@@ -20,6 +20,7 @@ import {
   worldInspectorContext,
   worldNodeForWorkspaceSurfaceSelection,
   worldSelectionIsCurrent,
+  worldSnapshotPriorityForNode,
   worldViewFromPath,
 } from "./WorldFoundationApp";
 import { buildWorldObject } from "./worldObject";
@@ -175,6 +176,63 @@ describe("World view preference", () => {
         paneId: "same-pane",
       })?.connectionId,
     ).toBe("host-b");
+  });
+
+  test("qualifies snapshot priority by the selected workspace and pane", () => {
+    const world = buildWorldObject(
+      [
+        {
+          connectionId: "host-a",
+          label: "Host A",
+          source: "saved-profile",
+          isDefault: true,
+          state: "ready",
+          generation: 4,
+          snapshotGeneration: 4,
+          stale: false,
+          actionable: true,
+          snapshot: {
+            workspaces: [
+              {
+                workspace_id: "workspace-512",
+                number: 513,
+                label: "Selected",
+                focused: false,
+                pane_count: 1,
+                tab_count: 1,
+                agent_status: "working",
+              },
+            ],
+            tabs: [],
+            panes: [
+              {
+                pane_id: "pane-4096",
+                terminal_id: "terminal-4096",
+                workspace_id: "workspace-512",
+                tab_id: "tab-2048",
+                focused: false,
+                agent: "codex",
+                agent_status: "working",
+                revision: 1,
+              },
+            ],
+            agents: [],
+          },
+        },
+      ],
+      "host-a",
+    );
+
+    expect(worldSnapshotPriorityForNode(world.spaces[0]!)).toEqual({
+      connectionId: "host-a",
+      workspaceId: "workspace-512",
+    });
+    expect(worldSnapshotPriorityForNode(world.leaves[0]!)).toEqual({
+      connectionId: "host-a",
+      workspaceId: "workspace-512",
+      paneId: "pane-4096",
+      terminalId: "terminal-4096",
+    });
   });
 
   test("does not implicitly activate another host while opening a World node", async () => {

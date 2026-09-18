@@ -4,6 +4,7 @@ import type {
   WorldHostObject,
   WorldLeafObject,
   WorldObject,
+  WorldObservedCoverage,
   WorldSpaceObject,
 } from "../worldObject";
 
@@ -61,6 +62,30 @@ describe("World Graph projection", () => {
       observedTerminals: 19,
       presentedTerminals: 16,
       omittedTerminals: 3,
+    });
+  });
+
+  test("reports exact leaf kinds when aggregate records are bounded", () => {
+    const bounded = fixtureSpace("local", 0, 16);
+    bounded.coverage.leaves = 4_097;
+    bounded.coverage.agents = 2_049;
+    bounded.coverage.shells = 2_048;
+    bounded.coverage.status.working = 2_049;
+
+    const graph = projectWorldGraph(
+      fixtureWorld([fixtureHost("local", [bounded])]),
+    );
+
+    expect(graph.hosts[0]?.spaces[0]).toMatchObject({
+      observedChildCount: 4_097,
+      omittedChildCount: 4_081,
+    });
+    expect(graph.coverage).toMatchObject({
+      observedAgents: 2_049,
+      omittedAgents: 2_033,
+      observedTerminals: 4_097,
+      omittedTerminals: 4_081,
+      observedShells: 2_048,
     });
   });
 
@@ -141,6 +166,7 @@ function fixtureWorld(hosts: WorldHostObject[]): WorldObject {
     leaves,
     nodes,
     nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage: combineCoverage(hosts.map(({ coverage }) => coverage)),
   };
 }
 
@@ -157,6 +183,7 @@ function fixtureHost(
     label: connectionId,
     connection: {} as WorldHostObject["connection"],
     spaces,
+    coverage: combineCoverage(spaces.map(({ coverage }) => coverage)),
   };
 }
 
@@ -166,6 +193,9 @@ function fixtureSpace(
   leafCount: number,
 ): WorldSpaceObject {
   const id = `space:${connectionId}:${index}`;
+  const children = Array.from({ length: leafCount }, (_, leaf) =>
+    fixtureLeaf(connectionId, index, leaf),
+  );
   return {
     ...base(connectionId),
     id,
@@ -175,10 +205,54 @@ function fixtureSpace(
     label: `Space ${index}`,
     workspace: {} as WorldSpaceObject["workspace"],
     tabs: [],
-    children: Array.from({ length: leafCount }, (_, leaf) =>
-      fixtureLeaf(connectionId, index, leaf),
-    ),
+    children,
+    coverage: coverageForLeaves(children),
   };
+}
+
+function coverageForLeaves(
+  leaves: readonly WorldLeafObject[],
+): WorldObservedCoverage {
+  const status = { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
+  const agents = leaves.filter(({ kind }) => kind === "agent");
+  for (const agent of agents) status[agent.status] += 1;
+  return {
+    spaces: 1,
+    tabs: 0,
+    leaves: leaves.length,
+    agents: agents.length,
+    shells: leaves.length - agents.length,
+    status,
+  };
+}
+
+function combineCoverage(
+  values: readonly WorldObservedCoverage[],
+): WorldObservedCoverage {
+  return values.reduce<WorldObservedCoverage>(
+    (total, value) => ({
+      spaces: total.spaces + value.spaces,
+      tabs: total.tabs + value.tabs,
+      leaves: total.leaves + value.leaves,
+      agents: total.agents + value.agents,
+      shells: total.shells + value.shells,
+      status: {
+        working: total.status.working + value.status.working,
+        idle: total.status.idle + value.status.idle,
+        blocked: total.status.blocked + value.status.blocked,
+        done: total.status.done + value.status.done,
+        unknown: total.status.unknown + value.status.unknown,
+      },
+    }),
+    {
+      spaces: 0,
+      tabs: 0,
+      leaves: 0,
+      agents: 0,
+      shells: 0,
+      status: { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 },
+    },
+  );
 }
 
 function fixtureLeaf(

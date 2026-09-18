@@ -67,6 +67,14 @@ function fixtureWorld() {
     label: "Platform",
     workspace: { focused: true },
     children: [agent, terminal],
+    coverage: {
+      spaces: 1,
+      tabs: 0,
+      leaves: 2,
+      agents: 1,
+      shells: 1,
+      status: { working: 1, idle: 0, blocked: 0, done: 0, unknown: 0 },
+    },
   };
   const host = {
     ...base,
@@ -75,6 +83,7 @@ function fixtureWorld() {
     parentId: null,
     label: "Forge",
     spaces: [space],
+    coverage: space.coverage,
   };
   const nodes = [host, space, agent, terminal];
   return {
@@ -84,5 +93,6 @@ function fixtureWorld() {
     leaves: [agent, terminal],
     nodes,
     nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage: space.coverage,
   } as unknown as WorldObject;
 }

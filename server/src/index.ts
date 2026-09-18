@@ -733,7 +733,10 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     try {
       const snapshots = worldSnapshots;
       if (!snapshots) throw new Error("World snapshot service is unavailable");
-      sendReply({ id, result: await snapshots.snapshot() }, "world-snapshot");
+      sendReply(
+        { id, result: await snapshots.snapshot(params) },
+        "world-snapshot",
+      );
     } catch (error) {
       sendError("world-snapshot-error", error);
     }

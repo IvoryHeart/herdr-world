@@ -6,6 +6,35 @@ const MAX_TABS = 2_048;
 const MAX_PANES = 4_096;
 const MAX_AGENTS = 4_096;
 const MAX_CONCURRENT_CONNECTIONS = 4;
+const MAX_PRIORITIES = 8;
+const MAX_NATIVE_ID_LENGTH = 512;
+
+type WorldAgentStatus = "working" | "idle" | "blocked" | "done" | "unknown";
+type WorldAgentStatusCounts = Record<WorldAgentStatus, number>;
+
+export type WorldSnapshotPriority = {
+  connection_id: string;
+  workspace_id: string;
+  pane_id?: string;
+  terminal_id?: string;
+};
+
+export type WorldWorkspaceCoverage = {
+  workspace_id: string;
+  tabs: number;
+  panes: number;
+  agent_panes: number;
+  status: WorldAgentStatusCounts;
+};
+
+export type WorldSnapshotCoverage = {
+  workspaces: number;
+  tabs: number;
+  panes: number;
+  agent_panes: number;
+  status: WorldAgentStatusCounts;
+  by_workspace: WorldWorkspaceCoverage[];
+};
 
 type RuntimeWithHerdr = {
   herdr: {
@@ -29,6 +58,7 @@ export type WorldSnapshot = {
   tabs: Record<string, unknown>[];
   panes: Record<string, unknown>[];
   agents: Record<string, unknown>[];
+  coverage: WorldSnapshotCoverage;
 };
 
 export type WorldConnectionSnapshot = {
@@ -62,15 +92,153 @@ type CachedSnapshot = {
   snapshot: WorldSnapshot;
 };
 
-function boundedRecords(value: unknown, key: string, limit: number) {
+function records(value: unknown, key: string) {
   const records = (value as Record<string, unknown> | null)?.[key];
   if (!Array.isArray(records)) return [];
-  return records
-    .filter(
-      (record): record is Record<string, unknown> =>
-        !!record && typeof record === "object" && !Array.isArray(record),
-    )
-    .slice(0, limit);
+  return records.filter(
+    (record): record is Record<string, unknown> =>
+      !!record && typeof record === "object" && !Array.isArray(record),
+  );
+}
+
+function boundedRecords(
+  records: readonly Record<string, unknown>[],
+  limit: number,
+  priority: (record: Record<string, unknown>) => boolean,
+) {
+  if (records.length <= limit) return [...records];
+  const admitted = new Set(
+    [
+      ...records.filter(priority),
+      ...records.filter((record) => !priority(record)),
+    ].slice(0, limit),
+  );
+  return records.filter((record) => admitted.has(record));
+}
+
+function nativeId(value: unknown): string | null {
+  return typeof value === "string" &&
+    value.length > 0 &&
+    value.length <= MAX_NATIVE_ID_LENGTH
+    ? value
+    : null;
+}
+
+function parsePriorities(value: unknown): WorldSnapshotPriority[] {
+  if (value === undefined) return [];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("invalid World snapshot parameters");
+  }
+  const priorities = (value as Record<string, unknown>).priorities;
+  if (priorities === undefined) return [];
+  if (!Array.isArray(priorities) || priorities.length > MAX_PRIORITIES) {
+    throw new Error("invalid World snapshot priorities");
+  }
+  const result: WorldSnapshotPriority[] = [];
+  const seen = new Set<string>();
+  for (const value of priorities) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error("invalid World snapshot priority");
+    }
+    const item = value as Record<string, unknown>;
+    const connectionId = nativeId(item.connection_id);
+    const workspaceId = nativeId(item.workspace_id);
+    const paneId =
+      item.pane_id === undefined ? undefined : nativeId(item.pane_id);
+    const terminalId =
+      item.terminal_id === undefined ? undefined : nativeId(item.terminal_id);
+    if (
+      !connectionId ||
+      !workspaceId ||
+      paneId === null ||
+      terminalId === null
+    ) {
+      throw new Error("invalid World snapshot priority");
+    }
+    const priority = {
+      connection_id: connectionId,
+      workspace_id: workspaceId,
+      ...(paneId ? { pane_id: paneId } : {}),
+      ...(terminalId ? { terminal_id: terminalId } : {}),
+    };
+    const key = JSON.stringify(priority);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(priority);
+  }
+  return result;
+}
+
+function emptyStatusCounts(): WorldAgentStatusCounts {
+  return { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
+}
+
+function agentStatus(value: unknown): WorldAgentStatus {
+  if (value === "working" || value === "busy" || value === "running") {
+    return "working";
+  }
+  if (value === "idle" || value === "waiting") return "idle";
+  if (value === "blocked" || value === "error") return "blocked";
+  if (value === "done" || value === "completed") return "done";
+  return "unknown";
+}
+
+function isAgentPane(pane: Record<string, unknown>) {
+  return typeof pane.agent === "string" && pane.agent.trim().length > 0;
+}
+
+function topologyCoverage(
+  workspaces: readonly Record<string, unknown>[],
+  tabs: readonly Record<string, unknown>[],
+  panes: readonly Record<string, unknown>[],
+  retainedWorkspaces: readonly Record<string, unknown>[],
+): WorldSnapshotCoverage {
+  const status = emptyStatusCounts();
+  let agentPanes = 0;
+  const workspaceCounts = new Map<
+    string,
+    Omit<WorldWorkspaceCoverage, "workspace_id">
+  >();
+  for (const workspace of retainedWorkspaces) {
+    const workspaceId = nativeId(workspace.workspace_id);
+    if (workspaceId && !workspaceCounts.has(workspaceId)) {
+      workspaceCounts.set(workspaceId, {
+        tabs: 0,
+        panes: 0,
+        agent_panes: 0,
+        status: emptyStatusCounts(),
+      });
+    }
+  }
+  for (const tab of tabs) {
+    const workspaceId = nativeId(tab.workspace_id);
+    const counts = workspaceId ? workspaceCounts.get(workspaceId) : undefined;
+    if (counts) counts.tabs += 1;
+  }
+  for (const pane of panes) {
+    const workspaceId = nativeId(pane.workspace_id);
+    const counts = workspaceId ? workspaceCounts.get(workspaceId) : undefined;
+    if (counts) counts.panes += 1;
+    if (!isAgentPane(pane)) continue;
+    agentPanes += 1;
+    const semanticStatus = agentStatus(pane.agent_status);
+    status[semanticStatus] += 1;
+    if (counts) {
+      counts.agent_panes += 1;
+      counts.status[semanticStatus] += 1;
+    }
+  }
+  return {
+    workspaces: workspaces.length,
+    tabs: tabs.length,
+    panes: panes.length,
+    agent_panes: agentPanes,
+    status,
+    by_workspace: [...workspaceCounts].map(([workspace_id, counts]) => ({
+      workspace_id,
+      ...counts,
+    })),
+  };
 }
 
 async function mapConcurrent<T, R>(
@@ -106,14 +274,15 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     return this.revision;
   }
 
-  async snapshot(): Promise<WorldSnapshotResult> {
+  async snapshot(params?: unknown): Promise<WorldSnapshotResult> {
+    const priorities = parsePriorities(params);
     // The profile store bounds the managed catalogue. Preserve that complete
     // candidate set here so each view can apply its own relevance-aware bound.
     const statuses = this.registry.list();
     const connections = await mapConcurrent(
       statuses,
       MAX_CONCURRENT_CONNECTIONS,
-      (status) => this.snapshotConnection(status),
+      (status) => this.snapshotConnection(status, priorities),
     );
     return {
       revision: this.revision,
@@ -145,6 +314,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
 
   private async snapshotConnection(
     status: ConnectionStatus,
+    priorities: readonly WorldSnapshotPriority[],
   ): Promise<WorldConnectionSnapshot> {
     const lease = this.registry.readyRuntimeLease(status.id);
     if (!lease || lease.generation !== status.generation) {
@@ -161,15 +331,99 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       if (!lease.isCurrent()) {
         return this.fallback(status, "connection changed during snapshot");
       }
-      const snapshot: WorldSnapshot = {
-        workspaces: boundedRecords(
-          workspaceResult,
-          "workspaces",
-          MAX_WORKSPACES,
+      const connectionPriorities = priorities.filter(
+        ({ connection_id }) => connection_id === status.id,
+      );
+      const allWorkspaces = records(workspaceResult, "workspaces");
+      const allTabs = records(tabResult, "tabs");
+      const allPanes = records(paneResult, "panes");
+      const allAgents = records(agentResult, "agents");
+      const explicitPanes = allPanes.filter((pane) =>
+        connectionPriorities.some(
+          (priority) =>
+            (priority.pane_id && priority.pane_id === pane.pane_id) ||
+            (priority.terminal_id && priority.terminal_id === pane.terminal_id),
         ),
-        tabs: boundedRecords(tabResult, "tabs", MAX_TABS),
-        panes: boundedRecords(paneResult, "panes", MAX_PANES),
-        agents: boundedRecords(agentResult, "agents", MAX_AGENTS),
+      );
+      const priorityWorkspaceIds = new Set([
+        ...connectionPriorities.map(({ workspace_id }) => workspace_id),
+        ...explicitPanes.flatMap((pane) => {
+          const workspaceId = nativeId(pane.workspace_id);
+          return workspaceId ? [workspaceId] : [];
+        }),
+      ]);
+      const workspaces = boundedRecords(
+        allWorkspaces,
+        MAX_WORKSPACES,
+        (workspace) =>
+          priorityWorkspaceIds.has(String(workspace.workspace_id)) ||
+          workspace.focused === true,
+      );
+      const retainedWorkspaceIds = new Set(
+        workspaces.flatMap((workspace) => {
+          const workspaceId = nativeId(workspace.workspace_id);
+          return workspaceId ? [workspaceId] : [];
+        }),
+      );
+      const panesInRetainedWorkspaces = allPanes.filter((pane) =>
+        retainedWorkspaceIds.has(String(pane.workspace_id)),
+      );
+      const paneIsExplicit = (pane: Record<string, unknown>) =>
+        connectionPriorities.some(
+          (priority) =>
+            (priority.pane_id && priority.pane_id === pane.pane_id) ||
+            (priority.terminal_id && priority.terminal_id === pane.terminal_id),
+        );
+      const panes = boundedRecords(
+        panesInRetainedWorkspaces,
+        MAX_PANES,
+        (pane) => paneIsExplicit(pane) || pane.focused === true,
+      );
+      const priorityTabIds = new Set(
+        explicitPanes.flatMap((pane) => {
+          const tabId = nativeId(pane.tab_id);
+          return tabId ? [tabId] : [];
+        }),
+      );
+      for (const workspace of workspaces) {
+        const activeTabId = nativeId(workspace.active_tab_id);
+        if (activeTabId) priorityTabIds.add(activeTabId);
+      }
+      const tabs = boundedRecords(
+        allTabs.filter((tab) =>
+          retainedWorkspaceIds.has(String(tab.workspace_id)),
+        ),
+        MAX_TABS,
+        (tab) => priorityTabIds.has(String(tab.tab_id)) || tab.focused === true,
+      );
+      const retainedPaneIds = new Set(
+        panes.flatMap((pane) => {
+          const paneId = nativeId(pane.pane_id);
+          return paneId ? [paneId] : [];
+        }),
+      );
+      const snapshot: WorldSnapshot = {
+        workspaces,
+        tabs,
+        panes,
+        agents: boundedRecords(
+          allAgents,
+          MAX_AGENTS,
+          (agent) =>
+            retainedPaneIds.has(String(agent.pane_id)) ||
+            connectionPriorities.some(
+              (priority) =>
+                (priority.pane_id && priority.pane_id === agent.pane_id) ||
+                (priority.terminal_id &&
+                  priority.terminal_id === agent.terminal_id),
+            ),
+        ),
+        coverage: topologyCoverage(
+          allWorkspaces,
+          allTabs,
+          allPanes,
+          workspaces,
+        ),
       };
       this.cache.set(status.id, { generation: lease.generation, snapshot });
       return {

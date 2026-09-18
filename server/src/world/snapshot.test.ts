@@ -70,6 +70,103 @@ function runtime(label: string): Runtime {
 }
 
 describe("WorldSnapshotService", () => {
+  test("rejects malformed priority hints at the bridge boundary", async () => {
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [],
+      readyRuntimeLease: () => null,
+    });
+
+    await expect(
+      service.snapshot({
+        priorities: [
+          {
+            connection_id: "local",
+            workspace_id: "workspace",
+            pane_id: "",
+          },
+        ],
+      }),
+    ).rejects.toThrow("invalid World snapshot priority");
+  });
+
+  test("preserves a selected inner candidate and exact topology counts at every bound", async () => {
+    const workspaces = Array.from({ length: 513 }, (_, index) => ({
+      workspace_id: `workspace-${index}`,
+      label: `Workspace ${index}`,
+      focused: false,
+    }));
+    const tabs = Array.from({ length: 2_049 }, (_, index) => ({
+      tab_id: `tab-${index}`,
+      workspace_id: index === 2_048 ? "workspace-512" : "workspace-0",
+      focused: false,
+    }));
+    const panes = Array.from({ length: 4_097 }, (_, index) => ({
+      pane_id: `pane-${index}`,
+      terminal_id: `terminal-${index}`,
+      workspace_id: index === 4_096 ? "workspace-512" : "workspace-0",
+      tab_id: index === 4_096 ? "tab-2048" : "tab-0",
+      focused: false,
+      ...(index % 2 === 0
+        ? { agent: "codex", agent_status: "working" }
+        : { agent_status: "idle" }),
+    }));
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          herdr: {
+            async call(method) {
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list") return { tabs };
+              if (method === "pane.list") return { panes };
+              if (method === "agent.list") return { agents: [] };
+              throw new Error(`unexpected method: ${method}`);
+            },
+          },
+        },
+        isCurrent: () => true,
+      }),
+    });
+
+    const result = await service.snapshot({
+      priorities: [
+        {
+          connection_id: "local",
+          workspace_id: "workspace-512",
+          pane_id: "pane-4096",
+          terminal_id: "terminal-4096",
+        },
+      ],
+    });
+    const snapshot = result.connections[0]?.snapshot;
+
+    expect(snapshot?.workspaces).toHaveLength(512);
+    expect(snapshot?.tabs).toHaveLength(2_048);
+    expect(snapshot?.panes).toHaveLength(4_096);
+    expect(snapshot?.workspaces.at(-1)?.workspace_id).toBe("workspace-512");
+    expect(snapshot?.tabs.at(-1)?.tab_id).toBe("tab-2048");
+    expect(snapshot?.panes.at(-1)?.pane_id).toBe("pane-4096");
+    expect(snapshot?.coverage).toMatchObject({
+      workspaces: 513,
+      tabs: 2_049,
+      panes: 4_097,
+      agent_panes: 2_049,
+      status: { working: 2_049, unknown: 0 },
+    });
+    expect(
+      snapshot?.coverage.by_workspace.find(
+        ({ workspace_id }) => workspace_id === "workspace-512",
+      ),
+    ).toMatchObject({
+      tabs: 1,
+      panes: 1,
+      agent_panes: 1,
+      status: { working: 1 },
+    });
+  });
+
   test("does not discard candidates before view-specific projection", async () => {
     const statuses = Array.from({ length: 129 }, (_, index) =>
       status(`host-${index}`),

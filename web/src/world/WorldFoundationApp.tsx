@@ -25,7 +25,11 @@ import {
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   type WorkspaceInspectorRequest,
 } from "../workspaceResource";
-import { useWorldRuntime, worldRuntimeStore } from "./runtimeStore";
+import {
+  useWorldRuntime,
+  worldRuntimeStore,
+  type WorldRuntimePriority,
+} from "./runtimeStore";
 import {
   buildWorldObject,
   type WorldHostObject,
@@ -206,6 +210,39 @@ export function worldIntentInitialView(
   if (preferred && views.includes(preferred)) return preferred;
   if (views.includes("terminal")) return "terminal";
   return views[0] ?? null;
+}
+
+export function worldSnapshotPriorityForNode(
+  node: WorldObjectNode,
+): WorldRuntimePriority | null {
+  if (node.kind === "host") return null;
+  const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
+  return {
+    connectionId: node.connectionId,
+    workspaceId: leaf?.workspaceId ?? node.nativeId,
+    ...(leaf ? { paneId: leaf.nativeId, terminalId: leaf.terminalId } : {}),
+  };
+}
+
+function snapshotPriorityForConversation(
+  conversation: WorldInspectorConversation,
+): WorldRuntimePriority {
+  return {
+    connectionId: conversation.connectionId,
+    workspaceId: conversation.workspaceId,
+    ...(conversation.paneId ? { paneId: conversation.paneId } : {}),
+    ...(conversation.terminalId ? { terminalId: conversation.terminalId } : {}),
+  };
+}
+
+function snapshotPriorityForSurface(
+  selection: WorkspaceSurfaceSelection,
+): WorldRuntimePriority {
+  return {
+    connectionId: selection.connectionId,
+    workspaceId: selection.workspaceId,
+    ...(selection.paneId ? { paneId: selection.paneId } : {}),
+  };
 }
 
 function initialView() {
@@ -530,6 +567,8 @@ function WorldControlPlane({
     ],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
+  const [pendingSurfacePriority, setPendingSurfacePriority] =
+    useState<WorldRuntimePriority | null>(null);
   const intentRequestRef = useRef(0);
   const worldViewLayoutRef = useRef<HTMLDivElement | null>(null);
   const contextRailRef = useRef<HTMLElement | null>(null);
@@ -586,7 +625,23 @@ function WorldControlPlane({
     () => inspectorConversations.map(({ nodeId }) => nodeId),
     [inspectorConversations],
   );
+  const snapshotPriorities = useMemo(
+    () => [
+      ...(pendingSurfacePriority ? [pendingSurfacePriority] : []),
+      ...(selection
+        ? [worldSnapshotPriorityForNode(selection)].filter(
+            (priority): priority is WorldRuntimePriority => priority !== null,
+          )
+        : []),
+      ...inspectorConversations.map(snapshotPriorityForConversation),
+    ],
+    [inspectorConversations, pendingSurfacePriority, selection],
+  );
   dockedInspectorGeometryRef.current = dockedInspectorGeometry;
+
+  useLayoutEffect(() => {
+    worldRuntimeStore.setPriorities(snapshotPriorities);
+  }, [snapshotPriorities]);
 
   useEffect(() => {
     setDockedInspectorGeometry(null);
@@ -736,8 +791,9 @@ function WorldControlPlane({
     id: string | null,
     requestedView: InspectorView | null = null,
     focusTarget = true,
+    candidateWorld = world,
   ): Promise<boolean> => {
-    const next = id ? (world.nodeById.get(id) ?? null) : null;
+    const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
     setIntentError(null);
@@ -825,7 +881,41 @@ function WorldControlPlane({
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
     const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
-    return node ? applySelection(node.id) : Promise.resolve(false);
+    if (node) return applySelection(node.id);
+    if (
+      surfaceSelection.connectionId !==
+        connectionSelection.activeConnectionId ||
+      runtime.connections.find(
+        ({ connectionId }) => connectionId === surfaceSelection.connectionId,
+      )?.generation !== surfaceSelection.runtimeGeneration
+    ) {
+      return Promise.resolve(false);
+    }
+    const priority = snapshotPriorityForSurface(surfaceSelection);
+    setPendingSurfacePriority(priority);
+    return worldRuntimeStore
+      .ensurePriorities([
+        priority,
+        ...inspectorConversations.map(snapshotPriorityForConversation),
+      ])
+      .then(() => {
+        const refreshedWorld = buildWorldObject(
+          worldRuntimeStore.get().connections,
+          connectionSelection.activeConnectionId,
+        );
+        const refreshedNode = worldNodeForWorkspaceSurfaceSelection(
+          refreshedWorld,
+          surfaceSelection,
+        );
+        return refreshedNode
+          ? applySelection(refreshedNode.id, null, true, refreshedWorld)
+          : false;
+      })
+      .catch((cause) => {
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
+        return false;
+      })
+      .finally(() => setPendingSurfacePriority(null));
   };
   useLayoutEffect(() => {
     const handler = (surfaceSelection: WorkspaceSurfaceSelection) =>

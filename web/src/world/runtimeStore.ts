@@ -9,12 +9,47 @@ import type { Pane, Tab, Workspace } from "../types";
 
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
+const MAX_PRIORITIES = 8;
+const MAX_WORKSPACE_COVERAGE = 512;
+
+export type WorldRuntimeStatusCounts = {
+  working: number;
+  idle: number;
+  blocked: number;
+  done: number;
+  unknown: number;
+};
+
+export type WorldRuntimeWorkspaceCoverage = {
+  workspaceId: string;
+  tabs: number;
+  panes: number;
+  agentPanes: number;
+  status: WorldRuntimeStatusCounts;
+};
+
+export type WorldRuntimeCoverage = {
+  workspaces: number;
+  tabs: number;
+  panes: number;
+  agentPanes: number;
+  status: WorldRuntimeStatusCounts;
+  byWorkspace: WorldRuntimeWorkspaceCoverage[];
+};
+
+export type WorldRuntimePriority = {
+  connectionId: string;
+  workspaceId: string;
+  paneId?: string;
+  terminalId?: string;
+};
 
 export type WorldRuntimeSnapshot = {
   workspaces: Workspace[];
   tabs: Tab[];
   panes: Pane[];
   agents: Record<string, unknown>[];
+  coverage?: WorldRuntimeCoverage;
 };
 
 export type WorldRuntimeConnection = {
@@ -41,7 +76,7 @@ export type WorldRuntimeState = {
 };
 
 type WorldRuntimeClient = {
-  call(method: string): Promise<unknown>;
+  call(method: string, params?: Record<string, unknown>): Promise<unknown>;
   onControl(callback: (control: BridgeControlMsg) => void): () => void;
   onStatus(callback: (status: ConnectionStatus) => void): () => void;
 };
@@ -75,6 +110,86 @@ function records<T>(value: unknown): T[] {
     : [];
 }
 
+function count(value: unknown): number | null {
+  return Number.isSafeInteger(value) && (value as number) >= 0
+    ? (value as number)
+    : null;
+}
+
+function parseStatusCounts(value: unknown): WorldRuntimeStatusCounts | null {
+  const item = record(value);
+  if (!item) return null;
+  const working = count(item.working);
+  const idle = count(item.idle);
+  const blocked = count(item.blocked);
+  const done = count(item.done);
+  const unknown = count(item.unknown);
+  return working === null ||
+    idle === null ||
+    blocked === null ||
+    done === null ||
+    unknown === null
+    ? null
+    : { working, idle, blocked, done, unknown };
+}
+
+function parseCoverage(value: unknown): WorldRuntimeCoverage | null {
+  const item = record(value);
+  if (!item || !Array.isArray(item.by_workspace)) return null;
+  const workspaces = count(item.workspaces);
+  const tabs = count(item.tabs);
+  const panes = count(item.panes);
+  const agentPanes = count(item.agent_panes);
+  const status = parseStatusCounts(item.status);
+  if (
+    workspaces === null ||
+    tabs === null ||
+    panes === null ||
+    agentPanes === null ||
+    agentPanes > panes ||
+    !status ||
+    Object.values(status).reduce((total, value) => total + value, 0) !==
+      agentPanes ||
+    item.by_workspace.length > MAX_WORKSPACE_COVERAGE
+  ) {
+    return null;
+  }
+  const seen = new Set<string>();
+  const byWorkspace: WorldRuntimeWorkspaceCoverage[] = [];
+  for (const value of item.by_workspace) {
+    const workspace = record(value);
+    if (!workspace || typeof workspace.workspace_id !== "string") return null;
+    const workspaceTabs = count(workspace.tabs);
+    const workspacePanes = count(workspace.panes);
+    const workspaceAgentPanes = count(workspace.agent_panes);
+    const workspaceStatus = parseStatusCounts(workspace.status);
+    if (
+      !workspace.workspace_id ||
+      seen.has(workspace.workspace_id) ||
+      workspaceTabs === null ||
+      workspacePanes === null ||
+      workspaceAgentPanes === null ||
+      workspaceAgentPanes > workspacePanes ||
+      !workspaceStatus ||
+      Object.values(workspaceStatus).reduce(
+        (total, statusCount) => total + statusCount,
+        0,
+      ) !== workspaceAgentPanes
+    ) {
+      return null;
+    }
+    seen.add(workspace.workspace_id);
+    byWorkspace.push({
+      workspaceId: workspace.workspace_id,
+      tabs: workspaceTabs,
+      panes: workspacePanes,
+      agentPanes: workspaceAgentPanes,
+      status: workspaceStatus,
+    });
+  }
+  return { workspaces, tabs, panes, agentPanes, status, byWorkspace };
+}
+
 function parseConnection(value: unknown): WorldRuntimeConnection | null {
   const item = record(value);
   if (
@@ -98,6 +213,8 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
   }
   const rawSnapshot = item.snapshot === null ? null : record(item.snapshot);
   if (item.snapshot !== null && !rawSnapshot) return null;
+  const coverage = rawSnapshot ? parseCoverage(rawSnapshot.coverage) : null;
+  if (rawSnapshot && !coverage) return null;
   const error = record(item.error)?.message;
   return {
     connectionId: item.connection_id,
@@ -119,6 +236,7 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
           tabs: records<Tab>(rawSnapshot.tabs),
           panes: records<Pane>(rawSnapshot.panes),
           agents: records<Record<string, unknown>>(rawSnapshot.agents),
+          coverage: coverage!,
         }
       : null,
   };
@@ -165,6 +283,9 @@ export class WorldRuntimeStore {
   private fallbackTimer: ReturnType<typeof setInterval> | null = null;
   private unlistenControl: (() => void) | null = null;
   private unlistenStatus: (() => void) | null = null;
+  private priorities: WorldRuntimePriority[] = [];
+  private priorityVersion = 0;
+  private appliedPriorityVersion = 0;
 
   constructor(private readonly client: WorldRuntimeClient) {}
 
@@ -205,6 +326,53 @@ export class WorldRuntimeStore {
     this.fallbackTimer = null;
   }
 
+  setPriorities(values: readonly WorldRuntimePriority[]): number {
+    const seen = new Set<string>();
+    const next = values
+      .flatMap((value) => {
+        if (
+          !value.connectionId ||
+          !value.workspaceId ||
+          (value.paneId !== undefined && !value.paneId) ||
+          (value.terminalId !== undefined && !value.terminalId)
+        ) {
+          return [];
+        }
+        const normalized: WorldRuntimePriority = {
+          connectionId: value.connectionId,
+          workspaceId: value.workspaceId,
+          ...(value.paneId ? { paneId: value.paneId } : {}),
+          ...(value.terminalId ? { terminalId: value.terminalId } : {}),
+        };
+        const key = JSON.stringify(normalized);
+        if (seen.has(key)) return [];
+        seen.add(key);
+        return [normalized];
+      })
+      .slice(0, MAX_PRIORITIES);
+    if (JSON.stringify(next) === JSON.stringify(this.priorities)) {
+      return this.priorityVersion;
+    }
+    this.priorities = next;
+    this.priorityVersion += 1;
+    if (this.unlistenControl) this.scheduleRefresh();
+    return this.priorityVersion;
+  }
+
+  async ensurePriorities(values: readonly WorldRuntimePriority[]) {
+    const requiredVersion = this.setPriorities(values);
+    while (this.appliedPriorityVersion < requiredVersion) {
+      await this.refresh();
+      if (
+        this.appliedPriorityVersion < requiredVersion &&
+        this.state.status === "error" &&
+        !this.refreshInFlight
+      ) {
+        throw new Error(this.state.error ?? "World snapshot refresh failed");
+      }
+    }
+  }
+
   async refresh() {
     if (this.refreshInFlight) {
       this.refreshQueued = true;
@@ -226,12 +394,27 @@ export class WorldRuntimeStore {
   }
 
   private async performRefresh(observationEpoch: number) {
+    const priorityVersion = this.priorityVersion;
+    const priorities = this.priorities;
     try {
       const parsed = parseWorldSnapshotResult(
-        await this.client.call("world.snapshot"),
+        await this.client.call("world.snapshot", {
+          priorities: priorities.map((priority) => ({
+            connection_id: priority.connectionId,
+            workspace_id: priority.workspaceId,
+            ...(priority.paneId ? { pane_id: priority.paneId } : {}),
+            ...(priority.terminalId
+              ? { terminal_id: priority.terminalId }
+              : {}),
+          })),
+        }),
       );
       if (!parsed) throw new Error("invalid World snapshot response");
       if (observationEpoch !== this.observationEpoch) return;
+      this.appliedPriorityVersion = Math.max(
+        this.appliedPriorityVersion,
+        priorityVersion,
+      );
       this.set({ ...parsed, status: "ready", error: null });
     } catch (error) {
       if (observationEpoch !== this.observationEpoch) return;

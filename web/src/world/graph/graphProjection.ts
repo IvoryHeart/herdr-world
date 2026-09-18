@@ -143,9 +143,7 @@ export function projectWorldGraph(
     ),
   ]);
   const presentedLeaves = graphSpaces.flatMap(({ children }) => children);
-  const observedAgents = world.leaves.filter(
-    ({ kind }) => kind === "agent",
-  ).length;
+  const observedAgents = world.coverage.agents;
   const presentedAgents = presentedLeaves.filter(
     ({ kind }) => kind === "agent",
   ).length;
@@ -157,22 +155,22 @@ export function projectWorldGraph(
     hosts,
     spaces: graphSpaces,
     omittedHostCount: Math.max(0, world.hosts.length - hosts.length),
-    omittedSpaceCount: Math.max(0, world.spaces.length - graphSpaces.length),
+    omittedSpaceCount: Math.max(0, world.coverage.spaces - graphSpaces.length),
     coverage: {
       configuredHosts: world.hosts.length,
       presentedHosts: hosts.length,
-      observedSpaces: world.spaces.length,
+      observedSpaces: world.coverage.spaces,
       presentedSpaces: graphSpaces.length,
       observedAgents,
       presentedAgents,
       omittedAgents: Math.max(0, observedAgents - presentedAgents),
-      observedTerminals: world.leaves.length,
+      observedTerminals: world.coverage.leaves,
       presentedTerminals: presentedLeaves.length,
       omittedTerminals: Math.max(
         0,
-        world.leaves.length - presentedLeaves.length,
+        world.coverage.leaves - presentedLeaves.length,
       ),
-      observedShells: world.leaves.length - observedAgents,
+      observedShells: world.coverage.shells,
       presentedShells: presentedLeaves.length - presentedAgents,
     },
     presentationBounds: GRAPH_PRESENTATION_BOUNDS,
@@ -191,11 +189,11 @@ function projectHost(
         ({ workspace, children }) =>
           workspace.focused || children.some(({ focused }) => focused),
       ),
-      Math.max(0, host.spaces.length - spaces.length),
+      Math.max(0, host.coverage.spaces - spaces.length),
     ),
     spaces,
-    observedSpaceCount: host.spaces.length,
-    omittedSpaceCount: Math.max(0, host.spaces.length - spaces.length),
+    observedSpaceCount: host.coverage.spaces,
+    omittedSpaceCount: Math.max(0, host.coverage.spaces - spaces.length),
   };
 }
 
@@ -210,7 +208,7 @@ function projectSpace(
     .map(({ leaf }) => graphNode(leaf, leaf.status, leaf.focused, 0));
   const omittedChildCount = Math.max(
     0,
-    space.children.length - children.length,
+    space.coverage.leaves - children.length,
   );
   return {
     node: graphNode(
@@ -220,7 +218,7 @@ function projectSpace(
       omittedChildCount,
     ),
     children,
-    observedChildCount: space.children.length,
+    observedChildCount: space.coverage.leaves,
     omittedChildCount,
   };
 }

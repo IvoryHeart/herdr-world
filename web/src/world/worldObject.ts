@@ -8,6 +8,15 @@ export type WorldAgentStatus =
   | "blocked"
   | "done"
   | "unknown";
+export type WorldAgentStatusCounts = Record<WorldAgentStatus, number>;
+export type WorldObservedCoverage = {
+  spaces: number;
+  tabs: number;
+  leaves: number;
+  agents: number;
+  shells: number;
+  status: WorldAgentStatusCounts;
+};
 export type WorldHostState =
   | "active"
   | "ready-inactive"
@@ -46,6 +55,7 @@ export type WorldHostObject = WorldObjectBase & {
   parentId: null;
   connection: WorldRuntimeConnection;
   spaces: WorldSpaceObject[];
+  coverage: WorldObservedCoverage;
 };
 
 export type WorldSpaceObject = WorldObjectBase & {
@@ -54,6 +64,7 @@ export type WorldSpaceObject = WorldObjectBase & {
   workspace: Workspace;
   tabs: Tab[];
   children: WorldLeafObject[];
+  coverage: WorldObservedCoverage;
 };
 
 export type WorldLeafObject = WorldObjectBase & {
@@ -88,6 +99,7 @@ export type WorldObject = {
   leaves: WorldLeafObject[];
   nodes: WorldObjectNode[];
   nodeById: ReadonlyMap<string, WorldObjectNode>;
+  coverage: WorldObservedCoverage;
 };
 
 export function worldObjectId(
@@ -152,6 +164,74 @@ function status(value: unknown): WorldAgentStatus {
   if (value === "blocked" || value === "error") return "blocked";
   if (value === "done" || value === "completed") return "done";
   return "unknown";
+}
+
+function emptyStatusCounts(): WorldAgentStatusCounts {
+  return { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
+}
+
+function observedCoverage(
+  connection: WorldRuntimeConnection,
+): WorldObservedCoverage {
+  const snapshot = connection.snapshot;
+  if (!snapshot) {
+    return {
+      spaces: 0,
+      tabs: 0,
+      leaves: 0,
+      agents: 0,
+      shells: 0,
+      status: emptyStatusCounts(),
+    };
+  }
+  if (snapshot.coverage) {
+    return {
+      spaces: snapshot.coverage.workspaces,
+      tabs: snapshot.coverage.tabs,
+      leaves: snapshot.coverage.panes,
+      agents: snapshot.coverage.agentPanes,
+      shells: Math.max(
+        0,
+        snapshot.coverage.panes - snapshot.coverage.agentPanes,
+      ),
+      status: { ...snapshot.coverage.status },
+    };
+  }
+  const statusCounts = emptyStatusCounts();
+  let agents = 0;
+  for (const pane of snapshot.panes) {
+    if (typeof pane.agent !== "string" || !pane.agent.trim()) continue;
+    agents += 1;
+    statusCounts[status(pane.agent_status)] += 1;
+  }
+  return {
+    spaces: snapshot.workspaces.length,
+    tabs: snapshot.tabs.length,
+    leaves: snapshot.panes.length,
+    agents,
+    shells: snapshot.panes.length - agents,
+    status: statusCounts,
+  };
+}
+
+function addCoverage(
+  left: WorldObservedCoverage,
+  right: WorldObservedCoverage,
+): WorldObservedCoverage {
+  return {
+    spaces: left.spaces + right.spaces,
+    tabs: left.tabs + right.tabs,
+    leaves: left.leaves + right.leaves,
+    agents: left.agents + right.agents,
+    shells: left.shells + right.shells,
+    status: {
+      working: left.status.working + right.status.working,
+      idle: left.status.idle + right.status.idle,
+      blocked: left.status.blocked + right.status.blocked,
+      done: left.status.done + right.status.done,
+      unknown: left.status.unknown + right.status.unknown,
+    },
+  };
 }
 
 function hostState(
@@ -258,6 +338,12 @@ function buildHost(
   const tabsByWorkspace = new Map<string, Tab[]>();
   const panesByWorkspace = new Map<string, Pane[]>();
   const tabsById = new Map<string, Tab>();
+  const workspaceCoverage = new Map(
+    (connection.snapshot?.coverage?.byWorkspace ?? []).map((coverage) => [
+      coverage.workspaceId,
+      coverage,
+    ]),
+  );
   for (const tab of connection.snapshot?.tabs ?? []) {
     const tabs = tabsByWorkspace.get(tab.workspace_id) ?? [];
     tabs.push(tab);
@@ -368,6 +454,16 @@ function buildHost(
           };
         },
       );
+      const exactCoverage = workspaceCoverage.get(workspace.workspace_id);
+      const spaceStatus = emptyStatusCounts();
+      let spaceAgents = 0;
+      if (!exactCoverage) {
+        for (const child of children) {
+          if (child.kind !== "agent") continue;
+          spaceAgents += 1;
+          spaceStatus[child.status] += 1;
+        }
+      }
       return {
         id: spaceId,
         kind: "space",
@@ -385,6 +481,26 @@ function buildHost(
         workspace,
         tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
         children,
+        coverage: exactCoverage
+          ? {
+              spaces: 1,
+              tabs: exactCoverage.tabs,
+              leaves: exactCoverage.panes,
+              agents: exactCoverage.agentPanes,
+              shells: Math.max(
+                0,
+                exactCoverage.panes - exactCoverage.agentPanes,
+              ),
+              status: { ...exactCoverage.status },
+            }
+          : {
+              spaces: 1,
+              tabs: (tabsByWorkspace.get(workspace.workspace_id) ?? []).length,
+              leaves: children.length,
+              agents: spaceAgents,
+              shells: children.length - spaceAgents,
+              status: spaceStatus,
+            },
       };
     },
   );
@@ -404,6 +520,7 @@ function buildHost(
     capabilities: hostCapabilities,
     connection,
     spaces,
+    coverage: observedCoverage(connection),
   };
 }
 
@@ -428,6 +545,17 @@ export function buildWorldObject(
       ...space.children,
     ]),
   ]);
+  const coverage = hosts.reduce<WorldObservedCoverage>(
+    (total, host) => addCoverage(total, host.coverage),
+    {
+      spaces: 0,
+      tabs: 0,
+      leaves: 0,
+      agents: 0,
+      shells: 0,
+      status: emptyStatusCounts(),
+    },
+  );
   return {
     version: 1,
     hosts,
@@ -435,5 +563,6 @@ export function buildWorldObject(
     leaves,
     nodes,
     nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage,
   };
 }

@@ -234,7 +234,6 @@ export function projectWorldOffice(
   );
   const presentedRoomKeys = new Set(presentedRooms.map(({ room }) => room.key));
   const allAgents = allRooms.flatMap(({ agents }) => agents);
-  const allDesks = allRooms.flatMap(({ desks }) => desks);
   const rooms = presentedRooms.map((entry) => {
     const desks = entry.desks.slice(0, OFFICE_PRESENTATION_BOUNDS.desksPerRoom);
     const seated = new Set(
@@ -258,13 +257,18 @@ export function projectWorldOffice(
         0,
         OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
       ),
-      omittedDeskCount: Math.max(0, entry.desks.length - desks.length),
+      omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
       omittedAgentCount: Math.max(
         0,
-        roomAgents.length - OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+        entry.source.coverage.status.working +
+          entry.source.coverage.status.unknown -
+          Math.min(
+            roomAgents.length,
+            OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+          ),
       ),
-      observedDeskCount: entry.desks.length,
-      observedAgentCount: entry.agents.length,
+      observedDeskCount: entry.source.coverage.tabs,
+      observedAgentCount: entry.source.coverage.agents,
     };
   });
   const roomByKey = new Map(rooms.map((room) => [room.key, room]));
@@ -279,6 +283,9 @@ export function projectWorldOffice(
           agent.hostKey === host.key && agent.destination === "reception",
       )
       .sort(compareAgents);
+    const observedWaitingAgentCount =
+      world.hosts.find(({ id }) => id === host.key)?.coverage.status.blocked ??
+      waitingAgents.length;
     return {
       key: `reception:${host.key}`,
       hostKey: host.key,
@@ -288,11 +295,14 @@ export function projectWorldOffice(
         0,
         OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
       ),
-      observedWaitingAgentCount: waitingAgents.length,
+      observedWaitingAgentCount,
       overflowCount: Math.max(
         0,
-        waitingAgents.length -
-          OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
+        observedWaitingAgentCount -
+          Math.min(
+            waitingAgents.length,
+            OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
+          ),
       ),
     };
   });
@@ -363,12 +373,11 @@ export function projectWorldOffice(
       };
     }),
   );
-  const roomCandidates = allAgents.filter(
-    ({ destination }) => destination === "room",
-  );
-  const waitingCandidates = allAgents.filter(
-    ({ destination }) => destination === "reception",
-  );
+  const totalRoomAgents =
+    world.coverage.status.working + world.coverage.status.unknown;
+  const totalWaitingAgents = world.coverage.status.blocked;
+  const totalBarAgents =
+    world.coverage.status.idle + world.coverage.status.done;
   const renderedRoomAgents = rooms.reduce(
     (count, room) => count + room.roomAgents.length,
     0,
@@ -377,18 +386,7 @@ export function projectWorldOffice(
     (count, reception) => count + reception.waitingAgents.length,
     0,
   );
-  const omittedRooms = Math.max(
-    0,
-    allRooms.length - OFFICE_PRESENTATION_BOUNDS.rooms,
-  );
-  const omittedDesks = allRooms.reduce(
-    (count, { room, desks }) =>
-      count +
-      (presentedRoomKeys.has(room.key)
-        ? Math.max(0, desks.length - OFFICE_PRESENTATION_BOUNDS.desksPerRoom)
-        : desks.length),
-    0,
-  );
+  const omittedRooms = Math.max(0, world.coverage.spaces - rooms.length);
   const renderedDesks = rooms.reduce(
     (count, room) => count + room.desks.length,
     0,
@@ -416,39 +414,36 @@ export function projectWorldOffice(
         ({ connectionState }) => connectionState === "reconnecting",
       ).length,
       staleHosts: hosts.filter(({ stale }) => stale).length,
-      observedWorkspaces: allRooms.length,
-      observedDesks: allDesks.length,
-      observedAgents: allAgents.length,
-      status: countStatuses(allAgents),
+      observedWorkspaces: world.coverage.spaces,
+      observedDesks: world.coverage.tabs,
+      observedAgents: world.coverage.agents,
+      status: { ...world.coverage.status },
       omittedRooms,
-      omittedDesks,
-      omittedRoomAgents: Math.max(
-        0,
-        roomCandidates.length - renderedRoomAgents,
-      ),
+      omittedDesks: Math.max(0, world.coverage.tabs - renderedDesks),
+      omittedRoomAgents: Math.max(0, totalRoomAgents - renderedRoomAgents),
       omittedReceptionDesks: Math.max(
         0,
         hosts.length - OFFICE_PRESENTATION_BOUNDS.receptionDesks,
       ),
       omittedWaitingAgents: Math.max(
         0,
-        waitingCandidates.length - renderedWaitingAgents,
+        totalWaitingAgents - renderedWaitingAgents,
       ),
-      omittedBarAgents: Math.max(0, barCandidates.length - barAgents.length),
+      omittedBarAgents: Math.max(0, totalBarAgents - barAgents.length),
     },
     presentationBounds: {
       ...OFFICE_PRESENTATION_BOUNDS,
-      totalRooms: allRooms.length,
+      totalRooms: world.coverage.spaces,
       renderedRooms: rooms.length,
-      totalDesks: allDesks.length,
+      totalDesks: world.coverage.tabs,
       renderedDesks,
-      totalRoomAgents: roomCandidates.length,
+      totalRoomAgents,
       renderedRoomAgents,
       totalReceptionDesks: hosts.length,
       renderedReceptionDesks: receptions.length,
-      totalWaitingAgents: waitingCandidates.length,
+      totalWaitingAgents,
       renderedWaitingAgents,
-      totalBarAgents: barCandidates.length,
+      totalBarAgents,
       renderedBarAgents: barAgents.length,
     },
   };
@@ -644,18 +639,6 @@ function compareBarAgents(left: OfficeAgent, right: OfficeAgent) {
 
 function roomStatusOrder(status: WorldAgentStatus) {
   return status === "working" ? 0 : status === "unknown" ? 1 : 2;
-}
-
-function countStatuses(agents: readonly OfficeAgent[]) {
-  const counts: Record<WorldAgentStatus, number> = {
-    working: 0,
-    idle: 0,
-    blocked: 0,
-    done: 0,
-    unknown: 0,
-  };
-  for (const agent of agents) counts[agent.semanticStatus] += 1;
-  return counts;
 }
 
 function stableNumber(value: string) {

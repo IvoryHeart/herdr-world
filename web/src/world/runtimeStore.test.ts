@@ -31,6 +31,34 @@ function result(label: string, generation = 1) {
           tabs: [],
           panes: [],
           agents: [],
+          coverage: {
+            workspaces: 1,
+            tabs: 0,
+            panes: 0,
+            agent_panes: 0,
+            status: {
+              working: 0,
+              idle: 0,
+              blocked: 0,
+              done: 0,
+              unknown: 0,
+            },
+            by_workspace: [
+              {
+                workspace_id: "shared",
+                tabs: 0,
+                panes: 0,
+                agent_panes: 0,
+                status: {
+                  working: 0,
+                  idle: 0,
+                  blocked: 0,
+                  done: 0,
+                  unknown: 0,
+                },
+              },
+            ],
+          },
         },
       },
     ],
@@ -143,6 +171,44 @@ describe("World aggregate runtime store", () => {
     ).toEqual([
       ["host-a", "shared"],
       ["host-b", "shared"],
+    ]);
+  });
+
+  test("sends qualified priorities with the aggregate refresh", async () => {
+    const calls: Array<{ method: string; params?: Record<string, unknown> }> =
+      [];
+    const runtime = new WorldRuntimeStore({
+      call: async (method, params) => {
+        calls.push({ method, params });
+        return result("observed");
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+
+    await runtime.ensurePriorities([
+      {
+        connectionId: "host-a",
+        workspaceId: "workspace-512",
+        paneId: "pane-4096",
+        terminalId: "terminal-4096",
+      },
+    ]);
+
+    expect(calls).toEqual([
+      {
+        method: "world.snapshot",
+        params: {
+          priorities: [
+            {
+              connection_id: "host-a",
+              workspace_id: "workspace-512",
+              pane_id: "pane-4096",
+              terminal_id: "terminal-4096",
+            },
+          ],
+        },
+      },
     ]);
   });
 

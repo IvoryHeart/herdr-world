@@ -103,6 +103,67 @@ describe("Pixel Office projection", () => {
     expect(office.roster).toHaveLength(18);
   });
 
+  test("reports exact Office omissions when aggregate records are bounded", () => {
+    const source = connection(
+      "local",
+      Array.from({ length: 8 }, (_, index) => tab(`tab-${index}`, index + 1)),
+      Array.from({ length: 16 }, (_, index) =>
+        pane(`tab-${index % 8}`, "working", `agent-${index}`, index),
+      ),
+    );
+    if (!source.snapshot) throw new Error("fixture snapshot missing");
+    source.snapshot.coverage = {
+      workspaces: 513,
+      tabs: 2_049,
+      panes: 4_097,
+      agentPanes: 4_097,
+      status: {
+        working: 4_097,
+        idle: 0,
+        blocked: 0,
+        done: 0,
+        unknown: 0,
+      },
+      byWorkspace: [
+        {
+          workspaceId: "workspace",
+          tabs: 9,
+          panes: 18,
+          agentPanes: 18,
+          status: {
+            working: 18,
+            idle: 0,
+            blocked: 0,
+            done: 0,
+            unknown: 0,
+          },
+        },
+      ],
+    };
+
+    const office = projectWorldOffice(buildWorldObject([source], "local"), 1);
+
+    expect(office.rooms[0]).toMatchObject({
+      observedDeskCount: 9,
+      omittedDeskCount: 1,
+      observedAgentCount: 18,
+      omittedAgentCount: 2,
+    });
+    expect(office.coverage).toMatchObject({
+      observedWorkspaces: 513,
+      observedDesks: 2_049,
+      observedAgents: 4_097,
+      omittedRooms: 512,
+      omittedDesks: 2_041,
+      omittedRoomAgents: 4_081,
+    });
+    expect(office.presentationBounds).toMatchObject({
+      totalRooms: 513,
+      totalDesks: 2_049,
+      totalRoomAgents: 4_097,
+    });
+  });
+
   test("keeps mixed-status shared tabs truthful beyond the eight-desk scene bound", () => {
     const tabs = Array.from({ length: 9 }, (_, index) =>
       tab(`tab-${index}`, index + 1),
