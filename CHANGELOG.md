@@ -84,7 +84,10 @@ retain their original Herdr Web lineage.
   visible drag handle for pointer resizing while retaining precise keyboard
   sizing. The docked overlay can also be repositioned, move and resize gestures
   no longer steal terminal focus, and selected identity no longer appears in a
-  duplicate persistent Office badge.
+  duplicate persistent Office badge. Mobile Office, Tree and Graph now keep
+  their shell-owned Inspector and Terminal, Files and Changes resources visible
+  instead of inheriting the hidden Spaces session slot, including while the
+  retained Inspector crosses into Spaces.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Preserved the complete managed-host candidate set and qualified selected,
   focused, attention-requiring and detected-agent candidates with their parents

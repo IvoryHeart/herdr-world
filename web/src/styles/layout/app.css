@@ -963,7 +963,11 @@ html:not([data-layout="mobile"])
     display: none;
   }
 
-  .body.mobile-view-session .workspace-inspector-slot,
+  .body.mobile-view-session
+    > .main
+    > .workspace-surfaces
+    > .workspace-stage
+    > .workspace-inspector-slot,
   .body .workspace-inspector-resizer {
     display: none;
   }

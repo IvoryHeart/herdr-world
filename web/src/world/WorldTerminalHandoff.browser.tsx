@@ -1,7 +1,10 @@
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
-import { initializeLayoutPreferences } from "../layoutPreferences";
+import {
+  initializeLayoutPreferences,
+  updateLayoutPreferences,
+} from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
@@ -1474,6 +1477,65 @@ async function run() {
   const persistentReviewerInspector = document.querySelector(
     ".world-context-rail .workspace-inspector",
   );
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () => document.documentElement.dataset.layout === "mobile",
+    "forced compact layout",
+  );
+  const compactReviewerSlot = persistentReviewerInspector?.closest<HTMLElement>(
+    ".workspace-inspector-slot",
+  );
+  check(
+    getComputedStyle(compactReviewerSlot!).display !== "none" &&
+      compactReviewerSlot!.getBoundingClientRect().height > 0,
+    "compact Graph hid the World Inspector behind the Spaces session rule",
+  );
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      window.__HERDR_WORLD_RENDERER__?.ready === true &&
+      document.querySelector(".world-context-rail .workspace-inspector") ===
+        persistentReviewerInspector,
+    "compact Office retained Inspector",
+  );
+  check(
+    compactReviewerSlot!.getBoundingClientRect().height > 0,
+    "compact Office did not render the retained Inspector",
+  );
+  persistentReviewerInspector
+    ?.querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')
+    ?.click();
+  await until(
+    () => persistentReviewerInspector?.getAttribute("data-view") === "files",
+    "compact Inspector Files view",
+  );
+  check(
+    (persistentReviewerInspector
+      ?.querySelector(".workspace-inspector-body")
+      ?.getBoundingClientRect().height ?? 0) > 0,
+    "compact Inspector Files resource had no visible body",
+  );
+  persistentReviewerInspector
+    ?.querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(3)')
+    ?.click();
+  await until(
+    () => persistentReviewerInspector?.getAttribute("data-view") === "changes",
+    "compact Inspector Changes view",
+  );
+  check(
+    (persistentReviewerInspector
+      ?.querySelector(".workspace-inspector-body")
+      ?.getBoundingClientRect().height ?? 0) > 0,
+    "compact Inspector Changes resource had no visible body",
+  );
+  persistentReviewerInspector
+    ?.querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')
+    ?.click();
+  await until(
+    () => persistentReviewerInspector?.getAttribute("data-view") === "terminal",
+    "compact Inspector Terminal view",
+  );
   const terminalAttachesBeforeSpaces = calls.filter(
     ({ method }) => method === "terminal.attach",
   ).length;
@@ -1499,7 +1561,7 @@ async function run() {
   );
   check(
     persistentReviewerInspector?.getBoundingClientRect().height !== 0,
-    "Spaces handoff hid the retained Inspector",
+    "compact Spaces handoff hid the retained Inspector",
   );
   check(
     calls.filter(({ method }) => method === "terminal.attach").length ===
@@ -1529,6 +1591,11 @@ async function run() {
       calls.filter(({ method }) => method === "terminal.detach").length ===
         terminalDetachesBeforeSpaces,
     "returning from Spaces replaced the Inspector terminal owner",
+  );
+  updateLayoutPreferences({ mode: "desktop" });
+  await until(
+    () => document.documentElement.dataset.layout === "desktop",
+    "restored desktop layout",
   );
   await until(() => graphTarget("Reviewer"), "Reviewer before retirement");
   flushSync(() => graphTarget("Reviewer")!.click());
