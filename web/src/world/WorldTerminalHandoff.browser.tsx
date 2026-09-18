@@ -337,7 +337,10 @@ function agentTarget(label: string) {
     ...document.querySelectorAll<HTMLButtonElement>(
       '.world-semantic-target[data-kind="agent"]',
     ),
-  ].find((button) => button.getAttribute("aria-label")?.includes(label));
+  ].find(
+    (button) =>
+      !button.disabled && button.getAttribute("aria-label")?.includes(label),
+  );
 }
 
 function graphTarget(label: string) {
