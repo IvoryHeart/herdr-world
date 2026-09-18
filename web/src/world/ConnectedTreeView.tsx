@@ -43,7 +43,10 @@ export default function ConnectedTreeView({
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(readTreePreferences(worldLocalStorage).collapsedIds),
   );
-  const projection = useMemo(() => projectWorldTree(world), [world]);
+  const projection = useMemo(
+    () => projectWorldTree(world, selectedId),
+    [selectedId, world],
+  );
   const matches = useMemo(
     () => connectedTreeMatches(projection, query),
     [projection, query],

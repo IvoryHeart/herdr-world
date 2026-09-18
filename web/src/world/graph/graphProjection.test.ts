@@ -82,6 +82,17 @@ describe("World Graph projection", () => {
       presentedHosts: 128,
     });
 
+    const upstreamBound = fixtureWorld(
+      Array.from({ length: 128 }, (_, index) =>
+        fixtureHost(`observed-${index}`, []),
+      ),
+    );
+    upstreamBound.omittedHostCount = 3;
+    expect(projectWorldGraph(upstreamBound)).toMatchObject({
+      omittedHostCount: 3,
+      coverage: { configuredHosts: 131, presentedHosts: 128 },
+    });
+
     const spaceBound = projectWorldGraph(
       fixtureWorld([
         fixtureHost(
@@ -101,6 +112,26 @@ describe("World Graph projection", () => {
       presentedSpaces: 128,
     });
   });
+
+  test("prioritizes the selected host, space, and leaf before every bound", () => {
+    const hosts = Array.from({ length: 129 }, (_, index) =>
+      fixtureHost(`remote-${index}`, [fixtureSpace(`remote-${index}`, 0, 1)]),
+    );
+    hosts[128] = fixtureHost("remote-128", [fixtureSpace("remote-128", 0, 19)]);
+    const selected = hosts[128]!.spaces[0]!.children[18]!;
+
+    const projection = projectWorldGraph(fixtureWorld(hosts), selected.id);
+    const selectedHost = projection.hosts.find(
+      ({ node }) => node.id === hosts[128]!.id,
+    );
+    const selectedSpace = selectedHost?.spaces.find(
+      ({ node }) => node.id === hosts[128]!.spaces[0]!.id,
+    );
+
+    expect(selectedHost).toBeDefined();
+    expect(selectedSpace).toBeDefined();
+    expect(selectedSpace?.children.map(({ id }) => id)).toContain(selected.id);
+  });
 });
 
 function fixtureWorld(hosts: WorldHostObject[]): WorldObject {
@@ -112,6 +143,7 @@ function fixtureWorld(hosts: WorldHostObject[]): WorldObject {
   ]);
   return {
     version: 1,
+    omittedHostCount: 0,
     hosts,
     spaces,
     leaves,

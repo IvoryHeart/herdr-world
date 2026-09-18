@@ -39,6 +39,7 @@ import WorldIntentProfile from "./WorldIntentProfile";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
 import {
+  reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
   worldInspectorForNode,
   type WorldInspectorConversation,
@@ -248,8 +249,17 @@ export default function WorldFoundationApp() {
     (snapshot) => snapshot.activeConnectionId,
   );
   const topbarWorld = useMemo(
-    () => buildWorldObject(topbarRuntime.connections, topbarConnectionId),
-    [topbarConnectionId, topbarRuntime.connections],
+    () =>
+      buildWorldObject(
+        topbarRuntime.connections,
+        topbarConnectionId,
+        topbarRuntime.omittedConnectionCount,
+      ),
+    [
+      topbarConnectionId,
+      topbarRuntime.connections,
+      topbarRuntime.omittedConnectionCount,
+    ],
   );
   const activeConversationLease = useStoreSelector(
     (snapshot) => ({
@@ -521,11 +531,13 @@ function WorldControlPlane({
       buildWorldObject(
         runtime.connections,
         hasSelectedConnection ? connectionSelection.activeConnectionId : null,
+        runtime.omittedConnectionCount,
       ),
     [
       connectionSelection.activeConnectionId,
       hasSelectedConnection,
       runtime.connections,
+      runtime.omittedConnectionCount,
     ],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
@@ -844,15 +856,42 @@ function WorldControlPlane({
 
   useEffect(() => {
     if (!hasSelectedConnection) return;
-    const retained = inspectorConversations.filter((conversation) => {
+    let changed = false;
+    const retained = inspectorConversations.flatMap((conversation) => {
       const current = world.nodeById.get(conversation.nodeId);
-      return Boolean(
-        current &&
-          current.generation === conversation.runtimeGeneration &&
-          current.actionable,
-      );
+      if (
+        !current ||
+        current.generation !== conversation.runtimeGeneration ||
+        !current.actionable
+      ) {
+        changed = true;
+        return [];
+      }
+      const view = worldIntentInitialView(current, null);
+      const context = worldInspectorContext(current);
+      const observed =
+        view && context
+          ? worldInspectorForNode(
+              current,
+              view,
+              worldIntentViews(current),
+              context,
+              {
+                dock: conversation.dock,
+                expanded: conversation.expanded,
+                size: conversation.size,
+              },
+            )
+          : null;
+      if (!observed) {
+        changed = true;
+        return [];
+      }
+      const next = reconcileWorldInspectorConversation(conversation, observed);
+      if (next !== conversation) changed = true;
+      return [next];
     });
-    if (retained.length !== inspectorConversations.length) {
+    if (changed) {
       const retainedIds = new Set(retained.map(({ nodeId }) => nodeId));
       const selectedInspectorRetired = Boolean(
         selection &&
@@ -1284,7 +1323,7 @@ function WorldControlPlane({
         ))}
         {inspectorConversations.map((conversation) => (
           <WorldInspectorConversationView
-            key={conversation.nodeId}
+            key={`${conversation.nodeId}:${conversation.resourceIdentity}`}
             conversation={conversation}
             target={
               conversation.nodeId === dockedInspectorId

@@ -70,6 +70,22 @@ function runtime(label: string): Runtime {
 }
 
 describe("WorldSnapshotService", () => {
+  test("observes the full view bound and reports exact additional hosts", async () => {
+    const statuses = Array.from({ length: 131 }, (_, index) =>
+      status(`host-${index}`, "disconnected"),
+    );
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => statuses,
+      readyRuntimeLease: () => null,
+    });
+
+    const result = await service.snapshot();
+
+    expect(result.connections).toHaveLength(128);
+    expect(result.truncated_connections).toBe(true);
+    expect(result.omitted_connections).toBe(3);
+  });
+
   test("keeps colliding native identifiers isolated by connection", async () => {
     const statuses = [status("local"), status("remote")];
     const runtimes = new Map([

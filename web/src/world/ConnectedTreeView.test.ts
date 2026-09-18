@@ -79,6 +79,7 @@ function fixtureWorld() {
   const nodes = [host, space, agent, terminal];
   return {
     version: 1,
+    omittedHostCount: 0,
     hosts: [host],
     spaces: [space],
     leaves: [agent, terminal],

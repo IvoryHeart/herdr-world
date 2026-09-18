@@ -89,6 +89,14 @@ let runtimeGeneration = 7;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
+let agents: Record<string, unknown>[] = [
+  {
+    pane_id: "reviewer-pane",
+    terminal_id: "reviewer-terminal",
+    agent: "reviewer",
+    agent_session: { agent: "reviewer", kind: "id", value: "review-a" },
+  },
+];
 const terminalListeners = new Set<(push: TerminalPush) => void>();
 
 function currentPanes() {
@@ -145,6 +153,7 @@ const client: ConnectionClient = {
         revision: worldRevision,
         observed_at: Date.now(),
         truncated_connections: false,
+        omitted_connections: 0,
         connections: [
           {
             connection_id: "local",
@@ -160,7 +169,7 @@ const client: ConnectionClient = {
               workspaces: [currentWorkspace()],
               tabs: currentTabs(),
               panes: currentPanes(),
-              agents: [],
+              agents,
             },
           },
         ],
@@ -1486,6 +1495,48 @@ async function run() {
     "selected Reviewer before retirement",
   );
   await settle();
+
+  const reviewerInspector = document.querySelector<HTMLElement>(
+    ".world-context-rail .workspace-inspector",
+  )!;
+  reviewerInspector
+    .querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')!
+    .click();
+  await until(
+    () => reviewerInspector.getAttribute("data-view") === "files",
+    "Reviewer Files state before session replacement",
+  );
+  panes[1]!.display_agent = "Reviewer Next";
+  agents = [
+    {
+      pane_id: "reviewer-pane",
+      terminal_id: "reviewer-terminal",
+      agent: "reviewer",
+      display_agent: "Reviewer Next",
+      task_summary: "Reviewing the replacement session",
+      agent_session: { agent: "reviewer", kind: "id", value: "review-b" },
+    },
+  ];
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer Next") &&
+      document
+        .querySelector(".world-context-rail .workspace-inspector")
+        ?.getAttribute("data-view") === "terminal",
+    "reconciled replacement Reviewer session",
+  );
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector")
+      ?.textContent?.includes("Reviewing the replacement session") === true,
+    "replacement session did not refresh the Inspector context",
+  );
 
   runtimeGeneration += 1;
   worldRevision += 1;

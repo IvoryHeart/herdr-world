@@ -48,10 +48,14 @@ type IndexedSpace = {
 
 // This mirrors Graph's tested relevance policy while remaining in Tree's lazy
 // chunk. Importing the Graph projection here creates another production asset.
-export function projectWorldTree(world: WorldObject): WorldTreeProjection {
+export function projectWorldTree(
+  world: WorldObject,
+  selectedId: string | null = null,
+): WorldTreeProjection {
+  const selected = selectedPath(world, selectedId);
   const presentedHosts = world.hosts
     .map((host, index): IndexedHost => ({ host, index }))
-    .sort(compareHosts)
+    .sort((left, right) => compareHosts(left, right, selected.hostId))
     .slice(0, TREE_PRESENTATION_BOUNDS.hosts);
   const presentedHostIds = new Set(presentedHosts.map(({ host }) => host.id));
   const presentedSpaces = world.spaces
@@ -64,11 +68,11 @@ export function projectWorldTree(world: WorldObject): WorldTreeProjection {
         ? [{ host, space, hostIndex, index }]
         : [];
     })
-    .sort(compareSpaces)
+    .sort((left, right) => compareSpaces(left, right, selected.spaceId))
     .slice(0, TREE_PRESENTATION_BOUNDS.spaces);
   const spaceById = new Map(
     presentedSpaces.map(
-      ({ space }) => [space.id, projectSpace(space)] as const,
+      ({ space }) => [space.id, projectSpace(space, selected.leafId)] as const,
     ),
   );
   const hosts = presentedHosts.map(({ host }) => {
@@ -95,7 +99,8 @@ export function projectWorldTree(world: WorldObject): WorldTreeProjection {
 
   return {
     hosts,
-    omittedHostCount: Math.max(0, world.hosts.length - hosts.length),
+    omittedHostCount:
+      world.omittedHostCount + Math.max(0, world.hosts.length - hosts.length),
     omittedSpaceCount: Math.max(
       0,
       world.spaces.length - presentedSpaces.length,
@@ -109,10 +114,13 @@ export function projectWorldTree(world: WorldObject): WorldTreeProjection {
   };
 }
 
-function projectSpace(space: WorldSpaceObject): WorldTreeSpace {
+function projectSpace(
+  space: WorldSpaceObject,
+  selectedLeafId: string | null,
+): WorldTreeSpace {
   const children = space.children
     .map((leaf, index) => ({ leaf, index }))
-    .sort(compareLeaves)
+    .sort((left, right) => compareLeaves(left, right, selectedLeafId))
     .slice(0, TREE_PRESENTATION_BOUNDS.childrenPerSpace)
     .map(({ leaf }) => leaf);
   return {
@@ -123,8 +131,14 @@ function projectSpace(space: WorldSpaceObject): WorldTreeSpace {
   };
 }
 
-function compareHosts(left: IndexedHost, right: IndexedHost) {
+function compareHosts(
+  left: IndexedHost,
+  right: IndexedHost,
+  selectedHostId: string | null,
+) {
   return (
+    Number(right.host.id === selectedHostId) -
+      Number(left.host.id === selectedHostId) ||
     Number(right.host.selectedHost) - Number(left.host.selectedHost) ||
     Number(hostNeedsAttention(right.host)) -
       Number(hostNeedsAttention(left.host)) ||
@@ -133,8 +147,14 @@ function compareHosts(left: IndexedHost, right: IndexedHost) {
   );
 }
 
-function compareSpaces(left: IndexedSpace, right: IndexedSpace) {
+function compareSpaces(
+  left: IndexedSpace,
+  right: IndexedSpace,
+  selectedSpaceId: string | null,
+) {
   return (
+    Number(right.space.id === selectedSpaceId) -
+      Number(left.space.id === selectedSpaceId) ||
     Number(spaceFocused(right.space)) - Number(spaceFocused(left.space)) ||
     Number(spaceNeedsAttention(right.space)) -
       Number(spaceNeedsAttention(left.space)) ||
@@ -147,13 +167,33 @@ function compareSpaces(left: IndexedSpace, right: IndexedSpace) {
 function compareLeaves(
   left: { leaf: WorldLeafObject; index: number },
   right: { leaf: WorldLeafObject; index: number },
+  selectedLeafId: string | null,
 ) {
   return (
+    Number(right.leaf.id === selectedLeafId) -
+      Number(left.leaf.id === selectedLeafId) ||
     Number(right.leaf.focused) - Number(left.leaf.focused) ||
     statusPriority(right.leaf.status) - statusPriority(left.leaf.status) ||
     Number(right.leaf.kind === "agent") - Number(left.leaf.kind === "agent") ||
     left.index - right.index
   );
+}
+
+function selectedPath(world: WorldObject, selectedId: string | null) {
+  const node = selectedId ? world.nodeById.get(selectedId) : undefined;
+  if (!node) return { hostId: null, spaceId: null, leafId: null };
+  if (node.kind === "host") {
+    return { hostId: node.id, spaceId: null, leafId: null };
+  }
+  if (node.kind === "space") {
+    return { hostId: node.parentId, spaceId: node.id, leafId: null };
+  }
+  const space = world.nodeById.get(node.parentId);
+  return {
+    hostId: space?.kind === "space" ? space.parentId : null,
+    spaceId: node.parentId,
+    leafId: node.id,
+  };
 }
 
 function hostFocused(host: WorldHostObject) {

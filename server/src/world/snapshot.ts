@@ -1,7 +1,7 @@
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
 
-const MAX_CONNECTIONS = 64;
+const MAX_CONNECTIONS = 128;
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
 const MAX_PANES = 4_096;
@@ -51,6 +51,7 @@ export type WorldSnapshotResult = {
   revision: number;
   observed_at: number;
   truncated_connections: boolean;
+  omitted_connections: number;
   connections: WorldConnectionSnapshot[];
 };
 
@@ -120,6 +121,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       revision: this.revision,
       observed_at: this.now(),
       truncated_connections: allStatuses.length > statuses.length,
+      omitted_connections: Math.max(0, allStatuses.length - statuses.length),
       connections,
     };
   }

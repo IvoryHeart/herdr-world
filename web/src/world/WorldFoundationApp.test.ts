@@ -24,6 +24,7 @@ import {
 } from "./WorldFoundationApp";
 import { buildWorldObject } from "./worldObject";
 import {
+  reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
   upsertWorldInspectorConversation,
   type WorldInspectorConversation,
@@ -34,6 +35,7 @@ function inspectorConversation(index: number): WorldInspectorConversation {
     nodeId: `node-${index}`,
     connectionId: "local",
     runtimeGeneration: 4,
+    resourceIdentity: `resource-${index}`,
     workspaceId: "studio",
     paneId: `pane-${index}`,
     terminalId: `terminal-${index}`,
@@ -966,6 +968,66 @@ describe("World view preference", () => {
         runtimeGeneration: 4,
       }),
     ).toEqual([current]);
+  });
+
+  test("refreshes retained Inspector identity and resets a replaced agent session", () => {
+    const current = {
+      ...inspectorConversation(0),
+      resourceIdentity: "session-a",
+      label: "Old agent",
+      paneId: "old-pane",
+      view: "history" as const,
+      dock: "bottom" as const,
+      expanded: true,
+      size: 640,
+    };
+    const observed: WorldInspectorConversation = {
+      ...inspectorConversation(0),
+      resourceIdentity: "session-b",
+      label: "New agent",
+      paneId: "new-pane",
+      context: {
+        kind: "agent" as const,
+        label: "New agent",
+        stateLabel: "Working",
+        locationLabel: "Studio · Local",
+        taskSummary: "New session",
+      },
+      availableViews: ["terminal", "files", "changes"],
+      view: "terminal" as const,
+    };
+
+    expect(reconcileWorldInspectorConversation(current, observed)).toEqual({
+      ...observed,
+      dock: "bottom",
+      expanded: true,
+      size: 640,
+    });
+  });
+
+  test("refreshes Inspector metadata without discarding same-session resource state", () => {
+    const current = {
+      ...inspectorConversation(0),
+      resourceIdentity: "session-a",
+      label: "Old label",
+      view: "files" as const,
+    };
+    const observed = {
+      ...inspectorConversation(0),
+      resourceIdentity: "session-a",
+      label: "New label",
+      context: {
+        ...inspectorConversation(0).context,
+        label: "New label",
+        taskSummary: "Updated task",
+      },
+      view: "terminal" as const,
+    };
+
+    expect(reconcileWorldInspectorConversation(current, observed)).toEqual({
+      ...observed,
+      view: "files",
+    });
   });
 
   test("does not dispatch Inspector work after a generation replacement", async () => {

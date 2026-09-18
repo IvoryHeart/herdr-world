@@ -53,6 +53,10 @@ describe("World Tree projection", () => {
 
     expect(hostProjection.hosts).toHaveLength(128);
     expect(hostProjection.omittedHostCount).toBe(1);
+
+    const upstreamBound = world(hosts.slice(0, 128));
+    upstreamBound.omittedHostCount = 3;
+    expect(projectWorldTree(upstreamBound).omittedHostCount).toBe(3);
     expect(hostProjection.hosts.map(({ source }) => source.id)).toContain(
       "host:remote-128",
     );
@@ -73,6 +77,26 @@ describe("World Tree projection", () => {
     ).toContain("space:local:128");
     expect(spaceProjection.hosts[0]?.omittedSpaceCount).toBe(1);
   });
+
+  test("prioritizes the selected host, space, and leaf before every bound", () => {
+    const hosts = Array.from({ length: 129 }, (_, index) =>
+      host(`remote-${index}`, [space(`remote-${index}`, 0, 1)]),
+    );
+    hosts[128] = host("remote-128", [space("remote-128", 0, 19)]);
+    const selected = hosts[128]!.spaces[0]!.children[18]!;
+
+    const projection = projectWorldTree(world(hosts), selected.id);
+    const selectedHost = projection.hosts.find(
+      ({ source }) => source.id === hosts[128]!.id,
+    );
+    const selectedSpace = selectedHost?.spaces.find(
+      ({ source }) => source.id === hosts[128]!.spaces[0]!.id,
+    );
+
+    expect(selectedHost).toBeDefined();
+    expect(selectedSpace).toBeDefined();
+    expect(selectedSpace?.children.map(({ id }) => id)).toContain(selected.id);
+  });
 });
 
 function world(hosts: WorldHostObject[]): WorldObject {
@@ -84,6 +108,7 @@ function world(hosts: WorldHostObject[]): WorldObject {
   ]);
   return {
     version: 1,
+    omittedHostCount: 0,
     hosts,
     spaces,
     leaves,

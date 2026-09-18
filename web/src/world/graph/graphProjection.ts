@@ -82,10 +82,14 @@ type IndexedSpace = {
   index: number;
 };
 
-export function projectWorldGraph(world: WorldObject): WorldGraphProjection {
+export function projectWorldGraph(
+  world: WorldObject,
+  selectedId: string | null = null,
+): WorldGraphProjection {
+  const selected = selectedPath(world, selectedId);
   const presentedHosts = world.hosts
     .map((host, index): IndexedHost => ({ host, index }))
-    .sort(compareHosts)
+    .sort((left, right) => compareHosts(left, right, selected.hostId))
     .slice(0, GRAPH_PRESENTATION_BOUNDS.hosts);
   const presentedHostIds = new Set(presentedHosts.map(({ host }) => host.id));
   const spaces = world.spaces
@@ -98,11 +102,11 @@ export function projectWorldGraph(world: WorldObject): WorldGraphProjection {
         ? [{ host, space, hostIndex, index }]
         : [];
     })
-    .sort(compareSpaces)
+    .sort((left, right) => compareSpaces(left, right, selected.spaceId))
     .slice(0, GRAPH_PRESENTATION_BOUNDS.spaces);
   const projectedSpaceById = new Map(
     spaces.map(({ space }) => {
-      const projected = projectSpace(space);
+      const projected = projectSpace(space, selected.leafId);
       return [space.id, projected] as const;
     }),
   );
@@ -152,10 +156,11 @@ export function projectWorldGraph(world: WorldObject): WorldGraphProjection {
     edges,
     hosts,
     spaces: graphSpaces,
-    omittedHostCount: Math.max(0, world.hosts.length - hosts.length),
+    omittedHostCount:
+      world.omittedHostCount + Math.max(0, world.hosts.length - hosts.length),
     omittedSpaceCount: Math.max(0, world.spaces.length - graphSpaces.length),
     coverage: {
-      configuredHosts: world.hosts.length,
+      configuredHosts: world.omittedHostCount + world.hosts.length,
       presentedHosts: hosts.length,
       observedSpaces: world.spaces.length,
       presentedSpaces: graphSpaces.length,
@@ -195,10 +200,13 @@ function projectHost(
   };
 }
 
-function projectSpace(space: WorldSpaceObject): WorldGraphSpace {
+function projectSpace(
+  space: WorldSpaceObject,
+  selectedLeafId: string | null,
+): WorldGraphSpace {
   const children = space.children
     .map((leaf, index) => ({ leaf, index }))
-    .sort(compareLeaves)
+    .sort((left, right) => compareLeaves(left, right, selectedLeafId))
     .slice(0, GRAPH_PRESENTATION_BOUNDS.childrenPerSpace)
     .map(({ leaf }) => graphNode(leaf, leaf.status, leaf.focused, 0));
   const omittedChildCount = Math.max(
@@ -255,8 +263,14 @@ function graphNode(
   };
 }
 
-function compareHosts(left: IndexedHost, right: IndexedHost) {
+function compareHosts(
+  left: IndexedHost,
+  right: IndexedHost,
+  selectedHostId: string | null,
+) {
   return (
+    Number(right.host.id === selectedHostId) -
+      Number(left.host.id === selectedHostId) ||
     Number(right.host.selectedHost) - Number(left.host.selectedHost) ||
     Number(hostNeedsAttention(right.host)) -
       Number(hostNeedsAttention(left.host)) ||
@@ -265,8 +279,14 @@ function compareHosts(left: IndexedHost, right: IndexedHost) {
   );
 }
 
-function compareSpaces(left: IndexedSpace, right: IndexedSpace) {
+function compareSpaces(
+  left: IndexedSpace,
+  right: IndexedSpace,
+  selectedSpaceId: string | null,
+) {
   return (
+    Number(right.space.id === selectedSpaceId) -
+      Number(left.space.id === selectedSpaceId) ||
     Number(spaceFocused(right.space)) - Number(spaceFocused(left.space)) ||
     Number(spaceNeedsAttention(right.space)) -
       Number(spaceNeedsAttention(left.space)) ||
@@ -279,13 +299,33 @@ function compareSpaces(left: IndexedSpace, right: IndexedSpace) {
 function compareLeaves(
   left: { leaf: WorldLeafObject; index: number },
   right: { leaf: WorldLeafObject; index: number },
+  selectedLeafId: string | null,
 ) {
   return (
+    Number(right.leaf.id === selectedLeafId) -
+      Number(left.leaf.id === selectedLeafId) ||
     Number(right.leaf.focused) - Number(left.leaf.focused) ||
     statusPriority(right.leaf.status) - statusPriority(left.leaf.status) ||
     Number(right.leaf.kind === "agent") - Number(left.leaf.kind === "agent") ||
     left.index - right.index
   );
+}
+
+function selectedPath(world: WorldObject, selectedId: string | null) {
+  const node = selectedId ? world.nodeById.get(selectedId) : undefined;
+  if (!node) return { hostId: null, spaceId: null, leafId: null };
+  if (node.kind === "host") {
+    return { hostId: node.id, spaceId: null, leafId: null };
+  }
+  if (node.kind === "space") {
+    return { hostId: node.parentId, spaceId: node.id, leafId: null };
+  }
+  const space = world.nodeById.get(node.parentId);
+  return {
+    hostId: space?.kind === "space" ? space.parentId : null,
+    spaceId: node.parentId,
+    leafId: node.id,
+  };
 }
 
 function hostFocused(host: WorldHostObject) {

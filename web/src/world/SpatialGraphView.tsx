@@ -58,7 +58,10 @@ export default function SpatialGraphView({
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 720px)").matches,
   );
-  const projection = useMemo(() => projectWorldGraph(world), [world]);
+  const projection = useMemo(
+    () => projectWorldGraph(world, selectedId),
+    [selectedId, world],
+  );
   const [initialView] = useState(() => readGraphPreferences(worldLocalStorage));
   const { prefs: initialPrefs, fitOnMount } = initialView;
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(

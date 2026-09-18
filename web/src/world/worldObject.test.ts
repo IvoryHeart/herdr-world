@@ -132,6 +132,25 @@ describe("WorldObject", () => {
     expect(remote).toMatchObject({ stale: true, actionable: false });
   });
 
+  test("keeps cached topology on its observed snapshot generation", () => {
+    const world = buildWorldObject(
+      [
+        connection("local", {
+          state: "reconnecting",
+          generation: 5,
+          snapshotGeneration: 4,
+          stale: true,
+          actionable: false,
+        }),
+      ],
+      "local",
+    );
+
+    expect(world.hosts[0]?.generation).toBe(5);
+    expect(world.spaces[0]?.generation).toBe(4);
+    expect(world.leaves[0]?.generation).toBe(4);
+  });
+
   test("keeps terminal-backed identity when agent classification changes", () => {
     const first = buildWorldObject([connection("local")], "local").leaves[0];
     const changed = connection("local");
@@ -163,7 +182,7 @@ describe("WorldObject", () => {
       focused: true,
       display_agent: "Codex Reviewer",
       model_name: "gpt-test",
-      task_summary: `  ${"Reviewing ".repeat(80)}\u0000  `,
+      task_summary: `  ${"a".repeat(159)}😀truncated\u0000  `,
       state_labels: {
         working: "Investigating",
         blocked: "Needs input",
@@ -191,11 +210,44 @@ describe("WorldObject", () => {
         agentHistory: true,
       },
     });
-    expect(agent.taskSummary?.length).toBeLessThanOrEqual(240);
+    expect(Array.from(agent.taskSummary ?? "")).toHaveLength(160);
+    expect(agent.taskSummary?.endsWith("😀")).toBe(true);
     expect(agent.taskSummary).not.toContain("\u0000");
     expect(terminal).not.toHaveProperty("agentLabel");
     expect(terminal).not.toHaveProperty("modelLabel");
     expect(terminal).not.toHaveProperty("taskSummary");
+  });
+
+  test("qualifies resource identity by the admitted agent session", () => {
+    const first = connection("local");
+    const second = connection("local");
+    if (!first.snapshot || !second.snapshot) {
+      throw new Error("fixture snapshot missing");
+    }
+    first.snapshot.agents = [
+      {
+        pane_id: "shared-pane",
+        terminal_id: "shared-terminal",
+        agent: "codex",
+        agent_session: { agent: "codex", kind: "id", value: "session-a" },
+      },
+    ];
+    second.snapshot.agents = [
+      {
+        pane_id: "shared-pane",
+        terminal_id: "shared-terminal",
+        agent: "codex",
+        agent_session: { agent: "codex", kind: "id", value: "session-b" },
+      },
+    ];
+
+    const firstLeaf = buildWorldObject([first], "local").leaves[0];
+    const secondLeaf = buildWorldObject([second], "local").leaves[0];
+
+    expect(firstLeaf?.id).toBe(secondLeaf?.id);
+    expect(firstLeaf?.agentSessionIdentity).not.toBe(
+      secondLeaf?.agentSessionIdentity,
+    );
   });
 
   test("labels reconnecting and offline retained hosts without making them operational", () => {

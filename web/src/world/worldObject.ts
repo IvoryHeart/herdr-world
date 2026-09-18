@@ -70,6 +70,7 @@ export type WorldLeafObject = WorldObjectBase & {
   agentLabel?: string;
   modelLabel?: string;
   taskSummary?: string;
+  agentSessionIdentity?: string;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
   lastActivityAt?: number;
   spaceLabel: string;
@@ -82,6 +83,7 @@ export type WorldObjectNode =
 
 export type WorldObject = {
   version: 1;
+  omittedHostCount: number;
   hosts: WorldHostObject[];
   spaces: WorldSpaceObject[];
   leaves: WorldLeafObject[];
@@ -100,7 +102,18 @@ export function worldObjectId(
 function boundedLabel(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
   const normalized = value.trim();
-  return normalized ? normalized.slice(0, 100) : fallback;
+  return normalized ? boundedCodePointPrefix(normalized, 100) : fallback;
+}
+
+function boundedCodePointPrefix(value: string, limit: number) {
+  let result = "";
+  let length = 0;
+  for (const character of value) {
+    if (length >= limit) break;
+    result += character;
+    length += 1;
+  }
+  return result;
 }
 
 export function boundedOptionalText(
@@ -112,7 +125,24 @@ export function boundedOptionalText(
     .replace(/[\u0000-\u001f\u007f-\u009f]/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
-  return normalized ? normalized.slice(0, limit).trimEnd() : undefined;
+  return normalized
+    ? boundedCodePointPrefix(normalized, limit).trimEnd()
+    : undefined;
+}
+
+function admittedAgentSessionIdentity(
+  metadata: Record<string, unknown> | null,
+): string | undefined {
+  const value = metadata?.agent_session;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const session = value as Record<string, unknown>;
+  const agent = boundedOptionalText(session.agent, 100);
+  const kind = boundedOptionalText(session.kind, 100);
+  const identity = boundedOptionalText(session.value, 512);
+  if (!agent && !kind && !identity) return undefined;
+  return JSON.stringify([agent ?? null, kind ?? null, identity ?? null]);
 }
 
 function status(value: unknown): WorldAgentStatus {
@@ -219,6 +249,8 @@ function buildHost(
   const selectedHost = connection.connectionId === selectedConnectionId;
   const hostCapabilities = actionCapabilities("host", connectionHostState);
   const operational = connectionHostState === "active";
+  const observedGeneration =
+    connection.snapshotGeneration ?? connection.generation;
   const id = worldObjectId(
     connection.connectionId,
     "host",
@@ -276,8 +308,11 @@ function buildHost(
           const taskSummary = isAgent
             ? boundedOptionalText(
                 pane.task_summary ?? agentMetadata?.task_summary,
-                240,
+                160,
               )
+            : undefined;
+          const agentSessionIdentity = isAgent
+            ? admittedAgentSessionIdentity(agentMetadata)
             : undefined;
           const lastActivityAt = isAgent
             ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
@@ -292,7 +327,7 @@ function buildHost(
             nativeId: pane.pane_id,
             parentId: spaceId,
             connectionId: connection.connectionId,
-            generation: connection.generation,
+            generation: observedGeneration,
             label: boundedLabel(
               agentLabel,
               isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
@@ -320,6 +355,7 @@ function buildHost(
             ...(agentLabel ? { agentLabel } : {}),
             ...(modelLabel ? { modelLabel } : {}),
             ...(taskSummary ? { taskSummary } : {}),
+            ...(agentSessionIdentity ? { agentSessionIdentity } : {}),
             stateLabels: isAgent
               ? admittedStateLabels(
                   pane.state_labels ?? agentMetadata?.state_labels,
@@ -339,7 +375,7 @@ function buildHost(
         nativeId: workspace.workspace_id,
         parentId: id,
         connectionId: connection.connectionId,
-        generation: connection.generation,
+        generation: observedGeneration,
         label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
         hostLabel: boundedLabel(connection.label, "Host"),
         hostState: connectionHostState,
@@ -375,6 +411,7 @@ function buildHost(
 export function buildWorldObject(
   connections: readonly WorldRuntimeConnection[],
   selectedConnectionId: string | null = null,
+  omittedHostCount = 0,
 ): WorldObject {
   const hosts = [...connections]
     .sort(
@@ -395,6 +432,7 @@ export function buildWorldObject(
   ]);
   return {
     version: 1,
+    omittedHostCount,
     hosts,
     spaces,
     leaves,

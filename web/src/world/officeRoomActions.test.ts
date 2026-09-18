@@ -182,6 +182,7 @@ function worldWith(...spaces: WorldSpaceObject[]): WorldObject {
   const nodes = [...spaces, ...spaces.flatMap((space) => space.children)];
   return {
     version: 1,
+    omittedHostCount: 0,
     hosts: [],
     spaces,
     leaves: spaces.flatMap((space) => space.children),

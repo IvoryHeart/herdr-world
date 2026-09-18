@@ -15,6 +15,7 @@ const first: WorldInspectorConversation = {
   nodeId: "agent:local:one",
   connectionId: "local",
   runtimeGeneration: 4,
+  resourceIdentity: "local:4:terminal-one",
   paneId: "pane-one",
   terminalId: "terminal-one",
   label: "Builder",

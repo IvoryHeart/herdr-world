@@ -74,7 +74,9 @@ retain their original Herdr Web lineage.
 - Made exact pane focus an admission requirement for World Inspectors, retained
   qualified docked and floating conversations and terminal ownership through
   Spaces handoff without attachment churn, and raised a background floating
-  Inspector when any of its tabs or controls is used.
+  Inspector when any of its tabs or controls is used. Retained Inspectors now
+  reconcile current pane, agent and capability metadata and reset their resource
+  state when the qualified agent session changes.
   Office connectors now run from the agent centre to the Inspector's right edge
   and curve in the actual direction, with desk fallback only when an agent
   anchor is unavailable. A live floating Inspector can now be moved from its
@@ -84,10 +86,11 @@ retain their original Herdr Web lineage.
   no longer steal terminal focus, and selected identity no longer appears in a
   duplicate persistent Office badge.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
-- Bounded both Tree presentations with relevant-entity priority and exact
-  omission reporting, scoped inactive-host action checks to their owning
-  branches, cancelled obsolete Pixi initialization during StrictMode replay,
-  and removed the Office metrics browser-test timeout race.
+- Bounded both Tree presentations with selected-path priority and exact omission
+  reporting across the full 128-host observation limit, bounded shared task
+  summaries to 160 Unicode characters, scoped inactive-host action checks to
+  their owning branches, cancelled obsolete Pixi initialization during
+  StrictMode replay, and removed the Office metrics browser-test timeout race.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Closed a retired terminal's selection with its Inspector instead of leaving an
   orphan stale profile, and kept admitted Office room/seat `+` affordances visible

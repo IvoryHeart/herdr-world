@@ -10,6 +10,7 @@ export type WorldInspectorConversation = {
   nodeId: string;
   connectionId: string;
   runtimeGeneration: number;
+  resourceIdentity: string;
   workspaceId: string;
   paneId?: string;
   terminalId?: string;
@@ -99,6 +100,56 @@ export function sameWorldInspector(
   );
 }
 
+export function reconcileWorldInspectorConversation(
+  current: WorldInspectorConversation,
+  observed: WorldInspectorConversation,
+): WorldInspectorConversation {
+  const sameResource = current.resourceIdentity === observed.resourceIdentity;
+  const next: WorldInspectorConversation = {
+    ...observed,
+    view:
+      sameResource && observed.availableViews.includes(current.view)
+        ? current.view
+        : observed.view,
+    dock: current.dock,
+    expanded: current.expanded,
+    size: current.size,
+  };
+  return inspectorConversationEqual(current, next) ? current : next;
+}
+
+function inspectorConversationEqual(
+  left: WorldInspectorConversation,
+  right: WorldInspectorConversation,
+) {
+  return (
+    left.nodeId === right.nodeId &&
+    left.connectionId === right.connectionId &&
+    left.runtimeGeneration === right.runtimeGeneration &&
+    left.resourceIdentity === right.resourceIdentity &&
+    left.workspaceId === right.workspaceId &&
+    left.paneId === right.paneId &&
+    left.terminalId === right.terminalId &&
+    left.label === right.label &&
+    left.hostLabel === right.hostLabel &&
+    left.spaceLabel === right.spaceLabel &&
+    left.view === right.view &&
+    left.dock === right.dock &&
+    left.expanded === right.expanded &&
+    left.size === right.size &&
+    left.availableViews.length === right.availableViews.length &&
+    left.availableViews.every(
+      (view, index) => view === right.availableViews[index],
+    ) &&
+    left.context.kind === right.context.kind &&
+    left.context.label === right.context.label &&
+    left.context.stateLabel === right.context.stateLabel &&
+    left.context.locationLabel === right.context.locationLabel &&
+    left.context.agent === right.context.agent &&
+    left.context.taskSummary === right.context.taskSummary
+  );
+}
+
 export function worldInspectorForNode(
   node: WorldObjectNode,
   view: InspectorView,
@@ -115,10 +166,23 @@ export function worldInspectorForNode(
     return null;
   }
   const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
+  const resourceIdentity = leaf
+    ? JSON.stringify([
+        node.connectionId,
+        node.generation,
+        leaf.workspaceId,
+        leaf.nativeId,
+        leaf.terminalId,
+        leaf.kind,
+        leaf.kind === "agent" ? leaf.pane.agent : null,
+        leaf.agentSessionIdentity ?? null,
+      ])
+    : JSON.stringify([node.connectionId, node.generation, node.nativeId]);
   return {
     nodeId: node.id,
     connectionId: node.connectionId,
     runtimeGeneration: node.generation,
+    resourceIdentity,
     workspaceId: leaf?.workspaceId ?? node.nativeId,
     ...(leaf ? { paneId: leaf.nativeId, terminalId: leaf.terminalId } : {}),
     label: node.label,
