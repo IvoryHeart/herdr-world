@@ -254,6 +254,68 @@ describe("WorldSnapshotService", () => {
     });
   });
 
+  test("does not let one dense space consume another presented space's leaf budget", async () => {
+    const workspaces = [
+      { workspace_id: "workspace-a", label: "Dense workspace" },
+      { workspace_id: "workspace-b", label: "Later workspace" },
+    ];
+    const tabs = [
+      { tab_id: "tab-a", workspace_id: "workspace-a" },
+      { tab_id: "tab-b", workspace_id: "workspace-b" },
+    ];
+    const panes = [
+      ...Array.from({ length: 4_096 }, (_, index) => ({
+        pane_id: `pane-a-${index}`,
+        terminal_id: `terminal-a-${index}`,
+        workspace_id: "workspace-a",
+        tab_id: "tab-a",
+        agent: "codex",
+        agent_status: "blocked",
+      })),
+      ...Array.from({ length: 16 }, (_, index) => ({
+        pane_id: `pane-b-${index}`,
+        terminal_id: `terminal-b-${index}`,
+        workspace_id: "workspace-b",
+        tab_id: "tab-b",
+        agent: "codex",
+        agent_status: "blocked",
+      })),
+    ];
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          herdr: {
+            async call(method) {
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list") return { tabs };
+              if (method === "pane.list") return { panes };
+              if (method === "agent.list") return { agents: [] };
+              throw new Error(`unexpected method: ${method}`);
+            },
+          },
+        },
+        isCurrent: () => true,
+      }),
+    });
+
+    const result = await service.snapshot();
+    const snapshot = result.connections[0]?.snapshot;
+
+    expect(snapshot?.panes).toHaveLength(4_096);
+    expect(
+      snapshot?.panes.filter(
+        ({ workspace_id }) => workspace_id === "workspace-b",
+      ),
+    ).toHaveLength(16);
+    expect(snapshot?.coverage.by_workspace).toEqual([
+      expect.objectContaining({ workspace_id: "workspace-a", panes: 4_096 }),
+      expect.objectContaining({ workspace_id: "workspace-b", panes: 16 }),
+    ]);
+  });
+
   test("does not discard candidates before view-specific projection", async () => {
     const statuses = Array.from({ length: 129 }, (_, index) =>
       status(`host-${index}`),

@@ -8,6 +8,8 @@ const MAX_AGENTS = 4_096;
 const MAX_CONCURRENT_CONNECTIONS = 4;
 const MAX_PRIORITIES = 8;
 const MAX_NATIVE_ID_LENGTH = 512;
+const MAX_PRESENTED_SPACES = 128;
+const MAX_PRESENTED_LEAVES_PER_SPACE = 16;
 
 type WorldAgentStatus = "working" | "idle" | "blocked" | "done" | "unknown";
 type WorldAgentStatusCounts = Record<WorldAgentStatus, number>;
@@ -116,6 +118,27 @@ function boundedRecords(
   return records.filter((record) => admitted.has(record));
 }
 
+function rankedRelevantRecords(
+  records: readonly Record<string, unknown>[],
+  relevance: (record: Record<string, unknown>) => readonly number[],
+) {
+  return records
+    .map((record, index) => ({ record, index, relevance: relevance(record) }))
+    .sort((left, right) => {
+      const dimensions = Math.max(
+        left.relevance.length,
+        right.relevance.length,
+      );
+      for (let index = 0; index < dimensions; index += 1) {
+        const difference =
+          (right.relevance[index] ?? 0) - (left.relevance[index] ?? 0);
+        if (difference !== 0) return difference;
+      }
+      return left.index - right.index;
+    })
+    .map(({ record }) => record);
+}
+
 function boundedRelevantRecords(
   records: readonly Record<string, unknown>[],
   limit: number,
@@ -123,23 +146,35 @@ function boundedRelevantRecords(
 ) {
   if (records.length <= limit) return [...records];
   const admitted = new Set(
-    records
-      .map((record, index) => ({ record, index, relevance: relevance(record) }))
-      .sort((left, right) => {
-        const dimensions = Math.max(
-          left.relevance.length,
-          right.relevance.length,
-        );
-        for (let index = 0; index < dimensions; index += 1) {
-          const difference =
-            (right.relevance[index] ?? 0) - (left.relevance[index] ?? 0);
-          if (difference !== 0) return difference;
-        }
-        return left.index - right.index;
-      })
-      .slice(0, limit)
-      .map(({ record }) => record),
+    rankedRelevantRecords(records, relevance).slice(0, limit),
   );
+  return records.filter((record) => admitted.has(record));
+}
+
+function boundedRelevantRecordsWithGroupReservations(
+  records: readonly Record<string, unknown>[],
+  limit: number,
+  relevance: (record: Record<string, unknown>) => readonly number[],
+  group: (record: Record<string, unknown>) => string | null,
+  reservedGroups: ReadonlySet<string>,
+  reservationLimit: number,
+) {
+  if (records.length <= limit) return [...records];
+  const ranked = rankedRelevantRecords(records, relevance);
+  const admitted = new Set<Record<string, unknown>>();
+  const groupCounts = new Map<string, number>();
+  for (const record of ranked) {
+    const groupId = group(record);
+    if (!groupId || !reservedGroups.has(groupId)) continue;
+    const count = groupCounts.get(groupId) ?? 0;
+    if (count >= reservationLimit) continue;
+    admitted.add(record);
+    groupCounts.set(groupId, count + 1);
+  }
+  for (const record of ranked) {
+    if (admitted.size >= limit) break;
+    admitted.add(record);
+  }
   return records.filter((record) => admitted.has(record));
 }
 
@@ -418,29 +453,36 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         }),
       ]);
       const workspaceRelevance = paneParentRelevance(allPanes, "workspace_id");
+      const workspaceRelevanceTuple = (workspace: Record<string, unknown>) => {
+        const workspaceId = nativeId(workspace.workspace_id);
+        const relevance = workspaceId
+          ? workspaceRelevance.get(workspaceId)
+          : undefined;
+        return [
+          Number(Boolean(workspaceId && priorityWorkspaceIds.has(workspaceId))),
+          Number(workspace.focused === true || relevance?.focused === true),
+          Number(relevance?.attention === true),
+          relevance?.agentCount ?? 0,
+        ];
+      };
       const workspaces = boundedRelevantRecords(
         allWorkspaces,
         MAX_WORKSPACES,
-        (workspace) => {
-          const workspaceId = nativeId(workspace.workspace_id);
-          const relevance = workspaceId
-            ? workspaceRelevance.get(workspaceId)
-            : undefined;
-          return [
-            Number(
-              Boolean(workspaceId && priorityWorkspaceIds.has(workspaceId)),
-            ),
-            Number(workspace.focused === true || relevance?.focused === true),
-            Number(relevance?.attention === true),
-            relevance?.agentCount ?? 0,
-          ];
-        },
+        workspaceRelevanceTuple,
       );
       const retainedWorkspaceIds = new Set(
         workspaces.flatMap((workspace) => {
           const workspaceId = nativeId(workspace.workspace_id);
           return workspaceId ? [workspaceId] : [];
         }),
+      );
+      const presentedWorkspaceIds = new Set(
+        rankedRelevantRecords(workspaces, workspaceRelevanceTuple)
+          .slice(0, MAX_PRESENTED_SPACES)
+          .flatMap((workspace) => {
+            const workspaceId = nativeId(workspace.workspace_id);
+            return workspaceId ? [workspaceId] : [];
+          }),
       );
       const panesInRetainedWorkspaces = allPanes.filter((pane) =>
         retainedWorkspaceIds.has(String(pane.workspace_id)),
@@ -451,15 +493,19 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
             (priority.pane_id && priority.pane_id === pane.pane_id) ||
             (priority.terminal_id && priority.terminal_id === pane.terminal_id),
         );
-      const panes = boundedRelevantRecords(
+      const paneRelevanceTuple = (pane: Record<string, unknown>) => [
+        Number(paneIsExplicit(pane)),
+        Number(pane.focused === true),
+        paneStatusPriority(pane),
+        Number(isAgentPane(pane)),
+      ];
+      const panes = boundedRelevantRecordsWithGroupReservations(
         panesInRetainedWorkspaces,
         MAX_PANES,
-        (pane) => [
-          Number(paneIsExplicit(pane)),
-          Number(pane.focused === true),
-          paneStatusPriority(pane),
-          Number(isAgentPane(pane)),
-        ],
+        paneRelevanceTuple,
+        (pane) => nativeId(pane.workspace_id),
+        presentedWorkspaceIds,
+        MAX_PRESENTED_LEAVES_PER_SPACE,
       );
       const priorityTabIds = new Set(
         explicitPanes.flatMap((pane) => {
