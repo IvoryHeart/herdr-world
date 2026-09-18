@@ -519,7 +519,7 @@
   outline-offset: -4px;
 }
 
-@media (max-width: 720px) {
+:where(html[data-layout="mobile"]) {
   .world-floating-terminal[data-compact-active="false"] {
     display: none;
   }

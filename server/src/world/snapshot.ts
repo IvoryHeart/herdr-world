@@ -9,6 +9,7 @@ const MAX_CONCURRENT_CONNECTIONS = 4;
 const MAX_PRIORITIES = 8;
 const MAX_NATIVE_ID_LENGTH = 512;
 const MAX_PRESENTED_SPACES = 128;
+const MAX_PRESENTED_TABS_PER_SPACE = 8;
 const MAX_PRESENTED_LEAVES_PER_SPACE = 16;
 
 type WorldAgentStatus = "working" | "idle" | "blocked" | "done" | "unknown";
@@ -518,7 +519,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         if (activeTabId) priorityTabIds.add(activeTabId);
       }
       const tabRelevance = paneParentRelevance(allPanes, "tab_id");
-      const tabs = boundedRelevantRecords(
+      const tabs = boundedRelevantRecordsWithGroupReservations(
         allTabs.filter((tab) =>
           retainedWorkspaceIds.has(String(tab.workspace_id)),
         ),
@@ -533,6 +534,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
             relevance?.agentCount ?? 0,
           ];
         },
+        (tab) => nativeId(tab.workspace_id),
+        presentedWorkspaceIds,
+        MAX_PRESENTED_TABS_PER_SPACE,
       );
       const retainedPaneIds = new Set(
         panes.flatMap((pane) => {

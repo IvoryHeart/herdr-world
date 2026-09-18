@@ -316,6 +316,64 @@ describe("WorldSnapshotService", () => {
     ]);
   });
 
+  test("does not let one dense space consume another presented space's desk budget", async () => {
+    const workspaces = [
+      { workspace_id: "workspace-a", label: "Dense workspace" },
+      { workspace_id: "workspace-b", label: "Later workspace" },
+    ];
+    const tabs = [
+      ...Array.from({ length: 2_048 }, (_, index) => ({
+        tab_id: `tab-a-${index}`,
+        workspace_id: "workspace-a",
+      })),
+      ...Array.from({ length: 8 }, (_, index) => ({
+        tab_id: `tab-b-${index}`,
+        workspace_id: "workspace-b",
+      })),
+    ];
+    const panes = tabs.map(({ tab_id, workspace_id }) => ({
+      pane_id: `pane-${tab_id}`,
+      terminal_id: `terminal-${tab_id}`,
+      workspace_id,
+      tab_id,
+      agent: "codex",
+      agent_status: "working",
+    }));
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          herdr: {
+            async call(method) {
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list") return { tabs };
+              if (method === "pane.list") return { panes };
+              if (method === "agent.list") return { agents: [] };
+              throw new Error(`unexpected method: ${method}`);
+            },
+          },
+        },
+        isCurrent: () => true,
+      }),
+    });
+
+    const result = await service.snapshot();
+    const snapshot = result.connections[0]?.snapshot;
+
+    expect(snapshot?.tabs).toHaveLength(2_048);
+    expect(
+      snapshot?.tabs.filter(
+        ({ workspace_id }) => workspace_id === "workspace-b",
+      ),
+    ).toHaveLength(8);
+    expect(snapshot?.coverage.by_workspace).toEqual([
+      expect.objectContaining({ workspace_id: "workspace-a", tabs: 2_048 }),
+      expect.objectContaining({ workspace_id: "workspace-b", tabs: 8 }),
+    ]);
+  });
+
   test("does not discard candidates before view-specific projection", async () => {
     const statuses = Array.from({ length: 129 }, (_, index) =>
       status(`host-${index}`),

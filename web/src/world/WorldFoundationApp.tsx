@@ -1424,7 +1424,9 @@ function WorldControlPlane({
             key={conversation.nodeId}
             conversation={conversation}
             cascadeIndex={index}
-            compactActive={index === floatingInspectors.length - 1}
+            compactActive={
+              !dockedInspector && index === floatingInspectors.length - 1
+            }
             onFocus={() => {
               void focusFloatingInspector(conversation).catch(() => undefined);
             }}

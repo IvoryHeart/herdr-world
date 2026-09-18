@@ -1538,6 +1538,13 @@ async function run() {
     compactReviewerSlot!.getBoundingClientRect().height > 0,
     "compact Office did not render the retained Inspector",
   );
+  const compactBuilderWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Builder Inspector"]',
+  )!;
+  check(
+    getComputedStyle(compactBuilderWindow).display === "none",
+    "compact Office exposed a floating Inspector above the docked Inspector",
+  );
   const compactNavigation = document.querySelector<HTMLElement>(
     '.mobile-nav[aria-label="Workspace view switcher"]',
   )!;
@@ -1609,12 +1616,35 @@ async function run() {
   );
   compactTerminalButton.click();
   await until(
-    () => persistentReviewerInspector?.getAttribute("data-view") === "terminal",
+    () =>
+      persistentReviewerInspector?.getAttribute("data-view") === "terminal" &&
+      persistentReviewerInspector.querySelector(
+        'button[aria-label="Open device keyboard"]',
+      ),
     "compact Inspector Terminal view",
   );
   check(
     compactTerminalButton.classList.contains("active"),
     "compact World Inspector Terminal navigation was not active",
+  );
+  const compactKeyboardButton =
+    persistentReviewerInspector!.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open device keyboard"]',
+    )!;
+  const compactShortcutButton =
+    persistentReviewerInspector!.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show terminal shortcuts"]',
+    )!;
+  check(
+    compactKeyboardButton.getBoundingClientRect().width >= 44 &&
+      compactShortcutButton.getBoundingClientRect().width > 0,
+    "compact World Inspector omitted its device keyboard or terminal shortcuts",
+  );
+  compactKeyboardButton.click();
+  await until(
+    () =>
+      document.activeElement === terminalInput(persistentReviewerInspector!),
+    "compact World Inspector device keyboard focus",
   );
   compactFilesButton.click();
   await until(
