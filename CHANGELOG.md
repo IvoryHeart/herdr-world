@@ -86,11 +86,12 @@ retain their original Herdr Web lineage.
   no longer steal terminal focus, and selected identity no longer appears in a
   duplicate persistent Office badge.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
-- Preserved the complete managed-host candidate set and qualified selected inner
-  candidates through the bounded aggregate transport, carrying exact topology
-  coverage until each visual projection applies its own bound. Tree, Graph and
-  Office now retain selected-path priority and report exact host, space, desk and
-  leaf omissions even beyond service record limits. Shared task summaries are
+- Preserved the complete managed-host candidate set and qualified selected,
+  focused, attention-requiring and detected-agent candidates with their parents
+  through the bounded aggregate transport, carrying exact topology coverage
+  until each visual projection applies its own bound. Tree, Graph and Office now
+  retain their relevance priority and report exact host, space, desk and leaf
+  omissions even beyond service record limits. Shared task summaries are
   bounded to 160 Unicode characters; inactive-host action checks are scoped to
   their owning branches; obsolete Pixi initialization is cancelled during
   StrictMode replay; and the Office metrics browser-test timeout race is removed.

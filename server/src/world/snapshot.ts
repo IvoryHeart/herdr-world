@@ -116,6 +116,33 @@ function boundedRecords(
   return records.filter((record) => admitted.has(record));
 }
 
+function boundedRelevantRecords(
+  records: readonly Record<string, unknown>[],
+  limit: number,
+  relevance: (record: Record<string, unknown>) => readonly number[],
+) {
+  if (records.length <= limit) return [...records];
+  const admitted = new Set(
+    records
+      .map((record, index) => ({ record, index, relevance: relevance(record) }))
+      .sort((left, right) => {
+        const dimensions = Math.max(
+          left.relevance.length,
+          right.relevance.length,
+        );
+        for (let index = 0; index < dimensions; index += 1) {
+          const difference =
+            (right.relevance[index] ?? 0) - (left.relevance[index] ?? 0);
+          if (difference !== 0) return difference;
+        }
+        return left.index - right.index;
+      })
+      .slice(0, limit)
+      .map(({ record }) => record),
+  );
+  return records.filter((record) => admitted.has(record));
+}
+
 function nativeId(value: unknown): string | null {
   return typeof value === "string" &&
     value.length > 0 &&
@@ -185,6 +212,44 @@ function agentStatus(value: unknown): WorldAgentStatus {
 
 function isAgentPane(pane: Record<string, unknown>) {
   return typeof pane.agent === "string" && pane.agent.trim().length > 0;
+}
+
+function paneStatusPriority(pane: Record<string, unknown>) {
+  const status = agentStatus(pane.agent_status);
+  return status === "blocked"
+    ? 3
+    : status === "working"
+      ? 2
+      : status === "done"
+        ? 1
+        : 0;
+}
+
+type PaneParentRelevance = {
+  focused: boolean;
+  attention: boolean;
+  agentCount: number;
+};
+
+function paneParentRelevance(
+  panes: readonly Record<string, unknown>[],
+  parentKey: "workspace_id" | "tab_id",
+) {
+  const result = new Map<string, PaneParentRelevance>();
+  for (const pane of panes) {
+    const parentId = nativeId(pane[parentKey]);
+    if (!parentId) continue;
+    const current = result.get(parentId) ?? {
+      focused: false,
+      attention: false,
+      agentCount: 0,
+    };
+    current.focused ||= pane.focused === true;
+    current.attention ||= paneStatusPriority(pane) > 0;
+    if (isAgentPane(pane)) current.agentCount += 1;
+    result.set(parentId, current);
+  }
+  return result;
 }
 
 function topologyCoverage(
@@ -352,12 +417,24 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           return workspaceId ? [workspaceId] : [];
         }),
       ]);
-      const workspaces = boundedRecords(
+      const workspaceRelevance = paneParentRelevance(allPanes, "workspace_id");
+      const workspaces = boundedRelevantRecords(
         allWorkspaces,
         MAX_WORKSPACES,
-        (workspace) =>
-          priorityWorkspaceIds.has(String(workspace.workspace_id)) ||
-          workspace.focused === true,
+        (workspace) => {
+          const workspaceId = nativeId(workspace.workspace_id);
+          const relevance = workspaceId
+            ? workspaceRelevance.get(workspaceId)
+            : undefined;
+          return [
+            Number(
+              Boolean(workspaceId && priorityWorkspaceIds.has(workspaceId)),
+            ),
+            Number(workspace.focused === true || relevance?.focused === true),
+            Number(relevance?.attention === true),
+            relevance?.agentCount ?? 0,
+          ];
+        },
       );
       const retainedWorkspaceIds = new Set(
         workspaces.flatMap((workspace) => {
@@ -374,10 +451,15 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
             (priority.pane_id && priority.pane_id === pane.pane_id) ||
             (priority.terminal_id && priority.terminal_id === pane.terminal_id),
         );
-      const panes = boundedRecords(
+      const panes = boundedRelevantRecords(
         panesInRetainedWorkspaces,
         MAX_PANES,
-        (pane) => paneIsExplicit(pane) || pane.focused === true,
+        (pane) => [
+          Number(paneIsExplicit(pane)),
+          Number(pane.focused === true),
+          paneStatusPriority(pane),
+          Number(isAgentPane(pane)),
+        ],
       );
       const priorityTabIds = new Set(
         explicitPanes.flatMap((pane) => {
@@ -389,12 +471,22 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         const activeTabId = nativeId(workspace.active_tab_id);
         if (activeTabId) priorityTabIds.add(activeTabId);
       }
-      const tabs = boundedRecords(
+      const tabRelevance = paneParentRelevance(allPanes, "tab_id");
+      const tabs = boundedRelevantRecords(
         allTabs.filter((tab) =>
           retainedWorkspaceIds.has(String(tab.workspace_id)),
         ),
         MAX_TABS,
-        (tab) => priorityTabIds.has(String(tab.tab_id)) || tab.focused === true,
+        (tab) => {
+          const tabId = nativeId(tab.tab_id);
+          const relevance = tabId ? tabRelevance.get(tabId) : undefined;
+          return [
+            Number(Boolean(tabId && priorityTabIds.has(tabId))),
+            Number(tab.focused === true || relevance?.focused === true),
+            Number(relevance?.attention === true),
+            relevance?.agentCount ?? 0,
+          ];
+        },
       );
       const retainedPaneIds = new Set(
         panes.flatMap((pane) => {

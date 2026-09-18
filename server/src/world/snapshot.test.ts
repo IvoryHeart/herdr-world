@@ -167,6 +167,93 @@ describe("WorldSnapshotService", () => {
     });
   });
 
+  test("preserves attention-requiring agents and their parents before topology caps", async () => {
+    const workspaces = Array.from({ length: 514 }, (_, index) => ({
+      workspace_id: `workspace-${index}`,
+      label: `Workspace ${index}`,
+      focused: false,
+    }));
+    const tabs = Array.from({ length: 2_050 }, (_, index) => ({
+      tab_id: `tab-${index}`,
+      workspace_id:
+        index >= 2_048 ? `workspace-${index - 1_536}` : "workspace-0",
+      focused: false,
+    }));
+    const panes = Array.from({ length: 4_098 }, (_, index) => ({
+      pane_id: `pane-${index}`,
+      terminal_id: `terminal-${index}`,
+      workspace_id:
+        index >= 4_096 ? `workspace-${index - 3_584}` : "workspace-0",
+      tab_id: index >= 4_096 ? `tab-${index - 2_048}` : `tab-${index % 2_048}`,
+      focused: false,
+      ...(index >= 4_096
+        ? {
+            agent: "codex",
+            agent_status: index === 4_097 ? "blocked" : "idle",
+          }
+        : {}),
+    }));
+    const agents = [
+      {
+        pane_id: "pane-4096",
+        terminal_id: "terminal-4096",
+        agent: "codex",
+        display_agent: "Idle agent",
+      },
+      {
+        pane_id: "pane-4097",
+        terminal_id: "terminal-4097",
+        agent: "codex",
+        display_agent: "Blocked agent",
+      },
+    ];
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          herdr: {
+            async call(method) {
+              if (method === "workspace.list") return { workspaces };
+              if (method === "tab.list") return { tabs };
+              if (method === "pane.list") return { panes };
+              if (method === "agent.list") return { agents };
+              throw new Error(`unexpected method: ${method}`);
+            },
+          },
+        },
+        isCurrent: () => true,
+      }),
+    });
+
+    const result = await service.snapshot();
+    const snapshot = result.connections[0]?.snapshot;
+
+    expect(snapshot?.workspaces).toHaveLength(512);
+    expect(snapshot?.tabs).toHaveLength(2_048);
+    expect(snapshot?.panes).toHaveLength(4_096);
+    expect(
+      snapshot?.workspaces.slice(-2).map(({ workspace_id }) => workspace_id),
+    ).toEqual(["workspace-512", "workspace-513"]);
+    expect(snapshot?.tabs.slice(-2).map(({ tab_id }) => tab_id)).toEqual([
+      "tab-2048",
+      "tab-2049",
+    ]);
+    expect(snapshot?.panes.slice(-2).map(({ pane_id }) => pane_id)).toEqual([
+      "pane-4096",
+      "pane-4097",
+    ]);
+    expect(snapshot?.agents).toEqual(agents);
+    expect(snapshot?.coverage).toMatchObject({
+      workspaces: 514,
+      tabs: 2_050,
+      panes: 4_098,
+      agent_panes: 2,
+      status: { blocked: 1, idle: 1 },
+    });
+  });
+
   test("does not discard candidates before view-specific projection", async () => {
     const statuses = Array.from({ length: 129 }, (_, index) =>
       status(`host-${index}`),
