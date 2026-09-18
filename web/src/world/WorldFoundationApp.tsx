@@ -24,6 +24,7 @@ import {
   WORKSPACE_INSPECTOR_CLOSE_EVENT,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   type WorkspaceInspectorRequest,
+  writeInspectorPreferences,
 } from "../workspaceResource";
 import {
   useWorldRuntime,
@@ -296,6 +297,40 @@ export default function WorldFoundationApp() {
     }),
     shallowEqual,
   );
+  const workspaceSurfaceInspectorConversation =
+    inspectorConversations.find(
+      (conversation) => conversation.nodeId === dockedInspectorId,
+    ) ?? inspectorConversations[inspectorConversations.length - 1];
+  const changeWorkspaceSurfaceInspectorView = useCallback(
+    (nextView: InspectorView) => {
+      const conversation = workspaceSurfaceInspectorConversation;
+      if (!conversation?.availableViews.includes(nextView)) return;
+      setInspectorConversations((current) =>
+        current.map((candidate) =>
+          candidate.nodeId === conversation.nodeId
+            ? { ...candidate, view: nextView }
+            : candidate,
+        ),
+      );
+      const workspace = store
+        .get()
+        .workspaces.find(
+          (candidate) => candidate.workspace_id === conversation.workspaceId,
+        );
+      if (!workspace) return;
+      writeInspectorPreferences(worldLocalStorage, {
+        scope: resourceScopeForWorkspace(conversation.connectionId, workspace),
+        open: true,
+        view: nextView,
+        availableViews: conversation.availableViews,
+        dock: conversation.dock,
+        size: conversation.size,
+        expanded: conversation.expanded,
+        ...(conversation.paneId ? { originPaneId: conversation.paneId } : {}),
+      });
+    },
+    [workspaceSurfaceInspectorConversation],
+  );
 
   useLayoutEffect(() => {
     const lease =
@@ -419,6 +454,16 @@ export default function WorldFoundationApp() {
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
+          workspaceSurfaceInspector={
+            workspaceSurfaceInspectorConversation
+              ? {
+                  view: workspaceSurfaceInspectorConversation.view,
+                  availableViews:
+                    workspaceSurfaceInspectorConversation.availableViews,
+                  onViewChange: changeWorkspaceSurfaceInspectorView,
+                }
+              : null
+          }
           onWorkspaceSurfaceSelect={
             view !== "spaces"
               ? (selection) =>

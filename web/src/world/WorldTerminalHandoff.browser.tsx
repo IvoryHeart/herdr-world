@@ -316,6 +316,41 @@ const client: ConnectionClient = {
         counts: {},
       };
     }
+    if (method === "agent_history.get") {
+      return {
+        status: "ok",
+        agent: "reviewer",
+        pane_id: "reviewer-pane",
+        workspace_id: workspaceBase.workspace_id,
+        tab_id: "review",
+        updated_at: "2026-01-01T00:00:00Z",
+        path: "/repo/.agent-history/reviewer.jsonl",
+        history_version: 2,
+        mode: "snapshot",
+        window_limit: 200,
+        cursor: { epoch: "mobile-inspector", revision: 1 },
+        entries: [
+          {
+            id: "review-message",
+            role: "assistant",
+            kind: "message",
+            text: "Review is ready.",
+            sent_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      };
+    }
+    if (method === "agent_session.get") {
+      return {
+        status: "ok",
+        agent: "reviewer",
+        pane_id: "reviewer-pane",
+        path: "/repo/.agent-sessions/reviewer.jsonl",
+        updated_at: "2026-01-01T00:00:00Z",
+        file: { size: 128 },
+        stats: { turns: 1, records: 1, token_usage: null },
+      };
+    }
     if (method === "terminal.attach") {
       const terminalId = String(params.terminal_id ?? "");
       for (const listener of terminalListeners) {
@@ -1503,38 +1538,90 @@ async function run() {
     compactReviewerSlot!.getBoundingClientRect().height > 0,
     "compact Office did not render the retained Inspector",
   );
-  persistentReviewerInspector
-    ?.querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(2)')
-    ?.click();
+  const compactNavigation = document.querySelector<HTMLElement>(
+    '.mobile-nav[aria-label="Workspace view switcher"]',
+  )!;
+  const compactFilesButton = compactNavigation.querySelector<HTMLButtonElement>(
+    'button[aria-label="Show workspace files"]',
+  )!;
+  const compactChangesButton =
+    compactNavigation.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show workspace changes"]',
+    )!;
+  const compactHistoryButton =
+    compactNavigation.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show agent message history"]',
+    )!;
+  const compactTerminalButton =
+    compactNavigation.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show terminal session"]',
+    )!;
+  compactFilesButton.click();
   await until(
     () => persistentReviewerInspector?.getAttribute("data-view") === "files",
-    "compact Inspector Files view",
+    "compact World Inspector Files view",
+  );
+  const compactFilesResource = persistentReviewerInspector?.querySelector(
+    ".inspector-files-resource:not(.is-hidden)",
   );
   check(
-    (persistentReviewerInspector
-      ?.querySelector(".workspace-inspector-body")
-      ?.getBoundingClientRect().height ?? 0) > 0,
-    "compact Inspector Files resource had no visible body",
+    (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0 &&
+      (compactFilesResource
+        ?.querySelector(".file-explorer-side")
+        ?.getBoundingClientRect().height ?? 0) > 0,
+    "compact World Inspector Files resource did not render its explorer",
   );
-  persistentReviewerInspector
-    ?.querySelector<HTMLButtonElement>('[role="tab"]:nth-of-type(3)')
-    ?.click();
+  check(
+    compactFilesButton.classList.contains("active"),
+    "compact World Inspector Files navigation was not active",
+  );
+  compactChangesButton.click();
   await until(
     () => persistentReviewerInspector?.getAttribute("data-view") === "changes",
-    "compact Inspector Changes view",
+    "compact World Inspector Changes view",
+  );
+  const compactChangesResource = persistentReviewerInspector?.querySelector(
+    ".inspector-changes-resource:not(.is-hidden)",
   );
   check(
-    (persistentReviewerInspector
-      ?.querySelector(".workspace-inspector-body")
-      ?.getBoundingClientRect().height ?? 0) > 0,
-    "compact Inspector Changes resource had no visible body",
+    (compactChangesResource?.getBoundingClientRect().height ?? 0) > 0 &&
+      (compactChangesResource
+        ?.querySelector(".diff-viewer-side")
+        ?.getBoundingClientRect().height ?? 0) > 0,
+    "compact World Inspector Changes resource did not render its file list",
   );
-  persistentReviewerInspector
-    ?.querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')
-    ?.click();
+  check(
+    compactChangesButton.classList.contains("active"),
+    "compact World Inspector Changes navigation was not active",
+  );
+  compactHistoryButton.click();
+  await until(
+    () =>
+      persistentReviewerInspector?.getAttribute("data-view") === "history" &&
+      (persistentReviewerInspector
+        ?.querySelector(".inspector-history-resource:not(.is-hidden)")
+        ?.getBoundingClientRect().height ?? 0) > 0,
+    "compact World Inspector History view",
+  );
+  check(
+    compactHistoryButton.classList.contains("active"),
+    "compact World Inspector History navigation was not active",
+  );
+  compactTerminalButton.click();
   await until(
     () => persistentReviewerInspector?.getAttribute("data-view") === "terminal",
     "compact Inspector Terminal view",
+  );
+  check(
+    compactTerminalButton.classList.contains("active"),
+    "compact World Inspector Terminal navigation was not active",
+  );
+  compactFilesButton.click();
+  await until(
+    () =>
+      persistentReviewerInspector?.getAttribute("data-view") === "files" &&
+      (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0,
+    "compact World Inspector Files view before Spaces",
   );
   const terminalAttachesBeforeSpaces = calls.filter(
     ({ method }) => method === "terminal.attach",
@@ -1560,8 +1647,10 @@ async function run() {
     "Spaces handoff destroyed the live Inspector owner",
   );
   check(
-    persistentReviewerInspector?.getBoundingClientRect().height !== 0,
-    "compact Spaces handoff hid the retained Inspector",
+    persistentReviewerInspector?.getBoundingClientRect().height !== 0 &&
+      persistentReviewerInspector?.getAttribute("data-view") === "files" &&
+      (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0,
+    "compact Spaces handoff hid or replaced the retained Files Inspector",
   );
   check(
     calls.filter(({ method }) => method === "terminal.attach").length ===

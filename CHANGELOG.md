@@ -87,7 +87,10 @@ retain their original Herdr Web lineage.
   duplicate persistent Office badge. Mobile Office, Tree and Graph now keep
   their shell-owned Inspector and Terminal, Files and Changes resources visible
   instead of inheriting the hidden Spaces session slot, including while the
-  retained Inspector crosses into Spaces.
+  retained Inspector crosses into Spaces. The compact shell navigation now
+  controls that active World Inspector directly, including Files, Changes,
+  History and Terminal availability and active state, rather than opening a
+  second hidden Spaces Inspector.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Preserved the complete managed-host candidate set and qualified selected,
   focused, attention-requiring and detected-agent candidates with their parents

@@ -1116,6 +1116,12 @@ export type WorkspaceSurfaceSelection = {
   paneId?: string;
 };
 
+export type WorkspaceSurfaceInspectorControl = {
+  view: InspectorView;
+  availableViews: readonly InspectorView[];
+  onViewChange(view: InspectorView): void;
+};
+
 export default function App({
   operationalShortcutsEnabled = true,
   inspectorPortal = null,
@@ -1123,6 +1129,7 @@ export default function App({
   primaryViewControl = null,
   workspaceSurface = null,
   workspaceSurfaceVisible = true,
+  workspaceSurfaceInspector = null,
   onWorkspaceSurfaceSelect,
   worldTerminalPresentations = [],
   onInspectorVisibilityChange,
@@ -1136,6 +1143,7 @@ export default function App({
   primaryViewControl?: ReactNode;
   workspaceSurface?: ReactNode;
   workspaceSurfaceVisible?: boolean;
+  workspaceSurfaceInspector?: WorkspaceSurfaceInspectorControl | null;
   onWorkspaceSurfaceSelect?: (
     selection: WorkspaceSurfaceSelection,
   ) => void | Promise<unknown>;
@@ -3375,6 +3383,23 @@ export default function App({
     </div>
   ) : null;
   const desktopSidebarHidden = !mobile && (sidebarHidden || zenMode);
+  const workspaceSurfaceMobileView =
+    workspaceSurfaceInspector?.view === "terminal"
+      ? "session"
+      : workspaceSurfaceInspector?.view;
+  const mobileNavigationView =
+    mobileView === "annotations" || mobileView === "workspaces"
+      ? mobileView
+      : (workspaceSurfaceMobileView ?? mobileView);
+  const workspaceSurfaceInspectorSupports = (view: InspectorView) =>
+    workspaceSurfaceInspector?.availableViews.includes(view) ?? false;
+  const selectWorkspaceSurfaceInspectorView = (view: InspectorView) => {
+    if (!workspaceSurfaceInspectorSupports(view)) return false;
+    setAnnotationsOpen(false);
+    setMobileView("session");
+    workspaceSurfaceInspector!.onViewChange(view);
+    return true;
+  };
   const topbar = (
     <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
       <div className="topbar-start">
@@ -3445,41 +3470,68 @@ export default function App({
         <button
           type="button"
           className={
-            mobileView === "session" && !agentHistoryOpen ? "active" : ""
+            mobileNavigationView === "session" &&
+            (workspaceSurfaceInspector !== null || !agentHistoryOpen)
+              ? "active"
+              : ""
           }
           title="Session"
           aria-label="Show terminal session"
           tabIndex={mobileControlsCollapsed ? -1 : 0}
-          onClick={activateTerminalSurface}
+          disabled={
+            workspaceSurfaceInspector !== null &&
+            !workspaceSurfaceInspectorSupports("terminal")
+          }
+          onClick={() => {
+            if (!selectWorkspaceSurfaceInspectorView("terminal")) {
+              activateTerminalSurface();
+            }
+          }}
         >
           <SquareTerminal size={16} />
           <span className="mobile-nav-label">Session</span>
         </button>
         <button
           type="button"
-          className={mobileView === "files" ? "active" : ""}
+          className={mobileNavigationView === "files" ? "active" : ""}
           title={shortcutTitle("Files", "files.toggle")}
           aria-label="Show workspace files"
           tabIndex={mobileControlsCollapsed ? -1 : 0}
-          onClick={() => openFileExplorer()}
+          disabled={
+            workspaceSurfaceInspector !== null &&
+            !workspaceSurfaceInspectorSupports("files")
+          }
+          onClick={() => {
+            if (!selectWorkspaceSurfaceInspectorView("files")) {
+              openFileExplorer();
+            }
+          }}
         >
           <FolderTree size={16} />
           <span className="mobile-nav-label">Files</span>
         </button>
         <button
           type="button"
-          className={mobileView === "changes" ? "active" : ""}
+          className={mobileNavigationView === "changes" ? "active" : ""}
           title={shortcutTitle("Changes", "diff.toggle")}
           aria-label="Show workspace changes"
           tabIndex={mobileControlsCollapsed ? -1 : 0}
-          onClick={() => openDiffViewer()}
+          disabled={
+            workspaceSurfaceInspector !== null &&
+            !workspaceSurfaceInspectorSupports("changes")
+          }
+          onClick={() => {
+            if (!selectWorkspaceSurfaceInspectorView("changes")) {
+              openDiffViewer();
+            }
+          }}
         >
           <FileDiff size={16} />
           <span className="mobile-nav-label">Changes</span>
         </button>
         <button
           type="button"
-          className={mobileView === "annotations" ? "active" : ""}
+          className={mobileNavigationView === "annotations" ? "active" : ""}
           title={shortcutTitle("Annotations", "annotations.toggle")}
           aria-label="Show review annotations"
           aria-pressed={annotationsOpen}
@@ -3493,17 +3545,30 @@ export default function App({
         </button>
         <button
           type="button"
-          className={mobileView === "history" ? "active" : ""}
+          className={mobileNavigationView === "history" ? "active" : ""}
           title={
-            activePaneHasAgent || historyInspectorOpen
-              ? "History"
-              : "Select an agent pane to view History"
+            workspaceSurfaceInspector
+              ? workspaceSurfaceInspectorSupports("history")
+                ? "History"
+                : "History is unavailable for this selection"
+              : activePaneHasAgent || historyInspectorOpen
+                ? "History"
+                : "Select an agent pane to view History"
           }
           aria-label="Show agent message history"
-          aria-pressed={historyInspectorOpen}
+          aria-pressed={
+            workspaceSurfaceInspector
+              ? mobileNavigationView === "history"
+              : historyInspectorOpen
+          }
           tabIndex={mobileControlsCollapsed ? -1 : 0}
-          disabled={!activePaneHasAgent && !historyInspectorOpen}
+          disabled={
+            workspaceSurfaceInspector
+              ? !workspaceSurfaceInspectorSupports("history")
+              : !activePaneHasAgent && !historyInspectorOpen
+          }
           onClick={() => {
+            if (selectWorkspaceSurfaceInspectorView("history")) return;
             if (historyInspectorOpen && mobileView !== "history") {
               setMobileView("history");
             } else {
@@ -3718,7 +3783,9 @@ export default function App({
       ) : null}
 
       <div
-        className={`body mobile-view-${mobileView}`}
+        className={`body mobile-view-${mobileView} ${
+          workspaceSurfaceInspector ? "has-workspace-surface-inspector" : ""
+        }`}
         style={{ gridTemplateColumns: `${sidebarWidth}px 6px minmax(0, 1fr)` }}
       >
         <div

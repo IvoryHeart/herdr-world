@@ -972,7 +972,9 @@ html:not([data-layout="mobile"])
     display: none;
   }
 
-  .body:is(.mobile-view-files, .mobile-view-changes, .mobile-view-history) {
+  .body:is(.mobile-view-files, .mobile-view-changes, .mobile-view-history):not(
+      .has-workspace-surface-inspector
+    ) {
     .workspace-terminal-surface {
       display: none;
     }
