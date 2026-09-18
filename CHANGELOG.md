@@ -86,11 +86,12 @@ retain their original Herdr Web lineage.
   no longer steal terminal focus, and selected identity no longer appears in a
   duplicate persistent Office badge.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
-- Bounded both Tree presentations with selected-path priority and exact omission
-  reporting across the full 128-host observation limit, bounded shared task
-  summaries to 160 Unicode characters, scoped inactive-host action checks to
-  their owning branches, cancelled obsolete Pixi initialization during
-  StrictMode replay, and removed the Office metrics browser-test timeout race.
+- Preserved the complete managed-host candidate set until each visual projection
+  applies its own bound, then bounded both Tree presentations with selected-path
+  priority and exact host, space and leaf omission reporting. Shared task summaries
+  are bounded to 160 Unicode characters; inactive-host action checks are scoped to
+  their owning branches; obsolete Pixi initialization is cancelled during
+  StrictMode replay; and the Office metrics browser-test timeout race is removed.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Closed a retired terminal's selection with its Inspector instead of leaving an
   orphan stale profile, and kept admitted Office room/seat `+` affordances visible

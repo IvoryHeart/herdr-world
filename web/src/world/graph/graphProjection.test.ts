@@ -77,20 +77,13 @@ describe("World Graph projection", () => {
 
     expect(hostBound.hosts).toHaveLength(128);
     expect(hostBound.omittedHostCount).toBe(1);
+    expect(hostBound.omittedSpaceCount).toBe(1);
     expect(hostBound.coverage).toMatchObject({
       configuredHosts: 129,
       presentedHosts: 128,
-    });
-
-    const upstreamBound = fixtureWorld(
-      Array.from({ length: 128 }, (_, index) =>
-        fixtureHost(`observed-${index}`, []),
-      ),
-    );
-    upstreamBound.omittedHostCount = 3;
-    expect(projectWorldGraph(upstreamBound)).toMatchObject({
-      omittedHostCount: 3,
-      coverage: { configuredHosts: 131, presentedHosts: 128 },
+      observedSpaces: 129,
+      presentedSpaces: 128,
+      omittedTerminals: 1,
     });
 
     const spaceBound = projectWorldGraph(
@@ -143,7 +136,6 @@ function fixtureWorld(hosts: WorldHostObject[]): WorldObject {
   ]);
   return {
     version: 1,
-    omittedHostCount: 0,
     hosts,
     spaces,
     leaves,

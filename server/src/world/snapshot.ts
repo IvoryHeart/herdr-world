@@ -1,7 +1,6 @@
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
 
-const MAX_CONNECTIONS = 128;
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
 const MAX_PANES = 4_096;
@@ -50,8 +49,6 @@ export type WorldConnectionSnapshot = {
 export type WorldSnapshotResult = {
   revision: number;
   observed_at: number;
-  truncated_connections: boolean;
-  omitted_connections: number;
   connections: WorldConnectionSnapshot[];
 };
 
@@ -110,8 +107,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   async snapshot(): Promise<WorldSnapshotResult> {
-    const allStatuses = this.registry.list();
-    const statuses = allStatuses.slice(0, MAX_CONNECTIONS);
+    // The profile store bounds the managed catalogue. Preserve that complete
+    // candidate set here so each view can apply its own relevance-aware bound.
+    const statuses = this.registry.list();
     const connections = await mapConcurrent(
       statuses,
       MAX_CONCURRENT_CONNECTIONS,
@@ -120,8 +118,6 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     return {
       revision: this.revision,
       observed_at: this.now(),
-      truncated_connections: allStatuses.length > statuses.length,
-      omitted_connections: Math.max(0, allStatuses.length - statuses.length),
       connections,
     };
   }

@@ -5,8 +5,6 @@ function result(label: string, generation = 1) {
   return {
     revision: generation,
     observed_at: 100 + generation,
-    truncated_connections: false,
-    omitted_connections: 0,
     connections: [
       {
         connection_id: "host-a",
@@ -59,20 +57,18 @@ describe("World aggregate runtime store", () => {
     expect(parsed?.connections[0].snapshot?.workspaces[0].label).toBe("valid");
   });
 
-  test("retains 128 hosts and the exact upstream omission count", () => {
+  test("retains every aggregate candidate for view-specific projection", () => {
     const template = result("valid").connections[0];
     const parsed = parseWorldSnapshotResult({
       ...result("valid"),
-      truncated_connections: true,
-      omitted_connections: 3,
-      connections: Array.from({ length: 128 }, (_, index) => ({
+      connections: Array.from({ length: 129 }, (_, index) => ({
         ...template,
         connection_id: `host-${index}`,
       })),
     });
 
-    expect(parsed?.connections).toHaveLength(128);
-    expect(parsed?.omittedConnectionCount).toBe(3);
+    expect(parsed?.connections).toHaveLength(129);
+    expect(parsed?.connections[128]?.connectionId).toBe("host-128");
   });
 
   test("a delayed response from before disconnect cannot replace a newer aggregate", async () => {

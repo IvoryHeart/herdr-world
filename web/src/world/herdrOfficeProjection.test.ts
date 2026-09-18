@@ -263,6 +263,30 @@ describe("Pixel Office projection", () => {
     });
   });
 
+  test("counts every host before applying the reception presentation bound", () => {
+    const office = projectWorldOffice(
+      buildWorldObject(
+        Array.from({ length: 129 }, (_, hostIndex) =>
+          connection(`host-${hostIndex}`, [], []),
+        ),
+        "host-128",
+      ),
+      1,
+    );
+
+    expect(office.coverage).toMatchObject({
+      configuredHosts: 129,
+      omittedReceptionDesks: 123,
+    });
+    expect(office.presentationBounds).toMatchObject({
+      totalReceptionDesks: 129,
+      renderedReceptionDesks: 6,
+    });
+    expect(
+      office.receptions.some(({ hostKey }) => hostKey.includes("host-128")),
+    ).toBe(true);
+  });
+
   test("publishes only the admitted bounded tab label to Office desks", () => {
     const source = connection(
       "local",

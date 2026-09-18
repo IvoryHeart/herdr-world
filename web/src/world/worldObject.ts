@@ -83,7 +83,6 @@ export type WorldObjectNode =
 
 export type WorldObject = {
   version: 1;
-  omittedHostCount: number;
   hosts: WorldHostObject[];
   spaces: WorldSpaceObject[];
   leaves: WorldLeafObject[];
@@ -411,7 +410,6 @@ function buildHost(
 export function buildWorldObject(
   connections: readonly WorldRuntimeConnection[],
   selectedConnectionId: string | null = null,
-  omittedHostCount = 0,
 ): WorldObject {
   const hosts = [...connections]
     .sort(
@@ -432,7 +430,6 @@ export function buildWorldObject(
   ]);
   return {
     version: 1,
-    omittedHostCount,
     hosts,
     spaces,
     leaves,

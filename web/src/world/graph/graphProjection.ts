@@ -156,11 +156,10 @@ export function projectWorldGraph(
     edges,
     hosts,
     spaces: graphSpaces,
-    omittedHostCount:
-      world.omittedHostCount + Math.max(0, world.hosts.length - hosts.length),
+    omittedHostCount: Math.max(0, world.hosts.length - hosts.length),
     omittedSpaceCount: Math.max(0, world.spaces.length - graphSpaces.length),
     coverage: {
-      configuredHosts: world.omittedHostCount + world.hosts.length,
+      configuredHosts: world.hosts.length,
       presentedHosts: hosts.length,
       observedSpaces: world.spaces.length,
       presentedSpaces: graphSpaces.length,

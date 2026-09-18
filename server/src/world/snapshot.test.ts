@@ -70,20 +70,27 @@ function runtime(label: string): Runtime {
 }
 
 describe("WorldSnapshotService", () => {
-  test("observes the full view bound and reports exact additional hosts", async () => {
-    const statuses = Array.from({ length: 131 }, (_, index) =>
-      status(`host-${index}`, "disconnected"),
+  test("does not discard candidates before view-specific projection", async () => {
+    const statuses = Array.from({ length: 129 }, (_, index) =>
+      status(`host-${index}`),
     );
     const service = new WorldSnapshotService<Runtime>({
       list: () => statuses,
-      readyRuntimeLease: () => null,
+      readyRuntimeLease: (connectionId) => ({
+        connectionId,
+        generation: 1,
+        runtime: runtime(connectionId),
+        isCurrent: () => true,
+      }),
     });
 
     const result = await service.snapshot();
 
-    expect(result.connections).toHaveLength(128);
-    expect(result.truncated_connections).toBe(true);
-    expect(result.omitted_connections).toBe(3);
+    expect(result.connections).toHaveLength(129);
+    expect(result.connections[128]?.snapshot).toMatchObject({
+      workspaces: [{ label: "host-128 workspace" }],
+      panes: [{ terminal_id: "shared-terminal" }],
+    });
   });
 
   test("keeps colliding native identifiers isolated by connection", async () => {

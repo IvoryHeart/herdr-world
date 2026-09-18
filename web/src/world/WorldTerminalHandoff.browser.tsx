@@ -152,8 +152,6 @@ const client: ConnectionClient = {
       return {
         revision: worldRevision,
         observed_at: Date.now(),
-        truncated_connections: false,
-        omitted_connections: 0,
         connections: [
           {
             connection_id: "local",

@@ -99,8 +99,7 @@ export function projectWorldTree(
 
   return {
     hosts,
-    omittedHostCount:
-      world.omittedHostCount + Math.max(0, world.hosts.length - hosts.length),
+    omittedHostCount: Math.max(0, world.hosts.length - hosts.length),
     omittedSpaceCount: Math.max(
       0,
       world.spaces.length - presentedSpaces.length,

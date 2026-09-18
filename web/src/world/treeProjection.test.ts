@@ -53,10 +53,8 @@ describe("World Tree projection", () => {
 
     expect(hostProjection.hosts).toHaveLength(128);
     expect(hostProjection.omittedHostCount).toBe(1);
-
-    const upstreamBound = world(hosts.slice(0, 128));
-    upstreamBound.omittedHostCount = 3;
-    expect(projectWorldTree(upstreamBound).omittedHostCount).toBe(3);
+    expect(hostProjection.omittedSpaceCount).toBe(1);
+    expect(hostProjection.coverage.omittedLeaves).toBe(1);
     expect(hostProjection.hosts.map(({ source }) => source.id)).toContain(
       "host:remote-128",
     );
@@ -108,7 +106,6 @@ function world(hosts: WorldHostObject[]): WorldObject {
   ]);
   return {
     version: 1,
-    omittedHostCount: 0,
     hosts,
     spaces,
     leaves,

@@ -7,7 +7,6 @@ import {
 } from "../api";
 import type { Pane, Tab, Workspace } from "../types";
 
-const MAX_CONNECTIONS = 128;
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
 
@@ -37,8 +36,6 @@ export type WorldRuntimeState = {
   status: "idle" | "loading" | "ready" | "error";
   revision: number;
   observedAt: number;
-  truncatedConnections: boolean;
-  omittedConnectionCount: number;
   connections: WorldRuntimeConnection[];
   error: string | null;
 };
@@ -53,8 +50,6 @@ const INITIAL_STATE: WorldRuntimeState = {
   status: "idle",
   revision: 0,
   observedAt: 0,
-  truncatedConnections: false,
-  omittedConnectionCount: 0,
   connections: [],
   error: null,
 };
@@ -139,16 +134,15 @@ export function parseWorldSnapshotResult(
     (item.revision as number) < 0 ||
     typeof item.observed_at !== "number" ||
     !Number.isFinite(item.observed_at) ||
-    typeof item.truncated_connections !== "boolean" ||
-    !Number.isSafeInteger(item.omitted_connections) ||
-    (item.omitted_connections as number) < 0 ||
     !Array.isArray(item.connections)
   ) {
     return null;
   }
   const seen = new Set<string>();
   const connections: WorldRuntimeConnection[] = [];
-  for (const value of item.connections.slice(0, MAX_CONNECTIONS)) {
+  // The same-origin service has already bounded the managed catalogue. A
+  // renderer cap here would discard selection and descendant information.
+  for (const value of item.connections) {
     const connection = parseConnection(value);
     if (!connection || seen.has(connection.connectionId)) continue;
     seen.add(connection.connectionId);
@@ -157,10 +151,6 @@ export function parseWorldSnapshotResult(
   return {
     revision: item.revision as number,
     observedAt: item.observed_at,
-    truncatedConnections: item.truncated_connections,
-    omittedConnectionCount:
-      (item.omitted_connections as number) +
-      Math.max(0, item.connections.length - MAX_CONNECTIONS),
     connections,
   };
 }

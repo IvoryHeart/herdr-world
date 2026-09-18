@@ -249,17 +249,8 @@ export default function WorldFoundationApp() {
     (snapshot) => snapshot.activeConnectionId,
   );
   const topbarWorld = useMemo(
-    () =>
-      buildWorldObject(
-        topbarRuntime.connections,
-        topbarConnectionId,
-        topbarRuntime.omittedConnectionCount,
-      ),
-    [
-      topbarConnectionId,
-      topbarRuntime.connections,
-      topbarRuntime.omittedConnectionCount,
-    ],
+    () => buildWorldObject(topbarRuntime.connections, topbarConnectionId),
+    [topbarConnectionId, topbarRuntime.connections],
   );
   const activeConversationLease = useStoreSelector(
     (snapshot) => ({
@@ -531,13 +522,11 @@ function WorldControlPlane({
       buildWorldObject(
         runtime.connections,
         hasSelectedConnection ? connectionSelection.activeConnectionId : null,
-        runtime.omittedConnectionCount,
       ),
     [
       connectionSelection.activeConnectionId,
       hasSelectedConnection,
       runtime.connections,
-      runtime.omittedConnectionCount,
     ],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
