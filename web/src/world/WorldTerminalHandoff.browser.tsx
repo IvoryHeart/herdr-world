@@ -1603,6 +1603,10 @@ async function run() {
   const persistentReviewerInspector = document.querySelector(
     ".world-context-rail .workspace-inspector",
   );
+  const compactRail = document.querySelector<HTMLElement>(
+    ".world-context-rail",
+  )!;
+  compactRail.style.width = "390px";
   updateLayoutPreferences({ mode: "mobile" });
   await until(
     () => document.documentElement.dataset.layout === "mobile",
@@ -1726,9 +1730,27 @@ async function run() {
     persistentReviewerInspector!.querySelector<HTMLButtonElement>(
       'button[aria-label="Show terminal shortcuts"]',
     )!;
+  const compactShortcutBounds = compactShortcutButton.getBoundingClientRect();
+  const compactTerminalPortalBounds = persistentReviewerInspector!
+    .querySelector(".workspace-inspector-terminal-portal")!
+    .getBoundingClientRect();
+  const compactTerminalShellBounds = persistentReviewerInspector!
+    .querySelector(".terminal-shell")!
+    .getBoundingClientRect();
+  const compactShortcutHitTarget = document.elementFromPoint(
+    compactShortcutBounds.left + compactShortcutBounds.width / 2,
+    compactShortcutBounds.top + compactShortcutBounds.height / 2,
+  );
   check(
     compactKeyboardButton.getBoundingClientRect().width >= 44 &&
-      compactShortcutButton.getBoundingClientRect().width > 0,
+      compactTerminalShellBounds.width <= compactTerminalPortalBounds.width &&
+      compactShortcutBounds.width > 0 &&
+      compactShortcutBounds.left >= compactTerminalPortalBounds.left &&
+      compactShortcutBounds.right <= compactTerminalPortalBounds.right &&
+      compactShortcutBounds.top >= compactTerminalPortalBounds.top &&
+      compactShortcutBounds.bottom <= compactTerminalPortalBounds.bottom &&
+      (compactShortcutHitTarget === compactShortcutButton ||
+        compactShortcutButton.contains(compactShortcutHitTarget)),
     "compact World Inspector omitted its device keyboard or terminal shortcuts",
   );
   compactKeyboardButton.click();
@@ -1823,6 +1845,7 @@ async function run() {
     "returning from Spaces did not restore the retained Inspector state",
   );
   updateLayoutPreferences({ mode: "desktop" });
+  compactRail.style.removeProperty("width");
   await until(
     () => document.documentElement.dataset.layout === "desktop",
     "restored desktop layout",

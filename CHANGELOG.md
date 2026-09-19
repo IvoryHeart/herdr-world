@@ -99,7 +99,10 @@ retain their original Herdr Web lineage.
   the native terminal mounts, so terminal sizing, mobile controls and resource
   tabs use the native Spaces layout. Returning browser focus restores input only
   to the terminal that previously held it, and stale lazy-loaded World assets
-  recover through the application's one-shot reload path.
+  recover through the application's one-shot reload path. Narrow World
+  Inspectors now constrain the shared terminal owner to the real portal width,
+  keeping terminal reflow, the device-keyboard action and the shortcut launcher
+  visible and focusable on phones.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Preserved the complete managed-host candidate set and qualified selected,
   focused, attention-requiring and detected-agent candidates with their parents
