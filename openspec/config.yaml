@@ -1,0 +1,34 @@
+schema: spec-driven
+context: |
+  Herdr World is a downstream React/TypeScript/Vite app with a Rust bridge and
+  minimal vendor/herdr-compat crate. Herdr is an external runtime authority.
+  Read AGENTS.md and docs/agent-development.md for delivery and knowledge rules.
+  Current contracts live in openspec/specs. docs contains implementation maps
+  and runbooks; docs/specs preserves historical decisions.
+  Inspect source and tests before asserting current behavior.
+  Routine fixes, refactors, dependency updates, tests, docs, and release mechanics
+  need no new proposal unless the owner requests one. Update affected current specs.
+  Existing user authorization carries through planning and implementation.
+  Use one change per coherent outcome; PR review is the delivery boundary.
+rules:
+  proposal:
+    - Explain the observable outcome, affected capabilities, and actual scope.
+    - Identify unresolved decisions; do not reopen decisions the owner has made.
+  specs:
+    - Requirements need observable scenarios including relevant failure behavior.
+    - Keep source navigation and operational recipes in linked docs.
+    - Preserve unrelated requirements when synchronizing a delta into a current spec.
+  design:
+    - Describe consequential implementation choices and actual constraints.
+  tasks:
+    - Include relevant verification and knowledge updates alongside implementation.
+    - A checked task is progress, not evidence that checks passed.
+operations:
+  apply:
+    guidance:
+      - Continue authorized work through verification and PR delivery.
+      - Stop for a real missing decision or permission, not a routine phase transition.
+  archive:
+    guidance:
+      - Archive only after implementation, spec synchronization, and verification.
+      - Record limitations truthfully; do not check unfinished tasks.

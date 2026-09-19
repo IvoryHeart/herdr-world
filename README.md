@@ -1,151 +1,148 @@
 # Herdr World
 
-[![Release](https://img.shields.io/github/v/release/IvoryHeart/herdr-world?include_prereleases&label=release)](https://github.com/IvoryHeart/herdr-world/releases)
-[![CI](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml/badge.svg)](https://github.com/IvoryHeart/herdr-world/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <img src="./web/public/herdr-world-logo.svg" alt="Herdr World ram mark" width="128" />
+</p>
 
-Herdr World is a browser and mobile workspace for [Herdr](https://github.com/herdrdev/herdr).
-It combines live terminal Spaces with visual Pixel Office and Graph themes, multi-host viewing,
-shared navigation, mobile controls, notes, uploads, and agent-aware workflows.
+A **visual control plane** for [Herdr](https://herdr.dev). Observe agents across
+local and SSH hosts in Office, Tree, and Graph; open the same qualified terminal,
+files, changes, and agent history in Spaces on desktop or mobile.
+**Requires a running Herdr server.**
 
-The current public preview is
-[`v0.1.1`](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
-It supports Linux x86-64 and macOS on Apple Silicon and Intel, and requires Herdr `v0.8.2` or newer
-with terminal protocol `20`. Visit the [project site](https://ivoryheart.github.io/herdr-world/) for
-an interactive overview.
+## Screenshots
 
-| Desktop | Mobile |
-|:--:|:--:|
-| <img src="docs/images/pixel-office-desktop.png" alt="Herdr World Pixel Office showing hosts, workspaces, and agents" width="720"> | <img src="docs/images/pixel-office-mobile.png" alt="Herdr World Pixel Office on a mobile viewport" width="260"> |
+### Desktop
 
-| Graph overview | Connected terminals |
-|:--:|:--:|
-| <img src="docs/images/graph-overview.png" alt="Herdr World Graph showing six synthetic example workspaces and agent nodes" width="720"> | <img src="docs/images/graph-live-terminals.png" alt="Herdr World Graph with two connected terminal windows displaying synthetic demo output" width="720"> |
+[![Office view showing agents across two Herdr hosts][desktop-office]][desktop-office]
 
-## Quick Start
+Office shows agent state across hosts at a glance. Tree and Graph expose the
+same qualified runtime, while Spaces keeps Herdr's full terminal and repository
+workflow one click away.
 
-Start or attach to a Herdr session, then choose an installation method. npm and the Herdr plugin
-require Node.js `22.14.0` or newer.
+<!-- markdownlint-disable MD033 -->
 
-### npm
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="33.33%" align="center">Tree</th>
+      <th width="33.33%" align="center">Graph</th>
+      <th width="33.33%" align="center">Spaces</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-tree.png"><img src="./docs/images/herdr-world-desktop-tree.png" alt="Tree view of hosts, spaces, and agents" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-graph.png"><img src="./docs/images/herdr-world-desktop-graph.png" alt="Graph view of hosts, spaces, and agents" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-spaces.png"><img src="./docs/images/herdr-world-desktop-spaces.png" alt="Spaces terminal workspace" width="100%" /></a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+### Mobile
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="33.33%" align="center">Office</th>
+      <th width="33.33%" align="center">Tree</th>
+      <th width="33.33%" align="center">Spaces</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-mobile-office.png"><img src="./docs/images/herdr-world-mobile-office.png" alt="Mobile Office view" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-mobile-tree.png"><img src="./docs/images/herdr-world-mobile-tree.png" alt="Mobile Tree view" width="100%" /></a>
+      </td>
+      <td width="33.33%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-mobile-spaces.png"><img src="./docs/images/herdr-world-mobile-spaces.png" alt="Mobile Spaces terminal" width="100%" /></a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- markdownlint-enable MD033 -->
+
+Click any screenshot to open the full-resolution image.
+
+[desktop-office]: ./docs/images/herdr-world-desktop-office.png
+
+## Quick start
+
+1. Install and start [Herdr](https://herdr.dev), or let Herdr World install and
+   start it later with `herdr-world herdr setup`.
+2. On Linux or macOS, install Herdr World:
+
+   ```bash
+   # Empty selects latest; use X.Y.Z (no v prefix) to pin a Herdr World version.
+   curl -fsSL \
+     https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
+     | HERDR_WORLD_VERSION= sh
+   ```
+
+   On Windows, download the matching x64 or ARM64 archive from the
+   [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).
+3. On Linux/macOS, add `~/.local/bin` to `PATH` and run `herdr-world`.
+   On Windows, extract the archive and run `herdr-world.exe`. Open the printed URL.
+
+Use the connection selector to add local sockets or an SSH destination. One World
+service owns every connection; the browser stays on the same World origin.
+
+See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
+updates, and services.
+
+## Install as a PWA
+
+**PWA installation is recommended for daily use:** a separate app window without
+browser tabs or the address bar. Open and authenticate with Herdr World, then install:
+
+- **iPhone/iPad Safari:** Share -> Add to Home Screen.
+- **macOS Safari 17+:** File -> Add to Dock.
+- **Chrome/Edge:** browser menu -> Install app.
+
+The process must stay running and reachable. **PWA mode is not offline access.**
+
+## Documentation
+
+- [Website](https://ivoryheart.github.io/herdr-world/) and
+  [hands-on tutorial](https://ivoryheart.github.io/herdr-world/tutorial/)
+  ([Markdown](./docs/TUTORIAL.md)): local work, mobile, and private remote access.
+- [Features and shortcuts](./FEATURES.md)
+- [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
+- [Architecture](./docs/ARCHITECTURE.md): system contracts.
+- [Development](./docs/development.md), [packaging](./docs/packaging.md), and
+  [release process](./docs/release.md).
+- [Security](./SECURITY.md) and [contributing](./CONTRIBUTING.md).
+
+## Development
+
+Use Bun 1.4.1 or newer and a running Herdr server:
 
 ```bash
-npm install --global @ivoryheart/herdr-world@latest
-herdr-world
+bun install --frozen-lockfile
+# Run in separate terminals:
+bun run dev:server
+bun run dev:web
 ```
 
-### Homebrew
+Open <http://localhost:5173>. See [CONTRIBUTING.md](./CONTRIBUTING.md) for checks
+and pull requests.
 
-```bash
-brew install IvoryHeart/tap/herdr-world
-herdr-world
-```
+## Security
 
-### Herdr plugin
+Herdr World controls terminals and modifies real files. Keep the default loopback
+binding; read [SECURITY.md](./SECURITY.md) before allowing another device access.
 
-```bash
-herdr plugin install IvoryHeart/herdr-world --ref v0.1.1
-herdr plugin action invoke open --plugin ivoryheart.herdr-world
-```
+## License
 
-Open [http://127.0.0.1:8787](http://127.0.0.1:8787) if the browser does not open automatically.
-Checksum-verified standalone archives are available on the
-[release page](https://github.com/IvoryHeart/herdr-world/releases/tag/v0.1.1).
-
-The macOS binaries are not yet signed or notarized. After verifying the download, the first launch
-may need approval in **System Settings → Privacy & Security**.
-
-## Advanced Usage
-
-Select a session, socket, or alternate port with normal launcher options:
-
-```bash
-herdr-world --session NAME
-HERDR_SOCKET_PATH=/path/to/herdr.sock herdr-world --port 8791
-herdr-world --no-herdr-setup
-```
-
-The interactive launcher can offer to install, update, or start Herdr. It asks before each action;
-`--no-herdr-setup` disables those prompts.
-
-Agent harnesses running inside a Herdr pane can publish a short, expiring task summary for the
-Office without starting another bridge:
-
-```bash
-herdr-world task-summary "Reviewing release checks"
-herdr-world task-summary --clear
-```
-
-The command uses `HERDR_PANE_ID`, binds reports to the pane's active agent session, defaults to a
-15-minute TTL, and accepts `--ttl-ms`, `--pane`, and `--session` for explicit bounded targets. It
-normalizes whitespace, caps summaries at 160 Unicode characters, and redacts obvious
-credential-shaped values. See the [development guide](docs/development.md#reporting-agent-task-summaries)
-for the full contract.
-
-Useful plugin operations include:
-
-```bash
-herdr plugin action invoke status --plugin ivoryheart.herdr-world
-herdr plugin action invoke doctor --plugin ivoryheart.herdr-world
-herdr plugin action invoke restart --plugin ivoryheart.herdr-world
-herdr plugin log list --plugin ivoryheart.herdr-world --limit 20
-```
-
-Plugin actions are asynchronous and target-scoped. Before uninstalling, repeat the stop-and-status
-sequence for every Herdr target or named session and wait for each action log to report
-`status: succeeded`:
-
-```bash
-herdr plugin action invoke stop --plugin ivoryheart.herdr-world
-herdr plugin action invoke status --plugin ivoryheart.herdr-world
-herdr --session NAME plugin action invoke stop --plugin ivoryheart.herdr-world
-herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
-herdr plugin uninstall ivoryheart.herdr-world
-```
-
-Use Settings → Network → Connections to connect Herdr World to another Herdr. Adding a connection
-normally needs only its address; Herdr World asks for a password when the other Herdr requires one.
-Use Network → Allow connections to let Herdr World elsewhere connect to this Herdr. The basic flow
-provides an on/off control, a copyable address, and optional password protection. Exact host, page,
-and destination restrictions remain available under Advanced network permissions. Development or
-standalone launches show these settings as read-only when no controller-owned restart boundary is
-available. Direct connections are intended for a trusted LAN/VPN path; use TLS, a VPN, or SSH for
-untrusted networks.
-
-To run from source:
-
-```bash
-npm install
-npm install --prefix web
-npm run dev:local
-```
-
-The full application is served at [http://127.0.0.1:8787](http://127.0.0.1:8787). Run
-`npm run check` before submitting changes.
-
-Binding the bridge beyond loopback is security-sensitive and requires explicit host and origin
-allow-lists. Use a VPN, SSH tunnel, or authenticated reverse proxy for remote access. See the
-[development](docs/development.md), [federation](docs/federation.md), [Android](docs/android.md), and
-[packaging](docs/packaging.md) guides for detailed workflows.
-
-## Contributing And Support
-
-Contributions are welcome; see [`CONTRIBUTING.md`](CONTRIBUTING.md). Use
-[GitHub Issues](https://github.com/IvoryHeart/herdr-world/issues) for bugs and focused feature
-requests. Security reports must follow [`SECURITY.md`](SECURITY.md) and should not be disclosed
-publicly before a fix is available. Community support is best-effort.
-
-## Licensing
-
-Herdr World is available under the [MIT License](LICENSE). Bundled components and assets retain
-their own licences and notices; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and the
-generated inventories in [`third_party/dependencies`](third_party/dependencies/README.md).
-
-## Acknowledgements
-
-Herdr World builds on [Herdr](https://github.com/herdrdev/herdr),
-[Herdr Web](https://github.com/kcosr/herdr-web),
-[Ghostty Web](https://www.npmjs.com/package/ghostty-web),
-[Ghostty](https://github.com/ghostty-org/ghostty), [PixiJS](https://pixijs.com/), and character art
-adapted from [Claw-Empire](https://github.com/thinkinaixyz/claw-empire). Thank you to their
-maintainers and contributors.
+Code: [MIT](./LICENSE). Bundled dependencies, fonts and brand assets retain their
+original terms; see [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) and the
+generated [dependency licence texts](./DEPENDENCY_LICENSES.md).

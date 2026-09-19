@@ -1,0 +1,12 @@
+export const LIST_TIMEOUT_MS = 10000;
+export const LIST_LIMIT = 1000;
+export const PREVIEW_TIMEOUT_MS = 10000;
+export const PREVIEW_MAX_BYTES = 512 * 1024;
+export const PREVIEW_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+export const DOWNLOAD_TIMEOUT_MS = 120000;
+export const UPLOAD_TIMEOUT_MS = 120000;
+export const DELETE_TIMEOUT_MS = 120000;
+export const GIT_DIFF_TIMEOUT_MS = 10000;
+export const GIT_DIFF_MAX_BYTES = 512 * 1024;
+export const GIT_PULL_TIMEOUT_MS = 120000;
+export const GIT_UNTRACKED_NUMSTAT_CONCURRENCY = 4;

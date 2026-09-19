@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ivoryheart.github.io/herdr-world/sitemap.xml

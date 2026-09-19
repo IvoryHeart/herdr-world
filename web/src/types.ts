@@ -1,36 +1,79 @@
-export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
+// Shapes confirmed against a running Herdr 0.7.0 server (protocol 14).
 
-export type WorkspaceInfo = {
+export interface WorktreeInfo {
+  repo_key: string;
+  repo_name: string;
+  repo_root: string;
+  checkout_path: string;
+  is_linked_worktree: boolean;
+  // Added by Herdr World when a linked worktree was created from a specific
+  // workspace. Herdr itself currently exposes repository identity only.
+  parent_workspace_id?: string;
+  gui_settings_key?: string;
+  worktree_hooks_enabled?: boolean;
+  git_status?: GitStatusSummary;
+}
+
+export interface GitStatusSummary {
+  branch?: string;
+  upstream?: string;
+  ahead: number;
+  behind: number;
+  staged: number;
+  unstaged: number;
+  untracked: number;
+  conflicted: number;
+  dirty: boolean;
+  error?: string;
+}
+
+export interface ExistingWorktree {
+  path: string;
+  branch?: string;
+  is_bare: boolean;
+  is_detached: boolean;
+  is_prunable: boolean;
+  is_linked_worktree: boolean;
+  open_workspace_id?: string;
+  label: string;
+}
+
+export interface WorktreeList {
+  type: "worktree_list";
+  source: {
+    repo_key: string;
+    repo_name: string;
+    repo_root: string;
+    source_checkout_path: string;
+    source_workspace_id?: string;
+  };
+  worktrees: ExistingWorktree[];
+}
+
+export interface Workspace {
   workspace_id: string;
   number: number;
   label: string;
   focused: boolean;
   pane_count: number;
   tab_count: number;
-  active_tab_id: string;
-  agent_status: AgentStatus;
-  can_clear_name?: boolean;
-  worktree?: {
-    repo_key: string;
-    repo_name: string;
-    repo_root: string;
-    checkout_path: string;
-    is_linked_worktree: boolean;
-  };
-};
+  cwd?: string;
+  active_tab_id?: string;
+  agent_status: string;
+  worktree?: WorktreeInfo;
+}
 
-export type TabInfo = {
+export interface Tab {
   tab_id: string;
   workspace_id: string;
   number: number;
   label: string;
   focused: boolean;
   pane_count: number;
-  agent_status: AgentStatus;
-  can_clear_name?: boolean;
-};
+  agent_status: string;
+}
 
-export type PaneInfo = {
+export interface Pane {
   pane_id: string;
   terminal_id: string;
   workspace_id: string;
@@ -38,69 +81,157 @@ export type PaneInfo = {
   focused: boolean;
   cwd?: string;
   foreground_cwd?: string;
-  label?: string;
   agent?: string;
-  title?: string;
-  terminal_title?: string;
-  terminal_title_stripped?: string;
+  /** Optional display-safe agent label supplied by Herdr. */
   display_agent?: string;
+  /** Optional model metadata; absent when the runtime does not report it. */
+  model?: string;
+  model_name?: string;
+  /** Optional bounded task metadata produced through Herdr pane metadata. */
   task_summary?: string;
-  agent_status: AgentStatus;
+  /** Runtime-provided labels for known semantic agent states. */
   state_labels?: Record<string, string>;
+  agent_status: string;
+  /** Herdr agent.list state-change sequence, scoped to this server lifetime. */
+  state_change_seq?: number;
+  /** Session file modification time in epoch milliseconds, from the bridge. */
+  last_activity_at?: number;
   revision: number;
-};
+}
 
-export type LayoutRect = {
+export interface Rect {
   x: number;
   y: number;
   width: number;
   height: number;
-};
+}
 
-export type LayoutPane = {
+export interface LayoutPane {
   pane_id: string;
   focused: boolean;
-  rect: LayoutRect;
-};
+  rect: Rect;
+}
 
-export type LayoutSnapshot = {
+export interface LayoutSplit {
+  id: string;
+  direction: "right" | "down";
+  ratio: number;
+  rect: Rect;
+}
+
+export interface PaneLayout {
   workspace_id: string;
   tab_id: string;
   zoomed: boolean;
-  area: LayoutRect;
+  area: Rect;
   focused_pane_id: string;
   panes: LayoutPane[];
-  splits: Array<{
-    id: string;
-    direction: "right" | "down";
-    ratio: number;
-    rect: LayoutRect;
-  }>;
-};
+  splits: LayoutSplit[];
+}
 
-export type Snapshot = {
-  workspaces: WorkspaceInfo[];
-  tabs: TabInfo[];
-  panes: PaneInfo[];
-  layouts: LayoutSnapshot[];
-  selected_pane_id?: string | null;
-};
-
-export type PaneAgentStatusChangedMessage = {
-  type: "pane.agent_status_changed";
+export interface PaneRead {
   pane_id: string;
   workspace_id: string;
-  agent_status: AgentStatus;
-  agent: string | null;
-  title: string | null;
-  display_agent: string | null;
-  task_summary?: string | null;
-  state_labels: Record<string, string>;
-};
+  tab_id: string;
+  source: string;
+  format: string;
+  text: string;
+  revision: number;
+  truncated: boolean;
+}
 
-export type ActivityResyncRequiredMessage = {
-  type: "resync_required";
-  reason: string;
-};
+export interface FileExplorerEntry {
+  name: string;
+  path: string;
+  type: "directory" | "file" | "symlink";
+  size: number;
+  mtime_ms: number;
+  hidden: boolean;
+  ignored?: boolean;
+}
 
-export type ActivityMessage = PaneAgentStatusChangedMessage | ActivityResyncRequiredMessage;
+export interface FileExplorerList {
+  workspace_id: string;
+  repo_name?: string;
+  checkout_path: string;
+  root: string;
+  path: string;
+  entries: FileExplorerEntry[];
+  truncated: boolean;
+}
+
+export interface FilePreview {
+  workspace_id: string;
+  repo_name?: string;
+  checkout_path: string;
+  root: string;
+  path: string;
+  // Omitted for regular files; "directory" targets have no previewable
+  // content and always report a null text.
+  type?: "file" | "directory";
+  size: number;
+  mtime_ms: number;
+  text: string | null;
+  binary: boolean;
+  mime_type?: string;
+  image_data_url?: string;
+  truncated: boolean;
+  resource_revision?: number;
+}
+
+export type GitDiffKind =
+  | "staged"
+  | "unstaged"
+  | "untracked"
+  | "conflicted"
+  | "branch"
+  | "last-step";
+
+export interface GitDiffEntry {
+  path: string;
+  old_path?: string;
+  kind: GitDiffKind;
+  status: string;
+  additions?: number;
+  deletions?: number;
+  generated?: boolean;
+  mtime_ms?: number;
+  size?: number;
+}
+
+export interface GitDiffSummary {
+  workspace_id: string;
+  repo_name?: string;
+  root: string;
+  mode?: "working" | "branch-main" | "last-step";
+  base?: string;
+  baseline_available?: boolean;
+  snapshot_id?: string;
+  entries: GitDiffEntry[];
+  counts: Record<GitDiffKind, number>;
+}
+
+export interface GitDiffFile {
+  workspace_id: string;
+  root: string;
+  path: string;
+  kind: GitDiffKind;
+  diff: string;
+  truncated: boolean;
+}
+
+// Raw list responses
+export interface WorkspaceList {
+  type: "workspace_list";
+  /** Studio bridge metadata, absent on older bridges (shared navigation). */
+  navigation_mode?: "browser-local" | "shared";
+  workspaces: Workspace[];
+}
+export interface TabList {
+  type: "tab_list";
+  tabs: Tab[];
+}
+export interface PaneList {
+  type: "pane_list";
+  panes: Pane[];
+}

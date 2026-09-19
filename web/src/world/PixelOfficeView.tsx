@@ -1,0 +1,626 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { worldLocalStorage } from "../browserStorage";
+import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
+import {
+  endpointCreationReason,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
+import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
+import type {
+  OfficeCanvasAnchor,
+  OfficeCanvasHover,
+  OfficeConversationAnchors,
+} from "./PixelOfficeCanvas";
+import { OfficeCanvasCallout } from "./OfficeCanvasCallout";
+import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
+import { OfficeCompletionNotices } from "./OfficeCompletionNotices";
+export { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
+import {
+  OfficeRoomActionsOverlay,
+  OfficeSemanticTargetsOverlay,
+} from "./OfficeRoomActionsOverlay";
+import {
+  projectWorldOffice,
+  type OfficeAgent,
+  type HerdrOfficeProjection,
+} from "./herdrOfficeProjection";
+import {
+  EMPTY_OFFICE_OBSERVABILITY,
+  fetchOfficeObservability,
+  type OfficeObservability,
+} from "./officeObservability";
+import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
+import type { PublishedOfficeLayout } from "./officeLayout";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+  type OfficePreferences,
+} from "./officePreferences";
+import type { WorldObject } from "./worldObject";
+import {
+  createdRootPaneId,
+  officeCreationActionState,
+  officeRoomActionCapabilities,
+  officeRoomKeyForSelection,
+} from "./officeRoomActions";
+import {
+  officeCompletionIdentity,
+  readCompletionSeen,
+  writeCompletionSeen,
+} from "./completionSeenState";
+import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
+
+type RoomDialog =
+  | { mode: "create"; roomKey: string | null }
+  | { mode: "rename" | "close"; roomKey: string; label: string };
+
+type PendingCreatedPane = {
+  connectionId: string;
+  generation: number;
+  paneId: string;
+  attempt: number;
+};
+
+const CREATED_PANE_ADMISSION_RETRY_MS = 120;
+const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
+
+export default function PixelOfficeView({
+  world,
+  selectedId,
+  onSelect,
+  onOpenTerminal,
+  onSelectedAnchorChange,
+  floatingTerminals,
+  onConversationNodeAnchorsChange,
+}: {
+  world: WorldObject;
+  selectedId: string | null;
+  onSelect(id: string): void | Promise<boolean>;
+  onOpenTerminal(id: string): Promise<void>;
+  onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
+  floatingTerminals: readonly { nodeId: string }[];
+  onConversationNodeAnchorsChange?(
+    anchors: Record<string, OfficeCanvasAnchor> | null,
+  ): void;
+}) {
+  const office = useMemo(
+    (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
+    [world],
+  );
+  const creationSnapshot = useStoreSelector(
+    (snapshot) => ({
+      navigationMode: snapshot.navigationMode,
+      workspaces: snapshot.workspaces,
+      browserNavigation: snapshot.browserNavigation,
+      panes: snapshot.panes,
+      endpointAvailability: snapshot.endpointAvailability,
+    }),
+    shallowEqual,
+  );
+  const [preferences, setPreferences] = useState(() =>
+    readOfficePreferences(worldLocalStorage),
+  );
+  const preferencesRef = useRef(preferences);
+  const onSelectRef = useRef(onSelect);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
+  const [renderedRevision, setRenderedRevision] = useState(0);
+  const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
+  const [pendingCreatedPane, setPendingCreatedPane] =
+    useState<PendingCreatedPane | null>(null);
+  const [completionSeen, setCompletionSeen] = useState(() =>
+    readCompletionSeen(worldLocalStorage),
+  );
+  const [sceneHover, setSceneHover] = useState<OfficeCanvasHover | null>(null);
+  const [observability, setObservability] = useState<OfficeObservability>(
+    EMPTY_OFFICE_OBSERVABILITY,
+  );
+  const [observabilityRevision, setObservabilityRevision] = useState(0);
+  preferencesRef.current = preferences;
+  onSelectRef.current = onSelect;
+
+  useEffect(() => {
+    let disposed = false;
+    const refresh = async () => {
+      const next = await fetchOfficeObservability().catch(() => ({
+        ...EMPTY_OFFICE_OBSERVABILITY,
+        health: "degraded" as const,
+        observedAt: Date.now(),
+      }));
+      if (!disposed) setObservability(next);
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [observabilityRevision]);
+
+  useEffect(() => {
+    const refresh = () => setObservabilityRevision((value) => value + 1);
+    window.addEventListener(WORLD_OBSERVABILITY_UPDATED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(WORLD_OBSERVABILITY_UPDATED_EVENT, refresh);
+  }, []);
+
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const next =
+        event instanceof CustomEvent && event.detail
+          ? (event.detail as OfficePreferences)
+          : readOfficePreferences(worldLocalStorage);
+      preferencesRef.current = next;
+      setPreferences(next);
+    };
+    window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(
+        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+        refresh,
+      );
+  }, []);
+
+  useEffect(() => {
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+    const frame = requestAnimationFrame(() => {
+      scroll.scrollLeft = preferencesRef.current.scrollLeft;
+      scroll.scrollTop = preferencesRef.current.scrollTop;
+    });
+    const onScroll = () => {
+      const next = {
+        ...preferencesRef.current,
+        scrollLeft: scroll.scrollLeft,
+        scrollTop: scroll.scrollTop,
+      };
+      preferencesRef.current = next;
+      writeOfficePreferences(worldLocalStorage, next);
+    };
+    scroll.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      scroll.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  const selectedKey = officePresentationKey(office, selectedId);
+  const completionSeenKeys = useMemo(
+    () =>
+      new Set(
+        office.roster.flatMap(({ agent }) =>
+          completionSeen.has(officeCompletionIdentity(agent))
+            ? [agent.key]
+            : [],
+        ),
+      ),
+    [completionSeen, office],
+  );
+  const unseenCompletions = useMemo(
+    () =>
+      office.roster
+        .map(({ agent }) => agent)
+        .filter(
+          (agent) =>
+            agent.semanticStatus === "done" &&
+            agent.deskKey !== null &&
+            !completionSeenKeys.has(agent.key),
+        )
+        .sort(
+          (left, right) =>
+            Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
+            left.displayLabel.localeCompare(right.displayLabel) ||
+            left.key.localeCompare(right.key),
+        ),
+    [completionSeenKeys, office],
+  );
+  const selectedRoomKey = officeRoomKeyForSelection(world, selectedId);
+  const conversationTargets = floatingTerminals.flatMap((terminal) => {
+    const targetKey = officePresentationKey(office, terminal.nodeId);
+    return targetKey
+      ? [
+          {
+            id: terminal.nodeId,
+            selectedKey: targetKey,
+            targetKey,
+          },
+        ]
+      : [];
+  });
+
+  useEffect(() => {
+    if (!pendingCreatedPane) return;
+    const host = world.hosts.find(
+      ({ connectionId }) => connectionId === pendingCreatedPane.connectionId,
+    );
+    if (!host || host.generation !== pendingCreatedPane.generation) {
+      setPendingCreatedPane(null);
+      return;
+    }
+    const pane = world.leaves.find(
+      (leaf) =>
+        leaf.connectionId === pendingCreatedPane.connectionId &&
+        leaf.nativeId === pendingCreatedPane.paneId &&
+        leaf.generation === pendingCreatedPane.generation,
+    );
+    if (!pane) return;
+    let cancelled = false;
+    let retryTimer: number | null = null;
+    void Promise.resolve(onSelectRef.current(pane.id)).then((admitted) => {
+      if (cancelled) return;
+      if (admitted !== false) {
+        setPendingCreatedPane(null);
+        return;
+      }
+      if (pendingCreatedPane.attempt + 1 >= CREATED_PANE_ADMISSION_ATTEMPTS) {
+        setPendingCreatedPane(null);
+        return;
+      }
+      retryTimer = window.setTimeout(
+        () =>
+          setPendingCreatedPane((current) =>
+            current?.paneId === pendingCreatedPane.paneId
+              ? { ...current, attempt: current.attempt + 1 }
+              : current,
+          ),
+        CREATED_PANE_ADMISSION_RETRY_MS,
+      );
+    });
+    return () => {
+      cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [pendingCreatedPane, world]);
+
+  const roomForKey = (roomKey: string | null) =>
+    roomKey ? (office.rooms.find(({ key }) => key === roomKey) ?? null) : null;
+  const seatCreationState = (roomKey: string) => {
+    const room = roomForKey(roomKey);
+    if (!room) return officeCreationActionState(false, null);
+    const admitted = officeRoomActionCapabilities(world, room).createSeat;
+    return officeCreationActionState(
+      admitted,
+      admitted
+        ? endpointCreationReason(
+            creationSnapshot,
+            "tab.create",
+            room.workspaceRef.nativeId,
+          )
+        : null,
+    );
+  };
+  const showCreateSeat = (roomKey: string) =>
+    seatCreationState(roomKey).visible;
+  const canCreateSeat = (roomKey: string) => seatCreationState(roomKey).enabled;
+  const roomCreationState = (roomKey: string | null) => {
+    const room = roomForKey(roomKey);
+    const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
+    const admitted = Boolean(
+      selectedHost?.actionable &&
+        !selectedHost.stale &&
+        (!room || room.workspaceRef.connectionId === selectedHost.connectionId),
+    );
+    return officeCreationActionState(
+      admitted,
+      admitted
+        ? endpointCreationReason(
+            creationSnapshot,
+            "workspace.create",
+            room?.workspaceRef.nativeId,
+          )
+        : null,
+    );
+  };
+  const showCreateRoom = (roomKey: string | null) =>
+    roomCreationState(roomKey).visible;
+  const canCreateRoom = (roomKey: string | null) =>
+    roomCreationState(roomKey).enabled;
+  const canManageRoom = (roomKey: string, action: "rename" | "close") => {
+    const room = roomForKey(roomKey);
+    if (!room) return false;
+    return officeRoomActionCapabilities(world, room)[action];
+  };
+  const rememberCreatedPane = (
+    connectionId: string,
+    generation: number,
+    result: unknown,
+  ) => {
+    const paneId = createdRootPaneId(result);
+    if (paneId) {
+      setPendingCreatedPane({ connectionId, generation, paneId, attempt: 0 });
+    }
+  };
+  const reportRoomActionFailure = (action: string, cause: unknown) => {
+    store.notify({
+      kind: "error",
+      message: `${action} failed`,
+      detail: cause instanceof Error ? cause.message : String(cause),
+    });
+  };
+  const createSeat = async (roomKey: string) => {
+    const room = roomForKey(roomKey);
+    if (!room || !canCreateSeat(roomKey)) return;
+    try {
+      const result = await store.createQualifiedTab(
+        {
+          connectionId: room.workspaceRef.connectionId,
+          runtimeGeneration: room.observedGeneration,
+        },
+        room.workspaceRef.nativeId,
+        { numberedLabel: true },
+      );
+      rememberCreatedPane(
+        room.workspaceRef.connectionId,
+        room.observedGeneration,
+        result,
+      );
+    } catch (cause) {
+      reportRoomActionFailure("Seat creation", cause);
+    }
+  };
+  const submitCreateRoom = async (label: string) => {
+    const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
+    if (!selectedHost || !canCreateRoom(roomDialog?.roomKey ?? null)) return;
+    setRoomDialog(null);
+    try {
+      const result = await store.createQualifiedWorkspace(
+        {
+          connectionId: selectedHost.connectionId,
+          runtimeGeneration: selectedHost.generation,
+        },
+        label.trim() || undefined,
+      );
+      rememberCreatedPane(
+        selectedHost.connectionId,
+        selectedHost.generation,
+        result,
+      );
+    } catch (cause) {
+      reportRoomActionFailure("Room creation", cause);
+    }
+  };
+  const submitRenameRoom = async (label: string) => {
+    if (
+      roomDialog?.mode !== "rename" ||
+      !canManageRoom(roomDialog.roomKey, "rename")
+    ) {
+      return;
+    }
+    const room = roomForKey(roomDialog.roomKey);
+    if (!room) return;
+    setRoomDialog(null);
+    const value = label.trim();
+    if (value && value !== roomDialog.label) {
+      try {
+        await store.renameQualifiedWorkspace(
+          {
+            connectionId: room.workspaceRef.connectionId,
+            runtimeGeneration: room.observedGeneration,
+          },
+          room.workspaceRef.nativeId,
+          value,
+        );
+      } catch (cause) {
+        reportRoomActionFailure("Room rename", cause);
+      }
+    }
+  };
+  const closeRoom = async (roomKey: string) => {
+    const room = roomForKey(roomKey);
+    if (!room || !canManageRoom(roomKey, "close")) return;
+    setRoomDialog(null);
+    try {
+      await store.closeQualifiedWorkspace(
+        {
+          connectionId: room.workspaceRef.connectionId,
+          runtimeGeneration: room.observedGeneration,
+        },
+        room.workspaceRef.nativeId,
+      );
+    } catch (cause) {
+      reportRoomActionFailure("Room close", cause);
+    }
+  };
+  const selectOfficeKey = (key: string) => {
+    const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
+    if (agent) {
+      onSelect(agent.nodeId);
+      return;
+    }
+    const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
+    if (desk) {
+      const occupant = desk.occupantAgentKey
+        ? office.roster.find(
+            ({ agent: candidate }) => candidate.key === desk.occupantAgentKey,
+          )?.agent
+        : null;
+      onSelect(
+        occupant?.nodeId ?? desk.terminalSelectionKeys[0] ?? desk.roomKey,
+      );
+      return;
+    }
+    onSelect(key);
+  };
+  const markCompletionSeen = (agent: OfficeAgent) => {
+    setCompletionSeen((current) => {
+      const next = new Set(current);
+      next.add(officeCompletionIdentity(agent));
+      writeCompletionSeen(worldLocalStorage, next);
+      return next;
+    });
+  };
+  const inspectOfficeTerminal = async (key: string) => {
+    const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
+    if (agent) {
+      await onOpenTerminal(agent.nodeId);
+      if (agent.semanticStatus === "done") markCompletionSeen(agent);
+      return;
+    }
+    const desk = office.deskRoster.find(({ desk }) => desk.key === key)?.desk;
+    if (!desk) return;
+    const occupant = desk.occupantAgentKey
+      ? office.roster.find(
+          ({ agent: candidate }) => candidate.key === desk.occupantAgentKey,
+        )?.agent
+      : null;
+    const nodeId = occupant?.nodeId ?? desk.terminalSelectionKeys[0];
+    if (nodeId) await onOpenTerminal(nodeId);
+  };
+  const openOfficeTerminal = (key: string) => {
+    void inspectOfficeTerminal(key).catch(() => undefined);
+  };
+
+  if (!world.hosts.length) {
+    return (
+      <div className="world-empty" role="status">
+        <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
+        <h2>No connected spaces yet</h2>
+        <p>Add or connect a local or SSH Herdr profile from Spaces.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="world-office-shell world-stage-shell">
+      <OfficeCompactTargetChooser
+        projection={office}
+        selectedKey={selectedKey}
+        onSelect={selectOfficeKey}
+        onActivateAgent={openOfficeTerminal}
+        onActivateDesk={openOfficeTerminal}
+      />
+      <OfficeCompletionNotices
+        agents={unseenCompletions}
+        onInspect={(agent) => openOfficeTerminal(agent.key)}
+      />
+      <div ref={scrollRef} className="world-stage-scroll">
+        <PixelOfficeCanvas
+          projection={office}
+          selectedKey={selectedKey}
+          completionSeenKeys={completionSeenKeys}
+          observability={observability}
+          conversationTargets={conversationTargets}
+          onSelect={selectOfficeKey}
+          onActivateAgent={openOfficeTerminal}
+          onActivateRoom={selectOfficeKey}
+          showCreateSeat={showCreateSeat}
+          onNewSeat={(roomKey) => void createSeat(roomKey)}
+          onHover={setSceneHover}
+          onSelectedAnchorChange={onSelectedAnchorChange}
+          onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
+            onConversationNodeAnchorsChange?.(
+              anchors
+                ? Object.fromEntries(
+                    Object.entries(anchors).flatMap(([id, value]) => {
+                      const anchor = preferredOfficeConnectorAnchor(value);
+                      return anchor ? [[id, anchor]] : [];
+                    }),
+                  )
+                : null,
+            );
+          }}
+          onLayoutChange={setLayout}
+          onCanvasRendered={setRenderedRevision}
+          roomAlignment={preferences.roomAlignment}
+          longRoomTitleMode={preferences.longTitleMode}
+        >
+          {layout ? (
+            <>
+              <OfficeSemanticTargetsOverlay
+                layout={layout}
+                projection={office}
+                renderedRevision={renderedRevision}
+                selectedKey={selectedKey}
+                onSelect={selectOfficeKey}
+                onActivateAgent={openOfficeTerminal}
+                onActivateDesk={openOfficeTerminal}
+                onActivateRoom={selectOfficeKey}
+              />
+              <OfficeRoomActionsOverlay
+                layout={layout}
+                projection={office}
+                renderedRevision={renderedRevision}
+                selectedRoomKey={selectedRoomKey}
+                showCreateSeat={showCreateSeat}
+                canCreateSeat={canCreateSeat}
+                onCreateSeat={(roomKey) => void createSeat(roomKey)}
+                showCreateRoom={showCreateRoom}
+                canCreateRoom={canCreateRoom}
+                onCreateRoom={(roomKey) =>
+                  setRoomDialog({ mode: "create", roomKey })
+                }
+                canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
+                onRenameRoom={(roomKey) => {
+                  const room = roomForKey(roomKey);
+                  if (room) {
+                    setRoomDialog({
+                      mode: "rename",
+                      roomKey,
+                      label: room.displayLabel,
+                    });
+                  }
+                }}
+                canCloseRoom={(roomKey) => canManageRoom(roomKey, "close")}
+                onCloseRoom={(roomKey) => {
+                  const room = roomForKey(roomKey);
+                  if (room) {
+                    setRoomDialog({
+                      mode: "close",
+                      roomKey,
+                      label: room.displayLabel,
+                    });
+                  }
+                }}
+              />
+            </>
+          ) : null}
+        </PixelOfficeCanvas>
+      </div>
+      {sceneHover && sceneHover.key !== selectedKey ? (
+        <OfficeCanvasCallout
+          callout={officeCalloutForKey(office, sceneHover.key)}
+          left={sceneHover.clientX}
+          top={sceneHover.clientY}
+        />
+      ) : null}
+      <TextInputDialog
+        open={roomDialog?.mode === "create"}
+        title="Create room"
+        label="Room name"
+        submitLabel="Create"
+        onClose={() => setRoomDialog(null)}
+        onSubmit={(label) => void submitCreateRoom(label)}
+      />
+      <TextInputDialog
+        open={roomDialog?.mode === "rename"}
+        title="Rename room"
+        label="Room name"
+        initialValue={roomDialog?.mode === "rename" ? roomDialog.label : ""}
+        submitLabel="Rename"
+        onClose={() => setRoomDialog(null)}
+        onSubmit={(label) => void submitRenameRoom(label)}
+      />
+      <ConfirmDialog
+        open={roomDialog?.mode === "close"}
+        title="Close room"
+        message={
+          roomDialog?.mode === "close"
+            ? `Close room “${roomDialog.label}”? Its running terminal sessions will end.`
+            : ""
+        }
+        confirmLabel="Close room"
+        danger
+        onClose={() => setRoomDialog(null)}
+        onConfirm={() => {
+          if (roomDialog?.mode === "close") {
+            void closeRoom(roomDialog.roomKey);
+          }
+        }}
+      />
+    </div>
+  );
+}

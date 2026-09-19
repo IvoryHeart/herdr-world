@@ -1,6 +1,9 @@
-import { stableNumber } from "../herdrOfficeProjection";
-import type { HerdrGraphProjection, WorldGraphEdge, WorldGraphNode } from "./herdrGraphProjection";
-import type { SavedGraphPosition } from "./graphViewPrefs";
+import type { SavedGraphPosition } from "./graphPreferences";
+import type {
+  WorldGraphEdge,
+  WorldGraphNode,
+  WorldGraphProjection,
+} from "./graphProjection";
 
 export type GraphLayoutNode = {
   id: string;
@@ -22,32 +25,53 @@ export type GraphLayoutState = {
 
 export function reconcileGraphLayout(
   previous: GraphLayoutState | null,
-  projection: HerdrGraphProjection,
+  projection: WorldGraphProjection,
   collapsedIds: ReadonlySet<string>,
   savedPositions: Readonly<Record<string, SavedGraphPosition>> = {},
 ) {
-  const visibleNodes = projection.nodes.filter(
-    (node) => node.kind === "space" || !node.parentId || !collapsedIds.has(node.parentId),
-  );
+  const hiddenIds = new Set<string>();
+  const visibleNodes = projection.nodes.filter((node) => {
+    if (
+      node.parentId &&
+      (hiddenIds.has(node.parentId) || collapsedIds.has(node.parentId))
+    ) {
+      hiddenIds.add(node.id);
+      return false;
+    }
+    return true;
+  });
   const visibleIds = new Set(visibleNodes.map(({ id }) => id));
   const edges = projection.edges.filter(
-    ({ sourceId, targetId }) => visibleIds.has(sourceId) && visibleIds.has(targetId),
+    ({ sourceId, targetId }) =>
+      visibleIds.has(sourceId) && visibleIds.has(targetId),
   );
   const topologyKey = JSON.stringify({
     nodes: visibleNodes.map(({ id }) => id).sort(),
-    edges: edges.map(({ sourceId, targetId }) => [sourceId, targetId]).sort(compareEdgeIds),
+    edges: edges
+      .map(({ sourceId, targetId }) => [sourceId, targetId])
+      .sort(compareEdgeIds),
   });
   const nodes = new Map<string, GraphLayoutNode>();
-  const spaces = visibleNodes.filter(({ kind }) => kind === "space");
-  for (const [index, source] of spaces.entries()) {
-    nodes.set(source.id, reuseOrSeed(previous, source, index, spaces.length, savedPositions[source.id]));
+  const hosts = visibleNodes.filter(({ kind }) => kind === "host");
+  for (const [index, source] of hosts.entries()) {
+    nodes.set(
+      source.id,
+      reuseOrSeed(
+        previous,
+        source,
+        index,
+        hosts.length,
+        savedPositions[source.id],
+      ),
+    );
   }
   for (const source of visibleNodes) {
-    if (source.kind !== "terminal") {
-      continue;
-    }
+    if (source.kind === "host") continue;
     const parent = source.parentId ? nodes.get(source.parentId) : null;
-    nodes.set(source.id, reuseOrSeedTerminal(previous, source, parent, savedPositions[source.id]));
+    nodes.set(
+      source.id,
+      reuseOrSeedChild(previous, source, parent, savedPositions[source.id]),
+    );
   }
   return {
     state: { nodes, edges, topologyKey },
@@ -56,42 +80,69 @@ export function reconcileGraphLayout(
 }
 
 export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
-  const spaces = [...state.nodes.values()].filter(({ kind }) => kind === "space");
-  const terminalsByParent = new Map<string, GraphLayoutNode[]>();
+  const hosts = [...state.nodes.values()].filter(({ kind }) => kind === "host");
+  const spaces = [...state.nodes.values()].filter(
+    ({ kind }) => kind === "space",
+  );
+  const childrenByParent = new Map<string, GraphLayoutNode[]>();
   for (const node of state.nodes.values()) {
-    if (node.kind === "terminal" && node.parentId) {
-      const siblings = terminalsByParent.get(node.parentId) ?? [];
-      siblings.push(node);
-      terminalsByParent.set(node.parentId, siblings);
+    if (node.kind === "host" || !node.parentId) continue;
+    const children = childrenByParent.get(node.parentId) ?? [];
+    children.push(node);
+    childrenByParent.set(node.parentId, children);
+  }
+
+  for (let leftIndex = 0; leftIndex < hosts.length; leftIndex += 1) {
+    const left = hosts[leftIndex];
+    if (!left) continue;
+    if (!left.pinned) {
+      left.vx += -left.x * 0.0007 * alpha;
+      left.vy += -left.y * 0.0007 * alpha;
+    }
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < hosts.length;
+      rightIndex += 1
+    ) {
+      const right = hosts[rightIndex];
+      if (right) repel(left, right, 620, 4, alpha);
     }
   }
 
   for (let leftIndex = 0; leftIndex < spaces.length; leftIndex += 1) {
     const left = spaces[leftIndex];
     if (!left) continue;
-    if (!left.pinned) {
-      left.vx += -left.x * 0.0007 * alpha;
-      left.vy += -left.y * 0.0007 * alpha;
+    for (const host of hosts) {
+      if (left.parentId !== host.id) repel(left, host, 260, 2, alpha);
     }
-    for (let rightIndex = leftIndex + 1; rightIndex < spaces.length; rightIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < spaces.length;
+      rightIndex += 1
+    ) {
       const right = spaces[rightIndex];
-      if (!right) continue;
-      repel(left, right, 230, 2.2, alpha);
+      if (right) repel(left, right, 150, 1.8, alpha);
     }
   }
 
-  for (const [parentId, terminals] of terminalsByParent) {
+  for (const [parentId, children] of childrenByParent) {
     const parent = state.nodes.get(parentId);
     if (!parent) continue;
-    for (let index = 0; index < terminals.length; index += 1) {
-      const terminal = terminals[index];
-      if (!terminal) continue;
-      if (!terminal.pinned) {
-        spring(terminal, parent, 110, 0.028, alpha);
+    for (let index = 0; index < children.length; index += 1) {
+      const child = children[index];
+      if (!child) continue;
+      if (!child.pinned) {
+        spring(child, parent, child.kind === "space" ? 180 : 105, 0.028, alpha);
       }
-      for (let otherIndex = index + 1; otherIndex < terminals.length; otherIndex += 1) {
-        const other = terminals[otherIndex];
-        if (other) repel(terminal, other, 58, 1.5, alpha);
+      for (
+        let otherIndex = index + 1;
+        otherIndex < children.length;
+        otherIndex += 1
+      ) {
+        const other = children[otherIndex];
+        if (other) {
+          repel(child, other, child.kind === "space" ? 120 : 58, 1.5, alpha);
+        }
       }
     }
   }
@@ -107,8 +158,8 @@ export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
     node.vy *= 0.82;
     const speed = Math.hypot(node.vx, node.vy);
     if (speed > 14) {
-      node.vx = node.vx / speed * 14;
-      node.vy = node.vy / speed * 14;
+      node.vx = (node.vx / speed) * 14;
+      node.vy = (node.vy / speed) * 14;
     }
     node.x += node.vx;
     node.y += node.vy;
@@ -123,7 +174,7 @@ export function graphBounds(nodes: Iterable<GraphLayoutNode>) {
   let maxX = Number.NEGATIVE_INFINITY;
   let maxY = Number.NEGATIVE_INFINITY;
   for (const node of nodes) {
-    const radius = node.kind === "space" ? 54 : 24;
+    const radius = graphNodeRadius(node.kind);
     minX = Math.min(minX, node.x - radius);
     minY = Math.min(minY, node.y - radius);
     maxX = Math.max(maxX, node.x + radius);
@@ -143,6 +194,10 @@ export function savedGraphPositions(state: GraphLayoutState | null) {
   return positions;
 }
 
+export function graphNodeRadius(kind: WorldGraphNode["kind"]) {
+  return kind === "host" ? 62 : kind === "space" ? 47 : 22;
+}
+
 function reuseOrSeed(
   previous: GraphLayoutState | null,
   source: WorldGraphNode,
@@ -157,11 +212,18 @@ function reuseOrSeed(
     return existing;
   }
   const angle = index * 2.399963229728653 + stableFraction(source.id);
-  const radius = Math.max(100, Math.sqrt(Math.max(1, count)) * 74) * Math.sqrt((index + 1) / count);
-  return layoutNode(source, saved?.x ?? Math.cos(angle) * radius, saved?.y ?? Math.sin(angle) * radius, saved?.pinned ?? false);
+  const radius =
+    Math.max(100, Math.sqrt(Math.max(1, count)) * 74) *
+    Math.sqrt((index + 1) / count);
+  return layoutNode(
+    source,
+    saved?.x ?? Math.cos(angle) * radius,
+    saved?.y ?? Math.sin(angle) * radius,
+    saved?.pinned ?? false,
+  );
 }
 
-function reuseOrSeedTerminal(
+function reuseOrSeedChild(
   previous: GraphLayoutState | null,
   source: WorldGraphNode,
   parent: GraphLayoutNode | null | undefined,
@@ -174,24 +236,49 @@ function reuseOrSeedTerminal(
     return existing;
   }
   const angle = stableFraction(source.id) * Math.PI * 2;
+  const radius = source.kind === "space" ? 145 : 82;
   return layoutNode(
     source,
-    saved?.x ?? (parent?.x ?? 0) + Math.cos(angle) * 86,
-    saved?.y ?? (parent?.y ?? 0) + Math.sin(angle) * 86,
+    saved?.x ?? (parent?.x ?? 0) + Math.cos(angle) * radius,
+    saved?.y ?? (parent?.y ?? 0) + Math.sin(angle) * radius,
     saved?.pinned ?? false,
   );
 }
 
-function layoutNode(source: WorldGraphNode, x: number, y: number, pinned: boolean): GraphLayoutNode {
-  return { id: source.id, source, kind: source.kind, parentId: source.parentId, x, y, vx: 0, vy: 0, pinned };
+function layoutNode(
+  source: WorldGraphNode,
+  x: number,
+  y: number,
+  pinned: boolean,
+): GraphLayoutNode {
+  return {
+    id: source.id,
+    source,
+    kind: source.kind,
+    parentId: source.parentId,
+    x,
+    y,
+    vx: 0,
+    vy: 0,
+    pinned,
+  };
 }
 
 function stableFraction(id: string) {
-  return stableNumber(id) / 0xffffffff;
+  let hash = 2_166_136_261;
+  for (let index = 0; index < id.length; index += 1) {
+    hash ^= id.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+  return (hash >>> 0) / 0xffffffff;
 }
 
 function compareEdgeIds(left: string[], right: string[]) {
-  return left[0]?.localeCompare(right[0] ?? "") || left[1]?.localeCompare(right[1] ?? "") || 0;
+  return (
+    left[0]?.localeCompare(right[0] ?? "") ||
+    left[1]?.localeCompare(right[1] ?? "") ||
+    0
+  );
 }
 
 function repel(
@@ -210,9 +297,9 @@ function repel(
     length = Math.max(0.01, Math.hypot(dx, dy));
   }
   if (length >= distance) return;
-  const force = (distance - length) / distance * strength * alpha;
-  const x = dx / length * force;
-  const y = dy / length * force;
+  const force = ((distance - length) / distance) * strength * alpha;
+  const x = (dx / length) * force;
+  const y = (dy / length) * force;
   if (!left.pinned) {
     left.vx -= x;
     left.vy -= y;
@@ -234,10 +321,10 @@ function spring(
   const dy = parent.y - node.y;
   const length = Math.max(0.01, Math.hypot(dx, dy));
   const force = (length - distance) * strength * alpha;
-  node.vx += dx / length * force;
-  node.vy += dy / length * force;
+  node.vx += (dx / length) * force;
+  node.vy += (dy / length) * force;
   if (!parent.pinned) {
-    parent.vx -= dx / length * force * 0.18;
-    parent.vy -= dy / length * force * 0.18;
+    parent.vx -= (dx / length) * force * 0.18;
+    parent.vy -= (dy / length) * force * 0.18;
   }
 }

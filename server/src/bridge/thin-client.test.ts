@@ -1,0 +1,465 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import * as net from "node:net";
+import * as path from "node:path";
+import { tmpdir } from "node:os";
+import { BinReader, BinWriter, encodeFrame } from "./bincode";
+import {
+  assertSupportedHerdrProtocol,
+  isSupportedHerdrProtocol,
+} from "./protocol-compat";
+import { ThinClient } from "./thin-client";
+
+const servers: net.Server[] = [];
+
+afterEach(async () => {
+  await Promise.all(
+    servers
+      .splice(0)
+      .map(
+        (server) =>
+          new Promise<void>((resolve) => server.close(() => resolve())),
+      ),
+  );
+});
+
+async function startHandshakeServer(
+  welcome: (protocol: number) => {
+    version: number;
+    encoding?: number;
+    error?: string;
+  },
+  onConnection: () => void = () => undefined,
+  onHello: (hello: { protocol: number; launchMode: number }) => void = () =>
+    undefined,
+) {
+  const socketPath = path.join(
+    tmpdir(),
+    `herdr-gui-thin-${process.pid}-${crypto.randomUUID()}.sock`,
+  );
+  const server = net.createServer((socket) => {
+    onConnection();
+    let input = Buffer.alloc(0);
+    socket.on("data", (chunk) => {
+      input = Buffer.concat([
+        input,
+        Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+      ]);
+      if (input.length < 4) return;
+      const length = input.readUInt32LE(0);
+      if (input.length < length + 4) return;
+      const reader = new BinReader(input.subarray(4, length + 4));
+      expect(reader.variant()).toBe(0);
+      const protocol = reader.varint();
+      reader.varint(); // cols
+      reader.varint(); // rows
+      reader.varint(); // cell_width_px
+      reader.varint(); // cell_height_px
+      let launchMode = 0;
+      if (protocol === 22) {
+        // TerminalHello: requested_encoding, keybindings, and launch_mode
+        // were removed; only pixel_mouse remains.
+        expect(reader.bool()).toBe(false);
+      } else {
+        reader.varint(); // requested_encoding
+        reader.varint(); // keybindings
+        launchMode = reader.varint();
+      }
+      expect(reader.remaining).toBe(0);
+      onHello({ protocol, launchMode });
+      const response = welcome(protocol);
+      const writer = new BinWriter();
+      writer.variant(0);
+      writer.varint(response.version);
+      writer.varint(response.encoding ?? 1);
+      writer.option(response.error, (value) => writer.string(value));
+      socket.write(encodeFrame(writer.toBuffer()));
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, resolve);
+  });
+  return socketPath;
+}
+
+async function startMessageServer(
+  onVariant: (variant: number, socket: net.Socket, reader: BinReader) => void,
+) {
+  const socketPath = path.join(
+    tmpdir(),
+    `herdr-gui-thin-messages-${process.pid}-${crypto.randomUUID()}.sock`,
+  );
+  const server = net.createServer((socket) => {
+    let input = Buffer.alloc(0);
+    socket.on("data", (chunk) => {
+      input = Buffer.concat([
+        input,
+        Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+      ]);
+      while (input.length >= 4) {
+        const length = input.readUInt32LE(0);
+        if (input.length < length + 4) return;
+        const reader = new BinReader(input.subarray(4, length + 4));
+        input = input.subarray(length + 4);
+        const variant = reader.variant();
+        onVariant(variant, socket, reader);
+        if (variant !== 0) continue;
+        const protocol = reader.varint();
+        const writer = new BinWriter();
+        writer.variant(0);
+        writer.varint(protocol);
+        writer.varint(1);
+        writer.option<string>(undefined, (value) => writer.string(value));
+        socket.write(encodeFrame(writer.toBuffer()));
+      }
+    });
+  });
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(socketPath, resolve);
+  });
+  return socketPath;
+}
+
+describe("Herdr thin-client protocol compatibility", () => {
+  test("supports verified legacy codecs and exact tagged protocol 22, not 21", () => {
+    expect(
+      [14, 15, 16, 17, 18, 19, 20, 21, 22].map(isSupportedHerdrProtocol),
+    ).toEqual([true, true, true, true, true, true, true, false, true]);
+    expect(isSupportedHerdrProtocol(13)).toBe(false);
+    // Protocols newer than 22 have an unknown wire layout and must fail
+    // loudly instead of mis-decoding.
+    expect(isSupportedHerdrProtocol(23)).toBe(false);
+    expect(isSupportedHerdrProtocol(999)).toBe(false);
+    for (const protocol of [13, 21, 23, 999, 17.5, 0x1_0000_0000, "22", null]) {
+      expect(() => assertSupportedHerdrProtocol(protocol)).toThrow(
+        "supports protocols 14-20 and 22",
+      );
+    }
+  });
+
+  for (const protocol of [14, 15, 16, 17, 18]) {
+    test(`waits for a successful protocol ${protocol} welcome`, async () => {
+      const seen: number[] = [];
+      const socketPath = await startHandshakeServer((requestedProtocol) => {
+        seen.push(requestedProtocol);
+        return { version: requestedProtocol };
+      });
+      const client = new ThinClient(socketPath, async () => protocol);
+
+      await client.connect(100, 30, {
+        launchMode: "terminal-attach",
+        encoding: 1,
+      });
+
+      expect(seen).toEqual([protocol]);
+      client.close();
+    });
+  }
+
+  test("maps the terminal-attach launch mode onto the negotiated protocol", async () => {
+    // Herdr 0.8.2 (protocol 20) renumbered ClientLaunchMode::TerminalAttach
+    // from 1 to 2 when AppDirectGraphics was inserted at index 1.
+    for (const [protocol, expectedLaunchMode] of [
+      [19, 1],
+      [20, 2],
+    ] as const) {
+      const seen: Array<{ protocol: number; launchMode: number }> = [];
+      const socketPath = await startHandshakeServer(
+        (requestedProtocol) => ({ version: requestedProtocol }),
+        () => undefined,
+        (hello) => seen.push(hello),
+      );
+      const client = new ThinClient(socketPath, async () => protocol);
+
+      await client.connect(100, 30, {
+        launchMode: "terminal-attach",
+        encoding: 1,
+      });
+
+      expect(seen).toEqual([{ protocol, launchMode: expectedLaunchMode }]);
+      client.close();
+    }
+  });
+
+  test("keeps the app launch mode at wire value 0 on newer protocols", async () => {
+    const seen: Array<{ protocol: number; launchMode: number }> = [];
+    const socketPath = await startHandshakeServer(
+      (requestedProtocol) => ({ version: requestedProtocol }),
+      () => undefined,
+      (hello) => seen.push(hello),
+    );
+    const client = new ThinClient(socketPath, async () => 20);
+
+    await client.connect(100, 30, { launchMode: "app", encoding: 1 });
+
+    expect(seen).toEqual([{ protocol: 20, launchMode: 0 }]);
+    client.close();
+  });
+
+  test("uses the TerminalHello layout on protocol 22", async () => {
+    const seen: Array<{ protocol: number; launchMode: number }> = [];
+    const socketPath = await startHandshakeServer(
+      (requestedProtocol) => ({ version: requestedProtocol }),
+      () => undefined,
+      (hello) => seen.push(hello),
+    );
+    const client = new ThinClient(socketPath, async () => 22);
+
+    await client.connect(100, 30, {
+      launchMode: "terminal-attach",
+      encoding: 1,
+    });
+
+    // The 6-field TerminalHello carries no launch mode at all.
+    expect(seen).toEqual([{ protocol: 22, launchMode: 0 }]);
+    client.close();
+  });
+
+  test("decodes terminal frames at the protocol 22 variant index", async () => {
+    const socketPath = await startMessageServer((variant, socket) => {
+      if (variant !== 5) return;
+      const writer = new BinWriter();
+      writer.variant(1); // ServerMessage::Terminal on protocol 22
+      writer.varint(7); // seq
+      writer.varint(100); // width
+      writer.varint(30); // height
+      writer.bool(true); // full
+      writer.bytes(Buffer.from("hello"));
+      socket.write(encodeFrame(writer.toBuffer()));
+    });
+    const client = new ThinClient(socketPath, async () => 22);
+    const terminal = new Promise<{
+      seq: number;
+      width: number;
+      height: number;
+      full: boolean;
+      bytes: Buffer;
+    }>((resolve) => client.once("terminal", resolve));
+
+    await client.connect(100, 30, { launchMode: "terminal-attach" });
+    client.attach("term_1", true);
+
+    expect(await terminal).toEqual({
+      seq: 7,
+      width: 100,
+      height: 30,
+      full: true,
+      bytes: Buffer.from("hello"),
+    });
+    client.close();
+  });
+
+  test("appends pixel_mouse to resize only on protocol 22", async () => {
+    const resizes: number[] = [];
+    const socketPath = await startMessageServer((variant, _socket, reader) => {
+      if (variant !== 3) return;
+      reader.varint(); // cols
+      reader.varint(); // rows
+      reader.varint(); // cell_width_px
+      reader.varint(); // cell_height_px
+      resizes.push(reader.bool() ? 1 : 0);
+    });
+    const client = new ThinClient(socketPath, async () => 22);
+
+    await client.connect(100, 30, { launchMode: "terminal-attach" });
+    client.resize(120, 40);
+    await Bun.sleep(10);
+
+    expect(resizes).toEqual([0]);
+    client.close();
+  });
+
+  test("rejects a welcome error instead of treating the socket as attached", async () => {
+    const socketPath = await startHandshakeServer((protocol) => ({
+      version: 16,
+      error: `client version ${protocol} is older than server version 16`,
+    }));
+    const client = new ThinClient(socketPath, async () => 14);
+
+    await expect(client.connect(100, 30)).rejects.toThrow(
+      "Herdr rejected thin-client protocol 14",
+    );
+  });
+
+  for (const protocol of [13, 21, 23, 999]) {
+    test(`rejects protocol ${protocol} before opening a thin socket`, async () => {
+      const client = new ThinClient("/missing.sock", async () => protocol);
+      await expect(client.connect(100, 30)).rejects.toThrow(
+        `Herdr protocol ${protocol} is not supported`,
+      );
+    });
+    test(`rejects unsupported Welcome protocol ${protocol}`, async () => {
+      const socketPath = await startHandshakeServer(() => ({
+        version: protocol,
+      }));
+      const client = new ThinClient(socketPath, async () => 22);
+      client.on("error", () => undefined);
+      await expect(client.connect(100, 30)).rejects.toThrow(
+        `Herdr protocol ${protocol} is not supported`,
+      );
+      expect(client.isClosed).toBe(true);
+    });
+  }
+
+  test("rejects a supported but mismatched Welcome protocol", async () => {
+    const socketPath = await startHandshakeServer(() => ({ version: 20 }));
+    const client = new ThinClient(socketPath, async () => 22);
+    await expect(client.connect(100, 30)).rejects.toThrow(
+      "welcomed protocol 20, expected 22",
+    );
+  });
+
+  test("requires TerminalAnsi encoding in protocol 22 Welcome", async () => {
+    const socketPath = await startHandshakeServer(() => ({
+      version: 22,
+      encoding: 0,
+    }));
+    const client = new ThinClient(socketPath, async () => 22);
+    await expect(client.connect(100, 30)).rejects.toThrow(
+      "unsupported encoding 0",
+    );
+  });
+
+  test("rejects an oversized frame before accepting a coalesced Welcome", async () => {
+    const socketPath = await startMessageServer((variant, socket) => {
+      if (variant !== 0) return;
+      const header = Buffer.alloc(4);
+      header.writeUInt32LE(32 * 1024 * 1024 + 1);
+      socket.write(header);
+    });
+    const client = new ThinClient(socketPath, async () => 22);
+    client.on("error", () => undefined);
+    await expect(client.connect(100, 30)).rejects.toThrow("oversized frame");
+    expect(client.isClosed).toBe(true);
+  });
+
+  test("does not open a socket when closed during protocol resolution", async () => {
+    let resolveProtocol!: (protocol: number) => void;
+    const protocol = new Promise<number>((resolve) => {
+      resolveProtocol = resolve;
+    });
+    let connections = 0;
+    const socketPath = await startHandshakeServer(
+      (requestedProtocol) => ({ version: requestedProtocol }),
+      () => {
+        connections += 1;
+      },
+    );
+    const client = new ThinClient(socketPath, () => protocol);
+
+    const connecting = client.connect(100, 30);
+    client.close();
+    resolveProtocol(17);
+
+    await expect(connecting).rejects.toThrow("thin client is closed");
+    await Bun.sleep(10);
+    expect(connections).toBe(0);
+  });
+
+  test("sends the one-time terminal attach transition only once", async () => {
+    const variants: number[] = [];
+    const socketPath = await startMessageServer((variant, socket) => {
+      variants.push(variant);
+      if (variant === 5 && variants.filter((value) => value === 5).length > 1) {
+        const writer = new BinWriter();
+        writer.variant(4);
+        writer.option("client is no longer pending terminal mode", (value) =>
+          writer.string(value),
+        );
+        socket.write(encodeFrame(writer.toBuffer()));
+      }
+    });
+    const client = new ThinClient(socketPath, async () => 16);
+
+    await client.connect(100, 30, {
+      launchMode: "terminal-attach",
+      encoding: 1,
+    });
+    client.attach("term_1", true);
+    client.attach("term_1", true);
+    await Bun.sleep(10);
+
+    expect(variants).toEqual([0, 5]);
+    expect(() => client.attach("term_2", true)).toThrow(
+      "already attached to term_1",
+    );
+    client.close();
+  });
+
+  test("encodes both physical page keys with the PageKey source", async () => {
+    const scrolls: Array<{
+      source: number;
+      bytes: Buffer;
+      direction: number;
+      lines: number;
+    }> = [];
+    let resolveScrolls!: () => void;
+    const receivedScrolls = new Promise<void>((resolve) => {
+      resolveScrolls = resolve;
+    });
+    const socketPath = await startMessageServer((variant, _socket, reader) => {
+      if (variant !== 6) return;
+      const source = reader.variant();
+      const bytes = source === 1 ? reader.bytes() : Buffer.alloc(0);
+      const direction = reader.variant();
+      const lines = reader.varint();
+      expect(reader.option(() => reader.varint())).toBeNull();
+      expect(reader.option(() => reader.varint())).toBeNull();
+      expect(reader.u8()).toBe(0);
+      scrolls.push({ source, bytes, direction, lines });
+      if (scrolls.length === 2) resolveScrolls();
+    });
+    const client = new ThinClient(socketPath, async () => 17);
+
+    await client.connect(100, 30, {
+      launchMode: "terminal-attach",
+      encoding: 1,
+    });
+    client.scroll("up", 28, null, null, "page-key");
+    client.scroll("down", 17, null, null, "page-key");
+    await receivedScrolls;
+
+    expect(scrolls).toEqual([
+      {
+        source: 1,
+        bytes: Buffer.from([0x1b, 0x5b, 0x35, 0x7e]),
+        direction: 0,
+        lines: 28,
+      },
+      {
+        source: 1,
+        bytes: Buffer.from([0x1b, 0x5b, 0x36, 0x7e]),
+        direction: 1,
+        lines: 17,
+      },
+    ]);
+    client.close();
+  });
+
+  test("decodes Herdr clipboard messages separately from terminal frames", async () => {
+    const clipboardData = "cmVtb3RlIGNvcHk=";
+    const socketPath = await startMessageServer((variant, socket) => {
+      if (variant !== 5) return;
+      const writer = new BinWriter();
+      writer.variant(6);
+      writer.string(clipboardData);
+      socket.write(encodeFrame(writer.toBuffer()));
+    });
+    const client = new ThinClient(socketPath, async () => 17);
+    const clipboard = new Promise<{ data: string }>((resolve) =>
+      client.once("clipboard", resolve),
+    );
+
+    await client.connect(100, 30, {
+      launchMode: "terminal-attach",
+      encoding: 1,
+    });
+    client.attach("term_1", true);
+
+    expect(await clipboard).toEqual({ data: clipboardData });
+    client.close();
+  });
+});

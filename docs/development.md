@@ -1,208 +1,49 @@
-# Local development
+# Development
 
-Work from the `herdr-world` repository root:
-
-```bash
-cd /path/to/herdr-world
-```
-
-## Quick start
-
-Herdr World is a client of a running Herdr server. Start or attach to the normal
-Herdr session first:
+Herdr World uses Bun 1.4.1, React/Vite and a Bun server. Herdr is an external runtime.
 
 ```bash
-herdr status server
-herdr session list
-herdr
+bun install --frozen-lockfile
 ```
 
-The active bridge baseline is Herdr `v0.8.2` or newer reporting terminal protocol
-`20` exactly. Protocol 19, protocol 21, missing protocol, and invalid Herdr
-versions are rejected before terminal attach; the error is intentionally bounded
-and does not echo untrusted version text.
-
-The last command is only needed when the server/session is not already
-running. It must leave the default socket at:
-
-```text
-~/.config/herdr/herdr.sock
-```
-
-Then start the web development stack from this repository:
+Start a local Herdr server, then run these in separate terminals:
 
 ```bash
-npm run dev:local
+bun run dev:server
+bun run dev:web
 ```
 
-This command:
+Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the World
+service at <http://127.0.0.1:8787>. To use explicit Herdr sockets or SSH, pass service
+options after the workspace command or configure a profile in the UI.
 
-1. Reuses a healthy bridge on `127.0.0.1:8787`, or starts one with
-   `scripts/run-bridge.sh`.
-2. Checks the local Herdr socket before starting a new bridge.
-3. Builds the bridge or static web assets only when the expected local build
-   outputs are missing.
-4. Starts the Vite frontend and points its `/api` and `/ws` proxy at the
-   bridge.
-
-Open the bridge URL for the complete app, including the production-rendered
-Office surface:
-
-```text
-http://127.0.0.1:8787
-```
-
-The command also starts Vite for frontend hot reload. Vite normally uses
-`http://127.0.0.1:5173`; if that port is occupied it reports the next port,
-such as `5174`. The bridge URL remains the canonical full-app URL.
-
-Stop the foreground Vite process with `Ctrl-C`; a bridge started by
-`dev:local` is stopped with it. An already-running bridge is left untouched.
-
-For the supervised one-command workflow, use `npm run dev`. It keeps the
-bridge and Vite on loopback by default, waits for a healthy
-`/api/capabilities` response before starting Vite, proxies `/api` and `/ws`,
-and terminates both child processes when either exits. It builds a missing
-bridge binary and uses the stable socket path unless `HERDR_SOCKET_PATH` or a
-bridge argument overrides it. Address variables are namespaced as
-`HERDR_WEB_BRIDGE_HOST`, `HERDR_WEB_BRIDGE_PORT`, `HERDR_WEB_DEV_HOST`, and
-`HERDR_WEB_DEV_PORT`; `dev:local` remains the reuse-existing-bridge workflow.
-
-The optional Settings → Terminal → Screen-reader text control is off by
-default. When enabled, each terminal exposes only a bounded, debounced plain-
-text mirror of its visible active viewport, including rows currently visible
-while the terminal is scrolled into scrollback; it does not publish unbounded
-terminal history, hidden cells, or terminal output to a bridge capability or
-server endpoint.
-Desktop IME preedit remains local to the browser and canceled composition is
-discarded before terminal input is sent.
-
-## What must be running
-
-| Layer | Required | Purpose | Default endpoint |
-| --- | --- | --- | --- |
-| Herdr server/session | Yes | Owns workspaces, tabs, panes, agents, and terminals | `~/.config/herdr/herdr.sock` |
-| `herdr-world-bridge` | Yes | Converts browser HTTP/WebSocket traffic to Herdr protocol traffic | `http://127.0.0.1:8787` |
-| Vite frontend | Only for HMR | Serves current React/TypeScript source during development | `http://127.0.0.1:5173` or next free port |
-| OTEL/Prometheus stack | Optional | Supplies the Office `Economy` metrics board | Prometheus `http://127.0.0.1:9101` |
-
-Herdr session data and the live Office roster do not depend on OTEL. If the
-telemetry stack is absent, the Office metrics board reports unavailable while
-the Herdr state and Office rooms remain usable.
-
-## Manual startup
-
-Use two terminals when debugging a layer independently:
+## Verification
 
 ```bash
-# Terminal 1: from herdr-world/
-scripts/run-bridge.sh
-
-# Terminal 2: from herdr-world/
-npm run dev:web
+bun run typecheck:quick       # source types without regenerating embedded assets
+bun test <path>               # focused Bun test
+bun run test:quick            # non-Chromium suite
+CHROME_BIN=/path/to/chromium bun run test:browser
+bun run build:site            # landing page/tutorial
+bun run check                 # complete PR candidate
 ```
 
-For the simplest no-HMR run, build once and open the bridge directly:
+`bun run check` validates dependency notices, formatting, lint, all types/tests,
+production frontend/server builds and OpenSpec contracts. Generated output belongs in
+ignored directories and must not be committed.
 
-```bash
-npm run build
-scripts/run-bridge.sh
-```
+## Architecture while developing
 
-To target a named Herdr session:
+The service owns connection profiles and isolated runtimes. Global RPC methods such as
+`connections.*` and `world.snapshot` do not carry a focused connection. Every
+downstream Herdr operation carries both `connection_id` and
+`connection_generation`. Keep aggregate observation read-only; send terminal,
+resource and mutation work through the qualified focused-runtime path.
 
-```bash
-HERDR_SESSION=my-session scripts/run-bridge.sh
-```
+See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the
+[knowledge map](knowledge-map.md).
 
-To target an explicit socket:
-
-```bash
-HERDR_SOCKET_PATH=/absolute/path/to/herdr.sock scripts/run-bridge.sh
-```
-
-## Reporting agent task summaries
-
-A harness or hook running inside an active Herdr agent pane can publish a
-bounded status line for Office callouts:
-
-```bash
-herdr-world task-summary "Implementing semantic Office targets"
-herdr-world task-summary "Running browser shard 2/4" --ttl-ms 300000
-herdr-world task-summary --clear
-```
-
-The command talks directly to Herdr and does not start, stop, or restart the
-browser bridge. It uses `HERDR_PANE_ID` by default; `--pane ID` and
-`--session NAME` select an explicit target. New reports require an active
-`agent_session` and are bound to its agent and metadata source so stale harness
-state can be retired by Herdr. Clearing remains available after an agent exits.
-
-Summaries default to a 900,000 ms (15-minute) TTL; `--ttl-ms` accepts 1 through
-86,400,000 ms (24 hours). Input whitespace is normalized, output is capped at
-160 Unicode characters, and obvious bearer tokens, credential assignments,
-and common secret-key shapes are replaced with `[redacted]`. This is a bounded
-safety filter, not permission to include prompts, terminal output, credentials,
-or other secrets. The success result reports only the pane, operation, and TTL,
-not the summary text.
-
-Herdr World reads the existing `task_summary` pane-metadata token into browser
-snapshots. Herdr's `pane.updated` event refreshes the snapshot after reports,
-clears, and TTL expiry; no additional HTTP route or upstream protocol field is
-used.
-
-## Optional Office telemetry
-
-The Office `Economy` board can read from any operator-managed Prometheus-
-compatible HTTP API. The telemetry service is optional and is not required for
-Herdr World sessions, the live Office roster, or room interactions. Herdr World
-does not assume ownership of the collector, storage, dashboards, or their
-deployment lifecycle.
-
-When a Prometheus-compatible service is available, restart the Herdr World
-bridge with its API URL:
-
-```bash
-cd /path/to/herdr-world
-# Stop an existing bridge on 8787 first if dev:local reports that it is healthy.
-HERDR_WORLD_OTEL_PROMETHEUS_URL=http://127.0.0.1:9101 npm run dev:local
-```
-
-`dev:local` deliberately reuses a healthy existing bridge, so it cannot apply
-new bridge environment variables to a process that is already running.
-
-The URL above is only an example. Use the endpoint exposed by the telemetry
-deployment in your environment; OTLP receiver, log-storage, and dashboard
-endpoints are outside the Herdr World startup contract.
-
-To configure the Office provider without restarting the bridge, open Herdr World
-Settings, choose `Office`, and save the Prometheus URL. An invalid URL is
-reported through the Office provider health state; correcting it applies the
-configuration again and returns the provider to its available state. The
-setting is browser-local and scoped to the selected bridge profile.
-
-## Fast diagnosis
-
-Check each layer in order:
-
-```bash
-herdr status server
-herdr session list
-curl -fsS http://127.0.0.1:8787/api/capabilities
-curl -fsS http://127.0.0.1:8787/api/snapshot
-```
-
-- No Herdr socket: start or attach to Herdr first.
-- Protocol/version incompatibility: check `curl -fsS http://127.0.0.1:8787/api/capabilities`; use Herdr `v0.8.2` or newer with terminal protocol `20`.
-- Bridge `502` from Vite: the bridge is not running on port `8787`.
-- Empty snapshot: the bridge is connected to the wrong Herdr socket/session.
-- Sessions visible but Office blank in Vite: use the bridge URL and inspect
-  the browser console; the Office E2E coverage asserts that the renderer
-  produces a live canvas.
-
-## Resize behavior
-
-Terminal rendering still refits on the next animation frame while a pane or
-Office conversation is resized. Browser-to-bridge terminal resize messages
-are coalesced to the latest cell dimensions and capped at one message per
-50 ms, preventing rapid layout/output feedback from stalling the page.
+The optional Office Economy provider is service-owned. For local testing, set
+`HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the Office metrics dialog;
+do not add browser-to-Prometheus requests. The provider intentionally accepts only a
+base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-office-metrics).

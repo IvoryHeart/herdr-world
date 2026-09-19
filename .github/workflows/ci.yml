@@ -1,109 +1,28 @@
 name: CI
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+    pull_request:
+    # Prepare Release uses this explicit dispatch because events created with its
+    # GITHUB_TOKEN do not start other workflows automatically.
+    workflow_dispatch:
 
 permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    contents: read
 
 jobs:
-  launchd:
-    name: macOS launchd plugin lifecycle (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-15
-          - arch: x86_64
-            runner: macos-15-intel
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-      - name: Exercise the real launchd plugin lifecycle
-        env:
-          HERDR_WORLD_REAL_LAUNCHD: "1"
-        run: node --test scripts/herdr-world-plugin.test.mjs
-
-  check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-about@0.9.2
-      - name: Install repository check dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes ripgrep
-      - name: Install root dependencies
-        run: npm ci
-      - name: Install web dependencies
-        run: npm ci --prefix web
-      - name: Run complete non-live checks
-        run: npm run check
-      - name: Run independence audit
-        run: npm run test:independence
-      - uses: taiki-e/install-action@cargo-audit
-      - name: Run dependency and secret security checks
-        run: npm run test:security
-
-  browser:
-    name: Browser shard ${{ matrix.shard }}/4
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            web/package-lock.json
-      - name: Install root dependencies
-        run: npm ci
-      - name: Install web dependencies
-        run: npm ci --prefix web
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Run test-level browser shard
-        run: >-
-          npm run test:e2e --
-          --fully-parallel
-          --workers=1
-          --shard=${{ matrix.shard }}/4
-          --fail-on-flaky-tests
-      - name: Upload Playwright diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-diagnostics-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
-          path: .scratch/playwright
-          if-no-files-found: ignore
+    validate:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.1"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - run: bun run format:check
+            - run: bun run lint
+            - run: bun run typecheck
+            - run: bun run build:site
+            - run: bun run test

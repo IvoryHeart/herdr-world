@@ -1,10 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "bun:test";
+
+const it = test;
 import { OFFICE_PRESENTATION_BOUNDS } from "./herdrOfficeProjection";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import { resolveOfficeLayout } from "./officeGeometry";
 import { officeSceneSignature } from "./officeSceneSignature";
 
-function projection(generatedAt: number, working: number): HerdrOfficeProjection {
+function projection(
+  generatedAt: number,
+  working: number,
+): HerdrOfficeProjection {
   return {
     version: 1,
     generatedAt,
@@ -22,8 +27,6 @@ function projection(generatedAt: number, working: number): HerdrOfficeProjection
       compatibleHosts: 0,
       connectingHosts: 0,
       staleHosts: 0,
-      incompatibleHosts: 0,
-      disabledHosts: 0,
       observedWorkspaces: 0,
       observedDesks: 0,
       observedAgents: working,

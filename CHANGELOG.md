@@ -1,34 +1,148 @@
 # Changelog
 
-This changelog records Herdr World releases and downstream changes. Each release identifies the
-exact [Herdr Web](https://github.com/kcosr/herdr-web) baseline from which it was derived; Herdr
-Web's own release history remains in its upstream changelog.
+This changelog records Herdr World releases and downstream changes. Current releases identify the
+exact Roamgate source synchronization in [UPSTREAM.md](UPSTREAM.md); historical release entries
+retain their original Herdr Web lineage.
 
 ## [Unreleased]
 
 ### Breaking Changes
 
+- Replaced the Herdr Web/Rust/Capacitor application with one Bun-compiled Herdr
+  World service and responsive Web/PWA derived from Roamgate. Existing bridge
+  profiles, browser preferences and Roamgate state are not imported; native Android
+  packaging is not part of this foundation.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+
 ### Added
 
-- Added a simplified Network UI for connecting Herdr instances and allowing connections to the
-  current Herdr, with connection status, detected and copyable addresses, an optional memory-hard
-  password, reload-safe tab-scoped client sessions, readiness/rollback status, and progressively
-  disclosed exact host, page-origin, and destination permissions.
-  [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
+- Added UI-managed local and OpenSSH Herdr profiles with isolated runtimes,
+  generations, retries and failure states behind one same-origin World application.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Added a bounded aggregate topology path and connection-qualified WorldObject for
+  observing several Herdr hosts without allowing stale or retired data to control
+  them.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Added native Spaces, Office, Tree and Graph views with canonical navigation,
+  qualified terminal handoff and Files, Changes and Agent History routing.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Added optional service-owned Prometheus metrics for the Office Economy board,
+  with UI configuration, bounded fixed queries, provider health and no dependency
+  from core topology or terminals.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Added World-owned standalone archives, installer, user services and the
+  `ivoryheart.herdr-world` Herdr plugin for Linux, macOS and Windows.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Changed
 
+- Based the active application source on Roamgate commit
+  `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an
+  external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Restored the retained Pixi Office as the primary World surface and placed the
+  machine selector, Office/Spaces/Tree/Graph selector, selected-host/runtime
+  summary, Actions and Menu in that order in the existing application top bar,
+  removed the separate Visual Control Plane header, and retained the Spaces
+  workspace navigator, focused tabs and annotations as the common frame around
+  every view instead of duplicating Graph navigation. The shared workspace
+  navigator can now be hidden and restored from its stage-edge controls; Zen
+  mode removes it from the stage layout and reveals it as an overlay from a thin
+  left-edge target, parallel to the top bar.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Unified selected-agent identity with the shared Inspector in Office, Tree,
+  Graph and Spaces; placed Terminal first and made it the default for each new
+  terminal-capable selection, with one docked and up to five independently
+  movable/resizable full Inspectors that retain their own tabs and resources.
+  Office now defaults new installations to separate cascaded floating Inspectors,
+  persists a user's docked or floating choice in the common Menu, and keeps room
+  alignment, long-title and observability settings there instead of reserving
+  Office or Zen scene space. Explicit Dock in and Dock out actions remain available
+  without rearranging existing conversations.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Kept private development manifests at `0.0.0`; reviewed plugin versions now
+  provide tagged binary, archive and update identities at release time.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+
 ### Fixed
 
-- Allowed a shared bridge's own LAN page to authenticate without duplicating its URL under
-  advanced client-origin settings, while retaining explicit policy for pages served elsewhere.
-  [Herdr World PR #77](https://github.com/IvoryHeart/herdr-world/pull/77)
-- Reconciled an owned launchd or systemd service whose runtime record was lost, so changing the
-  plugin bind host or access policy can take effect instead of leaving an old loopback service
-  loaded and blocking restart.
-  [Herdr World PR #75](https://github.com/IvoryHeart/herdr-world/pull/75)
+- Prevented Inspector portal publication from entering a React render loop, made
+  whole-Inspector docking, swapping and identity/resource handoff atomic, removed
+  the duplicate actionable-agent card and redundant Open-in-Spaces control, and
+  kept World settings visible above Office, Tree and Graph.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Routed common-navigator and focused-tab selections into the same matching visual
+  Inspector, made ordinary A-to-B selection replace the docked conversation without
+  unexpectedly floating A or mixing its terminal identity with B, and kept the live
+  Office mounted while a newly admitted seat retries exact terminal focus.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Made exact pane focus an admission requirement for World Inspectors, retained
+  qualified docked and floating conversations through Spaces handoff while
+  transferring each live terminal between one visual or native presenter, and
+  raised a background floating
+  Inspector when any of its tabs or controls is used. Retained Inspectors now
+  reconcile current pane, agent and capability metadata and reset their resource
+  state when the qualified agent session changes.
+  Floating Inspectors can move through the lower desktop viewport while keeping
+  their title region recoverable, use a compact corner resize affordance without
+  shrinking its touch target, and leave compact Office roads and open floor as a
+  native two-axis touch-panning surface.
+  Office connectors now run from the agent centre to the Inspector's right edge
+  and curve in the actual direction, with desk fallback only when an agent
+  anchor is unavailable. A live floating Inspector can now be moved from its
+  profile header without terminal focus interrupting the drag, and exposes a
+  visible drag handle for pointer resizing while retaining precise keyboard
+  sizing. The docked overlay can also be repositioned, move and resize gestures
+  no longer steal terminal focus, and selected identity no longer appears in a
+  duplicate persistent Office badge. Mobile Office, Tree and Graph now keep
+  their shell-owned Inspector and Terminal, Files and Changes resources visible
+  instead of inheriting the hidden Spaces session slot, including while the
+  retained Inspector crosses into Spaces. The compact shell navigation now
+  controls that active World Inspector directly, including Files, Changes,
+  History and Terminal availability and active state, rather than opening a
+  second hidden Spaces Inspector.
+  Switching to Spaces now removes every visual Inspector presentation before
+  the native terminal mounts, so terminal sizing, mobile controls and resource
+  tabs use the native Spaces layout. Returning browser focus restores input only
+  to the terminal that previously held it, and stale lazy-loaded World assets
+  recover through the application's one-shot reload path. Narrow World
+  Inspectors now constrain the shared terminal owner to the real portal width,
+  keeping terminal reflow, the device-keyboard action and the shortcut launcher
+  visible and focusable on phones.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Preserved the complete managed-host candidate set and qualified selected,
+  focused, attention-requiring and detected-agent candidates with their parents
+  through the bounded aggregate transport, reserving each presented space's
+  highest-priority leaves before filling the host-wide pane budget so a dense
+  branch cannot starve another admitted branch. Exact topology coverage remains
+  available until each visual projection applies its own bound. Tree, Graph and
+  Office now retain their relevance priority and report exact host, space, desk
+  and leaf omissions even beyond service record limits. Shared task summaries are
+  bounded to 160 Unicode characters; inactive-host action checks are scoped to
+  their owning branches; obsolete Pixi initialization is cancelled during
+  StrictMode replay; and the Office metrics browser-test timeout race is removed.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Closed a retired terminal's selection with its Inspector instead of leaving an
+  orphan stale profile, and kept admitted Office room/seat `+` affordances visible
+  while transient endpoint admission disables their actions. Visual tab focus and
+  Office room mutations are now fenced to the exact selected host generation.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Enforced automatic same-authority browser admission across privileged HTTP and
+  WebSocket traffic with an exact loopback-proxy origin, isolated World's login
+  cookie, fenced cross-host World handoffs and all hidden-view actions, made
+  disconnected observations read-only, bundled deterministic dependency licence
+  texts, displayed the reviewed release version in the frontend, and admitted the
+  recognized pre-foundation launcher symlink during installer cutover.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Removed
+
+- Removed browser-to-bridge federation, remote World installations and the former
+  Host, Origin and cross-origin CSP configuration workflow.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Removed the Rust bridge, vendored Herdr compatibility crate, native Capacitor
+  Android build and inherited legacy service/preference migration paths.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ## [0.1.1] - 2026-09-01
 

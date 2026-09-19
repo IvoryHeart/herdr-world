@@ -1,61 +1,53 @@
 # Third-party notices
 
-Herdr World contains code and assets from the projects below. The repository
-history, lockfiles, and referenced manifests provide the exact version record.
+Herdr World contains code and assets from the projects below. Lockfiles and the exact
+upstream revision in [UPSTREAM.md](UPSTREAM.md) provide the version record.
 
-## Herdr Web
+## Roamgate
 
-Herdr World is derived from
-[`kcosr/herdr-web`](https://github.com/kcosr/herdr-web), licensed under the MIT
-License, Copyright (c) 2026 Kevin. The retained MIT terms are in the repository
-[`LICENSE`](LICENSE). The current synchronized revision is recorded in
-[`UPSTREAM.md`](UPSTREAM.md).
+The application foundation is derived from
+[`powerfooI/roamgate`](https://github.com/powerfooI/roamgate) at commit
+`81c506e6135f5f3b47f7042252ffdac0ec2bf679`, licensed under the MIT License,
+Copyright (c) 2026 Arthur. The retained MIT terms are in [LICENSE](LICENSE).
+Roamgate is source lineage, not a separately installed World dependency.
 
-## Herdr compatibility source
+## Claw-Empire character assets
 
-`vendor/herdr-compat` contains copied or adapted source from
-[`herdrdev/herdr`](https://github.com/herdrdev/herdr) v0.8.2 at commit
-`9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c`, licensed under Apache-2.0.
-The exact source paths, hashes, and local dispositions are recorded in
-[`vendor/herdr-compat/VENDOR-MANIFEST.toml`](vendor/herdr-compat/VENDOR-MANIFEST.toml).
-The license text is retained in
-[`third_party/licenses/Apache-2.0.txt`](third_party/licenses/Apache-2.0.txt).
-
-## Claw-Empire character assets and Office adaptations
-
-The character sprites in `web/public/world/characters` are copied from
+The character sprites under `web/public/world/characters` originate from
 [`GreenSheep01201/claw-empire`](https://github.com/GreenSheep01201/claw-empire)
-at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under
-Apache-2.0, Copyright 2026 GreenSheep01201 (seowongil@gmail.com).
+at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under Apache-2.0,
+Copyright 2026 GreenSheep01201 (seowongil@gmail.com). The licence is retained in
+[`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt).
 
-The Office geometry and drawing TypeScript files are modified adaptations of
-the historical sources identified by hash in [`docs/world-assets.md`](docs/world-assets.md).
-Herdr World's TypeScript port and subsequent modifications are documented
-there as modified material. The Apache-2.0 text is retained in
-[`third_party/licenses/Apache-2.0.txt`](third_party/licenses/Apache-2.0.txt).
+## Nerd Fonts
 
-## PixiJS
+`web/src/assets/herdr-nerd-symbols.woff2` is a glyph-only derivative of
+[Nerd Fonts](https://github.com/ryanoasis/nerd-fonts). Its upstream licence set is
+retained in [`LICENSES/NERD-FONTS.txt`](LICENSES/NERD-FONTS.txt).
 
-World rendering uses PixiJS 8.3.4, licensed under the MIT License, Copyright
-(c) 2013-2023 Mathew Groves and Chad Engler. Its license is retained in
-[`third_party/licenses/PixiJS-MIT.txt`](third_party/licenses/PixiJS-MIT.txt)
-and alongside the shipped World assets.
+## Lobe Icons
 
-## JetBrains Mono Nerd Font
+Agent brand icons imported from `@lobehub/icons-static-svg` are provided by
+[Lobe Icons](https://github.com/lobehub/lobe-icons), Copyright (c) 2023 LobeHub,
+under the MIT License. See [`LICENSES/LOBE-ICONS.txt`](LICENSES/LOBE-ICONS.txt).
 
-The terminal includes `JetBrainsMonoNerdFontMono-Regular.woff2` as a fallback
-for box-drawing, symbol, and private-use glyphs. The font is licensed under the
-SIL Open Font License 1.1, Copyright 2020 The JetBrains Mono Project Authors.
-The copyright notice and full license are retained in
-[`web/public/fonts/OFL.txt`](web/public/fonts/OFL.txt) and shipped alongside
-the font.
+## Pi
 
-## Other dependencies
+`web/src/assets/pi-logo.svg` is adapted from the [Pi press kit](https://pi.dev/press-kit),
+which publishes its assets under the MIT License. See
+[`LICENSES/PI.txt`](LICENSES/PI.txt).
 
-JavaScript and Rust dependency versions are pinned by `package-lock.json`,
-`web/package-lock.json`, `bridge/Cargo.lock`, and
-`vendor/herdr-compat/Cargo.lock`. The complete production npm and planned
-desktop Cargo closures, their selected licences, copyright notices, and full
-licence texts are checked in under
-[`third_party/dependencies`](third_party/dependencies). Release assembly fails
-when those generated inventories drift from the resolved dependency graphs.
+## JavaScript dependencies
+
+The complete platform-independent JavaScript package inventory and declared licence
+identifiers are generated from the pinned Bun lockfile in
+[`DEPENDENCY_NOTICES.md`](DEPENDENCY_NOTICES.md). Copyright, permission and notice
+texts shipped by those package payloads are reproduced in
+[`DEPENDENCY_LICENSES.md`](DEPENDENCY_LICENSES.md). Package authors retain their own
+copyrights and licence terms.
+
+## Trademarks
+
+Herdr, Pi, Codex, Claude, Gemini, Kimi, Grok, and other product names and logos are
+trademarks of their respective owners. Their appearance identifies compatible tools
+and does not imply endorsement of Herdr World.

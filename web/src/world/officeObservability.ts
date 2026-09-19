@@ -1,9 +1,24 @@
-import type { BridgeRuntime } from "../bridge";
-import {
-  fetchObservabilitySnapshot,
-  type ObservabilityHealth,
-  type ObservabilityExtensionResponse,
-} from "../observability";
+export type ObservabilityHealth = "available" | "degraded" | "unavailable";
+
+export type ObservabilityExtensionResponse = {
+  descriptor: {
+    [key: string]: unknown;
+    provider_id: string;
+    health: ObservabilityHealth;
+    observed_at: number;
+  };
+  snapshot: {
+    [key: string]: unknown;
+    envelopes: Array<{
+      [key: string]: unknown;
+      payload: {
+        [key: string]: unknown;
+        namespace: string;
+        data: unknown;
+      };
+    }>;
+  };
+};
 
 export type OfficeObservabilityModel = {
   provider: string;
@@ -33,6 +48,29 @@ export type OfficeObservability = {
   totalUsage: number;
 };
 
+export type OfficeObservabilityConfiguration = {
+  providerId: string;
+  configured: boolean;
+  endpoint: string | null;
+  source: "environment" | "settings" | "none";
+  health: ObservabilityHealth;
+  healthReason: "provider_query_failed" | null;
+  observedAt: number;
+  lastSuccessAt: number | null;
+};
+
+type FetchLike = (
+  input: string | URL | Request,
+  init?: RequestInit,
+) => Promise<Response>;
+
+const OBSERVABILITY_CONFIG_PATH = "/api/world/observability/configuration";
+const OBSERVABILITY_SNAPSHOT_PATH = "/api/world/observability/snapshot";
+const MAX_MODELS = 128;
+const MAX_TEXT_LENGTH = 160;
+const MAX_USAGE_FIELDS = 32;
+const MAX_METRIC_VALUE = 1e18;
+
 export const EMPTY_OFFICE_OBSERVABILITY: OfficeObservability = {
   health: "unavailable",
   providerId: null,
@@ -47,31 +85,125 @@ export const EMPTY_OFFICE_OBSERVABILITY: OfficeObservability = {
 };
 
 export async function fetchOfficeObservability(
-  runtimes: readonly BridgeRuntime[],
+  fetchImpl: FetchLike = fetch,
 ): Promise<OfficeObservability> {
-  const candidates = runtimes.filter((runtime) =>
-    runtime.capabilities?.observability !== undefined &&
-    runtime.capabilityState === "ready" &&
-    runtime.canConnect,
-  );
-  if (candidates.length === 0) {
-    return EMPTY_OFFICE_OBSERVABILITY;
-  }
+  const response = await fetchImpl(OBSERVABILITY_SNAPSHOT_PATH, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(7_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return parseOfficeObservability(await response.json());
+}
 
-  const results = await Promise.allSettled(
-    candidates.map(async (runtime) => fetchObservabilitySnapshot(runtime.httpUrl)),
-  );
-  return aggregateOfficeObservability(results.map((result) =>
-    result.status === "fulfilled"
-      ? { response: result.value }
-      : { failed: true },
-  ));
+export async function fetchOfficeObservabilityConfiguration(
+  fetchImpl: FetchLike = fetch,
+): Promise<OfficeObservabilityConfiguration> {
+  const response = await fetchImpl(OBSERVABILITY_CONFIG_PATH, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(7_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return parseOfficeObservabilityConfiguration(await response.json());
+}
+
+export async function updateOfficeObservabilityConfiguration(
+  endpoint: string | null,
+  fetchImpl: FetchLike = fetch,
+): Promise<OfficeObservabilityConfiguration> {
+  const response = await fetchImpl(OBSERVABILITY_CONFIG_PATH, {
+    method: "PUT",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ prometheus_url: endpoint }),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new Error(await responseError(response));
+  return parseOfficeObservabilityConfiguration(await response.json());
+}
+
+export function parseOfficeObservability(value: unknown): OfficeObservability {
+  const data = requiredRecord(value, "Office observability response");
+  const rawModels = data.models;
+  if (!Array.isArray(rawModels) || rawModels.length > MAX_MODELS) {
+    throw new Error("Office observability model list is invalid");
+  }
+  const models = rawModels.map((raw) => {
+    const model = requiredRecord(raw, "Office observability model");
+    const usageRecord = requiredRecord(
+      model.usage,
+      "Office observability usage",
+    );
+    if (Object.keys(usageRecord).length > MAX_USAGE_FIELDS) {
+      throw new Error("Office observability usage is too large");
+    }
+    const usage: Record<string, number> = {};
+    for (const [name, amount] of Object.entries(usageRecord)) {
+      if (!isSafeText(name, 64) || !safeMetric(amount)) {
+        throw new Error("Office observability usage is invalid");
+      }
+      usage[name] = amount;
+    }
+    return {
+      provider: requiredText(model.provider, "provider"),
+      model: requiredText(model.model, "model"),
+      usage,
+      costUsd: nullableMetric(model.costUsd, "cost"),
+      costKind: model.costKind === "reported" ? ("reported" as const) : null,
+    };
+  });
+  return {
+    health: parseHealth(data.health),
+    providerId: nullableText(data.providerId, "provider"),
+    sourceCount: safeCount(data.sourceCount, "source count"),
+    configuredSourceCount: safeCount(
+      data.configuredSourceCount,
+      "configured source count",
+    ),
+    failedSourceCount: safeCount(data.failedSourceCount, "failed source count"),
+    observedAt: safeCount(data.observedAt, "observation time"),
+    windowSeconds:
+      data.windowSeconds === null
+        ? null
+        : safeCount(data.windowSeconds, "window"),
+    models,
+    totalCostUsd: nullableMetric(data.totalCostUsd, "total cost"),
+    totalUsage: safeMetric(data.totalUsage)
+      ? data.totalUsage
+      : invalid("Office observability total usage is invalid"),
+  };
+}
+
+export function parseOfficeObservabilityConfiguration(
+  value: unknown,
+): OfficeObservabilityConfiguration {
+  const data = requiredRecord(value, "Office observability configuration");
+  const source = data.source;
+  if (source !== "environment" && source !== "settings" && source !== "none") {
+    throw new Error("Office observability configuration source is invalid");
+  }
+  if (typeof data.configured !== "boolean") {
+    throw new Error("Office observability configuration state is invalid");
+  }
+  return {
+    providerId: requiredText(data.providerId, "provider"),
+    configured: data.configured,
+    endpoint: nullableText(data.endpoint, "endpoint", 2_048),
+    source,
+    health: parseHealth(data.health),
+    healthReason:
+      data.healthReason === "provider_query_failed"
+        ? "provider_query_failed"
+        : null,
+    observedAt: safeCount(data.observedAt, "observation time"),
+    lastSuccessAt:
+      data.lastSuccessAt === null
+        ? null
+        : safeCount(data.lastSuccessAt, "last success time"),
+  };
 }
 
 export function aggregateOfficeObservability(
   results: ReadonlyArray<
-    | { response: ObservabilityExtensionResponse }
-    | { failed: true }
+    { response: ObservabilityExtensionResponse } | { failed: true }
   >,
 ): OfficeObservability {
   const modelMap = new Map<string, OfficeObservabilityModel>();
@@ -107,9 +239,10 @@ export function aggregateOfficeObservability(
       const data = record(envelope.payload.data);
       const rawWindow = data.window_seconds;
       if (typeof rawWindow === "number" && Number.isFinite(rawWindow)) {
-        windowSeconds = windowSeconds === null
-          ? rawWindow
-          : Math.max(windowSeconds, rawWindow);
+        windowSeconds =
+          windowSeconds === null
+            ? rawWindow
+            : Math.max(windowSeconds, rawWindow);
       }
       const rawModels = Array.isArray(data.models) ? data.models : [];
       for (const rawModel of rawModels) {
@@ -129,18 +262,26 @@ export function aggregateOfficeObservability(
         if (model.costUsd !== null) {
           existing.costUsd = (existing.costUsd ?? 0) + model.costUsd;
         }
-        existing.costKind = mergeOfficeCostKind(existing.costKind, model.costKind);
+        existing.costKind = mergeOfficeCostKind(
+          existing.costKind,
+          model.costKind,
+        );
       }
     }
   }
 
-  const models = [...modelMap.values()].sort((left, right) =>
-    left.provider.localeCompare(right.provider) || left.model.localeCompare(right.model),
+  const models = [...modelMap.values()].sort(
+    (left, right) =>
+      left.provider.localeCompare(right.provider) ||
+      left.model.localeCompare(right.model),
   );
   const totalCostUsd = models.some(({ costUsd }) => costUsd !== null)
     ? models.reduce((total, { costUsd }) => total + (costUsd ?? 0), 0)
     : null;
-  const totalUsage = models.reduce((total, model) => total + officeModelUsageTotal(model.usage), 0);
+  const totalUsage = models.reduce(
+    (total, model) => total + officeModelUsageTotal(model.usage),
+    0,
+  );
   return {
     health: degraded ? "degraded" : available ? "available" : "unavailable",
     providerId,
@@ -174,22 +315,28 @@ function parseModel(value: unknown): OfficeObservabilityModel | null {
     provider,
     model,
     usage,
-    costUsd: typeof rawCost === "number" && Number.isFinite(rawCost) && rawCost >= 0
-      ? rawCost
-      : null,
+    costUsd:
+      typeof rawCost === "number" && Number.isFinite(rawCost) && rawCost >= 0
+        ? rawCost
+        : null,
     costKind: parseOfficeCostKind(data.cost_kind),
   };
 }
 
 function parseOfficeCostKind(value: unknown): OfficeCostKind | null {
   const kind = safeText(value);
-  return kind === "reported" || kind === "estimated" || kind === "estimated_fallback" ||
-      kind === "estimated_partial"
+  return kind === "reported" ||
+    kind === "estimated" ||
+    kind === "estimated_fallback" ||
+    kind === "estimated_partial"
     ? kind
     : null;
 }
 
-function mergeOfficeCostKind(left: OfficeCostKind | null, right: OfficeCostKind | null) {
+function mergeOfficeCostKind(
+  left: OfficeCostKind | null,
+  right: OfficeCostKind | null,
+) {
   if (left === null) return right;
   if (right === null || left === right) return left;
   return "mixed" as const;
@@ -206,7 +353,7 @@ export function officeModelUsageTotal(usage: Record<string, number>) {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : {};
 }
 
@@ -214,7 +361,10 @@ function safeText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export function formatOfficeCost(value: number | null, kind: OfficeCostKind | null = null) {
+export function formatOfficeCost(
+  value: number | null,
+  kind: OfficeCostKind | null = null,
+) {
   if (value === null) {
     return "—";
   }
@@ -238,8 +388,12 @@ export function formatOfficeUsage(value: number) {
   return Math.round(value).toString();
 }
 
-export function formatOfficeModelNames(models: readonly OfficeObservabilityModel[]) {
-  const names = models.slice(0, 3).map(({ model }) => formatOfficeModelName(model));
+export function formatOfficeModelNames(
+  models: readonly OfficeObservabilityModel[],
+) {
+  const names = models
+    .slice(0, 3)
+    .map(({ model }) => formatOfficeModelName(model));
   if (models.length > names.length) {
     names.push(`+${models.length - names.length}`);
   }
@@ -247,20 +401,107 @@ export function formatOfficeModelNames(models: readonly OfficeObservabilityModel
 }
 
 export function formatOfficeModelName(model: string) {
-  const name = model.split("/").at(-1) ?? model;
+  const segments = model.split("/");
+  const name = segments[segments.length - 1] ?? model;
   const parts = name.split("-");
-  const familyIndex = parts.findIndex((part) => /^(opus|sonnet|haiku)$/iu.test(part));
+  const familyIndex = parts.findIndex((part) =>
+    /^(opus|sonnet|haiku)$/iu.test(part),
+  );
   if (familyIndex >= 0) {
     const isVersionPart = (part: string) => /^\d{1,2}$/u.test(part);
     const afterFamily = parts.slice(familyIndex + 1).filter(isVersionPart);
     const beforeFamily = parts.slice(0, familyIndex).filter(isVersionPart);
-    const version = (afterFamily.length ? afterFamily : beforeFamily).slice(0, 2).join(".");
-    const family = parts[familyIndex].charAt(0).toUpperCase()
-      + parts[familyIndex].slice(1).toLowerCase();
+    const version = (afterFamily.length ? afterFamily : beforeFamily)
+      .slice(0, 2)
+      .join(".");
+    const family =
+      parts[familyIndex].charAt(0).toUpperCase() +
+      parts[familyIndex].slice(1).toLowerCase();
     return [family, version].filter(Boolean).join(" ");
   }
   return name
     .replace(/^claude-/u, "")
     .replace(/^gpt-[\d.-]+-/u, "")
     .replace(/^codex-/u, "");
+}
+
+async function responseError(response: Response) {
+  const fallback = `Office observability request failed: ${response.status}`;
+  try {
+    const text = (await response.text()).slice(0, 4_096);
+    const value = JSON.parse(text) as { error?: unknown };
+    return typeof value.error === "string" && value.error.trim()
+      ? value.error.trim().slice(0, 300)
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function parseHealth(value: unknown): ObservabilityHealth {
+  if (
+    value === "available" ||
+    value === "degraded" ||
+    value === "unavailable"
+  ) {
+    return value;
+  }
+  throw new Error("Office observability health is invalid");
+}
+
+function requiredRecord(value: unknown, label: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} is invalid`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function isSafeText(
+  value: unknown,
+  maximum = MAX_TEXT_LENGTH,
+): value is string {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    [...value].length <= maximum
+  );
+}
+
+function requiredText(value: unknown, label: string, maximum?: number) {
+  if (!isSafeText(value, maximum)) {
+    throw new Error(`Office observability ${label} is invalid`);
+  }
+  return value.trim();
+}
+
+function nullableText(value: unknown, label: string, maximum?: number) {
+  return value === null ? null : requiredText(value, label, maximum);
+}
+
+function safeMetric(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= MAX_METRIC_VALUE
+  );
+}
+
+function nullableMetric(value: unknown, label: string) {
+  if (value === null) return null;
+  if (!safeMetric(value)) {
+    throw new Error(`Office observability ${label} is invalid`);
+  }
+  return value;
+}
+
+function safeCount(value: unknown, label: string) {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    throw new Error(`Office observability ${label} is invalid`);
+  }
+  return value as number;
+}
+
+function invalid(message: string): never {
+  throw new Error(message);
 }
