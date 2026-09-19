@@ -1,16 +1,17 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { MoveDiagonal2 } from "lucide-react";
 import {
   clampFloatingTerminalGeometry,
   defaultFloatingTerminalGeometry,
+  floatingTerminalContainingViewport,
   moveFloatingTerminalPosition,
   resizeFloatingTerminalGeometry,
   type FloatingTerminalGeometry,
@@ -85,14 +86,30 @@ export default function WorldFloatingInspectorWindow({
     writeFloatingTerminalGeometry(worldLocalStorage, geometryId, geometry);
   }, [geometry, geometryId]);
 
+  useLayoutEffect(() => {
+    setGeometry((current) =>
+      clampFloatingTerminalGeometry(
+        current,
+        viewportSize(windowRef.current, current),
+      ),
+    );
+  }, []);
+
   useEffect(() => {
     const clampToViewport = () => {
       setGeometry((current) =>
-        clampFloatingTerminalGeometry(current, viewportSize()),
+        clampFloatingTerminalGeometry(
+          current,
+          viewportSize(windowRef.current, current),
+        ),
       );
     };
     window.addEventListener("resize", clampToViewport);
-    return () => window.removeEventListener("resize", clampToViewport);
+    window.visualViewport?.addEventListener("resize", clampToViewport);
+    return () => {
+      window.removeEventListener("resize", clampToViewport);
+      window.visualViewport?.removeEventListener("resize", clampToViewport);
+    };
   }, []);
 
   useEffect(() => {
@@ -159,7 +176,7 @@ export default function WorldFloatingInspectorWindow({
             current.geometry,
             deltaX,
             deltaY,
-            viewportSize(),
+            viewportSize(element, current.geometry),
             current.geometry,
           ),
         });
@@ -170,7 +187,7 @@ export default function WorldFloatingInspectorWindow({
           current.geometry,
           deltaX,
           deltaY,
-          viewportSize(),
+          viewportSize(element, current.geometry),
         ),
       );
     };
@@ -199,7 +216,7 @@ export default function WorldFloatingInspectorWindow({
           current,
           delta.x,
           delta.y,
-          viewportSize(),
+          viewportSize(windowRef.current, current),
           current,
         ),
       });
@@ -297,7 +314,12 @@ export default function WorldFloatingInspectorWindow({
       return;
     }
     setGeometry(
-      resizeFloatingTerminalGeometry(current, delta.x, delta.y, viewportSize()),
+      resizeFloatingTerminalGeometry(
+        current,
+        delta.x,
+        delta.y,
+        viewportSize(windowRef.current, current),
+      ),
     );
   };
 
@@ -329,15 +351,28 @@ export default function WorldFloatingInspectorWindow({
         title="Drag to resize Inspector; use arrow keys for precise sizing"
         onPointerDown={(event) => beginInteraction("resizing", event)}
         onKeyDown={(event) => nudge("resizing", event)}
-      >
-        <MoveDiagonal2 size={19} strokeWidth={2.4} aria-hidden="true" />
-      </button>
+      ></button>
     </section>
   );
 }
 
-function viewportSize() {
-  return { width: window.innerWidth, height: window.innerHeight };
+function viewportSize(
+  element?: HTMLElement | null,
+  geometry?: FloatingTerminalGeometry,
+) {
+  const visualViewport = window.visualViewport;
+  const viewport = {
+    width: visualViewport?.width ?? window.innerWidth,
+    height: visualViewport?.height ?? window.innerHeight,
+    offsetLeft: visualViewport?.offsetLeft ?? 0,
+    offsetTop: visualViewport?.offsetTop ?? 0,
+  };
+  if (!element || !geometry) return viewport;
+  const rendered = element.getBoundingClientRect();
+  return floatingTerminalContainingViewport(viewport, {
+    left: rendered.left - geometry.left,
+    top: rendered.top - geometry.top,
+  });
 }
 
 function arrowDelta(key: string, amount: number) {

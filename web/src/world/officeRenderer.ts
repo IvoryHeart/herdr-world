@@ -287,6 +287,10 @@ export async function createOfficeRenderer(
   canvas.setAttribute("aria-hidden", "true");
   canvas.setAttribute("data-office-canvas", "true");
   canvas.style.imageRendering = "auto";
+  // Pixi disables every native touch gesture on its event target. Office owns
+  // selection through taps, but empty floor and roads must remain a natural
+  // two-axis pan surface for the surrounding logical-canvas scroller.
+  canvas.style.touchAction = "pan-x pan-y";
   diagnostics.canvases = document.querySelectorAll(
     "canvas[data-office-canvas='true']",
   ).length;

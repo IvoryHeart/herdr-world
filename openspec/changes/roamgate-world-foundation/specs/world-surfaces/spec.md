@@ -156,6 +156,9 @@ The existing Spaces connection selector SHALL remain the profile-management surf
 views SHALL not introduce a second host catalogue and SHALL persistently identify the selected
 operational host and its state. Checkpoint Tree or Graph implementations SHALL not be described as
 complete until their view-specific acceptance passes.
+Office room alignment, long-title treatment, Inspector presentation and optional observability
+configuration SHALL live in the common settings menu on desktop, compact and Zen layouts. Office
+SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those infrequent controls.
 
 #### Scenario: Browser history across views
 
@@ -484,11 +487,10 @@ NOT force unrelated rows to that width.
 
 #### Scenario: Configure an optional observation provider
 
-- **WHEN** the user opens the World settings from any native view or the Office metrics shortcut
-  and saves a supported credential-free provider URL
+- **WHEN** the user opens the World settings from any native view and saves a supported
+  credential-free provider URL
 - **THEN** the World service validates and applies it, reports bounded health and updates the
-  relevant Office boards without exposing provider access or credentials to the browser, and both
-  entry points edit the same service-owned setting
+  relevant Office boards without exposing provider access or credentials to the browser
 
 ### Requirement: Office state and room operations
 
@@ -503,7 +505,8 @@ in the shared Inspector rather than a duplicate persistent scene badge. Capabili
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
 
-Office SHALL expose a persisted Inspector opening preference with Docked and Floating modes. In
+Office SHALL expose a persisted Inspector opening preference with Docked and Floating modes through
+the common settings menu, with Floating as the default when no valid preference has been saved. In
 Docked mode, a newly opened Office entity SHALL use the single docked Inspector and remain available
 for explicit Dock out. In Floating mode, each newly opened Office entity SHALL use its own bounded,
 cascaded floating Inspector until the conversation limit is reached. Changing the preference SHALL
@@ -527,9 +530,16 @@ distinct, nonduplicated semantic targets.
 
 #### Scenario: Choose the default Office Inspector presentation
 
-- **WHEN** the user selects Docked or Floating in Office settings and opens new Office entities
+- **WHEN** the user selects Docked or Floating in the common settings menu and opens new Office
+  entities
 - **THEN** Docked reuses the single docked target, Floating opens distinct bounded cascaded windows,
   existing presentations remain in place and the preference is restored on the next Office visit
+
+#### Scenario: Use Office controls on compact or Zen layouts
+
+- **WHEN** the user needs room alignment, long-title, Inspector-opening or observability settings
+- **THEN** the common menu exposes them without an Office toolbar or shortcut strip consuming scene
+  space
 
 #### Scenario: Create a seat in a room
 
@@ -617,6 +627,10 @@ and retain usable input, selection, scrolling, uploads and mobile controls. Comp
 present one active usable Inspector. Spatial views SHALL connect every visible Inspector to its
 represented desk, agent or node. These connectors SHALL track qualified anchors when either endpoint
 moves and SHALL never imply a different runtime ancestry, resource scope or terminal identity.
+Desktop movement SHALL allow a tall Inspector's draggable title region to reach the lower viewport
+while keeping that title region available for recovery; compact Inspectors SHALL remain fully
+contained. The resize affordance SHALL present a compact corner bracket while retaining an
+accessible drag target.
 
 Conversation identity and validity SHALL be qualified by connection and runtime generation inside
 the existing selected-connection browser lease. Opening another window or navigating among Office,
@@ -643,6 +657,12 @@ the browser lost it.
 - **WHEN** a user opens an agent and then its occupied desk or hierarchy node
 - **THEN** World focuses one qualified Inspector conversation and does not create another resource
   context, transport or duplicate input path
+
+#### Scenario: Pan the compact Office scene
+
+- **WHEN** a touch user drags over a road, open floor or other non-actionable canvas area
+- **THEN** the logical Office scrolls natively in either axis without requiring the gesture to
+  begin on a scrollbar or control
 
 #### Scenario: Open a terminal from an Office desk
 

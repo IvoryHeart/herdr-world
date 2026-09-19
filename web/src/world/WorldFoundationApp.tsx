@@ -41,6 +41,7 @@ import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
   readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   type OfficeInspectorPresentation,
 } from "./officePreferences";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
@@ -637,6 +638,26 @@ function WorldControlPlane({
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
     );
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const detail =
+        event instanceof CustomEvent
+          ? (event.detail as
+              | { inspectorPresentation?: OfficeInspectorPresentation }
+              | undefined)
+          : undefined;
+      setOfficeInspectorPresentation(
+        detail?.inspectorPresentation ??
+          readOfficePreferences(worldLocalStorage).inspectorPresentation,
+      );
+    };
+    window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(
+        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+        refresh,
+      );
+  }, []);
   const [pendingSurfacePriority, setPendingSurfacePriority] =
     useState<WorldRuntimePriority | null>(null);
   const intentRequestRef = useRef(0);
@@ -1409,9 +1430,6 @@ function WorldControlPlane({
                         }
                         onOpenTerminal={openTerminalById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
-                        onInspectorPresentationChange={
-                          setOfficeInspectorPresentation
-                        }
                       />
                     </Suspense>
                   ) : view === "tree" ? (

@@ -2,10 +2,32 @@ export type FloatingTerminalPosition = { left: number; top: number };
 export type FloatingTerminalSize = { width: number; height: number };
 export type FloatingTerminalGeometry = FloatingTerminalPosition &
   FloatingTerminalSize;
+export type FloatingTerminalViewport = FloatingTerminalSize & {
+  offsetLeft?: number;
+  offsetTop?: number;
+};
 
 const WINDOW_MARGIN = 8;
 const MIN_WIDTH = 420;
 const MIN_HEIGHT = 280;
+const COMPACT_VIEWPORT_MAX_WIDTH = 720;
+const MIN_VISIBLE_DESKTOP_TITLE_HEIGHT = 56;
+
+export function floatingTerminalContainingViewport(
+  viewport: FloatingTerminalViewport,
+  renderedOrigin: FloatingTerminalPosition,
+): FloatingTerminalSize {
+  return {
+    width: Math.max(
+      0,
+      (viewport.offsetLeft ?? 0) + viewport.width - renderedOrigin.left,
+    ),
+    height: Math.max(
+      0,
+      (viewport.offsetTop ?? 0) + viewport.height - renderedOrigin.top,
+    ),
+  };
+}
 
 export function defaultFloatingTerminalGeometry(
   cascadeIndex: number,
@@ -36,9 +58,13 @@ export function clampFloatingTerminalPosition(
     WINDOW_MARGIN,
     viewport.width - WINDOW_MARGIN - windowSize.width,
   );
+  const containedHeight =
+    viewport.width <= COMPACT_VIEWPORT_MAX_WIDTH
+      ? windowSize.height
+      : Math.min(windowSize.height, MIN_VISIBLE_DESKTOP_TITLE_HEIGHT);
   const maxTop = Math.max(
     WINDOW_MARGIN,
-    viewport.height - WINDOW_MARGIN - windowSize.height,
+    viewport.height - WINDOW_MARGIN - containedHeight,
   );
   return {
     left: clamp(position.left, WINDOW_MARGIN, maxLeft),

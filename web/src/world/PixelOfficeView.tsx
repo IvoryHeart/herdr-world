@@ -1,4 +1,3 @@
-import { Activity } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
@@ -8,10 +7,7 @@ import {
   store,
   useStoreSelector,
 } from "../store";
-import {
-  WORLD_OBSERVABILITY_SETTINGS_EVENT,
-  WORLD_OBSERVABILITY_UPDATED_EVENT,
-} from "../workspaceResource";
+import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { PixelOfficeCanvas } from "./PixelOfficeCanvas";
 import type {
   OfficeCanvasAnchor,
@@ -40,6 +36,7 @@ import { officeCalloutForKey, officePresentationKey } from "./officeSelection";
 import type { PublishedOfficeLayout } from "./officeLayout";
 import {
   readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
   writeOfficePreferences,
   type OfficePreferences,
 } from "./officePreferences";
@@ -79,8 +76,6 @@ export default function PixelOfficeView({
   onSelectedAnchorChange,
   floatingTerminals,
   onConversationNodeAnchorsChange,
-  onOpenObservabilitySettings,
-  onInspectorPresentationChange,
 }: {
   world: WorldObject;
   selectedId: string | null;
@@ -90,10 +85,6 @@ export default function PixelOfficeView({
   floatingTerminals: readonly { nodeId: string }[];
   onConversationNodeAnchorsChange?(
     anchors: Record<string, OfficeCanvasAnchor> | null,
-  ): void;
-  onOpenObservabilitySettings?: () => void;
-  onInspectorPresentationChange?(
-    presentation: OfficePreferences["inspectorPresentation"],
   ): void;
 }) {
   const office = useMemo(
@@ -158,6 +149,23 @@ export default function PixelOfficeView({
   }, []);
 
   useEffect(() => {
+    const refresh = (event: Event) => {
+      const next =
+        event instanceof CustomEvent && event.detail
+          ? (event.detail as OfficePreferences)
+          : readOfficePreferences(worldLocalStorage);
+      preferencesRef.current = next;
+      setPreferences(next);
+    };
+    window.addEventListener(WORLD_OFFICE_PREFERENCES_CHANGED_EVENT, refresh);
+    return () =>
+      window.removeEventListener(
+        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+        refresh,
+      );
+  }, []);
+
+  useEffect(() => {
     const scroll = scrollRef.current;
     if (!scroll) return;
     const frame = requestAnimationFrame(() => {
@@ -179,15 +187,6 @@ export default function PixelOfficeView({
       scroll.removeEventListener("scroll", onScroll);
     };
   }, []);
-
-  function updatePreferences(patch: Partial<OfficePreferences>) {
-    setPreferences((current) => {
-      const next = { ...current, ...patch };
-      preferencesRef.current = next;
-      writeOfficePreferences(worldLocalStorage, next);
-      return next;
-    });
-  }
 
   const selectedKey = officePresentationKey(office, selectedId);
   const completionSeenKeys = useMemo(
@@ -487,72 +486,6 @@ export default function PixelOfficeView({
 
   return (
     <div className="world-office-shell world-stage-shell">
-      <div className="world-office-toolbar" aria-label="Office layout">
-        <label>
-          <span>Room alignment</span>
-          <select
-            value={preferences.roomAlignment}
-            onChange={(event) =>
-              updatePreferences({
-                roomAlignment: event.target
-                  .value as OfficePreferences["roomAlignment"],
-              })
-            }
-          >
-            <option value="left">Left</option>
-            <option value="center">Centre</option>
-            <option value="right">Right</option>
-          </select>
-        </label>
-        <label>
-          <span>Inspectors</span>
-          <select
-            aria-label="Inspector opening"
-            value={preferences.inspectorPresentation}
-            onChange={(event) => {
-              const inspectorPresentation = event.target
-                .value as OfficePreferences["inspectorPresentation"];
-              updatePreferences({ inspectorPresentation });
-              onInspectorPresentationChange?.(inspectorPresentation);
-            }}
-          >
-            <option value="docked">Docked</option>
-            <option value="floating">Floating</option>
-          </select>
-        </label>
-        <button
-          type="button"
-          className="world-office-metrics-button"
-          data-status={observability.health}
-          aria-label={`Office metrics settings (${observability.health})`}
-          title={`Office metrics settings · ${observability.health}`}
-          onClick={() => {
-            if (onOpenObservabilitySettings) onOpenObservabilitySettings();
-            else
-              window.dispatchEvent(
-                new Event(WORLD_OBSERVABILITY_SETTINGS_EVENT),
-              );
-          }}
-        >
-          <Activity size={15} aria-hidden="true" />
-          <span>Metrics</span>
-        </button>
-        <label>
-          <span>Long room titles</span>
-          <select
-            value={preferences.longTitleMode}
-            onChange={(event) =>
-              updatePreferences({
-                longTitleMode: event.target
-                  .value as OfficePreferences["longTitleMode"],
-              })
-            }
-          >
-            <option value="expand">Expand room</option>
-            <option value="compact">Ellipsis</option>
-          </select>
-        </label>
-      </div>
       <OfficeCompactTargetChooser
         projection={office}
         selectedKey={selectedKey}

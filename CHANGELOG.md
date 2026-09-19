@@ -54,9 +54,11 @@ retain their original Herdr Web lineage.
   Graph and Spaces; placed Terminal first and made it the default for each new
   terminal-capable selection, with one docked and up to five independently
   movable/resizable full Inspectors that retain their own tabs and resources.
-  Office now persists whether subsequent selections open in the docked
-  Inspector or as separate cascaded floating Inspectors; explicit Dock in and
-  Dock out actions remain available without rearranging existing conversations.
+  Office now defaults new installations to separate cascaded floating Inspectors,
+  persists a user's docked or floating choice in the common Menu, and keeps room
+  alignment, long-title and observability settings there instead of reserving
+  Office or Zen scene space. Explicit Dock in and Dock out actions remain available
+  without rearranging existing conversations.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
   provide tagged binary, archive and update identities at release time.
@@ -81,6 +83,10 @@ retain their original Herdr Web lineage.
   Inspector when any of its tabs or controls is used. Retained Inspectors now
   reconcile current pane, agent and capability metadata and reset their resource
   state when the qualified agent session changes.
+  Floating Inspectors can move through the lower desktop viewport while keeping
+  their title region recoverable, use a compact corner resize affordance without
+  shrinking its touch target, and leave compact Office roads and open floor as a
+  native two-axis touch-panning surface.
   Office connectors now run from the agent centre to the Inspector's right edge
   and curve in the actual direction, with desk fallback only when an agent
   anchor is unavailable. A live floating Inspector can now be moved from its

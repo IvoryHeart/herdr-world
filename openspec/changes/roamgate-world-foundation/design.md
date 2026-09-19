@@ -190,8 +190,12 @@ not silently change another entity's state or the default for the next entity. F
 generation, persona, model, focus and task metadata are not repeated as a large profile card;
 appropriate admitted information remains available in scene callouts or the relevant resource view.
 
-Office settings persist an explicit default presentation for subsequent entity opens. Docked mode
-admits new contexts to the one docked target; Floating mode admits each new context directly to the
+The common settings menu owns Office room alignment, long-title treatment, Inspector presentation
+and optional observability configuration; Office does not reserve a persistent scene toolbar or a
+mobile/Zen shortcut strip for these infrequent controls. Office settings persist an explicit
+default presentation for subsequent entity opens, with Floating as the fresh-install default so
+the established multi-window Office interaction remains immediately available. Docked mode admits
+new contexts to the one docked target; Floating mode admits each new context directly to the
 bounded cascaded window registry. The preference does not migrate already-open contexts between
 targets, so users control those transitions only with Dock in and Dock out.
 
@@ -224,9 +228,9 @@ lifecycle before a new Inspector context can open.
 Optional observations appear in the compact header only after the provider qualifies them to the
 same connection, generation and agent session. Host totals are not divided or attributed by the UI,
 and absent observations produce no zero-value placeholders. Provider configuration is a
-service-owned World setting reachable from the common settings menu in every native view and from
-the Office metrics shortcut; both entry points use one shell-level dialog above whichever view is
-active and the same configuration endpoint.
+service-owned World setting reachable from the common settings menu in every native view. It uses
+one shell-level dialog above whichever view is active and the same configuration endpoint; Office
+does not retain a separate metrics shortcut.
 
 ### Keep selected-host Inspector conversations on existing resource owners
 
@@ -298,7 +302,9 @@ The shared `TerminalView` fits from the dimensions of its current visible contai
 portal transfer, window move/resize, dock change and Spaces handoff. Mobile input affordances follow
 the active qualified pane rather than a stale presenter. Desktop browser-focus recovery remembers
 whether that terminal held focus before blur and restores only that cursor, avoiding both the extra
-click and unwanted focus theft.
+click and unwanted focus theft. A desktop floating Inspector may move into the lower viewport while
+keeping its draggable title region reachable; compact presentation remains fully contained. Its
+resize affordance uses a compact corner bracket without reducing the usable pointer target.
 
 ### Restore operational summaries and pane pinning at the new seam
 

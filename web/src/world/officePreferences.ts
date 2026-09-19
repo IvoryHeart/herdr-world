@@ -13,12 +13,14 @@ export type OfficePreferences = {
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   roomAlignment: "left",
   longTitleMode: "expand",
-  inspectorPresentation: "docked",
+  inspectorPresentation: "floating",
   scrollLeft: 0,
   scrollTop: 0,
 });
 
 export const OFFICE_PREFERENCES_KEY = "officePreferences:v1";
+export const WORLD_OFFICE_PREFERENCES_CHANGED_EVENT =
+  "herdr-world:office-preferences-changed";
 const MAX_OFFICE_SCROLL = 1_000_000;
 
 type OfficePreferenceStorage = Pick<Storage, "getItem" | "setItem">;
@@ -74,6 +76,7 @@ export function writeOfficePreferences(
   } catch {
     // Presentation preferences must never prevent Office from rendering.
   }
+  return admitted;
 }
 
 function isRoomAlignment(value: unknown): value is OfficeRoomAlignment {

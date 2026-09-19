@@ -21,7 +21,7 @@ describe("Office preferences", () => {
     expect(readOfficePreferences(storage)).toEqual({
       roomAlignment: "left",
       longTitleMode: "compact",
-      inspectorPresentation: "docked",
+      inspectorPresentation: "floating",
       scrollLeft: 0,
       scrollTop: 1_000_000,
     });

@@ -1,4 +1,4 @@
-import { StrictMode, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
@@ -7,7 +7,6 @@ import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
-import { OfficeObservabilityDialog } from "./OfficeObservabilityDialog";
 import "./world.css";
 
 const failures: string[] = [];
@@ -22,14 +21,6 @@ async function waitFor(condition: () => boolean, message: string) {
     await settle();
   }
   throw new Error(message);
-}
-
-function enterText(input: HTMLInputElement, value: string) {
-  Object.getOwnPropertyDescriptor(
-    HTMLInputElement.prototype,
-    "value",
-  )?.set?.call(input, value);
-  input.dispatchEvent(new InputEvent("input", { bubbles: true }));
 }
 
 function workspace(id: string, label: string, paneCount: number): Workspace {
@@ -176,36 +167,22 @@ async function run() {
     let terminalActivationAllowed = false;
     let terminalActivations = 0;
     function OfficeHarness() {
-      const [settingsOpen, setSettingsOpen] = useState(false);
       return (
-        <>
-          <PixelOfficeView
-            world={world}
-            selectedId={world.leaves[0]?.id ?? null}
-            onSelect={() => {}}
-            onOpenTerminal={async () => {
-              terminalActivations += 1;
-              if (!terminalActivationAllowed) {
-                throw new Error("synthetic activation failure");
-              }
-            }}
-            floatingTerminals={[]}
-            onSelectedAnchorChange={(anchor) => {
-              selectedAnchor = anchor !== null;
-            }}
-            onOpenObservabilitySettings={() => setSettingsOpen(true)}
-          />
-          {settingsOpen ? (
-            <OfficeObservabilityDialog
-              onClose={() => setSettingsOpen(false)}
-              onSaved={() =>
-                window.dispatchEvent(
-                  new Event(WORLD_OBSERVABILITY_UPDATED_EVENT),
-                )
-              }
-            />
-          ) : null}
-        </>
+        <PixelOfficeView
+          world={world}
+          selectedId={world.leaves[0]?.id ?? null}
+          onSelect={() => {}}
+          onOpenTerminal={async () => {
+            terminalActivations += 1;
+            if (!terminalActivationAllowed) {
+              throw new Error("synthetic activation failure");
+            }
+          }}
+          floatingTerminals={[]}
+          onSelectedAnchorChange={(anchor) => {
+            selectedAnchor = anchor !== null;
+          }}
+        />
       );
     }
     root.render(
@@ -226,10 +203,7 @@ async function run() {
     await fetch("/release-metrics", { method: "POST" });
     window.dispatchEvent(new Event(WORLD_OBSERVABILITY_UPDATED_EVENT));
     await waitFor(
-      () =>
-        host
-          .querySelector(".world-office-metrics-button")
-          ?.getAttribute("data-status") === "available",
+      () => diagnostics.sceneRenders > rendersBeforeObservation,
       "Office did not apply the service-owned observability snapshot",
     );
     check(
@@ -242,6 +216,10 @@ async function run() {
     );
 
     check(canvas !== null, "Pixel Office canvas was not mounted");
+    check(
+      canvas?.style.touchAction === "pan-x pan-y",
+      "Pixel Office canvas did not allow native two-axis touch panning",
+    );
     check(
       diagnostics.lastError === null,
       "Pixel Office renderer reported an error",
@@ -351,20 +329,9 @@ async function run() {
     );
 
     const stageScroll = host.querySelector<HTMLElement>(".world-stage-scroll")!;
-    const alignment = host.querySelector<HTMLSelectElement>(
-      ".world-office-toolbar select",
-    );
-    const inspectorPresentation = host.querySelector<HTMLSelectElement>(
-      'select[aria-label="Inspector opening"]',
-    );
-    const titleMode = host.querySelectorAll<HTMLSelectElement>(
-      ".world-office-toolbar select",
-    )[2];
     check(
-      alignment?.value === "right" &&
-        inspectorPresentation?.value === "docked" &&
-        titleMode?.value === "compact",
-      "Office layout preferences were not restored",
+      host.querySelector(".world-office-toolbar") === null,
+      "Office retained a scene toolbar for settings",
     );
     if (compact) {
       check(
@@ -391,54 +358,6 @@ async function run() {
         "Office scroll preference was not persisted",
       );
     }
-
-    const metricsButton = host.querySelector<HTMLButtonElement>(
-      ".world-office-metrics-button",
-    );
-    metricsButton?.click();
-    await waitFor(
-      () =>
-        document.querySelector(
-          '[role="dialog"][aria-label="Office metrics settings"]',
-        ) !== null,
-      "Office metrics settings did not open",
-    );
-    const metricsDialog = document.querySelector<HTMLElement>(
-      '[role="dialog"][aria-label="Office metrics settings"]',
-    )!;
-    const prometheusInput =
-      metricsDialog.querySelector<HTMLInputElement>('input[type="url"]')!;
-    await waitFor(
-      () => !prometheusInput.disabled,
-      "Office metrics settings did not finish loading",
-    );
-    check(
-      prometheusInput.value === "http://metrics.example.test/",
-      "Office metrics settings did not show the service configuration",
-    );
-    enterText(prometheusInput, "http://replacement.example.test");
-    if (metricsDialog instanceof HTMLFormElement) metricsDialog.requestSubmit();
-    await waitFor(
-      () =>
-        metricsDialog.textContent?.includes("Prometheus provider saved.") ===
-        true,
-      "Office metrics settings did not save through the World service",
-    );
-    metricsDialog
-      .querySelector<HTMLButtonElement>(".world-observability-actions .ghost")
-      ?.click();
-    await waitFor(
-      () =>
-        metricsDialog.textContent?.includes(
-          "Not configured; Economy shows no provider data.",
-        ) === true,
-      "Office metrics settings did not disable the provider",
-    );
-    check(
-      host.querySelector("canvas[data-office-canvas='true']") !== null &&
-        host.querySelector(".world-semantic-target") !== null,
-      "Disabling optional observability disrupted the Office topology",
-    );
   } finally {
     root.unmount();
     await waitFor(

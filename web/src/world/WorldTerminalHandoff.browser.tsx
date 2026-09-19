@@ -679,19 +679,36 @@ async function run() {
       window.__HERDR_WORLD_RENDERER__?.ready === true && agentTarget("Builder"),
     "Office after shared-frame navigation",
   );
-  const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
-    'select[aria-label="Inspector opening"]',
-  );
   check(
-    inspectorOpeningSelect?.value === "docked",
-    "Office did not default Inspector opening to Docked",
+    document.querySelector(".world-office-toolbar") === null,
+    "Office settings still consumed a scene toolbar",
   );
-  if (inspectorOpeningSelect) {
-    inspectorOpeningSelect.value = "floating";
-    inspectorOpeningSelect.dispatchEvent(
-      new Event("change", { bubbles: true }),
-    );
-  }
+  topbarMenu?.click();
+  await until(
+    () =>
+      document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Office Inspector opening"]',
+      ),
+    "Office settings in common menu",
+  );
+  const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="Office Inspector opening"]',
+  )!;
+  check(
+    inspectorOpeningSelect.value === "floating" &&
+      Boolean(
+        document.querySelector<HTMLSelectElement>(
+          'select[aria-label="Office room alignment"]',
+        ),
+      ) &&
+      Boolean(
+        document.querySelector<HTMLSelectElement>(
+          'select[aria-label="Office long room titles"]',
+        ),
+      ),
+    "Office controls were not menu-owned or did not default to Floating",
+  );
+  topbarMenu?.click();
   flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
@@ -742,12 +759,20 @@ async function run() {
     () => !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
     "close preference-check Inspectors",
   );
-  if (inspectorOpeningSelect) {
-    inspectorOpeningSelect.value = "docked";
-    inspectorOpeningSelect.dispatchEvent(
-      new Event("change", { bubbles: true }),
-    );
-  }
+  topbarMenu?.click();
+  await until(
+    () =>
+      document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Office Inspector opening"]',
+      ),
+    "reopened Office settings",
+  );
+  const dockedOpeningSelect = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="Office Inspector opening"]',
+  )!;
+  dockedOpeningSelect.value = "docked";
+  dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  topbarMenu?.click();
   flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
@@ -1071,11 +1096,14 @@ async function run() {
     'button[aria-label="Resize Inspector window"]',
   )!;
   const builderResizeGripBounds = builderResizeGrip.getBoundingClientRect();
+  const builderResizeBracket = getComputedStyle(builderResizeGrip, "::after");
   check(
     builderResizeGripBounds.width >= 32 &&
       builderResizeGripBounds.height >= 32 &&
       getComputedStyle(builderResizeGrip).cursor === "nwse-resize" &&
-      builderResizeGrip.querySelector("svg") !== null,
+      Number.parseFloat(builderResizeBracket.width) <= 16 &&
+      builderResizeBracket.borderRightWidth !== "0px" &&
+      builderResizeBracket.borderBottomWidth !== "0px",
     "floating Inspector did not expose a visible drag-to-resize handle",
   );
   const builderWindowBeforeResize =

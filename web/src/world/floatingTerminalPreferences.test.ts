@@ -7,7 +7,7 @@ import {
 } from "./floatingTerminalPreferences";
 
 describe("floating terminal preferences", () => {
-  test("restores qualified geometry and reclamps it to the current viewport", () => {
+  test("restores geometry while keeping its desktop title region reachable", () => {
     const storage = memoryStorage(
       JSON.stringify([
         {
@@ -24,7 +24,7 @@ describe("floating terminal preferences", () => {
         { left: 20, top: 20, width: 420, height: 280 },
         { width: 800, height: 600 },
       ),
-    ).toEqual({ left: 92, top: 92, width: 700, height: 500 });
+    ).toEqual({ left: 92, top: 536, width: 700, height: 500 });
   });
 
   test("rejects malformed values and writes a bounded normalized record", () => {
