@@ -556,6 +556,7 @@ export function TerminalView({
     [controlledAgentHistoryOpen, onAgentHistoryOpenChange],
   );
   const isActivePaneRef = useRef(isActivePane);
+  const restoreFocusOnForegroundRef = useRef(false);
   const previewWorkspaceIdRef = useRef(pane?.workspace_id);
   const onOpenWorkspaceFileRef = useRef(onOpenWorkspaceFile);
   useLayoutEffect(() => {
@@ -671,6 +672,24 @@ export function TerminalView({
   useEffect(() => {
     if (isActivePane) focusTerminalSoon();
   }, [focusTerminalSoon, isActivePane]);
+  useEffect(() => {
+    const rememberTerminalFocus = () => {
+      restoreFocusOnForegroundRef.current =
+        isActivePaneRef.current &&
+        document.activeElement === termRef.current?.textarea;
+    };
+    const restoreTerminalFocus = () => {
+      if (!restoreFocusOnForegroundRef.current) return;
+      restoreFocusOnForegroundRef.current = false;
+      focusTerminalSoon();
+    };
+    window.addEventListener("blur", rememberTerminalFocus);
+    window.addEventListener("focus", restoreTerminalFocus);
+    return () => {
+      window.removeEventListener("blur", rememberTerminalFocus);
+      window.removeEventListener("focus", restoreTerminalFocus);
+    };
+  }, [focusTerminalSoon]);
   useEffect(() => {
     if (!canShowAgentHistory && agentHistoryOpen) setAgentHistoryOpen(false);
   }, [agentHistoryOpen, canShowAgentHistory, setAgentHistoryOpen]);

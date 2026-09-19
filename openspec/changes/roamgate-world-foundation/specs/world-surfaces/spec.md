@@ -262,11 +262,12 @@ stack a separate agent profile card above the resource pane. Terminal SHALL be t
 initial tab for a newly opened terminal-capable entity; changing one Inspector's active tab SHALL NOT
 change another Inspector or the default for a later entity.
 
-Selecting an actionable entity in either the common workspace navigator or the active visual SHALL
-open or focus its docked Inspector without resizing, relaying out or otherwise taking workspace from
-the visual stage. Ordinary selection SHALL replace and close a different docked conversation rather
-than implicitly turn it into a floating window. Direct desk activation SHALL open or focus that
-entity's floating Inspector. A floating Inspector SHALL be independently movable and resizable and
+Selecting an actionable entity in Tree or Graph SHALL open or focus its docked Inspector without
+resizing, relaying out or otherwise taking workspace from the visual stage. Office visual and common
+navigator selection SHALL follow the persisted Docked/Floating preference for newly opened entities
+and SHALL focus an existing entity in its current presentation. Docked admission SHALL replace and
+close a different docked conversation rather than implicitly turn it into a floating window. A
+floating Inspector SHALL be independently movable and resizable and
 expose Dock in and × controls. The docked Inspector SHALL expose Dock out, dock-position,
 expand/restore and × controls and SHALL itself be movable while it remains an overlay. Choosing a
 dock position or expand/restore SHALL snap it back to that explicit dock geometry. Docking a
@@ -502,6 +503,13 @@ in the shared Inspector rather than a duplicate persistent scene badge. Capabili
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.
 
+Office SHALL expose a persisted Inspector opening preference with Docked and Floating modes. In
+Docked mode, a newly opened Office entity SHALL use the single docked Inspector and remain available
+for explicit Dock out. In Floating mode, each newly opened Office entity SHALL use its own bounded,
+cascaded floating Inspector until the conversation limit is reached. Changing the preference SHALL
+govern subsequent opens and SHALL NOT rearrange an Inspector that is already presented; selecting an
+existing entity SHALL focus its current presentation.
+
 When several working or unknown room-destination agents share one tab, Office SHALL choose at most
 one deterministic seated occupant using the established state/focus priority and SHALL present
 remaining room-local agents as standing only within the tested per-room agent bound. Working or
@@ -516,6 +524,12 @@ distinct, nonduplicated semantic targets.
 - **WHEN** an admitted agent changes from working to blocked and later to done
 - **THEN** the same qualified agent moves from its room to reception and then the Agent Bar while
   its ancestry, selection and terminal identity remain stable
+
+#### Scenario: Choose the default Office Inspector presentation
+
+- **WHEN** the user selects Docked or Floating in Office settings and opens new Office entities
+- **THEN** Docked reuses the single docked target, Floating opens distinct bounded cascaded windows,
+  existing presentations remain in place and the preference is restored on the next Office visit
 
 #### Scenario: Create a seat in a room
 
@@ -578,17 +592,17 @@ and existing bridge connection; it SHALL NOT carry or synchronize replacement im
 Herdr Web. Retained World window code MAY provide presentation around the complete Inspector
 without owning resource or terminal transport.
 
-An Office desk activation SHALL directly open or focus that entity's floating Inspector on its
-Terminal tab, preserving the established Office interaction without creating a terminal-only
-window. The same qualified terminal SHALL have exactly one live Terminal presentation at a time.
+An Office desk activation SHALL open or focus that entity's Inspector on its Terminal tab in the
+presentation selected by the Office preference, preserving direct terminal access without creating
+a terminal-only window. The same qualified terminal SHALL have exactly one live Terminal presentation at a time.
 Docking, undocking or swapping Inspectors SHALL explicitly hand off that attachment after the old
 target detaches while preserving the Inspector's selected tab and other resource state.
 
 If ordinary selection replaces a docked Inspector, World SHALL close the outgoing docked
-conversation before mounting the replacement context and SHALL NOT create a floating window as a
-selection side effect. Floating conversations SHALL arise only from an explicit Dock out action or
-direct Office desk activation. Explicitly docking a floating conversation into an occupied dock
-SHALL continue to swap the two retained conversations.
+conversation before mounting the replacement context and SHALL NOT create a floating window in
+Docked mode. Floating conversations SHALL arise only from an explicit Dock out action or a new
+Office entity activation while Floating mode is selected. Explicitly docking a floating
+conversation into an occupied dock SHALL continue to swap the two retained conversations.
 
 The floating Inspector header SHALL expose Dock in and × controls. The docked Inspector SHALL
 expose Dock out and × controls plus its dock-position and expand controls. Closing either
@@ -605,16 +619,24 @@ represented desk, agent or node. These connectors SHALL track qualified anchors 
 moves and SHALL never imply a different runtime ancestry, resource scope or terminal identity.
 
 Conversation identity and validity SHALL be qualified by connection and runtime generation inside
-the existing selected-connection browser lease. Opening another window or navigating among views
-SHALL NOT detach, redirect or duplicate conversations while that host and generation remain
-selected. Explicitly activating another host SHALL retire every outgoing visual and Spaces terminal
-mount before the replacement becomes operational; World SHALL NOT retain simultaneous terminal
-conversations from several hosts in this change. All conversations SHALL use the one World browser
-WebSocket and existing terminal owner.
+the existing selected-connection browser lease. Opening another window or navigating among Office,
+Tree and Graph SHALL NOT detach, redirect or duplicate conversations while that host and generation
+remain selected. Selecting Spaces SHALL suspend every visual Inspector presentation so the native
+Spaces workspace is unobstructed and SHALL transfer the exact selected terminal presentation only
+after its visual owner detaches. The retained visual conversation state SHALL be restored when the
+user returns to a visual view. Explicitly activating another host SHALL retire every outgoing visual
+and Spaces terminal mount before the replacement becomes operational; World SHALL NOT retain
+simultaneous terminal conversations from several hosts in this change. All conversations SHALL use
+the one World browser WebSocket and existing terminal owner.
 
 Mounted-but-hidden Spaces SHALL NOT keep a competing terminal attachment for a terminal currently
-presented by a visual conversation. A handoff between a visual conversation and Spaces SHALL order
-presentation teardown and admission so the same qualified Herdr terminal is never mounted twice.
+presented by a visual conversation. A handoff between a visual conversation and visible Spaces MAY
+remount the current terminal UI, but SHALL preserve the qualified Herdr terminal/session identity,
+SHALL NOT close or recreate the server terminal and SHALL order presentation teardown and admission
+so that terminal is never mounted twice. The newly visible presenter SHALL refit to its actual
+dimensions, expose the applicable compact input controls and accept input without a second click;
+returning browser focus SHALL restore the terminal cursor only when that terminal held focus before
+the browser lost it.
 
 #### Scenario: Open the same terminal from two representations
 
@@ -625,8 +647,8 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 #### Scenario: Open a terminal from an Office desk
 
 - **WHEN** a user activates an actionable occupied or terminal desk in Office
-- **THEN** World directly opens or focuses its floating qualified Inspector on Terminal and draws a
-  connector to the represented desk or agent
+- **THEN** World opens or focuses its qualified Inspector on Terminal in the current Docked or
+  Floating default presentation and draws a connector to the represented desk or agent
 
 #### Scenario: Move an Inspector between docked and floating presentations
 
@@ -664,8 +686,16 @@ presentation teardown and admission so the same qualified Herdr terminal is neve
 
 - **WHEN** a live conversation exists and the user changes World views, including selecting Spaces
   through the primary view selector
-- **THEN** terminal identity and session ownership remain stable, view-local geometry is preserved
-  where applicable and Spaces does not reattach another session
+- **THEN** Office, Tree and Graph preserve the conversation and its view-local geometry, visible
+  Spaces hides every visual Inspector, presents the exact selected terminal through its native
+  workspace, and each handoff refits without duplicating or recreating the Herdr terminal session
+
+#### Scenario: Return to a previously focused terminal
+
+- **WHEN** a presented terminal held the browser focus and the user returns after focusing another
+  application or browser window
+- **THEN** the same active terminal reclaims its cursor and accepts input without an extra click,
+  while a terminal that did not previously hold focus does not steal it
 
 #### Scenario: Explicitly switch hosts with conversations open
 

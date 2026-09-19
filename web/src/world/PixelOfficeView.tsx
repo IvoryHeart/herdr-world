@@ -80,6 +80,7 @@ export default function PixelOfficeView({
   floatingTerminals,
   onConversationNodeAnchorsChange,
   onOpenObservabilitySettings,
+  onInspectorPresentationChange,
 }: {
   world: WorldObject;
   selectedId: string | null;
@@ -91,6 +92,9 @@ export default function PixelOfficeView({
     anchors: Record<string, OfficeCanvasAnchor> | null,
   ): void;
   onOpenObservabilitySettings?: () => void;
+  onInspectorPresentationChange?(
+    presentation: OfficePreferences["inspectorPresentation"],
+  ): void;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -498,6 +502,22 @@ export default function PixelOfficeView({
             <option value="left">Left</option>
             <option value="center">Centre</option>
             <option value="right">Right</option>
+          </select>
+        </label>
+        <label>
+          <span>Inspectors</span>
+          <select
+            aria-label="Inspector opening"
+            value={preferences.inspectorPresentation}
+            onChange={(event) => {
+              const inspectorPresentation = event.target
+                .value as OfficePreferences["inspectorPresentation"];
+              updatePreferences({ inspectorPresentation });
+              onInspectorPresentationChange?.(inspectorPresentation);
+            }}
+          >
+            <option value="docked">Docked</option>
+            <option value="floating">Floating</option>
           </select>
         </label>
         <button

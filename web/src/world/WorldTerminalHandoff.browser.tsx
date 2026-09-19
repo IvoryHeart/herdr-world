@@ -679,6 +679,85 @@ async function run() {
       window.__HERDR_WORLD_RENDERER__?.ready === true && agentTarget("Builder"),
     "Office after shared-frame navigation",
   );
+  const inspectorOpeningSelect = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="Inspector opening"]',
+  );
+  check(
+    inspectorOpeningSelect?.value === "docked",
+    "Office did not default Inspector opening to Docked",
+  );
+  if (inspectorOpeningSelect) {
+    inspectorOpeningSelect.value = "floating";
+    inspectorOpeningSelect.dispatchEvent(
+      new Event("change", { bubbles: true }),
+    );
+  }
+  flushSync(() => agentTarget("Builder")!.click());
+  await until(
+    () =>
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "floating preference Builder Inspector",
+  );
+  flushSync(() => agentTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ) &&
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "floating preference distinct Reviewer Inspector",
+  );
+  const preferredFloatingWindows = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ];
+  const firstPreferredBounds =
+    preferredFloatingWindows[0]?.getBoundingClientRect();
+  const secondPreferredBounds =
+    preferredFloatingWindows[1]?.getBoundingClientRect();
+  check(
+    Boolean(
+      firstPreferredBounds &&
+        secondPreferredBounds &&
+        Math.abs(firstPreferredBounds.width - secondPreferredBounds.width) <=
+          2 &&
+        (firstPreferredBounds.left !== secondPreferredBounds.left ||
+          firstPreferredBounds.top !== secondPreferredBounds.top) &&
+        !document
+          .querySelector(".world-context-rail")
+          ?.classList.contains("has-inspector"),
+    ),
+    "Floating mode did not use equally sized cascaded Inspector windows",
+  );
+  for (const floatingWindow of preferredFloatingWindows) {
+    floatingWindow
+      .querySelector<HTMLButtonElement>(
+        'button[aria-label="Close floating Inspector"]',
+      )
+      ?.click();
+  }
+  await until(
+    () => !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
+    "close preference-check Inspectors",
+  );
+  if (inspectorOpeningSelect) {
+    inspectorOpeningSelect.value = "docked";
+    inspectorOpeningSelect.dispatchEvent(
+      new Event("change", { bubbles: true }),
+    );
+  }
+  flushSync(() => agentTarget("Builder")!.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder"),
+    "docked preference Builder Inspector",
+  );
   const reviewerNavigatorRow = [
     ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
   ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
@@ -1405,6 +1484,14 @@ async function run() {
     "docked terminal did not retain keyboard focus",
   );
 
+  window.dispatchEvent(new Event("blur"));
+  document.body.focus();
+  window.dispatchEvent(new Event("focus"));
+  await until(
+    () => document.activeElement === dockedInput,
+    "previously focused docked terminal after browser focus return",
+  );
+
   flushSync(() => agentTarget("Reviewer")!.click());
   await until(
     () =>
@@ -1427,6 +1514,10 @@ async function run() {
     "Reviewer replacement did not expose its docked terminal input",
   );
   if (replacementReviewerInput) {
+    await until(
+      () => document.activeElement === replacementReviewerInput,
+      "newly selected docked Inspector terminal focus",
+    );
     const reviewerInputsBefore = calls.filter(
       ({ method, params }) =>
         method === "terminal.input" &&
@@ -1666,7 +1757,9 @@ async function run() {
       document
         .querySelector(".workspace-surface-owner")
         ?.classList.contains("is-inactive") &&
-      document.querySelector(".terminal-empty"),
+      document.querySelector(
+        '.workspace-terminal-surface button[aria-label="Open device keyboard"]',
+      ),
     "Spaces handoff",
   );
   await settle();
@@ -1674,20 +1767,37 @@ async function run() {
     document.querySelector(".world-control-plane") === persistentControlPlane &&
       document.querySelector(".world-context-rail .workspace-inspector") ===
         persistentReviewerInspector,
-    "Spaces handoff destroyed the live Inspector owner",
+    "Spaces handoff destroyed retained Inspector state",
   );
   check(
-    persistentReviewerInspector?.getBoundingClientRect().height !== 0 &&
-      persistentReviewerInspector?.getAttribute("data-view") === "files" &&
-      (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0,
-    "compact Spaces handoff hid or replaced the retained Files Inspector",
+    persistentControlPlane?.getBoundingClientRect().height === 0 &&
+      persistentReviewerInspector?.getBoundingClientRect().height === 0 &&
+      document.querySelector(".terminal-empty") === null,
+    "visible Spaces remained obstructed by a visual Inspector presentation",
+  );
+  const spacesTerminal = document.querySelector<HTMLElement>(
+    ".workspace-terminal-surface > .terminal-shell",
   );
   check(
-    calls.filter(({ method }) => method === "terminal.attach").length ===
+    Boolean(
+      spacesTerminal &&
+        spacesTerminal.getBoundingClientRect().width > 0 &&
+        spacesTerminal.getBoundingClientRect().height > 0 &&
+        terminalInput(spacesTerminal),
+    ),
+    "visible Spaces did not present its native selected terminal",
+  );
+  check(
+    calls.filter(({ method }) => method === "terminal.attach").length >
       terminalAttachesBeforeSpaces &&
-      calls.filter(({ method }) => method === "terminal.detach").length ===
-        terminalDetachesBeforeSpaces,
-    "Spaces handoff reattached or detached an Inspector terminal",
+      calls.filter(({ method }) => method === "terminal.detach").length >
+        terminalDetachesBeforeSpaces &&
+      calls.some(
+        ({ method, params }) =>
+          method === "terminal.attach" &&
+          params.terminal_id === "reviewer-terminal",
+      ),
+    "Spaces handoff did not transfer the selected terminal presentation",
   );
   viewSelect.value = "graph";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1705,11 +1815,12 @@ async function run() {
   await settle();
   check(
     document.querySelector(".world-control-plane") === persistentControlPlane &&
-      calls.filter(({ method }) => method === "terminal.attach").length ===
-        terminalAttachesBeforeSpaces &&
-      calls.filter(({ method }) => method === "terminal.detach").length ===
-        terminalDetachesBeforeSpaces,
-    "returning from Spaces replaced the Inspector terminal owner",
+      persistentReviewerInspector?.getAttribute("data-view") === "files" &&
+      (compactFilesResource?.getBoundingClientRect().height ?? 0) > 0 &&
+      document.querySelector(
+        ".workspace-terminal-surface > .terminal-shell",
+      ) === null,
+    "returning from Spaces did not restore the retained Inspector state",
   );
   updateLayoutPreferences({ mode: "desktop" });
   await until(

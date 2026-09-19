@@ -1,5 +1,4 @@
 import {
-  lazy,
   Suspense,
   useCallback,
   useEffect,
@@ -13,6 +12,7 @@ import { createPortal } from "react-dom";
 import App, { type WorkspaceSurfaceSelection } from "../App";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import { lazyWithReload } from "../lazyWithReload";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
   type InspectorView,
@@ -39,6 +39,10 @@ import {
 } from "./worldObject";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
+import {
+  readOfficePreferences,
+  type OfficeInspectorPresentation,
+} from "./officePreferences";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import WorldIntentProfile from "./WorldIntentProfile";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
@@ -55,19 +59,32 @@ export {
   upsertWorldFloatingTerminal,
 } from "./worldTerminalPresentation";
 
-const PixelOfficeView = lazy(() => import("./PixelOfficeView"));
-const ConnectedTreeView = lazy(() => import("./ConnectedTreeView"));
-const SpatialGraphView = lazy(() => import("./SpatialGraphView"));
-const WorldIntentConnector = lazy(() => import("./WorldIntentConnector"));
-const WorldViewErrorBoundary = lazy(() =>
+const PixelOfficeView = lazyWithReload(
+  "world-pixel-office",
+  () => import("./PixelOfficeView"),
+);
+const ConnectedTreeView = lazyWithReload(
+  "world-connected-tree",
+  () => import("./ConnectedTreeView"),
+);
+const SpatialGraphView = lazyWithReload(
+  "world-spatial-graph",
+  () => import("./SpatialGraphView"),
+);
+const WorldIntentConnector = lazyWithReload(
+  "world-intent-connector",
+  () => import("./WorldIntentConnector"),
+);
+const WorldViewErrorBoundary = lazyWithReload("world-view-boundary", () =>
   import("./WorldViewErrorBoundary").then((module) => ({
     default: module.WorldViewErrorBoundary,
   })),
 );
-const WorldFloatingTerminalWindow = lazy(
+const WorldFloatingTerminalWindow = lazyWithReload(
+  "world-floating-inspector",
   () => import("./WorldFloatingTerminal"),
 );
-const OfficeObservabilityDialog = lazy(() =>
+const OfficeObservabilityDialog = lazyWithReload("world-observability", () =>
   import("./PixelOfficeView").then((module) => ({
     default: module.OfficeObservabilityDialog,
   })),
@@ -455,7 +472,7 @@ export default function WorldFoundationApp() {
           }
           workspaceSurfaceVisible={view !== "spaces"}
           workspaceSurfaceInspector={
-            workspaceSurfaceInspectorConversation
+            view !== "spaces" && workspaceSurfaceInspectorConversation
               ? {
                   view: workspaceSurfaceInspectorConversation.view,
                   availableViews:
@@ -471,20 +488,24 @@ export default function WorldFoundationApp() {
                   Promise.resolve(false)
               : undefined
           }
-          worldTerminalPresentations={inspectorConversations.flatMap(
-            (conversation) =>
-              conversation.paneId && conversation.terminalId
-                ? [
-                    {
-                      ...conversation,
-                      paneId: conversation.paneId,
-                      terminalId: conversation.terminalId,
-                      portal:
-                        inspectorTerminalPortals[conversation.nodeId] ?? null,
-                    },
-                  ]
-                : [],
-          )}
+          worldTerminalPresentations={
+            view === "spaces"
+              ? []
+              : inspectorConversations.flatMap((conversation) =>
+                  conversation.paneId && conversation.terminalId
+                    ? [
+                        {
+                          ...conversation,
+                          paneId: conversation.paneId,
+                          terminalId: conversation.terminalId,
+                          portal:
+                            inspectorTerminalPortals[conversation.nodeId] ??
+                            null,
+                        },
+                      ]
+                    : [],
+                )
+          }
         />
       </div>
       {officeMetricsOpen
@@ -612,6 +633,10 @@ function WorldControlPlane({
     ],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
+  const [officeInspectorPresentation, setOfficeInspectorPresentation] =
+    useState<OfficeInspectorPresentation>(
+      () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
+    );
   const [pendingSurfacePriority, setPendingSurfacePriority] =
     useState<WorldRuntimePriority | null>(null);
   const intentRequestRef = useRef(0);
@@ -641,8 +666,10 @@ function WorldControlPlane({
     useState<WorldConnectorTargetBounds | null>(null);
   const inspectorConversationsRef = useRef(inspectorConversations);
   const dockedInspectorIdRef = useRef(dockedInspectorId);
+  const floatingInspectorPortalsRef = useRef(floatingInspectorPortals);
   inspectorConversationsRef.current = inspectorConversations;
   dockedInspectorIdRef.current = dockedInspectorId;
+  floatingInspectorPortalsRef.current = floatingInspectorPortals;
   const currentSelection = selection
     ? (world.nodeById.get(selection.id) ?? null)
     : null;
@@ -832,6 +859,32 @@ function WorldControlPlane({
     });
   };
 
+  const focusInspectorTerminal = (nodeId: string) => {
+    if (
+      document.documentElement.dataset.layout === "mobile" ||
+      window.matchMedia?.("(any-pointer: coarse)").matches
+    ) {
+      return;
+    }
+    const attempt = (remaining: number) => {
+      const target =
+        dockedInspectorIdRef.current === nodeId
+          ? contextRailRef.current
+          : floatingInspectorPortalsRef.current[nodeId];
+      const input = target?.querySelector<HTMLElement>(
+        ".xterm-helper-textarea",
+      );
+      if (input) {
+        input.focus({ preventScroll: true });
+        return;
+      }
+      if (remaining > 0) {
+        window.setTimeout(() => attempt(remaining - 1), 0);
+      }
+    };
+    requestAnimationFrame(() => attempt(2));
+  };
+
   const applySelection = async (
     id: string | null,
     requestedView: InspectorView | null = null,
@@ -881,6 +934,9 @@ function WorldControlPlane({
         if (existing.nodeId !== dockedInspectorId) {
           focusFloatingInspector(admitted, false);
         }
+        if (admitted.view === "terminal") {
+          focusInspectorTerminal(admitted.nodeId);
+        }
       } catch (cause) {
         if (intentRequestRef.current === requestId) {
           setIntentError(
@@ -910,6 +966,9 @@ function WorldControlPlane({
         conversation,
       ]);
       onDockedInspectorIdChange(conversation.nodeId);
+      if (conversation.view === "terminal") {
+        focusInspectorTerminal(conversation.nodeId);
+      }
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
         setIntentError(cause instanceof Error ? cause.message : String(cause));
@@ -920,13 +979,37 @@ function WorldControlPlane({
     }
     return true;
   };
-  const selectNode = (id: string) => applySelection(id);
+  const selectNode = (id: string) => {
+    const node = world.nodeById.get(id);
+    if (
+      view === "office" &&
+      officeInspectorPresentation === "floating" &&
+      node?.actionable &&
+      node.selectedHost
+    ) {
+      const existing = inspectorConversationsRef.current.find(
+        ({ nodeId }) => nodeId === node.id,
+      );
+      if (existing?.nodeId === dockedInspectorIdRef.current) {
+        return applySelection(id);
+      }
+      return openFloatingInspector(node)
+        .then(() => true)
+        .catch((cause) => {
+          setIntentError(
+            cause instanceof Error ? cause.message : String(cause),
+          );
+          return false;
+        });
+    }
+    return applySelection(id);
+  };
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
     const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
-    if (node) return applySelection(node.id);
+    if (node) return selectNode(node.id);
     if (
       surfaceSelection.connectionId !==
         connectionSelection.activeConnectionId ||
@@ -1058,23 +1141,28 @@ function WorldControlPlane({
       ({ nodeId }) => nodeId === node.id,
     );
     if (existing) {
+      const requestedView = existing.availableViews.includes("terminal")
+        ? "terminal"
+        : undefined;
       if (existing.nodeId === dockedInspectorId) {
         if (floatingInspectors.length >= 5) {
           throw new Error(
             "Five Inspectors are already floating. Close one before floating another.",
           );
         }
-        if (!(await focusFloatingInspector(existing))) {
+        if (!(await focusFloatingInspector(existing, true, requestedView))) {
           throw new Error("Inspector activation was superseded");
         }
         if (dockedInspectorIdRef.current === existing.nodeId) {
           onDockedInspectorIdChange(null);
         }
+        focusInspectorTerminal(existing.nodeId);
         return;
       }
-      if (!(await focusFloatingInspector(existing))) {
+      if (!(await focusFloatingInspector(existing, true, requestedView))) {
         throw new Error("Inspector activation was superseded");
       }
+      focusInspectorTerminal(existing.nodeId);
       return;
     }
     if (floatingInspectors.length >= 5) {
@@ -1098,6 +1186,7 @@ function WorldControlPlane({
         ...inspectorConversationsRef.current,
         conversation,
       ]);
+      focusInspectorTerminal(conversation.nodeId);
     } finally {
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
@@ -1107,6 +1196,19 @@ function WorldControlPlane({
     const node = world.nodeById.get(id);
     if (!node) throw new Error("This terminal is no longer available");
     try {
+      const existing = inspectorConversationsRef.current.find(
+        ({ nodeId }) => nodeId === node.id,
+      );
+      if (
+        view === "office" &&
+        (officeInspectorPresentation === "docked" ||
+          existing?.nodeId === dockedInspectorIdRef.current)
+      ) {
+        if (!(await applySelection(id, "terminal"))) {
+          throw new Error("This terminal could not be opened");
+        }
+        return;
+      }
       await openFloatingInspector(node);
     } catch (cause) {
       setIntentError(cause instanceof Error ? cause.message : String(cause));
@@ -1131,11 +1233,9 @@ function WorldControlPlane({
       if (intentRequestRef.current !== requestId) return false;
       setSelection(target);
       onDockedInspectorIdChange(conversation.nodeId);
-      requestAnimationFrame(() => {
-        contextRailRef.current
-          ?.querySelector<HTMLElement>(".xterm-helper-textarea")
-          ?.focus({ preventScroll: true });
-      });
+      if (conversation.view === "terminal") {
+        focusInspectorTerminal(conversation.nodeId);
+      }
       return true;
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
@@ -1148,11 +1248,11 @@ function WorldControlPlane({
   };
 
   const closeInspector = (conversation: WorldInspectorConversation) => {
-    onInspectorConversationsChange(
-      inspectorConversations.filter(
-        ({ nodeId }) => nodeId !== conversation.nodeId,
-      ),
+    const remaining = inspectorConversationsRef.current.filter(
+      ({ nodeId }) => nodeId !== conversation.nodeId,
     );
+    inspectorConversationsRef.current = remaining;
+    onInspectorConversationsChange(remaining);
     onInspectorTerminalPortal(conversation.nodeId, null);
     setFloatingInspectorPortals((current) => ({
       ...current,
@@ -1167,6 +1267,7 @@ function WorldControlPlane({
   const focusFloatingInspector = async (
     conversation: WorldInspectorConversation,
     focusTarget = true,
+    requestedView?: InspectorView,
   ): Promise<boolean> => {
     const target = world.nodeById.get(conversation.nodeId);
     if (!target) throw new Error("This Inspector is no longer available");
@@ -1182,9 +1283,14 @@ function WorldControlPlane({
       if (focusTarget) await focusWorldNode(target);
       if (intentRequestRef.current !== requestId) return false;
       const current = inspectorConversationsRef.current;
-      const currentConversation =
+      const observedConversation =
         current.find(({ nodeId }) => nodeId === conversation.nodeId) ??
         conversation;
+      const currentConversation =
+        requestedView &&
+        observedConversation.availableViews.includes(requestedView)
+          ? { ...observedConversation, view: requestedView }
+          : observedConversation;
       const currentFloating = current.filter(
         ({ nodeId }) => nodeId !== dockedInspectorIdRef.current,
       );
@@ -1198,11 +1304,9 @@ function WorldControlPlane({
         ]);
       }
       setSelection(target);
-      requestAnimationFrame(() => {
-        floatingInspectorPortals[conversation.nodeId]
-          ?.querySelector<HTMLElement>(".xterm-helper-textarea")
-          ?.focus({ preventScroll: true });
-      });
+      if (currentConversation.view === "terminal") {
+        focusInspectorTerminal(conversation.nodeId);
+      }
       return true;
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
@@ -1305,6 +1409,9 @@ function WorldControlPlane({
                         }
                         onOpenTerminal={openTerminalById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
+                        onInspectorPresentationChange={
+                          setOfficeInspectorPresentation
+                        }
                       />
                     </Suspense>
                   ) : view === "tree" ? (

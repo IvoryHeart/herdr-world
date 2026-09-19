@@ -112,8 +112,11 @@ Roamgate's browser lease while preserving multi-host topology for observation.
 The shared World hierarchy and Office, Tree and Graph views are built against the aggregate snapshot
 types and existing selection/terminal APIs. Roamgate's existing terminal workspace becomes the
 Spaces experience. Spaces stays mounted when a visual view is selected, so World uses the same
-component tree, Inspector resources and terminal ownership rather than embedding another
-application or maintaining a parallel runtime client. The current CSS Office, list Tree and static
+component tree, Inspector resources and terminal implementation rather than embedding another
+application or maintaining a parallel runtime client. Presentation ownership is exclusive: visual
+Inspectors own selected-host resources while Office, Tree or Graph is visible; selecting Spaces
+suspends those presenters and lets the native Spaces layout present the exact selected terminal.
+The current CSS Office, list Tree and static
 branch Graph are only foundation checkpoints and do not satisfy the view migration. The CSS Office
 must not evolve into a second renderer; it is removed when the retained Pixel Office mounts.
 Office rendering receives projection data and shell-owned callbacks and does not query or depend on
@@ -175,10 +178,10 @@ with a generic responsive CSS grid.
 
 ### Present one Inspector surface in docked or floating form
 
-Visual-view selection is observational. Office proves the seam first: selecting an agent opens the
-one docked Inspector overlay above the unchanged Pixi stage, while direct desk activation opens or
-focuses that entity's movable Inspector window. Both are presentations of the same reusable
-Inspector surface. The header contains only compact identity and safety state; Files, Changes,
+Visual-view selection is observational. Office proves the seam first: its explicit Docked/Floating
+preference determines whether a newly selected entity opens in the one docked Inspector overlay or
+as a movable Inspector window above the unchanged Pixi stage. Both are presentations of the same
+reusable Inspector surface. The header contains only compact identity and safety state; Files, Changes,
 Agent History and Terminal occupy the useful area and are visible as tabs immediately. The identity
 and resources have one lifecycle and close control. A floating Inspector exposes Dock in and a
 docked Inspector exposes Dock out plus dock-position and expand controls. Terminal is ordered first
@@ -186,6 +189,11 @@ and is the initial tab for each newly opened terminal-capable entity; changing a
 not silently change another entity's state or the default for the next entity. Full ancestry,
 generation, persona, model, focus and task metadata are not repeated as a large profile card;
 appropriate admitted information remains available in scene callouts or the relevant resource view.
+
+Office settings persist an explicit default presentation for subsequent entity opens. Docked mode
+admits new contexts to the one docked target; Floating mode admits each new context directly to the
+bounded cascaded window registry. The preference does not migrate already-open contexts between
+targets, so users control those transitions only with Dock in and Dock out.
 
 The overlay receives one focused operational context containing the exact connection, observed
 runtime generation, workspace and optional pane/terminal identity. Its connector uses the retained
@@ -234,8 +242,11 @@ The terminal implementation remains the current Roamgate-derived `TerminalView`,
 retired Herdr Web terminal or establish it as a second application upstream. Retained World window
 geometry and connector code wraps the complete Inspector surface, not a terminal-only card. While
 a terminal tab is live in an Inspector conversation, mounted-but-hidden Spaces does not mount a
-second `TerminalView` for that terminal; handoff retires one presentation before another admits the
-same Herdr terminal identity.
+second `TerminalView` for that terminal. Selecting Spaces first retires the visual presentation,
+then lets the native Spaces layout mount the same qualified terminal identity and fit it to the new
+container. Returning to a visual view performs the inverse and restores retained Inspector tab,
+resource and geometry state. A UI remount and terminal detach/attach are permitted at this boundary;
+creating or closing the underlying Herdr terminal session is not.
 
 The registry exposes mutually exclusive docked and floating targets for each qualified Inspector.
 Dock out transfers the whole docked Inspector—including its selected tab and resource state—into a
@@ -244,17 +255,17 @@ the two entries swap presentations so no context is discarded and the floating-w
 not increase. A transfer may remount a live terminal only after its old target detaches, so there is
 never more than one input listener or attachment for that terminal. The × control closes only that
 Inspector entry and never creates another presentation as a side effect. Activating an Office desk
-directly opens or focuses its floating Inspector on Terminal, preserving the established desk
-interaction. Focusing a terminal tab first focuses its exact Herdr pane so the existing input gate
+opens or focuses its Inspector on Terminal using the configured default presentation. Focusing a
+terminal tab first focuses its exact Herdr pane so the existing input gate
 remains authoritative. The overlaid docked presentation can also be dragged within the visual
 stage; an explicit dock-position or expand/restore action clears that free position and reapplies
 its named dock geometry.
 
 Changing selection while an Inspector is docked performs an ordered replacement without asking the
 new entity to inherit the old resource state: the outgoing docked entry closes before the new
-context mounts. It does not manufacture a floating window as a side effect of ordinary navigation;
-floating entries arise only through explicit Dock out or direct Office desk activation. Docking an
-existing floating entry into an occupied dock still swaps the two retained presentations. The
+context mounts. Docked mode does not manufacture a floating window as a side effect of ordinary
+navigation; floating entries arise through explicit Dock out or a new Office activation in Floating
+mode. Docking an existing floating entry into an occupied dock still swaps the two retained presentations. The
 common workspace navigator resolves its selected workspace or pane to the exact selected-host
 WorldObject identity and invokes this same path, so its highlighted selection and the visual
 Inspector cannot diverge. On compact layouts the registry is preserved while one active Inspector
@@ -278,9 +289,16 @@ tab and resource-selection state alongside the one docked Inspector. This is the
 multi-window boundary: users can compare terminals, files, changes and histories across qualified
 entities without cloning runtime ownership. Compact layouts expose one usable Inspector at a time.
 Spaces remains available from the primary view selector, without an Inspector-local Open in Spaces
-shortcut. A conversation survives projection refreshes and visual-view changes while its host
-remains selected, and closes after host switching, generation retirement or current admitted state
-confirms the qualified entity no longer exists.
+shortcut. Visual Inspector windows never cover visible Spaces. A conversation survives projection
+refreshes and view changes while its host remains selected, but its presentation is suspended while
+Spaces owns the operational workspace and restored on return. It closes after host switching,
+generation retirement or current admitted state confirms the qualified entity no longer exists.
+
+The shared `TerminalView` fits from the dimensions of its current visible container after every
+portal transfer, window move/resize, dock change and Spaces handoff. Mobile input affordances follow
+the active qualified pane rather than a stale presenter. Desktop browser-focus recovery remembers
+whether that terminal held focus before blur and restores only that cursor, avoiding both the extra
+click and unwanted focus theft.
 
 ### Restore operational summaries and pane pinning at the new seam
 
@@ -365,8 +383,9 @@ browser keys untouched for rollback but does not read them.
   shell-owned Inspector and terminal owners, pass one qualified context and reject any design that
   creates a second resource store, WebSocket, SSH tunnel or application instance.
 - **Reusing the retired Herdr Web terminal would create two UI upstreams** → Keep the current
-  Roamgate-derived terminal as the only implementation; adapt retained World windowing around it
-  and suppress any hidden Spaces instance that would attach to the same terminal concurrently.
+  Roamgate-derived terminal as the only implementation; adapt retained World windowing around it,
+  suppress hidden Spaces attachments and hand presentation back to native Spaces when it becomes
+  visible.
 - **Aggregate visibility can make inactive hosts look operational** → Show active,
   ready-inactive, reconnecting and offline/stale states distinctly; keep entity selection read-only
   and require explicit host activation before every operational entry point.

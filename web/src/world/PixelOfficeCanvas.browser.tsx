@@ -354,11 +354,16 @@ async function run() {
     const alignment = host.querySelector<HTMLSelectElement>(
       ".world-office-toolbar select",
     );
+    const inspectorPresentation = host.querySelector<HTMLSelectElement>(
+      'select[aria-label="Inspector opening"]',
+    );
     const titleMode = host.querySelectorAll<HTMLSelectElement>(
       ".world-office-toolbar select",
-    )[1];
+    )[2];
     check(
-      alignment?.value === "right" && titleMode?.value === "compact",
+      alignment?.value === "right" &&
+        inspectorPresentation?.value === "docked" &&
+        titleMode?.value === "compact",
       "Office layout preferences were not restored",
     );
     if (compact) {

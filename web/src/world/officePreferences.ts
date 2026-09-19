@@ -1,9 +1,11 @@
 export type OfficeRoomAlignment = "left" | "center" | "right";
 export type OfficeLongTitleMode = "expand" | "compact";
+export type OfficeInspectorPresentation = "docked" | "floating";
 
 export type OfficePreferences = {
   roomAlignment: OfficeRoomAlignment;
   longTitleMode: OfficeLongTitleMode;
+  inspectorPresentation: OfficeInspectorPresentation;
   scrollLeft: number;
   scrollTop: number;
 };
@@ -11,6 +13,7 @@ export type OfficePreferences = {
 export const DEFAULT_OFFICE_PREFERENCES: OfficePreferences = Object.freeze({
   roomAlignment: "left",
   longTitleMode: "expand",
+  inspectorPresentation: "docked",
   scrollLeft: 0,
   scrollTop: 0,
 });
@@ -34,6 +37,11 @@ export function readOfficePreferences(
       longTitleMode: isLongTitleMode(value.longTitleMode)
         ? value.longTitleMode
         : DEFAULT_OFFICE_PREFERENCES.longTitleMode,
+      inspectorPresentation: isInspectorPresentation(
+        value.inspectorPresentation,
+      )
+        ? value.inspectorPresentation
+        : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
       scrollLeft: boundedScroll(value.scrollLeft),
       scrollTop: boundedScroll(value.scrollTop),
     };
@@ -53,6 +61,11 @@ export function writeOfficePreferences(
     longTitleMode: isLongTitleMode(preferences.longTitleMode)
       ? preferences.longTitleMode
       : DEFAULT_OFFICE_PREFERENCES.longTitleMode,
+    inspectorPresentation: isInspectorPresentation(
+      preferences.inspectorPresentation,
+    )
+      ? preferences.inspectorPresentation
+      : DEFAULT_OFFICE_PREFERENCES.inspectorPresentation,
     scrollLeft: boundedScroll(preferences.scrollLeft),
     scrollTop: boundedScroll(preferences.scrollTop),
   };
@@ -69,6 +82,12 @@ function isRoomAlignment(value: unknown): value is OfficeRoomAlignment {
 
 function isLongTitleMode(value: unknown): value is OfficeLongTitleMode {
   return value === "expand" || value === "compact";
+}
+
+function isInspectorPresentation(
+  value: unknown,
+): value is OfficeInspectorPresentation {
+  return value === "docked" || value === "floating";
 }
 
 function boundedScroll(value: unknown) {

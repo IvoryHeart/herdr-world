@@ -12,6 +12,7 @@ describe("Office preferences", () => {
       JSON.stringify({
         roomAlignment: "sideways",
         longTitleMode: "compact",
+        inspectorPresentation: "stacked",
         scrollLeft: -4,
         scrollTop: 9_000_000,
       }),
@@ -20,6 +21,7 @@ describe("Office preferences", () => {
     expect(readOfficePreferences(storage)).toEqual({
       roomAlignment: "left",
       longTitleMode: "compact",
+      inspectorPresentation: "docked",
       scrollLeft: 0,
       scrollTop: 1_000_000,
     });
@@ -44,6 +46,7 @@ describe("Office preferences", () => {
     writeOfficePreferences(storage, {
       roomAlignment: "right",
       longTitleMode: "expand",
+      inspectorPresentation: "floating",
       scrollLeft: 12.4,
       scrollTop: Number.POSITIVE_INFINITY,
     });
@@ -53,6 +56,7 @@ describe("Office preferences", () => {
       value: JSON.stringify({
         roomAlignment: "right",
         longTitleMode: "expand",
+        inspectorPresentation: "floating",
         scrollLeft: 12,
         scrollTop: 0,
       }),

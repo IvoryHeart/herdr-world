@@ -39,9 +39,9 @@ recorded by this change rather than unexplained presentation rewrites.
 - Keep Office at its full stage size while selected, generation-qualified entities open the
   shell's complete Inspector as either the one docked overlay or one of up to five movable desktop
   windows. Every presentation SHALL retain compact identity plus its applicable Terminal, Files,
-  Changes and Agent History tabs; desk activation SHALL open or focus that entity's floating
-  Inspector on Terminal rather than create a terminal-only shell or a separately implemented
-  resource UI.
+  Changes and Agent History tabs; a persisted Docked/Floating Office preference SHALL determine
+  where subsequent entity activations open without creating a terminal-only shell or a separately
+  implemented resource UI.
 - Retain the useful Roamgate-derived operational surfaces and extend the Office context with a
   compact agent identity, authoritative qualified status and optional per-agent observations, a
   supported bounded task-summary workflow, ancestry and qualified agent/pane pinning.

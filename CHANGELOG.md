@@ -54,6 +54,9 @@ retain their original Herdr Web lineage.
   Graph and Spaces; placed Terminal first and made it the default for each new
   terminal-capable selection, with one docked and up to five independently
   movable/resizable full Inspectors that retain their own tabs and resources.
+  Office now persists whether subsequent selections open in the docked
+  Inspector or as separate cascaded floating Inspectors; explicit Dock in and
+  Dock out actions remain available without rearranging existing conversations.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
   provide tagged binary, archive and update identities at release time.
@@ -72,8 +75,9 @@ retain their original Herdr Web lineage.
   Office mounted while a newly admitted seat retries exact terminal focus.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Made exact pane focus an admission requirement for World Inspectors, retained
-  qualified docked and floating conversations and terminal ownership through
-  Spaces handoff without attachment churn, and raised a background floating
+  qualified docked and floating conversations through Spaces handoff while
+  transferring each live terminal between one visual or native presenter, and
+  raised a background floating
   Inspector when any of its tabs or controls is used. Retained Inspectors now
   reconcile current pane, agent and capability metadata and reset their resource
   state when the qualified agent session changes.
@@ -91,6 +95,11 @@ retain their original Herdr Web lineage.
   controls that active World Inspector directly, including Files, Changes,
   History and Terminal availability and active state, rather than opening a
   second hidden Spaces Inspector.
+  Switching to Spaces now removes every visual Inspector presentation before
+  the native terminal mounts, so terminal sizing, mobile controls and resource
+  tabs use the native Spaces layout. Returning browser focus restores input only
+  to the terminal that previously held it, and stale lazy-loaded World assets
+  recover through the application's one-shot reload path.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Preserved the complete managed-host candidate set and qualified selected,
   focused, attention-requiring and detected-agent candidates with their parents
