@@ -1,4 +1,6 @@
 {
+  "id": "/",
+  "scope": "/",
   "name": "Herdr World",
   "short_name": "World",
   "description": "A visual control plane for Herdr agents",

@@ -6,6 +6,7 @@
 
 .agent-history-card {
   position: relative;
+  cursor: pointer;
   display: grid;
   gap: 7px;
   padding: 10px;

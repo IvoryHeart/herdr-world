@@ -284,10 +284,6 @@
   flex: 1 1 auto;
 }
 
-.workspace-inspector-back {
-  display: none;
-}
-
 .workspace-inspector-unavailable {
   flex: 1 1 auto;
   display: flex;
@@ -390,21 +386,6 @@
 
 .workspace-inspector.is-compact.has-detail .workspace-inspector-detail {
   display: flex;
-}
-
-.workspace-inspector.is-compact.has-detail .workspace-inspector-back {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-bottom: 1px solid var(--viewer-border);
-  border-radius: 0;
-  background: var(--viewer-header-bg);
-  color: var(--text);
-  font-size: 12px;
 }
 
 @container workspace-stage (max-width: 699px) {

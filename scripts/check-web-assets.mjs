@@ -7,15 +7,17 @@ const publicRoot = fileURLToPath(new URL("../server/public/", import.meta.url));
 // The retained Pixel Office and spatial Graph add lazy renderer/environment
 // entry points. Keep total bytes and eager JS constrained while allowing the
 // shared visual-view ownership wiring in the shell.
-const maxFileCount = 170;
-const maxTotalBytes = 12 * 1024 * 1024;
+const maxFileCount = 190;
+const maxTotalBytes = 14 * 1024 * 1024;
 const maxInitialJsBytes = 660 * 1024;
 const maxInitialJsGzipBytes = 202 * 1024;
 const maxInitialCssBytes = 196 * 1024;
 
-/** Follow eager imports only; dynamic imports belong to feature budgets. */
-export function initialAssetFiles(manifest) {
-  const entries = Object.keys(manifest).filter((key) => manifest[key].isEntry);
+/** Follow eager imports only, from app entries or explicitly selected features. */
+export function initialAssetFiles(
+  manifest,
+  entries = Object.keys(manifest).filter((key) => manifest[key].isEntry),
+) {
   if (!entries.length) throw new Error("Vite manifest has no entry points");
   const visited = new Set();
   const files = new Set();
@@ -30,6 +32,37 @@ export function initialAssetFiles(manifest) {
   }
   for (const entry of entries) visit(entry);
   return [...files];
+}
+
+export function assertLazyGrammarAssets(manifest) {
+  const grammarFiles = new Set(
+    Object.entries(manifest)
+      .filter(
+        ([key, chunk]) =>
+          chunk.name?.startsWith("syntax-") ||
+          (key.includes("@shikijs") && key.includes("langs")),
+      )
+      .map(([, chunk]) => chunk.file),
+  );
+  // The World shell may embed WorkspaceInspectorHost in its Office view;
+  // validate it when Vite emits a standalone feature chunk, while requiring
+  // the general settings dialog that remains lazy.
+  for (const name of ["ConfigurationDialog", "WorkspaceInspectorHost"]) {
+    const entries = Object.keys(manifest).filter(
+      (key) => manifest[key].name === name,
+    );
+    if (!entries.length) {
+      if (name === "ConfigurationDialog") {
+        throw new Error(`Missing Vite feature chunk: ${name}`);
+      }
+      continue;
+    }
+    for (const file of initialAssetFiles(manifest, entries)) {
+      if (grammarFiles.has(file)) {
+        throw new Error(`${name} eagerly loads syntax grammar asset: ${file}`);
+      }
+    }
+  }
 }
 
 async function collectAssetStats(root) {
@@ -68,6 +101,7 @@ async function checkAssets() {
       { cause },
     );
   }
+  assertLazyGrammarAssets(manifest);
   let jsBytes = 0;
   let jsGzipBytes = 0;
   let cssBytes = 0;

@@ -2,7 +2,7 @@ import { defaultDataFile } from "./data-paths";
 import { dirname } from "node:path";
 import { mkdirSync } from "node:fs";
 import { rename, rm, writeFile } from "node:fs/promises";
-import { STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
+import { LEGACY_DEFAULT_CONNECTION_ID, STARTUP_DEFAULT_CONNECTION_ID } from "../connections/types";
 import { serverLogger } from "../utils/logger";
 import { sourceCheckoutPath as workspaceSourceCheckoutPath } from "../workspace/utils";
 
@@ -32,6 +32,7 @@ export type GuiSettings = {
   version: 1;
   repositories: Record<string, GuiRepoSettings>;
   workspace_auto_sync: Record<string, GuiWorkspaceAutoSyncSettings>;
+  terminal_transport?: Record<string, { surface_codecs: boolean }>;
   custom: Record<string, unknown>;
 };
 
@@ -50,6 +51,7 @@ function defaultGuiSettings(): GuiSettings {
     version: 1,
     repositories: {},
     workspace_auto_sync: {},
+    terminal_transport: {},
     custom: {},
   };
 }
@@ -117,6 +119,24 @@ function normalizeGuiSettings(raw: unknown): GuiSettings {
     version: 1,
     repositories: normalizedRepos,
     workspace_auto_sync: normalizedWorkspaceAutoSync,
+    terminal_transport: Object.fromEntries(
+      Object.entries(obj.terminal_transport ?? {}).flatMap(([key, value]) =>
+        value &&
+        typeof value === "object" &&
+        typeof (value as { surface_codecs?: unknown }).surface_codecs ===
+          "boolean"
+          ? [
+              [
+                key,
+                {
+                  surface_codecs: (value as { surface_codecs: boolean })
+                    .surface_codecs,
+                },
+              ],
+            ]
+          : [],
+      ),
+    ),
     custom:
       obj.custom && typeof obj.custom === "object"
         ? (obj.custom as Record<string, unknown>)
@@ -190,6 +210,18 @@ export function updateGuiSettings(
     if (!shouldCommit()) throw new Error("settings update cancelled");
     return persistGuiSettings(next, shouldCommit);
   });
+}
+
+export function terminalSurfaceCodecsEnabled(
+  settings: GuiSettings,
+  connectionId = STARTUP_DEFAULT_CONNECTION_ID,
+): boolean {
+  const configured =
+    settings.terminal_transport?.[connectionId] ??
+    (connectionId === STARTUP_DEFAULT_CONNECTION_ID
+      ? settings.terminal_transport?.[LEGACY_DEFAULT_CONNECTION_ID]
+      : undefined);
+  return configured?.surface_codecs !== false;
 }
 
 export function connectionSettingsPrefix(connectionId?: string | null): string {

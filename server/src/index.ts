@@ -21,6 +21,8 @@ import {
   SERVICE_COMMAND_CONTINUE,
 } from "./config/service-manager";
 import { runHerdrCommand } from "./herdr/cli";
+import { createWebPushService } from "./notifications/web-push";
+import { enrichIntegrationVersions } from "./herdr/integration-versions";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
@@ -121,6 +123,7 @@ if (herdrCommandResult !== null) {
 const config = loadServerConfig(APP_VERSION);
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
+const webPush = createWebPushService({ warn: (message) => logger.warn(message) });
 const officeObservabilityBootstrap = await readGuiSettings()
   .then((settings) => resolveOfficeObservabilityBootstrap(settings))
   .catch(() => {
@@ -146,11 +149,12 @@ const downstreamConnectionConfig = {
   hasExplicitSocketPath: config.hasExplicitSocketPath,
   hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
 };
-const { isAuthed, handleTokenLogin, handleLogin, loginPage } =
+const { isAuthed, sessionToken, handleTokenLogin, handleLogin, handleLogout, loginPage } =
   createAuthHandlers({
     authRequired: config.authRequired,
     password: config.password,
     urlLoginToken: config.generatedAuthToken,
+    secureCookies: Boolean(config.tls),
   });
 
 type RpcRequest = ConnectionRpcRequest;
@@ -465,6 +469,15 @@ function runtimeFactoryForProfile(
         safeSend,
         clientLabel,
         markRpcError,
+        onTaskEvent: (event) =>
+          webPush.notify(
+            {
+              ...event,
+              connectionId: identity.id,
+              runtimeGeneration: context.generation,
+            },
+            context.isCurrent,
+          ),
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
@@ -1167,6 +1180,12 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   try {
     const rawResult = await herdr.call(method, params ?? {});
     let result = rawResult;
+    if (method === "integration.list") {
+      result = await enrichIntegrationVersions(result, {
+        sshHost: sshHost(),
+        ping: () => herdr.ping(),
+      });
+    }
     if (method === "workspace.list") {
       result = await worktreeParents.enrichWorkspaceList(result);
       result = await enrichWorkspacesWithGitStatus(result);
@@ -1292,6 +1311,7 @@ function main() {
       Bun.serve({
         port: config.port,
         hostname: config.host,
+        tls: config.tls,
         async fetch(req, server) {
           const requestPathname = rawRequestPathname(req.url);
           let url: URL;
@@ -1315,6 +1335,9 @@ function main() {
           if (url.pathname === "/api/login" && req.method === "POST") {
             return handleLogin(req);
           }
+          if (url.pathname === "/api/logout") {
+            return handleLogout(req);
+          }
           if (url.pathname === "/login") {
             return loginPage();
           }
@@ -1326,6 +1349,10 @@ function main() {
               return unauthenticatedLoginRedirect();
             }
             return new Response("unauthorized", { status: 401 });
+          }
+
+          if (url.pathname === "/api/notifications/push") {
+            return webPush.handle(req);
           }
 
           const admissionError = browserRequestAdmissionError(
@@ -1506,7 +1533,7 @@ function main() {
     },
   });
   const listeningPort = server.port ?? config.port;
-  const publicBrowserUrl = browserUrlFor(config.host, listeningPort);
+  const publicBrowserUrl = browserUrlFor(config.host, listeningPort, Boolean(config.tls));
   logger.info("listening", {
     url: publicBrowserUrl,
     websocket: "/ws",
@@ -1547,6 +1574,7 @@ function main() {
 let managerStopTask: Promise<void> | null = null;
 function stopManagerOnce(): Promise<void> {
   connectionProfiles.stopSupervision();
+  webPush.stop();
   managerStopTask ??= connectionManager.stopAll();
   return managerStopTask;
 }

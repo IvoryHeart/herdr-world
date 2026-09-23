@@ -55,6 +55,36 @@ test.each(Array.from({ length: 8 }, (_, mask) => mask))(
   },
 );
 
+test("text search composes with role filters without changing counts or source entries", () => {
+  const filters = { user: true, agent: true, tool: false };
+  const before = structuredClone(entries);
+  expect(selectHistoryEntries(entries, filters, "  FAILED  ")).toEqual({
+    visible: [entries[5]],
+    counts: { user: 1, agent: 2, tool: 3 },
+  });
+  expect(
+    selectHistoryEntries(entries, ALL_HISTORY_FILTERS, "failed").visible,
+  ).toEqual([entries[4], entries[5]]);
+  expect(selectHistoryEntries(entries, filters, "missing").visible).toEqual([]);
+  expect(selectHistoryEntries(entries, filters, "  ").visible).toEqual([
+    entries[0],
+    entries[1],
+    entries[5],
+  ]);
+  const longText = { ...entries[0], text: `${"x".repeat(5000)}中文.*` };
+  expect(selectHistoryEntries([longText], filters, "中文.*").visible).toEqual([
+    longText,
+  ]);
+  expect(
+    selectHistoryEntries(
+      [{ ...entries[2], text: "", text_bytes: 100 }],
+      ALL_HISTORY_FILTERS,
+      "output",
+    ).visible,
+  ).toEqual([]);
+  expect(entries).toEqual(before);
+});
+
 test("agent errors belong to Agent; tool calls, outputs and errors belong to Tool", () => {
   expect(entries.map(historyEntryCategory)).toEqual([
     "user",

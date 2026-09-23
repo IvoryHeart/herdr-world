@@ -3,6 +3,7 @@ import { terminalLinkModifierMatches } from "./shortcutPreferences";
 import {
   findTerminalHttpLinks,
   sanitizeTerminalHttpUrl,
+  terminalFileUriPath,
 } from "./terminalLinks";
 import {
   findTerminalFileLinkCandidates,
@@ -120,174 +121,378 @@ function overlaps(a: TextRange, b: TextRange) {
   return a.start < b.end && a.end > b.start;
 }
 
+export type TerminalTouchLink =
+  | { kind: "url"; value: string }
+  | { kind: "file"; value: string };
+
+export type TerminalResolvedLink = {
+  /** Untrusted OSC8 target from the displayed cell, never its visible label. */
+  uri?: string | null;
+  url: string | null;
+  regions: { row: number; start_col: number; end_col: number }[];
+};
+
 export function registerTerminalLinkProvider(
   term: Terminal,
-  onPreviewPath?: (path: string) => void,
+  onPreviewPath?: (path: string, event: MouseEvent) => void,
   resolvePaths?: (paths: string[]) => Promise<Map<string, string>>,
   inferContinuations: () => boolean = () => false,
+  upstream?: {
+    state: () => unknown;
+    resolve: (
+      row: number,
+      col: number,
+      touch?: boolean,
+    ) => Promise<TerminalResolvedLink | null>;
+  },
 ) {
   let disposed = false;
-  const registration = term.registerLinkProvider({
-    provideLinks(bufferLineNumber, callback) {
-      const activeBuffer = term.buffer.active;
-      const columnCount = term.cols;
-      const infer = inferContinuations();
-      const context = readLinkContext(term, bufferLineNumber, infer);
-      if (!context) {
+  let requestGeneration = 0;
+  type TargetLink = ILink & { target: TerminalTouchLink };
+  const provideLinks = (
+    bufferLineNumber: number,
+    reply: (links: TargetLink[] | undefined) => void,
+    touch?: { col: number; current: () => boolean },
+  ) => {
+    const generation = touch ? requestGeneration : ++requestGeneration;
+    const requestCurrent = () =>
+      touch ? touch.current() : generation === requestGeneration;
+    // xterm stores replies in its current row cache, even for older requests.
+    const callback = (links: TargetLink[] | undefined) => {
+      if (touch || (!disposed && requestCurrent())) reply(links);
+    };
+    const activeBuffer = term.buffer.active;
+    const columnCount = term.cols;
+    const rowCount = term.rows;
+    const viewport = activeBuffer.viewportY;
+    const state = upstream?.state();
+    const infer = inferContinuations();
+    const context = readLinkContext(term, bufferLineNumber, infer);
+    if (!context || state === null) {
+      callback(undefined);
+      return;
+    }
+    const snapshot = JSON.stringify(context);
+    const { text, cells, segments } = context;
+    const isCurrent = () =>
+      !disposed &&
+      requestCurrent() &&
+      term.buffer.active === activeBuffer &&
+      term.cols === columnCount &&
+      term.rows === rowCount &&
+      activeBuffer.viewportY === viewport &&
+      upstream?.state() === state &&
+      inferContinuations() === infer &&
+      JSON.stringify(readLinkContext(term, bufferLineNumber, infer)) ===
+        snapshot;
+    const hover = () => {
+      // Inactive row caches survive repaint. Reject their actions and ask
+      // xterm to reread now that this stale link is active again.
+      if (!isCurrent())
+        queueMicrotask(() => {
+          if (!disposed) term.refresh(0, term.rows - 1);
+        });
+    };
+    const rangeFor = (span: TextRange) => {
+      const start = cells[span.start]?.start;
+      const end = cells[span.end - 1]?.end;
+      return start &&
+        end &&
+        start.y <= bufferLineNumber &&
+        end.y >= bufferLineNumber
+        ? { start, end }
+        : undefined;
+    };
+    const links: TargetLink[] = [];
+    // HTTP links use only real soft wraps. Heuristic joins cannot verify a URL.
+    for (const segment of segments) {
+      for (const match of findTerminalHttpLinks(
+        text.slice(segment.start, segment.end),
+      )) {
+        const range = rangeFor({
+          start: segment.start + match.start,
+          end: segment.start + match.end,
+        });
+        if (!range || (infer && range.end.x >= columnCount - 1)) continue;
+        links.push({
+          range,
+          hover,
+          text: match.url,
+          target: { kind: "url", value: match.url },
+          activate(event, raw) {
+            event.preventDefault();
+            if (!isCurrent() || !terminalLinkModifierMatches(event)) return;
+            const url = sanitizeTerminalHttpUrl(raw);
+            if (url) {
+              term.clearSelection?.();
+              window.open(url, "_blank", "noopener,noreferrer");
+            }
+          },
+        });
+      }
+    }
+    const candidates: Array<TerminalFileLinkCandidate & { inferred: boolean }> =
+      [];
+    if (onPreviewPath) {
+      // Exclude whole URLs as well as the individual row forms so a wrapped
+      // URL's path fragment never becomes a local file link.
+      const excluded = findTerminalHttpLinks(text);
+      const add = (part: TextRange) => {
+        for (const match of findTerminalFileLinkCandidates(
+          text.slice(part.start, part.end),
+        )) {
+          const candidate = {
+            ...match,
+            start: part.start + match.start,
+            end: part.start + match.end,
+          };
+          if (
+            !rangeFor(candidate) ||
+            excluded.some((span) => overlaps(candidate, span))
+          )
+            continue;
+          if (
+            candidates.some(
+              (span) =>
+                span.start === candidate.start && span.end === candidate.end,
+            )
+          )
+            continue;
+          candidates.push({
+            ...candidate,
+            inferred: segments.some(
+              (segment) =>
+                candidate.start < segment.end && candidate.end > segment.end,
+            ),
+          });
+        }
+      };
+      add({ start: 0, end: text.length });
+      if (segments.length > 1) {
+        // A path may end before another prose row or start after one. Try
+        // complete segment spans around the requested row, not just the
+        // longest guessed token and individual fragments.
+        for (let first = 0; first < segments.length; first++) {
+          for (let last = first; last < segments.length; last++) {
+            const span = {
+              start: segments[first]!.start,
+              end: segments[last]!.end,
+            };
+            if (rangeFor(span)) add(span);
+          }
+        }
+      }
+    }
+    // Prefer the complete existing path; retain standalone row links when a
+    // speculative join does not resolve. Validate ambiguous absolute fragments
+    // too, instead of making a known partial path immediately clickable.
+    candidates.sort((a, b) => b.end - b.start - (a.end - a.start));
+    const needsResolution = (candidate: (typeof candidates)[number]) =>
+      !candidate.absolute ||
+      candidate.inferred ||
+      candidates.some((other) => other.inferred && overlaps(candidate, other));
+    const pending = candidates.filter(needsResolution);
+    const finish = (resolved = new Map<string, string>()) => {
+      if (disposed) {
+        if (touch) callback(undefined);
+        return;
+      }
+      if (!isCurrent()) {
         callback(undefined);
         return;
       }
-      const snapshot = JSON.stringify(context);
-      const { text, cells, segments } = context;
-      const rangeFor = (span: TextRange) => {
-        const start = cells[span.start]?.start;
-        const end = cells[span.end - 1]?.end;
-        return start &&
-          end &&
-          start.y <= bufferLineNumber &&
-          end.y >= bufferLineNumber
-          ? { start, end }
-          : undefined;
-      };
-      const links: ILink[] = [];
-      // HTTP links use only real soft wraps. Heuristic joins cannot verify a URL.
-      for (const segment of segments) {
-        for (const match of findTerminalHttpLinks(
-          text.slice(segment.start, segment.end),
-        )) {
-          const range = rangeFor({
-            start: segment.start + match.start,
-            end: segment.start + match.end,
-          });
-          if (!range) continue;
-          links.push({
-            range,
-            text: match.url,
-            activate(event, raw) {
-              event.preventDefault();
-              if (!terminalLinkModifierMatches(event)) return;
-              const url = sanitizeTerminalHttpUrl(raw);
-              if (url) window.open(url, "_blank", "noopener,noreferrer");
-            },
-          });
-        }
-      }
-      const candidates: Array<
-        TerminalFileLinkCandidate & { inferred: boolean }
-      > = [];
-      if (onPreviewPath) {
-        // Exclude whole URLs as well as the individual row forms so a wrapped
-        // URL's path fragment never becomes a local file link.
-        const excluded = findTerminalHttpLinks(text);
-        const add = (part: TextRange) => {
-          for (const match of findTerminalFileLinkCandidates(
-            text.slice(part.start, part.end),
-          )) {
-            const candidate = {
-              ...match,
-              start: part.start + match.start,
-              end: part.start + match.end,
-            };
-            if (
-              !rangeFor(candidate) ||
-              excluded.some((span) => overlaps(candidate, span))
-            )
-              continue;
-            if (
-              candidates.some(
-                (span) =>
-                  span.start === candidate.start && span.end === candidate.end,
-              )
-            )
-              continue;
-            candidates.push({
-              ...candidate,
-              inferred: segments.some(
-                (segment) =>
-                  candidate.start < segment.end && candidate.end > segment.end,
-              ),
-            });
-          }
-        };
-        add({ start: 0, end: text.length });
-        if (segments.length > 1) {
-          // A path may end before another prose row or start after one. Try
-          // complete segment spans around the requested row, not just the
-          // longest guessed token and individual fragments.
-          for (let first = 0; first < segments.length; first++) {
-            for (let last = first; last < segments.length; last++) {
-              const span = {
-                start: segments[first]!.start,
-                end: segments[last]!.end,
-              };
-              if (rangeFor(span)) add(span);
+      const accepted: TextRange[] = [];
+      for (const candidate of candidates) {
+        const path = needsResolution(candidate)
+          ? resolved.get(candidate.path)
+          : candidate.path;
+        if (!path || accepted.some((span) => overlaps(candidate, span)))
+          continue;
+        accepted.push(candidate);
+        links.push({
+          range: rangeFor(candidate)!,
+          hover,
+          text: candidate.path,
+          target: { kind: "file", value: path },
+          activate(event) {
+            event.preventDefault();
+            if (isCurrent() && terminalLinkModifierMatches(event)) {
+              term.clearSelection?.();
+              onPreviewPath?.(path, event);
             }
+          },
+        });
+      }
+      if (!upstream) {
+        callback(links.length ? links : undefined);
+        return;
+      }
+      // Probe URL starts and one continuation cell, never every terminal cell.
+      const row = bufferLineNumber - 1 - (viewport ?? 0);
+      const rowLine = activeBuffer.getLine(bufferLineNumber - 1);
+      const rowText = rowLine
+        ? lineTextWithCells(rowLine, columnCount, bufferLineNumber)
+        : null;
+      const first = rowText?.text.search(/\S/) ?? -1;
+      const columns = new Set<number>();
+      if (first >= 0) columns.add(rowText!.cells[first]!.start.x - 1);
+      for (const link of findTerminalHttpLinks(rowText?.text ?? "")) {
+        columns.add(rowText!.cells[link.start]!.start.x - 1);
+      }
+      if (touch) {
+        columns.clear();
+        columns.add(touch.col);
+      }
+      const resolve = async () => {
+        const resolved: TerminalResolvedLink[] = [];
+        for (const col of [...columns].slice(0, MAX_CANDIDATES_PER_LINE)) {
+          if (!isCurrent()) {
+            callback(undefined);
+            return;
+          }
+          if (
+            resolved.some((link) =>
+              link.regions.some(
+                (r) => r.row === row && r.start_col <= col && r.end_col >= col,
+              ),
+            )
+          )
+            continue;
+          try {
+            const link = await upstream.resolve(row, col, !!touch);
+            if (touch && link && "uri" in link) {
+              if (!isCurrent()) {
+                callback(undefined);
+                return;
+              }
+              const uri = link.uri ?? "";
+              const path = terminalFileUriPath(uri);
+              const url = sanitizeTerminalHttpUrl(uri);
+              const target: TerminalTouchLink | null = path
+                ? { kind: "file", value: path }
+                : url && url === uri
+                  ? { kind: "url", value: url }
+                  : null;
+              callback(
+                target
+                  ? [
+                      {
+                        text: uri,
+                        target,
+                        range: {
+                          start: { x: col + 1, y: bufferLineNumber },
+                          end: { x: col + 1, y: bufferLineNumber },
+                        },
+                        activate() {},
+                      },
+                    ]
+                  : undefined,
+              );
+              return;
+            }
+            if (link) resolved.push(link);
+          } catch {
+            if (touch) {
+              callback(undefined);
+              return;
+            }
+            break;
           }
         }
-      }
-      // Prefer the complete existing path; retain standalone row links when a
-      // speculative join does not resolve. Validate ambiguous absolute fragments
-      // too, instead of making a known partial path immediately clickable.
-      candidates.sort((a, b) => b.end - b.start - (a.end - a.start));
-      const needsResolution = (candidate: (typeof candidates)[number]) =>
-        !candidate.absolute ||
-        candidate.inferred ||
-        candidates.some(
-          (other) => other.inferred && overlaps(candidate, other),
-        );
-      const pending = candidates.filter(needsResolution);
-      const finish = (resolved = new Map<string, string>()) => {
-        if (disposed) return;
-        if (
-          term.buffer.active !== activeBuffer ||
-          term.cols !== columnCount ||
-          inferContinuations() !== infer ||
-          JSON.stringify(readLinkContext(term, bufferLineNumber, infer)) !==
-            snapshot
-        ) {
+        if (!isCurrent()) {
           callback(undefined);
           return;
         }
-        const accepted: TextRange[] = [];
-        for (const candidate of candidates) {
-          const path = needsResolution(candidate)
-            ? resolved.get(candidate.path)
-            : candidate.path;
-          if (!path || accepted.some((span) => overlaps(candidate, span)))
+        const regions = resolved.flatMap((link) => link.regions);
+        const accepted = links.filter(
+          (link) =>
+            !regions.some((r) => {
+              const y = r.row + (viewport ?? 0) + 1;
+              return (
+                link.range.start.y <= y &&
+                link.range.end.y >= y &&
+                (link.range.start.y < y ||
+                  link.range.start.x <= r.end_col + 1) &&
+                (link.range.end.y > y || link.range.end.x >= r.start_col + 1)
+              );
+            }),
+        );
+        for (const link of resolved) {
+          if (!link.url || sanitizeTerminalHttpUrl(link.url) !== link.url)
             continue;
-          accepted.push(candidate);
-          links.push({
-            range: rangeFor(candidate)!,
-            text: candidate.path,
+          if (!link.regions.some((region) => region.row === row)) continue;
+          // The bridge validates contiguous regions. Keep one logical range so
+          // xterm underlines every wrapped row, whichever row is hovered.
+          const first = link.regions[0]!;
+          const last = link.regions[link.regions.length - 1]!;
+          accepted.push({
+            text: link.url,
+            target: { kind: "url", value: link.url },
+            hover,
+            range: {
+              start: {
+                x: first.start_col + 1,
+                y: first.row + (viewport ?? 0) + 1,
+              },
+              end: {
+                x: last.end_col + 1,
+                y: last.row + (viewport ?? 0) + 1,
+              },
+            },
             activate(event) {
               event.preventDefault();
-              if (terminalLinkModifierMatches(event)) onPreviewPath?.(path);
+              if (isCurrent() && terminalLinkModifierMatches(event)) {
+                term.clearSelection?.();
+                window.open(link.url!, "_blank", "noopener,noreferrer");
+              }
             },
           });
         }
-        callback(links.length ? links : undefined);
+        callback(accepted.length ? accepted : undefined);
       };
-      if (!pending.length || !resolvePaths) {
-        finish();
-        return;
+      void resolve();
+    };
+    if (!pending.length || !resolvePaths) {
+      finish();
+      return;
+    }
+    const resolveAll = async () => {
+      const paths = [...new Set(pending.map((candidate) => candidate.path))];
+      const resolved = new Map<string, string>();
+      // Contexts can exceed the per-line cache and server batch limit.
+      for (let i = 0; i < paths.length; i += MAX_CANDIDATES_PER_LINE) {
+        if (!isCurrent()) break;
+        const batch = await resolvePaths(
+          paths.slice(i, i + MAX_CANDIDATES_PER_LINE),
+        );
+        for (const [candidate, path] of batch) resolved.set(candidate, path);
       }
-      const resolveAll = async () => {
-        const paths = [...new Set(pending.map((candidate) => candidate.path))];
-        const resolved = new Map<string, string>();
-        // Contexts can exceed the per-line cache and server batch limit.
-        for (let i = 0; i < paths.length; i += MAX_CANDIDATES_PER_LINE) {
-          if (disposed) break;
-          const batch = await resolvePaths(
-            paths.slice(i, i + MAX_CANDIDATES_PER_LINE),
-          );
-          for (const [candidate, path] of batch) resolved.set(candidate, path);
-        }
-        return resolved;
-      };
-      void resolveAll().then(finish, () => finish());
-    },
-  });
+      return resolved;
+    };
+    void resolveAll().then(finish, () => finish());
+  };
+  const registration = term.registerLinkProvider({ provideLinks });
   return {
+    /** Independent lookup: never replaces xterm's pending hover row generation. */
+    resolveTouch(row: number, col: number, current: () => boolean) {
+      const y = term.buffer.active.viewportY + row + 1;
+      return new Promise<TerminalTouchLink | null>((reply) => {
+        provideLinks(
+          y,
+          (links) => {
+            const link = links?.find(
+              ({ range }) =>
+                range.start.y <= y &&
+                range.end.y >= y &&
+                (range.start.y < y || range.start.x <= col + 1) &&
+                (range.end.y > y || range.end.x >= col + 1),
+            );
+            reply(current() ? (link?.target ?? null) : null);
+          },
+          { col, current },
+        );
+      });
+    },
     dispose() {
       disposed = true;
       registration.dispose();

@@ -1,6 +1,11 @@
 import { worldLocalStorage } from "../browserStorage";
+import { imageMimeForPath } from "../../../shared/filePreview";
 import { shortcutMatches } from "../shortcutPreferences";
-import { DEFAULT_THEMES, type SelectedLineRange } from "@pierre/diffs";
+import {
+  DEFAULT_THEMES,
+  getSingularPatch,
+  type SelectedLineRange,
+} from "@pierre/diffs";
 import {
   PatchDiff,
   Virtualizer,
@@ -58,6 +63,7 @@ import {
   readDiffCollapseState,
   writeDiffCollapseState,
 } from "./diffContentState";
+import { diffSyntaxLanguageForPath } from "./diffSyntaxHighlighting";
 import "./DiffContentView.css";
 
 type DiffViewMode = "split" | "unified";
@@ -300,6 +306,18 @@ export function diffContentEntries(
 function isPreviewableImagePath(path: string) {
   const ext = path.toLowerCase().split(".").pop() ?? "";
   return PREVIEWABLE_IMAGE_EXTENSIONS.has(ext);
+}
+
+export function isImageDiff(path: string, diff: string) {
+  return imageMimeForPath(path) !== null && (!diff || isBinaryDiffText(diff));
+}
+
+export function highlightedPatch(patch: string, path: string) {
+  const diff = getSingularPatch(patch);
+  const language = diffSyntaxLanguageForPath(path);
+  if (!diff.prevName || diffSyntaxLanguageForPath(diff.prevName) === language)
+    diff.lang = language;
+  return diff;
 }
 
 function isBinaryDiffText(diff: string) {
@@ -694,6 +712,7 @@ function areDiffFileSectionPropsEqual(
 }
 
 export function DiffContentView({
+  selectionRevision = 0,
   entry,
   file,
   loading,
@@ -712,7 +731,9 @@ export function DiffContentView({
   onReanchorAnnotations,
   onEditAnnotation,
   embedded = false,
+  backAction,
 }: {
+  selectionRevision?: number;
   entry: GitDiffEntry | null;
   file: GitDiffFile | null;
   loading: boolean;
@@ -735,7 +756,10 @@ export function DiffContentView({
   ) => void;
   onEditAnnotation?: (id: string) => void;
   embedded?: boolean;
+  backAction?: { label: string; onClick: () => void };
 }) {
+  void selectionRevision;
+  void backAction;
   const sectionRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const selectFileRef = useRef(onSelectFile);

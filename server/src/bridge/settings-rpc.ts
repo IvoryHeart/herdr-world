@@ -4,6 +4,7 @@ import {
   serializeConnectionEnvelope,
 } from "../connections/protocol";
 import type { HerdrClient } from "./herdr-client";
+import { LEGACY_DEFAULT_CONNECTION_ID } from "../connections/types";
 import {
   connectionSettingsPrefix,
   DEFAULT_WORKSPACE_AUTO_SYNC_INTERVAL_MINUTES,
@@ -11,6 +12,7 @@ import {
   guiSettingsPath,
   readGuiSettings,
   repoWorktreeHooksEnabled,
+  terminalSurfaceCodecsEnabled,
   updateGuiSettings,
   workspaceAutoSyncSettingsKey,
   workspaceRepoSettingsKey,
@@ -47,6 +49,7 @@ export function createSettingsRpcHandler(args: {
   }>;
   workspaceAutoSyncIsRunning: (key: string) => boolean;
   onWorkspaceAutoSyncSettingsChanged: (key: string, enabled: boolean) => void;
+  onTerminalTransportSettingsChanged?: (enabled: boolean) => void;
   safeSend: (
     ws: ServerWebSocket<unknown>,
     payload: string,
@@ -106,6 +109,43 @@ export function createSettingsRpcHandler(args: {
         ? args.safeSend(ws, serialize({ id, result }), method)
         : fail(CONNECTION_CHANGED_DURING_REQUEST);
     try {
+      if (!requestIsCurrent()) return fail(CONNECTION_CHANGED_DURING_REQUEST);
+      if (method === "settings.terminal_transport.get") {
+        const settings = await readSettings();
+        return reply({
+          surface_codecs: terminalSurfaceCodecsEnabled(
+            settings,
+            args.connectionId,
+          ),
+        });
+      }
+      if (method === "settings.terminal_transport.update") {
+        if (
+          typeof params.surface_codecs !== "boolean" ||
+          Object.keys(params).some((key) => key !== "surface_codecs")
+        )
+          return fail(
+            "settings.terminal_transport.update requires only a boolean surface_codecs",
+          );
+        const enabled = params.surface_codecs;
+        const connectionId = args.connectionId ?? LEGACY_DEFAULT_CONNECTION_ID;
+        let changed = false;
+        const settings = await updateSettings((current) => {
+          changed =
+            terminalSurfaceCodecsEnabled(current, connectionId) !== enabled;
+          return {
+            ...current,
+            terminal_transport: {
+              ...current.terminal_transport,
+              [connectionId]: { surface_codecs: enabled },
+            },
+          };
+        }, requestIsCurrent);
+        if (changed) args.onTerminalTransportSettingsChanged?.(enabled);
+        return reply({
+          surface_codecs: terminalSurfaceCodecsEnabled(settings, connectionId),
+        });
+      }
       if (method === "settings.get") {
         const settings = await readSettings();
         return reply({ settings, path: guiSettingsPath() });

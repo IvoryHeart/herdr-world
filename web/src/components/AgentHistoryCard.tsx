@@ -2,7 +2,8 @@ import { memo, useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { historyEntryLabel, type HistoryEntry } from "./agentHistory";
 import { formatBytes } from "./agentSession";
-import { UI_LOCALE } from "../uiLocale";
+import { formatUiDateTime } from "../uiLocale";
+import { copyTextWithFeedback } from "../copyText";
 import "./AgentHistoryCard.css";
 
 export const HISTORY_PREVIEW_CHARS = 4000;
@@ -44,31 +45,28 @@ export const AgentHistoryCard = memo(function AgentHistoryCard({
     return () => observer.disconnect();
   }, [preview]);
   const label = historyEntryLabel(entry);
-  const time = new Date(entry.sent_at);
   return (
     <article
       className={`agent-history-card is-${entry.role} ${highlighted ? "is-minimap-target" : ""} ${selected ? "is-selected" : ""}`}
       data-sequence={index}
+      onClick={(event) => {
+        if (event.target instanceof Element && event.target.closest("button"))
+          return;
+        onExpand(entry);
+      }}
     >
       <div className="agent-history-card-meta">
         <strong className="agent-history-card-role">{label}</strong>
         <small>#{index}</small>
-        <time title={entry.sent_at}>
-          {Number.isNaN(time.getTime())
-            ? entry.sent_at
-            : time.toLocaleString(UI_LOCALE, {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
+        <time title={entry.sent_at} dateTime={entry.sent_at}>
+          {formatUiDateTime(entry.sent_at)}
         </time>
         <span />
         {!contentPending ? (
           <button
             type="button"
             className="agent-history-copy"
-            onClick={() => void navigator.clipboard?.writeText(entry.text)}
+            onClick={() => void copyTextWithFeedback(entry.text)}
             aria-label={`Copy entry ${index}`}
             title="Copy"
           >

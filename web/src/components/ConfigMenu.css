@@ -11,12 +11,19 @@
   right: 0;
   width: min(380px, calc(100vw - 24px));
   max-height: calc(100vh - 72px);
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   padding: 8px;
   border: 1px solid var(--shell-border);
   border-radius: 8px;
   background: var(--shell-panel);
   box-shadow: var(--shadow-lg);
+}
+
+.config-dropdown-content {
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .config-summary {
@@ -69,6 +76,13 @@
   padding-bottom: 0;
 }
 
+.config-logout-error {
+  grid-column: 1 / -1;
+  margin: 6px 8px;
+  color: var(--danger-text);
+  font-size: 12px;
+}
+
 .config-title {
   margin: 0 8px 4px;
   color: var(--muted);
@@ -105,6 +119,14 @@
   display: grid;
   gap: 2px;
   text-align: left;
+}
+
+.config-preference-row > .config-item-copy {
+  grid-column: 2;
+}
+
+.config-item-copy .config-notification-status {
+  display: block;
 }
 
 .config-item-copy strong {
@@ -429,14 +451,8 @@
     animation: config-sheet-in 160ms ease;
   }
 
-  .config-dropdown::before {
-    content: "";
-    display: block;
-    width: 36px;
-    height: 4px;
-    margin: 2px auto 6px;
-    border-radius: 999px;
-    background: var(--border);
+  .config-dropdown.is-expanded {
+    max-height: calc(90dvh / var(--ui-scale, 1));
   }
 
   .config-summary {

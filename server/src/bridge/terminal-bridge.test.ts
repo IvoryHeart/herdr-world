@@ -1,11 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import * as net from "node:net";
+import { EventEmitter, once } from "node:events";
 import * as path from "node:path";
 import { tmpdir } from "node:os";
 import { BinReader, BinWriter, encodeFrame } from "./bincode";
 import { createTerminalBridge } from "./terminal-bridge";
 import { silentLogger } from "../utils/logger";
+import {
+  flushCoalescedMessages,
+  sendWebSocketMessage,
+  WS_COALESCE_LIMIT_BYTES,
+} from "./websocket-send";
 
 test("explicit half-page history retains legacy Wheel source and line count", async () => {
   const sources: number[] = [];
@@ -33,6 +39,8 @@ test("explicit half-page history retains legacy Wheel source and line count", as
       rows: 30,
       relay_active: false,
     });
+    bridge.refreshSurfaceCodecs();
+    expect(bridge.statusTerminals()).toHaveLength(1);
     await bridge.handleTerminalRpc(ws, "scroll", "terminal.scroll", {
       terminal_id: "legacy",
       direction: "up",
@@ -62,13 +70,13 @@ afterEach(async () => {
   );
 });
 
-function terminalFrame(width = 100, height = 30, protocol = 17) {
+function terminalFrame(width = 100, height = 30, protocol = 17, full = true) {
   const writer = new BinWriter();
   writer.variant(protocol === 22 ? 1 : 2);
   writer.varint(1);
   writer.varint(width);
   writer.varint(height);
-  writer.bool(true);
+  writer.bool(full);
   writer.bytes(Buffer.from("frame"));
   return encodeFrame(writer.toBuffer());
 }
@@ -92,6 +100,7 @@ async function startThinServer(
     skipDirectFrame?: boolean;
     onDirectAttach?: (socket: net.Socket) => void;
     onScroll?: (reader: BinReader) => void;
+    frameFull?: boolean;
     tracker?: {
       appConnects: number;
       appCloses: number;
@@ -165,7 +174,12 @@ async function startThinServer(
             socket.write(encodeFrame(writer.toBuffer()));
             if (launchMode === 0) {
               socket.write(
-                terminalFrame(socketCols, socketRows, options.protocol),
+                terminalFrame(
+                  socketCols,
+                  socketRows,
+                  options.protocol,
+                  options.frameFull ?? true,
+                ),
               );
             }
           };
@@ -198,7 +212,12 @@ async function startThinServer(
           const sendTerminalFrame = () => {
             if (!socket.destroyed) {
               socket.write(
-                terminalFrame(socketCols, socketRows, options.protocol),
+                terminalFrame(
+                  socketCols,
+                  socketRows,
+                  options.protocol,
+                  options.frameFull ?? true,
+                ),
               );
             }
           };
@@ -1238,5 +1257,182 @@ test("navigation mode uses exactly the terminal backend decision", async () => {
   } finally {
     if (disabled === undefined) delete process.env.HERDR_WORLD_DISABLE_ENDPOINT;
     else process.env.HERDR_WORLD_DISABLE_ENDPOINT = disabled;
+  }
+});
+
+// A legacy ThinClient stream carries `full` on the wire, and it is false for an
+// incremental frame. Coalescing drops held frames, so a dropped incremental
+// frame loses output that no later frame repeats: the terminal renders corrupt.
+// Only a self-contained repaint may carry a coalesce key.
+test("does not coalesce an incremental legacy frame", async () => {
+  const socketPath = await startThinServer({ protocol: 17, frameFull: false });
+  const browser = {} as ServerWebSocket<unknown>;
+  const sends: { payload: string; coalesceKey?: string }[] = [];
+  const bridge = createTerminalBridge({
+    clientSocketPath: socketPath,
+    herdrProtocol: async () => 17,
+    safeSend: (_ws, payload, _context, coalesceKey) => {
+      sends.push({ payload, coalesceKey });
+      return true;
+    },
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+  });
+  try {
+    await bridge.handleTerminalRpc(browser, "attach", "terminal.attach", {
+      terminal_id: "term_1",
+      cols: 100,
+      rows: 30,
+    });
+    await waitForTerminalFrame(sends.map((s) => s.payload));
+    const frames = sends.filter((s) => s.payload.includes('"terminal"'));
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) {
+      expect(JSON.parse(frame.payload).terminal.full).toBe(false);
+      expect(frame.coalesceKey).toBeUndefined();
+    }
+  } finally {
+    bridge.dispose();
+  }
+});
+
+test("keeps full and incremental legacy frames in order under backpressure", async () => {
+  let source!: net.Socket;
+  const socketPath = await startThinServer({
+    onDirectAttach: (socket) => {
+      source = socket;
+    },
+  });
+  let buffered = WS_COALESCE_LIMIT_BYTES + 1;
+  const sent: string[] = [];
+  const received = new EventEmitter();
+  const browser = {
+    close: () => {},
+    getBufferedAmount: () => buffered,
+    send: (payload: string) => {
+      sent.push(payload);
+      return payload.length;
+    },
+  } as unknown as ServerWebSocket<unknown>;
+  const cleanup = () => {};
+  const bridge = createTerminalBridge({
+    clientSocketPath: socketPath,
+    herdrProtocol: async () => 17,
+    safeSend: (ws, payload, context, coalesceKey) => {
+      const result = sendWebSocketMessage(ws, payload, {
+        cleanup,
+        context,
+        coalesceKey,
+      });
+      if (JSON.parse(payload).terminal) received.emit("frame");
+      return result;
+    },
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+  });
+  try {
+    const fullFrame = once(received, "frame");
+    await bridge.handleTerminalRpc(browser, "attach", "terminal.attach", {
+      terminal_id: "term_1",
+      cols: 100,
+      rows: 30,
+      relay_active: false,
+    });
+    await fullFrame;
+    const incrementalFrame = once(received, "frame");
+    source.write(terminalFrame(100, 30, 17, false));
+    await incrementalFrame;
+    buffered = 0;
+    flushCoalescedMessages(browser, { cleanup });
+    expect(
+      sent
+        .map((payload) => JSON.parse(payload))
+        .filter((message) => message.terminal)
+        .map((message) => message.terminal.full),
+    ).toEqual([true, false]);
+  } finally {
+    bridge.dispose();
+  }
+});
+
+// A held frame is sized for the surface it was rendered against. If the surface
+// resizes while that frame is held, flushing it paints the OLD size into the new
+// pane, clipping the bottom and right. The bridge must drop the held frame
+// whenever the size it was rendered for stops being current.
+test("drops a held frame when the viewer resizes the terminal", async () => {
+  const socketPath = await startThinServer();
+  const browser = {} as ServerWebSocket<unknown>;
+  const messages: string[] = [];
+  const drops: { ws: ServerWebSocket<unknown>; coalesceKey: string }[] = [];
+  const bridge = createTerminalBridge({
+    clientSocketPath: socketPath,
+    herdrProtocol: async () => 17,
+    safeSend: (_ws, payload) => {
+      messages.push(payload);
+      return true;
+    },
+    dropCoalesced: (ws, coalesceKey) => drops.push({ ws, coalesceKey }),
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+  });
+  try {
+    await bridge.handleTerminalRpc(browser, "attach", "terminal.attach", {
+      terminal_id: "term_1",
+      cols: 100,
+      rows: 30,
+    });
+    await waitForTerminalFrame(messages);
+    drops.length = 0;
+    await bridge.handleTerminalRpc(browser, "resize", "terminal.resize", {
+      terminal_id: "term_1",
+      cols: 120,
+      rows: 40,
+    });
+    expect(drops).toEqual([
+      { ws: browser, coalesceKey: 'terminal:[null,null,"term_1"]' },
+    ]);
+  } finally {
+    bridge.dispose();
+  }
+});
+
+test("drops held frames for every viewer when an attach resizes the shared terminal", async () => {
+  const socketPath = await startThinServer();
+  const first = {} as ServerWebSocket<unknown>;
+  const second = {} as ServerWebSocket<unknown>;
+  const messages: string[] = [];
+  const drops: { ws: ServerWebSocket<unknown>; coalesceKey: string }[] = [];
+  const bridge = createTerminalBridge({
+    clientSocketPath: socketPath,
+    herdrProtocol: async () => 17,
+    safeSend: (_ws, payload) => {
+      messages.push(payload);
+      return true;
+    },
+    dropCoalesced: (ws, coalesceKey) => drops.push({ ws, coalesceKey }),
+    clientLabel: () => "test",
+    markRpcError: () => undefined,
+  });
+  try {
+    await bridge.handleTerminalRpc(first, "a1", "terminal.attach", {
+      terminal_id: "term_1",
+      cols: 100,
+      rows: 30,
+    });
+    await waitForTerminalFrame(messages);
+    drops.length = 0;
+    // A different size resizes the shared terminal, so the frame the FIRST
+    // viewer is holding is now the wrong size for it too.
+    await bridge.handleTerminalRpc(second, "a2", "terminal.attach", {
+      terminal_id: "term_1",
+      cols: 140,
+      rows: 50,
+    });
+    expect(drops.map((d) => d.ws)).toContain(first);
+    expect(
+      drops.every((d) => d.coalesceKey === 'terminal:[null,null,"term_1"]'),
+    ).toBe(true);
+  } finally {
+    bridge.dispose();
   }
 });

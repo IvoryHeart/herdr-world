@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { GitDiffEntry, GitDiffFile } from "../types";
+import { IMAGE_MIME_TYPES } from "../../../shared/filePreview";
+import { expandDiffEntryOnActivate } from "./diffContentState";
 import {
   diffContentEntries,
   diffHunkTargets,
   diffSearchGroups,
   nextDiffHunkIndex,
+  isImageDiff,
+  highlightedPatch,
 } from "./DiffContentView";
 
 const entries: GitDiffEntry[] = [
@@ -23,6 +27,66 @@ function diffFile(path: string, diff: string): GitDiffFile {
     truncated: false,
   };
 }
+
+describe("expandDiffEntryOnActivate", () => {
+  test("marks a collapsed entry as expanded", () => {
+    const current = new Map([["unstaged:a.ts", true]]);
+    const next = expandDiffEntryOnActivate(current, "unstaged:a.ts");
+    expect(next.get("unstaged:a.ts")).toBe(false);
+  });
+
+  test("keeps the same map when the entry is already expanded", () => {
+    const current = new Map([["unstaged:a.ts", false]]);
+    expect(expandDiffEntryOnActivate(current, "unstaged:a.ts")).toBe(current);
+  });
+
+  test("preserves other entries and tolerates an empty state", () => {
+    const current = new Map([["unstaged:b.ts", true]]);
+    const next = expandDiffEntryOnActivate(current, "unstaged:a.ts");
+    expect(next.get("unstaged:b.ts")).toBe(true);
+    expect(expandDiffEntryOnActivate(undefined, "unstaged:a.ts").size).toBe(1);
+  });
+});
+
+test("Changes previews every supported binary image without replacing text diffs", () => {
+  for (const extension of IMAGE_MIME_TYPES.keys()) {
+    const path = `image.${extension.toUpperCase()}`;
+    expect(isImageDiff(path, "Binary files a/image and b/image differ")).toBe(
+      true,
+    );
+    expect(isImageDiff(path, "GIT binary patch\nliteral 3")).toBe(true);
+    expect(isImageDiff(path, "")).toBe(true);
+    expect(isImageDiff(path, "@@ -1 +1 @@\n-<svg/>\n+<svg>...</svg>")).toBe(
+      false,
+    );
+  }
+  expect(isImageDiff("document.pdf", "Binary files a and b differ")).toBe(
+    false,
+  );
+  expect(isImageDiff("README.md", "")).toBe(false);
+});
+
+test("renames preserve per-side languages without losing same-language overrides", () => {
+  for (const [previousPath, path, language] of [
+    ["config.json", "config.txt", undefined],
+    ["config.json", "config.ts", undefined],
+    ["config.txt", "config.json", undefined],
+    ["old.json", "new.json", "json"],
+    ["Podfile", "Gemfile", "ruby"],
+  ] as const) {
+    const diff = highlightedPatch(
+      `diff --git a/${previousPath} b/${path}\n` +
+        `similarity index 90%\nrename from ${previousPath}\nrename to ${path}\n` +
+        `--- a/${previousPath}\n+++ b/${path}\n` +
+        '@@ -1,3 +1,3 @@\n {\n-  "value": 1\n+  "value": 2\n }\n',
+      path,
+    );
+    expect(diff.prevName).toBe(previousPath);
+    expect(diff.name).toBe(path);
+    if (language === undefined) expect(diff.lang).toBeUndefined();
+    else expect(diff.lang).toBe(language);
+  }
+});
 
 describe("diffContentEntries", () => {
   test("keeps every summary entry even when only one diff is loaded", () => {

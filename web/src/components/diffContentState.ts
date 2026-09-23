@@ -14,3 +14,15 @@ export function writeDiffCollapseState(
 export function clearDiffContentResourceState(resourceKey: string) {
   diffCollapseStateCache.delete(resourceKey);
 }
+
+/** Selecting a file is an explicit request to view it: record a manual
+ *  expand so prior manual collapses and auto-collapse defaults yield. */
+export function expandDiffEntryOnActivate(
+  current: ReadonlyMap<string, boolean> | undefined,
+  key: string,
+): ReadonlyMap<string, boolean> {
+  if (current?.get(key) === false) return current;
+  const next = new Map(current);
+  next.set(key, false);
+  return next;
+}

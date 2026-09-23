@@ -15,7 +15,6 @@ import {
 import {
   ChevronDown,
   ChevronRight,
-  Ellipsis,
   File,
   FileDiff,
   Folder,
@@ -50,6 +49,7 @@ import {
   buildGitRepoMenuItems,
   countWorkingEntries,
   gitFileConfirmCopy,
+  gitFolderConfirmCopy,
   gitRepoConfirmCopy,
   type GitFileMenuItem,
   type GitRepoMenuItem,
@@ -60,6 +60,7 @@ import { ConfirmDialog } from "./ModalDialogs";
 import "./DiffViewerPanel.css";
 
 export type ActiveDiffSelection = {
+  selectionRevision?: number;
   entry: GitDiffEntry | null;
   file: GitDiffFile | null;
   loading: boolean;
@@ -663,6 +664,16 @@ function makeTreeNode(name: string, path: string): DiffTreeNode {
   return { name, path, children: new Map(), entries: [] };
 }
 
+/** Every summary entry under a tree node, so folder menus can act on the
+ *  whole directory. */
+function collectTreeEntries(node: DiffTreeNode): GitDiffEntry[] {
+  const entries = [...node.entries];
+  for (const child of node.children.values()) {
+    entries.push(...collectTreeEntries(child));
+  }
+  return entries;
+}
+
 function buildDiffTree(entries: GitDiffEntry[]) {
   const root = makeTreeNode("", "");
   for (const entry of entries) {
@@ -810,10 +821,12 @@ export function prefetchDiffViewerWorkspace(
   return task;
 }
 
-type DiffFileMenuState = {
+type DiffContextMenuState = {
   x: number;
   y: number;
+  path: string;
   entries: GitDiffEntry[];
+  directory?: boolean;
 };
 
 type DiffConfirmState = {
@@ -890,6 +903,7 @@ export const DiffViewerPanel = forwardRef<
       cacheResourceKey,
     ),
   );
+  const selectionRevisionRef = useRef(0);
   const selectedEntryKeyRef = useRef(
     cache.selected ? diffEntryKey(cache.selected) : "",
   );
@@ -898,8 +912,7 @@ export const DiffViewerPanel = forwardRef<
   const diffScopeRef = useRef(diffScope);
   diffScopeRef.current = diffScope;
   const onSelectionChangeRef = useRef(onSelectionChange);
-  const [fileMenu, setFileMenu] = useState<DiffFileMenuState | null>(null);
-  const [repoMenu, setRepoMenu] = useState<{ x: number; y: number } | null>(
+  const [contextMenu, setContextMenu] = useState<DiffContextMenuState | null>(
     null,
   );
   const [confirmState, setConfirmState] = useState<DiffConfirmState | null>(
@@ -1020,8 +1033,15 @@ export const DiffViewerPanel = forwardRef<
     (
       source: DiffCache = cache,
       patch: Partial<ActiveDiffSelection> = {},
-    ): ActiveDiffSelection =>
-      buildActiveDiffSelection(source, patch, fileLoadingKey, summaryLoading),
+    ): ActiveDiffSelection => ({
+      ...buildActiveDiffSelection(
+        source,
+        patch,
+        fileLoadingKey,
+        summaryLoading,
+      ),
+      selectionRevision: selectionRevisionRef.current,
+    }),
     [cache, fileLoadingKey, summaryLoading],
   );
 
@@ -1126,6 +1146,7 @@ export const DiffViewerPanel = forwardRef<
       cacheResourceKey,
     );
     const revision = diffCacheRevision(cacheKey);
+    if (meta.userInitiated) selectionRevisionRef.current += 1;
     selectedEntryKeyRef.current = key;
     setCache((current) => {
       const next = beginDiffFileSelection(current, entry);
@@ -1387,16 +1408,27 @@ export const DiffViewerPanel = forwardRef<
     };
   }, []);
 
-  const openFileMenu = (entries: GitDiffEntry[], x: number, y: number) => {
-    if (diffScopeRef.current !== "working" || !entries.length) return;
+  const openContextMenu = (
+    target: {
+      path: string;
+      entries: GitDiffEntry[];
+      directory?: boolean;
+    },
+    x: number,
+    y: number,
+  ) => {
+    if (diffScopeRef.current !== "working") return;
     clearLongPressTimer();
-    setRepoMenu(null);
-    setFileMenu({ x, y, entries });
+    setContextMenu({ x, y, ...target });
   };
 
   const handleEntryPointerDown = (
     event: ReactPointerEvent<HTMLElement>,
-    entries: GitDiffEntry[],
+    target: {
+      path: string;
+      entries: GitDiffEntry[];
+      directory?: boolean;
+    },
   ) => {
     if (event.pointerType === "mouse") return;
     longPressTriggeredRef.current = false;
@@ -1404,7 +1436,7 @@ export const DiffViewerPanel = forwardRef<
     clearLongPressTimer();
     longPressTimerRef.current = setTimeout(() => {
       longPressTriggeredRef.current = true;
-      openFileMenu(entries, event.clientX, event.clientY);
+      openContextMenu(target, event.clientX, event.clientY);
     }, LONG_PRESS_MS);
   };
 
@@ -1449,32 +1481,49 @@ export const DiffViewerPanel = forwardRef<
 
   const runGitFileMenuAction = (
     item: GitFileMenuItem,
-    entries: GitDiffEntry[],
+    menu: DiffContextMenuState,
   ) => {
     const actionWorkspaceId = workspace?.workspace_id;
     if (!actionWorkspaceId) return;
-    const target =
-      entries.find((entry) =>
-        item.action === "discard_unstaged"
-          ? entry.kind === "unstaged"
-          : item.action === "delete_untracked"
-            ? entry.kind === "untracked"
-            : item.action === "unstage"
-              ? entry.kind === "staged"
-              : entry.kind !== "staged",
-      ) ?? entries[0];
-    if (!target) return;
+    const matches = menu.entries.filter((entry) =>
+      item.action === "discard_unstaged"
+        ? entry.kind === "unstaged"
+        : item.action === "delete_untracked"
+          ? entry.kind === "untracked"
+          : item.action === "unstage"
+            ? entry.kind === "staged"
+            : entry.kind !== "staged",
+    );
+    const targets = menu.directory
+      ? matches.length
+        ? matches
+        : menu.entries
+      : [matches[0] ?? menu.entries[0]].filter(
+          (entry): entry is GitDiffEntry => !!entry,
+        );
+    if (!targets.length) return;
     const execute = async () => {
-      const result = await store.runGitFileAction(
-        actionWorkspaceId,
-        item.action,
-        target,
-      );
-      if (!result) return;
+      if (menu.directory && targets.length > 1) {
+        await store.runGitFileActionBatch(
+          actionWorkspaceId,
+          item.action,
+          targets,
+        );
+        // A failed batch can still have changed earlier files.
+      } else {
+        const result = await store.runGitFileAction(
+          actionWorkspaceId,
+          item.action,
+          targets[0],
+        );
+        if (!result) return;
+      }
       await afterGitMutation(actionWorkspaceId);
     };
     if (item.destructive) {
-      const copy = gitFileConfirmCopy(item.action, target.path);
+      const copy = menu.directory
+        ? gitFolderConfirmCopy(item.action, menu.path, targets.length)
+        : gitFileConfirmCopy(item.action, targets[0].path);
       if (copy) {
         setConfirmState({ ...copy, run: () => void execute() });
         return;
@@ -1530,7 +1579,58 @@ export const DiffViewerPanel = forwardRef<
               paddingLeft: DIFF_TREE_BASE_INDENT + depth * DIFF_TREE_INDENT,
             }}
             key={child.path}
-            onClick={() => toggleDir(child.path)}
+            onClick={() => {
+              if (longPressTriggeredRef.current) {
+                longPressTriggeredRef.current = false;
+                return;
+              }
+              toggleDir(child.path);
+            }}
+            onContextMenu={(event) => {
+              if (diffScope !== "working") return;
+              event.preventDefault();
+              event.stopPropagation();
+              openContextMenu(
+                {
+                  path: child.path,
+                  entries: collectTreeEntries(child),
+                  directory: true,
+                },
+                event.clientX,
+                event.clientY,
+              );
+            }}
+            onKeyDown={(event) => {
+              if (diffScope !== "working") return;
+              if (
+                treeKeyboardAction(event.key, event.shiftKey) !== "context-menu"
+              ) {
+                return;
+              }
+              event.preventDefault();
+              event.stopPropagation();
+              const point = keyboardContextMenuPoint(event.currentTarget);
+              openContextMenu(
+                {
+                  path: child.path,
+                  entries: collectTreeEntries(child),
+                  directory: true,
+                },
+                point.x,
+                point.y,
+              );
+            }}
+            onPointerDown={(event) =>
+              handleEntryPointerDown(event, {
+                path: child.path,
+                entries: collectTreeEntries(child),
+                directory: true,
+              })
+            }
+            onPointerMove={handleEntryPointerMove}
+            onPointerUp={handleEntryPointerEnd}
+            onPointerCancel={handleEntryPointerEnd}
+            onPointerLeave={handleEntryPointerEnd}
           >
             <span className="diff-tree-twisty">
               {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -1570,7 +1670,7 @@ export const DiffViewerPanel = forwardRef<
             if (diffScope !== "working") return;
             event.preventDefault();
             event.stopPropagation();
-            openFileMenu(child.entries, event.clientX, event.clientY);
+            openContextMenu(child, event.clientX, event.clientY);
           }}
           onKeyDown={(event) => {
             if (diffScope !== "working") return;
@@ -1582,11 +1682,9 @@ export const DiffViewerPanel = forwardRef<
             event.preventDefault();
             event.stopPropagation();
             const point = keyboardContextMenuPoint(event.currentTarget);
-            openFileMenu(child.entries, point.x, point.y);
+            openContextMenu(child, point.x, point.y);
           }}
-          onPointerDown={(event) =>
-            handleEntryPointerDown(event, child.entries)
-          }
+          onPointerDown={(event) => handleEntryPointerDown(event, child)}
           onPointerMove={handleEntryPointerMove}
           onPointerUp={handleEntryPointerEnd}
           onPointerCancel={handleEntryPointerEnd}
@@ -1622,88 +1720,76 @@ export const DiffViewerPanel = forwardRef<
 
   return (
     <aside className="diff-viewer-side" aria-label="Diff Viewer">
-      <div className="diff-scope-toggle" aria-label="Diff scope">
-        <button
-          type="button"
-          className={diffScope === "last-step" ? "is-active" : ""}
-          onClick={() => setDiffScope("last-step")}
-          aria-pressed={diffScope === "last-step"}
-          aria-label="Last step"
-          title="Last step"
-        >
-          <span className="diff-scope-label-full" aria-hidden="true">
-            Last step
-          </span>
-          <span className="diff-scope-label-short" aria-hidden="true">
-            Last
-          </span>
-        </button>
-        <button
-          type="button"
-          className={diffScope === "working" ? "is-active" : ""}
-          onClick={() => setDiffScope("working")}
-          aria-pressed={diffScope === "working"}
-          aria-label="Working tree"
-          title="Working tree"
-        >
-          <span className="diff-scope-label-full" aria-hidden="true">
-            Working tree
-          </span>
-          <span className="diff-scope-label-short" aria-hidden="true">
-            Working
-          </span>
-        </button>
-        <button
-          type="button"
-          className={diffScope === "branch-main" ? "is-active" : ""}
-          onClick={() => setDiffScope("branch-main")}
-          aria-pressed={diffScope === "branch-main"}
-          aria-label="Against main"
-          title="Against main"
-        >
-          <span className="diff-scope-label-full" aria-hidden="true">
-            Against main
-          </span>
-          <span className="diff-scope-label-short" aria-hidden="true">
-            Main
-          </span>
-        </button>
-      </div>
-      <div
-        className="diff-toolbar-actions"
-        role="group"
-        aria-label="Diff actions"
-      >
-        <button
-          type="button"
-          className="diff-refresh"
-          title={summaryLoading ? "Refreshing..." : "Refresh"}
-          aria-label={summaryLoading ? "Refreshing changes" : "Refresh changes"}
-          aria-busy={summaryLoading}
-          disabled={summaryLoading}
-          onClick={() => void loadSummary(cache.selected, true)}
-        >
-          <RefreshCw
-            className={summaryLoading ? "is-spinning" : ""}
-            size={15}
-          />
-        </button>
-        {diffScope === "working" ? (
+      <div className="diff-panel-toolbar">
+        <div className="diff-scope-toggle" aria-label="Diff scope">
           <button
             type="button"
-            className="diff-refresh diff-more-actions"
-            title="More Git actions"
-            aria-label="More Git actions"
-            aria-haspopup="menu"
-            onClick={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              setFileMenu(null);
-              setRepoMenu({ x: rect.right, y: rect.bottom + 4 });
-            }}
+            className={diffScope === "last-step" ? "is-active" : ""}
+            onClick={() => setDiffScope("last-step")}
+            aria-pressed={diffScope === "last-step"}
+            aria-label="Last step"
+            title="Last step"
           >
-            <Ellipsis size={15} />
+            <span className="diff-scope-label-full" aria-hidden="true">
+              Last step
+            </span>
+            <span className="diff-scope-label-short" aria-hidden="true">
+              Last
+            </span>
           </button>
-        ) : null}
+          <button
+            type="button"
+            className={diffScope === "working" ? "is-active" : ""}
+            onClick={() => setDiffScope("working")}
+            aria-pressed={diffScope === "working"}
+            aria-label="Working tree"
+            title="Working tree"
+          >
+            <span className="diff-scope-label-full" aria-hidden="true">
+              Working tree
+            </span>
+            <span className="diff-scope-label-short" aria-hidden="true">
+              Working
+            </span>
+          </button>
+          <button
+            type="button"
+            className={diffScope === "branch-main" ? "is-active" : ""}
+            onClick={() => setDiffScope("branch-main")}
+            aria-pressed={diffScope === "branch-main"}
+            aria-label="Against main"
+            title="Against main"
+          >
+            <span className="diff-scope-label-full" aria-hidden="true">
+              Against main
+            </span>
+            <span className="diff-scope-label-short" aria-hidden="true">
+              Main
+            </span>
+          </button>
+        </div>
+        <div
+          className="diff-toolbar-actions"
+          role="group"
+          aria-label="Diff actions"
+        >
+          <button
+            type="button"
+            className="diff-refresh"
+            title={summaryLoading ? "Refreshing..." : "Refresh"}
+            aria-label={
+              summaryLoading ? "Refreshing changes" : "Refresh changes"
+            }
+            aria-busy={summaryLoading}
+            disabled={summaryLoading}
+            onClick={() => void loadSummary(cache.selected, true)}
+          >
+            <RefreshCw
+              className={summaryLoading ? "is-spinning" : ""}
+              size={15}
+            />
+          </button>
+        </div>
       </div>
 
       {!workspace ? (
@@ -1732,29 +1818,30 @@ export const DiffViewerPanel = forwardRef<
       {fileLoadingKey ? (
         <div className="diff-loading-inline">Loading diff...</div>
       ) : null}
-      {fileMenu ? (
+      {contextMenu ? (
         <ActionsMenu
-          x={fileMenu.x}
-          y={fileMenu.y}
-          header={{ title: fileMenu.entries[0]?.path ?? "", subtitle: "Git" }}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          header={{ title: contextMenu.path, subtitle: "Git" }}
           groups={[
             {
-              label: "File",
+              label: contextMenu.directory ? "Folder" : "File",
               items: [
-                ...(onOpenFile && fileMenu.entries[0]
+                ...(!contextMenu.directory &&
+                onOpenFile &&
+                contextMenu.entries[0]
                   ? [
                       {
                         key: "open",
                         label: "Open file",
-                        action: () => onOpenFile(fileMenu.entries[0]!),
+                        action: () => onOpenFile(contextMenu.entries[0]!),
                       },
                     ]
                   : []),
                 {
                   key: "copy-relative",
                   label: "Copy relative path",
-                  action: () =>
-                    copyPath(fileMenu.entries[0]?.path ?? "", "Relative path"),
+                  action: () => copyPath(contextMenu.path, "Relative path"),
                 },
                 ...(cache.summary?.root
                   ? [
@@ -1763,7 +1850,7 @@ export const DiffViewerPanel = forwardRef<
                         label: "Copy absolute path",
                         action: () =>
                           copyPath(
-                            `${cache.summary?.root}/${fileMenu.entries[0]?.path ?? ""}`,
+                            `${cache.summary?.root}/${contextMenu.path}`,
                             "Absolute path",
                           ),
                       },
@@ -1773,24 +1860,18 @@ export const DiffViewerPanel = forwardRef<
             },
             {
               label: "Git",
-              items: buildGitFileMenuItems(fileMenu.entries).map((item) => ({
+              items: buildGitFileMenuItems(
+                contextMenu.entries,
+                contextMenu.directory,
+              ).map((item) => ({
                 key: item.action,
                 label: item.label,
                 danger: item.danger,
-                action: () => runGitFileMenuAction(item, fileMenu.entries),
+                action: () => runGitFileMenuAction(item, contextMenu),
               })),
             },
-          ].filter((group) => group.items.length > 0)}
-          onClose={() => setFileMenu(null)}
-        />
-      ) : null}
-      {repoMenu ? (
-        <ActionsMenu
-          x={repoMenu.x}
-          y={repoMenu.y}
-          groups={[
             {
-              label: "Git",
+              label: "Repository",
               items: buildGitRepoMenuItems(workingCounts).map((item) => ({
                 key: item.action,
                 label: item.label,
@@ -1800,8 +1881,8 @@ export const DiffViewerPanel = forwardRef<
                 action: () => runGitRepoMenuAction(item),
               })),
             },
-          ]}
-          onClose={() => setRepoMenu(null)}
+          ].filter((group) => group.items.length > 0)}
+          onClose={() => setContextMenu(null)}
         />
       ) : null}
       <ConfirmDialog

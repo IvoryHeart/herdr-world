@@ -55,6 +55,7 @@ export function createAuthHandlers(args: {
   authRequired: boolean;
   password: string;
   urlLoginToken?: string;
+  secureCookies?: boolean;
 }) {
   if (args.authRequired && !args.password) {
     throw new Error("authentication requires a non-empty signing secret");
@@ -91,7 +92,12 @@ export function createAuthHandlers(args: {
   }
 
   function authCookie(): string {
-    return `${AUTH_COOKIE}=${signedToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_TOKEN_TTL_SECONDS}`;
+    return `${AUTH_COOKIE}=${signedToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_TOKEN_TTL_SECONDS}${args.secureCookies ? "; Secure" : ""}`;
+  }
+
+  function authCookieHeaders(req: Request): Record<string, string> {
+    // Reauthentication keeps every live tab on the same session token.
+    return isAuthed(req) ? {} : { "set-cookie": authCookie() };
   }
 
   function secretsEqual(actual: string, expected: string): boolean {
@@ -128,6 +134,28 @@ export function createAuthHandlers(args: {
     return token !== null && isValidSignedToken(token);
   }
 
+  function sessionToken(req: Request): string | null {
+    return parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
+  }
+
+  function handleLogout(req: Request): Response {
+    if (req.method !== "POST") {
+      return new Response("method not allowed", { status: 405, headers: { allow: "POST" } });
+    }
+    const logoutHeader =
+      req.headers.get("x-herdr-world-logout") ??
+      req.headers.get("x-roamgate-logout");
+    if (logoutHeader !== "1" || req.headers.get("sec-fetch-site") === "cross-site")
+      return new Response("forbidden", { status: 403 });
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "set-cookie": `${AUTH_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${args.secureCookies ? "; Secure" : ""}`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
   function handleTokenLogin(req: Request): Response | null {
     if (!args.authRequired || !args.urlLoginToken || req.method !== "GET") {
       return null;
@@ -143,7 +171,7 @@ export function createAuthHandlers(args: {
       status: 303,
       headers: {
         location,
-        ...(valid ? { "set-cookie": authCookie() } : {}),
+        ...(valid ? authCookieHeaders(req) : {}),
         "cache-control": "no-store",
         "referrer-policy": "no-referrer",
       },
@@ -170,18 +198,23 @@ export function createAuthHandlers(args: {
       status: 200,
       headers: {
         "content-type": "application/json",
-        "set-cookie": authCookie(),
+        "cache-control": "no-store",
+        ...authCookieHeaders(req),
       },
     });
   }
 
   function loginPage(): Response {
     return new Response(LOGIN_HTML, {
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+      },
     });
   }
 
-  return { isAuthed, handleTokenLogin, handleLogin, loginPage };
+  return { isAuthed, sessionToken, handleTokenLogin, handleLogin, handleLogout, loginPage };
 }
 
 export function unauthenticatedLoginRedirect(): Response {

@@ -244,6 +244,10 @@ export class TerminalAttachFrameWatchdog {
     return this.attempt;
   }
 
+  isCurrent(attempt: number): boolean {
+    return attempt === this.attempt;
+  }
+
   /** Records a matching frame whether it arrives before or after the RPC. */
   markFrame() {
     this.frameAttempt = this.attempt;

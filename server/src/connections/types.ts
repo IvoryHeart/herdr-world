@@ -1,4 +1,7 @@
 export const STARTUP_DEFAULT_CONNECTION_ID = "startup-default";
+// Kept for settings written by the upstream Roamgate runtime. New World
+// state uses the explicit startup connection identity.
+export const LEGACY_DEFAULT_CONNECTION_ID = "legacy-default";
 
 export type ConnectionId = string;
 

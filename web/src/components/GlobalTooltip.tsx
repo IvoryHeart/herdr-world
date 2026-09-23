@@ -43,9 +43,13 @@ function estimatedTooltipWidth(text: string) {
 
 function tooltipPosition(element: HTMLElement, text: string) {
   const rect = element.getBoundingClientRect();
+  const scale =
+    Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue("--ui-scale"),
+    ) || 1;
   const center = rect.left + rect.width / 2;
   const halfWidth = Math.min(
-    estimatedTooltipWidth(text) / 2,
+    (estimatedTooltipWidth(text) * scale) / 2,
     Math.max(0, (window.innerWidth - VIEWPORT_PADDING * 2) / 2),
   );
   const left = Math.min(
@@ -54,8 +58,8 @@ function tooltipPosition(element: HTMLElement, text: string) {
   );
   const placement: TooltipPlacement = rect.top > 52 ? "top" : "bottom";
   return {
-    left,
-    top: placement === "top" ? rect.top - 9 : rect.bottom + 9,
+    left: left / scale,
+    top: (placement === "top" ? rect.top - 9 : rect.bottom + 9) / scale,
     placement,
   };
 }

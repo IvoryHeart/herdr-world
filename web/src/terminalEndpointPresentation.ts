@@ -4,6 +4,7 @@ export interface TerminalPresentationFrame {
   text: string;
   size?: { cols: number; rows: number };
   history?: TerminalHistoryViewport;
+  linkFrame?: string;
 }
 
 /** xterm's native selection escape: Shift on non-Mac, Option on Mac. */
@@ -29,6 +30,7 @@ export class TerminalEndpointPresentation {
   private pendingFrame: TerminalPresentationFrame | null = null;
   displayedFrame: TerminalPresentationFrame | null = null;
   private writing = false;
+  private changingLinks = false;
   private incremental = "";
   private disposed = false;
   private generation = 0;
@@ -36,7 +38,11 @@ export class TerminalEndpointPresentation {
 
   constructor(
     private hasSelection: () => boolean,
-    private write: (text: string, parsed: () => void) => void,
+    private write: (
+      text: string,
+      parsed: () => void,
+      linksChanged: boolean,
+    ) => void,
     private viewportSize?: () => { cols: number; rows: number },
     private selectionHistory?: {
       accepts: (frame: TerminalPresentationFrame) => boolean;
@@ -51,6 +57,10 @@ export class TerminalEndpointPresentation {
 
   get writePending(): boolean {
     return this.writing;
+  }
+
+  get linkWritePending(): boolean {
+    return this.writing && this.changingLinks;
   }
 
   /** Legacy chunks are ordered, never coalesced as endpoint repaints. */
@@ -86,10 +96,11 @@ export class TerminalEndpointPresentation {
     mouseReporting: boolean,
     size?: { cols: number; rows: number },
     history?: TerminalHistoryViewport,
+    linkFrame?: string,
   ): void {
     if (this.disposed) return;
     this.mouseReporting = mouseReporting;
-    this.pendingFrame = { text, size, history };
+    this.pendingFrame = { text, size, history, linkFrame };
     this.flush();
   }
 
@@ -129,23 +140,51 @@ export class TerminalEndpointPresentation {
     }
     const incremental = this.incremental;
     this.incremental = "";
+    let text = frame?.text ?? "";
+    let linksChanged = true;
+    const displayed = this.displayedFrame;
+    if (frame && displayed && !prefix && !incremental) {
+      if (text === displayed.text) {
+        // Metadata may advance without changing the physical xterm buffer.
+        this.displayedFrame = frame;
+        this.selectionHistory?.presented(frame);
+        return;
+      }
+      if (frame.linkFrame && frame.linkFrame === displayed.linkFrame) {
+        // frameToAnsi ends its cell grid with DECAWM, then only cursor controls.
+        // Updating just that suffix preserves OSC8 IDs and the pressed link.
+        const cursor = text.lastIndexOf("\x1b[?7h");
+        if (
+          cursor >= 0 &&
+          text.slice(0, cursor) === displayed.text.slice(0, cursor)
+        ) {
+          text = text.slice(cursor);
+          linksChanged = false;
+        }
+      }
+    }
     if (prefix || frame !== null || incremental) {
       this.writing = true;
+      this.changingLinks = linksChanged;
       const generation = this.generation;
-      this.write(prefix + (frame?.text ?? "") + incremental, () => {
-        // reset() cannot cancel the physical xterm write. Its completion must
-        // still release the gate for current intent, never restore old state.
-        if (frame && !this.disposed && generation === this.generation) {
-          this.displayedFrame = frame;
-          this.selectionHistory?.presented(frame);
-        }
-        this.writing = false;
-        if (this.disposed) return;
-        const replay = this.deferredSelection;
-        this.deferredSelection = null;
-        if (replay) replay();
-        this.flush();
-      });
+      this.write(
+        prefix + text + incremental,
+        () => {
+          // reset() cannot cancel the physical xterm write. Its completion must
+          // still release the gate for current intent, never restore old state.
+          if (frame && !this.disposed && generation === this.generation) {
+            this.displayedFrame = frame;
+            this.selectionHistory?.presented(frame);
+          }
+          this.writing = false;
+          if (this.disposed) return;
+          const replay = this.deferredSelection;
+          this.deferredSelection = null;
+          if (replay) replay();
+          this.flush();
+        },
+        linksChanged,
+      );
     }
   }
 

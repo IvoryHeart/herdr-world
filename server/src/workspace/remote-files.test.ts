@@ -1,4 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { runBinaryProcessWithTimeout } from "./process";
+import { IMAGE_MIME_TYPES } from "../../../shared/filePreview";
+import { PREVIEW_IMAGE_MAX_BYTES, PREVIEW_MAX_BYTES } from "./file-constants";
 import {
   parseRemoteFileDelete,
   parseRemoteFileDownload,
@@ -6,6 +12,8 @@ import {
   parseRemoteFilePreview,
   parseRemoteFileResolutions,
   parseRemoteFileUpload,
+  resolveRemoteFilePaths,
+  readRemoteFile,
 } from "./remote-files";
 
 function b64(value: string) {
@@ -76,6 +84,17 @@ describe("remote file protocol parsers", () => {
     });
   });
 
+  test("never labels a short image payload as complete", () => {
+    const bytes = Buffer.alloc(PREVIEW_MAX_BYTES + 1);
+    const image = parseRemoteFilePreview(
+      `META\t${b64("/repo")}\t${600 * 1024}\t1\t${b64("image.apng")}\n${bytes.toString("base64")}`,
+      "image.apng",
+    );
+    expect(image.truncated).toBe(true);
+    expect(image.image_data_url).toBeUndefined();
+    expect(image.size).toBe(600 * 1024);
+  });
+
   test("parses directory previews without content", () => {
     const directory = parseRemoteFilePreview(
       `META\t${b64("/repo")}\t0\t9\t${b64("packages/app")}\tdirectory`,
@@ -132,4 +151,80 @@ describe("remote file protocol parsers", () => {
     expect(() => parseRemoteFileUpload("oops")).toThrow("oops");
     expect(() => parseRemoteFileDelete("oops")).toThrow("oops");
   });
+});
+
+// Execute the exact remote shell command locally, without an SSH server.
+test("remote image reads share the preview formats and byte limits", async () => {
+  const root = await mkdtemp(join(tmpdir(), "roamgate-image-preview-"));
+  try {
+    const bytes = Buffer.alloc(600 * 1024, 65);
+    for (const [extension, mime] of IMAGE_MIME_TYPES) {
+      const path = `image.${extension.toUpperCase()}`;
+      await writeFile(join(root, path), bytes);
+      const result = await readRemoteFile({
+        host: "example.invalid",
+        rootPath: root,
+        requestedPath: path,
+        shQuote: (value) => "'" + value.replace(/'/g, "'\"'\"'") + "'",
+        runProcessWithCodeTimeout: async (argv, timeout) => {
+          const result = await runBinaryProcessWithTimeout(
+            ["bash", "-c", argv[argv.length - 1]!],
+            timeout,
+          );
+          return { ...result, stdout: result.stdout.toString("utf8") };
+        },
+      });
+      expect(result.truncated).toBe(false);
+      expect(result.mime_type).toBe(mime);
+      const encoded = result.image_data_url?.split(",")[1] ?? "";
+      expect(Buffer.from(encoded, "base64").equals(bytes)).toBe(true);
+    }
+
+    const oversized = parseRemoteFilePreview(
+      `META\t${b64(root)}\t${PREVIEW_IMAGE_MAX_BYTES + 1}\t1\t${b64("large.apng")}\n${Buffer.alloc(PREVIEW_MAX_BYTES + 1).toString("base64")}`,
+      "large.apng",
+    );
+    expect(oversized.truncated).toBe(true);
+    expect(oversized.image_data_url).toBeUndefined();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("remote resolution includes directories but rejects relative and symlink escapes", async () => {
+  const root = await mkdtemp(join(tmpdir(), "herdr-gui-resolve-"));
+  try {
+    await mkdir(join(root, "docs"));
+    await writeFile(join(root, "docs", "guide.md"), "guide");
+    await symlink(join(root, ".."), join(root, "outside"));
+    const result = await resolveRemoteFilePaths({
+      host: "example.invalid",
+      rootPath: root,
+      requestedPaths: [
+        "docs/guide.md",
+        "docs",
+        join(root, "docs"),
+        "missing",
+        "..",
+        "outside",
+        join(root, ".."),
+      ],
+      shQuote: (value) => "'" + value.replace(/'/g, "'\"'\"'") + "'",
+      runProcessWithCodeTimeout: async (argv, timeout) => {
+        const result = await runBinaryProcessWithTimeout(
+          ["bash", "-c", argv[argv.length - 1]!],
+          timeout,
+        );
+        return { ...result, stdout: result.stdout.toString("utf8") };
+      },
+    });
+    expect(result).toEqual([
+      "docs/guide.md",
+      "docs",
+      join(root, "docs"),
+      join(root, ".."),
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
