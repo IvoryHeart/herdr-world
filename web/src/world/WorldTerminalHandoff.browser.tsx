@@ -978,6 +978,42 @@ async function run() {
     () => dockedRail.getBoundingClientRect().left <= dockedBeforeMove.left - 39,
     "drag-moved docked Inspector",
   );
+  const dockedAfterFirstMove = dockedRail.getBoundingClientRect();
+  dockedMoveHandle.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      buttons: 1,
+      pointerId: 20,
+      pointerType: "mouse",
+      clientX: dockedAfterFirstMove.left + 40,
+      clientY: dockedAfterFirstMove.top + 24,
+    }),
+  );
+  window.dispatchEvent(
+    new PointerEvent("pointermove", {
+      bubbles: true,
+      buttons: 1,
+      pointerId: 20,
+      pointerType: "mouse",
+      clientX: 0,
+      clientY: dockedAfterFirstMove.top + 24,
+    }),
+  );
+  window.dispatchEvent(
+    new PointerEvent("pointerup", {
+      bubbles: true,
+      button: 0,
+      pointerId: 20,
+      pointerType: "mouse",
+      clientX: 0,
+      clientY: dockedAfterFirstMove.top + 24,
+    }),
+  );
+  await until(
+    () => dockedRail.getBoundingClientRect().left <= 1,
+    "moved docked Inspector across the complete application viewport",
+  );
   check(
     calls.filter(({ method }) => method === "pane.get").length ===
       paneGetsBeforeDockedMove,
@@ -1582,6 +1618,31 @@ async function run() {
       terminalInput(document.querySelector(".world-context-rail") ?? document),
     "Builder Graph Inspector replacement",
   );
+  await until(
+    () =>
+      document.querySelectorAll(".world-intent-connector circle").length === 2,
+    "Builder Graph Inspector connector",
+  );
+  const graphBuilderNodeId = graphTarget("Builder")!.dataset.graphNodeAnchor!;
+  const graphBuilderPosition =
+    window.__HERDR_GRAPH_RENDERER__!.publishedNodes[graphBuilderNodeId]!;
+  const graphCanvasBounds = document
+    .querySelector<HTMLCanvasElement>("canvas[data-graph-canvas=true]")!
+    .getBoundingClientRect();
+  const graphConnectorSource = document.querySelector<SVGCircleElement>(
+    ".world-intent-connector circle",
+  )!;
+  check(
+    Math.abs(
+      Number(graphConnectorSource.getAttribute("cx")) -
+        (graphCanvasBounds.left + graphBuilderPosition.screenX),
+    ) <= 2 &&
+      Math.abs(
+        Number(graphConnectorSource.getAttribute("cy")) -
+          (graphCanvasBounds.top + graphBuilderPosition.screenY),
+      ) <= 2,
+    "Graph Inspector connector did not start at the node centre",
+  );
   check(
     !document.querySelector('[role="dialog"][aria-label="Reviewer Inspector"]'),
     "Graph A-to-B selection unexpectedly floated the replaced Inspector",
@@ -1603,6 +1664,68 @@ async function run() {
           params.terminal_id === "builder-terminal",
       ).length > graphBuilderInputsBefore,
     "Builder Graph terminal identity",
+  );
+
+  viewSelect.value = "tree";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") &&
+      terminalInput(
+        document.querySelector(".world-tree-inline-inspector") ?? document,
+      ),
+    "Builder inline Tree Inspector",
+  );
+  check(
+    !document
+      .querySelector(".world-context-rail")
+      ?.classList.contains("has-inspector") &&
+      document.querySelector(
+        ".world-connected-tree-card-wrap.has-inline-inspector",
+      ) !== null,
+    "Tree did not replace the detached overlay with the exact expanded leaf",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-tree-inline-inspector button[aria-label="Float Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "Tree Inspector dock out",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Dock Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") &&
+      !document.querySelector(
+        '[role="dialog"][aria-label="Builder Inspector"]',
+      ),
+    "Tree Inspector dock in",
+  );
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder"),
+    "Builder Graph Inspector after Tree inline transfer",
   );
 
   document

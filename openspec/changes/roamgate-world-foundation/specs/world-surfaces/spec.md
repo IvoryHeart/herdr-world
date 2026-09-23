@@ -265,9 +265,12 @@ stack a separate agent profile card above the resource pane. Terminal SHALL be t
 initial tab for a newly opened terminal-capable entity; changing one Inspector's active tab SHALL NOT
 change another Inspector or the default for a later entity.
 
-Selecting an actionable entity in Tree or Graph SHALL open or focus its docked Inspector without
-resizing, relaying out or otherwise taking workspace from the visual stage. Office visual and common
-navigator selection SHALL follow the persisted Docked/Floating preference for newly opened entities
+Selecting an actionable entity in Graph SHALL open or focus its docked Inspector without resizing,
+relaying out or otherwise taking workspace from the visual stage. Selecting an actionable Tree leaf
+SHALL expand that exact leaf to host the same shell-owned Inspector inline; Dock out SHALL transfer
+the complete conversation to a floating window and Dock in while Tree is active SHALL return it to
+the exact visible leaf. Only one Tree leaf SHALL host the inline dock target at a time. Office visual
+and common navigator selection SHALL follow the persisted Docked/Floating preference for newly opened entities
 and SHALL focus an existing entity in its current presentation. Docked admission SHALL replace and
 close a different docked conversation rather than implicitly turn it into a floating window. A
 floating Inspector SHALL be independently movable and resizable and
@@ -318,6 +321,13 @@ existing connection lifecycle.
 - **WHEN** the user docks, undocks, moves, resizes, expands or restores a selected-agent Inspector
 - **THEN** compact identity, selected resource state, applicable tabs and the controls for that
   presentation remain reachable within the same Inspector
+
+#### Scenario: Expand and detach a Tree leaf Inspector
+
+- **WHEN** a user opens an actionable Tree leaf, docks it out and later docks it back while Tree is
+  active
+- **THEN** the exact leaf expands inline, the complete Inspector moves to the floating presentation
+  and back without duplicate resources or terminal ownership, and any previous inline leaf collapses
 
 #### Scenario: Dock while another Inspector is docked
 
@@ -752,7 +762,10 @@ serve only as an equivalent compact or assistive presentation rather than the pr
 Tree SHALL bound presentation to 128 hosts, 128 spaces globally and 16 leaves per presented space,
 using the same relevance priority as Graph. Both its connected and semantic presentations SHALL
 consume that one bounded projection and report exact omitted host, space and leaf counts globally
-and at the affected branch; search SHALL operate only over the honestly presented projection.
+and at the affected branch; search SHALL operate only over the honestly presented projection. The
+selected actionable leaf SHALL be able to expand in place as Tree's single inline Inspector dock,
+with the leaf card remaining its contextual header and the shared resource surface appearing below
+it in both the connected desktop and equivalent compact hierarchy.
 
 #### Scenario: Scan an unequal multi-host hierarchy
 

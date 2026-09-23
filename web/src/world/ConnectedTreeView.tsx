@@ -25,20 +25,27 @@ export default function ConnectedTreeView({
   world,
   selectedId,
   conversationNodeIds,
+  inlineInspectorNodeId,
   onSelect,
   onOpenTerminal,
+  onInlineInspectorPortalChange,
   onSelectedAnchorChange,
   onNodeAnchorsChange,
 }: {
   world: WorldObject;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
+  inlineInspectorNodeId: string | null;
   onSelect(id: string): void;
   onOpenTerminal(id: string): void;
+  onInlineInspectorPortalChange(element: HTMLDivElement | null): void;
   onSelectedAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onNodeAnchorsChange(anchors: WorldNodeAnchors | null): void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const [compact, setCompact] = useState(
+    () => window.matchMedia("(max-width: 720px)").matches,
+  );
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(readTreePreferences(worldLocalStorage).collapsedIds),
@@ -55,6 +62,36 @@ export default function ConnectedTreeView({
   const visibleHosts = searchActive
     ? projection.hosts.filter((host) => matches.has(host.source.id))
     : projection.hosts;
+  const inlineAncestorIds = useMemo(() => {
+    if (!inlineInspectorNodeId) return new Set<string>();
+    const node = world.nodeById.get(inlineInspectorNodeId);
+    if (!node || (node.kind !== "agent" && node.kind !== "terminal")) {
+      return new Set<string>();
+    }
+    return new Set(
+      world.nodes
+        .filter(
+          (candidate) =>
+            candidate.connectionId === node.connectionId &&
+            (candidate.kind === "host" ||
+              (candidate.kind === "space" &&
+                candidate.nativeId === node.workspaceId)),
+        )
+        .map(({ id }) => id),
+    );
+  }, [inlineInspectorNodeId, world]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const update = () => setCompact(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!inlineInspectorNodeId) return;
+    setQuery("");
+  }, [inlineInspectorNodeId]);
 
   useEffect(() => {
     writeTreePreferences(worldLocalStorage, { collapsedIds: [...collapsed] });
@@ -177,9 +214,12 @@ export default function ConnectedTreeView({
                 searchActive={searchActive}
                 collapsed={collapsed}
                 selectedId={selectedId}
+                inlineInspectorNodeId={compact ? null : inlineInspectorNodeId}
+                forcedExpandedIds={inlineAncestorIds}
                 onToggle={toggle}
                 onSelect={onSelect}
                 onOpenTerminal={onOpenTerminal}
+                onInlineInspectorPortalChange={onInlineInspectorPortalChange}
               />
             ))}
           </div>
@@ -195,9 +235,12 @@ export default function ConnectedTreeView({
                 searchActive={searchActive}
                 collapsed={collapsed}
                 selectedId={selectedId}
+                inlineInspectorNodeId={compact ? inlineInspectorNodeId : null}
+                forcedExpandedIds={inlineAncestorIds}
                 onToggle={toggle}
                 onSelect={onSelect}
                 onOpenTerminal={onOpenTerminal}
+                onInlineInspectorPortalChange={onInlineInspectorPortalChange}
               />
             ))}
           </ul>
@@ -216,13 +259,19 @@ type BranchProps = {
   searchActive: boolean;
   collapsed: ReadonlySet<string>;
   selectedId: string | null;
+  inlineInspectorNodeId: string | null;
+  forcedExpandedIds: ReadonlySet<string>;
   onToggle(id: string): void;
   onSelect(id: string): void;
   onOpenTerminal(id: string): void;
+  onInlineInspectorPortalChange(element: HTMLDivElement | null): void;
 };
 
 function VisualHost({ host, ...props }: { host: WorldTreeHost } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(host.source.id);
+  const expanded =
+    props.searchActive ||
+    props.forcedExpandedIds.has(host.source.id) ||
+    !props.collapsed.has(host.source.id);
   const spaces = shownSpaces(host, props.matches);
   return (
     <section
@@ -255,7 +304,10 @@ function VisualSpace({
   space,
   ...props
 }: { space: WorldTreeSpace } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(space.source.id);
+  const expanded =
+    props.searchActive ||
+    props.forcedExpandedIds.has(space.source.id) ||
+    !props.collapsed.has(space.source.id);
   const leaves = shownLeaves(space, props.matches);
   return (
     <section
@@ -291,6 +343,8 @@ function TreeCard({
   onToggle,
   onSelect,
   onOpenTerminal,
+  inlineInspectorNodeId,
+  onInlineInspectorPortalChange,
 }: {
   node: WorldObjectNode;
   expanded?: boolean;
@@ -298,7 +352,7 @@ function TreeCard({
   const leaf = node.kind === "agent" || node.kind === "terminal";
   return (
     <div
-      className="world-connected-tree-card-wrap"
+      className={`world-connected-tree-card-wrap${inlineInspectorNodeId === node.id ? " has-inline-inspector" : ""}`}
       data-kind={node.kind}
       data-state={nodeState(node)}
     >
@@ -345,6 +399,13 @@ function TreeCard({
           <SquareTerminal size={14} aria-hidden="true" />
         </button>
       ) : null}
+      {leaf && inlineInspectorNodeId === node.id ? (
+        <div
+          className="world-tree-inline-inspector"
+          data-inline-inspector-node-id={node.id}
+          ref={onInlineInspectorPortalChange}
+        />
+      ) : null}
     </div>
   );
 }
@@ -353,7 +414,10 @@ function SemanticHost({
   host,
   ...props
 }: { host: WorldTreeHost } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(host.source.id);
+  const expanded =
+    props.searchActive ||
+    props.forcedExpandedIds.has(host.source.id) ||
+    !props.collapsed.has(host.source.id);
   return (
     <li data-tree-host-id={host.source.id}>
       <SemanticNode node={host.source} expanded={expanded} {...props} />
@@ -377,7 +441,10 @@ function SemanticSpace({
   space,
   ...props
 }: { space: WorldTreeSpace } & BranchProps) {
-  const expanded = props.searchActive || !props.collapsed.has(space.source.id);
+  const expanded =
+    props.searchActive ||
+    props.forcedExpandedIds.has(space.source.id) ||
+    !props.collapsed.has(space.source.id);
   return (
     <li>
       <SemanticNode node={space.source} expanded={expanded} {...props} />
@@ -407,49 +474,63 @@ function SemanticNode({
   onToggle,
   onSelect,
   onOpenTerminal,
+  inlineInspectorNodeId,
+  onInlineInspectorPortalChange,
 }: {
   node: WorldObjectNode;
   expanded?: boolean;
 } & BranchProps) {
   const leaf = node.kind === "agent" || node.kind === "terminal";
+  const inline = leaf && inlineInspectorNodeId === node.id;
   return (
-    <div className="world-tree-outline-row">
-      {expanded !== undefined ? (
+    <div
+      className={`world-tree-outline-node-wrap${inline ? " has-inline-inspector" : ""}`}
+    >
+      <div className="world-tree-outline-row">
+        {expanded !== undefined ? (
+          <button
+            type="button"
+            className="world-tree-outline-toggle"
+            aria-label={`${expanded ? "Collapse" : "Expand"} ${node.label}`}
+            aria-expanded={expanded}
+            disabled={searchActive}
+            onClick={() => onToggle(node.id)}
+          >
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
+        ) : (
+          <span className="world-tree-outline-spacer" />
+        )}
         <button
           type="button"
-          className="world-tree-outline-toggle"
-          aria-label={`${expanded ? "Collapse" : "Expand"} ${node.label}`}
-          aria-expanded={expanded}
-          disabled={searchActive}
-          onClick={() => onToggle(node.id)}
+          className="world-tree-outline-select"
+          data-world-node-anchor={node.id}
+          aria-pressed={selectedId === node.id}
+          onClick={() => onSelect(node.id)}
         >
-          <ChevronRight size={14} aria-hidden="true" />
+          <NodeIcon node={node} />
+          <span>
+            <strong>{node.label}</strong>
+            <small>{nodeSummary(node)}</small>
+          </span>
         </button>
-      ) : (
-        <span className="world-tree-outline-spacer" />
-      )}
-      <button
-        type="button"
-        className="world-tree-outline-select"
-        data-world-node-anchor={node.id}
-        aria-pressed={selectedId === node.id}
-        onClick={() => onSelect(node.id)}
-      >
-        <NodeIcon node={node} />
-        <span>
-          <strong>{node.label}</strong>
-          <small>{nodeSummary(node)}</small>
-        </span>
-      </button>
-      {leaf && node.actionable ? (
-        <button
-          type="button"
-          className="world-tree-outline-terminal"
-          aria-label={`Open ${node.label} terminal`}
-          onClick={() => onOpenTerminal(node.id)}
-        >
-          <SquareTerminal size={15} aria-hidden="true" />
-        </button>
+        {leaf && node.actionable ? (
+          <button
+            type="button"
+            className="world-tree-outline-terminal"
+            aria-label={`Open ${node.label} terminal`}
+            onClick={() => onOpenTerminal(node.id)}
+          >
+            <SquareTerminal size={15} aria-hidden="true" />
+          </button>
+        ) : null}
+      </div>
+      {inline ? (
+        <div
+          className="world-tree-inline-inspector"
+          data-inline-inspector-node-id={node.id}
+          ref={onInlineInspectorPortalChange}
+        />
       ) : null}
     </div>
   );

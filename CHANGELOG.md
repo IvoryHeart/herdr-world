@@ -57,8 +57,10 @@ retain their original Herdr Web lineage.
   Office now defaults new installations to separate cascaded floating Inspectors,
   persists a user's docked or floating choice in the common Menu, and keeps room
   alignment, long-title and observability settings there instead of reserving
-  Office or Zen scene space. Explicit Dock in and Dock out actions remain available
-  without rearranging existing conversations.
+  Office or Zen scene space. Tree now expands the exact selected leaf as its inline
+  Inspector and transfers the complete conversation through Dock out and Dock in.
+  Explicit docking actions remain available without rearranging existing
+  conversations.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
   provide tagged binary, archive and update identities at release time.
@@ -108,7 +110,9 @@ retain their original Herdr Web lineage.
   recover through the application's one-shot reload path. Narrow World
   Inspectors now constrain the shared terminal owner to the real portal width,
   keeping terminal reflow, the device-keyboard action and the shortcut launcher
-  visible and focusable on phones.
+  visible and focusable on phones. Graph hit testing now follows visual paint order
+  when nodes overlap, and its Inspector connector starts at the rendered node centre
+  even when the canvas is scaled.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Preserved the complete managed-host candidate set and qualified selected,
   focused, attention-requiring and detected-agent candidates with their parents

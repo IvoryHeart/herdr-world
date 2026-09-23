@@ -127,18 +127,25 @@ async function run() {
   let terminalOpens = 0;
   let selectedAnchor = false;
   let conversationAnchor = false;
+  let setInlineInspectorNodeId: (id: string | null) => void = () => {};
 
   function Fixture() {
     const [selectedId, setSelectedId] = useState<string | null>(agent.id);
+    const [inlineInspectorNodeId, setInlineInspector] = useState<string | null>(
+      null,
+    );
+    setInlineInspectorNodeId = setInlineInspector;
     return (
       <ConnectedTreeView
         world={world}
         selectedId={selectedId}
         conversationNodeIds={[terminal.id]}
+        inlineInspectorNodeId={inlineInspectorNodeId}
         onSelect={setSelectedId}
         onOpenTerminal={() => {
           terminalOpens += 1;
         }}
+        onInlineInspectorPortalChange={() => undefined}
         onSelectedAnchorChange={(anchor) => {
           selectedAnchor = anchor !== null;
         }}
@@ -246,6 +253,14 @@ async function run() {
       )
       ?.click();
     check(terminalOpens === 1, "Tree terminal action did not activate once");
+    setInlineInspectorNodeId(agent.id);
+    await waitFor(
+      () =>
+        activePresentation.querySelector(
+          `[data-inline-inspector-node-id='${CSS.escape(agent.id)}']`,
+        ) !== null,
+      "Tree did not expand the exact selected leaf as its inline Inspector target",
+    );
   } finally {
     root.unmount();
     host.remove();

@@ -261,9 +261,9 @@ never more than one input listener or attachment for that terminal. The × contr
 Inspector entry and never creates another presentation as a side effect. Activating an Office desk
 opens or focuses its Inspector on Terminal using the configured default presentation. Focusing a
 terminal tab first focuses its exact Herdr pane so the existing input gate
-remains authoritative. The overlaid docked presentation can also be dragged within the visual
-stage; an explicit dock-position or expand/restore action clears that free position and reapplies
-its named dock geometry.
+remains authoritative. The overlaid docked presentation can also be dragged across the application
+viewport rather than being clamped to the current visual-stage frame; an explicit dock-position or
+expand/restore action clears that free position and reapplies its named dock geometry.
 
 Changing selection while an Inspector is docked performs an ordered replacement without asking the
 new entity to inherit the old resource state: the outgoing docked entry closes before the new
@@ -329,6 +329,13 @@ the connected host-to-space-to-agent diagram currently labelled Graph becomes th
 presentation. It retains search, independent disclosure, visible connectors, selected-entity
 details and qualified actions. The list-style checkpoint Tree is only a compact or assistive
 fallback where the branch layout is not practical.
+
+Tree presents the shell-owned dock target inline: opening an actionable leaf expands that exact
+leaf and mounts the same Inspector resources beneath its card. Only one leaf is expanded as the
+inline dock at a time. Dock out moves the complete Inspector to the existing floating-window
+registry; Dock in while Tree is active returns it to the exact leaf, restoring ancestor disclosure
+when necessary. This is a presentation-target change only—the conversation registry, resource
+state, terminal owner and connection fencing remain shell-owned.
 
 Tree and Graph share one explicit presentation-budget policy: at most 128 hosts, 128 spaces globally
 and 16 leaves per presented space, ordered by selected/focused and attention-requiring relevance.

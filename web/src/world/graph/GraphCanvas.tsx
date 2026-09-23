@@ -573,37 +573,26 @@ class GraphRenderer {
 
   #point(event: { clientX: number; clientY: number }) {
     const rect = this.canvas.getBoundingClientRect();
+    const scaleX = rect.width / this.#width;
+    const scaleY = rect.height / this.#height;
     return {
       worldX:
-        (event.clientX - rect.left - this.#width / 2 - this.#camera.x) /
+        ((event.clientX - rect.left) / scaleX -
+          this.#width / 2 -
+          this.#camera.x) /
         this.#camera.zoom,
       worldY:
-        (event.clientY - rect.top - this.#height / 2 - this.#camera.y) /
+        ((event.clientY - rect.top) / scaleY -
+          this.#height / 2 -
+          this.#camera.y) /
         this.#camera.zoom,
     };
   }
 
   #hitNode(worldX: number, worldY: number) {
-    if (!this.#layout) return null;
-    const nodes = [...this.#layout.nodes.values()].reverse();
-    for (const node of nodes) {
-      if (
-        (node.kind === "host" || node.kind === "space") &&
-        Math.hypot(
-          worldX - (node.x + collapseBadgeOffset(node.kind)),
-          worldY - (node.y - collapseBadgeOffset(node.kind)),
-        ) <= 14
-      ) {
-        return node;
-      }
-      if (
-        Math.hypot(worldX - node.x, worldY - node.y) <=
-        graphNodeRadius(node.kind) + 3
-      ) {
-        return node;
-      }
-    }
-    return null;
+    return this.#layout
+      ? hitGraphNode(this.#layout.nodes, worldX, worldY)
+      : null;
   }
 
   #onPointerDown = (event: PointerEvent) => {
@@ -638,8 +627,9 @@ class GraphRenderer {
   #onPointerMove = (event: PointerEvent) => {
     const pointer = this.#pointer;
     if (!pointer || pointer.pointerId !== event.pointerId) return;
-    const dx = event.clientX - pointer.lastX;
-    const dy = event.clientY - pointer.lastY;
+    const rect = this.canvas.getBoundingClientRect();
+    const dx = (event.clientX - pointer.lastX) / (rect.width / this.#width);
+    const dy = (event.clientY - pointer.lastY) / (rect.height / this.#height);
     pointer.lastX = event.clientX;
     pointer.lastY = event.clientY;
     pointer.moved ||=
@@ -703,8 +693,10 @@ class GraphRenderer {
     const rect = this.canvas.getBoundingClientRect();
     this.#zoomAt(
       this.#camera.zoom * Math.exp(-event.deltaY * 0.0015),
-      event.clientX - rect.left - this.#width / 2,
-      event.clientY - rect.top - this.#height / 2,
+      (event.clientX - rect.left) / (rect.width / this.#width) -
+        this.#width / 2,
+      (event.clientY - rect.top) / (rect.height / this.#height) -
+        this.#height / 2,
     );
   };
 
@@ -756,6 +748,8 @@ class GraphRenderer {
   #emitAnchors(layout: GraphLayoutState) {
     if (!this.#onAnchorsChange) return;
     const rect = this.canvas.getBoundingClientRect();
+    const scaleX = rect.width / this.#width;
+    const scaleY = rect.height / this.#height;
     const anchors: Record<string, OfficeCanvasAnchor> = {};
     for (const requestedId of this.#anchorNodeIds) {
       const node =
@@ -764,14 +758,12 @@ class GraphRenderer {
       if (!node) continue;
       const rawX =
         rect.left +
-        this.#width / 2 +
-        this.#camera.x +
-        node.x * this.#camera.zoom;
+        (this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom) *
+          scaleX;
       const rawY =
         rect.top +
-        this.#height / 2 +
-        this.#camera.y +
-        node.y * this.#camera.zoom;
+        (this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom) *
+          scaleY;
       const visible =
         rawX >= rect.left &&
         rawX <= rect.right &&
@@ -828,6 +820,34 @@ class GraphRenderer {
       this.#cameraMode,
     );
   }
+}
+
+export function hitGraphNode(
+  nodes: ReadonlyMap<string, GraphLayoutNode>,
+  worldX: number,
+  worldY: number,
+) {
+  const paintedTopFirst = [...nodes.values()]
+    .sort((left, right) => nodeRank(left.kind) - nodeRank(right.kind))
+    .reverse();
+  for (const node of paintedTopFirst) {
+    if (
+      (node.kind === "host" || node.kind === "space") &&
+      Math.hypot(
+        worldX - (node.x + collapseBadgeOffset(node.kind)),
+        worldY - (node.y - collapseBadgeOffset(node.kind)),
+      ) <= 14
+    ) {
+      return node;
+    }
+    if (
+      Math.hypot(worldX - node.x, worldY - node.y) <=
+      graphNodeRadius(node.kind) + 3
+    ) {
+      return node;
+    }
+  }
+  return null;
 }
 
 function graphRendererDiagnostics() {

@@ -61,6 +61,7 @@ export default function WorldInspectorConversationView({
   conversation,
   target,
   floating,
+  embedded = false,
   onChange,
   onClose,
   onDockOut,
@@ -71,6 +72,7 @@ export default function WorldInspectorConversationView({
   conversation: WorldInspectorConversation;
   target: Element | null;
   floating: boolean;
+  embedded?: boolean;
   onChange(change: Partial<WorldInspectorConversation>): void;
   onClose(): void;
   onDockOut?(): void;
@@ -341,7 +343,7 @@ export default function WorldInspectorConversationView({
             onDockOut={floating ? undefined : onDockOut}
             onDockIn={floating ? onDockIn : undefined}
             controlMode={floating ? "floating" : "docked"}
-            windowMovable={!floating}
+            windowMovable={!floating && !embedded}
             onClose={onClose}
             onBack={() => {
               if (conversation.view === "files") {
