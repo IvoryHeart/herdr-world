@@ -17,7 +17,6 @@ import {
   Text,
   TextStyle,
   Texture,
-  UPDATE_PRIORITY,
 } from "pixi.js";
 import type {
   HerdrOfficeProjection,
@@ -239,7 +238,6 @@ export async function createOfficeRenderer(
   let lastRendererSize = { width: 0, height: 0 };
   let lastSceneSignature: string | null = null;
   let tick = 0;
-  let pendingRenderRevision = 0;
   let currentFontReady = officeFontReady();
   const animated: AnimatedItem[] = [];
   const scrollElement = element.closest<HTMLElement>(".world-stage-scroll");
@@ -494,26 +492,6 @@ export async function createOfficeRenderer(
     diagnostics.activeListeners += 1;
   }
 
-  const acknowledgeAfterRenderedFrame = (revision: number) => {
-    pendingRenderRevision = revision;
-    app.ticker.addOnce(
-      () => {
-        if (
-          disposed ||
-          pendingRenderRevision !== revision ||
-          currentLayout?.layoutRevision !== revision
-        ) {
-          return;
-        }
-        if (layoutPublisher.ackCanvasRendered(revision)) {
-          onCanvasRendered(revision);
-        }
-      },
-      undefined,
-      UPDATE_PRIORITY.UTILITY,
-    );
-  };
-
   const build = (requestedWidth = element.clientWidth) => {
     if (disposed) {
       return;
@@ -591,7 +569,14 @@ export async function createOfficeRenderer(
     element.style.height = `${layout.totalHeight}px`;
     app.stage.position.y = -(scrollElement?.scrollTop ?? 0);
     renderScene(layout);
-    acknowledgeAfterRenderedFrame(layout.layoutRevision);
+    // Render the published scene before admitting its matching DOM controls.
+    // A ticker-frame acknowledgement can remain pending indefinitely while a
+    // browser throttles the canvas, leaving the initial room actions disabled
+    // until an unrelated topology update triggers another build.
+    app.render();
+    if (layoutPublisher.ackCanvasRendered(layout.layoutRevision)) {
+      onCanvasRendered(layout.layoutRevision);
+    }
     diagnostics.layout = {
       officeWidth: layout.officeWidth,
       totalHeight: layout.totalHeight,

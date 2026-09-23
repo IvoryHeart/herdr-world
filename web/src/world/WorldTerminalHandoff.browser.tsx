@@ -469,6 +469,20 @@ async function run() {
     () => window.__HERDR_WORLD_RENDERER__?.ready === true,
     "Office renderer",
   );
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(".world-new-seat-canvas-action")
+        ?.disabled === false &&
+      document.querySelector<HTMLButtonElement>(".world-new-room-canvas-action")
+        ?.disabled === false,
+    "initial Office room and seat actions",
+  );
+  check(
+    !calls.some(
+      ({ method }) => method === "tab.create" || method === "workspace.create",
+    ),
+    "Office required a topology mutation before enabling initial room actions",
+  );
   check(
     document.querySelector(".world-status-header") === null,
     "the retired Visual Control Plane header still consumes Office height",
@@ -803,15 +817,49 @@ async function run() {
     ),
     "Floating mode did not use equally sized cascaded Inspector windows",
   );
-  for (const floatingWindow of preferredFloatingWindows) {
-    floatingWindow
-      .querySelector<HTMLButtonElement>(
-        'button[aria-label="Close floating Inspector"]',
-      )
-      ?.click();
-  }
+  preferredFloatingWindows
+    .find((floatingWindow) =>
+      floatingWindow.getAttribute("aria-label")?.startsWith("Builder "),
+    )
+    ?.querySelector<HTMLButtonElement>('button[aria-label="Dock Inspector"]')
+    ?.click();
   await until(
-    () => !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") === true &&
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ) !== null,
+    "occupied Builder dock with floating Reviewer Inspector",
+  );
+  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") === true,
+    "shared navigator admitted the existing floating Reviewer Inspector",
+  );
+  check(
+    !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
+    "shared navigator admission floated the displaced docked Inspector",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail button[aria-label="Close Workspace Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      !document
+        .querySelector(".world-context-rail")
+        ?.classList.contains("has-inspector") &&
+      !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
     "close preference-check Inspectors",
   );
   topbarMenu?.click();
