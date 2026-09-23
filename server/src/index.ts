@@ -167,6 +167,7 @@ const { handleUpdateCheck, handleUpdateInstall } = createUpdateHandlers({
 });
 const clients = new Set<ServerWebSocket<unknown>>();
 const clientIds = new WeakMap<ServerWebSocket<unknown>, number>();
+const clientSessions = new WeakMap<ServerWebSocket<unknown>, string | null>();
 interface WebSocketCleanupSnapshot {
   client: string;
   viewedTerminals: string[];
@@ -1308,7 +1309,7 @@ async function handleConnectionHttpRequest(
 function main() {
   const server = bindListenerBeforeConnectionStart({
     bindListener: () =>
-      Bun.serve({
+      Bun.serve<{ sessionToken: string | null }>({
         port: config.port,
         hostname: config.host,
         tls: config.tls,
@@ -1335,11 +1336,24 @@ function main() {
           if (url.pathname === "/api/login" && req.method === "POST") {
             return handleLogin(req);
           }
-          if (url.pathname === "/api/logout") {
-            return handleLogout(req);
-          }
           if (url.pathname === "/login") {
             return loginPage();
+          }
+          // The login page's logo and favicon must also work before login.
+          if (url.pathname === "/herdr-world-icon-192.png") {
+            return serveStatic(req, config.publicDir);
+          }
+          if (url.pathname === "/api/logout") {
+            const response = handleLogout(req);
+            const token = sessionToken(req);
+            if (response.ok && config.authRequired && token) {
+              for (const client of clients) {
+                if (clientSessions.get(client) !== token) continue;
+                webSocketCleanup.cleanup(client);
+                client.close(4001, "Logged out");
+              }
+            }
+            return response;
           }
 
           // Everything else requires auth when bound to a non-localhost address.
@@ -1363,7 +1377,8 @@ function main() {
           if (admissionError) return admissionError;
 
           if (url.pathname === "/ws") {
-            if (server.upgrade(req)) return undefined;
+            if (server.upgrade(req, { data: { sessionToken: sessionToken(req) } }))
+              return undefined;
             return new Response("websocket upgrade failed", { status: 400 });
           }
           if (url.pathname === "/api/health") {
@@ -1371,6 +1386,7 @@ function main() {
               ok: true,
               version: APP_VERSION,
               socket: config.socketPath,
+              auth_required: config.authRequired,
             });
           }
           if (url.pathname === "/api/update/check" && req.method === "GET") {
@@ -1409,6 +1425,7 @@ function main() {
         websocket: {
           open(ws) {
             clients.add(ws);
+            clientSessions.set(ws, ws.data.sessionToken);
             const label = assignClientId(ws);
             logger.debug("client connected", {
               client: label,

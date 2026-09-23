@@ -162,6 +162,37 @@
   padding: 6px 0 0;
 }
 
+/* Zen is easy to enter by accident through the shortcut, so a small tab
+   hangs flush from the top edge center holding the exit button. The corner
+   spots stay free for content and pane toolbars; the tab doubles as a pull
+   handle for the hidden topbar (see topbar.css) and floats above the
+   revealed topbar, whose center column is empty. */
+.zen-island {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 121;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px 6px;
+  border: 1px solid var(--border);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: var(--shadow-lg);
+}
+
+.zen-island:hover,
+.zen-island:focus-visible {
+  color: var(--text);
+}
+
 .pane-jump-backdrop {
   position: fixed;
   inset: 0;
@@ -362,7 +393,6 @@
 .pane-jump-agent-status {
   flex: 0 0 auto;
   margin-left: auto;
-  color: var(--muted);
   font-size: 11px;
   text-transform: capitalize;
 }

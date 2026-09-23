@@ -7,6 +7,9 @@ import {
   Download,
   ExternalLink,
   Focus,
+  ALargeSmall,
+  Activity,
+  LayoutDashboard,
   LogOut,
   Palette,
   Plug,
@@ -17,6 +20,7 @@ import {
   Wifi,
 } from "lucide-react";
 import packageJson from "../../package.json";
+import { worldLocalStorage } from "../browserStorage";
 import { logoutBrowserSession } from "../api";
 import { connectionHttpPath } from "../connectionHttp";
 import { useLayoutPreferences } from "../layoutPreferences";
@@ -27,6 +31,12 @@ import type {
   ConfigurationProps,
   ConfigurationTab,
 } from "./ConfigurationDialog";
+import {
+  readOfficePreferences,
+  WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+  writeOfficePreferences,
+  type OfficePreferences,
+} from "../world/officePreferences";
 import { ConfigurationLoadingDialog } from "./ConfigurationLoadingDialog";
 import { HerdrSetupCard } from "./HerdrSetupCard";
 import { MobileSheetHandle } from "./MobileSheetHandle";
@@ -56,7 +66,7 @@ type ConfigMenuProps = ConfigurationProps & {
 export function ConfigMenu({
   zenMode,
   onZenModeChange,
-  onOpenOfficeMetrics: _onOpenOfficeMetrics,
+  onOpenOfficeMetrics,
   ...configuration
 }: ConfigMenuProps) {
   const s = useStoreSelector(
@@ -86,6 +96,9 @@ export function ConfigMenu({
   const [configurationTab, setConfigurationTab] =
     useState<ConfigurationTab | null>(null);
   const [connectionDetailsOpen, setConnectionDetailsOpen] = useState(false);
+  const [officePreferences, setOfficePreferences] = useState(() =>
+    readOfficePreferences(worldLocalStorage),
+  );
   const [health, setHealth] = useState<{
     socket?: string;
     auth_required?: boolean;
@@ -114,6 +127,7 @@ export function ConfigMenu({
     setHealth(null);
     setHerdrInfo(null);
     setHerdrUnavailable(false);
+    setOfficePreferences(readOfficePreferences(worldLocalStorage));
     fetch("/api/health", { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null)
@@ -158,6 +172,20 @@ export function ConfigMenu({
       window.removeEventListener("keydown", onKey, { capture: true });
     };
   }, [connectionClient, open]);
+
+  const updateOfficePreferences = (patch: Partial<OfficePreferences>) => {
+    const next = writeOfficePreferences(worldLocalStorage, {
+      ...readOfficePreferences(worldLocalStorage),
+      ...patch,
+    });
+    setOfficePreferences(next);
+    window.dispatchEvent(
+      new CustomEvent<OfficePreferences>(
+        WORLD_OFFICE_PREFERENCES_CHANGED_EVENT,
+        { detail: next },
+      ),
+    );
+  };
 
   return (
     <>
@@ -248,6 +276,82 @@ export function ConfigMenu({
                     </button>
                   </div>
                 )}
+              </div>
+              <div className="config-section config-section-tiles-3">
+                <div className="config-title">Office</div>
+                <label className="config-preference-row">
+                  <span className="config-item-icon"><LayoutDashboard size={15} /></span>
+                  <span className="config-item-copy">
+                    <strong>Room alignment</strong>
+                    <span>Align rooms within each row</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Office room alignment"
+                    value={officePreferences.roomAlignment}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        roomAlignment: event.target.value as OfficePreferences["roomAlignment"],
+                      })
+                    }
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Centre</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon"><Focus size={15} /></span>
+                  <span className="config-item-copy">
+                    <strong>Inspector opening</strong>
+                    <span>Default for newly opened Office entities</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Office Inspector opening"
+                    value={officePreferences.inspectorPresentation}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        inspectorPresentation: event.target.value as OfficePreferences["inspectorPresentation"],
+                      })
+                    }
+                  >
+                    <option value="floating">Floating</option>
+                    <option value="docked">Docked</option>
+                  </select>
+                </label>
+                <label className="config-preference-row">
+                  <span className="config-item-icon"><ALargeSmall size={15} /></span>
+                  <span className="config-item-copy">
+                    <strong>Long room titles</strong>
+                    <span>Expand the room or shorten its label</span>
+                  </span>
+                  <select
+                    className="config-preference-select"
+                    aria-label="Office long room titles"
+                    value={officePreferences.longTitleMode}
+                    onChange={(event) =>
+                      updateOfficePreferences({
+                        longTitleMode: event.target.value as OfficePreferences["longTitleMode"],
+                      })
+                    }
+                  >
+                    <option value="expand">Expand room</option>
+                    <option value="compact">Ellipsis</option>
+                  </select>
+                </label>
+                {onOpenOfficeMetrics ? (
+                  <ConfigMenuItem
+                    icon={<Activity size={15} />}
+                    label="OTEL economy metrics"
+                    className="config-menu-item-row"
+                    description="Connect Prometheus to the Office Economy board"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenOfficeMetrics();
+                    }}
+                  />
+                ) : null}
               </div>
               <div className="config-section config-section-tiles-3">
                 <div className="config-title">Help & updates</div>

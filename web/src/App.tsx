@@ -1911,7 +1911,7 @@ export default function App({
             ? "No agent pane found; feedback copied"
             : "Review feedback copied",
           detail: `${annotations.length} comment${annotations.length === 1 ? "" : "s"}`,
-          autoDismissMs: 5000,
+          autoDismissMs: 3000,
         });
       } catch (error) {
         store.notify({
@@ -3681,7 +3681,7 @@ export default function App({
         >
           <MessageSquareText size={16} />
           <span className="mobile-nav-label">
-            Annotations {annotations.length}
+            {annotations.length > 0 ? `Annotations ${annotations.length}` : "Annotations"}
           </span>
         </button>
         <button
@@ -3836,8 +3836,9 @@ export default function App({
         </button>
       </div>
 
-      {s.updateInfo?.update_available || s.notice ? (
-        <div className="toast-viewport" aria-live="polite">
+      {s.updateInfo?.update_available || s.notice
+        ? createPortal(
+            <div className="toast-viewport" aria-live="polite">
           {s.updateInfo?.update_available ? (
             <div
               className={`toast toast-info ${
@@ -3920,8 +3921,10 @@ export default function App({
               />
             </div>
           ) : null}
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
 
       <div
         className={`body mobile-view-${mobileView} ${

@@ -17,7 +17,7 @@ describe("request authentication boundaries", () => {
     const html = await handlers.loginPage().text();
 
     expect(html).toContain("<title>Herdr World login</title>");
-    expect(html).toContain("<h2>▦ Herdr World</h2>");
+    expect(html).toContain("<span>Herdr World</span>");
     expect(html).not.toContain("herdr-gui");
   });
 

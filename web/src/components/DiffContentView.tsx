@@ -60,6 +60,7 @@ import {
   type DiffAutoCollapseInfo,
 } from "./diffAutoCollapse";
 import {
+  expandDiffEntryOnActivate,
   readDiffCollapseState,
   writeDiffCollapseState,
 } from "./diffContentState";
@@ -442,6 +443,7 @@ type DiffFileSectionProps = {
   imagePreviewState?: ImagePreviewState;
   options: PierreDiffOptions;
   currentSearchMatch: boolean;
+  mobile: boolean;
   embedded: boolean;
   annotations: readonly DiffReviewAnnotation[];
   annotationSelectionActive: boolean;
@@ -458,6 +460,7 @@ const DiffFileSection = memo(function DiffFileSection({
   imagePreviewState,
   options,
   currentSearchMatch,
+  mobile,
   embedded,
   annotations,
   annotationSelectionActive,
@@ -560,22 +563,52 @@ const DiffFileSection = memo(function DiffFileSection({
     >
       {embedded ? null : (
         <header className="diff-file-section-head">
-          <button
-            type="button"
-            className="diff-file-collapse"
-            onClick={toggle}
-            disabled={!section.active && !onSelectFile}
-            aria-expanded={!section.collapsed}
-            aria-label={`${section.collapsed ? "Expand" : "Collapse"} ${section.entry.path}`}
-            title={section.collapsed ? "Expand" : "Collapse"}
+          {mobile ? null : (
+            <button
+              type="button"
+              className="diff-file-collapse"
+              onClick={toggle}
+              disabled={!section.active && !onSelectFile}
+              aria-expanded={!section.collapsed}
+              aria-label={`${section.collapsed ? "Expand" : "Collapse"} ${section.entry.path}`}
+              title={section.collapsed ? "Expand" : "Collapse"}
+            >
+              {section.collapsed ? (
+                <ChevronRight size={14} />
+              ) : (
+                <ChevronDown size={14} />
+              )}
+            </button>
+          )}
+          <div
+            className={`diff-file-section-title ${
+              mobile && (section.active || onSelectFile) ? "is-toggle" : ""
+            }`}
+            onClick={
+              mobile && (section.active || onSelectFile) ? toggle : undefined
+            }
+            role={
+              mobile && (section.active || onSelectFile) ? "button" : undefined
+            }
+            tabIndex={
+              mobile && (section.active || onSelectFile) ? 0 : undefined
+            }
+            aria-expanded={
+              mobile && (section.active || onSelectFile)
+                ? !section.collapsed
+                : undefined
+            }
+            onKeyDown={
+              mobile && (section.active || onSelectFile)
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      toggle();
+                    }
+                  }
+                : undefined
+            }
           >
-            {section.collapsed ? (
-              <ChevronRight size={14} />
-            ) : (
-              <ChevronDown size={14} />
-            )}
-          </button>
-          <div className="diff-file-section-title">
             <strong>{section.entry.path}</strong>
             <span
               className={`git-status-code git-status-${statusCode.toLowerCase()}`}
@@ -700,6 +733,7 @@ function areDiffFileSectionPropsEqual(
     previous.imagePreviewState === next.imagePreviewState &&
     previous.options === next.options &&
     previous.currentSearchMatch === next.currentSearchMatch &&
+    previous.mobile === next.mobile &&
     previous.embedded === next.embedded &&
     previous.annotations === next.annotations &&
     previous.annotationSelectionActive === next.annotationSelectionActive &&
@@ -758,7 +792,6 @@ export function DiffContentView({
   embedded?: boolean;
   backAction?: { label: string; onClick: () => void };
 }) {
-  void selectionRevision;
   void backAction;
   const sectionRef = useRef<HTMLElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -1054,6 +1087,15 @@ export function DiffContentView({
     openFileRef.current = onOpenFile;
   }, [onOpenFile]);
   useEffect(() => {
+    if (!activeEntryKey) return;
+    setManualCollapseStates((current) => {
+      const next = expandDiffEntryOnActivate(current, activeEntryKey);
+      if (next === current) return current;
+      writeDiffCollapseState(resourceKey, next);
+      return next;
+    });
+  }, [activeEntryKey, resourceKey, selectionRevision]);
+  useEffect(() => {
     worldLocalStorage.setItem(DIFF_VIEW_MODE_KEY, viewMode);
   }, [viewMode]);
   useEffect(() => {
@@ -1186,7 +1228,7 @@ export function DiffContentView({
   );
 
   useEffect(() => {
-    if (embedded) return;
+    if (embedded || mobile) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || document.querySelector(".shortcut-modal"))
         return;
@@ -1201,7 +1243,7 @@ export function DiffContentView({
     window.addEventListener("keydown", onKey, { capture: true });
     return () =>
       window.removeEventListener("keydown", onKey, { capture: true });
-  }, [embedded, focusSearch]);
+  }, [embedded, mobile, focusSearch]);
 
   const diffList = visibleEntries.length ? (
     <Virtualizer
@@ -1220,6 +1262,7 @@ export function DiffContentView({
           }
           options={pierreOptions}
           currentSearchMatch={currentSearchEntryKey === section.key}
+          mobile={mobile}
           embedded={embedded}
           annotations={
             annotationsByPath.get(section.key) ?? EMPTY_DIFF_REVIEW_ANNOTATIONS
@@ -1243,11 +1286,17 @@ export function DiffContentView({
   return (
     <section
       ref={sectionRef}
-      className={`diff-content-view ${embedded ? "is-embedded" : ""}`}
+      className={`diff-content-view ${embedded ? "is-embedded" : ""} ${
+        mobile ? "is-mobile" : ""
+      }`}
       aria-label={embedded ? "File changes" : "Diff Viewer content"}
       tabIndex={-1}
       onKeyDownCapture={(e) => {
-        if (!embedded && shortcutMatches(e.nativeEvent, "preview.search")) {
+        if (
+          !embedded &&
+          !mobile &&
+          shortcutMatches(e.nativeEvent, "preview.search")
+        ) {
           if (isEditableSearchTarget(e.target)) return;
           e.preventDefault();
           e.stopPropagation();
