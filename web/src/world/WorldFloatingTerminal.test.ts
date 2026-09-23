@@ -12,7 +12,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "a floating Inspector keeps one portal through parent selection renders",
+  "a floating Inspector keeps one portal and stable drag bounds through parent renders",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "world-floating-terminal-"));
     const assets = new Map<string, Blob>();
@@ -29,7 +29,7 @@ test.skipIf(!chrome)(
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         return new Response(
-          '<body><script type="module" src="/WorldFloatingTerminal.browser.js"></script></body>',
+          '<head><link rel="stylesheet" href="/WorldFloatingTerminal.browser.css"></head><body><script type="module" src="/WorldFloatingTerminal.browser.js"></script></body>',
           { headers: { "Content-Type": "text/html" } },
         );
       },
@@ -82,6 +82,7 @@ test.skipIf(!chrome)(
         portal: "ready",
         inspectorLabel: "Reviewer Inspector",
         windows: 1,
+        stableDrag: true,
       });
     } finally {
       browser?.kill();

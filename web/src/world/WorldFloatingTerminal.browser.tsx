@@ -1,6 +1,9 @@
 import { StrictMode, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { worldLocalStorage } from "../browserStorage";
 import WorldFloatingTerminalWindow from "./WorldFloatingTerminal";
+import { FLOATING_TERMINAL_GEOMETRY_KEY } from "./floatingTerminalPreferences";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import "./world.css";
 
@@ -34,6 +37,16 @@ const first: WorldInspectorConversation = {
   expanded: false,
   size: 520,
 };
+
+worldLocalStorage.setItem(
+  FLOATING_TERMINAL_GEOMETRY_KEY,
+  JSON.stringify([
+    {
+      id: JSON.stringify([first.connectionId, first.nodeId]),
+      geometry: { left: 24, top: 80, width: 420, height: 300 },
+    },
+  ]),
+);
 
 function Fixture() {
   const [conversation, setConversation] = useState(first);
@@ -71,6 +84,17 @@ function Fixture() {
           }))
         }
       />
+      {portals[first.nodeId]
+        ? createPortal(
+            <header
+              className="workspace-inspector-head is-window-drag-handle"
+              data-testid="move-handle"
+            >
+              Move Inspector
+            </header>,
+            portals[first.nodeId]!,
+          )
+        : null}
     </>
   );
 }
@@ -88,7 +112,54 @@ setTimeout(() => {
   host
     .querySelector<HTMLButtonElement>('[data-testid="select-another"]')
     ?.click();
-  setTimeout(() => {
+  setTimeout(async () => {
+    const floatingWindow = host.querySelector<HTMLElement>(
+      ".world-floating-terminal",
+    )!;
+    const moveHandle = floatingWindow.querySelector<HTMLElement>(
+      '[data-testid="move-handle"]',
+    )!;
+    const startLeft = floatingWindow.getBoundingClientRect().left;
+    moveHandle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        pointerId: 12,
+        clientX: startLeft + 40,
+        clientY: 80,
+      }),
+    );
+    window.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        buttons: 1,
+        pointerId: 12,
+        clientX: startLeft + 190,
+        clientY: 80,
+      }),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    const firstMoveLeft = floatingWindow.getBoundingClientRect().left;
+    window.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        buttons: 1,
+        pointerId: 12,
+        clientX: startLeft + 340,
+        clientY: 80,
+      }),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    const secondMoveLeft = floatingWindow.getBoundingClientRect().left;
+    window.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 12,
+        clientX: startLeft + 340,
+        clientY: 80,
+      }),
+    );
     const result = {
       failures,
       portal: host.querySelector('[data-testid="portal-state"]')?.textContent,
@@ -96,6 +167,9 @@ setTimeout(() => {
         .querySelector(".world-floating-terminal")
         ?.getAttribute("aria-label"),
       windows: host.querySelectorAll(".world-floating-terminal").length,
+      stableDrag:
+        firstMoveLeft >= startLeft + 140 &&
+        secondMoveLeft >= firstMoveLeft + 140,
     };
     void fetch("/result", {
       method: "POST",

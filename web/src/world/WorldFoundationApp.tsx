@@ -997,7 +997,12 @@ function WorldControlPlane({
     setIntentError(null);
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
-    if (!next || !next.actionable || !next.selectedHost) {
+    if (
+      !next ||
+      next.kind === "host" ||
+      !next.actionable ||
+      !next.selectedHost
+    ) {
       setSelection(next);
       if (dockedInspector) {
         onInspectorConversationsChange(
@@ -1032,7 +1037,7 @@ function WorldControlPlane({
           );
         }
         if (existing.nodeId !== dockedInspectorId) {
-          focusFloatingInspector(admitted, false);
+          onDockedInspectorIdChange(admitted.nodeId);
         }
         if (admitted.view === "terminal") {
           focusInspectorTerminal(admitted.nodeId);
@@ -1084,6 +1089,7 @@ function WorldControlPlane({
     if (
       view === "office" &&
       officeInspectorPresentation === "floating" &&
+      node?.kind !== "host" &&
       node?.actionable &&
       node.selectedHost
     ) {
@@ -1109,7 +1115,7 @@ function WorldControlPlane({
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
     const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
-    if (node) return selectNode(node.id);
+    if (node) return applySelection(node.id);
     if (
       surfaceSelection.connectionId !==
         connectionSelection.activeConnectionId ||
@@ -1575,6 +1581,7 @@ function WorldControlPlane({
             className={`world-context-rail ${contextRailInspector ? "has-inspector" : ""}`}
             aria-label="World context"
             data-interaction={dockedInspectorMoving ? "moving" : undefined}
+            data-dock={contextRailInspector?.dock}
             data-free-position={
               dockedInspectorGeometry && !dockedInspectorExpanded
                 ? "true"
@@ -1590,8 +1597,11 @@ function WorldControlPlane({
                     width: dockedInspectorGeometry.width,
                     height: dockedInspectorGeometry.height,
                     maxHeight: "none",
-                  } satisfies CSSProperties)
-                : undefined
+                    "--world-inspector-dock-size": `${contextRailInspector?.size ?? 520}px`,
+                  } as CSSProperties)
+                : ({
+                    "--world-inspector-dock-size": `${contextRailInspector?.size ?? 520}px`,
+                  } as CSSProperties)
             }
           >
             {selected && showSelectionProfile ? (

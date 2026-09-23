@@ -34,6 +34,7 @@ type Interaction = {
   startX: number;
   startY: number;
   geometry: FloatingTerminalGeometry;
+  viewport: { width: number; height: number };
 };
 
 export default function WorldFloatingInspectorWindow({
@@ -158,6 +159,7 @@ export default function WorldFloatingInspectorWindow({
         startX: event.clientX,
         startY: event.clientY,
         geometry: initial,
+        viewport: viewportSize(element, initial),
       };
       onRaiseRef.current();
       capturePointer(element, event.pointerId);
@@ -176,7 +178,7 @@ export default function WorldFloatingInspectorWindow({
             current.geometry,
             deltaX,
             deltaY,
-            viewportSize(element, current.geometry),
+            current.viewport,
             current.geometry,
           ),
         });
@@ -187,7 +189,7 @@ export default function WorldFloatingInspectorWindow({
           current.geometry,
           deltaX,
           deltaY,
-          viewportSize(element, current.geometry),
+          current.viewport,
         ),
       );
     };
@@ -277,6 +279,7 @@ export default function WorldFloatingInspectorWindow({
       startX: event.clientX,
       startY: event.clientY,
       geometry: initial,
+      viewport: viewportSize(element, initial),
     };
     onRaiseRef.current();
     capturePointer(element, event.pointerId);
@@ -367,7 +370,13 @@ function viewportSize(
     offsetLeft: visualViewport?.offsetLeft ?? 0,
     offsetTop: visualViewport?.offsetTop ?? 0,
   };
-  if (!element || !geometry) return viewport;
+  if (
+    !element ||
+    !geometry ||
+    document.documentElement.dataset.layout !== "mobile"
+  ) {
+    return viewport;
+  }
   const rendered = element.getBoundingClientRect();
   return floatingTerminalContainingViewport(viewport, {
     left: rendered.left - geometry.left,
