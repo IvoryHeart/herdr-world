@@ -82,8 +82,11 @@ retain their original Herdr Web lineage.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Routed common-navigator and focused-tab selections into the same matching visual
   Inspector, made ordinary A-to-B selection replace the docked conversation without
-  unexpectedly floating A or mixing its terminal identity with B, and kept the live
-  Office mounted while a newly admitted seat retries exact terminal focus.
+  unexpectedly floating A—even when B was already floating—or mixing its terminal
+  identity with B. Office now acknowledges its initially rendered scene before
+  enabling room and seat actions, so those controls no longer wait for an unrelated
+  topology update, and keeps the live Office mounted while a newly admitted seat
+  retries exact terminal focus.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Made exact pane focus an admission requirement for World Inspectors, retained
   qualified docked and floating conversations through Spaces handoff while

@@ -199,6 +199,16 @@ async function run() {
       () => host.querySelector(".world-semantic-target") !== null,
       "Pixel Office overlays did not become ready",
     );
+    check(
+      host.querySelector<HTMLButtonElement>(".world-new-seat-canvas-action")
+        ?.disabled === false,
+      "Initial Office seat creation remained disabled after the scene rendered",
+    );
+    check(
+      host.querySelector<HTMLButtonElement>(".world-new-room-canvas-action")
+        ?.disabled === false,
+      "Initial Office room creation remained disabled after the scene rendered",
+    );
     const diagnostics = window.__HERDR_WORLD_RENDERER__!;
     const rendersBeforeObservation = diagnostics.sceneRenders;
     await fetch("/release-metrics", { method: "POST" });

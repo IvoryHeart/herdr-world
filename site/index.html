@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Herdr World is an open-source visual control plane for Herdr agents across local and SSH hosts, with terminals and review tools for desktop and mobile."
+      content="Herdr World observes local and SSH Herdr hosts in the background and projects one selected host into visual agent views, terminals, and review tools."
     />
     <meta property="og:type" content="website" />
     <meta
@@ -15,7 +15,7 @@
     />
     <meta
       property="og:description"
-      content="Observe agents across local and SSH hosts, then open their terminals, files, changes and history from one World application."
+      content="Observe local and SSH Herdr hosts in the background, then explore and operate one selected host in World."
     />
     <meta
       property="og:url"
@@ -38,7 +38,7 @@
     />
     <meta
       name="twitter:description"
-      content="One visual control plane for local and remote Herdr agents."
+      content="Observe every Herdr host and explore one selected host at a time."
     />
     <meta
       name="twitter:image"
@@ -57,7 +57,7 @@
         "name": "Herdr World",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
-        "description": "An open-source visual control plane for Herdr agents across local and SSH hosts.",
+        "description": "An open-source visual control plane that observes local and SSH Herdr hosts and projects one selected host at a time.",
         "url": "https://ivoryheart.github.io/herdr-world/",
         "downloadUrl": "https://github.com/IvoryHeart/herdr-world/releases/latest",
         "license": "https://opensource.org/license/mit"
@@ -127,7 +127,7 @@
               >Herdr</a
             >
           </div>
-          <h1>Every Herdr host, <span>in one World.</span></h1>
+          <h1>Every Herdr host, <span>one selected view.</span></h1>
           <p class="hero-lede">
             <a
               href="https://herdr.dev"
@@ -135,9 +135,9 @@
               rel="noopener noreferrer"
               >Herdr</a
             >
-            keeps the terminals alive. Herdr World observes agents across local
-            and SSH hosts, then opens the exact terminal, files, changes and
-            session history in one application.
+            keeps the terminals alive. Herdr World observes local and SSH hosts
+            in the background, projects the selected host into its visual views,
+            and opens the exact terminal, files, changes and session history.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">
@@ -192,7 +192,7 @@
                 />
                 <img
                   src="./assets/herdr-world-desktop-office.png"
-                  alt="Herdr World Office showing agents across two Herdr hosts"
+                  alt="Herdr World Office showing the selected Herdr host"
                   width="1440"
                   height="900"
                   fetchpriority="high"
@@ -388,10 +388,10 @@
                 tabindex="0"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-office.png"
-                data-alt="Herdr World Office showing agents across two Herdr hosts"
+                data-alt="Herdr World Office showing the selected Herdr host"
                 data-label="Office"
-                data-title="See the whole agent world at a glance."
-                data-copy="Scan every connected host, space, and recognized agent without losing the terminal workflow underneath."
+                data-title="See the selected agent world at a glance."
+                data-copy="Keep local and SSH hosts observed in the background, then scan the selected host's spaces and recognized agents without losing the terminal workflow."
               >
                 <span>01</span> Office
               </button>
@@ -404,10 +404,10 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-tree.png"
-                data-alt="Herdr World Tree showing qualified hosts, spaces, and agents"
+                data-alt="Herdr World Tree showing the selected host's spaces and agents"
                 data-label="Tree"
                 data-title="Trace every agent back to its runtime."
-                data-copy="Search and collapse a qualified host-space-agent hierarchy, even when native identifiers collide across machines."
+                data-copy="Search and collapse the selected host's qualified space-agent hierarchy while World keeps every managed host distinct in the background."
               >
                 <span>02</span> Tree
               </button>
@@ -420,7 +420,7 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-graph.png"
-                data-alt="Herdr World Graph showing relationships between hosts, spaces, and agents"
+                data-alt="Herdr World Graph showing the selected host's spaces and agents"
                 data-label="Graph"
                 data-title="Follow runtime relationships visually."
                 data-copy="Move from a machine to a workspace to the exact agent or terminal, then hand off into its live Spaces context."
@@ -482,7 +482,7 @@
                 >
                   <img
                     src="./assets/herdr-world-desktop-office.png"
-                    alt="Herdr World Office showing agents across two Herdr hosts"
+                    alt="Herdr World Office showing the selected Herdr host"
                     width="1440"
                     height="900"
                     loading="lazy"
@@ -493,11 +493,12 @@
               </div>
               <div class="showcase-caption" aria-live="polite">
                 <h3 data-showcase-title>
-                  See the whole agent world at a glance.
+                  See the selected agent world at a glance.
                 </h3>
                 <p data-showcase-copy>
-                  Scan every connected host, space, and recognized agent
-                  without losing the terminal workflow underneath.
+                  Keep local and SSH hosts observed in the background, then scan
+                  the selected host's spaces and recognized agents without
+                  losing the terminal workflow underneath.
                 </p>
               </div>
             </div>

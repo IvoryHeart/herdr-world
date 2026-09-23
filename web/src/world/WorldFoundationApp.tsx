@@ -1029,11 +1029,23 @@ function WorldControlPlane({
           requestedView && existing.availableViews.includes(requestedView)
             ? { ...existing, view: requestedView }
             : existing;
-        if (admitted !== existing) {
+        const displacedDockedInspector =
+          existing.nodeId !== dockedInspectorId ? dockedInspector : null;
+        if (displacedDockedInspector) {
+          onInspectorTerminalPortal(displacedDockedInspector.nodeId, null);
+        }
+        if (admitted !== existing || displacedDockedInspector) {
           onInspectorConversationsChange(
-            inspectorConversations.map((conversation) =>
-              conversation.nodeId === existing.nodeId ? admitted : conversation,
-            ),
+            inspectorConversations.flatMap((conversation) => {
+              if (conversation.nodeId === displacedDockedInspector?.nodeId) {
+                return [];
+              }
+              return [
+                conversation.nodeId === existing.nodeId
+                  ? admitted
+                  : conversation,
+              ];
+            }),
           );
         }
         if (existing.nodeId !== dockedInspectorId) {
