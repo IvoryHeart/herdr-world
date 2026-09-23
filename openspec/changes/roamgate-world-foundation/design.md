@@ -277,8 +277,9 @@ new entity to inherit the old resource state: the outgoing docked entry closes b
 context mounts. Docked mode does not manufacture a floating window as a side effect of ordinary
 navigation; floating entries arise through explicit Dock out or a new Office activation in Floating
 mode. Docking an existing floating entry into an occupied dock still swaps the two retained presentations. The
-common workspace navigator resolves its selected workspace or pane to the exact selected-host
-WorldObject identity and invokes this same path, so its highlighted selection and the visual
+common workspace navigator and focused tab strip resolve their selected workspace or pane to the
+exact selected-host WorldObject identity and always invoke the docked admission path, regardless of
+the Office scene's Docked/Floating preference, so their highlighted selection and the visual
 Inspector cannot diverge. On compact layouts the registry is preserved while one active Inspector
 remains usable at a time.
 

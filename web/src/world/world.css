@@ -317,17 +317,19 @@
 .world-context-rail.has-inspector {
   bottom: 12px;
 }
-.world-context-rail:has(.world-inspector-stage.inspector-dock-bottom) {
+.world-context-rail[data-dock="bottom"] {
   top: auto;
   right: 12px;
   bottom: 12px;
   left: 12px;
   width: auto;
+  height: min(var(--world-inspector-dock-size, 520px), calc(100% - 24px));
   max-height: min(72%, 720px);
 }
 .world-context-rail:has(.world-inspector-stage.is-inspector-expanded) {
   inset: 12px;
   width: auto;
+  height: auto;
   max-height: none;
 }
 .world-context-rail[data-free-position="true"] {
@@ -1808,10 +1810,11 @@
   .world-context-rail.has-inspector {
     bottom: 8px;
   }
-  .world-context-rail:has(.world-inspector-stage.inspector-dock-bottom),
+  .world-context-rail[data-dock="bottom"],
   .world-context-rail:has(.world-inspector-stage.is-inspector-expanded) {
     inset: 8px;
     width: auto;
+    height: auto;
     max-height: none;
   }
   .world-inspector-portal:not(:empty) {

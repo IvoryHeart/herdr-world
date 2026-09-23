@@ -120,6 +120,10 @@ retain their original Herdr Web lineage.
   visible and focusable on phones. Graph hit testing now follows visual paint order
   when nodes overlap, and its Inspector connector starts at the rendered node centre
   even when the canvas is scaled.
+  Shared navigator and focused-tab selection now remains docked independently
+  of Office's floating-window preference; host search opens bounded host detail,
+  bottom docking restores a full visible Inspector, and floating-window drag
+  bounds stay stable throughout each pointer gesture.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Preserved the complete managed-host candidate set and qualified selected,
   focused, attention-requiring and detected-agent candidates with their parents

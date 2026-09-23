@@ -45,6 +45,29 @@ whole view; World keeps other managed connections observed in the background.
   </tbody>
 </table>
 
+The same Inspector can move with an agent while preserving its exact terminal
+and repository context. Files and agent history are first-class views, not a
+handoff to a separate application.
+
+<table width="100%">
+  <thead>
+    <tr>
+      <th width="50%" align="center">Files</th>
+      <th width="50%" align="center">Agent history</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-files.png"><img src="./docs/images/herdr-world-desktop-files.png" alt="Office Inspector browsing files for the selected agent" width="100%" /></a>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <a href="./docs/images/herdr-world-desktop-history.png"><img src="./docs/images/herdr-world-desktop-history.png" alt="Office Inspector showing the selected agent's session history" width="100%" /></a>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
 ### Mobile
 
 <table width="100%">

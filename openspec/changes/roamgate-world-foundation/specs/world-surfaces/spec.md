@@ -283,8 +283,10 @@ relaying out or otherwise taking workspace from the visual stage. Selecting an a
 SHALL expand that exact leaf to host the same shell-owned Inspector inline; Dock out SHALL transfer
 the complete conversation to a floating window and Dock in while Tree is active SHALL return it to
 the exact visible leaf. Only one Tree leaf SHALL host the inline dock target at a time. Office visual
-and common navigator selection SHALL follow the persisted Docked/Floating preference for newly opened entities
-and SHALL focus an existing entity in its current presentation. Docked admission SHALL replace and
+selection SHALL follow the persisted Docked/Floating preference for newly opened entities and SHALL
+focus an existing entity in its current presentation. The common workspace navigator and focused
+tab strip SHALL always admit the matching entity into the docked Inspector, independently of the
+Office preference. Docked admission SHALL replace and
 close a different docked conversation rather than implicitly turn it into a floating window. A
 floating Inspector SHALL be independently movable and resizable and
 expose Dock in and × controls. The docked Inspector SHALL expose Dock out, dock-position,
@@ -326,14 +328,15 @@ existing connection lifecycle.
 
 - **WHEN** the user selects an actionable agent or non-agent terminal pane without an existing
   Inspector context or retained applicable tab preference
-- **THEN** its docked Inspector opens Terminal as the initial resource while keeping Files, Changes
-  and any admitted Agent History available as peer tabs
+- **THEN** its configured Inspector presentation opens Terminal as the initial resource while keeping
+  Files, Changes and any admitted Agent History available as peer tabs
 
 #### Scenario: Reposition a selected-agent Inspector
 
 - **WHEN** the user docks, undocks, moves, resizes, expands or restores a selected-agent Inspector
 - **THEN** compact identity, selected resource state, applicable tabs and the controls for that
-  presentation remain reachable within the same Inspector
+  presentation remain reachable within the same Inspector, and an explicit dock-position change
+  leaves the named dock fully visible
 
 #### Scenario: Expand and detach a Tree leaf Inspector
 

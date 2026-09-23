@@ -20,6 +20,13 @@ const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
+function enterSearch(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set?.call(input, value);
+  input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+}
 async function until(condition: () => unknown, message: string) {
   for (let index = 0; index < 200; index += 1) {
     if (condition()) return;
@@ -709,6 +716,54 @@ async function run() {
     "Office controls were not menu-owned or did not default to Floating",
   );
   topbarMenu?.click();
+  const floatingPreferenceNavigatorRow = [
+    ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
+  ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
+  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") &&
+      !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
+    "shared navigator docked Inspector with Floating Office preference",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail button[aria-label="Close Workspace Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      !document
+        .querySelector(".world-context-rail")
+        ?.classList.contains("has-inspector"),
+    "close shared navigator Inspector",
+  );
+  const officeSearch = document.querySelector<HTMLInputElement>(
+    'input[placeholder="Search Office"]',
+  )!;
+  enterSearch(officeSearch, "Local");
+  officeSearch
+    .closest("form")!
+    .dispatchEvent(
+      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
+    );
+  await until(
+    () =>
+      document
+        .querySelector('.world-selection-panel[data-kind="host"]')
+        ?.textContent?.includes("Local") &&
+      !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
+    "Office host search selection profile",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-selection-panel button[aria-label="Close profile"]',
+    )!
+    .click();
   flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
@@ -1018,6 +1073,35 @@ async function run() {
     calls.filter(({ method }) => method === "pane.get").length ===
       paneGetsBeforeDockedMove,
     "moving the docked Inspector focused its terminal",
+  );
+  dockedRail
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Dock Inspector at bottom"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document.querySelector(".world-inspector-stage.inspector-dock-bottom"),
+    "bottom dock after moving docked Inspector",
+  );
+  const worldLayoutBounds = document
+    .querySelector<HTMLElement>(".world-view-layout")!
+    .getBoundingClientRect();
+  const movedBottomDockBounds = dockedRail.getBoundingClientRect();
+  check(
+    movedBottomDockBounds.height > 40 &&
+      movedBottomDockBounds.top >= worldLayoutBounds.top - 1 &&
+      movedBottomDockBounds.bottom <= worldLayoutBounds.bottom + 1,
+    `bottom dock escaped the visible World stage: dock=${JSON.stringify({ top: movedBottomDockBounds.top, bottom: movedBottomDockBounds.bottom, height: movedBottomDockBounds.height })}; stage=${JSON.stringify({ top: worldLayoutBounds.top, bottom: worldLayoutBounds.bottom })}`,
+  );
+  dockedRail
+    .querySelector<HTMLButtonElement>(
+      'button[aria-label="Dock Inspector at right"]',
+    )!
+    .click();
+  await until(
+    () => document.querySelector(".world-inspector-stage.inspector-dock-right"),
+    "restore right dock after moved bottom dock",
   );
   document
     .querySelector<HTMLButtonElement>(
