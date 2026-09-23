@@ -407,7 +407,9 @@ function printServiceAccess(
     return;
   }
   if (!access.token) {
-    log(`Open: ${browserUrlFor(access.host, access.port, access.tls)} (local access)`);
+    log(
+      `Open: ${browserUrlFor(access.host, access.port, access.tls)} (local access)`,
+    );
     return;
   }
 

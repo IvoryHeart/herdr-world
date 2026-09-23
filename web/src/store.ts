@@ -912,7 +912,8 @@ function maybeShowBrowserTaskNotification(
     !state.taskNotificationsEnabled ||
     state.taskNotificationBusy ||
     state.taskNotificationTransport === "push"
-  ) return;
+  )
+    return;
   const version = taskNotificationPreferenceVersion;
   if (notificationPermission() !== "granted") return;
   void showTaskNotification(
@@ -982,7 +983,8 @@ function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
   if (
     !state.taskNotificationsEnabled ||
     !state.taskNotificationPreferences[blocked ? "blocked" : "completed"]
-  ) return;
+  )
+    return;
   const runtimeGeneration = state.serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const body = taskNotificationBody(pane, workspaces, tabs);
@@ -3319,9 +3321,16 @@ export const store = {
       set({ taskNotificationTransport: transport });
     } catch (error) {
       if (version === taskNotificationPreferenceVersion)
-        set({ notice: { kind: "error", message: "Background notification sync failed", detail: (error as Error).message } });
+        set({
+          notice: {
+            kind: "error",
+            message: "Background notification sync failed",
+            detail: (error as Error).message,
+          },
+        });
     } finally {
-      if (version === taskNotificationPreferenceVersion) set({ taskNotificationBusy: false });
+      if (version === taskNotificationPreferenceVersion)
+        set({ taskNotificationBusy: false });
     }
   },
 
@@ -3330,19 +3339,38 @@ export const store = {
     enabled: boolean,
   ) {
     const version = ++taskNotificationPreferenceVersion;
-    const preferences = { ...state.taskNotificationPreferences, [kind]: enabled };
+    const preferences = {
+      ...state.taskNotificationPreferences,
+      [kind]: enabled,
+    };
     set({ taskNotificationBusy: true });
     try {
-      const transport = await syncTaskPush(state.taskNotificationsEnabled, preferences);
+      const transport = await syncTaskPush(
+        state.taskNotificationsEnabled,
+        preferences,
+      );
       if (version !== taskNotificationPreferenceVersion) return;
       worldLocalStorage.setItem("taskNotificationTransport", transport);
-      worldLocalStorage.setItem(TASK_NOTIFICATION_PREFERENCES_KEY, JSON.stringify(preferences));
-      set({ taskNotificationPreferences: preferences, taskNotificationTransport: transport });
+      worldLocalStorage.setItem(
+        TASK_NOTIFICATION_PREFERENCES_KEY,
+        JSON.stringify(preferences),
+      );
+      set({
+        taskNotificationPreferences: preferences,
+        taskNotificationTransport: transport,
+      });
     } catch (error) {
       if (version === taskNotificationPreferenceVersion)
-        set({ notice: { kind: "error", message: "Notification preference was not saved", detail: (error as Error).message } });
+        set({
+          notice: {
+            kind: "error",
+            message: "Notification preference was not saved",
+            detail: (error as Error).message,
+          },
+        });
     } finally {
-      if (version === taskNotificationPreferenceVersion) set({ taskNotificationBusy: false });
+      if (version === taskNotificationPreferenceVersion)
+        set({ taskNotificationBusy: false });
     }
   },
 
@@ -3350,8 +3378,18 @@ export const store = {
     const version = ++taskNotificationPreferenceVersion;
     set({ taskNotificationBusy: true });
     if (!enabled) {
-      try { await syncTaskPush(false, state.taskNotificationPreferences); } catch (error) {
-        if (version === taskNotificationPreferenceVersion) set({ taskNotificationBusy: false, notice: { kind: "error", message: "Notification revocation failed", detail: (error as Error).message } });
+      try {
+        await syncTaskPush(false, state.taskNotificationPreferences);
+      } catch (error) {
+        if (version === taskNotificationPreferenceVersion)
+          set({
+            taskNotificationBusy: false,
+            notice: {
+              kind: "error",
+              message: "Notification revocation failed",
+              detail: (error as Error).message,
+            },
+          });
         return;
       }
       worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
@@ -3411,7 +3449,11 @@ export const store = {
       try {
         await prepareTaskNotifications();
         if (version !== taskNotificationPreferenceVersion) return;
-        transport = await syncTaskPush(true, state.taskNotificationPreferences, true);
+        transport = await syncTaskPush(
+          true,
+          state.taskNotificationPreferences,
+          true,
+        );
       } catch (error) {
         reportTaskNotificationFailure(error, version);
         return;

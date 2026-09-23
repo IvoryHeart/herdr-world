@@ -33,7 +33,8 @@ self.addEventListener("push", (event) => {
             typeof message?.body === "string"
               ? message.body
               : "Open Herdr World to check your agents.",
-          tag: typeof message?.tag === "string" ? message.tag : "herdr-world-task",
+          tag:
+            typeof message?.tag === "string" ? message.tag : "herdr-world-task",
           data: valid
             ? { type: "herdr-world:task-notification-activate", target }
             : null,

@@ -319,8 +319,8 @@ export function createWebPushService(
         return new Response("Method not allowed", { status: 405, headers });
       // A custom header and JSON require a same-origin request (no CORS grant).
       if (
-        req.headers.get("x-herdr-world-push") !== "1" &&
-        req.headers.get("x-roamgate-push") !== "1" ||
+        (req.headers.get("x-herdr-world-push") !== "1" &&
+          req.headers.get("x-roamgate-push") !== "1") ||
         req.headers.get("sec-fetch-site") === "cross-site" ||
         req.headers.get("content-type")?.split(";")[0] !== "application/json"
       )

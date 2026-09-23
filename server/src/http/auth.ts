@@ -109,12 +109,18 @@ export function createAuthHandlers(args: {
 
   function handleLogout(req: Request): Response {
     if (req.method !== "POST") {
-      return new Response("method not allowed", { status: 405, headers: { allow: "POST" } });
+      return new Response("method not allowed", {
+        status: 405,
+        headers: { allow: "POST" },
+      });
     }
     const logoutHeader =
       req.headers.get("x-herdr-world-logout") ??
       req.headers.get("x-roamgate-logout");
-    if (logoutHeader !== "1" || req.headers.get("sec-fetch-site") === "cross-site")
+    if (
+      logoutHeader !== "1" ||
+      req.headers.get("sec-fetch-site") === "cross-site"
+    )
       return new Response("forbidden", { status: 403 });
     return new Response(null, {
       status: 204,
@@ -183,7 +189,14 @@ export function createAuthHandlers(args: {
     });
   }
 
-  return { isAuthed, sessionToken, handleTokenLogin, handleLogin, handleLogout, loginPage };
+  return {
+    isAuthed,
+    sessionToken,
+    handleTokenLogin,
+    handleLogin,
+    handleLogout,
+    loginPage,
+  };
 }
 
 export function unauthenticatedLoginRedirect(): Response {

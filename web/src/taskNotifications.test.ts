@@ -331,7 +331,9 @@ describe("task notification transport", () => {
     const activate = mock();
     const replaceState = mock();
     const location = new URL(
-      origin + "/#herdr-world-task=" + encodeURIComponent(JSON.stringify(target)),
+      origin +
+        "/#herdr-world-task=" +
+        encodeURIComponent(JSON.stringify(target)),
     );
     await withBrowser(
       {
@@ -470,7 +472,9 @@ describe("notification service worker clicks", () => {
     listeners.notificationclick(event);
     await pending;
     expect(openWindow).toHaveBeenCalledWith(
-      origin + "/#herdr-world-task=" + encodeURIComponent(JSON.stringify(target)),
+      origin +
+        "/#herdr-world-task=" +
+        encodeURIComponent(JSON.stringify(target)),
     );
   });
 });

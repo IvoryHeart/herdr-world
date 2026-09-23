@@ -131,7 +131,11 @@ describe("native TLS", () => {
                 platform: "linux",
                 homeDir: dir,
                 execPath: "/opt/herdr-world-test/bin/herdr-world",
-                argv: ["/opt/herdr-world-test/bin/herdr-world", "service", "install"],
+                argv: [
+                  "/opt/herdr-world-test/bin/herdr-world",
+                  "service",
+                  "install",
+                ],
                 uid: 1000,
               },
               runCommand: (argv) =>

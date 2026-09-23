@@ -3173,10 +3173,22 @@ export default function App({
       uiScale === UI_SCALE_DEFAULT ? "" : String(uiScale / 100);
     if (uiScale === UI_SCALE_DEFAULT) {
       document.documentElement.style.removeProperty("--ui-scale");
+      document.documentElement.style.removeProperty(
+        "--config-sheet-max-height",
+      );
+      document.documentElement.style.removeProperty(
+        "--config-sheet-expanded-max-height",
+      );
     } else {
+      const scale = uiScale / 100;
+      document.documentElement.style.setProperty("--ui-scale", String(scale));
       document.documentElement.style.setProperty(
-        "--ui-scale",
-        String(uiScale / 100),
+        "--config-sheet-max-height",
+        `min(calc(78dvh / ${scale}), calc(640px / ${scale}))`,
+      );
+      document.documentElement.style.setProperty(
+        "--config-sheet-expanded-max-height",
+        `calc(90dvh / ${scale})`,
       );
     }
     // Radix positions popovers using getBoundingClientRect. Some engines
@@ -3681,7 +3693,9 @@ export default function App({
         >
           <MessageSquareText size={16} />
           <span className="mobile-nav-label">
-            {annotations.length > 0 ? `Annotations ${annotations.length}` : "Annotations"}
+            {annotations.length > 0
+              ? `Annotations ${annotations.length}`
+              : "Annotations"}
           </span>
         </button>
         <button
@@ -3839,88 +3853,90 @@ export default function App({
       {s.updateInfo?.update_available || s.notice
         ? createPortal(
             <div className="toast-viewport" aria-live="polite">
-          {s.updateInfo?.update_available ? (
-            <div
-              className={`toast toast-info ${
-                s.updateInstalling ? "toast-loading" : ""
-              }`}
-              role="status"
-            >
-              <ToastMark kind="info" loading={s.updateInstalling} />
-              <div className="toast-content">
-                <strong>
-                  Herdr World {s.updateInfo.latest_version} is available
-                </strong>
-                <p>
-                  Current {s.updateInfo.current_version}
-                  {s.updateInfo.can_auto_update
-                    ? " · ready to update and restart"
-                    : s.updateInfo.reason
-                      ? ` · ${s.updateInfo.reason}`
-                      : ""}
-                </p>
-                <div className="toast-actions">
-                  {s.updateInfo.can_auto_update ? (
-                    <button
-                      type="button"
-                      className="toast-action primary"
-                      onClick={() => store.installUpdate()}
-                      disabled={s.updateInstalling}
-                    >
-                      {s.updateInstalling ? "Updating..." : "Update & restart"}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="toast-action"
+              {s.updateInfo?.update_available ? (
+                <div
+                  className={`toast toast-info ${
+                    s.updateInstalling ? "toast-loading" : ""
+                  }`}
+                  role="status"
+                >
+                  <ToastMark kind="info" loading={s.updateInstalling} />
+                  <div className="toast-content">
+                    <strong>
+                      Herdr World {s.updateInfo.latest_version} is available
+                    </strong>
+                    <p>
+                      Current {s.updateInfo.current_version}
+                      {s.updateInfo.can_auto_update
+                        ? " · ready to update and restart"
+                        : s.updateInfo.reason
+                          ? ` · ${s.updateInfo.reason}`
+                          : ""}
+                    </p>
+                    <div className="toast-actions">
+                      {s.updateInfo.can_auto_update ? (
+                        <button
+                          type="button"
+                          className="toast-action primary"
+                          onClick={() => store.installUpdate()}
+                          disabled={s.updateInstalling}
+                        >
+                          {s.updateInstalling
+                            ? "Updating..."
+                            : "Update & restart"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="toast-action"
+                        onClick={() => store.dismissUpdate()}
+                        disabled={s.updateInstalling}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                  <CloseButton
+                    variant="toast"
+                    label="Dismiss update notification"
                     onClick={() => store.dismissUpdate()}
                     disabled={s.updateInstalling}
-                  >
-                    Dismiss
-                  </button>
+                  />
                 </div>
-              </div>
-              <CloseButton
-                variant="toast"
-                label="Dismiss update notification"
-                onClick={() => store.dismissUpdate()}
-                disabled={s.updateInstalling}
-              />
-            </div>
-          ) : null}
-          {s.notice ? (
-            <div
-              className={`toast toast-${s.notice.kind} ${
-                s.notice.loading ? "toast-loading" : ""
-              }`}
-              role={s.notice.kind === "error" ? "alert" : "status"}
-            >
-              <ToastMark kind={s.notice.kind} loading={s.notice.loading} />
-              <div className="toast-content">
-                <strong>{s.notice.message}</strong>
-                <NoticeDetail notice={s.notice} />
-                {s.notice.actionLabel &&
-                (s.notice.actionPaneId ||
-                  s.notice.actionWorkspaceId ||
-                  s.notice.actionClipboardText !== undefined) ? (
-                  <div className="toast-actions">
-                    <button
-                      type="button"
-                      className="toast-action primary"
-                      onClick={() => handleNoticeAction(s.notice!)}
-                    >
-                      {s.notice.actionLabel}
-                    </button>
+              ) : null}
+              {s.notice ? (
+                <div
+                  className={`toast toast-${s.notice.kind} ${
+                    s.notice.loading ? "toast-loading" : ""
+                  }`}
+                  role={s.notice.kind === "error" ? "alert" : "status"}
+                >
+                  <ToastMark kind={s.notice.kind} loading={s.notice.loading} />
+                  <div className="toast-content">
+                    <strong>{s.notice.message}</strong>
+                    <NoticeDetail notice={s.notice} />
+                    {s.notice.actionLabel &&
+                    (s.notice.actionPaneId ||
+                      s.notice.actionWorkspaceId ||
+                      s.notice.actionClipboardText !== undefined) ? (
+                      <div className="toast-actions">
+                        <button
+                          type="button"
+                          className="toast-action primary"
+                          onClick={() => handleNoticeAction(s.notice!)}
+                        >
+                          {s.notice.actionLabel}
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-              <CloseButton
-                variant="toast"
-                label="Dismiss notification"
-                onClick={() => store.clearNotice()}
-              />
-            </div>
-          ) : null}
+                  <CloseButton
+                    variant="toast"
+                    label="Dismiss notification"
+                    onClick={() => store.clearNotice()}
+                  />
+                </div>
+              ) : null}
             </div>,
             document.body,
           )

@@ -137,7 +137,7 @@ test("logout after reauthentication closes earlier and later tabs, not other bro
     expect(a.readyState).toBe(WebSocket.OPEN);
     const logout = await request("/api/logout", {
       method: "POST",
-          headers: { cookie: currentCookie, "x-herdr-world-logout": "1" },
+      headers: { cookie: currentCookie, "x-herdr-world-logout": "1" },
     });
     expect(logout.status).toBe(204);
     expect(logout.headers.get("set-cookie")).toContain("Max-Age=0");

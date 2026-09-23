@@ -272,6 +272,14 @@ function Harness() {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.zoom = String(scale / 100);
   document.documentElement.style.setProperty("--ui-scale", String(scale / 100));
+  document.documentElement.style.setProperty(
+    "--config-sheet-max-height",
+    `min(calc(78dvh / ${scale / 100}), calc(640px / ${scale / 100}))`,
+  );
+  document.documentElement.style.setProperty(
+    "--config-sheet-expanded-max-height",
+    `calc(90dvh / ${scale / 100})`,
+  );
   return (
     <ConfigMenu
       theme={theme}

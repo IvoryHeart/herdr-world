@@ -280,7 +280,9 @@ export function ConfigMenu({
               <div className="config-section config-section-tiles-3">
                 <div className="config-title">Office</div>
                 <label className="config-preference-row">
-                  <span className="config-item-icon"><LayoutDashboard size={15} /></span>
+                  <span className="config-item-icon">
+                    <LayoutDashboard size={15} />
+                  </span>
                   <span className="config-item-copy">
                     <strong>Room alignment</strong>
                     <span>Align rooms within each row</span>
@@ -291,7 +293,8 @@ export function ConfigMenu({
                     value={officePreferences.roomAlignment}
                     onChange={(event) =>
                       updateOfficePreferences({
-                        roomAlignment: event.target.value as OfficePreferences["roomAlignment"],
+                        roomAlignment: event.target
+                          .value as OfficePreferences["roomAlignment"],
                       })
                     }
                   >
@@ -301,7 +304,9 @@ export function ConfigMenu({
                   </select>
                 </label>
                 <label className="config-preference-row">
-                  <span className="config-item-icon"><Focus size={15} /></span>
+                  <span className="config-item-icon">
+                    <Focus size={15} />
+                  </span>
                   <span className="config-item-copy">
                     <strong>Inspector opening</strong>
                     <span>Default for newly opened Office entities</span>
@@ -312,7 +317,8 @@ export function ConfigMenu({
                     value={officePreferences.inspectorPresentation}
                     onChange={(event) =>
                       updateOfficePreferences({
-                        inspectorPresentation: event.target.value as OfficePreferences["inspectorPresentation"],
+                        inspectorPresentation: event.target
+                          .value as OfficePreferences["inspectorPresentation"],
                       })
                     }
                   >
@@ -321,7 +327,9 @@ export function ConfigMenu({
                   </select>
                 </label>
                 <label className="config-preference-row">
-                  <span className="config-item-icon"><ALargeSmall size={15} /></span>
+                  <span className="config-item-icon">
+                    <ALargeSmall size={15} />
+                  </span>
                   <span className="config-item-copy">
                     <strong>Long room titles</strong>
                     <span>Expand the room or shorten its label</span>
@@ -332,7 +340,8 @@ export function ConfigMenu({
                     value={officePreferences.longTitleMode}
                     onChange={(event) =>
                       updateOfficePreferences({
-                        longTitleMode: event.target.value as OfficePreferences["longTitleMode"],
+                        longTitleMode: event.target
+                          .value as OfficePreferences["longTitleMode"],
                       })
                     }
                   >

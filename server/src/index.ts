@@ -123,7 +123,9 @@ if (herdrCommandResult !== null) {
 const config = loadServerConfig(APP_VERSION);
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
-const webPush = createWebPushService({ warn: (message) => logger.warn(message) });
+const webPush = createWebPushService({
+  warn: (message) => logger.warn(message),
+});
 const officeObservabilityBootstrap = await readGuiSettings()
   .then((settings) => resolveOfficeObservabilityBootstrap(settings))
   .catch(() => {
@@ -149,13 +151,19 @@ const downstreamConnectionConfig = {
   hasExplicitSocketPath: config.hasExplicitSocketPath,
   hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
 };
-const { isAuthed, sessionToken, handleTokenLogin, handleLogin, handleLogout, loginPage } =
-  createAuthHandlers({
-    authRequired: config.authRequired,
-    password: config.password,
-    urlLoginToken: config.generatedAuthToken,
-    secureCookies: Boolean(config.tls),
-  });
+const {
+  isAuthed,
+  sessionToken,
+  handleTokenLogin,
+  handleLogin,
+  handleLogout,
+  loginPage,
+} = createAuthHandlers({
+  authRequired: config.authRequired,
+  password: config.password,
+  urlLoginToken: config.generatedAuthToken,
+  secureCookies: Boolean(config.tls),
+});
 
 type RpcRequest = ConnectionRpcRequest;
 
@@ -1377,7 +1385,9 @@ function main() {
           if (admissionError) return admissionError;
 
           if (url.pathname === "/ws") {
-            if (server.upgrade(req, { data: { sessionToken: sessionToken(req) } }))
+            if (
+              server.upgrade(req, { data: { sessionToken: sessionToken(req) } })
+            )
               return undefined;
             return new Response("websocket upgrade failed", { status: 400 });
           }
@@ -1550,7 +1560,11 @@ function main() {
     },
   });
   const listeningPort = server.port ?? config.port;
-  const publicBrowserUrl = browserUrlFor(config.host, listeningPort, Boolean(config.tls));
+  const publicBrowserUrl = browserUrlFor(
+    config.host,
+    listeningPort,
+    Boolean(config.tls),
+  );
   logger.info("listening", {
     url: publicBrowserUrl,
     websocket: "/ws",

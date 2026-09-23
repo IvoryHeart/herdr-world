@@ -31,7 +31,9 @@ test("the app links a credentialed standalone manifest with existing install ico
     "192x192",
     "512x512",
   ]);
-  for (const icon of manifest.icons.filter((icon: { type: string }) => icon.type === "image/png")) {
+  for (const icon of manifest.icons.filter(
+    (icon: { type: string }) => icon.type === "image/png",
+  )) {
     expect(icon.type).toBe("image/png");
     const bytes = Buffer.from(
       await Bun.file(resolve(web, "public", icon.src.slice(1))).arrayBuffer(),

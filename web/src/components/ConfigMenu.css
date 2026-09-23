@@ -22,6 +22,8 @@
 }
 
 .config-dropdown-content {
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -439,11 +441,7 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    max-height: min(78dvh, 640px);
-    max-height: min(
-      calc(78dvh / var(--ui-scale, 1)),
-      calc(640px / var(--ui-scale, 1))
-    );
+    max-height: var(--config-sheet-max-height, min(78dvh, 640px));
     padding: 4px 10px calc(10px + env(safe-area-inset-bottom, 0px));
     border: none;
     border-top: 1px solid var(--shell-border);
@@ -452,7 +450,7 @@
   }
 
   .config-dropdown.is-expanded {
-    max-height: calc(90dvh / var(--ui-scale, 1));
+    max-height: var(--config-sheet-expanded-max-height, 90dvh);
   }
 
   .config-summary {
