@@ -34,6 +34,111 @@
   overflow: hidden;
 }
 
+.world-view-toolbar-host {
+  min-width: 36px;
+  display: flex;
+  flex: 0 1 430px;
+  align-items: center;
+}
+.world-view-toolbar-host:empty {
+  display: none;
+}
+.world-view-toolbar {
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.world-view-toolbar-search,
+.world-view-search-overlay {
+  min-width: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 1px solid var(--topbar-control-border, var(--border, #343942));
+  border-radius: 7px;
+  color: var(--topbar-control-text, var(--muted, #9da7b4));
+  background: var(--topbar-control-bg, var(--bg, #0e1116));
+}
+.world-view-toolbar-search {
+  flex: 1 1 180px;
+}
+.world-view-toolbar-search:focus-within,
+.world-view-search-overlay:focus-within {
+  border-color: var(--accent, #79a6ff);
+}
+.world-view-toolbar-search label,
+.world-view-search-overlay label {
+  min-width: 0;
+  display: flex;
+  flex: 1 1 auto;
+}
+.world-view-toolbar-search input,
+.world-view-search-overlay input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+}
+.world-view-toolbar-results {
+  max-width: 130px;
+  overflow: hidden;
+  color: var(--muted, #9da7b4);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.world-view-toolbar-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+.world-view-search-toggle,
+.world-view-search-overlay button,
+.world-view-toolbar .world-spatial-graph-zoom button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--topbar-control-border, var(--border, #343942));
+  border-radius: 7px;
+  color: var(--topbar-control-text, var(--muted, #9da7b4));
+  background: var(--topbar-control-bg, var(--bg, #0e1116));
+}
+.world-view-toolbar .world-spatial-graph-fit {
+  width: auto;
+  padding: 0 8px;
+}
+.world-view-search-toggle:hover,
+.world-view-search-toggle:focus-visible,
+.world-view-search-overlay button:hover,
+.world-view-search-overlay button:focus-visible,
+.world-view-toolbar .world-spatial-graph-zoom button:hover,
+.world-view-toolbar .world-spatial-graph-zoom button:focus-visible {
+  border-color: var(--accent, #79a6ff);
+  color: var(--text, #edf2f7);
+}
+.world-view-search-overlay {
+  position: fixed;
+  z-index: 1000;
+  top: calc(52px + env(safe-area-inset-top, 0px));
+  right: calc(8px + env(safe-area-inset-right, 0px));
+  left: calc(8px + env(safe-area-inset-left, 0px));
+  height: 42px;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 42%);
+}
+
 .world-primary-view-select select {
   height: 30px;
   min-width: 92px;
@@ -1664,6 +1769,15 @@
 }
 
 @media (max-width: 760px) {
+  .world-view-toolbar-host {
+    flex: 0 0 30px;
+  }
+  .world-view-toolbar-actions {
+    display: none;
+  }
+  .world-view-toolbar-results {
+    max-width: 96px;
+  }
   .world-primary-nav {
     flex-basis: 48px;
     gap: 7px;

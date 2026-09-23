@@ -20,7 +20,7 @@ shared World model plus Office, Tree and Graph.
   available as one focused, shell-owned Office context.
 - Restore the connected Tree and spatial Graph after Office over the same qualified projection and
   focused Inspector seam.
-- Preserve all-host observation, selected-host visual conversations, the agent/pane watchlist and
+- Preserve internal all-host observation, selected-host visual presentation and conversations, the agent/pane watchlist and
   the supported task-summary reporting workflow without replacing Roamgate's focused-host
   interaction model.
 - Keep the replacement reviewable through staged commits and requirement-linked checks.
@@ -84,33 +84,35 @@ explicitly stale topology. Those states are distinct from the selected operation
 
 Mutations, resource requests and terminal attachments use only the selected connection and its
 current runtime generation. Selecting a World entity is observational and never changes that
-connection. An inactive ready host exposes an explicit Activate host action; after activation the
-shell uses Roamgate's existing connection-change lifecycle and revalidates the target before any
-operation. Every operational entry point owned by the mounted Spaces tree, including its command
-palette and already-open palette state, follows the active-view gate.
+connection. Explicit connection selection uses Roamgate's existing connection-change lifecycle and
+revalidates the target before any operation. Every operational entry point owned by the mounted
+Spaces tree, including its command palette and already-open palette state, follows the active-view
+gate.
 
-### Require one selected operational host without narrowing observation
+### Require one selected operational host and presentation
 
 The shell restores the existing last/default profile when it still belongs to the managed
 catalogue. When no profile is selected, Spaces' connection workflow is shown before Office, Tree or
-Graph is presented. The selected host remains stable while the user changes views. Visual surfaces
-continue to show the full WorldObject and label hosts as active, ready-inactive, reconnecting or
-offline/stale rather than describing every inactive host as disconnected.
+Graph is presented. The selected host remains stable while the user changes views. The service and
+browser runtime store continue to observe the full qualified aggregate, but the shell derives a
+selected-host WorldObject for Office, Tree, Graph, their counts and their search. Explicitly
+switching the connection changes that whole presentation; a view never mixes disabled entities from
+another host into an otherwise operational surface.
 
-Selecting an entity on a ready-inactive or stale host opens bounded read-only detail. Terminal,
-Files, Changes, Agent History, room and launcher controls remain unavailable until that exact host
-is explicitly activated and its current generation is admitted. Activation is a host-level action,
-not a side effect of entity selection or an attempted operation.
+An already-open context whose host becomes inactive during a switch is retired through the existing
+lease lifecycle. Any transient retained read-only context uses direct host-switch language and an
+explicit Switch now action; selection and attempted operations never switch hosts implicitly.
 
 This is an accepted product boundary, not a claim that the former World lacked cross-host terminal
 windows. The former implementation could retain conversations from several hosts concurrently;
 this replacement deliberately gives those operational contexts the same selected-host lifetime as
-Roamgate's browser lease while preserving multi-host topology for observation.
+Roamgate's browser lease while preserving the aggregate internally for connection management and a
+later simultaneous-host client.
 
 ### Establish World as native routes over the Roamgate store
 
-The shared World hierarchy and Office, Tree and Graph views are built against the aggregate snapshot
-types and existing selection/terminal APIs. Roamgate's existing terminal workspace becomes the
+The shared World hierarchy is built against the aggregate snapshot types and existing
+selection/terminal APIs; Office, Tree and Graph consume its selected-host projection. Roamgate's existing terminal workspace becomes the
 Spaces experience. Spaces stays mounted when a visual view is selected, so World uses the same
 component tree, Inspector resources and terminal implementation rather than embedding another
 application or maintaining a parallel runtime client. Presentation ownership is exclusive: visual
@@ -132,12 +134,17 @@ viewport without duplicating shell chrome. Keep the selected host/runtime state 
 ready/space/agent/stale summary in the inherited top bar, with compact layouts progressively hiding
 counts before they hide the selected host state.
 
+The same header owns a view-control slot. Office, Tree and Graph place search there; Graph also
+places Fit and zoom there. The views SHALL reuse that control treatment and SHALL not reserve a
+second stage header for those controls. View-specific overflow or transient errors may remain in the
+stage where their context is visible.
+
 The workspace frame below that header is shared too. Keep the existing Spaces workspace navigator,
 focused tab strip and review-annotations control mounted around Office, Tree and Graph; replace the
 Graph-specific desktop outline rather than showing two competing left hierarchies. The center
 surface alone changes with the selected view. The shared frame follows the selected Herdr host and
-workspace, while `WorldObject` continues to retain the aggregate read-only topology used by the
-visualizations. Review drafts remain workspace-qualified and synchronize between every Inspector
+workspace, while `WorldObject` continues to retain the aggregate topology and supplies only its
+selected-host projection to the visualizations. Review drafts remain workspace-qualified and synchronize between every Inspector
 presentation and the one shell annotation panel. Visual views do not clone the navigator, tab or
 annotation state. Navigator rows and focused-tab choices resolve to the same qualified World entity
 and admit the docked Inspector only after the exact Herdr focus succeeds.
@@ -340,7 +347,7 @@ state, terminal owner and connection fencing remain shell-owned.
 Tree and Graph share one explicit presentation-budget policy: at most 128 hosts, 128 spaces globally
 and 16 leaves per presented space, ordered by selected/focused and attention-requiring relevance.
 Each renderer and its semantic equivalent consume one bounded projection and disclose exact global
-and affected-branch omissions. This avoids rendering the unbounded aggregate twice and makes search
+and affected-branch omissions. This avoids rendering the unbounded selected-host projection twice and makes search
 truthful about the hierarchy currently presented.
 
 ### Restore the spatial Graph after Tree
@@ -399,9 +406,9 @@ browser keys untouched for rollback but does not read them.
   Roamgate-derived terminal as the only implementation; adapt retained World windowing around it,
   suppress hidden Spaces attachments and hand presentation back to native Spaces when it becomes
   visible.
-- **Aggregate visibility can make inactive hosts look operational** → Show active,
-  ready-inactive, reconnecting and offline/stale states distinctly; keep entity selection read-only
-  and require explicit host activation before every operational entry point.
+- **An aggregate view can make inactive hosts look operational** → Retain aggregate observation
+  internally but present only the selected host in Office, Tree and Graph until simultaneous-host
+  operations are supported; switch hosts only through the existing connection selector.
 - **Switching hosts retires live conversation windows** → Keep view changes separate from host
   changes, expose the selected host persistently and use the existing teardown path so no terminal
   input can be redirected to the replacement host.
@@ -418,8 +425,8 @@ browser keys untouched for rollback but does not read them.
 4. Restore the retained Pixel Office dependency, assets, projection contract, geometry, renderer,
    semantic targets and tests before adapting its `WorldObject`, action and shell boundaries.
 5. Require one selected operational host, expose the qualified shell-owned Inspector registry and
-   independently accept the complete retained Pixel Office over aggregate local plus SSH
-   observations.
+   independently accept the complete retained Pixel Office while switching between aggregate local
+   plus SSH observations one selected host at a time.
 6. Extend the existing selected-host Inspector and terminal owners to bounded conversation windows, then migrate
    and independently accept connected Tree and spatial Graph without reopening the runtime or
    Inspector boundaries.

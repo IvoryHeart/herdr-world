@@ -7,19 +7,22 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
-- **Office**, **Tree**, and **Graph** observe every connected local or SSH Herdr
-  profile through one host-qualified WorldObject. Equal workspace, pane, or terminal
-  IDs on different hosts remain distinct.
-- Failed hosts retain their last observed topology as visibly stale, never actionable.
-  Selecting a live entity revalidates its connection generation before opening the
-  same terminal or host-specific Inspector context in Spaces.
+- **Office**, **Tree**, and **Graph** show one selected local or SSH Herdr profile
+  at a time. The service and browser store still observe one host-qualified
+  aggregate, so switching the connection selector replaces the whole view without
+  conflating equal workspace, pane, or terminal IDs from different hosts.
+- A failed selected host may retain its last observed topology as visibly stale,
+  never actionable. Selecting a live entity revalidates its connection generation
+  before opening the same terminal or host-specific Inspector context.
+- Office, Tree, and Graph share search in the application top bar; Graph adds Fit
+  and zoom there instead of consuming a second stage header.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
 ### Foundation cutover boundaries
 
 The draft Roamgate-derived foundation restores the retained Pixi Office, connected
-Tree and spatial Graph over the same multi-host WorldObject. Office includes its CEO
+Tree and spatial Graph over the same qualified WorldObject projection. Office includes its CEO
 room, receptions, boards, Agent Bar, rooms, room actions, completion cues and live
 floating or profile-docked terminal conversations. Optional Prometheus data reaches
 the Economy board through bounded World-service queries; Office and terminals remain

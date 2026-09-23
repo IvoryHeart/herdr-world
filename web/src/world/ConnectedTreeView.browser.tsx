@@ -5,7 +5,7 @@ import type { Pane, Tab, Workspace } from "../types";
 import ConnectedTreeView from "./ConnectedTreeView";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { TREE_PREFERENCES_KEY } from "./treePreferences";
-import { buildWorldObject } from "./worldObject";
+import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import "./world.css";
 
 const failures: string[] = [];
@@ -107,20 +107,21 @@ async function run() {
   host.style.cssText = "width:100vw;height:100vh;overflow:hidden";
   document.body.append(host);
   const root = createRoot(host);
-  const world = buildWorldObject(
+  const aggregateWorld = buildWorldObject(
     [connection("local", "Forge"), connection("remote", "Review host")],
     "local",
   );
+  const world = worldObjectForConnection(aggregateWorld, "local");
   const agent = world.leaves.find(
     (node) => node.connectionId === "local" && node.kind === "agent",
   )!;
   const terminal = world.leaves.find(
     (node) => node.connectionId === "local" && node.kind === "terminal",
   )!;
-  const inactiveTerminal = world.leaves.find(
+  const inactiveTerminal = aggregateWorld.leaves.find(
     (node) => node.connectionId === "remote" && node.kind === "terminal",
   )!;
-  const inactiveHost = world.hosts.find(
+  const inactiveHost = aggregateWorld.hosts.find(
     (node) => node.connectionId === "remote",
   )!;
   const worldHost = world.hosts[0]!;
@@ -194,8 +195,8 @@ async function run() {
 
     const activePresentation = compact ? outline : diagram;
     check(
-      hasAnchor(activePresentation, inactiveTerminal.id),
-      "Tree omitted the inactive host's read-only hierarchy",
+      !hasAnchor(activePresentation, inactiveTerminal.id),
+      "Tree mixed another host into the selected-host presentation",
     );
     const inactiveBranch = [
       ...activePresentation.querySelectorAll<HTMLElement>(
@@ -203,12 +204,8 @@ async function run() {
       ),
     ].find((element) => element.dataset.treeHostId === inactiveHost.id);
     check(
-      inactiveBranch !== undefined,
-      "Tree omitted the inactive host branch",
-    );
-    check(
-      inactiveBranch?.querySelectorAll("[aria-label^='Open ']").length === 0,
-      "Tree exposed an inactive-host terminal action",
+      inactiveBranch === undefined,
+      "Tree retained an inactive host branch",
     );
     const hostToggle = activePresentation.querySelector<HTMLButtonElement>(
       `[aria-label="Collapse ${worldHost.label}"]`,
@@ -223,7 +220,19 @@ async function run() {
       "Tree disclosure was not persisted",
     );
 
-    const search = host.querySelector<HTMLInputElement>("input[type=search]")!;
+    if (compact) {
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Search Tree"]')
+        ?.click();
+      await waitFor(
+        () =>
+          document.querySelector(".world-view-search-overlay input") !== null,
+        "Compact Tree search did not open",
+      );
+    }
+    const search = (compact ? document : host).querySelector<HTMLInputElement>(
+      "input[type=search]",
+    )!;
     enterSearch(search, "release checks");
     await waitFor(
       () => hasAnchor(activePresentation, agent.id),
@@ -268,7 +277,11 @@ async function run() {
 }
 
 run()
-  .catch((error: unknown) => failures.push(String(error)))
+  .catch((error: unknown) =>
+    failures.push(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    ),
+  )
   .finally(() => {
     void fetch("/result", {
       method: "POST",

@@ -3412,7 +3412,9 @@ export default function App({
             alt=""
           />
           <span className="brand-title">Herdr World</span>
-          <span className="brand-version">v{APP_VERSION}</span>
+          <span className="brand-version" title={`Version ${APP_VERSION}`}>
+            v{APP_VERSION}
+          </span>
         </div>
         <ConnectionSwitcher />
         {primaryViewControl}

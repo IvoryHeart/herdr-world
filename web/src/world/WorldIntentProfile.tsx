@@ -3,6 +3,17 @@ import { X } from "lucide-react";
 import { AgentIcon } from "../components/AgentIcon";
 import type { WorldObjectNode } from "./worldObject";
 
+export function worldReadOnlyMessage(
+  currentGeneration: boolean,
+  canSwitchHost: boolean,
+) {
+  if (!currentGeneration) {
+    return "This view belongs to an earlier connection. Select the current item to continue.";
+  }
+  if (canSwitchHost) return "Switch hosts to activate this view.";
+  return "This host is not ready. Switch hosts or reconnect it to continue.";
+}
+
 export default function WorldIntentProfile({
   node,
   currentGeneration,
@@ -101,17 +112,16 @@ export default function WorldIntentProfile({
             disabled={working}
             onClick={() => void run(onActivateHost, false)}
           >
-            Activate {node.hostLabel}
+            Switch Now
           </button>
         </div>
       ) : null}
       {!currentGeneration || !node.actionable ? (
         <p className="world-panel-warning">
-          {!currentGeneration
-            ? "This selection belongs to a retired runtime generation. Select its current observation to use operational tools."
-            : node.capabilities.activateHost
-              ? `This observation is read-only. Activate ${node.hostLabel} to use its operational tools.`
-              : "This observation is read-only until its host is ready again."}
+          {worldReadOnlyMessage(
+            currentGeneration,
+            node.capabilities.activateHost,
+          )}
         </p>
       ) : null}
       {intentOpening ? (

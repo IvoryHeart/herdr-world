@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { AgentIcon } from "../components/AgentIcon";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
@@ -18,11 +19,13 @@ import {
   type WorldTreeSpace,
 } from "./treeProjection";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
+import { WorldViewToolbar } from "./WorldViewToolbar";
 
 export type WorldNodeAnchors = Record<string, OfficeCanvasAnchor>;
 
 export default function ConnectedTreeView({
   world,
+  toolbarPortal = null,
   selectedId,
   conversationNodeIds,
   inlineInspectorNodeId,
@@ -33,6 +36,7 @@ export default function ConnectedTreeView({
   onNodeAnchorsChange,
 }: {
   world: WorldObject;
+  toolbarPortal?: Element | null;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
   inlineInspectorNodeId: string | null;
@@ -172,85 +176,87 @@ export default function ConnectedTreeView({
     );
   }
 
-  return (
-    <div ref={rootRef} className="world-connected-tree-shell">
-      <label className="world-search world-tree-search">
-        <span>Search Tree</span>
-        <input
-          type="search"
-          value={query}
-          placeholder="Host, space, agent, task, or model"
-          onChange={(event) => setQuery(event.currentTarget.value)}
-        />
-      </label>
-      <p className="world-tree-results" aria-live="polite">
-        {searchActive
+  const toolbar = (
+    <WorldViewToolbar
+      viewLabel="Tree"
+      query={query}
+      onQueryChange={setQuery}
+      resultLabel={
+        searchActive
           ? visibleHosts.length
-            ? `${visibleHosts.length} matching host branches`
-            : "No Tree matches"
-          : `${visibleHosts.length} host branches`}
-      </p>
-      {projection.omittedHostCount ||
-      projection.omittedSpaceCount ||
-      projection.coverage.omittedLeaves ? (
-        <p className="world-tree-overflow-summary" aria-live="polite">
-          Presentation bounds omit {projection.omittedHostCount} hosts,{" "}
-          {projection.omittedSpaceCount} spaces, and{" "}
-          {projection.coverage.omittedLeaves} leaves.
-        </p>
-      ) : null}
-      {visibleHosts.length ? (
-        <>
-          <div
-            className="world-connected-tree"
-            role="tree"
-            aria-label="Connected World hierarchy"
-          >
-            {visibleHosts.map((host) => (
-              <VisualHost
-                key={host.source.id}
-                host={host}
-                matches={matches}
-                searchActive={searchActive}
-                collapsed={collapsed}
-                selectedId={selectedId}
-                inlineInspectorNodeId={compact ? null : inlineInspectorNodeId}
-                forcedExpandedIds={inlineAncestorIds}
-                onToggle={toggle}
-                onSelect={onSelect}
-                onOpenTerminal={onOpenTerminal}
-                onInlineInspectorPortalChange={onInlineInspectorPortalChange}
-              />
-            ))}
+            ? `${matches.size} matching items`
+            : "No matches"
+          : undefined
+      }
+    />
+  );
+
+  return (
+    <>
+      {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+      <div ref={rootRef} className="world-connected-tree-shell">
+        {projection.omittedHostCount ||
+        projection.omittedSpaceCount ||
+        projection.coverage.omittedLeaves ? (
+          <p className="world-tree-overflow-summary" aria-live="polite">
+            Presentation bounds omit {projection.omittedHostCount} hosts,{" "}
+            {projection.omittedSpaceCount} spaces, and{" "}
+            {projection.coverage.omittedLeaves} leaves.
+          </p>
+        ) : null}
+        {visibleHosts.length ? (
+          <>
+            <div
+              className="world-connected-tree"
+              role="tree"
+              aria-label="Connected World hierarchy"
+            >
+              {visibleHosts.map((host) => (
+                <VisualHost
+                  key={host.source.id}
+                  host={host}
+                  matches={matches}
+                  searchActive={searchActive}
+                  collapsed={collapsed}
+                  selectedId={selectedId}
+                  inlineInspectorNodeId={compact ? null : inlineInspectorNodeId}
+                  forcedExpandedIds={inlineAncestorIds}
+                  onToggle={toggle}
+                  onSelect={onSelect}
+                  onOpenTerminal={onOpenTerminal}
+                  onInlineInspectorPortalChange={onInlineInspectorPortalChange}
+                />
+              ))}
+            </div>
+            <ul
+              className="world-tree-outline"
+              aria-label="World hierarchy outline"
+            >
+              {visibleHosts.map((host) => (
+                <SemanticHost
+                  key={host.source.id}
+                  host={host}
+                  matches={matches}
+                  searchActive={searchActive}
+                  collapsed={collapsed}
+                  selectedId={selectedId}
+                  inlineInspectorNodeId={compact ? inlineInspectorNodeId : null}
+                  forcedExpandedIds={inlineAncestorIds}
+                  onToggle={toggle}
+                  onSelect={onSelect}
+                  onOpenTerminal={onOpenTerminal}
+                  onInlineInspectorPortalChange={onInlineInspectorPortalChange}
+                />
+              ))}
+            </ul>
+          </>
+        ) : (
+          <div className="world-empty">
+            <h2>No matches</h2>
           </div>
-          <ul
-            className="world-tree-outline"
-            aria-label="World hierarchy outline"
-          >
-            {visibleHosts.map((host) => (
-              <SemanticHost
-                key={host.source.id}
-                host={host}
-                matches={matches}
-                searchActive={searchActive}
-                collapsed={collapsed}
-                selectedId={selectedId}
-                inlineInspectorNodeId={compact ? inlineInspectorNodeId : null}
-                forcedExpandedIds={inlineAncestorIds}
-                onToggle={toggle}
-                onSelect={onSelect}
-                onOpenTerminal={onOpenTerminal}
-                onInlineInspectorPortalChange={onInlineInspectorPortalChange}
-              />
-            ))}
-          </ul>
-        </>
-      ) : (
-        <div className="world-empty">
-          <h2>No matches</h2>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }
 

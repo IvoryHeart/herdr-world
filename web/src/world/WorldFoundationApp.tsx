@@ -36,6 +36,7 @@ import {
   type WorldHostObject,
   type WorldObject,
   type WorldObjectNode,
+  worldObjectForConnection,
 } from "./worldObject";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
@@ -289,6 +290,8 @@ export default function WorldFoundationApp() {
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
+  const [viewToolbarPortal, setViewToolbarPortal] =
+    useState<HTMLDivElement | null>(null);
   const [inspectorConversations, setInspectorConversations] = useState<
     WorldInspectorConversation[]
   >([]);
@@ -317,7 +320,11 @@ export default function WorldFoundationApp() {
     (snapshot) => snapshot.activeConnectionId,
   );
   const topbarWorld = useMemo(
-    () => buildWorldObject(topbarRuntime.connections, topbarConnectionId),
+    () =>
+      worldObjectForConnection(
+        buildWorldObject(topbarRuntime.connections, topbarConnectionId),
+        topbarConnectionId,
+      ),
     [topbarConnectionId, topbarRuntime.connections],
   );
   const activeConversationLease = useStoreSelector(
@@ -451,15 +458,22 @@ export default function WorldFoundationApp() {
                 </select>
               </label>
               {view !== "spaces" ? (
-                <WorldTopbarStatus
-                  runtime={topbarRuntime}
-                  world={topbarWorld}
-                  selectedHostLabel={selectedHostStatusLabel(
-                    topbarWorld.hosts.find(
-                      ({ connectionId }) => connectionId === topbarConnectionId,
-                    ) ?? null,
-                  )}
-                />
+                <>
+                  <WorldTopbarStatus
+                    runtime={topbarRuntime}
+                    world={topbarWorld}
+                    selectedHostLabel={selectedHostStatusLabel(
+                      topbarWorld.hosts.find(
+                        ({ connectionId }) =>
+                          connectionId === topbarConnectionId,
+                      ) ?? null,
+                    )}
+                  />
+                  <div
+                    className="world-view-toolbar-host"
+                    ref={setViewToolbarPortal}
+                  />
+                </>
               ) : null}
             </div>
           }
@@ -481,6 +495,7 @@ export default function WorldFoundationApp() {
               onWorkspaceSurfaceSelectionReady={
                 registerWorkspaceSurfaceSelection
               }
+              viewToolbarPortal={viewToolbarPortal}
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
@@ -549,6 +564,7 @@ function WorldControlPlane({
   onInspectorConversationsChange,
   onInspectorTerminalPortal,
   onWorkspaceSurfaceSelectionReady,
+  viewToolbarPortal,
 }: {
   view: Exclude<WorldView, "spaces">;
   active: boolean;
@@ -567,6 +583,7 @@ function WorldControlPlane({
       | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
       | null,
   ): void;
+  viewToolbarPortal: HTMLDivElement | null;
 }) {
   const runtime = useWorldRuntime();
   const connectionSelection = useStoreSelector(
@@ -633,7 +650,7 @@ function WorldControlPlane({
       connectionSelection.activeConnectionId,
       connectionSelection.connections,
     );
-  const world = useMemo(
+  const aggregateWorld = useMemo(
     () =>
       buildWorldObject(
         runtime.connections,
@@ -643,6 +660,18 @@ function WorldControlPlane({
       connectionSelection.activeConnectionId,
       hasSelectedConnection,
       runtime.connections,
+    ],
+  );
+  const world = useMemo(
+    () =>
+      worldObjectForConnection(
+        aggregateWorld,
+        hasSelectedConnection ? connectionSelection.activeConnectionId : null,
+      ),
+    [
+      aggregateWorld,
+      connectionSelection.activeConnectionId,
+      hasSelectedConnection,
     ],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
@@ -1098,8 +1127,11 @@ function WorldControlPlane({
         ...inspectorConversations.map(snapshotPriorityForConversation),
       ])
       .then(() => {
-        const refreshedWorld = buildWorldObject(
-          worldRuntimeStore.get().connections,
+        const refreshedWorld = worldObjectForConnection(
+          buildWorldObject(
+            worldRuntimeStore.get().connections,
+            connectionSelection.activeConnectionId,
+          ),
           connectionSelection.activeConnectionId,
         );
         const refreshedNode = worldNodeForWorkspaceSurfaceSelection(
@@ -1471,6 +1503,7 @@ function WorldControlPlane({
                     >
                       <PixelOfficeView
                         world={world}
+                        toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}
                         floatingTerminals={inspectorConversations}
@@ -1489,6 +1522,7 @@ function WorldControlPlane({
                     >
                       <ConnectedTreeView
                         world={world}
+                        toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
                         inlineInspectorNodeId={treeInlineInspectorNodeId}
@@ -1504,6 +1538,7 @@ function WorldControlPlane({
                   ) : (
                     <SpatialGraphView
                       world={world}
+                      toolbarPortal={viewToolbarPortal}
                       selectedId={selectedId}
                       conversationNodeIds={conversationNodeIds}
                       onSelect={selectNode}

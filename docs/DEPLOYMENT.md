@@ -111,8 +111,10 @@ sessions, explicit sockets, and SSH targets must be started by their operator.
 
 Open the connection selector in Spaces to add, test, connect, disconnect, edit, or
 remove profiles. Profiles are shared by authenticated browsers; each browser chooses
-its own focused connection for terminal and Inspector work. Office, Tree, and Graph
-observe every connected profile concurrently.
+its own focused connection for terminal and Inspector work. Office, Tree, Graph,
+their counts, and search show only that selected connection. Changing the connection
+replaces the complete visual presentation; other configured connections remain
+observed in the background until selected.
 
 Local profiles name existing Herdr control and render sockets. SSH profiles accept
 only an OpenSSH alias or `user@host`. Leave remote socket fields empty to use the

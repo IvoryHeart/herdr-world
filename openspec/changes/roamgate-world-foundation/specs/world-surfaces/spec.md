@@ -14,17 +14,19 @@ Spaces terminal workspace SHALL remain mounted while another view is visible so 
 does not create another application or competing runtime store. Selection SHALL not itself mutate
 Herdr or change the selected connection.
 
-Office, Tree and Graph SHALL retain every managed host in the shared WorldObject, including current
-ready-inactive hosts and explicitly stale cached topology. The shell SHALL restore a valid
-last/default managed profile as the selected operational host or present the existing connection
-workflow before showing a visual view when no managed profile is selected. View navigation SHALL
-not change that selection.
+The runtime store and shared WorldObject SHALL retain every managed host, including current
+ready-inactive hosts and explicitly stale cached topology. Office, Tree and Graph, their visible
+counts and their search SHALL consume only the selected host's projection until the operational
+client supports simultaneous active hosts. The shell SHALL restore a valid last/default managed
+profile as the selected operational host or present the existing connection workflow before showing
+a visual view when no managed profile is selected. View navigation SHALL not change that selection.
 
 Terminal, Spaces, Inspector, room and launcher actions SHALL be available only when their target
-belongs to the selected host and its current runtime generation. Selecting an entity on another
-host SHALL remain useful and read-only. A ready-inactive host SHALL be labelled distinctly from an
-offline or stale host and MAY expose an explicit Activate host control; entity selection or an
-attempted operation SHALL NOT activate it implicitly.
+belongs to the selected host and its current runtime generation. Switching the selected connection
+SHALL retire the outgoing presentation and replace it with the incoming host rather than leaving
+disabled foreign rooms, nodes or leaves in the view. Any transient retained read-only context SHALL
+offer a clearly labelled Switch now action; entity selection or an attempted operation SHALL NOT
+switch hosts implicitly.
 
 #### Scenario: Move between Spaces and a visual view
 
@@ -46,16 +48,17 @@ attempted operation SHALL NOT activate it implicitly.
 
 #### Scenario: Inspect an entity on a ready-inactive host
 
-- **WHEN** a user selects an entity on a ready host other than the selected operational host
-- **THEN** World preserves its bounded detail, identifies the host as ready-inactive, leaves every
-  operational control disabled and does not change the selected host
+- **WHEN** two managed hosts have current topology and one is the selected operational host
+- **THEN** the runtime retains both qualified observations while Office, Tree, Graph, visible counts
+  and search contain only the selected host
 
 #### Scenario: Explicitly activate an observed host
 
-- **WHEN** a user invokes Activate host for a ready-inactive host
+- **WHEN** a user selects another managed host through the connection selector or invokes Switch now
+  from a transient retained context
 - **THEN** World uses the existing selected-connection lifecycle, retires the outgoing host's
-  scoped terminal and resource contexts, and enables actions only after the new host and generation
-  are current
+  scoped visual, terminal and resource contexts, replaces every visual projection with the incoming
+  host and enables actions only after the new host and generation are current
 
 #### Scenario: Active host changes during an Office action
 
@@ -139,9 +142,11 @@ semantic hierarchy and operational controls without requiring precision pointer 
 The native World shell SHALL offer Spaces, Office, Tree and Graph once each and SHALL keep rendered
 view, browser history and canonical paths `/spaces`, `/office`, `/tree` and `/graph` consistent.
 The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
-machine selector; the selected-host/runtime state and bounded ready/space/agent/stale summary SHALL
-also remain in that top bar. World SHALL NOT stack a second view-navigation or Visual Control Plane
-status bar above the application.
+machine selector; the selected-host/runtime state and bounded space/agent/stale summary SHALL also
+remain in that top bar. The shell SHALL provide one shared view-control slot there: Office, Tree and
+Graph SHALL place search in it, and Graph SHALL additionally place Fit and zoom in it. World SHALL
+NOT stack a second view-navigation, Visual Control Plane status bar or view-local search/zoom header
+above the application stage.
 The inherited Spaces workspace navigator, focused tab strip and review-annotations control SHALL
 remain the common frame around Spaces, Office, Tree and Graph. Changing views SHALL replace only the
 center surface. Graph SHALL not place a second workspace hierarchy beside that common navigator on
@@ -169,8 +174,9 @@ SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those in
 #### Scenario: Use the single application top bar
 
 - **WHEN** a user changes among Office, Spaces, Tree and Graph
-- **THEN** the view selector, version, selected-host/runtime summary, machine selector and shell
-  tools remain in one top bar and the selected view receives all remaining vertical workspace
+- **THEN** the view selector, version, selected-host/runtime summary, machine selector, applicable
+  search/Fit/zoom controls and shell tools remain in one top bar and the selected view receives all
+  remaining vertical workspace
 
 #### Scenario: Use the common workspace frame
 
@@ -219,7 +225,8 @@ SHALL not embed or launch a separately branded Roamgate application.
 
 #### Scenario: Activate a host from a visual view
 
-- **WHEN** the user explicitly activates the ready-inactive host of a selected visual entity
+- **WHEN** an outgoing read-only context remains briefly visible after its host becomes inactive and
+  the user invokes Switch now
 - **THEN** the shell changes and revalidates the selected host through its existing connection
   lifecycle without treating the original entity selection as an operation
 
@@ -236,6 +243,12 @@ overflow on the application page.
 - **WHEN** a user searches Tree or Graph or collapses a host or space branch
 - **THEN** search retains the complete ancestor context of matches and clearing search restores the
   view's in-memory disclosure state
+
+#### Scenario: Search Office from the common header
+
+- **WHEN** a user searches the selected host from Office and chooses a matching entity
+- **THEN** World selects that exact qualified entity without adding an Office stage toolbar or
+  changing hosts
 
 #### Scenario: Select a stale entity
 
@@ -289,8 +302,8 @@ appear only for an admitted agent session. Selecting a host SHALL retain bounded
 activation state without inventing workspace resources.
 
 Every Inspector SHALL expose generation-fenced resources only for the selected operational host. A
-ready-inactive or stale entity SHALL retain a bounded read-only identity and an explicit Activate
-host control outside the Inspector without opening live resources. An actionable entity SHALL NOT
+transient outgoing or stale selection MAY retain a bounded read-only identity and SHALL use an
+explicit Switch now control when its saved host can be selected, without opening live resources. An actionable entity SHALL NOT
 retain a separate floating profile card. Missing metadata SHALL remain absent rather than inferred.
 Authoritative cost, input-token, output-token or similar observations MAY appear in the compact
 identity area only when the provider qualifies them to that exact agent session; unavailable or
@@ -306,7 +319,7 @@ Each Inspector SHALL remain visually connected to its represented agent, desk or
 whenever that exact qualified anchor is visible. Opening or focusing an Inspector SHALL not change
 the selected host. World SHALL admit identity and resource content together after qualified pane
 focus; a delayed or rejected focus SHALL never show a new identity over another entity's resources.
-Explicit host activation SHALL retire every outgoing Inspector and terminal context through the
+Explicit host switching SHALL retire every outgoing Inspector and terminal context through the
 existing connection lifecycle.
 
 #### Scenario: Open a terminal-capable Inspector
@@ -365,9 +378,9 @@ existing connection lifecycle.
 
 #### Scenario: Inspect an agent on an inactive host
 
-- **WHEN** a user selects a current agent on a ready-inactive host
-- **THEN** the detail context remains available, identifies the inactive host and offers explicit
-  host activation without opening terminal or Inspector resources
+- **WHEN** a host switch leaves a transient read-only selection from the outgoing host
+- **THEN** the detail context says that the user must switch hosts to activate the view and offers
+  Switch now without opening terminal or Inspector resources
 
 #### Scenario: Change selection while focus is delayed or rejected
 
@@ -583,7 +596,7 @@ distinct, nonduplicated semantic targets.
 
 #### Scenario: Completion activation is unavailable
 
-- **WHEN** a completion target is on an inactive host, stale, incompatible or cannot be opened
+- **WHEN** a completion target is stale, incompatible or cannot be opened
 - **THEN** Office retains its unseen marker and bounded notice, explains that inspection is
   unavailable and does not treat selection as acknowledgement
 
@@ -595,7 +608,7 @@ distinct, nonduplicated semantic targets.
 
 #### Scenario: Room action is unavailable
 
-- **WHEN** a room belongs to an inactive host, is stale or full, or its host lacks the required
+- **WHEN** a room is stale or full, or its host lacks the required
   capability
 - **THEN** the corresponding control remains understandable but cannot create an Office-only room,
   desk or mutation
@@ -769,7 +782,7 @@ it in both the connected desktop and equivalent compact hierarchy.
 
 #### Scenario: Scan an unequal multi-host hierarchy
 
-- **WHEN** hosts contain different numbers of spaces and leaves
+- **WHEN** the selected host contains spaces with different numbers of leaves
 - **THEN** Tree keeps each branch visibly connected to its exact parent without dangling lines or
   equalizing unrelated branches
 

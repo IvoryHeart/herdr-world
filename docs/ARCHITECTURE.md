@@ -214,6 +214,13 @@ actions are connection-scoped. Switching connections retires the browser lease;
 same-ID runtime replacement clears active and inactive cached sessions before
 resource IDs can be reused.
 
+The runtime store retains qualified snapshots for every managed connection, but
+the current Roamgate-derived client has one operational connection lease. Office,
+Tree, Graph, their visible counts, and their shared search therefore receive a
+selected-host WorldObject projection. Switching the connection selector retires
+the outgoing visual/Inspector contexts before replacing the entire projection;
+inactive-host rooms or nodes are not mixed into the active view.
+
 ## Workspace resource ownership
 
 A checkout owns Files/Changes data; a workspace supplies its runtime route; a tab

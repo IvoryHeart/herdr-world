@@ -63,7 +63,14 @@ retain their original Herdr Web lineage.
   conversations.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Kept private development manifests at `0.0.0`; reviewed plugin versions now
-  provide tagged binary, archive and update identities at release time.
+  provide tagged binary, archive and update identities at release time. Source
+  builds display their reachable Git tag/revision instead of presenting the
+  private manifest placeholder as a product version.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- Kept qualified multi-host observation in the service and browser store while
+  making Office, Tree, Graph, their counts, and search show only the browser's
+  selected operational host. Search now occupies one shared top-bar control slot,
+  with Graph Fit and zoom beside it instead of a duplicate stage header.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Fixed

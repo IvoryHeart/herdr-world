@@ -1,6 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import { rmSync } from "node:fs";
 import packageJson from "../../package.json";
+import { currentBuildVersion } from "../../scripts/build-version";
 import type { SshTunnelConfig } from "./bridge/ssh-tunnel";
 import {
   sendWebSocketMessage,
@@ -100,8 +101,10 @@ import {
   WORKTREE_REMOVE_TIMEOUT_MS,
 } from "./worktree/remove";
 
-const APP_VERSION =
-  process.env.HERDR_WORLD_BUILD_VERSION?.trim() || packageJson.version;
+const APP_VERSION = currentBuildVersion(
+  process.env.HERDR_WORLD_BUILD_VERSION,
+  packageJson.version,
+);
 const serviceCommandResult = runServiceCommand(process.argv.slice(2));
 if (serviceCommandResult === SERVICE_COMMAND_CONTINUE) {
   process.argv.splice(2);

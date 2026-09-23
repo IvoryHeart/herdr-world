@@ -37,7 +37,8 @@ ignored directories and must not be committed.
 The service owns connection profiles and isolated runtimes. Global RPC methods such as
 `connections.*` and `world.snapshot` do not carry a focused connection. Every
 downstream Herdr operation carries both `connection_id` and
-`connection_generation`. Keep aggregate observation read-only; send terminal,
+`connection_generation`. Keep aggregate observation internal and project only the
+selected host into visual surfaces; send terminal,
 resource and mutation work through the qualified focused-runtime path.
 
 See [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) and the

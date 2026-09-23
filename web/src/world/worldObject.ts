@@ -566,3 +566,47 @@ export function buildWorldObject(
     coverage,
   };
 }
+
+/**
+ * Keeps aggregate observation intact while giving a focused client one coherent
+ * host presentation. The returned nodes are the original qualified objects, so
+ * identities and runtime generations cannot be rebound by the projection.
+ */
+export function worldObjectForConnection(
+  world: WorldObject,
+  connectionId: string | null,
+): WorldObject {
+  const host = connectionId
+    ? world.hosts.find((candidate) => candidate.connectionId === connectionId)
+    : undefined;
+  const hosts = host ? [host] : [];
+  const spaces = host?.spaces ?? [];
+  const leaves = spaces.flatMap((space) => space.children);
+  const nodes: WorldObjectNode[] = host
+    ? [
+        host,
+        ...spaces.flatMap((space): WorldObjectNode[] => [
+          space,
+          ...space.children,
+        ]),
+      ]
+    : [];
+  return {
+    version: 1,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage: host
+      ? host.coverage
+      : {
+          spaces: 0,
+          tabs: 0,
+          leaves: 0,
+          agents: 0,
+          shells: 0,
+          status: emptyStatusCounts(),
+        },
+  };
+}

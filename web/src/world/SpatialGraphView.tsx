@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { AgentIcon } from "../components/AgentIcon";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
@@ -36,9 +37,11 @@ import {
   type WorldGraphSpace,
 } from "./graph/graphProjection";
 import type { WorldObject } from "./worldObject";
+import { WorldViewToolbar } from "./WorldViewToolbar";
 
 export default function SpatialGraphView({
   world,
+  toolbarPortal = null,
   selectedId,
   conversationNodeIds,
   onSelect,
@@ -47,6 +50,7 @@ export default function SpatialGraphView({
   onNodeAnchorsChange,
 }: {
   world: WorldObject;
+  toolbarPortal?: Element | null;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
   onSelect(id: string): void;
@@ -240,136 +244,137 @@ export default function SpatialGraphView({
     projection.omittedHostCount +
     projection.omittedSpaceCount +
     projection.coverage.omittedTerminals;
-  return (
-    <div ref={rootRef} className="world-spatial-graph-shell">
-      <header className="world-spatial-graph-bar">
-        <div className="world-spatial-graph-heading">
-          <strong>World Graph</strong>
-          <span>
-            {projection.coverage.presentedHosts} hosts ·{" "}
-            {projection.coverage.presentedSpaces} spaces ·{" "}
-            {projection.coverage.presentedAgents} agents ·{" "}
-            {projection.coverage.presentedShells} terminals
-          </span>
-        </div>
-        <label className="world-spatial-graph-search">
-          <span aria-hidden="true">⌕</span>
-          <span className="world-sr-only">Search Graph</span>
-          <input
-            type="search"
-            value={query}
-            placeholder="Host, space, agent, task, or model"
-            onChange={(event) => setQuery(event.currentTarget.value)}
-          />
-        </label>
-        <div
-          className="world-spatial-graph-zoom"
-          role="group"
-          aria-label="Graph zoom controls"
+  const toolbar = (
+    <WorldViewToolbar
+      viewLabel="Graph"
+      query={query}
+      onQueryChange={setQuery}
+      resultLabel={
+        searchActive
+          ? visibleHosts.length
+            ? `${matches?.size ?? 0} matching items`
+            : "No matches"
+          : undefined
+      }
+    >
+      <div
+        className="world-spatial-graph-zoom"
+        role="group"
+        aria-label="Graph zoom controls"
+      >
+        <button
+          type="button"
+          aria-label="Zoom out"
+          title="Zoom out"
+          onClick={() => canvasRef.current?.zoomOut()}
         >
-          <button
-            type="button"
-            aria-label="Zoom out"
-            title="Zoom out"
-            onClick={() => canvasRef.current?.zoomOut()}
-          >
-            <ZoomOut size={16} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            aria-label="Zoom in"
-            title="Zoom in"
-            onClick={() => canvasRef.current?.zoomIn()}
-          >
-            <ZoomIn size={16} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="world-spatial-graph-fit"
-            onClick={() => canvasRef.current?.fit()}
-          >
-            <Maximize2 size={15} aria-hidden="true" />
-            Fit
-          </button>
-        </div>
-      </header>
-      <div className="world-spatial-graph-content">
-        <aside
-          className="world-spatial-graph-outline"
-          aria-label="Graph semantic hierarchy"
+          <ZoomOut size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Zoom in"
+          title="Zoom in"
+          onClick={() => canvasRef.current?.zoomIn()}
         >
-          <div className="world-spatial-graph-outline-head" aria-live="polite">
-            {searchActive
-              ? `${visibleHosts.length} matching host branches`
-              : `${projection.hosts.length} presented host branches`}
-          </div>
-          {visibleHosts.length ? (
-            <ul>
-              {visibleHosts.map((host) => (
-                <SemanticHost
-                  key={host.node.id}
-                  host={host}
-                  collapsedIds={effectiveCollapsedIds}
-                  selectedId={selectedId}
-                  matches={matches}
-                  searchActive={searchActive}
-                  onToggle={toggleCollapse}
-                  onSelect={onSelect}
-                  onOpenTerminal={onOpenTerminal}
-                  runAction={runAction}
-                />
-              ))}
-            </ul>
-          ) : (
-            <p className="world-spatial-graph-empty">No Graph matches.</p>
-          )}
-          {projection.omittedHostCount ? (
-            <p className="world-spatial-graph-overflow-copy">
-              {projection.omittedHostCount} hosts omitted by the 128-host bound.
-            </p>
-          ) : null}
-          {projection.omittedSpaceCount ? (
-            <p className="world-spatial-graph-overflow-copy">
-              {projection.omittedSpaceCount} spaces omitted by the 128-space
-              bound.
-            </p>
-          ) : null}
-          {actionError ? (
-            <p className="world-spatial-graph-action-error" role="status">
-              {actionError}
-            </p>
-          ) : null}
-        </aside>
-        {!compact ? (
-          <div className="world-spatial-graph-visual">
-            <GraphCanvas
-              ref={canvasRef}
-              projection={projection}
-              collapsedIds={effectiveCollapsedIds}
-              selectedId={selectedId}
-              matchedIds={matches}
-              anchorNodeIds={anchorNodeIds}
-              initialPrefs={initialPrefs}
-              fitOnMount={fitOnMount}
-              onSelect={onSelect}
-              onActivate={activateNode}
-              onToggleCollapse={toggleCollapse}
-              onViewChange={updateView}
-              onAnchorsChange={publishAnchors}
-            />
-            <div className="world-spatial-graph-help">
-              Double-click a leaf to open its terminal · drag nodes to pin ·
-              drag empty space to pan
-            </div>
-            {overflowCount ? (
-              <div className="world-spatial-graph-overflow">
-                +{overflowCount} outside presentation bounds
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+          <ZoomIn size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="world-spatial-graph-fit"
+          onClick={() => canvasRef.current?.fit()}
+        >
+          <Maximize2 size={15} aria-hidden="true" />
+          Fit
+        </button>
       </div>
-    </div>
+    </WorldViewToolbar>
+  );
+  return (
+    <>
+      {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+      <div ref={rootRef} className="world-spatial-graph-shell">
+        <div className="world-spatial-graph-content">
+          <aside
+            className="world-spatial-graph-outline"
+            aria-label="Graph semantic hierarchy"
+          >
+            <div
+              className="world-spatial-graph-outline-head"
+              aria-live="polite"
+            >
+              {searchActive
+                ? `${visibleHosts.length} matching host branches`
+                : `${projection.hosts.length} presented host branches`}
+            </div>
+            {visibleHosts.length ? (
+              <ul>
+                {visibleHosts.map((host) => (
+                  <SemanticHost
+                    key={host.node.id}
+                    host={host}
+                    collapsedIds={effectiveCollapsedIds}
+                    selectedId={selectedId}
+                    matches={matches}
+                    searchActive={searchActive}
+                    onToggle={toggleCollapse}
+                    onSelect={onSelect}
+                    onOpenTerminal={onOpenTerminal}
+                    runAction={runAction}
+                  />
+                ))}
+              </ul>
+            ) : (
+              <p className="world-spatial-graph-empty">No Graph matches.</p>
+            )}
+            {projection.omittedHostCount ? (
+              <p className="world-spatial-graph-overflow-copy">
+                {projection.omittedHostCount} hosts omitted by the 128-host
+                bound.
+              </p>
+            ) : null}
+            {projection.omittedSpaceCount ? (
+              <p className="world-spatial-graph-overflow-copy">
+                {projection.omittedSpaceCount} spaces omitted by the 128-space
+                bound.
+              </p>
+            ) : null}
+            {actionError ? (
+              <p className="world-spatial-graph-action-error" role="status">
+                {actionError}
+              </p>
+            ) : null}
+          </aside>
+          {!compact ? (
+            <div className="world-spatial-graph-visual">
+              <GraphCanvas
+                ref={canvasRef}
+                projection={projection}
+                collapsedIds={effectiveCollapsedIds}
+                selectedId={selectedId}
+                matchedIds={matches}
+                anchorNodeIds={anchorNodeIds}
+                initialPrefs={initialPrefs}
+                fitOnMount={fitOnMount}
+                onSelect={onSelect}
+                onActivate={activateNode}
+                onToggleCollapse={toggleCollapse}
+                onViewChange={updateView}
+                onAnchorsChange={publishAnchors}
+              />
+              <div className="world-spatial-graph-help">
+                Double-click a leaf to open its terminal · drag nodes to pin ·
+                drag empty space to pan
+              </div>
+              {overflowCount ? (
+                <div className="world-spatial-graph-overflow">
+                  +{overflowCount} outside presentation bounds
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -256,7 +256,11 @@ as reliable alerts.
 Browsers share Herdr events, not all fonts, drafts, pins, or shortcuts.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser selects its displayed connection.** Editing
+**Profiles are shared; each browser selects its displayed connection.** Office,
+Tree, Graph, their counts, and search all follow that selection. Switching profiles
+replaces the visible host everywhere and retires the outgoing host's Inspector and
+terminal contexts. Other configured hosts remain observed in the background, but are
+not mixed into the selected host's rooms or hierarchy. Editing
 a profile affects others' connection lists. There is no per-person read-only
 role: do not share a workspace URL like a document link.
 

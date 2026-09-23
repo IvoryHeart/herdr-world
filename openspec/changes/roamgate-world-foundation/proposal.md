@@ -31,8 +31,9 @@ recorded by this change rather than unexplained presentation rewrites.
   surfaces native World capabilities rather than a separately installed Roamgate application.
   Present Pixel Office as the primary World surface while retaining that workspace as Spaces.
 - Project all managed Herdr connections into a shared, host-qualified World hierarchy and migrate
-  Spaces, the mature Pixel Office, connected Tree and spatial Graph as complete first-class views
-  with all-host observation and guarded selected-host actions. Port the established Pixel Office
+  Spaces, the mature Pixel Office, connected Tree and spatial Graph as complete first-class views.
+  Keep the aggregate available to the shell, but project only the selected host into each visual
+  view until the operational client supports simultaneous active hosts. Port the established Pixel Office
   projection contract, Pixi renderer, geometry, layout publication, semantic targets, assets and
   tests directly; adapt their data and action boundaries to Roamgate rather than recreating the
   scene in DOM/CSS.
@@ -46,10 +47,9 @@ recorded by this change rather than unexplained presentation rewrites.
   compact agent identity, authoritative qualified status and optional per-agent observations, a
   supported bounded task-summary workflow, ancestry and qualified agent/pane pinning.
 - **BREAKING** Replace the former World's simultaneous cross-host terminal-conversation behavior
-  with Roamgate's one-selected-connection model for every operational surface. The shared
-  WorldObject SHALL continue to present all managed hosts, including ready-inactive and retained
-  stale topology, while terminal, Files, Changes, Agent History, room and launcher actions remain
-  disabled outside the explicitly selected host. Up to five floating Inspector conversations from
+  with Roamgate's one-selected-connection model for every operational surface. The shared runtime
+  store and WorldObject SHALL continue to retain all managed hosts, including ready-inactive and
+  retained stale topology, while Office, Tree and Graph present only the selected host. Up to five floating Inspector conversations from
   that host, plus the one docked Inspector, SHALL use the existing one WebSocket and terminal owner;
   selecting an entity SHALL never switch hosts, and explicitly activating another host SHALL retire
   the outgoing terminal and Inspector contexts.
@@ -77,9 +77,9 @@ None.
   connection manager containing isolated local and SSH Herdr runtimes.
 - `bridge-access`: Replace cross-origin bridge admission with one same-origin World service and its
   trusted-single-user authentication boundary.
-- `world-surfaces`: Make the shared World projection, deep Pixel Office, connected Tree, spatial
-  Graph, focused Inspector and qualified selected-host conversations native surfaces of the
-  Roamgate-derived shell while retaining aggregate observation of its managed connection runtimes.
+- `world-surfaces`: Make the shared World projection, selected-host Pixel Office, connected Tree,
+  spatial Graph, focused Inspector and qualified conversations native surfaces of the
+  Roamgate-derived shell while retaining aggregate observation internally.
 - `distribution-boundaries`: Change upstream lineage, implementation stack, artifacts and plugin
   lifecycle from Herdr Web/Rust to the Roamgate-derived World application.
 
@@ -98,7 +98,7 @@ None.
   incomplete until selected-host conversations and all three view migrations pass acceptance.
 - Does not preserve obsolete shell chrome or behavior explicitly retired by this change.
   Simultaneous cross-host terminal and Inspector contexts are an approved breaking retirement;
-  the established Pixel Office presentation, aggregate multi-host observation, selected-host
+  the established Pixel Office presentation, internally retained aggregate multi-host observation, selected-host
   multi-Inspector conversations and the explicitly listed view behavior remain required.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.

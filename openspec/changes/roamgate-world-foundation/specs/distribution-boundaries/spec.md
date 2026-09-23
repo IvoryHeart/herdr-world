@@ -31,6 +31,11 @@ products. The embedded frontend and compiled service SHALL expose the same revie
 - **WHEN** a tagged release builds the embedded frontend and compiled service
 - **THEN** both display or report that tagged version rather than a private development-manifest value
 
+#### Scenario: Source development version
+- **WHEN** World is built from a Git checkout without a reviewed release version injection
+- **THEN** the frontend and service identify the reachable tag and source revision rather than
+  displaying the private `0.0.0` manifest placeholder as the product version
+
 #### Scenario: Plugin installation
 - **WHEN** a user installs the `ivoryheart.herdr-world` Herdr plugin and invokes its start action
 - **THEN** the plugin obtains and starts the matching Herdr World executable and exposes one World

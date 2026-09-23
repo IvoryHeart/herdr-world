@@ -5,7 +5,7 @@ import type { Pane, Tab, Workspace } from "../types";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import { buildWorldObject } from "./worldObject";
+import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
 import "./world.css";
 
@@ -160,7 +160,8 @@ async function run() {
     stale: true,
     actionable: false,
   };
-  const world = buildWorldObject([local, remote, stale], "local");
+  const aggregateWorld = buildWorldObject([local, remote, stale], "local");
+  const world = worldObjectForConnection(aggregateWorld, "local");
 
   try {
     let selectedAnchor = false;
@@ -240,13 +241,10 @@ async function run() {
       "Agent Bar geometry is missing",
     );
     check(
-      layout?.ceoBlocks.receptions.length === 3,
-      "Host receptions are missing",
+      layout?.ceoBlocks.receptions.length === 1,
+      "The selected host reception is missing",
     );
-    check(
-      layout?.rooms.length === 3,
-      "Unequal multi-host work rooms are missing",
-    );
+    check(layout?.rooms.length === 1, "The selected host work room is missing");
     check(
       host.querySelectorAll(".world-semantic-target").length > 0,
       "Office semantic targets are missing",
@@ -276,17 +274,21 @@ async function run() {
       "Successful completion inspection did not acknowledge the marker",
     );
     check(
+      terminalActivations === 2,
+      "Completion inspection did not preserve explicit activation attempts",
+    );
+    check(
       host.querySelectorAll(".world-new-seat-canvas-action").length === 1,
       "The active host room is missing its new-seat control",
     );
     check(
-      host.querySelectorAll(".world-room-overlay-action").length === 6,
+      host.querySelectorAll(".world-room-overlay-action").length === 2,
       "Room management controls are missing",
     );
     check(
       host.querySelectorAll(".world-room-overlay-action:not(:disabled)")
         .length === 2,
-      "Inactive or stale hosts exposed room mutations",
+      "The selected host room did not expose its mutations",
     );
     check(
       host.querySelector(".world-new-room-canvas-action") !== null,
@@ -315,19 +317,8 @@ async function run() {
         '.world-semantic-target[data-kind="agent"]',
       ),
     ].find((button) => button.getAttribute("aria-label")?.includes(", stale,"));
-    check(
-      inactiveAgent !== undefined,
-      "Ready-inactive host agents are missing",
-    );
-    check(staleAgent !== undefined, "Stale host agents are missing");
-    const activationsBeforeReadOnly = terminalActivations;
-    inactiveAgent?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-    staleAgent?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
-    check(
-      terminalActivations === activationsBeforeReadOnly,
-      "A read-only host opened a terminal",
-    );
-
+    check(inactiveAgent === undefined, "Office mixed in another ready host");
+    check(staleAgent === undefined, "Office mixed in a stale host");
     const stageScroll = host.querySelector<HTMLElement>(".world-stage-scroll")!;
     check(
       host.querySelector(".world-office-toolbar") === null,

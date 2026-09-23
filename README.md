@@ -4,20 +4,21 @@
   <img src="./web/public/herdr-world-logo.svg" alt="Herdr World ram mark" width="128" />
 </p>
 
-A **visual control plane** for [Herdr](https://herdr.dev). Observe agents across
-local and SSH hosts in Office, Tree, and Graph; open the same qualified terminal,
-files, changes, and agent history in Spaces on desktop or mobile.
+A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
+hosts, select one host at a time in Office, Tree, Graph, or Spaces, and open its
+qualified terminals, files, changes, and agent history on desktop or mobile.
 **Requires a running Herdr server.**
 
 ## Screenshots
 
 ### Desktop
 
-[![Office view showing agents across two Herdr hosts][desktop-office]][desktop-office]
+[![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Office shows agent state across hosts at a glance. Tree and Graph expose the
-same qualified runtime, while Spaces keeps Herdr's full terminal and repository
-workflow one click away.
+Office shows the selected host's agent state at a glance. Tree and Graph expose
+the same qualified runtime, while Spaces keeps Herdr's full terminal and
+repository workflow one click away. Switch the host selector to replace the
+whole view; World keeps other managed connections observed in the background.
 
 <!-- markdownlint-disable MD033 -->
 
@@ -94,7 +95,9 @@ Click any screenshot to open the full-resolution image.
    On Windows, extract the archive and run `herdr-world.exe`. Open the printed URL.
 
 Use the connection selector to add local sockets or an SSH destination. One World
-service owns every connection; the browser stays on the same World origin.
+service owns every connection; each browser selects one operational host and stays
+on the same World origin. Office, Tree, Graph, visible counts, and search follow
+that selected host until simultaneous active-host interaction is supported.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.

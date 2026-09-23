@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
 import {
@@ -41,6 +42,7 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import type { WorldObject } from "./worldObject";
+import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import {
   createdRootPaneId,
   officeCreationActionState,
@@ -70,6 +72,7 @@ const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 
 export default function PixelOfficeView({
   world,
+  toolbarPortal = null,
   selectedId,
   onSelect,
   onOpenTerminal,
@@ -78,6 +81,7 @@ export default function PixelOfficeView({
   onConversationNodeAnchorsChange,
 }: {
   world: WorldObject;
+  toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string): void | Promise<boolean>;
   onOpenTerminal(id: string): Promise<void>;
@@ -120,6 +124,11 @@ export default function PixelOfficeView({
     EMPTY_OFFICE_OBSERVABILITY,
   );
   const [observabilityRevision, setObservabilityRevision] = useState(0);
+  const [query, setQuery] = useState("");
+  const searchMatches = useMemo(
+    () => worldSearchMatches(world, query),
+    [query, world],
+  );
   preferencesRef.current = preferences;
   onSelectRef.current = onSelect;
 
@@ -484,143 +493,165 @@ export default function PixelOfficeView({
     );
   }
 
+  const toolbar = (
+    <WorldViewToolbar
+      viewLabel="Office"
+      query={query}
+      onQueryChange={setQuery}
+      resultLabel={
+        query.trim()
+          ? searchMatches.length
+            ? `${searchMatches.length} matches · Enter to select`
+            : "No matches"
+          : undefined
+      }
+      onSubmit={() => {
+        const match = searchMatches[0];
+        if (match) void onSelect(match.id);
+      }}
+    />
+  );
+
   return (
-    <div className="world-office-shell world-stage-shell">
-      <OfficeCompactTargetChooser
-        projection={office}
-        selectedKey={selectedKey}
-        onSelect={selectOfficeKey}
-        onActivateAgent={openOfficeTerminal}
-        onActivateDesk={openOfficeTerminal}
-      />
-      <OfficeCompletionNotices
-        agents={unseenCompletions}
-        onInspect={(agent) => openOfficeTerminal(agent.key)}
-      />
-      <div ref={scrollRef} className="world-stage-scroll">
-        <PixelOfficeCanvas
+    <>
+      {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+      <div className="world-office-shell world-stage-shell">
+        <OfficeCompactTargetChooser
           projection={office}
           selectedKey={selectedKey}
-          completionSeenKeys={completionSeenKeys}
-          observability={observability}
-          conversationTargets={conversationTargets}
           onSelect={selectOfficeKey}
           onActivateAgent={openOfficeTerminal}
-          onActivateRoom={selectOfficeKey}
-          showCreateSeat={showCreateSeat}
-          onNewSeat={(roomKey) => void createSeat(roomKey)}
-          onHover={setSceneHover}
-          onSelectedAnchorChange={onSelectedAnchorChange}
-          onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
-            onConversationNodeAnchorsChange?.(
-              anchors
-                ? Object.fromEntries(
-                    Object.entries(anchors).flatMap(([id, value]) => {
-                      const anchor = preferredOfficeConnectorAnchor(value);
-                      return anchor ? [[id, anchor]] : [];
-                    }),
-                  )
-                : null,
-            );
-          }}
-          onLayoutChange={setLayout}
-          onCanvasRendered={setRenderedRevision}
-          roomAlignment={preferences.roomAlignment}
-          longRoomTitleMode={preferences.longTitleMode}
-        >
-          {layout ? (
-            <>
-              <OfficeSemanticTargetsOverlay
-                layout={layout}
-                projection={office}
-                renderedRevision={renderedRevision}
-                selectedKey={selectedKey}
-                onSelect={selectOfficeKey}
-                onActivateAgent={openOfficeTerminal}
-                onActivateDesk={openOfficeTerminal}
-                onActivateRoom={selectOfficeKey}
-              />
-              <OfficeRoomActionsOverlay
-                layout={layout}
-                projection={office}
-                renderedRevision={renderedRevision}
-                selectedRoomKey={selectedRoomKey}
-                showCreateSeat={showCreateSeat}
-                canCreateSeat={canCreateSeat}
-                onCreateSeat={(roomKey) => void createSeat(roomKey)}
-                showCreateRoom={showCreateRoom}
-                canCreateRoom={canCreateRoom}
-                onCreateRoom={(roomKey) =>
-                  setRoomDialog({ mode: "create", roomKey })
-                }
-                canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
-                onRenameRoom={(roomKey) => {
-                  const room = roomForKey(roomKey);
-                  if (room) {
-                    setRoomDialog({
-                      mode: "rename",
-                      roomKey,
-                      label: room.displayLabel,
-                    });
-                  }
-                }}
-                canCloseRoom={(roomKey) => canManageRoom(roomKey, "close")}
-                onCloseRoom={(roomKey) => {
-                  const room = roomForKey(roomKey);
-                  if (room) {
-                    setRoomDialog({
-                      mode: "close",
-                      roomKey,
-                      label: room.displayLabel,
-                    });
-                  }
-                }}
-              />
-            </>
-          ) : null}
-        </PixelOfficeCanvas>
-      </div>
-      {sceneHover && sceneHover.key !== selectedKey ? (
-        <OfficeCanvasCallout
-          callout={officeCalloutForKey(office, sceneHover.key)}
-          left={sceneHover.clientX}
-          top={sceneHover.clientY}
+          onActivateDesk={openOfficeTerminal}
         />
-      ) : null}
-      <TextInputDialog
-        open={roomDialog?.mode === "create"}
-        title="Create room"
-        label="Room name"
-        submitLabel="Create"
-        onClose={() => setRoomDialog(null)}
-        onSubmit={(label) => void submitCreateRoom(label)}
-      />
-      <TextInputDialog
-        open={roomDialog?.mode === "rename"}
-        title="Rename room"
-        label="Room name"
-        initialValue={roomDialog?.mode === "rename" ? roomDialog.label : ""}
-        submitLabel="Rename"
-        onClose={() => setRoomDialog(null)}
-        onSubmit={(label) => void submitRenameRoom(label)}
-      />
-      <ConfirmDialog
-        open={roomDialog?.mode === "close"}
-        title="Close room"
-        message={
-          roomDialog?.mode === "close"
-            ? `Close room “${roomDialog.label}”? Its running terminal sessions will end.`
-            : ""
-        }
-        confirmLabel="Close room"
-        danger
-        onClose={() => setRoomDialog(null)}
-        onConfirm={() => {
-          if (roomDialog?.mode === "close") {
-            void closeRoom(roomDialog.roomKey);
+        <OfficeCompletionNotices
+          agents={unseenCompletions}
+          onInspect={(agent) => openOfficeTerminal(agent.key)}
+        />
+        <div ref={scrollRef} className="world-stage-scroll">
+          <PixelOfficeCanvas
+            projection={office}
+            selectedKey={selectedKey}
+            completionSeenKeys={completionSeenKeys}
+            observability={observability}
+            conversationTargets={conversationTargets}
+            onSelect={selectOfficeKey}
+            onActivateAgent={openOfficeTerminal}
+            onActivateRoom={selectOfficeKey}
+            showCreateSeat={showCreateSeat}
+            onNewSeat={(roomKey) => void createSeat(roomKey)}
+            onHover={setSceneHover}
+            onSelectedAnchorChange={onSelectedAnchorChange}
+            onAnchorChange={(anchors: OfficeConversationAnchors | null) => {
+              onConversationNodeAnchorsChange?.(
+                anchors
+                  ? Object.fromEntries(
+                      Object.entries(anchors).flatMap(([id, value]) => {
+                        const anchor = preferredOfficeConnectorAnchor(value);
+                        return anchor ? [[id, anchor]] : [];
+                      }),
+                    )
+                  : null,
+              );
+            }}
+            onLayoutChange={setLayout}
+            onCanvasRendered={setRenderedRevision}
+            roomAlignment={preferences.roomAlignment}
+            longRoomTitleMode={preferences.longTitleMode}
+          >
+            {layout ? (
+              <>
+                <OfficeSemanticTargetsOverlay
+                  layout={layout}
+                  projection={office}
+                  renderedRevision={renderedRevision}
+                  selectedKey={selectedKey}
+                  onSelect={selectOfficeKey}
+                  onActivateAgent={openOfficeTerminal}
+                  onActivateDesk={openOfficeTerminal}
+                  onActivateRoom={selectOfficeKey}
+                />
+                <OfficeRoomActionsOverlay
+                  layout={layout}
+                  projection={office}
+                  renderedRevision={renderedRevision}
+                  selectedRoomKey={selectedRoomKey}
+                  showCreateSeat={showCreateSeat}
+                  canCreateSeat={canCreateSeat}
+                  onCreateSeat={(roomKey) => void createSeat(roomKey)}
+                  showCreateRoom={showCreateRoom}
+                  canCreateRoom={canCreateRoom}
+                  onCreateRoom={(roomKey) =>
+                    setRoomDialog({ mode: "create", roomKey })
+                  }
+                  canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
+                  onRenameRoom={(roomKey) => {
+                    const room = roomForKey(roomKey);
+                    if (room) {
+                      setRoomDialog({
+                        mode: "rename",
+                        roomKey,
+                        label: room.displayLabel,
+                      });
+                    }
+                  }}
+                  canCloseRoom={(roomKey) => canManageRoom(roomKey, "close")}
+                  onCloseRoom={(roomKey) => {
+                    const room = roomForKey(roomKey);
+                    if (room) {
+                      setRoomDialog({
+                        mode: "close",
+                        roomKey,
+                        label: room.displayLabel,
+                      });
+                    }
+                  }}
+                />
+              </>
+            ) : null}
+          </PixelOfficeCanvas>
+        </div>
+        {sceneHover && sceneHover.key !== selectedKey ? (
+          <OfficeCanvasCallout
+            callout={officeCalloutForKey(office, sceneHover.key)}
+            left={sceneHover.clientX}
+            top={sceneHover.clientY}
+          />
+        ) : null}
+        <TextInputDialog
+          open={roomDialog?.mode === "create"}
+          title="Create room"
+          label="Room name"
+          submitLabel="Create"
+          onClose={() => setRoomDialog(null)}
+          onSubmit={(label) => void submitCreateRoom(label)}
+        />
+        <TextInputDialog
+          open={roomDialog?.mode === "rename"}
+          title="Rename room"
+          label="Room name"
+          initialValue={roomDialog?.mode === "rename" ? roomDialog.label : ""}
+          submitLabel="Rename"
+          onClose={() => setRoomDialog(null)}
+          onSubmit={(label) => void submitRenameRoom(label)}
+        />
+        <ConfirmDialog
+          open={roomDialog?.mode === "close"}
+          title="Close room"
+          message={
+            roomDialog?.mode === "close"
+              ? `Close room “${roomDialog.label}”? Its running terminal sessions will end.`
+              : ""
           }
-        }}
-      />
-    </div>
+          confirmLabel="Close room"
+          danger
+          onClose={() => setRoomDialog(null)}
+          onConfirm={() => {
+            if (roomDialog?.mode === "close") {
+              void closeRoom(roomDialog.roomKey);
+            }
+          }}
+        />
+      </div>
+    </>
   );
 }

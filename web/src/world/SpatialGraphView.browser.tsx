@@ -6,7 +6,7 @@ import SpatialGraphView from "./SpatialGraphView";
 import { LatestFrameValue } from "./graph/GraphCanvas";
 import { GRAPH_PREFERENCES_KEY } from "./graph/graphPreferences";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import { buildWorldObject } from "./worldObject";
+import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import "./world.css";
 
 const failures: string[] = [];
@@ -127,20 +127,21 @@ async function run() {
   host.style.cssText = "width:100vw;height:100vh;overflow:hidden";
   document.body.append(host);
   const root = createRoot(host);
-  const initialWorld = buildWorldObject(
+  const aggregateWorld = buildWorldObject(
     [
       connection("local", "Forge", "working"),
       connection("remote", "Review host", "blocked"),
     ],
     "local",
   );
+  const initialWorld = worldObjectForConnection(aggregateWorld, "local");
   const agent = initialWorld.leaves.find(
     (node) => node.connectionId === "local" && node.kind === "agent",
   )!;
   const terminal = initialWorld.leaves.find(
     (node) => node.connectionId === "local" && node.kind === "terminal",
   )!;
-  const inactiveHost = initialWorld.hosts.find(
+  const inactiveHost = aggregateWorld.hosts.find(
     (node) => node.connectionId === "remote",
   )!;
   const localHost = initialWorld.hosts.find(
@@ -157,17 +158,16 @@ async function run() {
     const [agentStatus, updateAgentStatus] =
       useState<Pane["agent_status"]>("working");
     setAgentStatus = updateAgentStatus;
-    const world = useMemo(
-      () =>
-        buildWorldObject(
-          [
-            connection("local", "Forge", agentStatus),
-            connection("remote", "Review host", "blocked"),
-          ],
-          "local",
-        ),
-      [agentStatus],
-    );
+    const world = useMemo(() => {
+      const aggregate = buildWorldObject(
+        [
+          connection("local", "Forge", agentStatus),
+          connection("remote", "Review host", "blocked"),
+        ],
+        "local",
+      );
+      return worldObjectForConnection(aggregate, "local");
+    }, [agentStatus]);
     return (
       <SpatialGraphView
         world={world}
@@ -208,15 +208,8 @@ async function run() {
       ...outline.querySelectorAll<HTMLElement>("[data-graph-host-id]"),
     ].find((element) => element.dataset.graphHostId === inactiveHost.id);
     check(
-      inactiveBranch !== undefined,
-      "Graph omitted the inactive host branch",
-    );
-    const activeTerminalActions = inactiveBranch?.querySelectorAll(
-      "[aria-label^='Open ']",
-    );
-    check(
-      activeTerminalActions?.length === 0,
-      "Graph exposed an inactive-host terminal action",
+      inactiveBranch === undefined,
+      "Graph mixed another host into the selected-host presentation",
     );
     check(
       outline.textContent?.includes("Running release checks") === true,
@@ -242,11 +235,11 @@ async function run() {
         "Graph renderer did not settle",
       );
       check(
-        window.__HERDR_GRAPH_RENDERER__?.nodes === 8,
-        "Graph renderer did not retain every qualified node",
+        window.__HERDR_GRAPH_RENDERER__?.nodes === 4,
+        "Graph renderer did not retain the selected host's qualified nodes",
       );
       check(
-        window.__HERDR_GRAPH_RENDERER__?.links === 6,
+        window.__HERDR_GRAPH_RENDERER__?.links === 3,
         "Graph renderer did not retain exact parent-child links",
       );
     }
@@ -278,7 +271,19 @@ async function run() {
       !selectedSemantic(),
       "Collapsed Graph branch remained in the outline",
     );
-    const search = host.querySelector<HTMLInputElement>("input[type=search]")!;
+    if (compact) {
+      host
+        .querySelector<HTMLButtonElement>('[aria-label="Search Graph"]')
+        ?.click();
+      await waitFor(
+        () =>
+          document.querySelector(".world-view-search-overlay input") !== null,
+        "Compact Graph search did not open",
+      );
+    }
+    const search = (compact ? document : host).querySelector<HTMLInputElement>(
+      "input[type=search]",
+    )!;
     enterSearch(search, "release checks");
     await waitFor(
       () => selectedSemantic() !== undefined,
@@ -428,7 +433,11 @@ async function run() {
 }
 
 run()
-  .catch((error: unknown) => failures.push(String(error)))
+  .catch((error: unknown) =>
+    failures.push(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    ),
+  )
   .finally(() => {
     void fetch("/result", {
       method: "POST",

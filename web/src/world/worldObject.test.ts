@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
-import { buildWorldObject, worldObjectId } from "./worldObject";
+import {
+  buildWorldObject,
+  worldObjectForConnection,
+  worldObjectId,
+} from "./worldObject";
 
 function connection(
   connectionId: string,
@@ -104,6 +108,29 @@ describe("WorldObject", () => {
       selectedHost: true,
       actionable: true,
     });
+  });
+
+  test("projects one selected host without discarding the aggregate", () => {
+    const aggregate = buildWorldObject(
+      [connection("local"), connection("remote")],
+      "remote",
+    );
+
+    const visible = worldObjectForConnection(aggregate, "remote");
+
+    expect(aggregate.hosts.map(({ connectionId }) => connectionId)).toEqual([
+      "local",
+      "remote",
+    ]);
+    expect(visible.hosts.map(({ connectionId }) => connectionId)).toEqual([
+      "remote",
+    ]);
+    expect(
+      visible.nodes.every(({ connectionId }) => connectionId === "remote"),
+    ).toBe(true);
+    expect(visible.coverage).toEqual(aggregate.hosts[1]?.coverage);
+    expect(visible.nodeById.has(aggregate.hosts[0]!.id)).toBe(false);
+    expect(worldObjectForConnection(aggregate, "missing").nodes).toEqual([]);
   });
 
   test("never aliases colliding native ids and does not admit stale hosts", () => {
