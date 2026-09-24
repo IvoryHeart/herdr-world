@@ -30,7 +30,7 @@
 - [x] 5.1 Run formatting, lint, type checking, unit/integration tests and production builds through the repository's final check command and record exact results
 - [x] 5.2 Exercise the compiled World application against a local Herdr plus the deterministic SSH fixture, verifying connection management, aggregate World observation, terminal input, Files, Changes and Agent History
 - [x] 5.3 Run responsive mounted-browser acceptance on Office, Tree and Graph at desktop and phone sizes, and publish privacy-safe synthetic captures that demonstrate the delivered compositions and operational contexts
-- [ ] 5.4 Review the final diff and history for secrets, unrelated generated output and stale product identities; push the scoped foundation implementation and return PR #93 to ready status for independent review
+- [x] 5.4 Review the final diff and history for secrets, unrelated generated output and stale product identities; push the scoped foundation implementation and return PR #93 to ready status for independent review
 
 ## 6. Review corrections
 
@@ -96,4 +96,4 @@ delivery. Their restoration and expanded live local/SSH acceptance are tracked b
 - [x] 13.1 Exercise aggregate selected-host projection, stale/reconnect and colliding-ID cases through the deterministic connection, store and mounted-browser suites; verify Office, Tree, Graph, their search/counts/actions and bounded Inspector registry contain only the selected host and explicit switching retires outgoing contexts before admitting another host. Track the expanded simultaneous live local-plus-SSH matrix in GitHub issue #95
 - [x] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the delivered per-view feature inventory with approved breaking retirements identified explicitly
 - [x] 13.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the delivered views, record the deferred workflows in GitHub issue #95, and remove incomplete-checkpoint claims from the delivery narrative
-- [ ] 13.4 Run the complete repository and distribution checks, resolve current findings and return PR #93 to ready status for independent review without merging it
+- [x] 13.4 Run the complete repository and distribution checks, resolve current findings and return PR #93 to ready status for independent review without merging it
