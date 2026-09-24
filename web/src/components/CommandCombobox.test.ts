@@ -31,6 +31,16 @@ describe("command combobox search helpers", () => {
     expect(workspaceScore).toBeGreaterThan(0);
   });
 
+  test("finds tab focus actions by their natural-language label", () => {
+    expect(
+      commandFilter("Focus tab: Builder", "focus on your tab", [
+        "focus tab",
+        "focus on your tab",
+        "switch tab",
+      ]),
+    ).toBeGreaterThan(0);
+  });
+
   test("detects direct file path queries without treating words as paths", () => {
     expect(commandPathQuery("docs/guides/runtime.md")).toBe(
       "docs/guides/runtime.md",

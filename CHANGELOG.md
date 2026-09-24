@@ -52,8 +52,10 @@ retain their original Herdr Web lineage.
   external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - Restored the retained Pixi Office as the primary World surface and placed the
-  machine selector, Office/Spaces/Tree/Graph selector, selected-host/runtime
-  summary, Actions and Menu in that order in the existing application top bar,
+  machine selector, Office/Spaces/Tree/Graph selector, Actions and Menu in the
+  existing application top bar. Tree and Graph now keep their selected-host and
+  runtime summary in a collapsible floating panel, while Office continues to
+  present its richer summary in the CEO room,
   removed the separate Visual Control Plane header, and retained the Spaces
   workspace navigator, focused tabs and annotations as the common frame around
   every view instead of duplicating Graph navigation. The shared workspace
@@ -81,8 +83,12 @@ retain their original Herdr Web lineage.
 - Kept qualified multi-host observation in the service and browser store while
   making Office, Tree, Graph, their counts, and search show only the browser's
   selected operational host. Search now occupies one shared top-bar control slot,
-  with Graph Fit and zoom beside it instead of a duplicate stage header.
-  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+  exposes selectable matching items, and keeps Graph Fit and zoom beside it
+  instead of a duplicate stage header. The complete shared model action catalog
+  remains available from every projection; visual terminal focus uses the
+  generation-qualified World Inspector path.
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93),
+  [contextual action correction in PR #100](https://github.com/IvoryHeart/herdr-world/pull/100)
 
 ### Fixed
 

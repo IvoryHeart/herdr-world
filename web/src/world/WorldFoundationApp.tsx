@@ -10,6 +10,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import App, { type WorkspaceSurfaceSelection } from "../App";
+import type {
+  CommandActionResult,
+  CommandSearchResult,
+} from "../components/CommandCombobox";
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { lazyWithReload } from "../lazyWithReload";
@@ -33,11 +37,12 @@ import {
 } from "./runtimeStore";
 import {
   buildWorldObject,
-  type WorldHostObject,
   type WorldObject,
   type WorldObjectNode,
+  type WorldLeafObject,
   worldObjectForConnection,
 } from "./worldObject";
+import { worldSearchMatches, worldSearchResult } from "./WorldViewToolbar";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
@@ -48,7 +53,7 @@ import {
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import WorldIntentProfile from "./WorldIntentProfile";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
-import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
+import { WorldConnectionRequired } from "./WorldStatus";
 import {
   reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
@@ -93,6 +98,29 @@ const OfficeObservabilityDialog = lazyWithReload("world-observability", () =>
 );
 
 export type WorldView = "spaces" | "office" | "tree" | "graph";
+
+type WorldCommandActions = {
+  run(actionKey: string): CommandActionResult | void;
+};
+
+export function worldFocusActionTarget(
+  world: WorldObject,
+  actionKey: string,
+): WorldLeafObject | null {
+  const candidates = actionKey.startsWith("focus-tab-")
+    ? world.leaves.filter(
+        (leaf) => leaf.tabId === actionKey.slice("focus-tab-".length),
+      )
+    : actionKey.startsWith("focus-agent-")
+      ? world.leaves.filter(
+          (leaf) => leaf.nativeId === actionKey.slice("focus-agent-".length),
+        )
+      : [];
+  const actionable = candidates.filter(
+    (leaf) => leaf.selectedHost && leaf.actionable,
+  );
+  return actionable.find((leaf) => leaf.focused) ?? actionable[0] ?? null;
+}
 
 const SELECTED_CONNECTION_KEY = "worldSelectedConnection";
 const WORLD_VIEWS: readonly WorldView[] = ["office", "spaces", "tree", "graph"];
@@ -302,6 +330,27 @@ export default function WorldFoundationApp() {
     Record<string, HTMLDivElement | null>
   >({});
   const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
+  const [worldSearchQuery, setWorldSearchQuery] = useState("");
+  const worldCommandActionsRef = useRef<WorldCommandActions | null>(null);
+  const worldSearchRef = useRef<
+    (query: string) => readonly CommandSearchResult[]
+  >(() => []);
+  const worldSearch = useCallback(
+    (query: string) => worldSearchRef.current(query),
+    [],
+  );
+  const registerWorldSearch = useCallback(
+    (handler: (query: string) => readonly CommandSearchResult[]) => {
+      worldSearchRef.current = handler;
+    },
+    [],
+  );
+  const registerWorldCommandActions = useCallback(
+    (actions: WorldCommandActions | null) => {
+      worldCommandActionsRef.current = actions;
+    },
+    [],
+  );
   const workspaceSurfaceSelectionRef = useRef<
     ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
   >(null);
@@ -314,18 +363,6 @@ export default function WorldFoundationApp() {
       workspaceSurfaceSelectionRef.current = handler;
     },
     [],
-  );
-  const topbarRuntime = useWorldRuntime();
-  const topbarConnectionId = useStoreSelector(
-    (snapshot) => snapshot.activeConnectionId,
-  );
-  const topbarWorld = useMemo(
-    () =>
-      worldObjectForConnection(
-        buildWorldObject(topbarRuntime.connections, topbarConnectionId),
-        topbarConnectionId,
-      ),
-    [topbarConnectionId, topbarRuntime.connections],
   );
   const activeConversationLease = useStoreSelector(
     (snapshot) => ({
@@ -416,14 +453,16 @@ export default function WorldFoundationApp() {
     const onPopState = () => {
       const next = worldViewFromPath(window.location.pathname);
       setViewState(next);
+      setWorldSearchQuery("");
       if (next !== "spaces") setVisualView(next);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [view]);
 
-  const setView = (next: WorldView) => {
+  const setView = useCallback((next: WorldView) => {
     setViewState(next);
+    setWorldSearchQuery("");
     if (next !== "spaces") setVisualView(next);
     if (window.location.pathname !== WORLD_VIEW_PATHS[next]) {
       const url = new URL(window.location.href);
@@ -433,7 +472,18 @@ export default function WorldFoundationApp() {
     if (next === "spaces") {
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     }
-  };
+  }, []);
+  const handleCommandAction = useCallback(
+    (actionKey: string) => {
+      if (view === "spaces") return;
+      if (actionKey.startsWith("world-")) return;
+      // The inherited action catalog belongs to the shared model. Only a
+      // target-sensitive World focus action is intercepted here; every other
+      // action must continue to its existing store/dialog callback.
+      return worldCommandActionsRef.current?.run(actionKey);
+    },
+    [view],
+  );
 
   return (
     <div className="world-foundation-shell">
@@ -441,6 +491,11 @@ export default function WorldFoundationApp() {
       <div className="world-spaces-layer is-active">
         <App
           operationalShortcutsEnabled={view === "spaces"}
+          commandMenuEnabled
+          worldSearch={worldSearch}
+          onCommandSearchChange={setWorldSearchQuery}
+          onCommandAction={handleCommandAction}
+          commandMenuPlaceholder="Search World, actions, or enter file path..."
           topbarPortal={topbarPortal}
           primaryViewControl={
             <div className="world-topbar-control-plane">
@@ -459,16 +514,6 @@ export default function WorldFoundationApp() {
               </label>
               {view !== "spaces" ? (
                 <>
-                  <WorldTopbarStatus
-                    runtime={topbarRuntime}
-                    world={topbarWorld}
-                    selectedHostLabel={selectedHostStatusLabel(
-                      topbarWorld.hosts.find(
-                        ({ connectionId }) =>
-                          connectionId === topbarConnectionId,
-                      ) ?? null,
-                    )}
-                  />
                   <div
                     className="world-view-toolbar-host"
                     ref={setViewToolbarPortal}
@@ -495,6 +540,10 @@ export default function WorldFoundationApp() {
               onWorkspaceSurfaceSelectionReady={
                 registerWorkspaceSurfaceSelection
               }
+              searchQuery={worldSearchQuery}
+              onSearchQueryChange={setWorldSearchQuery}
+              onWorldSearchReady={registerWorldSearch}
+              onWorldCommandActionsReady={registerWorldCommandActions}
               viewToolbarPortal={viewToolbarPortal}
             />
           }
@@ -564,6 +613,10 @@ function WorldControlPlane({
   onInspectorConversationsChange,
   onInspectorTerminalPortal,
   onWorkspaceSurfaceSelectionReady,
+  searchQuery,
+  onSearchQueryChange,
+  onWorldSearchReady,
+  onWorldCommandActionsReady,
   viewToolbarPortal,
 }: {
   view: Exclude<WorldView, "spaces">;
@@ -583,6 +636,12 @@ function WorldControlPlane({
       | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
       | null,
   ): void;
+  searchQuery: string;
+  onSearchQueryChange(query: string): void;
+  onWorldSearchReady(
+    handler: (query: string) => readonly CommandSearchResult[],
+  ): void;
+  onWorldCommandActionsReady(actions: WorldCommandActions | null): void;
   viewToolbarPortal: HTMLDivElement | null;
 }) {
   const runtime = useWorldRuntime();
@@ -674,6 +733,10 @@ function WorldControlPlane({
       hasSelectedConnection,
     ],
   );
+  const commandActionWorldRef = useRef(world);
+  commandActionWorldRef.current = world;
+  const commandActionActiveRef = useRef(active);
+  commandActionActiveRef.current = active;
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
@@ -1147,6 +1210,28 @@ function WorldControlPlane({
     }
     return applySelection(id);
   };
+  const worldSearchHandler = useCallback(
+    (query: string): readonly CommandSearchResult[] =>
+      worldSearchMatches(world, query)
+        .slice(0, 8)
+        .map((node) => {
+          const result = worldSearchResult(node);
+          return {
+            key: `world-${result.id}`,
+            title: result.label,
+            detail: result.detail,
+            keywords: [node.kind, node.hostLabel, node.connectionId],
+            run: () => void worldSearchSelectHandlerRef.current(result.id),
+          };
+        }),
+    [world],
+  );
+  const worldSearchSelectHandlerRef = useRef(selectNode);
+  worldSearchSelectHandlerRef.current = selectNode;
+  useLayoutEffect(() => {
+    onWorldSearchReady(worldSearchHandler);
+    return () => onWorldSearchReady(() => []);
+  }, [onWorldSearchReady, worldSearchHandler]);
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
   >(() => Promise.resolve(false));
@@ -1361,6 +1446,36 @@ function WorldControlPlane({
       throw cause;
     }
   };
+  const openTerminalByIdRef = useRef(openTerminalById);
+  openTerminalByIdRef.current = openTerminalById;
+  const worldCommandActionsRef = useRef<WorldCommandActions | null>(null);
+  if (!worldCommandActionsRef.current) {
+    worldCommandActionsRef.current = {
+      run: (actionKey) => {
+        if (!commandActionActiveRef.current) return "blocked";
+        if (
+          !actionKey.startsWith("focus-tab-") &&
+          !actionKey.startsWith("focus-agent-")
+        ) {
+          return;
+        }
+        const target = worldFocusActionTarget(
+          commandActionWorldRef.current,
+          actionKey,
+        );
+        if (!target) {
+          setIntentError("This terminal is no longer available");
+          return "blocked";
+        }
+        void openTerminalByIdRef.current(target.id).catch(() => undefined);
+        return "handled";
+      },
+    };
+  }
+  useLayoutEffect(() => {
+    onWorldCommandActionsReady(worldCommandActionsRef.current);
+    return () => onWorldCommandActionsReady(null);
+  }, [onWorldCommandActionsReady]);
 
   const dockFloatingInspector = async (
     conversation: WorldInspectorConversation,
@@ -1556,6 +1671,9 @@ function WorldControlPlane({
                     >
                       <PixelOfficeView
                         world={world}
+                        query={searchQuery}
+                        onQueryChange={onSearchQueryChange}
+                        showSearch={false}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         onSelect={selectNode}
@@ -1575,6 +1693,10 @@ function WorldControlPlane({
                     >
                       <ConnectedTreeView
                         world={world}
+                        runtime={runtime}
+                        query={searchQuery}
+                        onQueryChange={onSearchQueryChange}
+                        showSearch={false}
                         toolbarPortal={viewToolbarPortal}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
@@ -1591,6 +1713,10 @@ function WorldControlPlane({
                   ) : (
                     <SpatialGraphView
                       world={world}
+                      runtime={runtime}
+                      query={searchQuery}
+                      onQueryChange={onSearchQueryChange}
+                      showSearch={false}
                       toolbarPortal={viewToolbarPortal}
                       selectedId={selectedId}
                       conversationNodeIds={conversationNodeIds}
@@ -1807,14 +1933,6 @@ export function chooseWorldSelectedConnection({
   if (ids.has(defaultConnectionId)) return defaultConnectionId;
   if (ids.has(activeConnectionId)) return activeConnectionId;
   return null;
-}
-
-export function selectedHostStatusLabel(
-  host: Pick<WorldHostObject, "label" | "hostState"> | null,
-) {
-  return host
-    ? `${host.label} · ${hostStateLabel(host.hostState)}`
-    : "No host selected";
 }
 
 export function shouldCloseWorldInspector(node: WorldObjectNode | null) {

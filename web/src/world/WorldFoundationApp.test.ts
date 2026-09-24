@@ -11,7 +11,6 @@ import {
   hasValidSelectedConnection,
   moveDockedInspectorGeometry,
   parseWorldView,
-  selectedHostStatusLabel,
   retainWorldFloatingTerminals,
   shouldCloseWorldInspector,
   upsertWorldFloatingTerminal,
@@ -19,11 +18,12 @@ import {
   worldIntentViews,
   worldInspectorContext,
   worldNodeForWorkspaceSurfaceSelection,
+  worldFocusActionTarget,
   worldSelectionIsCurrent,
   worldSnapshotPriorityForNode,
   worldViewFromPath,
 } from "./WorldFoundationApp";
-import { buildWorldObject } from "./worldObject";
+import { buildWorldObject, type WorldObject } from "./worldObject";
 import {
   reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
@@ -58,6 +58,41 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("World view preference", () => {
+  test("resolves only selected-host visual terminal focus targets", () => {
+    const world = {
+      leaves: [
+        {
+          nativeId: "builder-pane",
+          tabId: "builder-tab",
+          selectedHost: true,
+          actionable: true,
+          focused: false,
+        },
+        {
+          nativeId: "reviewer-pane",
+          tabId: "reviewer-tab",
+          selectedHost: true,
+          actionable: true,
+          focused: true,
+        },
+        {
+          nativeId: "foreign-pane",
+          tabId: "foreign-tab",
+          selectedHost: false,
+          actionable: true,
+          focused: true,
+        },
+      ],
+    } as WorldObject;
+    expect(
+      worldFocusActionTarget(world, "focus-tab-reviewer-tab")?.nativeId,
+    ).toBe("reviewer-pane");
+    expect(
+      worldFocusActionTarget(world, "focus-agent-foreign-pane"),
+    ).toBeNull();
+    expect(worldFocusActionTarget(world, "focus-workspace-studio")).toBeNull();
+  });
+
   test("moves a docked Inspector without allowing it to leave the World stage", () => {
     const geometry = { left: 600, top: 40, width: 320, height: 420 };
     expect(
@@ -374,19 +409,6 @@ describe("World view preference", () => {
       false,
     );
     expect(hasValidSelectedConnection("startup-default", [])).toBe(false);
-  });
-
-  test("does not describe a reconnecting selected profile as active", () => {
-    expect(selectedHostStatusLabel(null)).toBe("No host selected");
-    expect(
-      selectedHostStatusLabel({
-        label: "Remote",
-        hostState: "reconnecting",
-      }),
-    ).toBe("Remote · Reconnecting");
-    expect(
-      selectedHostStatusLabel({ label: "Local", hostState: "active" }),
-    ).toBe("Local · Active");
   });
 
   test("retires the shared Inspector when selection moves to another host", () => {
