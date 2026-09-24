@@ -14,10 +14,11 @@ to fall through to Spaces.
 
 - Keep one command palette/search surface and the complete inherited model-action catalog in the
   top bar across Spaces, Office, Tree and Graph.
-- Add an explicit World action dispatcher only for actions that need a
-  generation-qualified visual target and a view-preserving presentation. Existing workspace,
-  tab, pane, file, worktree and dialog actions continue to execute through the shared model
-  callbacks from every projection.
+- Add an explicit World action dispatcher for actions that need a generation-qualified visual
+  target and a view-preserving presentation. Existing workspace, tab, pane and worktree actions
+  continue to execute through the shared model callbacks from every projection; visual file and
+  diff actions use the World Inspector conversation so they do not update an unrendered
+  Spaces-only Inspector.
 - Make terminal focus actions from Office, Tree and Graph resolve the selected host and current
   runtime generation, perform exact pane focus, and open or focus the existing shell-owned
   Inspector without changing the current view.
@@ -45,9 +46,10 @@ to fall through to Spaces.
 
 - OpenSpec delta validates strictly.
 - Unit tests cover action classification and exact World target resolution.
-- Mounted browser coverage opens the palette from a visual view, invokes `Focus tab`, and verifies
-  that the view remains active while the qualified Inspector/terminal target becomes visible and
-  focused; it also exercises a shared model action such as `Close pane` from that same palette.
+- Mounted browser coverage opens the palette from a visual view, invokes `Focus tab`, opens Files
+  and Changes resources, and verifies that the view remains active while qualified Inspector
+  targets become visible and focused; it also exercises a shared model action such as `Close pane`
+  from that same palette.
 - Failure coverage proves stale, foreign, missing, or rejected targets do not dispatch a Spaces
   focus and do not publish mismatched Inspector identity/resources.
 - Lint, typecheck, focused tests, and the complete repository check pass before the replacement PR

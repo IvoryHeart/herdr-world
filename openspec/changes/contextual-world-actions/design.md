@@ -1,10 +1,11 @@
 ## Context
 
 The existing `CommandCombobox` owns the inherited model action definitions and the World shell
-supplies selected-host `WorldObject` projections plus `openTerminalById`/Inspector lifecycle. The
-cleanup branch shares the query UI, but it must distinguish model actions from actions that need a
-visual target. Model actions are valid from every projection; terminal focus needs a view-aware
-dispatcher so it cannot attach a hidden Spaces terminal or change the current visual route.
+supplies selected-host `WorldObject` projections plus the visual Inspector lifecycle. The cleanup
+branch shares the query UI, but it must distinguish model actions from actions that need a visual
+target. Model mutations are valid from every projection; terminal focus and file/diff resource
+opening need a view-aware dispatcher so they cannot attach a hidden Spaces terminal, update an
+unrendered Spaces-only Inspector, or change the current visual route.
 
 ## Decisions
 
@@ -22,7 +23,9 @@ target-sensitive ownership boundary observable and testable.
 `WorldFoundationApp` holds a stable dispatcher ref and passes it to the shared shell. The mounted
 `WorldControlPlane` registers a handler for the current visual presenter. Registration is cleared
 on teardown and is gated by the active view, so a hidden visual presenter cannot intercept Spaces
-actions.
+actions. The handler admits terminal focus and workspace resource actions through the same
+generation-qualified World Inspector conversation; ordinary model actions fall through to their
+existing callbacks.
 
 ### Resolve targets from the selected, current-generation WorldObject
 
@@ -34,17 +37,17 @@ generation. Missing or stale targets return `false` so no hidden Spaces callback
 
 ### Reuse the existing Inspector admission path
 
-A handled terminal action calls the existing `openTerminalById` path. That path performs qualified
-focus through `focusWorldNode`, admits the entity only after focus succeeds, and applies the current
-Office/Tree/Graph Inspector presentation. The action does not change `view`, selected host, or
-terminal ownership. Rejected focus reports the existing World error and publishes no mismatched
-Inspector context.
+A handled terminal or resource action calls the existing `applySelection`/`openTerminalById` path.
+That path performs qualified focus through `focusWorldNode`, admits the entity only after focus
+succeeds, and applies the current Office/Tree/Graph Inspector presentation. The action does not
+change `view`, selected host, or terminal ownership. Rejected focus reports the existing World
+error and publishes no mismatched Inspector context.
 
 ### Preserve the complete model action catalog
 
-Visual routes expose the same model action catalog as Spaces. Workspace, tab, pane, file and
-worktree actions use the existing shared store and shell-owned dialogs, so they remain available
-and retain their existing endpoint/capability guards. Only terminal focus actions with a
+Visual routes expose the same model action catalog as Spaces. Workspace, tab, pane and worktree
+actions use the existing shared store and shell-owned dialogs, so they remain available and retain
+their existing endpoint/capability guards. Terminal focus and workspace file/diff actions with a
 generation-qualified World target are intercepted for view-preserving Inspector admission. No
 visual action is routed to the hidden Spaces terminal surface merely because its callback was
 defined in the inherited component.
@@ -57,5 +60,6 @@ defined in the inherited component.
 - A tab may have multiple panes. The focused-then-first resolution must be deterministic and remain
   bounded by the selected host snapshot.
 - Existing action keyboard shortcuts must use the same handled boundary as pointer selection.
-- The visual Inspector remains the only terminal presenter while a visual route is active; hidden
-  Spaces must not mount a second `TerminalView` for that terminal.
+- The visual Inspector remains the only terminal/resource presenter while a visual route is active;
+  hidden Spaces must not mount a second `TerminalView` or receive a resource action for that
+  visual target.

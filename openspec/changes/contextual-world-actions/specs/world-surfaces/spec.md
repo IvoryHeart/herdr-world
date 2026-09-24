@@ -6,9 +6,10 @@ The shared top-bar command palette SHALL use one query surface for World entity 
 complete model action catalog across Spaces, Office, Tree and Graph. The existing workspace, tab,
 pane, file, worktree and dialog actions SHALL remain available from every projection and SHALL
 continue to use their shared model callbacks and capability guards. A visual route SHALL add an
-explicit World dispatcher only for actions that require a generation-qualified visual target; no
-action SHALL be routed to the hidden Spaces terminal surface merely because the inherited callback
-is defined there.
+explicit World dispatcher for actions that require a generation-qualified visual target, including
+resource Inspectors whose presentation belongs to the active visual surface; no action SHALL be
+routed to the hidden Spaces terminal surface merely because the inherited callback is defined
+there.
 
 Every handled visual action SHALL preserve the current canonical World view and selected host. A
 terminal-focus action SHALL resolve its target from the selected-host `WorldObject`, exact-focus
@@ -28,7 +29,17 @@ content until focus succeeds, and stale, foreign, missing, or rejected targets S
 - **WHEN** a user searches for and selects `Close pane`, `Create tab`, file browsing, or a
   worktree action while Office, Tree, or Graph is active
 - **THEN** the existing confirmation, dialog, or shared model callback runs with the same
-  endpoint and capability guards as in Spaces, while the current visual view remains active
+  endpoint and capability guards as in Spaces, while the current visual view remains active; file
+  browsing and diff actions open the qualified World Inspector resource instead of updating an
+  unrendered Spaces-only Inspector
+
+#### Scenario: Open a workspace resource from a visual view
+
+- **WHEN** a user selects `Open file explorer` or `Open Diff Viewer` for the current workspace while
+  Office, Tree, or Graph is active
+- **THEN** World resolves the selected current-generation workspace, focuses it through the
+  qualified World path, and opens the Files or Changes resource in the existing visual Inspector
+  without changing the current view or selected host
 
 #### Scenario: Focus a tab from a visual view
 

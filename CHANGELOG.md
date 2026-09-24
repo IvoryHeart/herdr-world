@@ -89,6 +89,10 @@ retain their original Herdr Web lineage.
   generation-qualified World Inspector path.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93),
   [contextual action correction in PR #100](https://github.com/IvoryHeart/herdr-world/pull/100)
+- Routed visual file and diff Actions through the active World Inspector instead of the
+  unrendered Spaces Inspector state, and made browser-local Create tab acquire a qualified visual
+  terminal source before applying the existing endpoint capability guard.
+  [contextual action correction in PR #100](https://github.com/IvoryHeart/herdr-world/pull/100)
 
 ### Fixed
 

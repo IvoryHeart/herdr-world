@@ -69,6 +69,7 @@ type ActionDefinition = {
   keywords?: string[];
   danger?: boolean;
   disabledReason?: string | null;
+  dispatchWhenDisabled?: boolean;
   run: () => void;
 };
 
@@ -238,6 +239,7 @@ export function runCommandNumberShortcut<T>(
 
 export function CommandCombobox({
   operationalShortcutsEnabled = true,
+  allowDisabledActionDispatch = false,
   worldSearch,
   onSearchChange,
   onActionRun,
@@ -247,6 +249,7 @@ export function CommandCombobox({
   onOpenDiffViewer,
 }: {
   operationalShortcutsEnabled?: boolean;
+  allowDisabledActionDispatch?: boolean;
   worldSearch?: (query: string) => readonly CommandSearchResult[];
   onSearchChange?: (query: string) => void;
   onActionRun?: (key: string) => CommandActionResult | void;
@@ -396,7 +399,12 @@ export function CommandCombobox({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [onSearchChange, operationalShortcutsEnabled]);
 
-  const run = (fn: () => void, actionKey?: string) => {
+  const run = (
+    fn: () => void,
+    actionKey?: string,
+    disabledReason?: string | null,
+    dispatchWhenDisabled = false,
+  ) => {
     setOpen(false);
     setSearch("");
     onSearchChange?.("");
@@ -405,6 +413,11 @@ export function CommandCombobox({
       const result = onActionRun?.(actionKey);
       if (result === "handled" || result === "blocked") return;
     }
+    if (
+      disabledReason &&
+      (!dispatchWhenDisabled || !allowDisabledActionDispatch)
+    )
+      return;
     fn();
   };
 
@@ -583,6 +596,7 @@ export function CommandCombobox({
         "tab.create",
         focusedWorkspace.workspace_id,
       ),
+      dispatchWhenDisabled: true,
       run: () => store.createTab(focusedWorkspace.workspace_id),
     });
   }
@@ -763,6 +777,7 @@ export function CommandCombobox({
         "tab.create",
         focusedWorkspace.workspace_id,
       ),
+      dispatchWhenDisabled: true,
       run: () => store.createTab(focusedWorkspace.workspace_id),
     });
     for (const workspace of otherWorkspaces) {
@@ -777,6 +792,7 @@ export function CommandCombobox({
           "tab.create",
           workspace.workspace_id,
         ),
+        dispatchWhenDisabled: true,
         run: () => store.createTab(workspace.workspace_id),
       });
     }
@@ -1080,7 +1096,17 @@ export function CommandCombobox({
             runCommandNumberShortcut(
               event,
               numberedActions,
-              (action) => !action.disabledReason && run(action.run, action.key),
+              (action) =>
+                (!action.disabledReason ||
+                  (action.dispatchWhenDisabled &&
+                    allowDisabledActionDispatch &&
+                    onActionRun)) &&
+                run(
+                  action.run,
+                  action.key,
+                  action.disabledReason,
+                  action.dispatchWhenDisabled,
+                ),
             );
           }}
         >
@@ -1118,13 +1144,27 @@ export function CommandCombobox({
                       )}
                       keywords={action.keywords}
                       danger={action.danger}
-                      disabledReason={action.disabledReason}
+                      disabledReason={
+                        action.dispatchWhenDisabled &&
+                        allowDisabledActionDispatch &&
+                        onActionRun
+                          ? null
+                          : action.disabledReason
+                      }
                       onSelect={() => {
                         if (
                           operationalShortcutsEnabled &&
-                          !action.disabledReason
+                          (!action.disabledReason ||
+                            (action.dispatchWhenDisabled &&
+                              allowDisabledActionDispatch &&
+                              onActionRun))
                         )
-                          run(action.run, action.key);
+                          run(
+                            action.run,
+                            action.key,
+                            action.disabledReason,
+                            action.dispatchWhenDisabled,
+                          );
                       }}
                     />
                   ))}

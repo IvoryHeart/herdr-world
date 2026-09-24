@@ -20,12 +20,14 @@
   selected host, or terminal ownership.
 - [x] 3.4 Preserve shared model-action fallthrough and fail closed only for stale, foreign, missing,
   or rejected visual focus targets.
+- [x] 3.5 Route visual file and diff actions through the generation-qualified World Inspector
+  conversation instead of the unrendered Spaces Inspector state.
 
 ## 4. Verification and delivery
 
 - [x] 4.1 Add unit coverage for shared action handling, target resolution, and fail-closed behavior.
-- [x] 4.2 Extend mounted browser coverage for visual action parity and a view-preserving terminal
-  focus handoff.
+- [x] 4.2 Extend mounted browser coverage for visual action parity, resource Inspector opening, and
+  a view-preserving terminal focus handoff.
 - [x] 4.3 Run formatting, lint, typecheck, focused tests, `npm run spec:check`, and the complete
   repository check.
 - [ ] 4.4 Update the changelog/PR description with the contextual action contract and deliver the

@@ -1184,6 +1184,7 @@ export type WorkspaceSurfaceInspectorControl = {
 export default function App({
   operationalShortcutsEnabled = true,
   commandMenuEnabled = operationalShortcutsEnabled,
+  commandActionCanHandleDisabled = false,
   worldSearch,
   onCommandSearchChange,
   onCommandAction,
@@ -1203,6 +1204,7 @@ export default function App({
 }: {
   operationalShortcutsEnabled?: boolean;
   commandMenuEnabled?: boolean;
+  commandActionCanHandleDisabled?: boolean;
   worldSearch?: (query: string) => readonly CommandSearchResult[];
   onCommandSearchChange?: (query: string) => void;
   onCommandAction?: (key: string) => CommandActionResult | void;
@@ -3591,6 +3593,7 @@ export default function App({
           <CommandCombobox
             key={`${resourceUiKey}:commands`}
             operationalShortcutsEnabled={commandMenuEnabled}
+            allowDisabledActionDispatch={commandActionCanHandleDisabled}
             worldSearch={worldSearch}
             onSearchChange={onCommandSearchChange}
             onActionRun={onCommandAction}

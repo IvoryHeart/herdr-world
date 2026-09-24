@@ -17,7 +17,12 @@ import type {
 import type { ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { lazyWithReload } from "../lazyWithReload";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  endpointCreationReason,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
 import {
   type InspectorView,
   readInspectorPreferences,
@@ -492,6 +497,7 @@ export default function WorldFoundationApp() {
         <App
           operationalShortcutsEnabled={view === "spaces"}
           commandMenuEnabled
+          commandActionCanHandleDisabled={view !== "spaces"}
           worldSearch={worldSearch}
           onCommandSearchChange={setWorldSearchQuery}
           onCommandAction={handleCommandAction}
@@ -738,6 +744,8 @@ function WorldControlPlane({
   const commandActionActiveRef = useRef(active);
   commandActionActiveRef.current = active;
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
+  const commandActionSelectionRef = useRef<WorldObjectNode | null>(null);
+  commandActionSelectionRef.current = selection;
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
@@ -1184,6 +1192,8 @@ function WorldControlPlane({
     }
     return true;
   };
+  const applySelectionRef = useRef(applySelection);
+  applySelectionRef.current = applySelection;
   const selectNode = (id: string) => {
     const node = world.nodeById.get(id);
     if (
@@ -1453,6 +1463,146 @@ function WorldControlPlane({
     worldCommandActionsRef.current = {
       run: (actionKey) => {
         if (!commandActionActiveRef.current) return "blocked";
+        const requestedView =
+          actionKey === "current-file-explorer"
+            ? ("files" as const)
+            : actionKey === "current-diff-viewer"
+              ? ("changes" as const)
+              : null;
+        if (requestedView) {
+          const snapshot = store.get();
+          const selected = commandActionSelectionRef.current;
+          const selectedWorkspaceId =
+            selected && selected.kind !== "host"
+              ? selected.kind === "space"
+                ? selected.nativeId
+                : selected.workspaceId
+              : null;
+          const focusedWorkspaceId = snapshot.workspaces.find(
+            (workspace) => workspace.focused,
+          )?.workspace_id;
+          const workspaceId = selectedWorkspaceId ?? focusedWorkspaceId;
+          const target = commandActionWorldRef.current.spaces.find(
+            (space) =>
+              space.nativeId === workspaceId &&
+              space.selectedHost &&
+              space.actionable,
+          );
+          if (!target) {
+            setIntentError("This workspace is no longer available");
+            return "blocked";
+          }
+          void applySelectionRef
+            .current(target.id, requestedView)
+            .then((opened) => {
+              if (!opened) {
+                setIntentError("This workspace resource could not be opened");
+              }
+            });
+          return "handled";
+        }
+        const isCreateTabAction =
+          actionKey === "current-create-tab" ||
+          actionKey === "create-tab" ||
+          actionKey.startsWith("create-tab-");
+        const createTabWorkspaceId = (() => {
+          if (!isCreateTabAction) return null;
+          const snapshot = store.get();
+          if (
+            actionKey === "current-create-tab" ||
+            actionKey === "create-tab"
+          ) {
+            const selected = commandActionSelectionRef.current;
+            const selectedWorkspaceId =
+              selected && selected.kind !== "host"
+                ? selected.kind === "space"
+                  ? selected.nativeId
+                  : selected.workspaceId
+                : null;
+            return (
+              selectedWorkspaceId ??
+              snapshot.workspaces.find((workspace) => workspace.focused)
+                ?.workspace_id ??
+              null
+            );
+          }
+          return (
+            commandActionWorldRef.current.spaces.find(
+              (space) => actionKey === `create-tab-${space.nativeId}`,
+            )?.nativeId ?? null
+          );
+        })();
+        if (isCreateTabAction) {
+          if (!createTabWorkspaceId) {
+            setIntentError("This workspace is no longer available");
+            return "blocked";
+          }
+          const createTab = async () => {
+            const snapshot = store.get();
+            const reason = endpointCreationReason(
+              snapshot,
+              "tab.create",
+              createTabWorkspaceId,
+            );
+            if (!reason) {
+              await store.createTab(createTabWorkspaceId);
+              return;
+            }
+            const space = commandActionWorldRef.current.spaces.find(
+              (candidate) =>
+                candidate.nativeId === createTabWorkspaceId &&
+                candidate.selectedHost &&
+                candidate.actionable,
+            );
+            const selected = commandActionSelectionRef.current;
+            const selectedLeaf =
+              selected &&
+              selected.kind !== "host" &&
+              selected.kind !== "space" &&
+              selected.workspaceId === createTabWorkspaceId
+                ? selected
+                : null;
+            const source =
+              selectedLeaf ??
+              space?.children.find((leaf) => leaf.focused) ??
+              space?.children[0] ??
+              null;
+            if (!source) {
+              setIntentError(
+                "Open a terminal in this workspace before creating a tab",
+              );
+              return;
+            }
+            const opened = await applySelectionRef.current(
+              source.id,
+              "terminal",
+            );
+            if (!opened) {
+              setIntentError("This workspace terminal could not be opened");
+              return;
+            }
+            let remainingReason: string | null = reason;
+            for (let attempt = 0; attempt < 100; attempt += 1) {
+              remainingReason = endpointCreationReason(
+                store.get(),
+                "tab.create",
+                createTabWorkspaceId,
+              );
+              if (!remainingReason) {
+                await store.createTab(createTabWorkspaceId);
+                return;
+              }
+              await new Promise((resolve) => window.setTimeout(resolve, 50));
+            }
+            setIntentError(remainingReason ?? "Tab creation is unavailable");
+          };
+          void createTab().catch((cause) => {
+            setIntentError(
+              cause instanceof Error ? cause.message : String(cause),
+            );
+          });
+          return "handled";
+        }
         if (
           !actionKey.startsWith("focus-tab-") &&
           !actionKey.startsWith("focus-agent-")

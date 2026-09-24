@@ -373,7 +373,12 @@ const client: ConnectionClient = {
           bytes: btoa(`${terminalId}\r\n`),
         });
       }
-      return {};
+      return {
+        endpoint: {
+          methods: ["pane.focus", "tab.create"],
+          capabilities: [],
+        },
+      };
     }
     return {};
   },
@@ -2531,6 +2536,137 @@ async function run() {
     () => !document.querySelector('[role="dialog"][aria-label="Close Pane"]'),
     "visual World action close-pane confirmation cancellation",
   );
+
+  const visualFileListCallsBefore = calls.filter(
+    ({ method }) => method === "file.list",
+  ).length;
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual file action palette",
+  );
+  const visualFileActionSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(visualFileActionSearch, "open file explorer");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Open file explorer",
+      ),
+    "World visual file action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent ===
+        "Open file explorer",
+    )
+    ?.click();
+  await until(
+    () =>
+      document.querySelector(
+        ".world-context-rail .workspace-inspector[data-view=files]",
+      ) !== null,
+    "World visual file action opened the World Inspector",
+  );
+  check(
+    calls.filter(({ method }) => method === "file.list").length >
+      visualFileListCallsBefore,
+    "visual file action did not load the selected workspace",
+  );
+
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual diff action palette",
+  );
+  const visualDiffActionSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(visualDiffActionSearch, "open diff viewer");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Open Diff Viewer",
+      ),
+    "World visual diff action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent ===
+        "Open Diff Viewer",
+    )
+    ?.click();
+  await until(
+    () =>
+      document.querySelector(
+        ".world-context-rail .workspace-inspector[data-view=changes]",
+      ) !== null,
+    "World visual diff action opened the World Inspector",
+  );
+  check(
+    document.querySelector(
+      ".world-context-rail .workspace-inspector .diff-viewer-side",
+    ) !== null,
+    "visual diff action did not render the selected workspace changes",
+  );
+
+  const browserLocalState = store.get();
+  __storeTesting.replaceState({
+    ...browserLocalState,
+    navigationMode: "browser-local",
+    endpointAvailability: {},
+    browserNavigation: {
+      ...browserLocalState.browserNavigation,
+      revision: browserLocalState.browserNavigation.revision + 1,
+      workspaceId: workspaceBase.workspace_id,
+      tabIds: {
+        ...browserLocalState.browserNavigation.tabIds,
+        [workspaceBase.workspace_id]: "work",
+      },
+      paneIds: {
+        ...browserLocalState.browserNavigation.paneIds,
+        work: "builder-pane",
+      },
+    },
+  });
+  const tabCreateCallsBefore = calls.filter(
+    ({ method }) => method === "tab.create",
+  ).length;
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual create-tab action palette",
+  );
+  const visualCreateTabSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(visualCreateTabSearch, "create tab");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Create tab",
+      ),
+    "World visual create-tab action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent === "Create tab",
+    )
+    ?.click();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "tab.create").length >
+      tabCreateCallsBefore,
+    "World visual create-tab action dispatch",
+  );
+
   document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
 
   runtimeGeneration += 1;
