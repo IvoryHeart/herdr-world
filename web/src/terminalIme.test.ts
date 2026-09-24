@@ -7,6 +7,7 @@ import {
   TerminalImeFallbackTracker,
   TerminalImeKeyEventTracker,
   TerminalImeTextareaFallbackTracker,
+  terminalMobileTextareaEdit,
   terminalImeTextareaDelta,
 } from "./terminalIme";
 
@@ -240,6 +241,26 @@ describe("terminal IME textarea fallback", () => {
     expect(tracker.flush("中文输入", true)).toEqual({
       status: "unhandled",
     });
+  });
+});
+
+describe("mobile terminal textarea reconciliation", () => {
+  test("rewrites only the changed tail after an Android autocorrection", () => {
+    expect(
+      terminalMobileTextareaEdit(
+        "okay, lets pull teh latest from main",
+        "okay, lets pull the latest from main",
+      ),
+    ).toBe("\x7f".repeat(19) + "he latest from main");
+  });
+
+  test("preserves appends and sends every removed grapheme as DEL", () => {
+    expect(terminalMobileTextareaEdit("hello", "hello world")).toBe(" world");
+    expect(terminalMobileTextareaEdit("hello world", "hello")).toBe(
+      "\x7f".repeat(6),
+    );
+    expect(terminalMobileTextareaEdit("A😀é", "A")).toBe("\x7f".repeat(2));
+    expect(terminalMobileTextareaEdit("same", "same")).toBeNull();
   });
 });
 

@@ -175,6 +175,7 @@ test.skipIf(!chrome).each([390, 320])(
       await run("readingWheel");
       await tap('button[aria-label="Open device keyboard"]');
       await run("typing");
+      await run("androidCorrections");
       await cdp("Input.dispatchMouseEvent", {
         type: "mouseWheel",
         deltaX: 0,

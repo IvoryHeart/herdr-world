@@ -107,6 +107,7 @@ import {
   terminalImeEventTime,
   terminalImeFallbackText,
   terminalImeTextareaDelta,
+  terminalMobileTextareaEdit,
 } from "../terminalIme";
 import { terminalShortcutSequence } from "../terminalKeys";
 import { TerminalHistorySelection } from "../terminalHistorySelection";
@@ -893,6 +894,7 @@ export function TerminalView({
     let terminalCompositionActive = false;
     let compositionSettleTimer: number | null = null;
     let compositionStartTextareaValue = "";
+    let mobileTextareaBaseline: string | null = null;
     let nativePasteFallbackTimer: number | null = null;
     let pasteTextareaClearTimer: number | null = null;
     let pasteTextareaBeforeInput: TerminalPasteTextareaSnapshot | null = null;
@@ -1203,6 +1205,9 @@ export function TerminalView({
       imeTextareaFallback.cancel();
       imeCommitGuard.completeRecoveryCycle();
     };
+    const cancelMobileTextareaReconciliation = () => {
+      mobileTextareaBaseline = null;
+    };
     const cancelCompositionSettle = () => {
       if (compositionSettleTimer === null) return;
       window.clearTimeout(compositionSettleTimer);
@@ -1299,6 +1304,8 @@ export function TerminalView({
     };
     const applePlatform = isApplePlatform();
     const appleTouchPlatform = applePlatform && navigator.maxTouchPoints > 0;
+    const mobileTextareaReconciliation =
+      !applePlatform && shouldAvoidVirtualKeyboard();
     const shouldRecoverCommittedImeInput = (input: InputEvent) =>
       applePlatform &&
       !terminalCompositionActive &&
@@ -1315,6 +1322,20 @@ export function TerminalView({
       if (e.type === "keydown") {
         imeCommitGuard.beginIndependentInput();
         if (applePlatform) imeKeyEvent.begin();
+        if (
+          mobileTextareaReconciliation &&
+          e.keyCode === 229 &&
+          !terminalCompositionActive
+        ) {
+          imeKeyEvent.begin();
+          const snapshot = readTerminalTextareaSnapshot();
+          mobileTextareaBaseline ??= snapshot.value;
+          lastTerminalTextareaSnapshot = snapshot;
+          // Own this Android-style mutation instead of allowing xterm's
+          // keyCode-229 timer to resend the complete helper textarea.
+          return false;
+        }
+        cancelMobileTextareaReconciliation();
       }
       if (e.type === "keydown" && e.keyCode !== 229) {
         imeTextareaFallback.cancelPending();
@@ -1438,6 +1459,7 @@ export function TerminalView({
       pastePaneIdBeforeInput = null;
       lastTerminalTextareaSnapshot = readTerminalTextareaSnapshot();
       compositionStartTextareaValue = lastTerminalTextareaSnapshot.value;
+      cancelMobileTextareaReconciliation();
       cancelImeTextareaFallback();
     };
     const onTerminalCompositionEnd = () => {
@@ -1472,6 +1494,7 @@ export function TerminalView({
       pasteTextareaBeforeInput = null;
       pastePaneIdBeforeInput = null;
       lastTerminalTextareaSnapshot = readTerminalTextareaSnapshot();
+      cancelMobileTextareaReconciliation();
       cancelImeTextareaFallback();
     };
     const onTerminalBeforeInput = (e: Event) => {
@@ -1514,6 +1537,7 @@ export function TerminalView({
       // relying on the bridge round trip before the next key is processed.
       input.preventDefault();
       input.stopPropagation();
+      cancelMobileTextareaReconciliation();
       sendMissingImeText(fallbackText, eventAt, observedAt);
     };
     const handleTerminalTextInput = (e: Event) => {
@@ -1537,6 +1561,7 @@ export function TerminalView({
         cancelImeTextareaFallback();
         pasteTextareaBeforeInput = null;
         pastePaneIdBeforeInput = null;
+        cancelMobileTextareaReconciliation();
         const textarea = term.textarea;
         if (textarea) {
           // Restore xterm's keydown baseline until its queued 229 timer runs.
@@ -1573,6 +1598,7 @@ export function TerminalView({
 
       lastTerminalTextareaSnapshot = textareaSnapshot;
       if (input.inputType === "insertFromPaste") {
+        cancelMobileTextareaReconciliation();
         input.stopPropagation();
         if (nativePasteFallbackTimer === null) {
           pasteTextareaBeforeInput = null;
@@ -1584,6 +1610,27 @@ export function TerminalView({
       cancelPasteTextareaClear();
       pasteTextareaBeforeInput = null;
       pastePaneIdBeforeInput = null;
+
+      if (
+        mobileTextareaReconciliation &&
+        mobileTextareaBaseline !== null &&
+        !terminalCompositionActive
+      ) {
+        const before = mobileTextareaBaseline;
+        cancelMobileTextareaReconciliation();
+        // A non-composed InputEvent can make xterm emit input.data before this
+        // listener runs. Reconcile from that already-sent state so the same
+        // characters are not submitted twice.
+        const sentState =
+          xtermHandledCurrentInput && input.data ? before + input.data : before;
+        const edit = terminalMobileTextareaEdit(
+          sentState,
+          textareaSnapshot.value,
+        );
+        if (edit) sendText(edit);
+        input.stopImmediatePropagation();
+        return;
+      }
 
       if (xtermHandledCurrentInput) {
         // Safari still mutates the helper textarea after xterm handles some

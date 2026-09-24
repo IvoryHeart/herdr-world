@@ -5,6 +5,10 @@ const RECENT_OUTPUT_MAX_AGE_MS = 80;
 const PENDING_XTERM_OUTPUT_MAX_AGE_MS = 24;
 const COMMIT_CAPTURE_WINDOW_MS = 50;
 const COMMIT_DUPLICATE_WINDOW_MS = 300;
+const GRAPHEME_SEGMENTER =
+  typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
+    : null;
 
 type ImeInputEvent = Pick<InputEvent, "data" | "inputType" | "isComposing">;
 
@@ -99,6 +103,39 @@ export function terminalImeTextareaDelta(
 ): string | null {
   if (after === before || !after.startsWith(before)) return null;
   return after.slice(before.length) || null;
+}
+
+function terminalGraphemes(text: string): string[] {
+  if (!GRAPHEME_SEGMENTER) return Array.from(text);
+  return Array.from(GRAPHEME_SEGMENTER.segment(text), ({ segment }) => segment);
+}
+
+/**
+ * Converts an Android-style replacement of xterm's helper textarea into the
+ * terminal edits needed to produce the same value. Mobile keyboards commonly
+ * replace an earlier word while leaving the terminal cursor at the end. The
+ * pinned xterm fallback resends the whole textarea when that happens; rewrite
+ * only the changed tail instead so accumulated prompt text is never repeated.
+ */
+export function terminalMobileTextareaEdit(
+  before: string,
+  after: string,
+): string | null {
+  if (before === after) return null;
+  const beforeGraphemes = terminalGraphemes(before);
+  const afterGraphemes = terminalGraphemes(after);
+  let commonPrefixLength = 0;
+  while (
+    commonPrefixLength < beforeGraphemes.length &&
+    commonPrefixLength < afterGraphemes.length &&
+    beforeGraphemes[commonPrefixLength] === afterGraphemes[commonPrefixLength]
+  ) {
+    commonPrefixLength += 1;
+  }
+  return (
+    "\x7f".repeat(beforeGraphemes.length - commonPrefixLength) +
+    afterGraphemes.slice(commonPrefixLength).join("")
+  );
 }
 
 /**
