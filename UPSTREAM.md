@@ -7,7 +7,7 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 Current synchronization points:
 
 - Roamgate: `c07db60b06b1b23a34ed143d47011a6b8330379a` (v0.7.9, synchronized/replayed
-  before the World rebrand and visual projection)
+  from the v0.7.9 source before the World rebrand and visual projection)
 - Herdr compatibility: Herdr 0.9.0, terminal protocol 22
 
 Git history is the detailed source record. Future Roamgate refreshes are explicit merge
