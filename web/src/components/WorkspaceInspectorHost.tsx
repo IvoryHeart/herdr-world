@@ -42,6 +42,7 @@ import {
   readInspectorPreferences,
   resourceOwnerKey,
   resourceStateKey,
+  workspaceResourceCandidates,
   writeInspectorNavigationRatio,
   type InspectorDock,
   type InspectorSplitView,
@@ -87,6 +88,15 @@ function checkoutLabel(workspace?: Workspace) {
     workspace.label ||
     workspace.workspace_id
   );
+}
+
+function workspaceSelectorLabel(workspace: Workspace) {
+  const checkout = checkoutLabel(workspace);
+  const path = workspace.worktree?.checkout_path ?? workspace.cwd;
+  const kind = workspace.worktree?.is_linked_worktree
+    ? "linked worktree"
+    : "workspace";
+  return `${checkout} · ${kind}${path ? ` — ${path}` : ""}`;
 }
 
 const INSPECTOR_RESOURCE_HORIZONTAL_PADDING = 16;
@@ -203,6 +213,7 @@ export function WorkspaceInspectorHost({
   onReady,
   visible,
   workspace,
+  workspaces = [],
   historyPane,
   fileSelection,
   previewRequestRef,
@@ -226,6 +237,7 @@ export function WorkspaceInspectorHost({
   windowMovable = false,
   terminalDetached = false,
   onViewChange,
+  onWorkspaceChange,
   onDockChange,
   onExpandedChange,
   onClose,
@@ -236,6 +248,7 @@ export function WorkspaceInspectorHost({
   onReady?: () => void;
   visible: boolean;
   workspace?: Workspace;
+  workspaces?: Workspace[];
   historyPane?: Pane;
   fileSelection: ActiveFilePreviewSelection;
   previewRequestRef: React.MutableRefObject<number>;
@@ -265,6 +278,7 @@ export function WorkspaceInspectorHost({
   ) => void;
   onEditAnnotation: (id: string) => void;
   onViewChange: (view: InspectorView) => void;
+  onWorkspaceChange?: (workspaceId: string) => void;
   onDockChange: (dock: InspectorDock) => void;
   onExpandedChange: (expanded: boolean) => void;
   onClose: () => void;
@@ -296,6 +310,11 @@ export function WorkspaceInspectorHost({
   }));
   const resourceKey = resourceOwnerKey(state.scope);
   const contentResourceKey = resourceStateKey(state.scope);
+  const workspaceCandidates = workspaceResourceCandidates(
+    state.scope.connectionId,
+    workspaces,
+    workspace?.workspace_id,
+  );
   const fileDiffEntries =
     fileDiffState.resourceKey === contentResourceKey
       ? fileDiffState.entries
@@ -477,6 +496,10 @@ export function WorkspaceInspectorHost({
             : windowMovable
               ? "is-window-drag-handle is-docked-window-drag-handle"
               : ""
+        } ${
+          workspaceCandidates.length > 1 && onWorkspaceChange
+            ? "has-target-picker"
+            : ""
         }`}
         tabIndex={controlMode === "floating" || windowMovable ? 0 : undefined}
         aria-label={
@@ -553,6 +576,25 @@ export function WorkspaceInspectorHost({
             ) : null}
           </div>
         )}
+        {workspaceCandidates.length > 1 && onWorkspaceChange ? (
+          <label className="workspace-inspector-target-picker">
+            <span>Inspect</span>
+            <select
+              aria-label="Inspect checkout"
+              value={workspace?.workspace_id ?? ""}
+              onChange={(event) => onWorkspaceChange(event.target.value)}
+            >
+              {workspaceCandidates.map((candidate) => (
+                <option
+                  key={candidate.workspace_id}
+                  value={candidate.workspace_id}
+                >
+                  {workspaceSelectorLabel(candidate)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div className="workspace-inspector-tabs" role="tablist">
           {terminalAvailable ? (
             <button

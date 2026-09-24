@@ -277,6 +277,14 @@ export default function WorldInspectorConversationView({
       ),
     );
   };
+  const selectWorkspace = (workspaceId: string) => {
+    if (
+      !workspaces.some((candidate) => candidate.workspace_id === workspaceId)
+    ) {
+      return;
+    }
+    onChange({ workspaceId, paneId: undefined });
+  };
   const createAnnotation = (input: NewReviewAnnotation) => {
     if (!connectionClient.isCurrent()) return;
     const annotation = createReviewAnnotation(input);
@@ -300,6 +308,7 @@ export default function WorldInspectorConversationView({
             state={inspectorState}
             visible
             workspace={workspace}
+            workspaces={workspaces}
             historyPane={historyPane}
             fileSelection={fileSelection}
             previewRequestRef={previewRequestRef}
@@ -338,6 +347,7 @@ export default function WorldInspectorConversationView({
             }}
             onTerminalPortalChange={setTerminalPortal}
             onViewChange={changeView}
+            onWorkspaceChange={selectWorkspace}
             onDockChange={changeDock}
             onExpandedChange={changeExpanded}
             onDockOut={floating ? undefined : onDockOut}

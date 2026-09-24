@@ -135,6 +135,8 @@ export interface WorkspaceInspectorState {
   scope: ResourceScope;
   open: boolean;
   view: InspectorView;
+  /** Normal opens follow terminal focus; an explicit resource selection pins it. */
+  followFocusedWorkspace?: boolean;
   availableViews?: InspectorView[];
   dock: InspectorDock;
   size: number;
@@ -244,6 +246,52 @@ export function resolveWorkspaceForScope(
   return workspaces.find(
     (workspace) => checkoutKeyForWorkspace(workspace) === scope.checkoutKey,
   );
+}
+
+/**
+ * Return one open workspace for each resource owner, keeping a preferred
+ * workspace first when several agents share a checkout.
+ *
+ * Files and Changes are checkout-scoped, so showing duplicate workspace rows
+ * for the same checkout would suggest that they have different content.
+ */
+export function workspaceResourceCandidates(
+  connectionId: string,
+  workspaces: Workspace[],
+  preferredWorkspaceId?: string,
+): Workspace[] {
+  const ordered = preferredWorkspaceId
+    ? [
+        ...workspaces.filter(
+          (workspace) => workspace.workspace_id === preferredWorkspaceId,
+        ),
+        ...workspaces.filter(
+          (workspace) => workspace.workspace_id !== preferredWorkspaceId,
+        ),
+      ]
+    : workspaces;
+  const owners = new Set<string>();
+  return ordered.filter((workspace) => {
+    const owner = resourceOwnerKey(
+      resourceScopeForWorkspace(connectionId, workspace),
+    );
+    if (owners.has(owner)) return false;
+    owners.add(owner);
+    return true;
+  });
+}
+
+export function pinInspectorResource(
+  state: WorkspaceInspectorState,
+  scope: ResourceScope,
+): WorkspaceInspectorState {
+  return {
+    ...state,
+    scope,
+    followFocusedWorkspace: false,
+    originPaneId: undefined,
+    initialDirectory: undefined,
+  };
 }
 
 export function relativePathWithinCheckout(

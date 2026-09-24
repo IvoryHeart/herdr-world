@@ -107,14 +107,16 @@ macOS preset; see [other platform bindings](#keyboard-shortcuts).
 
 Open Files, Changes, or Agent History with the TabBar Inspector button,
 `Cmd+Shift+B` on macOS, or workspace/agent context menus. The header identifies repository,
-branch/worktree, and checkout path. Inspector and Annotations leave the primary
-sidebar's visibility unchanged.
+branch/worktree, and checkout path. When multiple checkouts are open, **Inspect** lists
+each checkout once so Files and Changes can be retargeted without changing terminal focus.
+Inspector and Annotations leave the primary sidebar's visibility unchanged.
 
 - Dock right/bottom, resize, or expand without unmounting the terminal. Header
   controls restore/close; Esc dismisses transient UI, not the Inspector.
 - Tab switches keep it open. Workspace switches restore the target checkout's
-  view, selection, and layout. Closing returns to the originating tab if it
-  exists, otherwise the active tab.
+  view, selection, and layout. An explicit **Inspect** selection stays pinned to
+  that checkout while terminal focus changes. Closing returns to the originating
+  tab if it exists, otherwise the active tab.
 - Wide layouts show navigation beside content; narrow layouts drill into files
   with overlay/full-screen views. Resize the separator by dragging or
   Left/Right/Home/End; double-click resets it. Files and Changes save separate

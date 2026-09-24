@@ -248,12 +248,14 @@ state starts fresh. Switching checkouts restores that checkout's saved selection
 or shows its file list when nothing has been selected.
 
 Inspector actions capture the originating workspace instead of consulting global
-focus when results arrive. A vanished workspace can rebind only to the same
-checkout; a missing path must not fall back to a sibling worktree. Agent cwd is
-used only inside the checkout, otherwise browsing starts at its root. Successful
-worktree removal clears that checkout's state and retargets/closes the Inspector
-without affecting siblings. Closing one workspace does not erase resources still
-used by another workspace for that checkout.
+focus when results arrive. The Inspector checkout selector offers one open
+workspace per checkout and pins Files/Changes to an explicit selection without
+focusing its terminal. A vanished workspace can rebind only to the same checkout;
+a missing path must not fall back to a sibling worktree. Agent cwd is used only
+inside the checkout, otherwise browsing starts at its root. Successful worktree
+removal clears that checkout's state and retargets/closes the Inspector without
+affecting siblings. Closing one workspace does not erase resources still used by
+another workspace for that checkout.
 
 The terminal stays mounted across Inspector views and geometry changes. Resource
 layout/preferences are separate from content caches. See

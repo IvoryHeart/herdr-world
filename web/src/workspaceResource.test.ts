@@ -14,6 +14,7 @@ import {
   isWorkspaceInspectorShortcut as resolveShortcut,
   INSPECTOR_SEPARATOR_SIZE,
   normalizeInspectorViews,
+  pinInspectorResource,
   readInspectorPreferences,
   readResourceFileSelection,
   relativePathWithinCheckout,
@@ -22,6 +23,7 @@ import {
   resourceStateKey,
   resolveWorkspaceForScope,
   sameResourceOwner,
+  workspaceResourceCandidates,
   writeInspectorNavigationRatio,
   writeInspectorPreferences,
   writeResourceFileSelection,
@@ -140,6 +142,50 @@ describe("workspace inspector geometry", () => {
 });
 
 describe("workspace resource scope", () => {
+  test("pins the Inspector to a selected resource without retaining pane routing", () => {
+    const current: WorkspaceInspectorState = {
+      scope: resourceScopeForWorkspace("local", workspace("main", "/repo")),
+      open: true,
+      view: "changes",
+      followFocusedWorkspace: true,
+      dock: "right",
+      size: 420,
+      expanded: false,
+      originPaneId: "pane-main",
+      initialDirectory: "src",
+    };
+    const pinned = pinInspectorResource(
+      current,
+      resourceScopeForWorkspace(
+        "local",
+        workspace("agent", "/repo/.worktrees/agent"),
+      ),
+    );
+
+    expect(pinned).toMatchObject({
+      followFocusedWorkspace: false,
+      originPaneId: undefined,
+      initialDirectory: undefined,
+      scope: {
+        workspaceId: "agent",
+      },
+    });
+    expect(pinned.view).toBe("changes");
+  });
+
+  test("offers one selector target per checkout and keeps the selected target first", () => {
+    const main = workspace("main", "/repo");
+    const agent = workspace("agent", "/repo/.worktrees/agent");
+    const duplicate = workspace("duplicate", "/repo/.worktrees/agent");
+
+    expect(
+      workspaceResourceCandidates("local", [main, agent, duplicate], "agent"),
+    ).toEqual([agent, main]);
+    expect(
+      workspaceResourceCandidates("local", [main, agent, duplicate]),
+    ).toEqual([main, agent]);
+  });
+
   test("isolates main and sibling worktrees even with the same repository settings key", () => {
     const storage = memoryStorage();
     const main = resourceScopeForWorkspace("local", workspace("main", "/repo"));

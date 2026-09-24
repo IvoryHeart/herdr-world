@@ -15,7 +15,7 @@
 .workspace-inspector-head {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) auto auto;
+  grid-template-columns: minmax(120px, 1fr) auto auto auto;
   align-items: center;
   gap: 8px;
   min-height: 58px;
@@ -64,6 +64,33 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.workspace-inspector-target-picker {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.workspace-inspector-target-picker select {
+  min-width: 0;
+  max-width: min(34vw, 360px);
+  height: 28px;
+  padding: 0 24px 0 7px;
+  border: 1px solid var(--viewer-border);
+  border-radius: 6px;
+  background: var(--viewer-content-bg);
+  color: var(--text-strong);
+  font: inherit;
+}
+
+.workspace-inspector-target-picker select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .workspace-inspector-repo {
@@ -341,6 +368,17 @@
   grid-column: 1;
 }
 
+.workspace-inspector.is-compact .workspace-inspector-target-picker {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-content: space-between;
+}
+
+.workspace-inspector.is-compact .workspace-inspector-target-picker select {
+  flex: 1 1 auto;
+  max-width: none;
+}
+
 .workspace-inspector.is-compact .workspace-inspector-actions {
   grid-column: 2;
   grid-row: 1;
@@ -350,6 +388,12 @@
   grid-column: 1 / -1;
   grid-row: 2;
   width: 100%;
+}
+
+.workspace-inspector.is-compact
+  .workspace-inspector-head.has-target-picker
+  .workspace-inspector-tabs {
+  grid-row: 3;
 }
 
 .workspace-inspector.is-compact .workspace-inspector-tabs button {

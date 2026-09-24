@@ -41,6 +41,9 @@ retain their original Herdr Web lineage.
 
 ### Changed
 
+- Made the Inspector's Files and Changes surfaces selectable by open checkout,
+  with one target per worktree and explicit selections pinned independently of
+  terminal focus.
 - Based the active application source on Roamgate commit
   `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an
   external runtime compatible with Herdr 0.9.0 and terminal protocol 22.

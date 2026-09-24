@@ -162,6 +162,7 @@ import {
   inspectorMaximumSize,
   isWorkspaceInspectorShortcut,
   normalizeInspectorViews,
+  pinInspectorResource,
   readInspectorPreferences,
   readResourceFileSelection,
   relativePathWithinCheckout,
@@ -1677,6 +1678,7 @@ export default function App({
         scope,
         open: true,
         view: admittedView,
+        followFocusedWorkspace: true,
         ...(options.availableViews ? { availableViews } : {}),
         dock,
         size,
@@ -1732,6 +1734,44 @@ export default function App({
       mobile,
       annotationsOpen,
       annotationScopeRef,
+      setAnnotationDraftScope,
+    ],
+  );
+  const selectInspectorWorkspace = useCallback(
+    (workspaceId: string) => {
+      const current = inspectorStateRef.current;
+      if (!current?.open) return;
+      const snapshot = store.get();
+      const workspace = snapshot.workspaces.find(
+        (candidate) => candidate.workspace_id === workspaceId,
+      );
+      if (!workspace) return;
+      const scope = resourceScopeForWorkspace(
+        connectionClient.connectionId,
+        workspace,
+      );
+      if (
+        current.scope.workspaceId === scope.workspaceId &&
+        sameResourceOwner(current.scope, scope) &&
+        current.followFocusedWorkspace === false
+      ) {
+        return;
+      }
+      setAnnotationDraftScope(scope, annotationsOpen);
+      fileQuickOpenRequestRef.current += 1;
+      setActiveDiff(emptyActiveDiffSelection());
+      setActiveFilePreview(emptyActiveFilePreviewSelection());
+      const next = pinInspectorResource(current, scope);
+      inspectorReturnFocusRef.current = null;
+      commitInspectorState(next);
+      writeInspectorPreferences(worldLocalStorage, next);
+      if (mobile) setMobileView(current.view);
+    },
+    [
+      annotationsOpen,
+      commitInspectorState,
+      connectionClient.connectionId,
+      mobile,
       setAnnotationDraftScope,
     ],
   );
@@ -2599,6 +2639,7 @@ export default function App({
     if (!current?.open || !focusedWorkspace || s.pendingFocusWorkspaceId) {
       return;
     }
+    if (current.followFocusedWorkspace === false) return;
     const routedWorkspace = resolveWorkspaceForScope(
       current.scope,
       s.workspaces,
@@ -3327,6 +3368,7 @@ export default function App({
               : !mobile || mobileView === inspectorState.view
           }
           workspace={inspectorWorkspace}
+          workspaces={s.workspaces}
           historyPane={inspectorHistoryPane}
           fileSelection={activeFilePreview}
           previewRequestRef={fileQuickOpenRequestRef}
@@ -3373,6 +3415,7 @@ export default function App({
           onTerminalPopOut={onTerminalPopOut}
           terminalDetached={Boolean(inspectorFloatingTerminal)}
           onViewChange={setInspectorView}
+          onWorkspaceChange={selectInspectorWorkspace}
           onDockChange={setInspectorDock}
           onExpandedChange={setInspectorExpanded}
           onClose={closeInspector}
