@@ -1024,31 +1024,46 @@ function WorldControlPlane({
       try {
         if (focusTarget) await focusWorldNode(next);
         if (intentRequestRef.current !== requestId) return false;
+        const currentConversations = inspectorConversationsRef.current;
+        const currentExisting = currentConversations.find(
+          ({ nodeId }) => nodeId === next.id,
+        );
+        if (!currentExisting) return false;
+        const currentDockedInspectorId = dockedInspectorIdRef.current;
+        const currentDockedInspector = currentConversations.find(
+          ({ nodeId }) => nodeId === currentDockedInspectorId,
+        );
         setSelection(next);
         const admitted =
-          requestedView && existing.availableViews.includes(requestedView)
-            ? { ...existing, view: requestedView }
-            : existing;
+          requestedView &&
+          currentExisting.availableViews.includes(requestedView)
+            ? { ...currentExisting, view: requestedView }
+            : currentExisting;
         const displacedDockedInspector =
-          existing.nodeId !== dockedInspectorId ? dockedInspector : null;
+          currentExisting.nodeId !== currentDockedInspectorId
+            ? (currentDockedInspector ?? null)
+            : null;
         if (displacedDockedInspector) {
           onInspectorTerminalPortal(displacedDockedInspector.nodeId, null);
         }
-        if (admitted !== existing || displacedDockedInspector) {
-          onInspectorConversationsChange(
-            inspectorConversations.flatMap((conversation) => {
+        if (admitted !== currentExisting || displacedDockedInspector) {
+          const nextConversations = currentConversations.flatMap(
+            (conversation) => {
               if (conversation.nodeId === displacedDockedInspector?.nodeId) {
                 return [];
               }
               return [
-                conversation.nodeId === existing.nodeId
+                conversation.nodeId === currentExisting.nodeId
                   ? admitted
                   : conversation,
               ];
-            }),
+            },
           );
+          inspectorConversationsRef.current = nextConversations;
+          onInspectorConversationsChange(nextConversations);
         }
-        if (existing.nodeId !== dockedInspectorId) {
+        if (currentExisting.nodeId !== currentDockedInspectorId) {
+          dockedInspectorIdRef.current = admitted.nodeId;
           onDockedInspectorIdChange(admitted.nodeId);
         }
         if (admitted.view === "terminal") {
@@ -1072,16 +1087,26 @@ function WorldControlPlane({
     try {
       if (focusTarget) await focusWorldNode(next);
       if (intentRequestRef.current !== requestId) return false;
+      const currentConversations = inspectorConversationsRef.current;
+      const currentDockedInspectorId = dockedInspectorIdRef.current;
+      const currentDockedInspector = currentConversations.find(
+        ({ nodeId }) => nodeId === currentDockedInspectorId,
+      );
       setSelection(next);
-      if (dockedInspector) {
-        onInspectorTerminalPortal(dockedInspector.nodeId, null);
+      if (currentDockedInspector) {
+        onInspectorTerminalPortal(currentDockedInspector.nodeId, null);
       }
-      onInspectorConversationsChange([
-        ...inspectorConversations.filter(
-          ({ nodeId }) => nodeId !== dockedInspector?.nodeId,
+      const nextConversations = [
+        ...currentConversations.filter(
+          ({ nodeId }) =>
+            nodeId !== currentDockedInspector?.nodeId &&
+            nodeId !== conversation.nodeId,
         ),
         conversation,
-      ]);
+      ];
+      inspectorConversationsRef.current = nextConversations;
+      onInspectorConversationsChange(nextConversations);
+      dockedInspectorIdRef.current = conversation.nodeId;
       onDockedInspectorIdChange(conversation.nodeId);
       if (conversation.view === "terminal") {
         focusInspectorTerminal(conversation.nodeId);
@@ -1379,7 +1404,8 @@ function WorldControlPlane({
       ...current,
       [conversation.nodeId]: null,
     }));
-    if (dockedInspectorId === conversation.nodeId) {
+    if (dockedInspectorIdRef.current === conversation.nodeId) {
+      dockedInspectorIdRef.current = null;
       onDockedInspectorIdChange(null);
     }
     if (selected?.id === conversation.nodeId) setSelection(null);
@@ -1720,6 +1746,7 @@ function WorldControlPlane({
                 return;
               }
               setDockedInspectorGeometry(null);
+              dockedInspectorIdRef.current = null;
               onDockedInspectorIdChange(null);
             }}
             onFocus={
