@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { createECDH, randomBytes } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // Exercise the real HTTP router and socket cleanup, not a second test router.
 test("logout after reauthentication closes earlier and later tabs, not other browsers", async () => {
   const root = await mkdtemp(join(tmpdir(), "herdr-world-logout-"));
+  const pushPath = join(root, "web-push.json");
   const sockets: WebSocket[] = [];
   const child = Bun.spawn([process.execPath, "server/src/index.ts"], {
     cwd: join(import.meta.dir, "../../.."),
@@ -25,6 +27,7 @@ test("logout after reauthentication closes earlier and later tabs, not other bro
       HERDR_SESSION: "",
       HERDR_WORLD_TLS_CERT: "",
       HERDR_WORLD_TLS_KEY: "",
+      HERDR_WORLD_WEB_PUSH_PATH: pushPath,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -62,6 +65,34 @@ test("logout after reauthentication closes earlier and later tabs, not other bro
     };
     const first = await login();
     const second = await login();
+    const pushDevice = (id: string) => {
+      const key = createECDH("prime256v1");
+      key.generateKeys();
+      return {
+        subscription: {
+          endpoint: `https://fcm.googleapis.com/fcm/send/${id}`,
+          keys: {
+            p256dh: key.getPublicKey().toString("base64url"),
+            auth: randomBytes(16).toString("base64url"),
+          },
+        },
+        preferences: { completed: true, blocked: true },
+      };
+    };
+    const registerPush = async (cookie: string, id: string) => {
+      const response = await request("/api/notifications/push", {
+        method: "POST",
+        headers: {
+          cookie,
+          "content-type": "application/json",
+          "x-herdr-world-push": "1",
+        },
+        body: JSON.stringify(pushDevice(id)),
+      });
+      expect(response.status).toBe(200);
+    };
+    await registerPush(first, "first");
+    await registerPush(second, "second");
     const connect = async (cookie: string) => {
       // Bun accepts custom handshake headers; lib.dom's constructor does not.
       const Socket = WebSocket as unknown as new (
@@ -141,6 +172,9 @@ test("logout after reauthentication closes earlier and later tabs, not other bro
     });
     expect(logout.status).toBe(204);
     expect(logout.headers.get("set-cookie")).toContain("Max-Age=0");
+    const pushRegistry = JSON.parse(await readFile(pushPath, "utf8"));
+    expect(pushRegistry.devices).toHaveLength(1);
+    expect(pushRegistry.devices[0].subscription.endpoint).toContain("/second");
     expect(await Promise.all(closures)).toEqual([4001, 4001]);
     expect(otherBrowser.readyState).toBe(WebSocket.OPEN);
     expect((await request("/api/health")).status).toBe(401);

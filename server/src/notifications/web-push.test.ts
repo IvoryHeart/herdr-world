@@ -232,6 +232,37 @@ test("authenticated, non-CSRF device mutations persist privately across restart 
   }
 });
 
+test("logout revokes session-bound devices before later notifications are delivered", async () => {
+  const send = mock(async (_subscription: webpush.PushSubscription) => ({
+    statusCode: 201,
+    body: "",
+    headers: {},
+  }));
+  const f = fixture(send);
+  try {
+    const loggedOut = device("logged-out");
+    const otherSession = device("other-session");
+    const legacy = device("legacy");
+    await f.service.handle(request("POST", loggedOut), "session-a");
+    await f.service.handle(request("POST", otherSession), "session-b");
+    await f.service.handle(request("POST", legacy));
+
+    f.service.revokeSession("session-a");
+    f.service.notify(task, () => true);
+    await Promise.resolve();
+
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send.mock.calls[0]?.[0].endpoint).toBe(
+      otherSession.subscription.endpoint,
+    );
+    expect(JSON.parse(readFileSync(f.path, "utf8")).devices).toEqual([
+      { ...otherSession, sessionToken: "session-b" },
+    ]);
+  } finally {
+    f.cleanup();
+  }
+});
+
 test("completion and blocked preferences, stale runtimes and expired endpoints are isolated", async () => {
   const calls: Array<{ endpoint: string; payload: string }> = [];
   const expired = Promise.withResolvers<void>();

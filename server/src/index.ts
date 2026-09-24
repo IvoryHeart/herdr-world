@@ -1361,6 +1361,17 @@ function main() {
             const response = handleLogout(req);
             const token = sessionToken(req);
             if (response.ok && config.authRequired && token) {
+              try {
+                webPush.revokeSession(token);
+              } catch (error) {
+                logger.warn("Web Push logout revocation failed", {
+                  error: (error as Error).message,
+                });
+                return new Response("Unable to revoke push notifications", {
+                  status: 503,
+                  headers: { "cache-control": "no-store" },
+                });
+              }
               for (const client of clients) {
                 if (clientSessions.get(client) !== token) continue;
                 webSocketCleanup.cleanup(client);
@@ -1387,7 +1398,7 @@ function main() {
           if (admissionError) return admissionError;
 
           if (url.pathname === "/api/notifications/push") {
-            return webPush.handle(req);
+            return webPush.handle(req, sessionToken(req));
           }
 
           if (url.pathname === "/ws") {
