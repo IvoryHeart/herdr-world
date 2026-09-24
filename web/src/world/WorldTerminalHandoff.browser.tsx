@@ -947,6 +947,119 @@ async function run() {
       ) !== null,
     "restore occupied Builder dock for ordinary navigator admission",
   );
+
+  const paneGetsBeforeClosedDockIn = calls.filter(
+    ({ method }) => method === "pane.get",
+  ).length;
+  const delayedClosedDockIn = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "reviewer-pane",
+    promise: delayedClosedDockIn.promise,
+  };
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Reviewer Inspector"] button[aria-label="Dock Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "pane.get").length ===
+      paneGetsBeforeClosedDockIn + 1,
+    "delayed Reviewer Dock in focus",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Reviewer Inspector"] button[aria-label="Close floating Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      !document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "close Reviewer during delayed Dock in",
+  );
+  delayedClosedDockIn.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Builder") === true &&
+      !document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "delayed Dock in admitted an Inspector closed during focus",
+  );
+
+  flushSync(() => agentTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "restore Reviewer for delayed floating focus",
+  );
+  const paneGetsBeforeClosedFloatingFocus = calls.filter(
+    ({ method }) => method === "pane.get",
+  ).length;
+  const delayedClosedFloatingFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "reviewer-pane",
+    promise: delayedClosedFloatingFocus.promise,
+  };
+  document
+    .querySelector<HTMLElement>(
+      '[role="dialog"][aria-label="Reviewer Inspector"] .workspace-inspector-body',
+    )!
+    .dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        pointerId: 17,
+        pointerType: "mouse",
+      }),
+    );
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "pane.get").length ===
+      paneGetsBeforeClosedFloatingFocus + 1,
+    "delayed floating Reviewer focus",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Reviewer Inspector"] button[aria-label="Close floating Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      !document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "close Reviewer during delayed floating focus",
+  );
+  delayedClosedFloatingFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Builder") === true &&
+      !document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "delayed floating focus resurrected the closed Inspector",
+  );
+
+  flushSync(() => agentTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "restore Reviewer for ordinary navigator admission",
+  );
   flushSync(() => floatingPreferenceNavigatorRow?.click());
   await until(
     () =>

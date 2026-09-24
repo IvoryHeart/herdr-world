@@ -1377,10 +1377,15 @@ function WorldControlPlane({
     try {
       await focusWorldNode(target);
       if (intentRequestRef.current !== requestId) return false;
+      const currentConversation = inspectorConversationsRef.current.find(
+        ({ nodeId }) => nodeId === conversation.nodeId,
+      );
+      if (!currentConversation) return false;
       setSelection(target);
-      onDockedInspectorIdChange(conversation.nodeId);
-      if (conversation.view === "terminal") {
-        focusInspectorTerminal(conversation.nodeId);
+      dockedInspectorIdRef.current = currentConversation.nodeId;
+      onDockedInspectorIdChange(currentConversation.nodeId);
+      if (currentConversation.view === "terminal") {
+        focusInspectorTerminal(currentConversation.nodeId);
       }
       return true;
     } catch (cause) {
@@ -1430,9 +1435,10 @@ function WorldControlPlane({
       if (focusTarget) await focusWorldNode(target);
       if (intentRequestRef.current !== requestId) return false;
       const current = inspectorConversationsRef.current;
-      const observedConversation =
-        current.find(({ nodeId }) => nodeId === conversation.nodeId) ??
-        conversation;
+      const observedConversation = current.find(
+        ({ nodeId }) => nodeId === conversation.nodeId,
+      );
+      if (!observedConversation) return false;
       const currentConversation =
         requestedView &&
         observedConversation.availableViews.includes(requestedView)
@@ -1442,13 +1448,16 @@ function WorldControlPlane({
         ({ nodeId }) => nodeId !== dockedInspectorIdRef.current,
       );
       if (
+        currentConversation !== observedConversation ||
         currentFloating[currentFloating.length - 1]?.nodeId !==
-        conversation.nodeId
+          conversation.nodeId
       ) {
-        onInspectorConversationsChange([
+        const nextConversations = [
           ...current.filter(({ nodeId }) => nodeId !== conversation.nodeId),
           currentConversation,
-        ]);
+        ];
+        inspectorConversationsRef.current = nextConversations;
+        onInspectorConversationsChange(nextConversations);
       }
       setSelection(target);
       if (currentConversation.view === "terminal") {
