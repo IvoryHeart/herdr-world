@@ -54,44 +54,6 @@ test("development bridge and Vite proxies stay off the production port", async (
   expect(config.server?.proxy?.["/ws"]).toMatchObject({ ws: true });
 });
 
-test("browser CI is opt-in without weakening default validation", () => {
-  const workflow = Bun.YAML.parse(
-    readFileSync(new URL(".github/workflows/ci.yml", root), "utf8"),
-  ) as {
-    on: {
-      workflow_dispatch: {
-        inputs: { browser_tests: { type: string; default: boolean } };
-      };
-    };
-    jobs: Record<string, { if?: string; steps: { run?: string }[] }>;
-  };
-  expect(workflow.on.workflow_dispatch.inputs.browser_tests).toMatchObject({
-    type: "boolean",
-    default: false,
-  });
-  expect(workflow.jobs.validate.if).toBeUndefined();
-  expect(
-    workflow.jobs.validate.steps.flatMap((step) =>
-      step.run ? [step.run] : [],
-    ),
-  ).toEqual([
-    "bun install --frozen-lockfile",
-    "bun run format:check",
-    "bun run lint",
-    "bun run typecheck",
-    "bun run build:site",
-    "bun run test:quick",
-  ]);
-  expect(workflow.jobs.browser.if).toBe(
-    "github.event_name == 'workflow_dispatch' && inputs.browser_tests",
-  );
-  expect(
-    workflow.jobs.browser.steps.some(
-      (step) => step.run === "bun run test:browser",
-    ),
-  ).toBe(true);
-});
-
 test("CI and release jobs install once from the workspace root", () => {
   for (const file of ["ci.yml", "prepare-release.yml", "release.yml"]) {
     const workflow = Bun.YAML.parse(

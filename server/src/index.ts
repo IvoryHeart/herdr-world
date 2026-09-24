@@ -1373,16 +1373,16 @@ function main() {
             return new Response("unauthorized", { status: 401 });
           }
 
-          if (url.pathname === "/api/notifications/push") {
-            return webPush.handle(req);
-          }
-
           const admissionError = browserRequestAdmissionError(
             req,
             config.host,
             config.publicOrigin,
           );
           if (admissionError) return admissionError;
+
+          if (url.pathname === "/api/notifications/push") {
+            return webPush.handle(req);
+          }
 
           if (url.pathname === "/ws") {
             if (
@@ -1592,7 +1592,9 @@ function main() {
     config.generatedAuthToken,
   );
   if (isAnyHost(config.host)) {
-    const lanUrls = getLanIPs().map((ip) => `http://${ip}:${listeningPort}`);
+    const lanUrls = getLanIPs().map((ip) =>
+      browserUrlFor(ip, listeningPort, Boolean(config.tls)),
+    );
     if (lanUrls.length > 0) {
       for (const url of lanUrls) logger.info("LAN URL", { url });
     } else {

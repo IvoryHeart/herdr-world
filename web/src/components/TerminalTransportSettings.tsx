@@ -5,8 +5,8 @@ import { useConnectionClient } from "../useConnectionClient";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 
 const TRANSPORT_DESCRIPTION =
-  "Reduces Herdr-to-Roamgate traffic when the server supports delta and reuse frames. " +
-  "Saved on the Roamgate server for this connection and shared by all viewers. " +
+  "Reduces Herdr-to-Herdr World traffic when the server supports delta and reuse frames. " +
+  "Saved by the Herdr World server for this connection and shared by all viewers. " +
   "Changes briefly reconnect terminal displays; running tasks are not stopped. " +
   "Older Herdr servers keep their existing transport.";
 

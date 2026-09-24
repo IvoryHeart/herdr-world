@@ -27,8 +27,8 @@ PORT=8787
 # HERDR_WORLD_PUBLIC_ORIGIN=https://world.example
 
 # Optional native HTTPS. Set both to absolute PEM file paths.
-# ROAMGATE_TLS_CERT=/path/to/cert-chain.pem
-# ROAMGATE_TLS_KEY=/path/to/private-key.pem
+# HERDR_WORLD_TLS_CERT=/path/to/cert-chain.pem
+# HERDR_WORLD_TLS_KEY=/path/to/private-key.pem
 
 # Operational logs default to info. Use debug only while diagnosing an issue.
 # HERDR_WORLD_LOG_LEVEL=info

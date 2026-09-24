@@ -41,6 +41,12 @@ retain their original Herdr Web lineage.
 
 ### Changed
 
+- Synchronized the active application source with Roamgate v0.7.9 at
+  `c07db60b06b1b23a34ed143d47011a6b8330379a`, carrying forward authentication and
+  session handling, TLS and configuration, notifications, terminal transport,
+  previews, diff/navigation, and integration updates while retaining Herdr World
+  branding and the external Herdr runtime boundary.
+  [Herdr World PR #97](https://github.com/IvoryHeart/herdr-world/pull/97)
 - Based the active application source on Roamgate commit
   `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an
   external runtime compatible with Herdr 0.9.0 and terminal protocol 22.
