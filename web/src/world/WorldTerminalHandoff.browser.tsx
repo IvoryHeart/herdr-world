@@ -835,6 +835,118 @@ async function run() {
       ) !== null,
     "occupied Builder dock with floating Reviewer Inspector",
   );
+
+  const paneGetsBeforeClosedTargetFocus = calls.filter(
+    ({ method }) => method === "pane.get",
+  ).length;
+  const delayedClosedTargetFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "reviewer-pane",
+    promise: delayedClosedTargetFocus.promise,
+  };
+  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "pane.get").length ===
+      paneGetsBeforeClosedTargetFocus + 1,
+    "delayed existing floating Inspector focus",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Reviewer Inspector"] button[aria-label="Close floating Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      !document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "close floating target during delayed focus",
+  );
+  delayedClosedTargetFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Builder") === true &&
+      !document.body.textContent?.includes("Reviewer Inspector"),
+    "delayed navigator focus resurrected the closed target Inspector",
+  );
+
+  flushSync(() => agentTarget("Reviewer")!.click());
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ),
+    "restore floating Reviewer Inspector for delayed dock race",
+  );
+  const paneGetsBeforeDockOutFocus = calls.filter(
+    ({ method }) => method === "pane.get",
+  ).length;
+  const delayedDockOutFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "reviewer-pane",
+    promise: delayedDockOutFocus.promise,
+  };
+  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "pane.get").length ===
+      paneGetsBeforeDockOutFocus + 1,
+    "delayed focus before occupied dock-out",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail button[aria-label="Float Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      !document
+        .querySelector(".world-context-rail")
+        ?.classList.contains("has-inspector") &&
+      document.querySelector(
+        '[role="dialog"][aria-label="Builder Inspector"]',
+      ) !== null,
+    "float occupied dock during delayed focus",
+  );
+  delayedDockOutFocus.resolve();
+  delayedPaneGet = null;
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer") === true,
+    "delayed focus admitted Reviewer after Builder dock-out",
+  );
+  check(
+    document.querySelector(
+      '[role="dialog"][aria-label="Builder Inspector"]',
+    ) !== null,
+    "delayed navigator focus deleted the explicitly floated dock occupant",
+  );
+
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Dock Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder") === true &&
+      document.querySelector(
+        '[role="dialog"][aria-label="Reviewer Inspector"]',
+      ) !== null,
+    "restore occupied Builder dock for ordinary navigator admission",
+  );
   flushSync(() => floatingPreferenceNavigatorRow?.click());
   await until(
     () =>
