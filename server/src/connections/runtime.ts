@@ -8,6 +8,7 @@ import {
 } from "../bridge/endpoint-creation";
 import type { ServerWebSocket } from "bun";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
+import { createAgentChangeHandlers } from "../agent/change-context";
 import { createAgentSessionFileAccess } from "../agent/session-file-access";
 import { HerdrClient } from "../bridge/herdr-client";
 import { assertSupportedHerdrProtocol } from "../bridge/protocol-compat";
@@ -140,6 +141,13 @@ export function createLegacyConnectionRuntime(args: {
       runProcessWithCodeTimeout,
       shQuote,
     });
+  const agentChanges = createAgentChangeHandlers({
+    herdrCall: (method, params) => herdr.call(method, params),
+    sshHost,
+    runProcessWithCodeTimeout,
+    shQuote,
+    lastStepBaselines,
+  });
   const files = createFileHandlers({
     herdr,
     sshHost,
@@ -474,6 +482,7 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    agentChanges,
     startTransport,
     startBackground,
     stop,

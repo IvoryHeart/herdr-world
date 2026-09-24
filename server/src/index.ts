@@ -193,6 +193,9 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
+  "agent_changes.context",
+  "agent_changes.summary",
+  "agent_changes.file",
   "file.read",
   "git.diff_file",
   "git.file_action",
@@ -940,6 +943,33 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-session-get");
     } catch (e) {
       sendError("agent-session-get-error", e);
+    }
+    return;
+  }
+  if (method === "agent_changes.context") {
+    try {
+      const result = await connection.agentChanges.context(params ?? {});
+      sendReply({ id, result }, "agent-changes-context");
+    } catch (e) {
+      sendError("agent-changes-context-error", e);
+    }
+    return;
+  }
+  if (method === "agent_changes.summary") {
+    try {
+      const result = await connection.agentChanges.summary(params ?? {});
+      sendReply({ id, result }, "agent-changes-summary");
+    } catch (e) {
+      sendError("agent-changes-summary-error", e);
+    }
+    return;
+  }
+  if (method === "agent_changes.file") {
+    try {
+      const result = await connection.agentChanges.file(params ?? {});
+      sendReply({ id, result }, "agent-changes-file");
+    } catch (e) {
+      sendError("agent-changes-file-error", e);
     }
     return;
   }

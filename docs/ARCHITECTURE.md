@@ -226,8 +226,12 @@ inactive-host rooms or nodes are not mixed into the active view.
 A checkout owns Files/Changes data; a workspace supplies its runtime route; a tab
 is a return location; a pane supplies optional path/session context. Repository
 groups do not represent a combined working tree. Changes describe checkout edits,
-not proof that one agent produced them. Last step uses recorded activity snapshots,
-not attribution of arbitrary working-tree edits.
+not proof that one agent produced them. The Inspector's agent-scoped Changes
+target is the bounded exception: it resolves a selected pane's agent-reported
+checkout or working directory through additive read-only RPCs, and explicitly
+reports unavailable context rather than falling back to workspace ownership.
+Last step uses recorded activity snapshots, not attribution of arbitrary
+working-tree edits.
 
 Git resource keys encode the endpoint-qualified repository identity
 (`worktree.gui_settings_key`) and normalized checkout path as a pair. The path

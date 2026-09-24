@@ -27,6 +27,35 @@ function summary(workspaceId: string): GitDiffSummary {
 }
 
 describe("shared git diff summaries", () => {
+  test("routes an agent target through the additive read-only RPC", async () => {
+    let method = "";
+    let params: Record<string, unknown> | undefined;
+    const client: ConnectionClient = {
+      connectionId: "agent-summary",
+      generation: 1,
+      serverRuntimeGeneration: 1,
+      isCurrent: () => true,
+      acceptsServerGeneration: () => true,
+      call: async (nextMethod, nextParams) => {
+        method = nextMethod;
+        params = nextParams;
+        return summary("workspace-1");
+      },
+    };
+
+    await refreshGitDiffSummary(
+      client,
+      "workspace-1",
+      "working",
+      "agent:pane-1",
+      {},
+      { kind: "agent", paneId: "pane-1" },
+    );
+
+    expect(method).toBe("agent_changes.summary");
+    expect(params).toEqual({ pane_id: "pane-1", mode: "working" });
+  });
+
   test("deduplicates refreshes and publishes one shared snapshot", async () => {
     let calls = 0;
     let resolve!: (value: GitDiffSummary) => void;

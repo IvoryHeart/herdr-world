@@ -21,6 +21,56 @@
   background: var(--viewer-panel-bg);
 }
 
+.diff-agent-context {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 8px;
+  padding: 8px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--viewer-border));
+  border-radius: 8px;
+  background: color-mix(
+    in srgb,
+    var(--accent-soft) 58%,
+    var(--viewer-panel-bg)
+  );
+  font-size: 11px;
+}
+
+.diff-agent-context.is-unavailable {
+  border-color: color-mix(
+    in srgb,
+    var(--danger-text) 46%,
+    var(--viewer-border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--danger-soft) 45%,
+    var(--viewer-panel-bg)
+  );
+}
+
+.diff-agent-context-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text);
+}
+
+.diff-agent-context-heading span,
+.diff-agent-context-detail,
+.diff-agent-context-source {
+  color: var(--muted);
+}
+
+.diff-agent-context-path {
+  overflow: hidden;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .diff-tree-row:hover .git-status-code,
 .diff-tree-row.is-selected .git-status-code {
   opacity: 1;

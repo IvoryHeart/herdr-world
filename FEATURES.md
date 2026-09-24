@@ -119,9 +119,11 @@ sidebar's visibility unchanged.
   with overlay/full-screen views. Resize the separator by dragging or
   Left/Right/Home/End; double-click resets it. Files and Changes save separate
   checkout-scoped widths.
-- Agent browsing starts at its cwd only inside the checkout. Terminal links use
-  their pane's workspace, not later focus. Changes cover the checkout, not
-  proven agent ownership.
+- Agent Changes opened from an agent pane resolve that agent's reported checkout
+  or working directory and show its repository, branch, path, and read-only
+  diff. An unresolved agent target is shown explicitly; it never masquerades
+  as the workspace checkout. Workspace Changes remains available as its own
+  checkout-scoped view.
 - Open closed worktrees before browsing. Missing/prunable worktrees offer cleanup,
   never sibling files. Removal clears only that checkout's resource state.
 - Directory targets opened from terminal links offer a New workspace action that

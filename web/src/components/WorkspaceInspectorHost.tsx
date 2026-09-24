@@ -294,6 +294,9 @@ export function WorkspaceInspectorHost({
     terminal: false,
   }));
   const resourceKey = resourceOwnerKey(state.scope);
+  const diffResourceKey = historyPane?.pane_id
+    ? `${resourceKey}:agent:${historyPane.pane_id}`
+    : resourceKey;
   const contentResourceKey = resourceStateKey(state.scope);
   const fileDiffEntries =
     fileDiffState.resourceKey === contentResourceKey
@@ -876,7 +879,10 @@ export function WorkspaceInspectorHost({
               <DiffViewerPanel
                 ref={diffViewerRef}
                 workspaceId={workspace.workspace_id}
-                resourceKey={resourceKey}
+                agentPaneId={
+                  state.view === "changes" ? historyPane?.pane_id : undefined
+                }
+                resourceKey={diffResourceKey}
                 onOpenFile={onOpenDiffFile}
                 onSelectionChange={(selection, meta) => {
                   if (selection.entry && meta?.userInitiated) {

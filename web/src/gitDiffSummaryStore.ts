@@ -5,6 +5,10 @@ import { connectionClientScopeKey } from "./useConnectionClient";
 
 export type GitDiffSummaryMode = "working" | "branch-main" | "last-step";
 
+export type GitDiffTarget =
+  | { kind: "workspace"; workspaceId: string }
+  | { kind: "agent"; paneId: string };
+
 export type GitDiffSummaryState = {
   summary: GitDiffSummary | null;
   loading: boolean;
@@ -160,6 +164,7 @@ export function refreshGitDiffSummary(
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
   options: { afterCurrent?: boolean } = {},
+  target: GitDiffTarget = { kind: "workspace", workspaceId },
 ): Promise<GitDiffSummary> {
   const key = gitDiffSummaryKey(client, workspaceId, mode, resourceKey);
   const running = requests.get(key);
@@ -177,7 +182,14 @@ export function refreshGitDiffSummary(
             "connection changed before queued diff summary request",
           );
         }
-        return refreshGitDiffSummary(client, workspaceId, mode, resourceKey);
+        return refreshGitDiffSummary(
+          client,
+          workspaceId,
+          mode,
+          resourceKey,
+          {},
+          target,
+        );
       })
       .finally(() => {
         if (trailingRequests.get(key) === trailing) {
@@ -194,10 +206,12 @@ export function refreshGitDiffSummary(
   activeTokens.set(key, token);
   publish(key, { loading: true, error: null, revision });
   const task = (
-    client.call("git.diff_summary", {
-      workspace_id: workspaceId,
-      mode,
-    }) as Promise<GitDiffSummary>
+    client.call(
+      target.kind === "agent" ? "agent_changes.summary" : "git.diff_summary",
+      target.kind === "agent"
+        ? { pane_id: target.paneId, mode }
+        : { workspace_id: workspaceId, mode },
+    ) as Promise<GitDiffSummary>
   )
     .then((summary) => {
       if (!client.isCurrent()) {

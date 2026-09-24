@@ -21,6 +21,10 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added read-only agent-scoped Changes context that identifies the selected
+  agent's reported checkout, repository, branch and changed files, with an
+  explicit unavailable state when ownership cannot be resolved.
+
 - Added UI-managed local and OpenSSH Herdr profiles with isolated runtimes,
   generations, retries and failure states behind one same-origin World application.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)

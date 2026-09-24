@@ -201,6 +201,7 @@ export interface GitDiffEntry {
 
 export interface GitDiffSummary {
   workspace_id: string;
+  pane_id?: string;
   repo_name?: string;
   root: string;
   mode?: "working" | "branch-main" | "last-step";
@@ -209,6 +210,22 @@ export interface GitDiffSummary {
   snapshot_id?: string;
   entries: GitDiffEntry[];
   counts: Record<GitDiffKind, number>;
+}
+
+export interface AgentChangeContext {
+  version: 1;
+  pane_id: string;
+  workspace_id: string;
+  agent: string;
+  display_agent: string;
+  agent_status: string;
+  status: "resolved" | "unavailable";
+  source: "reported-checkout" | "foreground-cwd" | "cwd" | "unresolved";
+  checkout_path: string;
+  root: string;
+  repo_name: string;
+  branch: string;
+  detail: string;
 }
 
 export interface GitDiffFile {

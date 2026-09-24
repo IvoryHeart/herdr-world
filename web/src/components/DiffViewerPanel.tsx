@@ -21,7 +21,12 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { ConnectionClient } from "../api";
-import type { GitDiffEntry, GitDiffFile, GitDiffSummary } from "../types";
+import type {
+  AgentChangeContext,
+  GitDiffEntry,
+  GitDiffFile,
+  GitDiffSummary,
+} from "../types";
 import { useStoreSelector } from "../store";
 import {
   connectionClientScopeKey,
@@ -39,6 +44,7 @@ import {
   retireGitDiffSummary,
   retireGitDiffSummaryResource,
   useGitDiffSummaryState,
+  type GitDiffTarget,
 } from "../gitDiffSummaryStore";
 import { diffAutoCollapseInfo } from "./diffAutoCollapse";
 import { store } from "../store";
@@ -83,6 +89,7 @@ export type DiffViewerPanelHandle = {
 
 export type DiffViewerPanelProps = {
   workspaceId?: string;
+  agentPaneId?: string;
   resourceKey?: string;
   onSelectionChange?: (
     selection: ActiveDiffSelection,
@@ -513,6 +520,7 @@ function requestDiffFile(
   entry: GitDiffEntry,
   revision: number,
   snapshotId?: string,
+  target?: GitDiffTarget,
 ) {
   if (!client.isCurrent()) {
     return Promise.reject(new Error("connection changed during diff request"));
@@ -532,14 +540,26 @@ function requestDiffFile(
   );
   const running = diffFileRequests.get(requestKey);
   if (running) return running;
-  const task = client.call("git.diff_file", {
-    workspace_id: workspaceId,
-    mode: scope,
-    path: entry.path,
-    old_path: entry.old_path,
-    kind: entry.kind,
-    snapshot_id: snapshotId,
-  }) as Promise<GitDiffFile>;
+  const task = client.call(
+    target?.kind === "agent" ? "agent_changes.file" : "git.diff_file",
+    target?.kind === "agent"
+      ? {
+          pane_id: target.paneId,
+          mode: scope,
+          path: entry.path,
+          old_path: entry.old_path,
+          kind: entry.kind,
+          snapshot_id: snapshotId,
+        }
+      : {
+          workspace_id: workspaceId,
+          mode: scope,
+          path: entry.path,
+          old_path: entry.old_path,
+          kind: entry.kind,
+          snapshot_id: snapshotId,
+        },
+  ) as Promise<GitDiffFile>;
   diffFileRequests.set(
     requestKey,
     task
@@ -591,6 +611,7 @@ export function prefetchDiffFilesInBatches(
   resourceKey = workspaceId,
   onFile?: (entry: GitDiffEntry, file: GitDiffFile, revision: number) => void,
   onFileError?: (entry: GitDiffEntry, error: string, revision: number) => void,
+  target?: GitDiffTarget,
 ) {
   const key = diffCacheKey(client, workspaceId, scope, resourceKey);
   const revision = diffCacheRevision(key);
@@ -612,6 +633,7 @@ export function prefetchDiffFilesInBatches(
           entry,
           revision,
           snapshotId,
+          target,
         );
         if (!client.isCurrent() || diffCacheRevision(key) !== revision) return;
         cacheDiffFile(
@@ -840,7 +862,7 @@ export const DiffViewerPanel = forwardRef<
   DiffViewerPanelHandle,
   DiffViewerPanelProps
 >(function DiffViewerPanel(
-  { workspaceId, resourceKey, onSelectionChange, onOpenFile },
+  { workspaceId, agentPaneId, resourceKey, onSelectionChange, onOpenFile },
   ref,
 ) {
   const workspaces = useStoreSelector((state) => state.workspaces);
@@ -850,7 +872,19 @@ export const DiffViewerPanel = forwardRef<
     ? workspaces.find((w) => w.workspace_id === workspaceId)
     : focusedWorkspace;
   const cacheWorkspaceId = workspace?.workspace_id;
-  const cacheResourceKey = resourceKey ?? cacheWorkspaceId;
+  const agentTarget: GitDiffTarget | undefined = agentPaneId
+    ? { kind: "agent", paneId: agentPaneId }
+    : undefined;
+  const isAgentTarget = Boolean(agentPaneId);
+  const cacheResourceKey =
+    resourceKey ?? (agentPaneId ? `agent:${agentPaneId}` : cacheWorkspaceId);
+  const [agentContext, setAgentContext] = useState<AgentChangeContext | null>(
+    null,
+  );
+  const [agentContextLoading, setAgentContextLoading] = useState(
+    Boolean(agentPaneId),
+  );
+  const agentContextReady = !agentPaneId || agentContext?.status === "resolved";
   const completionKey = lastStepCompletionKey(
     connectionClient.connectionId,
     cacheWorkspaceId,
@@ -869,6 +903,51 @@ export const DiffViewerPanel = forwardRef<
     readCompletion,
     readCompletion,
   );
+
+  useEffect(() => {
+    let active = true;
+    if (!agentPaneId) {
+      setAgentContext(null);
+      setAgentContextLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    setAgentContext(null);
+    setAgentContextLoading(true);
+    void connectionClient
+      .call("agent_changes.context", { pane_id: agentPaneId })
+      .then((result) => {
+        if (active) setAgentContext(result as AgentChangeContext);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAgentContext({
+          version: 1,
+          pane_id: agentPaneId,
+          workspace_id: workspace?.workspace_id ?? "",
+          agent: "agent",
+          display_agent: "Agent",
+          agent_status: "",
+          status: "unavailable",
+          source: "unresolved",
+          checkout_path: "",
+          root: "",
+          repo_name: "",
+          branch: "",
+          detail:
+            error instanceof Error
+              ? error.message
+              : "Agent checkout context could not be loaded.",
+        });
+      })
+      .finally(() => {
+        if (active) setAgentContextLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [agentPaneId, connectionClient, workspace?.workspace_id]);
   const completionRevisionRef = useRef({
     key: completionKey,
     revision: completionRevision,
@@ -933,7 +1012,13 @@ export const DiffViewerPanel = forwardRef<
       diffScope,
       cacheResourceKey,
     );
-  }, [cacheResourceKey, cacheWorkspaceId, connectionClient, diffScope]);
+  }, [
+    agentContextReady,
+    cacheResourceKey,
+    cacheWorkspaceId,
+    connectionClient,
+    diffScope,
+  ]);
 
   const isCurrentContext = (
     workspaceId: string | undefined,
@@ -975,6 +1060,7 @@ export const DiffViewerPanel = forwardRef<
   useEffect(() => {
     const summary = sharedSummaryState.summary;
     if (
+      !agentContextReady ||
       !workspace?.workspace_id ||
       !summary ||
       cache.summary === summary ||
@@ -1027,7 +1113,7 @@ export const DiffViewerPanel = forwardRef<
     // The shared snapshot is the synchronization boundary; cache adoption is
     // intentionally driven only when that immutable snapshot changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sharedSummaryState.summary]);
+  }, [agentContextReady, sharedSummaryState.summary]);
 
   const diffSelection = useCallback(
     (
@@ -1054,7 +1140,13 @@ export const DiffViewerPanel = forwardRef<
     afterCurrent = false,
     clearCurrent = false,
   ) => {
-    if (!workspace?.workspace_id || !connectionClient.isCurrent()) return;
+    if (
+      !workspace?.workspace_id ||
+      !connectionClient.isCurrent() ||
+      !agentContextReady
+    ) {
+      return;
+    }
     const workspaceId = workspace.workspace_id;
     const scope = diffScope;
     preferredSummarySelectionRef.current = previousSelected;
@@ -1080,6 +1172,7 @@ export const DiffViewerPanel = forwardRef<
         scope,
         cacheResourceKey,
         { afterCurrent },
+        agentTarget,
       );
     } catch (e) {
       if (isCurrentContext(workspaceId, scope)) {
@@ -1200,6 +1293,7 @@ export const DiffViewerPanel = forwardRef<
         entry,
         revision,
         cache.summary?.snapshot_id,
+        agentTarget,
       );
       if (
         !isCurrentContext(workspaceId, scope) ||
@@ -1359,7 +1453,13 @@ export const DiffViewerPanel = forwardRef<
     void loadSummary(preferredWorkingEntry ?? cached.selected);
     // Reopen against a fresh workspace snapshot.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheResourceKey, cacheWorkspaceId, connectionClient, diffScope]);
+  }, [
+    agentContextReady,
+    cacheResourceKey,
+    cacheWorkspaceId,
+    connectionClient,
+    diffScope,
+  ]);
 
   useEffect(() => {
     if (cache.selected) void loadFile(cache.selected);
@@ -1417,7 +1517,7 @@ export const DiffViewerPanel = forwardRef<
     x: number,
     y: number,
   ) => {
-    if (diffScopeRef.current !== "working") return;
+    if (isAgentTarget || diffScopeRef.current !== "working") return;
     clearLongPressTimer();
     setContextMenu({ x, y, ...target });
   };
@@ -1720,6 +1820,52 @@ export const DiffViewerPanel = forwardRef<
 
   return (
     <aside className="diff-viewer-side" aria-label="Diff Viewer">
+      {isAgentTarget ? (
+        <div
+          className={`diff-agent-context ${
+            agentContext?.status === "unavailable" ? "is-unavailable" : ""
+          }`}
+          aria-live="polite"
+        >
+          <div className="diff-agent-context-heading">
+            <strong>
+              {agentContextLoading
+                ? "Agent source control"
+                : agentContext?.status === "resolved"
+                  ? `Agent changes · ${agentContext.display_agent}`
+                  : "Agent checkout unavailable"}
+            </strong>
+            {agentContext?.agent_status ? (
+              <span>{agentContext.agent_status}</span>
+            ) : null}
+          </div>
+          {agentContextLoading ? (
+            <span className="diff-agent-context-detail">
+              Resolving the agent's checkout…
+            </span>
+          ) : agentContext?.status === "resolved" ? (
+            <>
+              <span className="diff-agent-context-detail">
+                {agentContext.repo_name || "Git repository"}
+                {agentContext.branch ? ` · ${agentContext.branch}` : ""}
+              </span>
+              <span
+                className="diff-agent-context-path"
+                title={agentContext.checkout_path}
+              >
+                {agentContext.checkout_path}
+              </span>
+              <span className="diff-agent-context-source">
+                Source: {agentContext.source.replace(/-/g, " ")}
+              </span>
+            </>
+          ) : (
+            <span className="diff-agent-context-detail">
+              {agentContext?.detail || "No agent-owned checkout was resolved."}
+            </span>
+          )}
+        </div>
+      ) : null}
       <div className="diff-panel-toolbar">
         <div className="diff-scope-toggle" aria-label="Diff scope">
           <button
@@ -1796,25 +1942,29 @@ export const DiffViewerPanel = forwardRef<
         <p className="modal-error">No workspace is focused.</p>
       ) : null}
 
-      {cache.error ? <p className="modal-error">{cache.error}</p> : null}
+      {cache.error && agentContextReady ? (
+        <p className="modal-error">{cache.error}</p>
+      ) : null}
 
-      <div className="diff-list diff-tree" aria-label="Changed files">
-        {summaryLoading && !cache.summary ? (
-          <DiffSkeleton />
-        ) : cache.summary?.entries.length ? (
-          renderTreeNode(tree, 0)
-        ) : (
-          <div className="diff-empty">
-            <FileDiff size={18} />
-            <span>
-              {diffScope === "last-step" &&
-              cache.summary?.baseline_available === false
-                ? "No completed agent step yet"
-                : "No changes"}
-            </span>
-          </div>
-        )}
-      </div>
+      {agentContextLoading || agentContextReady ? (
+        <div className="diff-list diff-tree" aria-label="Changed files">
+          {summaryLoading && !cache.summary ? (
+            <DiffSkeleton />
+          ) : cache.summary?.entries.length ? (
+            renderTreeNode(tree, 0)
+          ) : (
+            <div className="diff-empty">
+              <FileDiff size={18} />
+              <span>
+                {diffScope === "last-step" &&
+                cache.summary?.baseline_available === false
+                  ? "No completed agent step yet"
+                  : "No changes"}
+              </span>
+            </div>
+          )}
+        </div>
+      ) : null}
       {fileLoadingKey ? (
         <div className="diff-loading-inline">Loading diff...</div>
       ) : null}
