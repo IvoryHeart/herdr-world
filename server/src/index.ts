@@ -21,6 +21,8 @@ import {
   SERVICE_COMMAND_CONTINUE,
 } from "./config/service-manager";
 import { runHerdrCommand } from "./herdr/cli";
+import { createWebPushService } from "./notifications/web-push";
+import { enrichIntegrationVersions } from "./herdr/integration-versions";
 import {
   createHerdrSetupHandlers,
   herdrSetupGuardForProfile,
@@ -121,6 +123,9 @@ if (herdrCommandResult !== null) {
 const config = loadServerConfig(APP_VERSION);
 configureServerLogger(config.logLevel);
 const logger = serverLogger;
+const webPush = createWebPushService({
+  warn: (message) => logger.warn(message),
+});
 const officeObservabilityBootstrap = await readGuiSettings()
   .then((settings) => resolveOfficeObservabilityBootstrap(settings))
   .catch(() => {
@@ -146,12 +151,19 @@ const downstreamConnectionConfig = {
   hasExplicitSocketPath: config.hasExplicitSocketPath,
   hasExplicitClientSocketPath: config.hasExplicitClientSocketPath,
 };
-const { isAuthed, handleTokenLogin, handleLogin, loginPage } =
-  createAuthHandlers({
-    authRequired: config.authRequired,
-    password: config.password,
-    urlLoginToken: config.generatedAuthToken,
-  });
+const {
+  isAuthed,
+  sessionToken,
+  handleTokenLogin,
+  handleLogin,
+  handleLogout,
+  loginPage,
+} = createAuthHandlers({
+  authRequired: config.authRequired,
+  password: config.password,
+  urlLoginToken: config.generatedAuthToken,
+  secureCookies: Boolean(config.tls),
+});
 
 type RpcRequest = ConnectionRpcRequest;
 
@@ -163,6 +175,7 @@ const { handleUpdateCheck, handleUpdateInstall } = createUpdateHandlers({
 });
 const clients = new Set<ServerWebSocket<unknown>>();
 const clientIds = new WeakMap<ServerWebSocket<unknown>, number>();
+const clientSessions = new WeakMap<ServerWebSocket<unknown>, string | null>();
 interface WebSocketCleanupSnapshot {
   client: string;
   viewedTerminals: string[];
@@ -465,6 +478,15 @@ function runtimeFactoryForProfile(
         safeSend,
         clientLabel,
         markRpcError,
+        onTaskEvent: (event) =>
+          webPush.notify(
+            {
+              ...event,
+              connectionId: identity.id,
+              runtimeGeneration: context.generation,
+            },
+            context.isCurrent,
+          ),
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
@@ -1167,6 +1189,12 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
   try {
     const rawResult = await herdr.call(method, params ?? {});
     let result = rawResult;
+    if (method === "integration.list") {
+      result = await enrichIntegrationVersions(result, {
+        sshHost: sshHost(),
+        ping: () => herdr.ping(),
+      });
+    }
     if (method === "workspace.list") {
       result = await worktreeParents.enrichWorkspaceList(result);
       result = await enrichWorkspacesWithGitStatus(result);
@@ -1289,9 +1317,10 @@ async function handleConnectionHttpRequest(
 function main() {
   const server = bindListenerBeforeConnectionStart({
     bindListener: () =>
-      Bun.serve({
+      Bun.serve<{ sessionToken: string | null }>({
         port: config.port,
         hostname: config.host,
+        tls: config.tls,
         async fetch(req, server) {
           const requestPathname = rawRequestPathname(req.url);
           let url: URL;
@@ -1318,6 +1347,22 @@ function main() {
           if (url.pathname === "/login") {
             return loginPage();
           }
+          // The login page's logo and favicon must also work before login.
+          if (url.pathname === "/herdr-world-icon-192.png") {
+            return serveStatic(req, config.publicDir);
+          }
+          if (url.pathname === "/api/logout") {
+            const response = handleLogout(req);
+            const token = sessionToken(req);
+            if (response.ok && config.authRequired && token) {
+              for (const client of clients) {
+                if (clientSessions.get(client) !== token) continue;
+                webSocketCleanup.cleanup(client);
+                client.close(4001, "Logged out");
+              }
+            }
+            return response;
+          }
 
           // Everything else requires auth when bound to a non-localhost address.
           if (!isAuthed(req)) {
@@ -1328,6 +1373,10 @@ function main() {
             return new Response("unauthorized", { status: 401 });
           }
 
+          if (url.pathname === "/api/notifications/push") {
+            return webPush.handle(req);
+          }
+
           const admissionError = browserRequestAdmissionError(
             req,
             config.host,
@@ -1336,7 +1385,10 @@ function main() {
           if (admissionError) return admissionError;
 
           if (url.pathname === "/ws") {
-            if (server.upgrade(req)) return undefined;
+            if (
+              server.upgrade(req, { data: { sessionToken: sessionToken(req) } })
+            )
+              return undefined;
             return new Response("websocket upgrade failed", { status: 400 });
           }
           if (url.pathname === "/api/health") {
@@ -1344,6 +1396,7 @@ function main() {
               ok: true,
               version: APP_VERSION,
               socket: config.socketPath,
+              auth_required: config.authRequired,
             });
           }
           if (url.pathname === "/api/update/check" && req.method === "GET") {
@@ -1382,6 +1435,7 @@ function main() {
         websocket: {
           open(ws) {
             clients.add(ws);
+            clientSessions.set(ws, ws.data.sessionToken);
             const label = assignClientId(ws);
             logger.debug("client connected", {
               client: label,
@@ -1506,7 +1560,11 @@ function main() {
     },
   });
   const listeningPort = server.port ?? config.port;
-  const publicBrowserUrl = browserUrlFor(config.host, listeningPort);
+  const publicBrowserUrl = browserUrlFor(
+    config.host,
+    listeningPort,
+    Boolean(config.tls),
+  );
   logger.info("listening", {
     url: publicBrowserUrl,
     websocket: "/ws",
@@ -1547,6 +1605,7 @@ function main() {
 let managerStopTask: Promise<void> | null = null;
 function stopManagerOnce(): Promise<void> {
   connectionProfiles.stopSupervision();
+  webPush.stop();
   managerStopTask ??= connectionManager.stopAll();
   return managerStopTask;
 }

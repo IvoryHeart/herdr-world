@@ -34,6 +34,28 @@ afterEach(async () => {
   }
 });
 
+function trackSocket(socket: net.Socket) {
+  sockets.add(socket);
+  socket.on("close", () => sockets.delete(socket));
+  socket.on("error", (error: NodeJS.ErrnoException) => {
+    // The bridge can exit while a background RPC response is being written.
+    if (error.code !== "EPIPE" && error.code !== "ECONNRESET") throw error;
+  });
+}
+
+test("fixture sockets tolerate peer shutdown but surface unexpected errors", () => {
+  const socket = new net.Socket();
+  trackSocket(socket);
+  for (const code of ["EPIPE", "ECONNRESET"])
+    expect(() =>
+      socket.emit("error", Object.assign(new Error(code), { code })),
+    ).not.toThrow();
+  const unexpected = Object.assign(new Error("unexpected socket failure"), {
+    code: "EINVAL",
+  });
+  expect(() => socket.emit("error", unexpected)).toThrow(unexpected);
+});
+
 async function listen(server: net.Server, path: string): Promise<void> {
   servers.push(server);
   await new Promise<void>((resolve, reject) => {
@@ -56,8 +78,7 @@ async function fakeHerdr(
   const renderPath = join(root, `${id}-render.sock`);
   await listen(
     net.createServer((socket) => {
-      sockets.add(socket);
-      socket.on("close", () => sockets.delete(socket));
+      trackSocket(socket);
       let input = "";
       socket.on("data", async (chunk) => {
         input += chunk.toString();
@@ -89,8 +110,7 @@ async function fakeHerdr(
   );
   await listen(
     net.createServer((socket) => {
-      sockets.add(socket);
-      socket.on("close", () => sockets.delete(socket));
+      trackSocket(socket);
       let input = Buffer.alloc(0);
       socket.on("data", (chunk) => {
         input = Buffer.concat([input, Buffer.from(chunk)]);
@@ -230,7 +250,11 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   roots.push(root);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   chmodSync(root, 0o700);
-  const alpha = await fakeHerdr(root, "alpha");
+  const alpha = await fakeHerdr(root, "alpha", 14, undefined, ({ method }) =>
+    method === "workspace.get"
+      ? { workspace: { worktree: { checkout_path: root } } }
+      : undefined,
+  );
   const beta = await fakeHerdr(root, "beta");
   const registryPath = join(root, "connections.json");
   writeFileSync(
@@ -363,6 +387,28 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     );
     expect(initialAlpha.connection_generation).toBe(oldAlphaGeneration);
     expect(initialAlpha.result.workspaces[0].name).toBe("from-alpha");
+    writeFileSync(
+      join(root, "page.html"),
+      "<h1>HTML marker</h1><script>throw 1</script>",
+    );
+    const htmlPreview = await fetch(
+      `http://127.0.0.1:${port}/api/connections/alpha/file/download?connection_generation=${oldAlphaGeneration}&workspace_id=shared-workspace&path=page.html&inline=1`,
+    );
+    expect(htmlPreview.status).toBe(200);
+    expect(htmlPreview.headers.get("content-type")).toBe(
+      "text/html; charset=utf-8",
+    );
+    expect(htmlPreview.headers.get("content-disposition")).toStartWith(
+      "inline;",
+    );
+    expect(htmlPreview.headers.get("content-security-policy")).toStartWith(
+      "sandbox;",
+    );
+    expect(htmlPreview.headers.get("X-Herdr-Connection-Id")).toBe("alpha");
+    expect(htmlPreview.headers.get("X-Herdr-Connection-Generation")).toBe(
+      String(oldAlphaGeneration),
+    );
+    expect(await htmlPreview.text()).toBe("<h1>HTML marker</h1>");
     expect((await rpc("connections.test", { id: "beta" })).version).toBe(
       "fake-beta",
     );
@@ -657,6 +703,7 @@ test("production routing bootstraps only a verified empty session and serializes
     let seq = 0;
     const rpc = (
       ws: WebSocket,
+      method: string,
       params: Record<string, unknown>,
       generation?: number,
     ) =>
@@ -677,8 +724,8 @@ test("production routing bootstraps only a verified empty session and serializes
         ws.send(
           JSON.stringify({
             id,
-            method: "workspace.create",
-            connection_id: "empty",
+            method,
+            connection_id: method === "workspace.create" ? "empty" : undefined,
             ...(generation === undefined
               ? {}
               : { connection_generation: generation }),
@@ -686,26 +733,41 @@ test("production routing bootstraps only a verified empty session and serializes
           }),
         );
       });
+    // HTTP health only confirms the listener; await the backend handshake too.
     expect(
-      (await rpc(browsers[0], { browser_source: null })).error,
-    ).toBeDefined();
+      await rpc(browsers[0], "connections.connect", { id: "empty" }),
+    ).toMatchObject({ result: { state: "ready" } });
+    expect(
+      (await rpc(browsers[0], "workspace.create", { browser_source: null }))
+        .error,
+    ).toMatchObject({
+      message: "Cannot verify an empty session. Refresh and retry creation.",
+    });
     expect(mutations).toHaveLength(0);
     valid = true;
     const results = await Promise.all(
-      browsers.map((ws) => rpc(ws, { browser_source: null, focus: true })),
+      browsers.map((ws) =>
+        rpc(ws, "workspace.create", { browser_source: null, focus: true }),
+      ),
     );
     expect(
       results.filter((result) => result.result?.type === "workspace_created"),
+      JSON.stringify(results),
     ).toHaveLength(1);
     expect(results.filter((result) => result.error)).toHaveLength(1);
     expect(mutations).toEqual([{ focus: false }]);
     expect(
-      (await rpc(browsers[0], { browser_source: null, cwd: "/wrong" })).error,
+      (
+        await rpc(browsers[0], "workspace.create", {
+          browser_source: null,
+          cwd: "/wrong",
+        })
+      ).error,
     ).toBeDefined();
     workspaces = [];
     expect(
       (
-        await rpc(browsers[0], {
+        await rpc(browsers[0], "workspace.create", {
           browser_source: null,
           cwd: "/explicit",
           focus: true,
@@ -715,7 +777,14 @@ test("production routing bootstraps only a verified empty session and serializes
     expect(mutations[1]).toEqual({ cwd: "/explicit", focus: false });
     workspaces = [];
     expect(
-      (await rpc(browsers[0], { browser_source: null }, 99999)).error,
+      (
+        await rpc(
+          browsers[0],
+          "workspace.create",
+          { browser_source: null },
+          99999,
+        )
+      ).error,
     ).toBeDefined();
     expect(mutations).toHaveLength(2);
   } finally {

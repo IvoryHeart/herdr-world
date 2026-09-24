@@ -324,6 +324,19 @@ describe("terminal relay viewport cache", () => {
 });
 
 describe("TerminalAttachFrameWatchdog", () => {
+  test("attempt identity survives a frame but not closure or replacement", () => {
+    const watchdog = new TerminalAttachFrameWatchdog();
+    const first = watchdog.begin();
+    watchdog.markFrame();
+    expect(watchdog.isCurrent(first)).toBe(true);
+    watchdog.cancel();
+    expect(watchdog.isCurrent(first)).toBe(false);
+    const next = watchdog.begin();
+    watchdog.cancel(first);
+    expect(watchdog.isCurrent(next)).toBe(true);
+    watchdog.dispose();
+    expect(watchdog.isCurrent(next)).toBe(false);
+  });
   test("does not arm when the frame arrived before the RPC response", async () => {
     const watchdog = new TerminalAttachFrameWatchdog();
     const attempt = watchdog.begin();

@@ -27,7 +27,7 @@ import {
 } from "@xterm/addon-clipboard";
 import { FitAddon } from "@xterm/addon-fit";
 import { UnicodeGraphemesAddon } from "@xterm/addon-unicode-graphemes";
-import type { ITheme } from "@xterm/xterm";
+import type { IBufferRange, ITheme } from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
 import {
   Columns2,
@@ -115,11 +115,18 @@ import {
   TerminalTouchSelection,
   terminalSelectedText,
 } from "../terminalTouchSelection";
-import { registerTerminalLinkProvider } from "../terminalLinkProvider";
 import {
-  findTerminalHttpLinks,
-  sanitizeTerminalHttpUrl,
-} from "../terminalLinks";
+  registerTerminalLinkProvider,
+  type TerminalResolvedLink,
+  type TerminalTouchLink,
+} from "../terminalLinkProvider";
+import {
+  TerminalFileLinkMenu,
+  type TerminalFileLinkMenuState,
+} from "./TerminalFileLinkMenu";
+import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { directoryPreviewName } from "../filesystemPaths";
+import { sanitizeTerminalHttpUrl, terminalFileUriPath } from "../terminalLinks";
 import {
   createTerminalPasteRunner,
   type TerminalPasteTextareaSnapshot,
@@ -199,14 +206,30 @@ function sendBytes(
 
 const FONT_FAMILY =
   'SFMono-Regular, Menlo, Monaco, "0xProto Nerd Font Mono", "JetBrainsMonoNL Nerd Font", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", Consolas, "Liberation Mono", "Courier New", "Noto Sans Mono CJK SC", "Source Han Mono SC", "Sarasa Mono SC", "Herdr Nerd Symbols", monospace';
-const LINK_BLUE = "\x1b[94m";
-const RESET_FOREGROUND = "\x1b[39m";
-const ANSI_SEQUENCE_RE =
-  /\x1b\][\s\S]*?(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-Z\\-_]/g;
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
 const TERMINAL_EVICTION_WINDOW_MS = 60_000;
 const TERMINAL_EVICTION_MAX_RETRIES = 3;
 const TERMINAL_TOUCH_TAP_SLOP_PX = 8;
+// A switch that resolves within this window shows no spinner at all, which
+// reads as an instant switch instead of a flash of loading chrome. Set well
+// above the round trip a local attach actually takes: a spinner that appears
+// and leaves again is more distracting than a terminal that stays briefly
+// blank, and a switch is still perceived as immediate far past this point.
+const TERMINAL_LOADING_SPINNER_DELAY_MS = 500;
+
+/** True only once `pending` has held continuously for `delayMs`. */
+function useDelayedFlag(pending: boolean, delayMs: number): boolean {
+  const [elapsed, setElapsed] = useState(false);
+  useEffect(() => {
+    if (!pending) {
+      setElapsed(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setElapsed(true), delayMs);
+    return () => window.clearTimeout(timer);
+  }, [delayMs, pending]);
+  return pending && elapsed;
+}
 
 function terminalDensity(uiScale: number) {
   const compact = typeof window !== "undefined" && isMobileLayout();
@@ -249,35 +272,6 @@ function terminalCellAtPoint(term: Terminal, clientX: number, clientY: number) {
 
 function terminalCellAt(term: Terminal, e: WheelEvent) {
   return terminalCellAtPoint(term, e.clientX, e.clientY);
-}
-
-function colorHttpLinks(input: string): string {
-  let output = "";
-  let index = 0;
-
-  for (const match of input.matchAll(ANSI_SEQUENCE_RE)) {
-    const start = match.index ?? 0;
-    if (start > index)
-      output += colorHttpLinksInText(input.slice(index, start));
-    output += match[0];
-    index = start + match[0].length;
-  }
-
-  if (index < input.length) output += colorHttpLinksInText(input.slice(index));
-  return output;
-}
-
-function colorHttpLinksInText(text: string): string {
-  const links = findTerminalHttpLinks(text);
-  if (links.length === 0) return text;
-  let output = "";
-  let offset = 0;
-  for (const link of links) {
-    output += text.slice(offset, link.start);
-    output += `${LINK_BLUE}${link.url}${RESET_FOREGROUND}`;
-    offset = link.end;
-  }
-  return output + text.slice(offset);
 }
 
 function isEditableElement(target: EventTarget | null) {
@@ -421,11 +415,30 @@ export function TerminalView({
     | null
   >(null);
   const [uploadError, setUploadError] = useState("");
+  const [fileLinkMenu, setFileLinkMenu] =
+    useState<TerminalFileLinkMenuState | null>(null);
+  const [touchLink, setTouchLink] = useState<
+    (TerminalTouchLink & { current: () => boolean }) | null
+  >(null);
+  const [workspaceDirectory, setWorkspaceDirectory] = useState<string | null>(
+    null,
+  );
+  const touchLinkIntentRef = useRef(0);
+  const linkRevisionRef = useRef(0);
+  const linkReadyRef = useRef(false);
   const [terminalLoading, setTerminalLoading] = useState(
     s.status === "connected" && !s.connectionPaused,
   );
   const [terminalAttachError, setTerminalAttachError] = useState("");
   const [pasteLoading, setPasteLoading] = useState(false);
+  const terminalLoadingSpinner = useDelayedFlag(
+    terminalLoading,
+    TERMINAL_LOADING_SPINNER_DELAY_MS,
+  );
+  const navigationLoadingSpinner = useDelayedFlag(
+    s.navigationLoading,
+    TERMINAL_LOADING_SPINNER_DELAY_MS,
+  );
   const [attachRetry, setAttachRetry] = useState(0);
   const [inputActive, setInputActive] = useState(false);
   const inputActiveRef = useRef(false);
@@ -503,7 +516,7 @@ export function TerminalView({
   const composerOpen = controlledComposerOpen ?? localComposerOpen;
   const composerOpenRef = useRef(composerOpen);
   composerOpenRef.current = composerOpen;
-  const closeTerminalInput = useCallback(() => {
+  const closeTerminalInput = useCallback((blurInput = true) => {
     inputActiveRef.current = false;
     inputSessionRef.current++;
     setInputActive(false);
@@ -515,9 +528,13 @@ export function TerminalView({
       touchSelectionRef.current?.active === true;
     if (term.textarea)
       term.textarea.readOnly = term.options.disableStdin === true;
-    term.blur();
+    if (blurInput) term.blur();
   }, []);
   useLayoutEffect(() => {
+    linkRevisionRef.current++;
+    termRef.current?.refresh(0, termRef.current.rows - 1);
+    setFileLinkMenu(null);
+    setWorkspaceDirectory(null);
     if (desiredTerminalRef.current !== (pane?.terminal_id ?? null))
       endpointPresentationRef.current?.reset(true);
     touchSelectionRef.current?.reset();
@@ -525,7 +542,6 @@ export function TerminalView({
   }, [
     closeTerminalInput,
     composerOpen,
-    isActivePane,
     connectionClient,
     pane?.pane_id,
     pane?.terminal_id,
@@ -539,6 +555,14 @@ export function TerminalView({
     attachRetry,
     termInstance,
   ]);
+  useLayoutEffect(() => {
+    // Selecting a split is not new link content: preserve its mouse-down link.
+    // Still end mobile input/selection and dismiss actions on focus changes.
+    setFileLinkMenu(null);
+    setWorkspaceDirectory(null);
+    touchSelectionRef.current?.reset();
+    closeTerminalInput();
+  }, [closeTerminalInput, isActivePane]);
   const setComposerOpen = useCallback(
     (open: boolean) => {
       if (controlledComposerOpen === undefined) setLocalComposerOpen(open);
@@ -749,6 +773,9 @@ export function TerminalView({
         (amount === "half" && store.terminalScrollReason(targetTerminalId))
       )
         return;
+      linkRevisionRef.current++;
+      term.refresh(0, term.rows - 1);
+      setFileLinkMenu(null);
       connectionClient
         .call("terminal.scroll", {
           terminal_id: targetTerminalId,
@@ -812,6 +839,46 @@ export function TerminalView({
   useEffect(() => {
     if (!container) return;
     let terminalEffectDisposed = false;
+    const retireTouchLink = () => {
+      touchLinkIntentRef.current++;
+      setTouchLink(null);
+    };
+    let latestLinkFrame: string | undefined;
+    let latestEndpointText: string | undefined;
+    let oscHover: {
+      text: string;
+      state: string | null;
+      range: IBufferRange;
+      ready: boolean;
+    } | null = null;
+    let oscRefreshRange: IBufferRange | null = null;
+    const linkState = () => {
+      const presentation = endpointPresentationRef.current;
+      if (
+        terminalEffectDisposed ||
+        !connectionClient.isCurrent() ||
+        !linkReadyRef.current ||
+        !desiredTerminalRef.current ||
+        presentation?.linkWritePending ||
+        (!latestLinkFrame &&
+          latestEndpointText !== undefined &&
+          presentation?.displayedFrame?.text !== latestEndpointText) ||
+        (latestLinkFrame &&
+          presentation?.displayedFrame?.linkFrame !== latestLinkFrame)
+      )
+        return null;
+      return `${linkRevisionRef.current}:${desiredTerminalRef.current}:${term.cols}:${term.rows}:${term.buffer.active.viewportY}`;
+    };
+    const showFileLinkMenu = (path: string, event: MouseEvent) => {
+      const workspaceId = previewWorkspaceIdRef.current;
+      if (workspaceId && linkState())
+        setFileLinkMenu({
+          path,
+          workspaceId,
+          x: event.clientX,
+          y: event.clientY,
+        });
+    };
     const term = new Terminal({
       cursorBlink: true,
       disableStdin: composerOpenRef.current || shouldAvoidVirtualKeyboard(),
@@ -820,16 +887,71 @@ export function TerminalView({
       theme: terminalThemeRef.current,
       allowProposedApi: true,
       linkHandler: {
+        // Opt in only to route local file URIs below; all other schemes stay inert.
+        allowNonHttpProtocols: true,
+        hover(_event, text, range) {
+          oscHover = { text, state: linkState(), range, ready: false };
+          // Native hover can reuse an inactive line cache. A new range object
+          // after a full refresh proves xterm actually reread the OSC8 target.
+          if (!oscRefreshRange) {
+            oscRefreshRange = range;
+            queueMicrotask(() => {
+              if (!terminalEffectDisposed) term.refresh(0, term.rows - 1);
+            });
+          }
+        },
+        leave() {
+          oscHover = null;
+        },
         activate(event, text) {
           event.preventDefault();
-          if (!terminalLinkModifierMatches(event)) return;
+          if (
+            !terminalLinkModifierMatches(event) ||
+            !oscHover?.ready ||
+            !oscHover.state ||
+            oscHover.text !== text ||
+            oscHover.state !== linkState()
+          )
+            return;
+          const path = terminalFileUriPath(text);
+          if (path) {
+            term.clearSelection();
+            showFileLinkMenu(path, event);
+            return;
+          }
           const url = sanitizeTerminalHttpUrl(text);
-          if (url) window.open(url, "_blank", "noopener,noreferrer");
+          if (url) {
+            term.clearSelection();
+            window.open(url, "_blank", "noopener,noreferrer");
+          }
         },
       },
       scrollbar: { showScrollbar: false },
       scrollback: 2000,
     });
+    const linkRender = term.onRender(({ start, end }) => {
+      // Public onRender fires before xterm's active-link invalidation listener.
+      queueMicrotask(() => {
+        if (!oscHover) oscRefreshRange = null;
+        if (
+          !terminalEffectDisposed &&
+          start === 0 &&
+          end === term.rows - 1 &&
+          oscHover &&
+          oscRefreshRange &&
+          oscHover.range !== oscRefreshRange &&
+          oscHover.state === linkState()
+        ) {
+          oscHover.ready = true;
+          oscRefreshRange = null;
+        }
+      });
+    });
+    const invalidateLinks = () => {
+      retireTouchLink();
+      linkRevisionRef.current++;
+      term.refresh(0, term.rows - 1);
+    };
     const fit = new FitAddon();
     const clipboardProvider = createTerminalClipboardProvider({
       onWriteStart() {
@@ -871,9 +993,33 @@ export function TerminalView({
     fitRef.current = fit;
     const linkProvider = registerTerminalLinkProvider(
       term,
-      openPathInInspector,
+      showFileLinkMenu,
       resolveTerminalFilePaths,
       () => endpointPresentationRef.current?.displayedFrame != null,
+      {
+        state: linkState,
+        resolve: async (row, col, touch) => {
+          const terminalId = desiredTerminalRef.current;
+          if (
+            !latestLinkFrame ||
+            !terminalId ||
+            !linkState() ||
+            (!touch &&
+              !store
+                .get()
+                .endpointAvailability[terminalId]?.methods.includes(
+                  "pane.link.resolve",
+                ))
+          )
+            return null;
+          return connectionClient.call("terminal.link.resolve", {
+            terminal_id: terminalId,
+            frame: latestLinkFrame,
+            row,
+            col,
+          }) as Promise<TerminalResolvedLink>;
+        },
+      },
     );
 
     const imeFallback = new TerminalImeFallbackTracker();
@@ -916,6 +1062,7 @@ export function TerminalView({
       (!shouldAvoidVirtualKeyboard() || inputActiveRef.current);
 
     term.onData((data) => {
+      invalidateLinks();
       if (replayingWheel && acceptsEndpointInput()) {
         sendBytes(
           connectionClient,
@@ -949,7 +1096,12 @@ export function TerminalView({
     const endpointPresentation: TerminalEndpointPresentation =
       new TerminalEndpointPresentation(
         () => term.hasSelection() || historySelection.active,
-        (text, parsed) => term.write(colorHttpLinks(text), parsed),
+        (text, parsed, linksChanged) =>
+          term.write(text, () => {
+            parsed();
+            if (!terminalEffectDisposed && linksChanged)
+              term.refresh(0, term.rows - 1);
+          }),
         () => ({ cols: term.cols, rows: term.rows }),
         {
           accepts: (frame) => historySelection.accepts(frame),
@@ -981,6 +1133,10 @@ export function TerminalView({
       endpointPresentation.flush();
     });
     const selectionResize = term.onResize(() => {
+      invalidateLinks();
+      linkReadyRef.current = false;
+      latestLinkFrame = undefined;
+      setFileLinkMenu(null);
       touchSelection.reset();
       setReviewSelection((current) => (current?.composing ? current : null));
       historySelection.reset();
@@ -1003,6 +1159,12 @@ export function TerminalView({
       }
       const text = b64toText(t.bytes);
       if (text === null) return;
+      if (!t.link_frame || t.link_frame !== latestLinkFrame) invalidateLinks();
+      linkReadyRef.current = true;
+      latestEndpointText =
+        typeof t.mouse_reporting === "boolean" ? text : undefined;
+      latestLinkFrame = t.link_frame;
+      // An explicitly chosen path is a stable action target, even as a TUI repaints.
       attachWatchdogRef.current?.markFrame();
       attachTimeoutCountRef.current = 0;
       setTerminalLoading(false);
@@ -1017,6 +1179,7 @@ export function TerminalView({
             rows: t.height,
           },
           t.history,
+          t.link_frame,
         );
       } else {
         endpointPresentation.updateIncremental(text, () => {
@@ -1063,14 +1226,22 @@ export function TerminalView({
       ) {
         return;
       }
+      invalidateLinks();
+      linkReadyRef.current = false;
+      setFileLinkMenu(null);
       store.setTerminalEndpoint(connectionClient, closed.terminal_id, null);
       // Herdr closes the direct attach when another client takes the
       // terminal over (or its stream dies). Re-attach, but bound takeover
       // wars between two clients so they cannot evict each other forever.
       touchSelection.reset();
       endpointPresentation.reset();
+      attachWatchdogRef.current?.cancel();
       attachedRef.current = null;
       attachingRef.current = null;
+      if (closed.reason === "terminal_configuration_changed") {
+        setAttachRetry((value) => value + 1);
+        return;
+      }
       const now = Date.now();
       attachEvictionsRef.current = attachEvictionsRef.current.filter(
         (at) => now - at < TERMINAL_EVICTION_WINDOW_MS,
@@ -1094,6 +1265,9 @@ export function TerminalView({
       terminalIdentity,
       (sendRemoteDetach) => {
         disposedByConnectionLease = true;
+        invalidateLinks();
+        linkReadyRef.current = false;
+        setFileLinkMenu(null);
         const terminalId = attachedRef.current ?? desiredTerminalRef.current;
         if (sendRemoteDetach && terminalId && connectionClient.isCurrent()) {
           void connectionClient
@@ -1351,6 +1525,14 @@ export function TerminalView({
         return false;
       }
       if (e.type === "keydown" && shortcutMatches(e, "terminal.copy")) {
+        // Keep native copy on the terminal textarea so Safari's IME focus is
+        // not interrupted by the clipboard fallback's temporary readonly input.
+        const nativeCopy =
+          !e.altKey &&
+          !e.shiftKey &&
+          (e.key.toLowerCase() === "c" || e.code === "KeyC") &&
+          (applePlatform ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+        if (nativeCopy) return false;
         e.preventDefault();
         e.stopPropagation();
         const text = trimCopiedLinePadding(
@@ -1484,7 +1666,9 @@ export function TerminalView({
       }, 0);
     };
     const onTerminalBlur = () => {
-      closeTerminalInput();
+      // Desktop window blur retains activeElement for native focus restoration.
+      // Explicitly blurring it would discard that target when switching apps.
+      closeTerminalInput(shouldAvoidVirtualKeyboard());
       imeCommitGuard.beginIndependentInput();
       imeKeyEvent.end();
       cancelCompositionSettle();
@@ -1970,7 +2154,20 @@ export function TerminalView({
         historySelection.reset();
         if (endpointPresentation.beginSelection(activate)) activate();
       },
+      selected: ({ row, col }) => {
+        const intent = touchLinkIntentRef.current;
+        const state = linkState();
+        const current = () =>
+          !!state &&
+          state === linkState() &&
+          touchSelection.active &&
+          intent === touchLinkIntentRef.current;
+        void linkProvider.resolveTouch(row, col, current).then((target) => {
+          if (target && current()) setTouchLink({ ...target, current });
+        });
+      },
       changed: () => {
+        retireTouchLink();
         setTouchHandles(touchSelection.handles);
         if (!touchSelection.active) {
           setReviewSelection((current) =>
@@ -2015,7 +2212,10 @@ export function TerminalView({
         e.stopImmediatePropagation();
         return;
       }
-      const offerReview = reviewSelectionDrag && e.button === 0;
+      const offerReview =
+        reviewSelectionDrag &&
+        e.button === 0 &&
+        !terminalLinkModifierMatches(e);
       reviewSelectionDrag = false;
       selectionDragGuard.mouseUp();
       endpointPresentation.selectionDrag = false;
@@ -2113,6 +2313,8 @@ export function TerminalView({
 
     const onWheel = (e: WheelEvent) => {
       if (replayingWheel) return;
+      invalidateLinks();
+      setFileLinkMenu(null);
       touchSelection.cancelPending();
       if (touchSelection.active) {
         e.preventDefault();
@@ -2199,6 +2401,7 @@ export function TerminalView({
     const onTouchStart = (e: TouchEvent) => {
       lastPointerType = "touch";
       if (e.touches.length !== 1) {
+        retireTouchLink();
         touchMoved = true;
         touchSelection.cancelPending();
         if (!touchSelection.active) endpointPresentation.cancelSelection();
@@ -2215,6 +2418,8 @@ export function TerminalView({
     };
     const onTouchMove = (e: TouchEvent) => {
       if (e.touches.length !== 1 || touchLastY === null) return;
+      invalidateLinks();
+      setFileLinkMenu(null);
       const touch = e.touches[0];
       touchSelection.move({ x: touch.clientX, y: touch.clientY });
       if (
@@ -2285,6 +2490,7 @@ export function TerminalView({
       if (dismissInput) closeTerminalInput();
     };
     const onTouchCancel = () => {
+      retireTouchLink();
       touchSelection.cancelPending();
       if (!touchSelection.active) endpointPresentation.cancelSelection();
       touchStartX = null;
@@ -2470,6 +2676,7 @@ export function TerminalView({
       });
       imeFallback.dispose();
       imeCommitGuard.dispose();
+      linkRender.dispose();
       linkProvider.dispose();
       const terminalId = attachedRef.current ?? desiredTerminalRef.current;
       if (
@@ -2603,7 +2810,11 @@ export function TerminalView({
       })
       .then(
         (result) => {
-          if (!connectionClient.isCurrent()) return;
+          if (
+            !connectionClient.isCurrent() ||
+            !attachWatchdogRef.current?.isCurrent(attachAttempt)
+          )
+            return;
           if (desiredTerminalRef.current === terminalId)
             store.setTerminalEndpoint(
               connectionClient,
@@ -2673,7 +2884,11 @@ export function TerminalView({
           }
         },
         (e) => {
-          if (!connectionClient.isCurrent()) return;
+          if (
+            !connectionClient.isCurrent() ||
+            !attachWatchdogRef.current?.isCurrent(attachAttempt)
+          )
+            return;
           attachWatchdogRef.current?.cancel(attachAttempt);
           if (attachingRef.current === terminalId) attachingRef.current = null;
           if (desiredTerminalRef.current === terminalId) {
@@ -2824,14 +3039,18 @@ export function TerminalView({
                 </button>
               </div>
             ) : s.navigationLoading ? (
-              <div
-                className="terminal-loading"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="terminal-loading-dot" />
-                <span>Loading terminal</span>
-              </div>
+              // Stay blank for the grace window rather than falling through to
+              // the prompt below, which would read as "nothing is happening".
+              navigationLoadingSpinner ? (
+                <div
+                  className="terminal-loading"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span className="terminal-loading-dot" />
+                  <span>Loading terminal</span>
+                </div>
+              ) : null
             ) : (
               <span className="muted">
                 Select a workspace or agent to open its terminal.
@@ -2862,6 +3081,24 @@ export function TerminalView({
 
   return (
     <>
+      {fileLinkMenu
+        ? createPortal(
+            <TerminalFileLinkMenu
+              state={fileLinkMenu}
+              client={connectionClient}
+              onClose={() => setFileLinkMenu(null)}
+              onPreview={openPathInInspector}
+              onWorkspace={setWorkspaceDirectory}
+            />,
+            document.body,
+          )
+        : null}
+      <CreateWorkspaceDialog
+        open={workspaceDirectory !== null}
+        initialCwd={workspaceDirectory ?? ""}
+        initialName={directoryPreviewName(workspaceDirectory ?? "")}
+        onClose={() => setWorkspaceDirectory(null)}
+      />
       {reviewSelection &&
       !reviewSelection.composing &&
       touchHandles.length === 0
@@ -2947,6 +3184,37 @@ export function TerminalView({
                 >
                   Done
                 </button>
+                {touchLink ? (
+                  <button
+                    type="button"
+                    onPointerDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      if (!touchLink.current()) {
+                        setTouchLink(null);
+                        return;
+                      }
+                      if (touchLink.kind === "url") {
+                        window.open(
+                          touchLink.value,
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
+                      } else {
+                        const workspaceId = previewWorkspaceIdRef.current;
+                        if (workspaceId)
+                          setFileLinkMenu({
+                            path: touchLink.value,
+                            workspaceId,
+                            x: event.clientX,
+                            y: event.clientY,
+                          });
+                      }
+                      touchSelectionRef.current?.reset();
+                    }}
+                  >
+                    {touchLink.kind === "url" ? "Open link" : "File actions"}
+                  </button>
+                ) : null}
               </div>
               {touchHandles.map((handle) => (
                 <button
@@ -2967,6 +3235,8 @@ export function TerminalView({
                   onPointerDown={(event) => {
                     event.preventDefault();
                     if (!event.isPrimary) return;
+                    touchLinkIntentRef.current++;
+                    setTouchLink(null);
                     touchHandleOffsetRef.current = {
                       x: event.clientX - handle.x,
                       y: event.clientY - handle.cellY,
@@ -3305,7 +3575,7 @@ export function TerminalView({
           >
             <span>{terminalAttachError}</span>
           </div>
-        ) : terminalLoading || pasteLoading ? (
+        ) : terminalLoadingSpinner || pasteLoading ? (
           <div className="terminal-loading" role="status" aria-live="polite">
             <span className="terminal-loading-dot" />
             <span>{pasteLoading ? "Pasting..." : "Loading terminal"}</span>

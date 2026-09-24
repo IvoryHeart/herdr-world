@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
@@ -82,18 +82,23 @@ describe("local workspace file operations", () => {
     });
   });
 
-  test("resolves only regular files inside the workspace", async () => {
+  test("resolves files and directories without allowing relative or symlink escapes", async () => {
     await withTempDir(async (root) => {
       await mkdir(join(root, "a", "b"), { recursive: true });
       await writeFile(join(root, "a", "b", "c.png"), "image");
+      await symlink(join(root, ".."), join(root, "outside"));
       expect(
         await resolveLocalFilePaths(root, [
           "a/b/c.png",
           "a/b",
           "missing/file.png",
           "../outside.txt",
+          "..",
+          "outside",
+          join(root, "a", "b"),
+          join(root, ".."),
         ]),
-      ).toEqual(["a/b/c.png"]);
+      ).toEqual(["a/b/c.png", "a/b", join(root, "a", "b"), join(root, "..")]);
     });
   });
 

@@ -1,5 +1,4 @@
 import {
-  ChevronLeft,
   FileDiff,
   FolderTree,
   GitFork,
@@ -733,23 +732,6 @@ export function WorkspaceInspectorHost({
         </div>
       ) : (
         <div className="workspace-inspector-body">
-          {hasDetail && state.view === "changes" ? (
-            <button
-              type="button"
-              className="workspace-inspector-back"
-              onClick={() => {
-                setDrillInByView((current) => ({
-                  ...current,
-                  [state.view]: false,
-                }));
-                onBack();
-              }}
-            >
-              <ChevronLeft size={15} />
-              Changed files
-            </button>
-          ) : null}
-
           <div
             className={`workspace-inspector-resource inspector-files-resource ${
               state.view === "files" ? "" : "is-hidden"
@@ -864,6 +846,7 @@ export function WorkspaceInspectorHost({
                             : {}
                         }
                         resourceKey={`${contentResourceKey}:file:${fileChangesKey}`}
+                        mobile={compact}
                         connectionClient={connectionClient}
                         annotations={annotations}
                         onCreateAnnotation={onCreateAnnotation}
@@ -930,6 +913,7 @@ export function WorkspaceInspectorHost({
                 >
                   <DiffContentView
                     key={contentResourceKey}
+                    selectionRevision={diffSelection.selectionRevision}
                     entry={diffSelection.entry}
                     file={diffSelection.file}
                     loading={diffSelection.loading}
@@ -949,6 +933,20 @@ export function WorkspaceInspectorHost({
                       diffViewerRef.current?.selectEntry(target)
                     }
                     onOpenFile={onOpenDiffFile}
+                    backAction={
+                      compact && hasDetail
+                        ? {
+                            label: "Changed files",
+                            onClick: () => {
+                              setDrillInByView((current) => ({
+                                ...current,
+                                changes: false,
+                              }));
+                              onBack();
+                            },
+                          }
+                        : undefined
+                    }
                   />
                 </Suspense>
               ) : null}

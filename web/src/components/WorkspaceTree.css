@@ -72,6 +72,27 @@
   background: color-mix(in srgb, var(--accent-soft) 60%, transparent);
 }
 
+.tree-row > .git-status {
+  min-width: min-content;
+  flex: 0 1 auto;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: 2px;
+}
+
+.tree-row > .git-status:has(.git-branch:not([hidden])) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tree-row .git-badge {
+  padding-inline: 2px;
+}
+
+.tree-row .git-branch {
+  min-width: 0;
+}
+
 .tree-row.is-focused > .ws-label {
   color: var(--text-strong);
   font-weight: 700;

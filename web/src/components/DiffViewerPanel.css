@@ -59,6 +59,24 @@
   margin-bottom: 6px;
 }
 
+/* Scope toggle and icon actions share one row in every layout. */
+.diff-panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.diff-panel-toolbar .diff-scope-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.diff-panel-toolbar .diff-toolbar-actions {
+  margin-bottom: 0;
+}
+
 .diff-scope-toggle button,
 .diff-toolbar-actions button {
   white-space: nowrap;
@@ -283,7 +301,7 @@
 
 .diff-search-controls {
   min-width: 0;
-  flex: 1 1 240px;
+  flex: 0 1 220px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -523,6 +541,43 @@
 .diff-file-open:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* Compact mode: slimmer file cards; the collapse button is dropped and the
+   whole title row toggles instead. */
+.diff-content-view.is-mobile .diff-file-section-head {
+  min-height: 26px;
+  padding: 2px 8px;
+  gap: 6px;
+}
+
+/* Full path of the expanded file, shown on its own banner above the diff. */
+.diff-file-path-banner {
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--viewer-border);
+  background: var(--viewer-header-bg);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+  word-break: break-all;
+}
+
+.diff-content-view.is-mobile .diff-file-section-title.is-toggle {
+  cursor: pointer;
+}
+
+.diff-content-view.is-mobile .diff-file-section-title.is-toggle:hover strong {
+  color: var(--accent);
+}
+
+.diff-content-view.is-mobile .diff-file-section-title strong {
+  font-size: 12px;
+}
+
+.diff-content-view.is-mobile .diff-file-open {
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
 }
 
 .diff-file-section.is-search-current .diff-file-section-head {

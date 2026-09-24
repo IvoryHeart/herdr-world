@@ -1,13 +1,17 @@
 import { EventEmitter } from "node:events";
 import * as net from "node:net";
 import { BinReader, BinWriter, encodeFrame } from "./bincode";
+import type { FrameData } from "./thin-client";
 import {
-  type CellData,
-  type CursorState,
-  type FrameData,
-  readCellData,
-  readFrameData,
-} from "./thin-client";
+  SurfaceReader,
+  type SurfaceBaseline,
+  SURFACE_DELTA_KIND,
+  SURFACE_REUSE_KIND,
+  readFullSurface,
+  readSurfacePatch,
+  readSurfaceDelta,
+  readSurfaceReuse,
+} from "./endpoint-surface";
 
 import { type PaneInputEvent, encodePaneInput } from "./vt-input-classifier";
 import { isTerminalClipboardPayload } from "./terminal-clipboard";
@@ -82,7 +86,7 @@ export interface EndpointSurface {
  * Client-owned shell connection to a Herdr >= 0.9.0 server over
  * herdr-client.sock, speaking the stable endpoint generation 1 contract:
  * bincode-envelope `EndpointControl` with JSON payloads, plus the frozen
- * PaneSurface/PaneSurfacePatch codecs.
+ * PaneSurface/PaneSurfacePatch codecs and negotiated delta/reuse controls.
  *
  * `connect` waits for both the welcome and the first valid shell.snapshot.v1
  * so endpoint methods can use its boot ID. Full surfaces replace the
@@ -105,7 +109,7 @@ export class EndpointClient extends EventEmitter {
         timer: ReturnType<typeof setTimeout>;
       }
     | undefined;
-  private surface: EndpointSurface | null = null;
+  private surface: SurfaceBaseline | null = null;
   private bootId = "";
   private requestSeq = 0;
   private pendingRequests = new Map<
@@ -114,10 +118,14 @@ export class EndpointClient extends EventEmitter {
       resolve: (result: unknown) => void;
       reject: (error: Error) => void;
       chunks: string[];
+      timer?: ReturnType<typeof setTimeout>;
     }
   >();
 
-  constructor(private socketPath: string) {
+  constructor(
+    private socketPath: string,
+    private surfaceCodecsEnabled = true,
+  ) {
     super();
   }
 
@@ -190,6 +198,8 @@ export class EndpointClient extends EventEmitter {
       endpoint_keybindings: false,
       mouse_capture: false,
       surface_active: true,
+      surface_delta: this.surfaceCodecsEnabled,
+      surface_reuse: this.surfaceCodecsEnabled,
       snapshot_codecs: ["shell.snapshot.v1"],
       surface_codecs: ["shell.surface.v1"],
       input_codecs: ["shell.input.semantic.v1"],
@@ -241,6 +251,7 @@ export class EndpointClient extends EventEmitter {
   callEndpoint(
     method: string,
     params: Record<string, unknown>,
+    timeoutMs?: number,
   ): Promise<unknown> {
     if (this.closed) {
       return Promise.reject(new Error("endpoint client closed"));
@@ -259,15 +270,29 @@ export class EndpointClient extends EventEmitter {
     w.string(this.bootId);
     w.string(JSON.stringify({ id: requestId, method, params }));
     return new Promise((resolve, reject) => {
-      this.pendingRequests.set(requestId, { resolve, reject, chunks: [] });
+      const timer =
+        timeoutMs === undefined
+          ? undefined
+          : setTimeout(() => {
+              this.pendingRequests.delete(requestId);
+              reject(new Error(`Endpoint ${method} timed out`));
+            }, timeoutMs);
+      this.pendingRequests.set(requestId, {
+        resolve,
+        reject,
+        chunks: [],
+        timer,
+      });
       this.write(w.toBuffer());
     });
   }
 
   close() {
     this.closed = true;
+    this.surface = null;
     this.rejectWelcome(new Error("endpoint client closed during handshake"));
     for (const pending of this.pendingRequests.values()) {
+      clearTimeout(pending.timer);
       pending.reject(new Error("endpoint client closed"));
     }
     this.pendingRequests.clear();
@@ -328,10 +353,18 @@ export class EndpointClient extends EventEmitter {
         if (r.remaining === 0 && isTerminalClipboardPayload(data)) {
           this.emit("clipboard", { data });
         }
-      } else if (variant === SM.PaneSurface) {
-        this.handleSurface(r);
-      } else if (variant === SM.PaneSurfacePatch) {
-        this.handlePatch(r);
+      } else if (
+        variant === SM.PaneSurface ||
+        variant === SM.PaneSurfacePatch
+      ) {
+        this.assertNegotiatedCodecs();
+        const reader = new SurfaceReader(payload);
+        reader.variant();
+        this.acceptSurface(
+          variant === SM.PaneSurface
+            ? readFullSurface(reader)
+            : readSurfacePatch(reader, this.surface),
+        );
       } else if (variant === SM.ClientShellSnapshot) {
         // The server delivers snapshots as EndpointControl JSON; this variant
         // exists in the frozen enum but is not currently sent.
@@ -346,6 +379,7 @@ export class EndpointClient extends EventEmitter {
         if (pending) {
           pending.chunks.push(data);
           if (finalChunk) {
+            clearTimeout(pending.timer);
             this.pendingRequests.delete(requestId);
             try {
               const parsed = JSON.parse(pending.chunks.join(""));
@@ -438,6 +472,10 @@ export class EndpointClient extends EventEmitter {
           revision: raw.revision ?? 0,
           raw,
         };
+        if (this.bootId && snapshot.bootId && this.bootId !== snapshot.bootId) {
+          this.close();
+          throw new Error("Herdr endpoint boot changed; reconnect required");
+        }
         this.bootId = snapshot.bootId;
         this.emit("snapshot", snapshot);
         this.resolveWelcome();
@@ -451,118 +489,35 @@ export class EndpointClient extends EventEmitter {
         this.sendControl(HEALTH_PONG_KIND, data);
       return;
     }
+    if (kind === SURFACE_DELTA_KIND || kind === SURFACE_REUSE_KIND) {
+      const capability =
+        kind === SURFACE_DELTA_KIND ? "surface_delta" : "surface_reuse";
+      if (
+        !this.surfaceCodecsEnabled ||
+        !this.welcome?.capabilities.includes(capability)
+      )
+        throw new Error(`Herdr sent unnegotiated ${capability}`);
+      this.acceptSurface(
+        kind === SURFACE_DELTA_KIND
+          ? readSurfaceDelta(data, this.surface)
+          : readSurfaceReuse(data, this.surface),
+      );
+      return;
+    }
     // Unknown named controls are optional and ignored per the contract.
   }
 
-  private handleSurface(r: BinReader) {
-    r.string(); // boot_id
-    r.varint(); // projection_revision
-    const surfaceRevision = r.varint(); // surface_revision (u64, varint)
-    const frame = readFrameData(r);
-    const panes = readPaneSurfacePanes(r);
-    // splits / popup / graphics tail: unused by the GUI, left unread.
-    this.surface = { frame, surfaceRevision, panes };
-    this.emit("surface", this.surface);
+  private acceptSurface(surface: SurfaceBaseline) {
+    if (
+      surface.bootId !== this.bootId ||
+      (this.surface &&
+        (surface.surfaceRevision <= this.surface.surfaceRevision ||
+          surface.projectionRevision < this.surface.projectionRevision))
+    )
+      throw new Error(
+        "Invalid endpoint surface identity or revision; reconnect required",
+      );
+    this.surface = surface;
+    this.emit("surface", surface);
   }
-
-  private handlePatch(r: BinReader) {
-    r.string(); // boot_id
-    r.varint(); // projection_revision
-    const baseSurfaceRevision = r.varint();
-    const surfaceRevision = r.varint();
-    const rowCount = r.varint();
-    const rows: Array<{ x: number; y: number; cells: CellData[] }> = [];
-    for (let i = 0; i < rowCount; i++) {
-      const x = r.varint();
-      const y = r.varint();
-      const cellCount = r.varint();
-      const cells: CellData[] = new Array(cellCount);
-      for (let j = 0; j < cellCount; j++) cells[j] = readCellData(r);
-      rows.push({ x, y, cells });
-    }
-    const panes = readPaneSurfacePanes(r);
-    const cursor = r.option(
-      (): CursorState => ({
-        x: r.varint(),
-        y: r.varint(),
-        visible: r.bool(),
-        shape: r.u8(),
-      }),
-    );
-
-    const current = this.surface;
-    if (!current || current.surfaceRevision !== baseSurfaceRevision) {
-      // Base mismatch: skip the patch and wait for the next full surface.
-      // ponytail: no resend request; the server repaints on focus/resize.
-      return;
-    }
-    // Patches carry only changed pane metadata, not the complete pane list.
-    // Keep the other panes so cursor-only updates still reach their sessions.
-    const nextPanes = current.panes.slice();
-    for (const pane of panes) {
-      const index = nextPanes.findIndex((p) => p.paneId === pane.paneId);
-      // Topology changes require a full surface; do not apply a partial one.
-      if (index < 0) return;
-      nextPanes[index] = pane;
-    }
-    const { frame } = current;
-    // Copy before patching: consumers may retain earlier emitted frames.
-    const cells = frame.cells.slice();
-    // The cursor is the final state, including null when it is cleared.
-    const nextFrame: FrameData = { ...frame, cells, cursor };
-    for (const { x, y, cells: rowCells } of rows) {
-      if (y >= frame.height) continue;
-      const offset = y * frame.width + x;
-      for (let j = 0; j < rowCells.length && x + j < frame.width; j++) {
-        cells[offset + j] = rowCells[j];
-      }
-    }
-    this.surface = { frame: nextFrame, surfaceRevision, panes: nextPanes };
-    this.emit("surface", this.surface);
-  }
-}
-
-function readRect(r: BinReader) {
-  return {
-    x: r.varint(),
-    y: r.varint(),
-    width: r.varint(),
-    height: r.varint(),
-  };
-}
-
-function readPaneSurfacePanes(r: BinReader): PaneSurfacePaneMeta[] {
-  const count = r.varint();
-  const panes: PaneSurfacePaneMeta[] = new Array(count);
-  for (let i = 0; i < count; i++) {
-    const paneId = r.string();
-    const contentRevision = r.varint();
-    const rect = readRect(r);
-    const innerRect = readRect(r);
-    if (r.bool()) readRect(r); // scrollbar_rect
-    let scroll: PaneSurfacePaneMeta["scroll"] = null;
-    if (r.bool()) {
-      scroll = {
-        offsetFromBottom: r.varint(),
-        maxOffsetFromBottom: r.varint(),
-        viewportRows: r.varint(),
-      };
-    }
-    const focused = r.bool();
-    const mouseReporting = r.bool();
-    r.bool(); // sgr_pixel_mouse
-    r.bool(); // alternate_screen_active
-    r.varint(); // pixel_width
-    r.varint(); // pixel_height
-    panes[i] = {
-      paneId,
-      contentRevision,
-      rect,
-      innerRect,
-      scroll,
-      focused,
-      mouseReporting,
-    };
-  }
-  return panes;
 }

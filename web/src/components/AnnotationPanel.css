@@ -223,10 +223,17 @@
   min-width: 0;
   min-height: 32px;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 5px;
   font-size: 11px;
+}
+
+.annotation-delivery-actions kbd {
+  flex-basis: 100%;
+  font-size: 9px;
+  opacity: 0.7;
 }
 
 .annotation-clear-button {

@@ -52,6 +52,7 @@ export class TerminalTouchSelection {
     private options: {
       begin: (activate: () => void) => void;
       changed: () => void;
+      selected?: (cell: { row: number; col: number }) => void;
       release: () => void;
     },
   ) {}
@@ -181,6 +182,10 @@ export class TerminalTouchSelection {
     this.endpoints = [selected[0].position, end.position + end.width];
     this.active = true;
     this.highlight();
+    this.options.selected?.({
+      row: Math.floor(hit / term.cols),
+      col: hit % term.cols,
+    });
   }
 
   drag(index: 0 | 1, point: Point) {

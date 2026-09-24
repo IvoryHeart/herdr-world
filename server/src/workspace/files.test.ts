@@ -178,7 +178,7 @@ describe("workspace file handlers", () => {
     });
   });
 
-  test("resolves existing workspace-relative files in one batch", async () => {
+  test("resolves existing workspace-relative files and directories in one batch", async () => {
     await withTempDir(async (root) => {
       await mkdir(join(root, "a", "b"), { recursive: true });
       await writeFile(join(root, "a", "b", "c.png"), "image");
@@ -222,6 +222,7 @@ describe("workspace file handlers", () => {
         files: [
           { candidate: "a/b/c.png", path: "a/b/c.png" },
           { candidate: "./a/b/c.png", path: "a/b/c.png" },
+          { candidate: "a/b", path: "a/b" },
         ],
       });
     });

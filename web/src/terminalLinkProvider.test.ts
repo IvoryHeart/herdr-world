@@ -46,12 +46,41 @@ function fixture(rows: string[], cols: number, wrapped: number[] = []) {
     new Promise<ILink[]>((done) =>
       provider.provideLinks(row, (found) => done(found ?? [])),
     );
-  return { term, lines, requests, existing, resolve, previewed, links };
+  return {
+    term,
+    lines,
+    requests,
+    existing,
+    resolve,
+    previewed,
+    links,
+    provide: (row: number, callback: (links: ILink[] | undefined) => void) =>
+      provider.provideLinks(row, callback),
+  };
 }
 
 // These exercise the actual provider registered with xterm, including async
 // resolution and the one-based, inclusive ranges used for mouse activation.
 describe("terminal link provider", () => {
+  test("suppresses a late filesystem reply after a newer row lookup", async () => {
+    const f = fixture(["docs/a.md", "docs/b.md"], 30);
+    const completions: ((value: Map<string, string>) => void)[] = [];
+    registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      () => new Promise((done) => completions.push(done)),
+    );
+    let oldReplies = 0;
+    f.provide(1, () => oldReplies++);
+    const b = f.links(2);
+    completions[1]!(new Map([["docs/b.md", "/tmp/b.md"]]));
+    expect((await b)[0]?.text).toBe("docs/b.md");
+    completions[0]!(new Map([["docs/a.md", "/tmp/a.md"]]));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(oldReplies).toBe(0);
+  });
+
   test("treats a soft-wrapped absolute file as one link from either row", async () => {
     const f = fixture(["See /tmp/long/gu", "ide.md and text"], 16, [2]);
     registerTerminalLinkProvider(f.term, (path) => f.previewed.push(path));
@@ -352,5 +381,308 @@ describe("terminal link provider", () => {
     f.lines[1]!.isWrapped = false;
     complete(new Map([["docs/long-path/guide.md", "docs/long-path/guide.md"]]));
     expect(await result).toEqual([]);
+  });
+});
+
+describe("endpoint terminal link provider", () => {
+  const regions = [
+    { row: 1, start_col: 4, end_col: 23 },
+    { row: 2, start_col: 0, end_col: 4 },
+  ];
+  const resolved = { regions, url: "https://example.com/guide" };
+
+  test.each(["resolved", "invalidated"])(
+    "suppresses superseded row callbacks when %s",
+    async (mode) => {
+      const f = fixture(["https://a.example", "https://b.example"], 30);
+      const completions: ((value: null) => void)[] = [];
+      let state = 1;
+      registerTerminalLinkProvider(f.term, undefined, undefined, () => false, {
+        state: () => state,
+        resolve: () => new Promise((done) => completions.push(done)),
+      });
+      const replies: string[] = [];
+      f.provide(1, () => replies.push("A"));
+      const b = f.links(2);
+      completions[1]!(null);
+      expect((await b)[0]?.text).toBe("https://b.example");
+      if (mode === "invalidated") state++;
+      completions[0]!(null);
+      await Promise.resolve();
+      expect(replies).toEqual([]);
+    },
+  );
+
+  test.each([0, 7])(
+    "keeps the complete upstream link range from either row at viewport %d",
+    async (viewportY) => {
+      const f = fixture(
+        [
+          ...Array<string>(viewportY).fill(""),
+          "",
+          "See https://example.com/",
+          "guide",
+        ],
+        24,
+      );
+      Object.assign(f.term.buffer.active, { viewportY });
+      const calls: number[][] = [];
+      registerTerminalLinkProvider(
+        f.term,
+        () => {},
+        undefined,
+        () => true,
+        {
+          state: () => 1,
+          resolve: async (row, col) => {
+            calls.push([row, col]);
+            return col === 0 && row === 1
+              ? { regions: [], url: null }
+              : resolved;
+          },
+        },
+      );
+      for (const row of [2, 3])
+        expect(
+          (await f.links(viewportY + row)).map((l) => [l.text, l.range]),
+        ).toEqual([
+          [
+            resolved.url,
+            {
+              start: { x: 5, y: viewportY + 2 },
+              end: { x: 5, y: viewportY + 3 },
+            },
+          ],
+        ]);
+      expect(calls).toEqual([
+        [1, 0],
+        [1, 4],
+        [2, 0],
+      ]);
+    },
+  );
+
+  test.each(["unsupported", "failed"])(
+    "retains file and safe local URL fallback when %s",
+    async (mode) => {
+      const f = fixture(
+        ["https://example.com", "  docs/long-folder/", "  README.md"],
+        30,
+      );
+      f.existing.add("docs/long-folder/README.md");
+      registerTerminalLinkProvider(
+        f.term,
+        () => {},
+        f.resolve,
+        () => true,
+        {
+          state: () => 1,
+          resolve: async () => {
+            if (mode === "failed") throw new Error("resolver unavailable");
+            return null;
+          },
+        },
+      );
+      expect((await f.links(1))[0]?.text).toBe("https://example.com");
+      expect((await f.links(3))[0]?.text).toBe("docs/long-folder/README.md");
+    },
+  );
+
+  test("does not fall back to clipped URL fragments inside upstream regions", async () => {
+    const f = fixture(["https://example.com/part"], 24);
+    registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      undefined,
+      () => true,
+      {
+        state: () => 1,
+        resolve: async () => ({
+          regions: [{ row: 0, start_col: 0, end_col: 22 }],
+          url: null,
+        }),
+      },
+    );
+    expect(await f.links(1)).toEqual([]);
+  });
+
+  test.each(["frame", "scroll", "resize", "reconnect", "navigation"])(
+    "drops asynchronous replies after %s",
+    async (change) => {
+      const f = fixture(["", "See https://example.com/", "guide"], 24);
+      let state: number | null = 1;
+      let finish!: (value: typeof resolved) => void;
+      registerTerminalLinkProvider(
+        f.term,
+        () => {},
+        undefined,
+        () => true,
+        {
+          state: () => state,
+          resolve: () =>
+            new Promise((done) => {
+              finish = done;
+            }),
+        },
+      );
+      const links = f.links(3);
+      if (change === "resize") Object.assign(f.term, { cols: 25 });
+      else if (change === "scroll")
+        Object.assign(f.term.buffer.active, { viewportY: 1 });
+      else state = change === "frame" ? 2 : null;
+      finish(resolved);
+      expect(await links).toEqual([]);
+    },
+  );
+
+  test("refreshes a stale cached file on hover without enabling its old action", async () => {
+    const f = fixture(["/tmp/old.md"], 30);
+    let state = 1;
+    const refreshed: number[][] = [];
+    Object.assign(f.term, {
+      rows: 10,
+      refresh: (...rows: number[]) => refreshed.push(rows),
+    });
+    registerTerminalLinkProvider(
+      f.term,
+      (path) => f.previewed.push(path),
+      undefined,
+      () => false,
+      {
+        state: () => state,
+        resolve: async () => null,
+      },
+    );
+    const [link] = await f.links(1);
+    state++;
+    f.lines[0]!.text = "/tmp/new.md";
+    const event = { preventDefault() {}, ctrlKey: true } as MouseEvent;
+    link!.hover!(event, link!.text);
+    link!.activate(event, link!.text);
+    await Promise.resolve();
+    expect(f.previewed).toEqual([]);
+    expect(refreshed).toEqual([[0, 9]]);
+    expect((await f.links(1))[0]?.text).toBe("/tmp/new.md");
+  });
+
+  test("rechecks file actions at click time and forwards the menu position", async () => {
+    const f = fixture(["/tmp/docs/guide.md"], 30);
+    let state = 1;
+    const opened: unknown[] = [];
+    registerTerminalLinkProvider(
+      f.term,
+      (path, event) => opened.push([path, event]),
+      undefined,
+      () => false,
+      {
+        state: () => state,
+        resolve: async () => null,
+      },
+    );
+    const previous = getShortcutSnapshot().preferences.active;
+    try {
+      selectShortcutPreset("windows");
+      const event = {
+        ctrlKey: true,
+        metaKey: false,
+        altKey: false,
+        shiftKey: false,
+        clientX: 70,
+        clientY: 30,
+        preventDefault() {},
+      } as MouseEvent;
+      const [link] = await f.links(1);
+      link!.activate(event, link!.text);
+      expect(opened).toEqual([["/tmp/docs/guide.md", event]]);
+      state++;
+      link!.activate(event, link!.text);
+      expect(opened).toHaveLength(1);
+    } finally {
+      selectShortcutPreset(previous);
+    }
+  });
+});
+
+describe("terminal touch link lookup", () => {
+  test("uses the original cell without retiring a pending hover", async () => {
+    const f = fixture(["docs/a.md", "docs/b.md"], 30);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    const completions: ((value: Map<string, string>) => void)[] = [];
+    const provider = registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      () => new Promise((done) => completions.push(done)),
+    );
+    const hover = f.links(1);
+    const touch = provider.resolveTouch(1, 6, () => true);
+    completions[1]!(new Map([["docs/b.md", "/tmp/b.md"]]));
+    expect(await touch).toEqual({ kind: "file", value: "/tmp/b.md" });
+    completions[0]!(new Map([["docs/a.md", "/tmp/a.md"]]));
+    expect((await hover)[0]?.text).toBe("docs/a.md");
+  });
+
+  test.each([
+    "javascript:alert(1)",
+    "file://example.com/tmp/docs",
+    "https://example.org/hidden",
+    "file://localhost/tmp/guide%20one.md",
+    null,
+  ])(
+    "OSC8 target %s overrides URL-looking labels with exactly one cell lookup",
+    async (uri) => {
+      const f = fixture(["https://label.example"], 40);
+      Object.assign(f.term.buffer.active, { viewportY: 0 });
+      const cells: number[][] = [];
+      const provider = registerTerminalLinkProvider(
+        f.term,
+        () => {},
+        undefined,
+        () => false,
+        {
+          state: () => 1,
+          resolve: async (row, col, touch) => {
+            expect(touch).toBe(true);
+            cells.push([row, col]);
+            return { url: null, regions: [], uri };
+          },
+        },
+      );
+      expect(await provider.resolveTouch(0, 10, () => true)).toEqual(
+        uri === "https://example.org/hidden"
+          ? { kind: "url", value: uri }
+          : uri === "file://localhost/tmp/guide%20one.md"
+            ? { kind: "file", value: "/tmp/guide one.md" }
+            : null,
+      );
+      expect(cells).toEqual([[0, 10]]);
+    },
+  );
+
+  test("selection edits and failed endpoint reads cannot revive a label target", async () => {
+    const f = fixture(["https://label.example"], 40);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    let finish!: () => void;
+    let current = true;
+    const provider = registerTerminalLinkProvider(
+      f.term,
+      undefined,
+      undefined,
+      () => false,
+      {
+        state: () => 1,
+        resolve: () =>
+          new Promise((_resolve, reject) => {
+            finish = () => reject(new Error("stale frame"));
+          }),
+      },
+    );
+    const pending = provider.resolveTouch(0, 10, () => current);
+    current = false;
+    finish();
+    expect(await pending).toBeNull();
+    current = true;
+    const failed = provider.resolveTouch(0, 10, () => current);
+    finish();
+    expect(await failed).toBeNull();
   });
 });

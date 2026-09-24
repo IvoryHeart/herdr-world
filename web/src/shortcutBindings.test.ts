@@ -333,6 +333,31 @@ test("older presets gain panel shortcuts without replacing saved assignments", (
   }
 });
 
+test("older presets gain annotation delivery shortcuts without replacing saved keys", () => {
+  for (const base of ["mac", "windows", "linux"] as const) {
+    const defaults = defaultShortcutBindings(base);
+    const bindings: Partial<typeof defaults> = { ...defaults };
+    delete bindings["annotations.copy"];
+    delete bindings["annotations.prefill"];
+    expect(
+      validateShortcutPreset({ ...preset(), base, bindings }).bindings,
+    ).toEqual(defaults);
+
+    delete bindings["terminal.copy"];
+    bindings["annotation.submit"] = [];
+    bindings["composer.send"] = [];
+    bindings["tab.create"] = defaults["annotations.copy"];
+    bindings["tab.close"] = defaults["annotations.prefill"];
+    const loaded = validateShortcutPreset({ ...preset(), base, bindings });
+    expect(loaded.bindings["annotations.copy"]).toEqual([]);
+    expect(loaded.bindings["annotations.prefill"]).toEqual([]);
+    expect(loaded.bindings["tab.create"]).toEqual(defaults["annotations.copy"]);
+    expect(loaded.bindings["tab.close"]).toEqual(
+      defaults["annotations.prefill"],
+    );
+  }
+});
+
 describe("terminal copy shortcuts", () => {
   test("copies with platform bindings without taking over Ctrl+C", () => {
     for (const platform of ["windows", "linux", "mac"] as const) {
@@ -372,6 +397,8 @@ describe("terminal copy shortcuts", () => {
       ...previous.bindings,
     };
     delete bindings["terminal.copy"];
+    delete bindings["annotations.copy"];
+    delete bindings["annotations.prefill"];
     bindings["tab.create"] = ["Ctrl+Shift+C"];
     const loaded = parseShortcutPreferences(
       JSON.stringify({

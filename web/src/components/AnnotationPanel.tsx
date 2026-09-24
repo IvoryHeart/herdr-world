@@ -16,6 +16,12 @@ import {
   terminalAnnotationTitle,
   type ReviewAnnotation,
 } from "../annotations";
+import {
+  shortcutLabel,
+  shortcutMatches,
+  shortcutTitle,
+  useShortcutPreferences,
+} from "../shortcutPreferences";
 import type { Pane } from "../types";
 import { ConfirmDialog } from "./ModalDialogs";
 import { ThemedSelect } from "./ThemedSelect";
@@ -74,6 +80,9 @@ export function AnnotationPanel({
   onSend: (paneId: string | null) => void;
   onGoToAgent?: () => void;
 }) {
+  useShortcutPreferences();
+  const copyShortcut = shortcutLabel("annotations.copy");
+  const prefillShortcut = shortcutLabel("annotations.prefill");
   const hasFeedback = annotations.some((annotation) =>
     annotation.comment.trim(),
   );
@@ -117,6 +126,26 @@ export function AnnotationPanel({
     <aside
       className={`annotation-panel ${floating ? "is-floating" : ""}`}
       aria-label="Review annotations"
+      onKeyDown={(event) => {
+        if (
+          event.defaultPrevented ||
+          confirmClear ||
+          !(event.target instanceof Node) ||
+          !event.currentTarget.contains(event.target)
+        )
+          return;
+        const copy = shortcutMatches(event.nativeEvent, "annotations.copy");
+        const prefill = shortcutMatches(
+          event.nativeEvent,
+          "annotations.prefill",
+        );
+        if (!copy && !prefill) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (busy || !hasFeedback || event.repeat) return;
+        if (copy) onCopy();
+        else onSend(targetPaneId || null);
+      }}
     >
       <header className="annotation-panel-head">
         <div>
@@ -260,16 +289,25 @@ export function AnnotationPanel({
             className="ghost"
             disabled={busy || !hasFeedback}
             onClick={onCopy}
+            title={shortcutTitle("Copy review feedback", "annotations.copy")}
           >
             <Clipboard size={14} /> Copy
+            {copyShortcut !== "Unassigned" ? <kbd>{copyShortcut}</kbd> : null}
           </button>
           <button
             type="button"
             disabled={busy || !hasFeedback}
             onClick={() => onSend(targetPaneId || null)}
+            title={shortcutTitle(
+              agentPanes.length ? "Pre-fill agent" : "Copy feedback",
+              "annotations.prefill",
+            )}
           >
             {agentPanes.length ? <Send size={14} /> : <Clipboard size={14} />}
             {agentPanes.length ? "Pre-fill agent" : "Copy feedback"}
+            {prefillShortcut !== "Unassigned" ? (
+              <kbd>{prefillShortcut}</kbd>
+            ) : null}
           </button>
         </div>
         {onGoToAgent ? (

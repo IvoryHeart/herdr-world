@@ -1,4 +1,8 @@
 import {
+  createTaskEventTracker,
+  type TaskEvent,
+} from "../notifications/task-events";
+import {
   assertEndpointCreationSource,
   createEmptyWorkspaceCreator,
 } from "../bridge/endpoint-creation";
@@ -9,10 +13,15 @@ import { HerdrClient } from "../bridge/herdr-client";
 import { assertSupportedHerdrProtocol } from "../bridge/protocol-compat";
 import { createSettingsRpcHandler } from "../bridge/settings-rpc";
 import {
+  readGuiSettings,
+  terminalSurfaceCodecsEnabled,
+} from "../config/gui-settings";
+import {
   createSshTunnelManager,
   type SshTunnelConfig,
   type SshTunnelError,
 } from "../bridge/ssh-tunnel";
+import { dropCoalescedMessage } from "../bridge/websocket-send";
 import { createTerminalBridge } from "../bridge/terminal-bridge";
 import { createHerdrInfoHandler } from "../http/herdr-info";
 import { createImageUploadHandler } from "../http/image-upload";
@@ -92,6 +101,7 @@ export function createLegacyConnectionRuntime(args: {
   clientLabel: (ws: ServerWebSocket<unknown>) => string;
   markRpcError: MarkRpcError;
   onEvent: (event: unknown, identity: ConnectionIdentity) => void;
+  onTaskEvent?: (event: TaskEvent) => void;
   onError?: (error: unknown, identity: ConnectionIdentity) => void;
   onTransportExit?: (error: SshTunnelError) => void;
   /** Test seam for deterministic shutdown coverage. */
@@ -188,6 +198,17 @@ export function createLegacyConnectionRuntime(args: {
       files.resolveWorkspaceGitRoot({ workspace_id: workspaceId }),
     workspaceAutoSyncIsRunning: workspaceAutoSync.isRunning,
     onWorkspaceAutoSyncSettingsChanged: workspaceAutoSync.settingsChanged,
+    onTerminalTransportSettingsChanged: (enabled) => {
+      if (disposed) return;
+      terminalBridge.refreshSurfaceCodecs();
+      args.onEvent(
+        {
+          event: "settings.terminal_transport.updated",
+          data: { surface_codecs: enabled },
+        },
+        identity,
+      );
+    },
     safeSend: args.safeSend,
     markRpcError: args.markRpcError,
   });
@@ -197,6 +218,8 @@ export function createLegacyConnectionRuntime(args: {
     connectionGeneration: args.connectionGeneration,
     formatError: sanitizeConnectionError,
     clientSocketPath,
+    surfaceCodecsEnabled: async () =>
+      terminalSurfaceCodecsEnabled(await readGuiSettings(), identity.id),
     herdrProtocol: async () => {
       const protocol: unknown = (await herdr.ping()).protocol;
       assertSupportedHerdrProtocol(protocol);
@@ -236,6 +259,7 @@ export function createLegacyConnectionRuntime(args: {
       }
     },
     safeSend: args.safeSend,
+    dropCoalesced: dropCoalescedMessage,
     clientLabel: args.clientLabel,
     markRpcError: args.markRpcError,
     confirmRelayResize: async ({ cols, rows, paneId }) => {
@@ -305,6 +329,10 @@ export function createLegacyConnectionRuntime(args: {
     failureMessage: "agent status subscription failed",
     recoveryMessage: "agent status subscription recovered",
   });
+  const taskEvents = createTaskEventTracker((event) =>
+    args.onTaskEvent?.(event),
+  );
+  let taskListRevision = 0;
   const agentStatusSubscriptions = createAgentStatusSubscriptionLoop({
     herdr,
     connectionId: identity.id,
@@ -317,8 +345,14 @@ export function createLegacyConnectionRuntime(args: {
         connection: identity.id,
         operation: "pane list",
       }),
-    onPaneListStart: lastStepTurns.beginPaneList,
-    onPaneList: lastStepTurns.reconcilePaneList,
+    onPaneListStart: () => {
+      taskListRevision = taskEvents.beginPaneList();
+      return lastStepTurns.beginPaneList();
+    },
+    onPaneList: (result, revision) => {
+      taskEvents.reconcilePaneList(result, taskListRevision);
+      lastStepTurns.reconcilePaneList(result, revision);
+    },
     log: (message) => {
       agentStatusRecovery.recovered({ connection: identity.id });
       logger.debug(message, { connection: identity.id });
@@ -326,6 +360,7 @@ export function createLegacyConnectionRuntime(args: {
   });
 
   const onHerdrEvent = (event: unknown) => {
+    taskEvents.handleHerdrEvent(event);
     lastStepTurns.handleHerdrEvent(event);
     agentStatusSubscriptions.handleHerdrEvent(event);
     args.onEvent(event, identity);
@@ -399,6 +434,7 @@ export function createLegacyConnectionRuntime(args: {
     backgroundStarted = false;
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
+    taskEvents.stop();
     const autoSyncStop = workspaceAutoSync.stop();
     terminalBridge.dispose();
     const subscriptionStop = subscriptionLoop.stop();

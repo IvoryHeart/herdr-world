@@ -28,9 +28,8 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   /* Same height as the navigation header (scope toggle block + its
      margin), so both header rows read as one line. */
   min-height: 46px;
@@ -45,38 +44,42 @@
   padding: 5px 8px;
 }
 
-.diff-content-view.is-embedded .diff-content-actions {
-  flex-basis: auto;
-}
-
 .diff-content-title {
   min-width: 0;
-  /* Grow so the display controls and search cluster stay right-aligned. */
   flex: 1 1 auto;
-  display: grid;
-  gap: 1px;
 }
 
-.diff-content-title strong,
-.diff-content-title span {
+.diff-content-title strong {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.diff-content-title span {
+.diff-content-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
   color: var(--muted);
-  font-size: 12px;
 }
 
+.diff-content-back:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+/* Control groups keep their natural width and wrap as whole units; the
+   growing title pushes them right on wide panels. */
 .diff-content-actions {
   min-width: 0;
-  max-width: min(560px, 100%);
-  /* After the display controls: on narrow widths the search wraps to its
-     own full-width row below the title row. */
   order: 2;
-  flex: 1 1 220px;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
@@ -230,4 +233,27 @@
     min-width: 0;
     max-width: 100%;
   }
+}
+
+/* Compact mode (mobile layout or narrow inspector) collapses the head to a
+   single row: icon back button, title, wrap toggle, and hunk navigation.
+   The search controls stay desktop-only. */
+.diff-content-view.is-mobile .diff-content-head {
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 5px 8px;
+}
+
+.diff-content-view.is-mobile .diff-content-title strong {
+  font-size: 12px;
+}
+
+.diff-content-view.is-mobile .diff-content-actions {
+  display: contents;
+}
+
+/* Keep the head on one line: bare "N/M" counter, no "changes" suffix. */
+.diff-content-view.is-mobile .diff-hunk-navigation span {
+  min-width: 0;
 }

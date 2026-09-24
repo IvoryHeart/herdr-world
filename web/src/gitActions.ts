@@ -36,25 +36,41 @@ export type GitWorkingCounts = {
 
 // Builds the Git menu for one changed file from every summary entry sharing
 // its path, so combined states (staged + unstaged) get the matching actions.
+// `plural` rewords labels for folder menus acting on many files at once.
 export function buildGitFileMenuItems(
   entries: Pick<GitDiffEntry, "kind">[],
+  plural = false,
 ): GitFileMenuItem[] {
   const kinds = new Set(entries.map((entry) => entry.kind));
   const items: GitFileMenuItem[] = [];
   if (kinds.has("untracked")) {
-    items.push({ action: "stage", label: "Stage file" });
+    items.push({
+      action: "stage",
+      label: plural ? "Stage files" : "Stage file",
+    });
   } else if (kinds.has("conflicted")) {
-    items.push({ action: "stage", label: "Mark resolved" });
+    items.push({
+      action: "stage",
+      label: plural ? "Mark all resolved" : "Mark resolved",
+    });
   } else if (kinds.has("unstaged")) {
-    items.push({ action: "stage", label: "Stage changes" });
+    items.push({
+      action: "stage",
+      label: plural ? "Stage all changes" : "Stage changes",
+    });
   }
   if (kinds.has("staged")) {
-    items.push({ action: "unstage", label: "Unstage changes" });
+    items.push({
+      action: "unstage",
+      label: plural ? "Unstage all changes" : "Unstage changes",
+    });
   }
   if (kinds.has("unstaged")) {
     items.push({
       action: "discard_unstaged",
-      label: "Discard unstaged changes…",
+      label: plural
+        ? "Discard all unstaged changes…"
+        : "Discard unstaged changes…",
       danger: true,
       destructive: true,
     });
@@ -62,7 +78,7 @@ export function buildGitFileMenuItems(
   if (kinds.has("untracked")) {
     items.push({
       action: "delete_untracked",
-      label: "Delete untracked file…",
+      label: plural ? "Delete untracked files…" : "Delete untracked file…",
       danger: true,
       destructive: true,
     });
@@ -172,6 +188,30 @@ export function gitFileConfirmCopy(action: GitFileAction, path: string) {
       return {
         title: "Delete Untracked File",
         message: `Delete untracked file "${path}"? This cannot be undone.`,
+        confirmLabel: "Delete",
+      };
+    default:
+      return null;
+  }
+}
+
+export function gitFolderConfirmCopy(
+  action: GitFileAction,
+  path: string,
+  count: number,
+) {
+  const files = count === 1 ? "1 file" : `${count} files`;
+  switch (action) {
+    case "discard_unstaged":
+      return {
+        title: "Discard Changes",
+        message: `Discard unstaged changes in ${files} under "${path}"? Any staged versions are kept. This cannot be undone.`,
+        confirmLabel: "Discard",
+      };
+    case "delete_untracked":
+      return {
+        title: "Delete Untracked Files",
+        message: `Delete ${files} under "${path}" not tracked by Git? Ignored files are kept. This cannot be undone.`,
         confirmLabel: "Delete",
       };
     default:

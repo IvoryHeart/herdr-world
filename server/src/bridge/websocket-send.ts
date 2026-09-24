@@ -1,17 +1,35 @@
 import { serverLogger } from "../utils/logger";
 
 export const WS_BACKPRESSURE_LIMIT_BYTES = 8 * 1024 * 1024;
+export const WS_COALESCE_LIMIT_BYTES = 1024 * 1024;
+export const WS_COMPRESSION_MIN_BYTES = 1024;
+// WebKit rejects shared-compressor streams interleaved with plain replies.
+// Keep compression per connection; inbound decompression can still be shared.
+export const WS_PER_MESSAGE_DEFLATE = {
+  compress: "dedicated",
+  decompress: "shared",
+} as const;
 
 const websocketLogger = serverLogger.child("websocket");
+
+// Terminal frames are self-contained repaints, so a frame still waiting to be
+// written carries nothing the next frame will not carry as well. Once a viewer
+// falls behind, keep only the newest frame per terminal and send it when the
+// socket drains. Queueing every repaint instead is what walks the buffer up to
+// WS_BACKPRESSURE_LIMIT_BYTES and disconnects a viewer that is merely slow.
+const heldPayloads = new WeakMap<WebSocketSendTarget, Map<string, string>>();
 
 interface WebSocketSendTarget {
   close(code?: number, reason?: string): void;
   getBufferedAmount(): number;
-  send(payload: string): number;
+  send(payload: string, compress?: boolean): number;
 }
 
 interface WebSocketSendOptions {
   cleanup: () => void;
+  // Set for payloads that fully replace an earlier one with the same key, so a
+  // backlogged socket can drop the earlier one instead of queueing both.
+  coalesceKey?: string;
   context?: string;
   warn?: (message: string) => void;
 }
@@ -94,6 +112,7 @@ export function sendWebSocketMessage(
   payload: string,
   {
     cleanup,
+    coalesceKey,
     context = "message",
     warn = (message) =>
       websocketLogger.warn("send failed", {
@@ -102,10 +121,23 @@ export function sendWebSocketMessage(
   }: WebSocketSendOptions,
 ): boolean {
   const sendContext = { cleanup, context, warn };
+  if (coalesceKey !== undefined) {
+    const held = heldPayloads.get(ws);
+    if (ws.getBufferedAmount() > WS_COALESCE_LIMIT_BYTES) {
+      if (held) held.set(coalesceKey, payload);
+      else heldPayloads.set(ws, new Map([[coalesceKey, payload]]));
+      return true;
+    }
+    held?.delete(coalesceKey);
+  }
   try {
     if (closeSlowWebSocket(ws, sendContext)) return false;
 
-    const result = ws.send(payload);
+    const result = ws.send(
+      payload,
+      context === "terminal-frame" &&
+        Buffer.byteLength(payload) >= WS_COMPRESSION_MIN_BYTES,
+    );
     if (result === 0) {
       cleanup();
       warn(`[bridge] websocket send dropped during ${context}`);
@@ -121,5 +153,44 @@ export function sendWebSocketMessage(
     );
     closeWebSocket(ws, { context, warn });
     return false;
+  }
+}
+
+// Drop a held payload that has gone stale. A frame is sized for the surface it
+// was rendered against, so once that surface resizes the held frame paints a
+// partial screen: short by the rows and columns the surface gained. A resize
+// makes the terminal emit a fresh frame anyway, so dropping the held one loses
+// nothing and is the only way to avoid painting the stale size.
+export function dropCoalescedMessage(
+  ws: WebSocketSendTarget,
+  coalesceKey: string,
+): void {
+  heldPayloads.get(ws)?.delete(coalesceKey);
+}
+
+// Send the frames held back while the socket was behind. Call this when the
+// socket drains. Each held payload is the newest repaint for its terminal, so
+// one send per key restores the viewer to the current surface.
+export function flushCoalescedMessages(
+  ws: WebSocketSendTarget,
+  {
+    cleanup,
+    context = "terminal-frame",
+    warn,
+  }: Omit<WebSocketSendOptions, "coalesceKey">,
+): void {
+  const held = heldPayloads.get(ws);
+  if (!held?.size) return;
+  const entries = Array.from(held);
+  held.clear();
+  for (const [coalesceKey, payload] of entries) {
+    const sent = sendWebSocketMessage(ws, payload, {
+      cleanup,
+      coalesceKey,
+      context,
+      warn,
+    });
+    // A failed send has already closed the socket; stop rather than retry.
+    if (!sent) return;
   }
 }

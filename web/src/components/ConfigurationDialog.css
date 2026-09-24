@@ -1,0 +1,223 @@
+.configuration-backdrop[hidden],
+.configuration-modal [hidden] {
+  display: none;
+}
+
+.configuration-modal,
+.configuration-loading-modal {
+  width: min(640px, 100%);
+  max-height: min(760px, calc(100dvh / var(--ui-scale, 1) - 36px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.configuration-modal .modal-head,
+.configuration-tabs,
+.configuration-modal .modal-actions {
+  flex: 0 0 auto;
+}
+
+.configuration-modal .modal-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.configuration-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.configuration-tabs button {
+  flex: 1 1 80px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px;
+  font-size: 12px;
+  border-color: var(--border);
+  background: transparent;
+  color: var(--muted);
+}
+
+.configuration-tabs button[aria-selected="true"] {
+  color: var(--text-strong);
+  background: var(--accent-soft);
+}
+
+.configuration-content {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 4px 0;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.configuration-setting-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.configuration-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+}
+
+.popover-content.configuration-help-content {
+  z-index: 6000;
+  width: 360px;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (pointer: coarse) {
+  .configuration-help {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+.configuration-scope {
+  margin: 10px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.configuration-modal .config-menu-item,
+.configuration-modal .config-preference-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 52px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+}
+
+.configuration-modal .config-menu-item:hover {
+  background: var(--border-soft);
+}
+
+.configuration-modal .config-preference-row > .config-item-copy {
+  grid-column: 2;
+}
+
+.configuration-modal .config-menu-item > svg {
+  display: block;
+}
+
+.configuration-modal .config-item-copy {
+  text-align: left;
+  gap: 3px;
+}
+
+.configuration-modal .config-item-copy strong,
+.configuration-modal .config-item-copy span {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  overflow: visible;
+}
+
+.configuration-modal .config-item-copy strong {
+  font-size: 12px;
+}
+
+.configuration-modal .modal-actions {
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 11px;
+}
+
+.configuration-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px;
+  color: var(--danger-text);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.configuration-error span {
+  flex: 1;
+  min-width: 0;
+}
+
+:where(html[data-layout="mobile"]) {
+  .configuration-backdrop {
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 0 0;
+  }
+
+  .configuration-modal,
+  .configuration-loading-modal {
+    width: 100%;
+    max-height: min(100%, calc(90dvh / var(--ui-scale, 1)));
+    margin: auto 0 0;
+    padding: 0 calc(12px + env(safe-area-inset-right, 0px))
+      calc(12px + env(safe-area-inset-bottom, 0px))
+      calc(12px + env(safe-area-inset-left, 0px));
+    border-bottom: none;
+    border-radius: 16px 16px 0 0;
+    animation: configuration-sheet-in 160ms ease-out;
+  }
+}
+
+@keyframes configuration-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .configuration-modal,
+  .configuration-loading-modal {
+    animation: none;
+  }
+}
+
+@media (max-width: 500px) {
+  .configuration-tabs button {
+    flex-basis: calc(50% - 4px);
+  }
+
+  :where(html:not([data-layout="mobile"])) .configuration-modal {
+    padding: 12px;
+  }
+
+  .configuration-modal .config-preference-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .configuration-modal .config-preference-row > .config-item-icon {
+    display: none;
+  }
+
+  .configuration-modal .config-preference-row > .config-item-copy {
+    grid-column: 1;
+  }
+}

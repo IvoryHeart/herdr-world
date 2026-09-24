@@ -1,3 +1,4 @@
+import { IMAGE_MIME_TYPES } from "../../../shared/filePreview";
 import { sshCommandArgv } from "../bridge/ssh-command";
 import {
   DELETE_TIMEOUT_MS,
@@ -158,7 +159,7 @@ for request in "\${requests[@]}"; do
   if [ "$requested_absolute" != "1" ]; then
     case "$target_real/" in "$root_prefix"*) ;; *) continue ;; esac
   fi
-  [ -f "$target_real" ] || continue
+  [ -f "$target_real" ] || [ -d "$target_real" ] || continue
   printf 'FILE\\t%s\\n' "$(printf '%s' "$request" | base64 | tr -d '\\n')"
 done
 `;
@@ -209,7 +210,8 @@ export function parseRemoteFilePreview(
   const raw = Buffer.from(base64, "base64");
   const size = Number(rawSize) || raw.length;
   const previewLimit = previewLimitForPath(relativePath, size);
-  const truncated = size > previewLimit || raw.length > previewLimit;
+  const truncated =
+    size > previewLimit || raw.length > previewLimit || raw.length < size;
   const bytes = truncated ? raw.subarray(0, previewLimit) : raw;
   const decoded = decodePreviewBuffer(bytes, truncated, relativePath);
   return {
@@ -268,7 +270,7 @@ size="$(stat -c %s "$target_real" 2>/dev/null || stat -f %z "$target_real" 2>/de
 mtime="$(stat -c %Y "$target_real" 2>/dev/null || stat -f %m "$target_real" 2>/dev/null || printf 0)"
 limit="$text_limit"
 case "$(printf '%s' "$rel" | tr '[:upper:]' '[:lower:]')" in
-  *.png|*.jpg|*.jpeg|*.gif|*.webp|*.bmp|*.ico|*.avif)
+  ${Array.from(IMAGE_MIME_TYPES.keys(), (extension) => `*.${extension}`).join("|")})
     if [ "$size" -le "$image_limit" ]; then limit="$image_limit"; fi
     ;;
 esac
