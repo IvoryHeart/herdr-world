@@ -80,6 +80,10 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
+- Reconciled Android terminal textarea replacements as tail edits so mobile
+  autocorrection, deletion and revised text no longer resend accumulated input
+  or lose corrections.
+  [Herdr World PR #96](https://github.com/IvoryHeart/herdr-world/pull/96)
 - Prevented Inspector portal publication from entering a React render loop, made
   whole-Inspector docking, swapping and identity/resource handoff atomic, removed
   the duplicate actionable-agent card and redundant Open-in-Spaces control, and

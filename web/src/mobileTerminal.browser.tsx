@@ -136,6 +136,11 @@ const inputCalls = () =>
   calls.filter((call) =>
     ["terminal.input", "pane.send_input"].includes(call.method),
   );
+const terminalInputText = () =>
+  inputCalls()
+    .filter((call) => call.method === "terminal.input")
+    .map((call) => atob(String(call.params.data)))
+    .join("");
 const click = (selector: string) =>
   flushSync(() => document.querySelector<HTMLButtonElement>(selector)!.click());
 const textarea = () =>
@@ -388,6 +393,71 @@ const api = {
             btoa(String.fromCharCode(...new TextEncoder().encode("界"))),
       ).length === 1,
       "IME commit reaches terminal exactly once while input is active",
+    );
+    calls.length = 0;
+  },
+  async androidCorrections() {
+    const edit = async (
+      value: string,
+      data: string | null,
+      composed = true,
+    ) => {
+      const target = textarea();
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Unidentified",
+          code: "",
+          keyCode: 229,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+      target.value = value;
+      target.setSelectionRange(value.length, value.length);
+      target.dispatchEvent(
+        new InputEvent("input", {
+          data,
+          inputType: data === null ? "deleteContentBackward" : "insertText",
+          bubbles: true,
+          composed,
+        }),
+      );
+      target.dispatchEvent(
+        new KeyboardEvent("keyup", {
+          key: "Unidentified",
+          code: "",
+          keyCode: 0,
+          bubbles: true,
+        }),
+      );
+      await settle();
+    };
+
+    calls.length = 0;
+    textarea().value = "";
+    await edit("okay, lets pull teh latest from main", "main");
+    await edit("okay, lets pull the latest from main", "the");
+    await edit("okay, lets pull the latest from mai", null);
+    await edit("okay, lets pull the latest from main now", "n now");
+
+    const initial = "okay, lets pull teh latest from main";
+    const correction = "\x7f".repeat(19) + "he latest from main";
+    check(
+      terminalInputText() === `${initial}${correction}\x7fn now`,
+      `Android corrections reconcile once without accumulated repeats: ${JSON.stringify(
+        terminalInputText(),
+      )}`,
+    );
+
+    calls.length = 0;
+    textarea().value = "";
+    await edit("hello", "hello", false);
+    await edit("help", "p", false);
+    check(
+      terminalInputText() === `hellop${"\x7f".repeat(3)}p`,
+      `Android non-composed input accounts for text xterm already sent: ${JSON.stringify(
+        terminalInputText(),
+      )}`,
     );
     calls.length = 0;
   },
