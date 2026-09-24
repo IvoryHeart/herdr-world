@@ -21,18 +21,20 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ### Foundation cutover boundaries
 
-The draft Roamgate-derived foundation restores the retained Pixi Office, connected
-Tree and spatial Graph over the same qualified WorldObject projection. Office includes its CEO
+The Roamgate-derived foundation restores the retained Pixi Office, connected Tree and
+spatial Graph over the same qualified WorldObject projection. Office includes its CEO
 room, receptions, boards, Agent Bar, rooms, room actions, completion cues and live
 floating or profile-docked terminal conversations. Optional Prometheus data reaches
 the Economy board through bounded World-service queries; Office and terminals remain
 independent of that provider.
 
-This is still a draft replacement pending complete selected-host lifecycle, local/SSH
-and responsive acceptance. The qualified agent/pane Pin, Unpin and Pinned-only
-watchlist also remains required. Browser-federated bridge URLs, native Capacitor
-Android packaging and old visual preference keys are retired; the responsive
-installable PWA is the mobile client.
+The delivered foundation covers the selected-host lifecycle and the focused local,
+SSH, desktop and responsive acceptance recorded by the current contract. Expanded
+simultaneous live local-plus-SSH acceptance, the task-summary producer and the
+qualified agent/pane watchlist are follow-up work tracked in
+[#95](https://github.com/IvoryHeart/herdr-world/issues/95). Browser-federated bridge
+URLs, native Capacitor Android packaging and old visual preference keys are retired;
+the responsive installable PWA is the mobile client.
 
 ## Workspace, Tab, and Pane Navigation
 

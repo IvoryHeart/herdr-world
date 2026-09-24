@@ -97,3 +97,8 @@ delivery. Their restoration and expanded live local/SSH acceptance are tracked b
 - [x] 13.2 Run focused unit and mounted-browser suites plus synthetic desktop/phone visual comparison for every view, and record the delivered per-view feature inventory with approved breaking retirements identified explicitly
 - [x] 13.3 Reconcile README, screenshots, feature/architecture guidance, changelog and current specs with the delivered views, record the deferred workflows in GitHub issue #95, and remove incomplete-checkpoint claims from the delivery narrative
 - [x] 13.4 Run the complete repository and distribution checks, resolve current findings and return PR #93 to ready status for independent review without merging it
+
+## 14. Merge-readiness corrections
+
+- [x] 14.1 Reconcile the public feature guide with the scoped foundation delivery and link the deferred live matrix, task-summary producer and agent/pane watchlist to GitHub issue #95
+- [x] 14.2 Restore the protected `Delivery checks` and native arm64/x86_64 macOS launchd plugin-lifecycle contexts, run the canonical repository check in CI and lock the required workflow contract with a regression test
