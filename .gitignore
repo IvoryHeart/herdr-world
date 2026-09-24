@@ -23,3 +23,11 @@ server/herdr-world
 server/herdr-world.exe
 server/herdr-world-*
 server/*.bun-build
+
+# Local agent worktrees, browser fixtures, and generated release/build output
+.agents/
+.scratch/
+_site/
+bridge/target/
+vendor/*/target/
+dist-packages/
