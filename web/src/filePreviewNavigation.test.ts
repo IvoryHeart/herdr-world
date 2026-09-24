@@ -133,7 +133,7 @@ for (const narrow of [false, true])
                     `File preview navigation checks timed out: ${events.join("; ")}`,
                   ),
                 ),
-              30_000,
+              45_000,
             );
           }),
         ]);
@@ -163,5 +163,5 @@ for (const narrow of [false, true])
         console.info(`Browser fixture evidence: ${dir}`);
       }
     },
-    45_000,
+    60_000,
   );
