@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import webpush from "web-push";
 import {
   createWebPushService,
+  pushSessionBinding,
   validatePushDevice,
   validatePushEndpoint,
   type PushTask,
@@ -233,11 +234,11 @@ test("authenticated, non-CSRF device mutations persist privately across restart 
 });
 
 test("logout revokes session-bound devices before later notifications are delivered", async () => {
-  const send = mock(async (_subscription: webpush.PushSubscription) => ({
-    statusCode: 201,
-    body: "",
-    headers: {},
-  }));
+  const sentEndpoints: string[] = [];
+  const send = mock(async (subscription: webpush.PushSubscription) => {
+    sentEndpoints.push(subscription.endpoint);
+    return { statusCode: 201, body: "", headers: {} };
+  });
   const f = fixture(send);
   try {
     const loggedOut = device("logged-out");
@@ -252,11 +253,9 @@ test("logout revokes session-bound devices before later notifications are delive
     await Promise.resolve();
 
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]?.[0].endpoint).toBe(
-      otherSession.subscription.endpoint,
-    );
+    expect(sentEndpoints).toEqual([otherSession.subscription.endpoint]);
     expect(JSON.parse(readFileSync(f.path, "utf8")).devices).toEqual([
-      { ...otherSession, sessionToken: "session-b" },
+      { ...otherSession, sessionBinding: pushSessionBinding("session-b") },
     ]);
   } finally {
     f.cleanup();

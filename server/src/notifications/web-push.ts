@@ -1,4 +1,4 @@
-import { createECDH, ECDH, randomUUID } from "node:crypto";
+import { createECDH, createHash, ECDH, randomUUID } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -24,8 +24,8 @@ export interface PushPreferences {
 interface Device {
   subscription: webpush.PushSubscription;
   preferences: PushPreferences;
-  /** Auth session that enrolled this browser, absent for legacy/unauthed data. */
-  sessionToken?: string;
+  /** Non-reversible binding for the auth session that enrolled this browser. */
+  sessionBinding?: string;
 }
 interface Registry {
   version: 1;
@@ -39,6 +39,16 @@ export interface PushTask extends TaskEvent {
 }
 const MAX_DEVICES = 128;
 const MAX_BODY_BYTES = 16 * 1024;
+const PUSH_SESSION_BINDING_DOMAIN = "herdr-world:web-push-session:v1\0";
+const PUSH_SESSION_BINDING_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/** Derive a non-bearer registry key from the reusable authentication cookie. */
+export function pushSessionBinding(sessionToken: string): string {
+  return createHash("sha256")
+    .update(PUSH_SESSION_BINDING_DOMAIN)
+    .update(sessionToken)
+    .digest("base64url");
+}
 
 /** Only browser push providers are valid outbound destinations, never arbitrary URLs. */
 export function validatePushEndpoint(value: unknown): string {
@@ -78,15 +88,14 @@ export function validatePushDevice(value: unknown): Device {
   const input = value as Device | null;
   const subscription = input?.subscription;
   const preferences = input?.preferences;
-  const sessionToken = input?.sessionToken;
+  const sessionBinding = input?.sessionBinding;
   if (
     !subscription ||
     typeof preferences?.completed !== "boolean" ||
     typeof preferences.blocked !== "boolean" ||
-    (sessionToken !== undefined &&
-      (typeof sessionToken !== "string" ||
-        sessionToken.length === 0 ||
-        sessionToken.length > 4096))
+    (sessionBinding !== undefined &&
+      (typeof sessionBinding !== "string" ||
+        !PUSH_SESSION_BINDING_PATTERN.test(sessionBinding)))
   )
     throw new Error("Invalid push preferences");
   const endpoint = validatePushEndpoint(subscription.endpoint);
@@ -103,7 +112,7 @@ export function validatePushDevice(value: unknown): Device {
       completed: preferences.completed,
       blocked: preferences.blocked,
     },
-    ...(sessionToken === undefined ? {} : { sessionToken }),
+    ...(sessionBinding === undefined ? {} : { sessionBinding }),
   };
 }
 
@@ -246,12 +255,13 @@ export function createWebPushService(
   /** Revoke every push device enrolled by one browser auth session. */
   function revokeSession(sessionToken: string) {
     if (!registry || !sessionToken) return;
-    // Entries without a session token predate session binding. Drop those on
+    const sessionBinding = pushSessionBinding(sessionToken);
+    // Entries without a session binding predate this protection. Drop those on
     // the first authenticated logout rather than allowing legacy delivery.
     const devices = registry.devices.filter(
       (device) =>
-        device.sessionToken !== undefined &&
-        device.sessionToken !== sessionToken,
+        device.sessionBinding !== undefined &&
+        device.sessionBinding !== sessionBinding,
     );
     if (devices.length === registry.devices.length) return;
     save({ ...registry, devices });
@@ -369,10 +379,11 @@ export function createWebPushService(
       try {
         if (req.method === "POST") {
           device = validatePushDevice(input);
-          // The browser cannot choose its session binding. Preserve only the
-          // server-supplied auth token; stored legacy data may contain one.
-          delete device.sessionToken;
-          if (sessionToken) device.sessionToken = sessionToken;
+          // The browser cannot choose its session binding; persist only the
+          // one-way value derived from the server-supplied auth token.
+          delete device.sessionBinding;
+          if (sessionToken)
+            device.sessionBinding = pushSessionBinding(sessionToken);
           endpoint = device.subscription.endpoint;
         } else
           endpoint = validatePushEndpoint(
