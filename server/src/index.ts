@@ -1,11 +1,14 @@
 import type { ServerWebSocket } from "bun";
+import { isHtmlPath } from "../../shared/filePreview";
 import { rmSync } from "node:fs";
 import packageJson from "../../package.json";
 import { currentBuildVersion } from "../../scripts/build-version";
 import type { SshTunnelConfig } from "./bridge/ssh-tunnel";
 import {
+  flushCoalescedMessages,
   sendWebSocketMessage,
   WebSocketCleanupTracker,
+  WS_PER_MESSAGE_DEFLATE,
 } from "./bridge/websocket-send";
 import {
   browserUrlFor,
@@ -91,6 +94,7 @@ import {
 import { runProcessWithCodeTimeout, shQuote } from "./utils/process-utils";
 import { rpcLogLevel } from "./utils/rpc-logging";
 import { syncWorktreeBase } from "./worktree/create";
+import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
 import {
   createOfficeObservabilityHttpHandler,
@@ -577,11 +581,13 @@ function safeSend(
   ws: ServerWebSocket<unknown>,
   payload: string,
   context = "message",
+  coalesceKey?: string,
 ): boolean {
   return sendWebSocketMessage(ws, payload, {
     cleanup: () => {
       webSocketCleanup.cleanup(ws);
     },
+    coalesceKey,
     context,
     warn: (message) =>
       logger.warn("websocket send failed", {
@@ -1427,12 +1433,22 @@ function main() {
             req.method,
           );
           if (connectionRoute) {
+            if (
+              connectionRoute.kind === "connection" &&
+              connectionRoute.endpoint === "file-download" &&
+              url.searchParams.get("inline") === "1" &&
+              isHtmlPath(url.searchParams.get("path") ?? "")
+            ) {
+              // HTML preparation can require several bounded SSH resource reads.
+              server.timeout(req, DOWNLOAD_TIMEOUT_MS / 1000);
+            }
             return handleConnectionHttpRequest(connectionRoute, url, req);
           }
           // Everything else: serve the built frontend (embedded or on-disk).
           return serveStatic(req, config.publicDir);
         },
         websocket: {
+          perMessageDeflate: WS_PER_MESSAGE_DEFLATE,
           open(ws) {
             clients.add(ws);
             clientSessions.set(ws, ws.data.sessionToken);
@@ -1459,7 +1475,20 @@ function main() {
               "hello",
             );
           },
+          drain(ws) {
+            // The viewer caught up: send the newest repaint we held back.
+            flushCoalescedMessages(ws, {
+              cleanup: () => {
+                webSocketCleanup.cleanup(ws);
+              },
+              warn: (detail) =>
+                logger.warn("websocket send failed", {
+                  detail: detail.replace(/^\[bridge\] /, ""),
+                }),
+            });
+          },
           message(ws, message) {
+            if (!clients.has(ws)) return;
             const text =
               typeof message === "string" ? message : message.toString();
             const { id, method, connectionId, connectionGeneration } =
