@@ -39,7 +39,9 @@ export function historyEntryCategory(entry: HistoryEntry): HistoryCategory {
 export function selectHistoryEntries(
   entries: HistoryEntry[],
   filters: HistoryFilters,
+  query = "",
 ) {
+  const search = query.trim().toLowerCase();
   const counts: Record<HistoryCategory, number> = {
     user: 0,
     agent: 0,
@@ -49,7 +51,11 @@ export function selectHistoryEntries(
   for (const entry of entries) {
     const category = historyEntryCategory(entry);
     counts[category] += 1;
-    if (filters[category]) visible.push(entry);
+    if (
+      filters[category] &&
+      (!search || entry.text.toLowerCase().includes(search))
+    )
+      visible.push(entry);
   }
   return { visible, counts };
 }

@@ -26,6 +26,7 @@ const base = {
   "annotations.toggle": ["Ctrl+Alt+A"],
   "zen.toggle": ["Ctrl+Alt+Z"],
   "panes.recent": ["Ctrl+Alt+J"],
+  "panes.search": ["Alt+K"],
   "tab.create": ["Ctrl+Alt+T"],
   "tab.close": ["Ctrl+Alt+W"],
   "tab.previous": ["Alt+Shift+ArrowLeft"],
@@ -57,6 +58,8 @@ const base = {
   "preview.selectAll": ["Ctrl+A"],
   "composer.send": ["Ctrl+Enter"],
   "annotation.submit": ["Ctrl+Enter"],
+  "annotations.copy": ["Ctrl+Shift+C"],
+  "annotations.prefill": ["Ctrl+Enter"],
 };
 export type ShortcutNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 export type ShortcutId =
@@ -125,6 +128,8 @@ export function defaultShortcutBindings(
       "preview.selectAll": ["Meta+A"],
       "composer.send": ["Meta+Enter"],
       "annotation.submit": ["Meta+Enter"],
+      "annotations.copy": ["Meta+Shift+C"],
+      "annotations.prefill": ["Meta+Enter"],
     });
   return bindings;
 }
@@ -269,8 +274,8 @@ export function formatShortcut(
 
 export function shortcutScope(id: ShortcutId): string {
   if (id.startsWith("command.") && id !== "command.menu") return "command";
-  if (id === "terminal.history") return "global";
-  if (/^(terminal|preview|composer|annotation)\./.test(id))
+  if (id === "terminal.history" || id === "annotations.toggle") return "global";
+  if (/^(terminal|preview|composer|annotation|annotations)\./.test(id))
     return id.split(".")[0];
   return "global";
 }

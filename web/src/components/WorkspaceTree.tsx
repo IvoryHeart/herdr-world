@@ -1131,7 +1131,9 @@ function WorkspaceRow({
         ) : (
           <span className="twisty" aria-hidden="true" />
         )}
-        <strong className="ws-label">{workspaceDisplayName(w)}</strong>
+        <strong className="ws-label" title={workspaceDisplayName(w)}>
+          {workspaceDisplayName(w)}
+        </strong>
         {tabCountVisible ? (
           <span
             className="workspace-tab-count"

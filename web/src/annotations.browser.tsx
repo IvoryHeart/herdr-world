@@ -16,6 +16,8 @@ import type { ShortcutId } from "./shortcutBindings";
 import {
   getShortcutSnapshot,
   selectShortcutPreset,
+  shortcutLabel,
+  updateShortcut,
 } from "./shortcutPreferences";
 import {
   resourceScopeForWorkspace,
@@ -50,6 +52,7 @@ export async function checkAnnotationUX(
     id: ShortcutId,
     target: EventTarget = window,
     repeat = false,
+    overrides: KeyboardEventInit = {},
   ) => {
     const parts = getShortcutSnapshot().preset.bindings[id][0].split("+");
     const key = parts[parts.length - 1];
@@ -65,6 +68,7 @@ export async function checkAnnotationUX(
           bubbles: true,
           cancelable: true,
           repeat,
+          ...overrides,
         }),
       ),
     );
@@ -91,8 +95,12 @@ export async function checkAnnotationUX(
         : ".tabbar-utilities button:last-child .tabbar-change-count",
     );
     check(
-      label?.textContent?.trim() ===
-        (mobile() ? `Annotations ${count}` : String(count)),
+      mobile()
+        ? label?.textContent?.trim() ===
+            (count > 0 ? `Annotations ${count}` : "Annotations")
+        : count > 0
+          ? label?.textContent === String(count)
+          : label === null,
       "Annotations tab count is stale",
     );
   };
@@ -1131,10 +1139,14 @@ export async function checkAnnotationUX(
       }
     }
     let copied = "";
+    let copyCalls = 0;
+    let copyFails = false;
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: {
         writeText: async (text: string) => {
+          copyCalls++;
+          if (copyFails) throw new Error("Synthetic clipboard failure");
           copied = text;
         },
       },
@@ -1145,8 +1157,90 @@ export async function checkAnnotationUX(
       copied.includes("terminal pane") && draft().length === 2,
       "Copy did not retain mixed draft",
     );
-    click(".annotation-delivery-actions button:last-child");
-    await until(() => delivery, "pre-fill did not start");
+    const checkCopyNotice = () => {
+      const toast = document.querySelector<HTMLElement>(".toast-success");
+      const rect = toast?.getBoundingClientRect();
+      check(
+        toast?.getAttribute("role") === "status" &&
+          toast.textContent?.includes("Review feedback copied") === true &&
+          !!rect &&
+          rect.width > 0 &&
+          rect.top >= 0 &&
+          rect.bottom <= innerHeight &&
+          toast.contains(
+            document.elementFromPoint(
+              rect.x + rect.width / 2,
+              rect.y + rect.height / 2,
+            ),
+          ) &&
+          store.get().notice?.autoDismissMs === 3000,
+        "Copy success notification is missing, obscured, or not transient",
+      );
+    };
+    checkCopyNotice();
+    const deliveryEditor = document.querySelector<HTMLTextAreaElement>(
+      ".annotation-card textarea",
+    )!;
+    deliveryEditor.focus();
+    for (const preset of ["mac", "windows", "linux"]) {
+      flushSync(() => selectShortcutPreset(preset));
+      const before = copyCalls;
+      pressShortcut("annotations.copy", window);
+      pressShortcut("annotations.prefill", window);
+      pressShortcut("annotations.copy", deliveryEditor, true);
+      pressShortcut("annotations.prefill", deliveryEditor, true);
+      pressShortcut("annotations.copy", deliveryEditor, false, {
+        isComposing: true,
+      });
+      pressShortcut("annotations.prefill", deliveryEditor, false, {
+        isComposing: true,
+      });
+      pressShortcut("annotations.copy", deliveryEditor, false, {
+        shiftKey: false,
+      });
+      check(
+        copyCalls === before && !delivery,
+        "Delivery shortcuts escaped their scope or intercepted typing/repeats",
+      );
+      flushSync(() => store.clearNotice());
+      pressShortcut("annotations.copy", deliveryEditor);
+      check(
+        !store.get().notice,
+        "Copy announced success before clipboard completion",
+      );
+      pressShortcut("annotations.copy", deliveryEditor);
+      pressShortcut("annotations.prefill", deliveryEditor);
+      await settle();
+      check(
+        copyCalls === before + 1 && !delivery && draft().length === 2,
+        "Copy shortcut duplicated delivery or changed the draft",
+      );
+      checkCopyNotice();
+      check(
+        document.querySelector(
+          ".annotation-delivery-actions button:first-child kbd",
+        )?.textContent === shortcutLabel("annotations.copy") &&
+          document.querySelector(
+            ".annotation-delivery-actions button:last-child kbd",
+          )?.textContent === shortcutLabel("annotations.prefill"),
+        "Delivery shortcut hints did not follow the selected preset",
+      );
+    }
+    flushSync(() => updateShortcut("annotations.copy", ["Alt+F8"]));
+    pressShortcut("annotations.copy", deliveryEditor);
+    await settle();
+    checkCopyNotice();
+    flushSync(() => selectShortcutPreset(originalPreset));
+    copyFails = true;
+    pressShortcut("annotations.copy", deliveryEditor);
+    await settle();
+    check(
+      store.get().notice?.kind === "error" && draft().length === 2,
+      "Failed copy announced success or changed the draft",
+    );
+    copyFails = false;
+    pressShortcut("annotations.prefill", deliveryEditor);
+    await until(() => delivery, "pre-fill shortcut did not start");
     check(
       sent[0]?.pane_id === pane.pane_id &&
         JSON.stringify(sent[0]?.keys) === "[]",
@@ -1174,6 +1268,19 @@ export async function checkAnnotationUX(
         ),
       ].every((button) => button.disabled),
       "blank delivery not disabled",
+    );
+    const blankCopyCalls = copyCalls;
+    pressShortcut(
+      "annotations.copy",
+      document.querySelector(".annotation-card textarea")!,
+    );
+    pressShortcut(
+      "annotations.prefill",
+      document.querySelector(".annotation-card textarea")!,
+    );
+    check(
+      copyCalls === blankCopyCalls && !delivery,
+      "Blank draft shortcuts delivered feedback",
     );
     type(".annotation-card textarea", "Final feedback");
     click('button[aria-label="Agent pane"]');

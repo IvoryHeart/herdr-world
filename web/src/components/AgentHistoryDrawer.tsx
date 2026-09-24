@@ -9,15 +9,16 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
-import { Copy, Download, Eye, RefreshCw, X } from "lucide-react";
+import { Copy, Download, Eye, Info, RefreshCw, X } from "lucide-react";
 import { useStoreSelector } from "../store";
+import { copyTextWithFeedback } from "../copyText";
 import { useConnectionClient } from "../useConnectionClient";
 import type { Pane } from "../types";
 import {
   DEFAULT_INSPECTOR_NAVIGATION_RATIO,
   inspectorNavigationRatioAtPosition,
 } from "../workspaceResource";
-import { formatUiRelativeTime, UI_LOCALE } from "../uiLocale";
+import { formatUiDateTime, formatUiRelativeTime } from "../uiLocale";
 import { shortId } from "../utils";
 import { AgentIcon } from "./AgentIcon";
 import { AgentMessageContent } from "./AgentMessageContent";
@@ -26,7 +27,6 @@ import { AgentHistoryCard } from "./AgentHistoryCard";
 import { AgentHistoryFilters } from "./AgentHistoryFilters";
 import {
   ALL_HISTORY_FILTERS,
-  historyEntryCategory,
   historyEntryLabel,
   mergeAgentHistory,
   selectHistoryEntries,
@@ -46,17 +46,6 @@ import {
   tokenUsage,
 } from "./agentSession";
 import "./AgentHistoryDrawer.css";
-
-function formatHistoryTime(sentAt: string) {
-  const time = new Date(sentAt);
-  if (Number.isNaN(time.getTime())) return sentAt;
-  return time.toLocaleString(UI_LOCALE, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatRelativeTime(timestamp: string) {
   const time = new Date(timestamp);
@@ -400,6 +389,7 @@ export function AgentHistoryDrawer({
     workspaces.find((workspace) => workspace.workspace_id === pane.workspace_id)
       ?.label ?? pane.workspace_id;
   const [history, setHistory] = useState<AgentHistory | null>(null);
+  const [query, setQuery] = useState("");
   // Tool entries arrive redacted (metadata only) and are fetched on demand.
   const [filters, setFilters] = useState<HistoryFilters>({
     ...ALL_HISTORY_FILTERS,
@@ -412,9 +402,7 @@ export function AgentHistoryDrawer({
     () => new Set(),
   );
   const [session, setSession] = useState<AgentSessionSummary | null>(null);
-  const [drawerTab, setDrawerTab] = useState<"messages" | "details">(
-    "messages",
-  );
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [previewPane, setPreviewPane] = useState<Pane | null>(null);
   const [previewSummary, setPreviewSummary] =
     useState<AgentSessionSummary | null>(null);
@@ -569,8 +557,9 @@ export function AgentHistoryDrawer({
     setWideSelectedId(null);
     setWideListRatio(DEFAULT_INSPECTOR_NAVIGATION_RATIO);
     setHistory(null);
+    setQuery("");
     setSession(null);
-    setDrawerTab("messages");
+    setDetailsOpen(false);
     setExpandedMessage(null);
     setToolEntryTexts(new Map());
     setToolEntryLoading(new Set());
@@ -639,14 +628,31 @@ export function AgentHistoryDrawer({
     ],
   );
 
+  const messages = useMemo(() => history?.messages ?? [], [history?.messages]);
+  // Substitute fetched tool payloads only while their byte lengths still match.
+  const hydrateEntry = useCallback(
+    (entry: AgentHistoryEntry): AgentHistoryEntry => {
+      const overlay = toolEntryTexts.get(entry.id);
+      return overlay !== undefined &&
+        (entry.text_bytes === undefined || overlay.bytes === entry.text_bytes)
+        ? { ...entry, text: overlay.text }
+        : entry;
+    },
+    [toolEntryTexts],
+  );
+  const hydratedMessages = useMemo(
+    () => (toolEntryTexts.size === 0 ? messages : messages.map(hydrateEntry)),
+    [messages, toolEntryTexts, hydrateEntry],
+  );
+  const { visible: visibleMessages, counts } = useMemo(
+    () => selectHistoryEntries(hydratedMessages, filters, query),
+    [hydratedMessages, filters, query],
+  );
   const wideSelectedEntry = wide
-    ? (history?.messages.find(
-        (entry) =>
-          entry.id === wideSelectedId && filters[historyEntryCategory(entry)],
-      ) ?? null)
+    ? (visibleMessages.find((entry) => entry.id === wideSelectedId) ?? null)
     : null;
   const activeMessage = wide
-    ? drawerTab === "messages"
+    ? !detailsOpen
       ? wideSelectedEntry
       : null
     : expandedMessage;
@@ -751,32 +757,15 @@ export function AgentHistoryDrawer({
     [],
   );
 
-  const messages = useMemo(() => history?.messages ?? [], [history?.messages]);
-  // Substitute on-demand fetched tool payloads over their redacted stubs.
-  // Byte-length validation keeps overlays from going stale when a revision
-  // replaces an entry's content under the same id.
-  const hydrateEntry = useCallback(
-    (entry: AgentHistoryEntry): AgentHistoryEntry => {
-      const overlay = toolEntryTexts.get(entry.id);
-      return overlay !== undefined &&
-        (entry.text_bytes === undefined || overlay.bytes === entry.text_bytes)
-        ? { ...entry, text: overlay.text }
-        : entry;
-    },
-    [toolEntryTexts],
-  );
-  const hydratedMessages = useMemo(
-    () => (toolEntryTexts.size === 0 ? messages : messages.map(hydrateEntry)),
-    [messages, toolEntryTexts, hydrateEntry],
-  );
-  const { visible: visibleMessages, counts } = useMemo(
-    () => selectHistoryEntries(hydratedMessages, filters),
-    [hydratedMessages, filters],
-  );
-  const changeFilters = (next: HistoryFilters) => {
+  const changeFilters = (next: HistoryFilters, nextQuery = query) => {
     setFilters(next);
+    setQuery(nextQuery);
     setExpandedMessage((entry) =>
-      entry && next[historyEntryCategory(entry)] ? entry : null,
+      entry &&
+      selectHistoryEntries([hydrateEntry(entry)], next, nextQuery).visible
+        .length
+        ? entry
+        : null,
     );
     if (highlightTimerRef.current !== null) {
       window.clearTimeout(highlightTimerRef.current);
@@ -796,7 +785,7 @@ export function AgentHistoryDrawer({
   useEffect(() => {
     const root = contentRef.current;
     const timeline = timelineRef.current;
-    if (drawerTab !== "messages" || !root || !timeline) {
+    if (detailsOpen || !root || !timeline) {
       visibleRangeKeyRef.current = "";
       setVisibleRange(null);
       return;
@@ -893,7 +882,7 @@ export function AgentHistoryDrawer({
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", schedule);
     };
-  }, [drawerTab, visibleMessages, wide]);
+  }, [detailsOpen, visibleMessages, wide]);
 
   // Stable identity so the message dialog's focus effect only re-runs when the
   // message itself changes, not on every drawer re-render.
@@ -1001,41 +990,53 @@ export function AgentHistoryDrawer({
       : undefined;
 
   const sessionActions = sessionReady ? (
-    <div
-      className={
-        wide ? "agent-history-toolbar-actions" : "agent-history-footer"
-      }
-    >
+    <>
       <button
         type="button"
-        className="primary-btn"
+        className="agent-history-icon"
         onClick={openSessionPreview}
+        aria-label="Open transcript"
+        title="Open transcript"
       >
         <Eye size={14} />
-        Open transcript
       </button>
       <button
         type="button"
-        className="secondary-btn"
+        className="agent-history-icon"
         onClick={() => downloadSession(pane, connectionClient)}
+        aria-label="Export raw session"
+        title="Export raw session"
       >
         <Download size={14} />
-        Export raw
       </button>
-    </div>
+    </>
   ) : null;
 
   const historyFilters = (
-    <AgentHistoryFilters
-      filters={filters}
-      counts={counts}
-      onToggle={(category) =>
-        changeFilters({
-          ...filters,
-          [category]: !filters[category],
-        })
-      }
-    />
+    <>
+      <div className="agent-history-search">
+        <input
+          type="search"
+          aria-label="Search history messages"
+          placeholder="Search loaded messages"
+          title="Search loaded message text. Tool content is searchable after loading it."
+          value={query}
+          onChange={(event) =>
+            changeFilters(filters, event.currentTarget.value)
+          }
+        />
+      </div>
+      <AgentHistoryFilters
+        filters={filters}
+        counts={counts}
+        onToggle={(category) =>
+          changeFilters({
+            ...filters,
+            [category]: !filters[category],
+          })
+        }
+      />
+    </>
   );
   const historyMinimap =
     messageEntries.length > 1 ? (
@@ -1075,13 +1076,15 @@ export function AgentHistoryDrawer({
         <div className="agent-history-state">
           {messages.length > 0 ? (
             <>
-              No entries match the selected message types.
+              {query.trim()
+                ? "No entries match the search and selected message types."
+                : "No entries match the selected message types."}
               <button
                 type="button"
                 className="secondary-btn"
-                onClick={() => changeFilters(ALL_HISTORY_FILTERS)}
+                onClick={() => changeFilters(ALL_HISTORY_FILTERS, "")}
               >
-                Show all types
+                {query.trim() ? "Reset filters" : "Show all types"}
               </button>
             </>
           ) : (
@@ -1100,7 +1103,8 @@ export function AgentHistoryDrawer({
     <div
       className="agent-history-wide"
       ref={wideSplitRef}
-      role="tabpanel"
+      role="region"
+      aria-label="History messages"
       style={
         {
           "--agent-history-list-width": `${wideListRatio * 100}%`,
@@ -1175,7 +1179,20 @@ export function AgentHistoryDrawer({
           <div className="agent-history-identity">
             <AgentIcon agent={pane.agent} />
             <div className="agent-history-title">
-              <strong>Session</strong>
+              <strong>
+                Session
+                {messages.length > 0 ? (
+                  <span
+                    className="agent-history-count"
+                    aria-label={`${messageEntries.length} of ${messages.length} history entries`}
+                    title="Most recent 200 messages with their tool entries"
+                  >
+                    {messageEntries.length === messages.length
+                      ? messages.length
+                      : `${messageEntries.length}/${messages.length}`}
+                  </span>
+                ) : null}
+              </strong>
               <span title={workspaceLabel}>
                 {workspaceLabel} · {pane.agent ?? "Agent"} ·{" "}
                 {shortId(pane.pane_id)}
@@ -1188,6 +1205,18 @@ export function AgentHistoryDrawer({
             {pane.agent_status}
           </span>
           <div className="agent-history-actions">
+            <button
+              type="button"
+              className="agent-history-icon"
+              aria-label="Session details"
+              aria-pressed={detailsOpen}
+              title={detailsOpen ? "Show history" : "Show session details"}
+              onClick={() => setDetailsOpen((current) => !current)}
+              disabled={!hasSessionData}
+            >
+              <Info size={14} />
+            </button>
+            {sessionActions}
             <button
               type="button"
               className={`agent-history-icon ${loading ? "is-loading" : ""}`}
@@ -1222,9 +1251,7 @@ export function AgentHistoryDrawer({
                 <button
                   type="button"
                   className="agent-history-icon"
-                  onClick={() =>
-                    void navigator.clipboard?.writeText(unavailableCommand)
-                  }
+                  onClick={() => void copyTextWithFeedback(unavailableCommand)}
                   aria-label="Copy integration command"
                   title="Copy command"
                 >
@@ -1243,55 +1270,27 @@ export function AgentHistoryDrawer({
           </div>
         ) : (
           <>
-            <div className="agent-history-tabs">
-              <div
-                className="agent-history-tab-list"
-                role="tablist"
-                aria-label="Session drawer view"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={drawerTab === "messages"}
-                  title="Most recent 200 messages with their tool entries"
-                  className={drawerTab === "messages" ? "is-active" : ""}
-                  onClick={() => setDrawerTab("messages")}
-                >
-                  History
-                  {messages.length > 0 ? (
-                    <span>
-                      {messageEntries.length === messages.length
-                        ? messages.length
-                        : `${messageEntries.length}/${messages.length}`}
-                    </span>
-                  ) : null}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={drawerTab === "details"}
-                  className={drawerTab === "details" ? "is-active" : ""}
-                  onClick={() => setDrawerTab("details")}
-                >
-                  Details
-                </button>
-              </div>
-              {wide ? sessionActions : null}
-            </div>
-
             {error ? <div className="agent-history-error">{error}</div> : null}
-            {drawerTab === "messages" ? (
+            {!detailsOpen ? (
               wide ? (
                 wideMessagesPanel
               ) : (
-                <div className="agent-history-messages" role="tabpanel">
+                <div
+                  className="agent-history-messages"
+                  role="region"
+                  aria-label="History messages"
+                >
                   {historyFilters}
                   {historyMinimap}
                   {historyTimeline}
                 </div>
               )
             ) : (
-              <div className="agent-history-details" role="tabpanel">
+              <div
+                className="agent-history-details"
+                role="region"
+                aria-label="Session details"
+              >
                 {sessionReady ? (
                   <section
                     className="agent-history-overview"
@@ -1308,7 +1307,7 @@ export function AgentHistoryDrawer({
                     <div>
                       <strong
                         title={
-                          updatedAt ? formatHistoryTime(updatedAt) : undefined
+                          updatedAt ? formatUiDateTime(updatedAt) : undefined
                         }
                       >
                         {updatedAt ? formatRelativeTime(updatedAt) : "-"}
@@ -1353,12 +1352,10 @@ export function AgentHistoryDrawer({
                 />
                 <DetailRow
                   label="Updated"
-                  value={updatedAt ? formatHistoryTime(updatedAt) : "-"}
+                  value={updatedAt ? formatUiDateTime(updatedAt) : "-"}
                 />
               </div>
             )}
-
-            {!wide ? sessionActions : null}
           </>
         )}
       </aside>
@@ -1396,7 +1393,7 @@ function DetailRow({
         <button
           type="button"
           className="agent-history-icon"
-          onClick={() => void navigator.clipboard?.writeText(value)}
+          onClick={() => void copyTextWithFeedback(value)}
           aria-label={`Copy ${label.toLowerCase()}`}
           title={`Copy ${label.toLowerCase()}`}
         >

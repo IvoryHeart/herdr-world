@@ -12,6 +12,99 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+test("terminal transport settings validate input, persist by connection, and reconnect only on change", async () => {
+  let settings: GuiSettings = {
+    version: 1,
+    repositories: {},
+    workspace_auto_sync: {},
+    custom: { keep: true },
+    terminal_transport: { beta: { surface_codecs: false } },
+  };
+  const changed: boolean[] = [];
+  const messages: any[] = [];
+  let writes = 0;
+  let failWrite = false;
+  let cancelAfterWrite = false;
+  let valid = true;
+  const handler = createSettingsRpcHandler({
+    connectionId: "alpha",
+    connectionGeneration: 3,
+    readSettings: async () => settings,
+    updateSettings: async (update, isCurrent) => {
+      expect(isCurrent?.()).toBe(true);
+      if (failWrite) throw new Error("write failed");
+      settings = await update(settings);
+      writes++;
+      if (cancelAfterWrite) valid = false;
+      return settings;
+    },
+    onTerminalTransportSettingsChanged: (value) => {
+      expect(settings.terminal_transport?.alpha.surface_codecs).toBe(value);
+      changed.push(value);
+    },
+    herdr: {} as HerdrClient,
+    sshHost: () => undefined,
+    readPaseoWorktreeHooks: async () => null,
+    resolveWorkspaceGitRoot: async () => ({ workspace: {}, root: "/tmp" }),
+    workspaceAutoSyncIsRunning: () => false,
+    onWorkspaceAutoSyncSettingsChanged: () => {},
+    safeSend: (_ws, payload) => {
+      messages.push(JSON.parse(payload));
+      return true;
+    },
+    markRpcError: () => {},
+  });
+  const call = (
+    method: string,
+    params: Record<string, unknown> = {},
+    current = true,
+  ) =>
+    handler(
+      {} as ServerWebSocket<unknown>,
+      "settings",
+      `settings.terminal_transport.${method}`,
+      params,
+      () => current && valid,
+    );
+  await call("get");
+  expect(messages.at(-1)).toMatchObject({
+    connection_id: "alpha",
+    connection_generation: 3,
+    result: { surface_codecs: true },
+  });
+  for (const params of [
+    {},
+    { surface_codecs: "false" },
+    { surface_codecs: false, connection_id: "beta" },
+  ]) {
+    await call("update", params);
+    expect(messages.at(-1).error.message).toContain("boolean surface_codecs");
+  }
+  expect(writes).toBe(0);
+  await call("update", { surface_codecs: false });
+  await call("get");
+  expect(messages.at(-1).result).toEqual({ surface_codecs: false });
+  await call("update", { surface_codecs: false });
+  expect(changed).toEqual([false]);
+  await call("update", { surface_codecs: true });
+  expect(changed).toEqual([false, true]);
+  expect(settings.terminal_transport?.beta.surface_codecs).toBe(false);
+  expect(settings.custom).toEqual({ keep: true });
+  failWrite = true;
+  await call("update", { surface_codecs: false });
+  expect(messages.at(-1).error.message).toBe("write failed");
+  expect(changed).toEqual([false, true]);
+  const before = writes;
+  await call("update", { surface_codecs: false }, false);
+  expect(writes).toBe(before);
+  expect(changed).toEqual([false, true]);
+  failWrite = false;
+  cancelAfterWrite = true;
+  await call("update", { surface_codecs: false });
+  expect(changed).toEqual([false, true, false]);
+  expect(messages.at(-1).error).toBeDefined();
+});
+
 test("settings RPC errors carry their runtime connection identity", async () => {
   const messages: string[] = [];
   const handler = createSettingsRpcHandler({

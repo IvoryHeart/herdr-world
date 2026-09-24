@@ -1,11 +1,15 @@
 import { join } from "node:path";
-import { PUBLIC_FILES } from "../public-files.gen";
 import {
   decodeStaticPathname,
   isStaticRequestMethod,
   resolvePublicFilePath,
   shouldServeSpaEntry,
 } from "./static-paths";
+
+// --asset ./public preserves this directory under import.meta.dir in binaries.
+const builtPublicDir = Bun.isStandaloneExecutable
+  ? join(import.meta.dir, "public")
+  : join(import.meta.dir, "../../public");
 
 export async function serveStatic(
   req: Request,
@@ -17,42 +21,33 @@ export async function serveStatic(
       headers: { allow: "GET, HEAD" },
     });
   }
-  const url = new URL(req.url);
-  const pathname = decodeStaticPathname(url.pathname);
+  let pathname: string | null;
+  try {
+    pathname = decodeStaticPathname(new URL(req.url).pathname);
+  } catch {
+    return new Response("bad request", { status: 400 });
+  }
   if (!pathname) return new Response("bad request", { status: 400 });
 
-  const filePath = resolvePublicFilePath(publicDir, pathname);
-  if (!filePath) return new Response("not found", { status: 404 });
   const serveEntry =
     pathname === "/index.html" ||
     shouldServeSpaEntry(req.method, req.headers.get("accept"));
 
-  const file = Bun.file(filePath);
-  if (await file.exists()) {
-    return new Response(file, { headers: responseHeaders(pathname) });
-  }
-  if (serveEntry) {
-    const index = Bun.file(join(publicDir, "index.html"));
-    if (await index.exists()) {
-      return new Response(index, {
-        headers: responseHeaders("/index.html"),
-      });
+  for (const directory of [publicDir, builtPublicDir]) {
+    const filePath = resolvePublicFilePath(directory, pathname);
+    if (!filePath) return new Response("not found", { status: 404 });
+    const file = Bun.file(filePath);
+    if (await file.exists()) {
+      return new Response(file, { headers: responseHeaders(pathname) });
     }
-  }
-
-  const embedded =
-    PUBLIC_FILES[pathname] ??
-    (serveEntry ? PUBLIC_FILES["/index.html"] : undefined);
-  if (embedded) {
-    const body =
-      embedded.encoding === "base64"
-        ? Buffer.from(embedded.content, "base64")
-        : embedded.content;
-    return new Response(body, {
-      headers: responseHeaders(
-        PUBLIC_FILES[pathname] ? pathname : "/index.html",
-      ),
-    });
+    if (serveEntry) {
+      const index = Bun.file(join(directory, "index.html"));
+      if (await index.exists()) {
+        return new Response(index, {
+          headers: responseHeaders("/index.html"),
+        });
+      }
+    }
   }
 
   return new Response("not found", { status: 404 });

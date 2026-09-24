@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   findTerminalHttpLinks,
   sanitizeTerminalHttpUrl,
+  terminalFileUriPath,
 } from "./terminalLinks";
 
 describe("terminal HTTP links", () => {
@@ -89,5 +90,40 @@ describe("terminal HTTP links", () => {
   test("rejects unsupported or incomplete destinations", () => {
     expect(sanitizeTerminalHttpUrl("javascript:alert(1)")).toBeNull();
     expect(sanitizeTerminalHttpUrl("https://")).toBeNull();
+  });
+});
+
+describe("terminal OSC 8 local file URIs", () => {
+  test.each([
+    ["file:///tmp/docs/guide%20one.md", "/tmp/docs/guide one.md"],
+    ["file://localhost/tmp/docs", "/tmp/docs"],
+    ["file://LOCALHOST/tmp/guide%23notes.md", "/tmp/guide#notes.md"],
+    ["file:///tmp/guide%3Fnotes.md", "/tmp/guide?notes.md"],
+    ["file:///C:/docs/guide.md", "C:/docs/guide.md"],
+    ["file:///tmp/%E7%95%8C.md", "/tmp/界.md"],
+  ])("decodes local target %s", (uri, path) => {
+    expect(terminalFileUriPath(uri)).toBe(path);
+  });
+  test.each([
+    "file://example.com/tmp/docs",
+    "file:////example.com/share",
+    "file:///%2Fexample.com/share",
+    "file:///%5C%5Cexample.com/share",
+    "file:///tmp/%00hidden",
+    "file:///tmp/%1Bhidden",
+    "file:///tmp/%C2%85hidden",
+    "file:///tmp/%zz",
+    "file:///tmp/docs?",
+    "file:///tmp/docs#",
+    "file:///tmp/docs?query",
+    "file:///tmp/docs#fragment",
+    "file://user@localhost/tmp/docs",
+    "file:relative",
+    "file:/tmp/docs",
+    "javascript:alert(1)",
+    "data:text/html,hello",
+    "vscode://file/tmp/docs",
+  ])("rejects unsupported or unsafe target %s", (uri) => {
+    expect(terminalFileUriPath(uri)).toBeNull();
   });
 });

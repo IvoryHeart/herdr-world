@@ -78,7 +78,7 @@ export async function resolveLocalFilePaths(
         );
         if (!requestedAbsolute) assertInsideRoot(rootReal, targetReal);
         const info = await stat(targetReal);
-        return info.isFile() ? requestedPath : null;
+        return info.isFile() || info.isDirectory() ? requestedPath : null;
       } catch {
         return null;
       }

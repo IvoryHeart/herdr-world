@@ -180,6 +180,13 @@
   transform: none;
 }
 
+/* The zen island tab is a wider pull handle for the hidden topbar: hovering
+   it or tabbing onto it slides the topbar down. */
+.app.zen:has(.zen-island:hover) .topbar,
+.app.zen:has(.zen-island:focus-within) .topbar {
+  transform: none;
+}
+
 /* A popover opened from the keyboard must not measure a sliding anchor, and
    its trigger must stay visible while the pointer moves to the portal. */
 .app.zen .topbar:has([data-state="open"]),
@@ -198,6 +205,9 @@
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
   .topbar {
+    /* Anchor the opaque header for iOS standalone scroll-edge handling. */
+    position: sticky;
+    top: 0;
     grid-template-columns: minmax(0, 1fr) auto;
     min-height: calc(40px + env(safe-area-inset-top, 0px));
     padding: calc(6px + env(safe-area-inset-top, 0px))

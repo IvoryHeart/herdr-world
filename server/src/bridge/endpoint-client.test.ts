@@ -6,6 +6,14 @@ import { tmpdir } from "node:os";
 import { BinReader, BinWriter, encodeFrame } from "./bincode";
 import { EndpointClient, type EndpointSurface } from "./endpoint-client";
 import type { CellData, FrameData } from "./thin-client";
+import {
+  SurfaceReader,
+  readFullSurface,
+  readSurfaceDelta,
+  readSurfaceReuse,
+  SURFACE_DELTA_KIND,
+  SURFACE_REUSE_KIND,
+} from "./endpoint-surface";
 
 const servers: net.Server[] = [];
 const sockets = new Set<net.Socket>();
@@ -108,11 +116,13 @@ function surfaceFrame(payload: {
   surfaceRevision: number;
   frame: FrameData;
   panes?: TestPane[];
+  bootId?: string;
+  projectionRevision?: number;
 }): Buffer {
   const w = new BinWriter();
   w.variant(13); // PaneSurface
-  w.string("boot-1");
-  w.varint(1); // projection_revision
+  w.string(payload.bootId ?? "boot-1");
+  w.varint(payload.projectionRevision ?? 1); // projection_revision
   w.varint(payload.surfaceRevision);
   writeFrame(w, payload.frame);
   const panes = payload.panes ?? [{ paneId: "w1:p1" }];
@@ -121,7 +131,9 @@ function surfaceFrame(payload: {
     writePane(w, pane.paneId, pane.focused, pane.mouseReporting);
   w.varint(0); // splits
   w.bool(false); // popup
-  // SurfaceGraphicsScene tail: the client stops reading before it.
+  w.varint(0); // graphics assets
+  w.varint(0); // graphics placements
+  w.varint(0); // retained assets
   return w.toBuffer();
 }
 
@@ -334,7 +346,11 @@ describe("EndpointClient (endpoint generation 1)", () => {
   });
 
   test("sends a generation-1 hello with the required codecs", async () => {
-    const socketPath = await startEndpointServer(() => {});
+    const socketPath = await startEndpointServer((hello) => {
+      expect(hello.surface_delta).toBe(true);
+      expect(hello.surface_reuse).toBe(true);
+      expect(hello.surface_codecs).toEqual(["shell.surface.v1"]);
+    });
     const client = new EndpointClient(socketPath);
     const welcome = new Promise<any>((resolve) =>
       client.once("welcome", resolve),
@@ -481,8 +497,13 @@ describe("EndpointClient (endpoint generation 1)", () => {
     const client = new EndpointClient(socketPath);
     const surfaces: EndpointSurface[] = [];
     client.on("surface", (s) => surfaces.push(s));
+    const error = new Promise<Error>((resolve) =>
+      client.once("error", resolve),
+    );
     await client.connect(10, 2);
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect((await error).message).toContain("baseline mismatch");
+    expect(client.isClosed).toBe(true);
+    expect(client.currentSurface).toBeNull();
 
     expect(surfaces.length).toBe(2);
     expect(surfaces[0].surfaceRevision).toBe(1);
@@ -647,7 +668,7 @@ describe("EndpointClient (endpoint generation 1)", () => {
     }
   });
 
-  test("rejects unknown-pane patches without changing the retained surface", async () => {
+  test("closes unknown-pane patches without emitting a partial surface", async () => {
     const base: FrameData = {
       cells: Array.from({ length: 50 }, () => cell(" ")),
       width: 10,
@@ -685,17 +706,16 @@ describe("EndpointClient (endpoint generation 1)", () => {
     const client = new EndpointClient(socketPath);
     const surfaces: EndpointSurface[] = [];
     client.on("surface", (surface) => surfaces.push(surface));
+    const error = new Promise<Error>((resolve) =>
+      client.once("error", resolve),
+    );
     try {
       await client.connect(10, 5);
-      await Bun.sleep(50);
-      expect(surfaces.map((surface) => surface.surfaceRevision)).toEqual([
-        1, 3,
-      ]);
+      expect((await error).message).toContain("topology");
+      expect(surfaces.map((surface) => surface.surfaceRevision)).toEqual([1]);
       expect(surfaces[0].frame).toEqual(base);
-      expect(surfaces[1].frame.cells[0].symbol).toBe(" ");
-      expect(surfaces[1].frame.cells[1].symbol).toBe("Y");
-      expect(surfaces[1].frame.cursor).toBeNull();
-      expect(surfaces[1].panes).toEqual(surfaces[0].panes);
+      expect(client.currentSurface).toBeNull();
+      expect(client.isClosed).toBe(true);
     } finally {
       client.close();
     }
@@ -849,6 +869,673 @@ for (const invalid of [
     }
   });
 }
+
+const CODEC_WELCOME = {
+  ...WELCOME,
+  server_version: "0.9.1",
+  capabilities: ["surface_delta", "surface_reuse", "health_check"],
+};
+const CODEC_FRAME: FrameData = {
+  width: 10,
+  height: 5,
+  cells: Array.from({ length: 50 }, () => cell(" ")),
+  cursor: null,
+  hyperlinks: [],
+};
+
+function deltaData(
+  options: {
+    base?: number;
+    baseProjection?: number;
+    revision?: number;
+    projection?: number;
+    bootId?: string;
+    frame?: FrameData;
+    panes?: TestPane[];
+    rows?: Array<{ x: number; y: number; cells: CellData[] }>;
+  } = {},
+) {
+  const w = new BinWriter();
+  w.varint(options.baseProjection ?? 1);
+  w.varint(options.base ?? 1);
+  const surface = surfaceFrame({
+    surfaceRevision: options.revision ?? 2,
+    projectionRevision: options.projection ?? 2,
+    bootId: options.bootId,
+    frame: options.frame ?? { ...CODEC_FRAME, cells: [] },
+    panes: options.panes,
+  }).subarray(1); // SurfaceDelta embeds the struct, not the enum tag.
+  const tail = new BinWriter();
+  const rows = options.rows ?? [{ x: 2, y: 1, cells: [cell("x")] }];
+  tail.varint(rows.length);
+  for (const row of rows) {
+    tail.varint(row.x);
+    tail.varint(row.y);
+    tail.varint(row.cells.length);
+    for (const c of row.cells) writeCell(tail, c);
+  }
+  tail.bool(false); // popup_cells
+  return Buffer.concat([w.toBuffer(), surface, tail.toBuffer()])
+    .toString("base64")
+    .replace(/=+$/, "");
+}
+
+function reuseData(base = 2, revision = 3) {
+  return {
+    base_surface_revision: base,
+    surface: {
+      boot_id: "boot-1",
+      projection_revision: 3,
+      surface_revision: revision,
+      frame: { ...CODEC_FRAME, cells: [] as CellData[], graphics: [] },
+      panes: [
+        {
+          pane_id: "w1:p2",
+          content_revision: 9,
+          rect: { x: 0, y: 0, width: 10, height: 5 },
+          inner_rect: { x: 1, y: 1, width: 8, height: 3 },
+          scrollbar_rect: null,
+          scroll: {
+            offset_from_bottom: 5,
+            max_offset_from_bottom: 20,
+            viewport_rows: 3,
+          },
+          focused: true,
+          mouse_reporting: true,
+          sgr_pixel_mouse: false,
+          alternate_screen_active: false,
+          pixel_width: 0,
+          pixel_height: 0,
+        },
+      ],
+      splits: [],
+      popup: null,
+      graphics: { assets: [], placements: [], retained_assets: [] },
+    },
+  };
+}
+
+function codecBaseline() {
+  const r = new SurfaceReader(
+    surfaceFrame({ surfaceRevision: 1, frame: CODEC_FRAME }),
+  );
+  r.variant();
+  return readFullSurface(r);
+}
+
+// This checksum is frozen by Herdr v0.9.1's surface_delta_v1_binary_fixture_is_frozen.
+test.each([true, false])(
+  "legacy full frames and patches accept u32 hyperlinks (codecs: %s)",
+  async (enabled) => {
+    const frame: FrameData = {
+      width: 257,
+      height: 257,
+      cursor: null,
+      cells: Array.from({ length: 257 * 257 }, (_, i) =>
+        cell("x", { hyperlink: i < 65537 ? i : null }),
+      ),
+      hyperlinks: Array.from(
+        { length: 65537 },
+        (_, i) => `https://e.test/${i.toString(36)}`,
+      ),
+    };
+    const full = surfaceFrame({ surfaceRevision: 1, frame });
+    expect(full.length).toBeLessThan(2 * 1024 * 1024);
+    let peer!: net.Socket;
+    const socketPath = await startEndpointServer((_hello, socket) => {
+      peer = socket;
+      socket.write(encodeFrame(full));
+    });
+    const client = new EndpointClient(socketPath, enabled);
+    try {
+      const first = once(client, "surface");
+      await Promise.all([client.connect(257, 257), first]);
+      expect(client.currentSurface?.frame.hyperlinks).toHaveLength(65537);
+      expect(client.currentSurface?.frame.cells[65536].hyperlink).toBe(65536);
+      const patched = once(client, "surface");
+      peer.write(
+        encodeFrame(
+          patchFrame({
+            baseSurfaceRevision: 1,
+            surfaceRevision: 2,
+            rows: [{ x: 0, y: 0, cells: [cell("Y", { hyperlink: 65536 })] }],
+          }),
+        ),
+      );
+      await patched;
+      expect(client.currentSurface?.frame.cells[0]).toMatchObject({
+        symbol: "Y",
+        hyperlink: 65536,
+      });
+      expect(client.isClosed).toBe(false);
+    } finally {
+      client.close();
+    }
+    expect(() =>
+      readSurfaceDelta(
+        deltaData({ frame: { ...frame, cells: [] } }),
+        codecBaseline(),
+      ),
+    ).toThrow("integer out of range");
+  },
+);
+
+test("full-frame pane collections are byte-bounded rather than delta-bounded", () => {
+  const panes = Array.from({ length: 4097 }, (_, i) => ({
+    paneId: `pane-${i}`,
+  }));
+  const reader = new SurfaceReader(
+    surfaceFrame({ surfaceRevision: 1, frame: CODEC_FRAME, panes }),
+  );
+  reader.variant();
+  expect(readFullSurface(reader).panes).toHaveLength(4097);
+  expect(() => readSurfaceDelta(deltaData({ panes }), codecBaseline())).toThrow(
+    "integer out of range",
+  );
+});
+
+test("delta fixture matches the upstream frozen wire checksum", () => {
+  const data = deltaData({
+    bootId: "boot",
+    frame: { ...CODEC_FRAME, width: 120, height: 40, cells: [] },
+    panes: [],
+    rows: [{ x: 0, y: 0, cells: [cell("x")] }],
+  });
+  const wire = encodeFrame(controlFrame(SURFACE_DELTA_KIND, data));
+  expect(new Bun.CryptoHasher("sha256").update(wire).digest("hex")).toBe(
+    "1effe2cbf998ff334bda9151995b87d54e646a1b90c10d853723d5bc1c8a84bf",
+  );
+});
+
+test("full, delta, reuse, patch and resized full share one immutable baseline", async () => {
+  const reuse = reuseData();
+  reuse.surface.frame.cursor = { x: 2, y: 1, visible: false, shape: 5 };
+  const socketPath = await startEndpointServer(
+    (_hello, socket) => {
+      const messages = [
+        surfaceFrame({
+          surfaceRevision: 1,
+          frame: CODEC_FRAME,
+          panes: [{ paneId: "w1:p1" }, { paneId: "w1:p2" }],
+        }),
+        controlFrame(
+          SURFACE_DELTA_KIND,
+          deltaData({
+            panes: [
+              { paneId: "w1:p1", focused: false },
+              { paneId: "w1:p2", mouseReporting: true },
+            ],
+          }),
+        ),
+        controlFrame(SURFACE_REUSE_KIND, JSON.stringify(reuse)),
+        // Return to another tab at the same geometry: metadata is a complete list.
+        controlFrame(
+          SURFACE_DELTA_KIND,
+          deltaData({
+            base: 3,
+            baseProjection: 3,
+            revision: 4,
+            projection: 4,
+            panes: [{ paneId: "w2:p1" }],
+            rows: [],
+          }),
+        ),
+        surfaceFrame({
+          surfaceRevision: 5,
+          projectionRevision: 5,
+          frame: { ...CODEC_FRAME, width: 5, height: 10 },
+        }),
+        controlFrame(
+          SURFACE_DELTA_KIND,
+          deltaData({
+            base: 5,
+            baseProjection: 5,
+            revision: 6,
+            projection: 5,
+            frame: { ...CODEC_FRAME, width: 5, height: 10, cells: [] },
+            rows: [{ x: 4, y: 9, cells: [cell("Z")] }],
+          }),
+        ),
+      ];
+      // Fragment a control payload and coalesce the rest on the same socket.
+      const wire = Buffer.concat(messages.map(encodeFrame));
+      socket.write(wire.subarray(0, 7));
+      socket.write(wire.subarray(7));
+    },
+    undefined,
+    true,
+    CODEC_WELCOME,
+  );
+  const client = new EndpointClient(socketPath);
+  const surfaces: EndpointSurface[] = [];
+  const done = new Promise<void>((resolve) =>
+    client.on("surface", (s) => {
+      surfaces.push(s);
+      if (surfaces.length === 6) resolve();
+    }),
+  );
+  try {
+    await client.connect(10, 5);
+    await done;
+    expect(surfaces.map((s) => s.surfaceRevision)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(surfaces[0].frame.cells[12].symbol).toBe(" ");
+    expect(surfaces[1].frame.cells[12].symbol).toBe("x");
+    expect(surfaces[1].panes).toHaveLength(2);
+    expect(surfaces[2].panes.map((p) => p.paneId)).toEqual(["w1:p2"]);
+    expect(surfaces[2].panes[0].scroll?.offsetFromBottom).toBe(5);
+    expect(surfaces[2].panes[0].mouseReporting).toBe(true);
+    expect(surfaces[2].frame.cursor?.visible).toBe(false);
+    expect(surfaces[3].panes[0].paneId).toBe("w2:p1");
+    expect(surfaces[3].frame.cursor).toBeNull();
+    expect(surfaces[5].frame.cells[49].symbol).toBe("Z");
+    expect(surfaces[4].frame.cells[49].symbol).toBe(" ");
+  } finally {
+    client.close();
+  }
+});
+
+test("legacy patch updates the base used by delta and reuse", async () => {
+  const socketPath = await startEndpointServer(
+    (_hello, socket) => {
+      for (const payload of [
+        surfaceFrame({ surfaceRevision: 1, frame: CODEC_FRAME }),
+        patchFrame({
+          baseSurfaceRevision: 1,
+          surfaceRevision: 2,
+          rows: [{ x: 0, y: 0, cells: [cell("P")] }],
+        }),
+        controlFrame(SURFACE_DELTA_KIND, deltaData({ base: 2, revision: 3 })),
+        controlFrame(SURFACE_REUSE_KIND, JSON.stringify(reuseData(3, 4))),
+      ])
+        socket.write(encodeFrame(payload));
+    },
+    undefined,
+    true,
+    CODEC_WELCOME,
+  );
+  const client = new EndpointClient(socketPath);
+  const done = new Promise<EndpointSurface>((resolve) =>
+    client.on("surface", (s) => {
+      if (s.surfaceRevision === 4) resolve(s);
+    }),
+  );
+  try {
+    await client.connect(10, 5);
+    const surface = await done;
+    expect(surface.frame.cells[0].symbol).toBe("P");
+    expect(surface.frame.cells[12].symbol).toBe("x");
+  } finally {
+    client.close();
+  }
+});
+
+for (const [name, options] of Object.entries({
+  "wrong base": { base: 0 },
+  "wrong projection": { baseProjection: 0 },
+  "revision gap": { revision: 3 },
+  "duplicate revision": { revision: 1 },
+  "old projection": { projection: 0 },
+  "other boot": { bootId: "boot-2" },
+  resize: { frame: { ...CODEC_FRAME, width: 5, height: 10, cells: [] } },
+  "nonempty grid": { frame: CODEC_FRAME },
+  "outside row": { rows: [{ x: 10, y: 0, cells: [cell("!")] }] },
+  "outside grid": { rows: [{ x: 0, y: 5, cells: [cell("!")] }] },
+  "empty span": { rows: [{ x: 0, y: 0, cells: [] }] },
+  overlap: {
+    rows: [
+      { x: 0, y: 0, cells: [cell("!")] },
+      { x: 0, y: 0, cells: [cell("!")] },
+    ],
+  },
+  "bad hyperlink": {
+    rows: [{ x: 0, y: 0, cells: [cell("!", { hyperlink: 0 })] }],
+  },
+})) {
+  test(`rejects delta ${name} atomically`, () => {
+    const base = codecBaseline();
+    expect(() => readSurfaceDelta(deltaData(options), base)).toThrow();
+    expect(base.surfaceRevision).toBe(1);
+    expect(base.frame.cells[12].symbol).toBe(" ");
+    expect(readSurfaceDelta(deltaData(), base).frame.cells[12].symbol).toBe(
+      "x",
+    );
+  });
+}
+
+test("rejects malformed base64, trailing bytes and oversized collection prefixes", () => {
+  const base = codecBaseline();
+  const valid = Buffer.from(deltaData(), "base64");
+  for (const data of [
+    "!",
+    "A",
+    deltaData() + "=",
+    Buffer.concat([valid, Buffer.from([0])])
+      .toString("base64")
+      .replace(/=+$/, ""),
+  ])
+    expect(() => readSurfaceDelta(data, base)).toThrow();
+  // Replace the metadata grid count with a huge u64; no cells may be allocated.
+  const w = new BinWriter();
+  w.varint(1);
+  w.varint(1);
+  w.string("boot-1");
+  w.varint(2);
+  w.varint(2);
+  w.varint(2n ** 63n);
+  expect(() =>
+    readSurfaceDelta(w.toBuffer().toString("base64").replace(/=+$/, ""), base),
+  ).toThrow();
+});
+
+test("hyperlink tables, wide cells, combining text and styles survive deltas", () => {
+  const base = codecBaseline();
+  const styled = cell("\u4e2d", {
+    fg: 0xff112233,
+    bg: 0xff445566,
+    modifier: 3,
+    hyperlink: 0,
+  });
+  const data = deltaData({
+    frame: { ...CODEC_FRAME, cells: [], hyperlinks: ["https://example.com"] },
+    rows: [
+      {
+        x: 0,
+        y: 0,
+        cells: [styled, cell("", { skip: true }), cell("e\u0301")],
+      },
+    ],
+  });
+  const surface = readSurfaceDelta(data, base);
+  expect(surface.frame.cells.slice(0, 3)).toEqual([
+    styled,
+    cell("", { skip: true }),
+    cell("e\u0301"),
+  ]);
+  expect(surface.frame.hyperlinks).toEqual(["https://example.com"]);
+  const reuse = reuseData();
+  reuse.surface.frame.hyperlinks = [];
+  expect(() => readSurfaceReuse(JSON.stringify(reuse), surface)).toThrow(
+    "hyperlink",
+  );
+});
+
+test.each([SURFACE_DELTA_KIND, SURFACE_REUSE_KIND])(
+  "connection-local negotiation and fresh baseline for %s",
+  async (kind) => {
+    let connection = 0;
+    const socketPath = await startEndpointServer(
+      (_hello, socket) => {
+        if (++connection === 1)
+          socket.write(
+            encodeFrame(
+              surfaceFrame({ surfaceRevision: 1, frame: CODEC_FRAME }),
+            ),
+          );
+        socket.write(
+          encodeFrame(
+            controlFrame(
+              kind,
+              kind === SURFACE_DELTA_KIND
+                ? deltaData()
+                : JSON.stringify(reuseData(1, 2)),
+            ),
+          ),
+        );
+      },
+      undefined,
+      true,
+      CODEC_WELCOME,
+    );
+    for (let i = 0; i < 2; i++) {
+      const client = new EndpointClient(socketPath);
+      const result = new Promise<string>((resolve) => {
+        client.on("error", () => resolve("error"));
+        client.on("surface", (s) => {
+          if (s.surfaceRevision === 2) resolve("surface");
+        });
+      });
+      try {
+        await client.connect(10, 5);
+        expect(await result).toBe(i === 0 ? "surface" : "error");
+        if (i === 1) {
+          expect(client.isClosed).toBe(true);
+          expect(client.currentSurface).toBeNull();
+        }
+      } finally {
+        client.close();
+      }
+    }
+    const oldPath = await startEndpointServer((_hello, socket) =>
+      socket.write(encodeFrame(controlFrame(kind, "invalid"))),
+    );
+    const old = new EndpointClient(oldPath);
+    const error = new Promise<Error>((resolve) => old.once("error", resolve));
+    try {
+      await old.connect(10, 5);
+      expect((await error).message).toContain("unnegotiated");
+    } finally {
+      old.close();
+    }
+  },
+);
+
+test("popup patch/replace and graphics tails cannot desynchronize main delta rows", () => {
+  function popupSurface(revision: number, metadata: boolean, popupId: string) {
+    const w = new BinWriter();
+    w.string("boot-1");
+    w.varint(1);
+    w.varint(revision);
+    writeFrame(w, { ...CODEC_FRAME, cells: metadata ? [] : CODEC_FRAME.cells });
+    w.varint(0); // panes
+    w.varint(1); // splits
+    w.variant(1);
+    w.varint(4);
+    for (let i = 0; i < 2; i++) for (const n of [0, 0, 10, 5]) w.varint(n);
+    w.varint(2);
+    w.bool(true);
+    w.bool(false);
+    w.bool(true);
+    w.string(popupId);
+    w.string("popup");
+    w.bool(true);
+    w.variant(0);
+    w.varint(2); // width in cells
+    w.bool(true);
+    w.variant(1);
+    w.u8(50); // height in percent
+    writeFrame(w, {
+      ...CODEC_FRAME,
+      width: 2,
+      height: 1,
+      cells: metadata ? [] : [cell("a"), cell("b")],
+    });
+    w.bool(false);
+    w.bool(false);
+    w.varint(0);
+    w.varint(0);
+    const key = (layer: boolean) => {
+      w.variant(layer ? 1 : 0);
+      if (layer) {
+        w.string("w1:p1");
+        w.string("layer");
+      } else {
+        w.variant(1);
+        w.string(popupId);
+        w.varint(1);
+      }
+      w.varint(1);
+      w.varint(1);
+      w.variant(1);
+      w.varint(4);
+      w.varint(2n ** 63n);
+    };
+    w.varint(1);
+    key(true);
+    w.bytes(Buffer.from([0, 128, 255, 255]));
+    w.varint(1);
+    key(false);
+    for (let i = 0; i < 13; i++) w.varint(i);
+    w.varint(1);
+    key(true);
+    return w.toBuffer();
+  }
+  let base = readFullSurface(
+    new SurfaceReader(popupSurface(1, false, "popup-1")),
+  );
+  const first = base;
+  for (const [revision, replace, id] of [
+    [2, false, "popup-1"],
+    [3, true, "popup-2"],
+  ] as const) {
+    const prefix = new BinWriter();
+    prefix.varint(1);
+    prefix.varint(revision - 1);
+    const tail = new BinWriter();
+    tail.varint(1);
+    tail.varint(0);
+    tail.varint(0);
+    tail.varint(1);
+    writeCell(tail, cell("M"));
+    tail.bool(true);
+    tail.variant(replace ? 1 : 0);
+    if (replace) {
+      tail.varint(2);
+      writeCell(tail, cell("Y"));
+      writeCell(tail, cell("Z"));
+    } else {
+      tail.varint(1);
+      tail.varint(1);
+      tail.varint(0);
+      tail.varint(1);
+      writeCell(tail, cell("X"));
+    }
+    const data = Buffer.concat([
+      prefix.toBuffer(),
+      popupSurface(revision, true, id),
+      tail.toBuffer(),
+    ])
+      .toString("base64")
+      .replace(/=+$/, "");
+    base = readSurfaceDelta(data, base);
+    expect(base.frame.cells[0].symbol).toBe("M");
+    expect(base.popup?.frame.cells.map((c) => c.symbol).join("")).toBe(
+      replace ? "YZ" : "aX",
+    );
+  }
+  expect(first.popup?.frame.cells.map((c) => c.symbol).join("")).toBe("ab");
+  expect(first.frame.cells[0].symbol).toBe(" ");
+});
+
+test("reuse rejects invalid JSON metadata and revision mismatches atomically", () => {
+  const base = codecBaseline();
+  for (const mutate of [
+    (v: ReturnType<typeof reuseData>) => {
+      v.base_surface_revision = 0;
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.surface_revision = 3;
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.boot_id = "other";
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.projection_revision = 0;
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.frame.width = 9;
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.frame.cells = [cell("!")];
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.panes[0].content_revision = Number.MAX_SAFE_INTEGER + 1;
+    },
+    (v: ReturnType<typeof reuseData>) => {
+      v.surface.panes.push(v.surface.panes[0]);
+    },
+  ]) {
+    const data = reuseData(1, 2);
+    mutate(data);
+    expect(() => readSurfaceReuse(JSON.stringify(data), base)).toThrow();
+    expect(base.surfaceRevision).toBe(1);
+  }
+  expect(() => readSurfaceReuse("{", base)).toThrow();
+  expect(() =>
+    readSurfaceReuse(
+      JSON.stringify({ ...reuseData(1, 2), surface: null }),
+      base,
+    ),
+  ).toThrow();
+});
+
+test.each(["snapshot boot", "surface boot", "stale full", "stale projection"])(
+  "closes a connection with %s without publishing its frame",
+  async (kind) => {
+    const socketPath = await startEndpointServer((_hello, socket) => {
+      socket.write(
+        encodeFrame(surfaceFrame({ surfaceRevision: 1, frame: CODEC_FRAME })),
+      );
+      socket.write(
+        encodeFrame(
+          kind === "snapshot boot"
+            ? controlFrame(
+                "shell.snapshot.v1",
+                JSON.stringify({ boot_id: "boot-2", revision: 1 }),
+              )
+            : surfaceFrame({
+                surfaceRevision: kind === "stale full" ? 1 : 2,
+                frame: CODEC_FRAME,
+                bootId: kind === "surface boot" ? "boot-2" : "boot-1",
+                projectionRevision: kind === "stale projection" ? 0 : 1,
+              }),
+        ),
+      );
+    });
+    const client = new EndpointClient(socketPath);
+    const surfaces: EndpointSurface[] = [];
+    client.on("surface", (surface) => surfaces.push(surface));
+    const error = new Promise<Error>((resolve) =>
+      client.once("error", resolve),
+    );
+    try {
+      await client.connect(10, 5);
+      expect((await error).message).toContain("reconnect required");
+      expect(surfaces).toHaveLength(1);
+      expect(client.currentSurface).toBeNull();
+      expect(client.isClosed).toBe(true);
+    } finally {
+      client.close();
+    }
+  },
+);
+
+test("disabled surface codecs are omitted from negotiation even when advertised", async () => {
+  let peer!: net.Socket;
+  const socketPath = await startEndpointServer(
+    (hello, socket) => {
+      expect(hello.surface_delta).toBe(false);
+      expect(hello.surface_reuse).toBe(false);
+      peer = socket;
+      socket.write(
+        encodeFrame(surfaceFrame({ surfaceRevision: 1, frame: CODEC_FRAME })),
+      );
+    },
+    undefined,
+    true,
+    CODEC_WELCOME,
+  );
+  const client = new EndpointClient(socketPath, false);
+  const error = new Promise<Error>((resolve) => client.once("error", resolve));
+  try {
+    await client.connect(10, 5);
+    expect(client.currentSurface?.frame).toEqual(CODEC_FRAME);
+    peer.write(encodeFrame(controlFrame(SURFACE_DELTA_KIND, deltaData())));
+    expect((await error).message).toContain("unnegotiated");
+    expect(client.isClosed).toBe(true);
+  } finally {
+    client.close();
+  }
+});
 
 test("core resize and semantic input wait for verified codecs", () => {
   const client = new EndpointClient("/unused-issue111.sock");

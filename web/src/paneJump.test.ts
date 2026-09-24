@@ -4,6 +4,7 @@ import {
   paneCanClose,
   paneJumpEntries,
   paneJumpTargetId,
+  paneSearchEntries,
 } from "./paneJump";
 import type { Pane, Tab, Workspace } from "./types";
 
@@ -107,6 +108,7 @@ describe("recent pane projection", () => {
     expect(entries).toEqual([
       {
         paneId: "p1",
+        paneLabel: "Pane p1",
         title: "example-repo",
         subtitle: "Tab 1 · /repos/w1",
         agent: "codex",
@@ -144,16 +146,43 @@ describe("recent pane projection", () => {
     expect(entries[0].agentStatus).toBeUndefined();
   });
 
+  test("distinguishes same-tab panes by their existing short IDs in both modes", () => {
+    const snapshot = {
+      panes: [pane("w1:p1", "w1", "t1"), pane("w1:p2", "w1", "t1")],
+      recentPaneIds: ["w1:p1", "w1:p2"],
+      tabs: [tab("t1", "w1")],
+      workspaces: [workspace("w1", "one")],
+    };
+    for (const entries of [
+      paneJumpEntries(snapshot),
+      paneSearchEntries(snapshot, ""),
+    ]) {
+      expect(entries.map((entry) => entry.paneLabel)).toEqual([
+        "Pane p1",
+        "Pane p2",
+      ]);
+      expect(entries.map((entry) => entry.subtitle)).toEqual([
+        "Tab 1 · /repos/w1",
+        "Tab 1 · /repos/w1",
+      ]);
+    }
+    expect(
+      paneSearchEntries(snapshot, "Pane p2").map((entry) => entry.paneId),
+    ).toEqual(["w1:p2"]);
+  });
+
   test("does not refocus the pane that is already current", () => {
     const entries = [
       {
         paneId: "current",
+        paneLabel: "Pane current",
         title: "one",
         subtitle: "Tab 1",
         current: true,
       },
       {
         paneId: "previous",
+        paneLabel: "Pane previous",
         title: "two",
         subtitle: "Tab 1",
         current: false,
@@ -163,5 +192,72 @@ describe("recent pane projection", () => {
     expect(paneJumpTargetId(entries, 0)).toBeNull();
     expect(paneJumpTargetId(entries, 1)).toBe("previous");
     expect(paneJumpTargetId(entries, 2)).toBeNull();
+  });
+});
+
+describe("pane search projection", () => {
+  const snapshot = {
+    layout: {
+      panes: [
+        {
+          pane_id: "p1",
+          focused: true,
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+        },
+      ],
+    },
+    panes: [
+      pane("p1", "w1", "t1"),
+      pane("p2", "w2", "t2", "codex"),
+      pane("p3", "w3", "t3"),
+    ],
+    recentPaneIds: ["p1"],
+    tabs: [tab("t1", "w1"), tab("t2", "w2"), tab("t3", "w3")],
+    workspaces: [
+      workspace("w1", "roamgate"),
+      workspace("w2", "herdr-docs"),
+      workspace("w3", "roamgate-site"),
+    ],
+  };
+
+  test("reaches panes that the recent list never kept", () => {
+    expect(
+      paneJumpEntries(snapshot, "p1").map((entry) => entry.paneId),
+    ).toEqual(["p1"]);
+    expect(
+      paneSearchEntries(snapshot, "", "p1").map((entry) => entry.paneId),
+    ).toEqual(["p1", "p2", "p3"]);
+  });
+
+  test("matches workspace, directory, and agent text case-insensitively", () => {
+    const ids = (query: string) =>
+      paneSearchEntries(snapshot, query, "p1").map((entry) => entry.paneId);
+
+    expect(ids("HERDR")).toEqual(["p2"]);
+    expect(ids("codex")).toEqual(["p2"]);
+    expect(ids("/repos/w3")).toEqual(["p3"]);
+    expect(ids("roamgate")).toEqual(["p1", "p3"]);
+    expect(ids("nothing here")).toEqual([]);
+  });
+
+  test("requires every token but ignores their order", () => {
+    const ids = (query: string) =>
+      paneSearchEntries(snapshot, query, "p1").map((entry) => entry.paneId);
+
+    expect(ids("codex herdr")).toEqual(["p2"]);
+    expect(ids("codex roamgate")).toEqual([]);
+    expect(ids("  tab   herdr  ")).toEqual(["p2"]);
+  });
+
+  test("keeps the recent order ahead of the remaining panes", () => {
+    const entries = paneSearchEntries(
+      { ...snapshot, recentPaneIds: ["p3", "p2"] },
+      "",
+      "p3",
+    );
+
+    expect(entries.map((entry) => entry.paneId)).toEqual(["p3", "p2", "p1"]);
+    expect(entries[0].current).toBe(true);
+    expect(entries[1].current).toBe(false);
   });
 });

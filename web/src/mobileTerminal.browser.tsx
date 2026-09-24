@@ -10,7 +10,12 @@ import {
 import { copyTextFromUserGesture } from "./terminalClipboard";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
-import { bridge, type ConnectionClient, type TerminalPush } from "./api";
+import {
+  bridge,
+  type ConnectionClient,
+  type TerminalPush,
+  type TerminalClosedPush,
+} from "./api";
 import { __storeTesting, store } from "./store";
 import {
   initializeLayoutPreferences,
@@ -37,6 +42,14 @@ const releaseParser = () => {
 };
 const calls: { method: string; params: Record<string, unknown> }[] = [];
 const listeners = new Set<(frame: TerminalPush) => void>();
+const closedListeners = new Set<(closed: TerminalClosedPush) => void>();
+bridge.onTerminalClosed = (listener) => {
+  closedListeners.add(listener);
+  return () => {
+    closedListeners.delete(listener);
+  };
+};
+let pendingAttach: Promise<unknown> | null = null;
 let cols = 80,
   rows = 24;
 let client: ConnectionClient = {
@@ -51,6 +64,7 @@ let client: ConnectionClient = {
       cols = Number(params.cols);
       rows = Number(params.rows);
     }
+    if (method === "terminal.attach" && pendingAttach) return pendingAttach;
     return {};
   },
 };
@@ -266,6 +280,59 @@ const api = {
   },
   async ready() {
     await settle();
+    const attachesBefore = calls.filter(
+      (call) => call.method === "terminal.attach",
+    ).length;
+    for (let i = 0; i < 5; i++) {
+      for (const listener of closedListeners)
+        listener({
+          connection_id: client.connectionId,
+          connection_generation: client.serverRuntimeGeneration ?? undefined,
+          terminal_id: pane.terminal_id!,
+          reason: "terminal_configuration_changed",
+        });
+      await settle();
+    }
+    check(
+      calls.filter((call) => call.method === "terminal.attach").length ===
+        attachesBefore + 5,
+      "configuration changes reattach without consuming the takeover retry budget",
+    );
+    for (const lateReply of ["success", "failure"]) {
+      let resolve!: (value: unknown) => void;
+      let reject!: (error: Error) => void;
+      pendingAttach = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      const close = () => {
+        for (const listener of closedListeners)
+          listener({
+            connection_id: client.connectionId,
+            connection_generation: 1,
+            terminal_id: pane.terminal_id!,
+            reason: "terminal_configuration_changed",
+          });
+      };
+      close();
+      await settle();
+      pendingAttach = null;
+      close();
+      await settle();
+      frame("replacement");
+      await settle();
+      if (lateReply === "failure") reject(new Error("obsolete attach failure"));
+      else resolve({ endpoint: { methods: ["obsolete"], capabilities: [] } });
+      await settle();
+      check(
+        !document.body.textContent?.includes("obsolete attach failure"),
+        "late attach failure replaced the successful display",
+      );
+      check(
+        store.get().endpointAvailability[pane.terminal_id!] === null,
+        "late attach success overwrote the replacement metadata",
+      );
+    }
     frame(
       "\x1b[2J\x1b[H$ echo output\r\n  error: /repo/界é.ts\r\n\r\n  code();\x1b[?1000h\x1b[?1006h",
     );
@@ -1148,6 +1215,39 @@ const api = {
     await settle();
     frame("\x1b[2J\x1b[Hdesktop selection text", false);
     await settle();
+    const returnToApp = async () => {
+      // Window deactivation blurs the input but retains document.activeElement.
+      document.activeElement?.dispatchEvent(new FocusEvent("blur"));
+      window.dispatchEvent(new Event("blur"));
+      window.dispatchEvent(new Event("focus"));
+      await settle();
+    };
+    textarea().focus();
+    calls.length = 0;
+    await returnToApp();
+    check(
+      document.activeElement === textarea(),
+      "idle desktop terminal retains focus across app switches without output",
+    );
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "a",
+        code: "KeyA",
+        keyCode: 65,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    check(inputCalls().length > 0, "restored terminal receives keyboard input");
+    const otherInput = document.createElement("input");
+    document.body.append(otherInput);
+    otherInput.focus();
+    await returnToApp();
+    check(
+      document.activeElement === otherInput,
+      "app switches preserve other input focus",
+    );
+    otherInput.remove();
     const screen = document.querySelector(".xterm-screen")!;
     const rect = screen.getBoundingClientRect();
     const mouse = (

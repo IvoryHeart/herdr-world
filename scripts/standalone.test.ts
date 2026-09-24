@@ -1,0 +1,139 @@
+import { expect, test } from "bun:test";
+import { mkdtemp, mkdir, rename, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import serverPackage from "../server/package.json";
+
+test("standalone serves native assets without ambient config and retains source maps", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "herdr-world-standalone-"));
+  const runtimeDir = join(dir, "runtime");
+  const overrideDir = join(dir, "override");
+  const binary = join(
+    dir,
+    process.platform === "win32" ? "herdr-world.exe" : "herdr-world",
+  );
+  async function run(argv: string[], cwd: string) {
+    const child = Bun.spawn(argv, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 30_000,
+      killSignal: "SIGKILL",
+    });
+    const [code, stdout, stderr] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+    ]);
+    return { code, stdout, stderr };
+  }
+  try {
+    await mkdir(join(dir, "public/assets"), { recursive: true });
+    await mkdir(join(dir, "src"));
+    await mkdir(runtimeDir);
+    await mkdir(overrideDir);
+    await Bun.write(join(dir, "public/index.html"), "embedded entry");
+    await Bun.write(
+      join(dir, "public/assets/app-hash.js"),
+      "export const value = 42;",
+    );
+    await Bun.write(
+      join(dir, "public/assets/font.woff2"),
+      new Uint8Array([0, 1, 128, 255]),
+    );
+    await Bun.write(
+      join(runtimeDir, ".env"),
+      "HERDR_WORLD_STANDALONE_TEST=ambient\n",
+    );
+    await Bun.write(
+      join(runtimeDir, "bunfig.toml"),
+      'preload = ["./unexpected.ts"]\n',
+    );
+    await Bun.write(
+      join(runtimeDir, "unexpected.ts"),
+      'throw new Error("ambient preload ran");',
+    );
+    await Bun.write(join(overrideDir, "index.html"), "external entry");
+    await Bun.write(
+      join(dir, "src/index.ts"),
+      `
+import { serveStatic } from ${JSON.stringify(fileURLToPath(new URL("../server/src/http/static-files.ts", import.meta.url)))};
+if (process.argv.includes("--crash")) throw new Error("source map probe");
+const server = Bun.serve({
+  hostname: "127.0.0.1", port: 0,
+  fetch: request => serveStatic(request, process.argv[2]),
+});
+const results = [];
+try {
+  for (const [path, method, accept] of [
+    ["/", "GET", "text/html"],
+    ["/workspace", "GET", "text/html"],
+    ["/assets/app-hash.js", "GET", "*/*"],
+    ["/assets/font.woff2", "GET", "*/*"],
+    ["/missing.js", "GET", "*/*"],
+    ["/", "HEAD", "text/html"],
+    ["/", "POST", "text/html"],
+    ["/%ZZ", "GET", "text/html"],
+    ["/..%2Foutside.txt", "GET", "text/html"],
+  ]) {
+    const response = await fetch(new URL(path, server.url), { method, headers: { accept } });
+    results.push({ status: response.status, type: response.headers.get("content-type"),
+      cache: response.headers.get("cache-control"), body: Buffer.from(await response.arrayBuffer()).toString("base64") });
+  }
+    console.log(JSON.stringify({ standalone: Bun.isStandaloneExecutable,
+    ambient: process.env.HERDR_WORLD_STANDALONE_TEST ?? null, results }));
+} finally { server.stop(true); }
+`,
+    );
+    // Exercise the actual release flags, not a separate test-only build recipe.
+    const build = await run(
+      [process.execPath, ...serverPackage.scripts.compile.split(" ").slice(1)],
+      dir,
+    );
+    expect(build.code, build.stderr).toBe(0);
+    await rename(join(dir, "public"), join(dir, "source-public"));
+    await rename(join(dir, "src"), join(dir, "source-src"));
+    await rm(join(dir, "herdr-world.map"), { force: true });
+    const embedded = await run(
+      [binary, join(dir, "missing-public")],
+      runtimeDir,
+    );
+    expect(embedded.code, embedded.stderr).toBe(0);
+    const result = JSON.parse(embedded.stdout);
+    expect(result.standalone).toBe(true);
+    expect(result.ambient).toBeNull();
+    expect(
+      result.results.map((item: { status: number }) => item.status),
+    ).toEqual([200, 200, 200, 200, 404, 200, 405, 400, 404]);
+    expect(result.results[0].cache).toBe("no-cache, must-revalidate");
+    expect(Buffer.from(result.results[1].body, "base64").toString()).toBe(
+      "embedded entry",
+    );
+    expect(result.results[2].type).toContain("javascript");
+    expect(Buffer.from(result.results[2].body, "base64").toString()).toBe(
+      "export const value = 42;",
+    );
+    expect(result.results[3].type).toBe("font/woff2");
+    expect([...Buffer.from(result.results[3].body, "base64")]).toEqual([
+      0, 1, 128, 255,
+    ]);
+    expect(result.results[5].body).toBe("");
+    const override = await run([binary, overrideDir], runtimeDir);
+    expect(override.code, override.stderr).toBe(0);
+    const overridden = JSON.parse(override.stdout).results;
+    expect(Buffer.from(overridden[0].body, "base64").toString()).toBe(
+      "external entry",
+    );
+    expect(Buffer.from(overridden[1].body, "base64").toString()).toBe(
+      "external entry",
+    );
+    expect(overridden[2]).toEqual(result.results[2]);
+    const crash = await run([binary, overrideDir, "--crash"], runtimeDir);
+    expect(crash.code).not.toBe(0);
+    expect(crash.stderr).toContain("source map probe");
+    expect(crash.stderr).toMatch(/src[\\/]index\.ts:\d+/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}, 45_000);

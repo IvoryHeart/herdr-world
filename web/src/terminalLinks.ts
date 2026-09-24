@@ -1,3 +1,33 @@
+/** OSC 8 file URIs are local paths, never network/UNC shares or shell schemes. */
+export function terminalFileUriPath(raw: string): string | null {
+  if (
+    !/^file:\/\//i.test(raw) ||
+    raw !== raw.trim() ||
+    /[?#\u0000-\u001f\u007f-\u009f]/.test(raw)
+  )
+    return null;
+  try {
+    const uri = new URL(raw);
+    if (
+      uri.protocol !== "file:" ||
+      (uri.hostname && uri.hostname !== "localhost") ||
+      uri.search ||
+      uri.hash
+    )
+      return null;
+    const path = decodeURIComponent(uri.pathname);
+    if (
+      !path.startsWith("/") ||
+      path.startsWith("//") ||
+      /[\\\u0000-\u001f\u007f-\u009f]/.test(path)
+    )
+      return null;
+    return /^\/[a-z]:\//i.test(path) ? path.slice(1) : path;
+  } catch {
+    return null;
+  }
+}
+
 const HTTP_URL_START_RE = /https?:\/\//gi;
 const HTTP_URL_PREFIX_RE = /^https?:\/\//i;
 const ASCII_URL_CHARACTER_RE = /^[A-Za-z0-9\-._~:/?#\x5b\x5d@!$&()*+,;=%]$/;

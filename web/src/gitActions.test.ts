@@ -4,6 +4,7 @@ import {
   buildGitRepoMenuItems,
   countWorkingEntries,
   gitFileConfirmCopy,
+  gitFolderConfirmCopy,
   gitRepoConfirmCopy,
 } from "./gitActions";
 import type { GitDiffEntry } from "./types";
@@ -63,6 +64,30 @@ describe("buildGitFileMenuItems", () => {
       { action: "stage", label: "Mark resolved" },
     ]);
   });
+
+  test("plural labels for folder menus", () => {
+    expect(
+      buildGitFileMenuItems(
+        [entry("staged"), entry("unstaged"), entry("untracked")],
+        true,
+      ),
+    ).toEqual([
+      { action: "stage", label: "Stage files" },
+      { action: "unstage", label: "Unstage all changes" },
+      {
+        action: "discard_unstaged",
+        label: "Discard all unstaged changes…",
+        danger: true,
+        destructive: true,
+      },
+      {
+        action: "delete_untracked",
+        label: "Delete untracked files…",
+        danger: true,
+        destructive: true,
+      },
+    ]);
+  });
 });
 
 describe("countWorkingEntries", () => {
@@ -119,5 +144,16 @@ describe("confirm copy", () => {
     expect(gitRepoConfirmCopy("delete_all_untracked", 1)?.message).toContain(
       "1 file",
     );
+  });
+
+  test("folder confirmations name the directory and file count", () => {
+    expect(gitFolderConfirmCopy("stage", "src", 2)).toBeNull();
+    const copy = gitFolderConfirmCopy("discard_unstaged", "src/app", 3);
+    expect(copy?.message).toContain('under "src/app"');
+    expect(copy?.message).toContain("3 files");
+    expect(copy?.message).toContain("staged versions are kept");
+    expect(
+      gitFolderConfirmCopy("delete_untracked", "src", 1)?.message,
+    ).toContain("1 file");
   });
 });

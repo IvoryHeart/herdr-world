@@ -31,6 +31,55 @@ describe("endpoint selection presentation", () => {
     },
   );
 
+  test("identical full surfaces skip writes; cursor-only surfaces preserve the link gate and OSC8 cells", () => {
+    const writes: { text: string; linksChanged: boolean }[] = [];
+    let parsed!: () => void;
+    const presentation = new TerminalEndpointPresentation(
+      () => false,
+      (text, done, linksChanged) => {
+        writes.push({ text, linksChanged });
+        parsed = done;
+      },
+    );
+    const cells =
+      "\x1b[H\x1b[2J\x1b]8;;https://example.com\x1b\\label\x1b]8;;\x1b\\";
+    presentation.update(
+      cells + "\x1b[?7h\x1b[?25l",
+      false,
+      undefined,
+      undefined,
+      "content-1",
+    );
+    expect(presentation.linkWritePending).toBe(true);
+    parsed();
+    presentation.update(
+      cells + "\x1b[?7h\x1b[?25l",
+      false,
+      undefined,
+      undefined,
+      "content-1",
+    );
+    expect(writes).toHaveLength(1);
+    expect(presentation.writePending).toBe(false);
+    presentation.update(
+      cells + "\x1b[?7h\x1b[2;3H\x1b[?25h",
+      false,
+      undefined,
+      undefined,
+      "content-1",
+    );
+    expect(writes[1]).toEqual({
+      text: "\x1b[?7h\x1b[2;3H\x1b[?25h",
+      linksChanged: false,
+    });
+    expect(presentation.writePending).toBe(true);
+    expect(presentation.linkWritePending).toBe(false);
+    parsed();
+    presentation.update("different", false, undefined, undefined, "content-2");
+    expect(presentation.linkWritePending).toBe(true);
+    parsed();
+  });
+
   test("selection cannot begin while an endpoint frame is still queued for parsing", async () => {
     let selected = false;
     let visible = "A";

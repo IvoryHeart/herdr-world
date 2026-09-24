@@ -60,3 +60,5 @@ function browserStorage(kind: "localStorage" | "sessionStorage"): Storage {
 
 export const worldLocalStorage = browserStorage("localStorage");
 export const worldSessionStorage = browserStorage("sessionStorage");
+export const roamgateLocalStorage = worldLocalStorage;
+export const roamgateSessionStorage = worldSessionStorage;

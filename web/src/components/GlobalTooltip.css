@@ -2,7 +2,7 @@
   position: fixed;
   z-index: 5000;
   width: max-content;
-  max-width: min(360px, calc(100vw - 24px));
+  max-width: min(360px, calc((100vw - 24px) / var(--ui-scale, 1)));
   padding: 7px 9px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
   border-radius: 8px;

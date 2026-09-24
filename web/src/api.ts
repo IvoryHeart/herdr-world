@@ -179,6 +179,8 @@ export interface TerminalPush {
   full: boolean;
   /** Present only for endpoint full pane repaints; absent on legacy streams. */
   mouse_reporting?: boolean;
+  /** Opaque identity from this terminal socket's advertised read-only resolver. */
+  link_frame?: string;
   /** Absolute rows of a complete endpoint pane viewport. */
   history?: import("./terminalHistorySelection").TerminalHistoryViewport;
   /** base64-encoded ANSI bytes */
@@ -243,6 +245,16 @@ export function isBridgeGlobalMethod(method: string): boolean {
     method.startsWith("connections.") ||
     method.startsWith("world.")
   );
+}
+
+export async function logoutBrowserSession(): Promise<void> {
+  const response = await fetch("/api/logout", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "x-herdr-world-logout": "1", "x-roamgate-logout": "1" },
+  });
+  if (!response.ok) throw new Error("Could not log out. Please try again.");
+  location.replace("/login");
 }
 
 function wsUrl(): string {
@@ -511,7 +523,17 @@ export class Bridge {
     ws.onerror = () => {
       // onclose will handle reconnect.
     };
-    ws.onclose = () => this.handleDisconnect(ws, "bridge disconnected");
+    ws.onclose = (event) => {
+      if (this.ws !== ws) return;
+      if (event?.code === 4001) {
+        this.disconnect("logged out");
+        // Clear the shared cookie in every tab before navigating. A close frame
+        // can arrive before the initiating tab receives its logout response.
+        void logoutBrowserSession().catch(() => location.replace("/login"));
+        return;
+      }
+      this.handleDisconnect(ws, "bridge disconnected");
+    };
   }
 
   disconnect(reason = "bridge connection paused") {
@@ -655,6 +677,7 @@ export class Bridge {
       return;
     }
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
+    // pi-lens-ignore: no-unsafe-dictionary-any
     const msg = parsed as Record<string, any>;
     const owns = (field: string) =>
       Object.prototype.hasOwnProperty.call(msg, field);

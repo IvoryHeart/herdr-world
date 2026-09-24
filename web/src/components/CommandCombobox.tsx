@@ -7,6 +7,7 @@ import {
 } from "../shortcutPreferences";
 import { SHORTCUT_NUMBERS, type ShortcutNumber } from "../shortcutBindings";
 import { endpointCreationReason } from "../store";
+import { normalizeSearchText } from "../searchText";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDown,
@@ -103,13 +104,7 @@ function agentName(pane: Pane) {
     .join(" · ");
 }
 
-export function normalizeSearchText(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[-_:/]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+export { normalizeSearchText };
 
 export function commandFilter(
   value: string,
@@ -354,7 +349,12 @@ export function CommandCombobox({
   useEffect(() => {
     if (!operationalShortcutsEnabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || document.querySelector(".modal-backdrop"))
+      // The pane switcher owns K even when its held modifiers match this
+      // shortcut. Both handlers run on window, so listener order cannot decide.
+      if (
+        e.defaultPrevented ||
+        document.querySelector(".modal-backdrop, .pane-jump-backdrop")
+      )
         return;
       if (!shortcutMatches(e, "command.menu") || e.repeat) return;
       if (

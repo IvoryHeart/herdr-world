@@ -26,6 +26,10 @@ PORT=8787
 # one exact public origin (for example https://world.example).
 # HERDR_WORLD_PUBLIC_ORIGIN=https://world.example
 
+# Optional native HTTPS. Set both to absolute PEM file paths.
+# HERDR_WORLD_TLS_CERT=/path/to/cert-chain.pem
+# HERDR_WORLD_TLS_KEY=/path/to/private-key.pem
+
 # Operational logs default to info. Use debug only while diagnosing an issue.
 # HERDR_WORLD_LOG_LEVEL=info
 

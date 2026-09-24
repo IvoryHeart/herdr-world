@@ -195,7 +195,8 @@
   }
 
   .section {
-    padding-block: 148px;
+    padding-block: 112px;
+    scroll-margin-top: 78px;
   }
 
   .section-heading {
@@ -443,13 +444,13 @@
   .hero {
     display: grid;
     min-height: 100vh;
-    padding-top: 162px;
+    padding-top: 132px;
     padding-bottom: 72px;
     align-items: center;
   }
 
   .hero-copy {
-    width: min(860px, 100%);
+    width: min(960px, 100%);
     margin-inline: auto;
     text-align: center;
   }
@@ -479,10 +480,10 @@
   .hero h1 {
     max-width: 960px;
     margin-inline: auto;
-    font-size: clamp(4rem, 8.2vw, 7.7rem);
+    font-size: clamp(4rem, 7.4vw, 6.4rem);
     font-weight: 760;
-    line-height: 0.88;
-    letter-spacing: -0.075em;
+    line-height: 1;
+    letter-spacing: -0.055em;
   }
 
   .hero h1 span {
@@ -499,17 +500,29 @@
 
   .hero-lede {
     max-width: 700px;
-    margin: 34px auto 0;
+    margin: 24px auto 0;
     color: var(--text-soft);
     font-size: clamp(1.04rem, 1.6vw, 1.28rem);
     line-height: 1.72;
+  }
+
+  .agent-logo {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    object-fit: contain;
+  }
+
+  .agent-logo-pi {
+    filter: brightness(0) invert(1);
+    transform: scale(1.35);
   }
 
   .hero-actions {
     display: flex;
     justify-content: center;
     gap: 12px;
-    margin-top: 38px;
+    margin-top: 28px;
   }
 
   .platform-line {
@@ -542,7 +555,7 @@
 
   .hero-requirement {
     margin-top: 12px;
-    color: #667089;
+    color: var(--muted);
     font-size: 0.73rem;
   }
 
@@ -557,7 +570,7 @@
 
   .hero-visual {
     width: min(1180px, 100%);
-    margin: 96px auto 0;
+    margin: 64px auto 0;
     border-radius: var(--radius-lg);
     perspective: 1600px;
   }
@@ -671,9 +684,7 @@
     border-radius: 10px;
     color: var(--blue-bright);
     background: rgba(122, 162, 247, 0.12);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    font-weight: 700;
+    flex: 0 0 auto;
   }
 
   .agent-card > div:nth-child(2) {
@@ -722,26 +733,7 @@
     animation: float-card 6.8s 800ms ease-in-out infinite reverse;
   }
 
-  .task-check {
-    display: grid;
-    width: 32px;
-    height: 32px;
-    flex: 0 0 auto;
-    place-items: center;
-    border-radius: 50%;
-    color: var(--green);
-    background: rgba(84, 209, 122, 0.12);
-  }
-
-  .task-check svg {
-    width: 16px;
-    height: 16px;
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 2;
-  }
-
-  .task-card > div {
+  .task-card > div:last-child {
     display: grid;
     line-height: 1.35;
   }
@@ -749,7 +741,7 @@
   .hero-proof {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    margin-top: 96px;
+    margin-top: 72px;
     border-block: 1px solid var(--line);
   }
 
@@ -802,13 +794,25 @@
     grid-template-columns: 0.84fr 1.16fr;
   }
 
+  .bento-worktrees {
+    display: grid;
+    min-height: auto;
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+  }
+
+  .bento-worktrees .branch-map {
+    margin-block: 44px;
+  }
+
   .bento-copy {
     padding: 44px;
   }
 
   .feature-number {
     display: block;
-    margin-bottom: 80px;
+    margin-bottom: 40px;
     color: #69748f;
     font-family: var(--font-mono);
     font-size: 0.72rem;
@@ -1038,52 +1042,132 @@
   }
 
   .branch-map {
-    position: relative;
-    display: grid;
-    gap: 14px;
-    margin: 10px 36px 36px;
-    padding-left: 20px;
+    margin: 24px 36px;
+    padding: 24px;
+    border: 1px solid var(--line-strong);
+    border-radius: 18px;
+    background: #0b101a;
+    box-shadow: var(--shadow-soft);
   }
 
-  .branch-map > div {
-    position: relative;
-    display: grid;
-    padding: 13px 15px 13px 34px;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: rgba(8, 11, 18, 0.58);
+  .branch-root,
+  .branch-worktree {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
-  .branch-map i {
-    position: absolute;
-    z-index: 1;
-    top: 21px;
-    left: -25px;
-    width: 9px;
-    height: 9px;
-    border: 2px solid var(--panel);
-    border-radius: 50%;
-    background: var(--blue);
-    box-shadow: 0 0 0 2px rgba(122, 162, 247, 0.3);
+  .branch-map svg {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: var(--blue-bright);
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .branch-root > svg {
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: rgba(122, 162, 247, 0.1);
   }
 
   .branch-map strong {
+    display: block;
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.82rem;
+    font-weight: 600;
   }
 
-  .branch-map small {
+  .branch-root strong {
+    font-size: 0.95rem;
+  }
+
+  .branch-root small {
+    display: block;
     color: var(--muted);
-    font-size: 0.68rem;
+    font-size: 0.7rem;
   }
 
-  .branch-line {
+  .branch-root .branch-label {
+    margin-bottom: 3px;
+    color: var(--blue-bright);
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .branch-children {
+    display: grid;
+    gap: 10px;
+    margin: 16px 0 0 17px;
+    padding-left: 24px;
+  }
+
+  .branch-worktree {
+    position: relative;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgba(122, 162, 247, 0.04);
+  }
+
+  .branch-worktree::before,
+  .branch-worktree::after {
     position: absolute;
-    top: 23px;
-    bottom: 23px;
-    left: 0;
+    left: -25px;
+    background: var(--line-strong);
+    content: "";
+  }
+
+  .branch-worktree::before {
+    top: -11px;
+    bottom: -1px;
     width: 1px;
-    background: rgba(122, 162, 247, 0.35);
+  }
+
+  .branch-worktree:first-child::before {
+    top: -17px;
+  }
+
+  .branch-worktree:last-child::before {
+    bottom: 50%;
+  }
+
+  .branch-worktree::after {
+    top: 50%;
+    width: 24px;
+    height: 1px;
+  }
+
+  .branch-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 6px;
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: #93e8ae;
+    background: rgba(84, 209, 122, 0.08);
+    font-size: 0.65rem;
+  }
+
+  .branch-status.is-changed {
+    color: #ffe0a3;
+    background: rgba(240, 196, 83, 0.08);
+  }
+
+  .branch-status::before {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
   }
 
   .showcase-section {
@@ -1223,7 +1307,7 @@
   }
 
   .workflow-section {
-    padding-bottom: 174px;
+    padding-bottom: 112px;
   }
 
   .workflow-grid {
@@ -1641,6 +1725,10 @@
     font-size: 0.86rem;
   }
 
+  .footer-brand .brand-notice {
+    font-size: 0.74rem;
+  }
+
   .footer-brand p a {
     color: var(--text-soft);
     text-decoration: underline;
@@ -1852,9 +1940,14 @@
     grid-template-columns: 1fr;
   }
 
-  .bento-wide {
+  .bento-wide,
+  .bento-worktrees {
     grid-column: auto;
     grid-template-columns: 1fr;
+  }
+
+  .bento-worktrees .branch-map {
+    margin-top: 0;
   }
 
   .agent-stack {
@@ -1953,7 +2046,7 @@
   }
 
   .hero h1 {
-    font-size: clamp(3.35rem, 17vw, 5rem);
+    font-size: clamp(2.75rem, 12vw, 4.4rem);
   }
 
   .hero-lede {
@@ -2059,7 +2152,18 @@
   }
 
   .mini-agent b {
-    display: none;
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .branch-map {
+    margin-inline: 16px;
+    padding: 16px;
+  }
+
+  .branch-worktree {
+    gap: 8px;
+    padding: 10px;
   }
 
   .terminal-preview {

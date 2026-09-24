@@ -1,36 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-
-const LOGIN_HTML = `<!doctype html>
-<html lang="en"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Herdr World login</title>
-<style>
-  body{margin:0;height:100vh;display:flex;align-items:center;justify-content:center;
-    background:#0f1115;color:#e6e8ee;font-family:-apple-system,Segoe UI,Roboto,sans-serif}
-  .box{background:#171a21;border:1px solid #2a2f3a;border-radius:14px;padding:28px;width:300px}
-  h2{margin:0 0 16px;font-size:16px}
-  input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;
-    border:1px solid #2a2f3a;background:#0c0e13;color:#e6e8ee;font-size:14px;outline:none}
-  input:focus{border-color:#6ea8ff}
-  button{margin-top:12px;width:100%;padding:10px;border-radius:8px;border:none;
-    background:#3d7dff;color:#fff;font-size:14px;font-weight:600;cursor:pointer}
-  .err{color:#ff9a9a;font-size:13px;margin-top:10px;min-height:18px}
-</style></head>
-<body><div class="box">
-  <h2>▦ Herdr World</h2>
-  <input id="pw" type="password" placeholder="password or token" autofocus />
-  <button id="btn">Log in</button>
-  <div class="err" id="err"></div>
-</div>
-<script>
-  const pw=document.getElementById('pw'),btn=document.getElementById('btn'),err=document.getElementById('err');
-  async function go(){
-    err.textContent='';
-    const r=await fetch('/api/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({password:pw.value})});
-    if(r.ok){location.href='/';}else{err.textContent='Wrong password or token';pw.value='';pw.focus();}
-  }
-  btn.onclick=go; pw.onkeydown=e=>{if(e.key==='Enter')go()};
-</script></body></html>`;
+import { LOGIN_HTML } from "./login-page";
 
 const AUTH_COOKIE = "herdr_world_auth";
 const AUTH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -55,6 +24,7 @@ export function createAuthHandlers(args: {
   authRequired: boolean;
   password: string;
   urlLoginToken?: string;
+  secureCookies?: boolean;
 }) {
   if (args.authRequired && !args.password) {
     throw new Error("authentication requires a non-empty signing secret");
@@ -91,7 +61,12 @@ export function createAuthHandlers(args: {
   }
 
   function authCookie(): string {
-    return `${AUTH_COOKIE}=${signedToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_TOKEN_TTL_SECONDS}`;
+    return `${AUTH_COOKIE}=${signedToken()}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_TOKEN_TTL_SECONDS}${args.secureCookies ? "; Secure" : ""}`;
+  }
+
+  function authCookieHeaders(req: Request): Record<string, string> {
+    // Reauthentication keeps every live tab on the same session token.
+    return isAuthed(req) ? {} : { "set-cookie": authCookie() };
   }
 
   function secretsEqual(actual: string, expected: string): boolean {
@@ -128,6 +103,34 @@ export function createAuthHandlers(args: {
     return token !== null && isValidSignedToken(token);
   }
 
+  function sessionToken(req: Request): string | null {
+    return parseCookie(req.headers.get("cookie"), AUTH_COOKIE);
+  }
+
+  function handleLogout(req: Request): Response {
+    if (req.method !== "POST") {
+      return new Response("method not allowed", {
+        status: 405,
+        headers: { allow: "POST" },
+      });
+    }
+    const logoutHeader =
+      req.headers.get("x-herdr-world-logout") ??
+      req.headers.get("x-roamgate-logout");
+    if (
+      logoutHeader !== "1" ||
+      req.headers.get("sec-fetch-site") === "cross-site"
+    )
+      return new Response("forbidden", { status: 403 });
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "set-cookie": `${AUTH_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${args.secureCookies ? "; Secure" : ""}`,
+        "cache-control": "no-store",
+      },
+    });
+  }
+
   function handleTokenLogin(req: Request): Response | null {
     if (!args.authRequired || !args.urlLoginToken || req.method !== "GET") {
       return null;
@@ -143,7 +146,7 @@ export function createAuthHandlers(args: {
       status: 303,
       headers: {
         location,
-        ...(valid ? { "set-cookie": authCookie() } : {}),
+        ...(valid ? authCookieHeaders(req) : {}),
         "cache-control": "no-store",
         "referrer-policy": "no-referrer",
       },
@@ -170,18 +173,30 @@ export function createAuthHandlers(args: {
       status: 200,
       headers: {
         "content-type": "application/json",
-        "set-cookie": authCookie(),
+        "cache-control": "no-store",
+        ...authCookieHeaders(req),
       },
     });
   }
 
   function loginPage(): Response {
     return new Response(LOGIN_HTML, {
-      headers: { "content-type": "text/html; charset=utf-8" },
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "no-store",
+        "referrer-policy": "no-referrer",
+      },
     });
   }
 
-  return { isAuthed, handleTokenLogin, handleLogin, loginPage };
+  return {
+    isAuthed,
+    sessionToken,
+    handleTokenLogin,
+    handleLogin,
+    handleLogout,
+    loginPage,
+  };
 }
 
 export function unauthenticatedLoginRedirect(): Response {

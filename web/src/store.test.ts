@@ -318,6 +318,9 @@ function partitionState(): State {
     sessionsByConnectionId: { alpha, beta },
     notice: null,
     taskNotificationsEnabled: false,
+    taskNotificationPreferences: { completed: true, blocked: true },
+    taskNotificationTransport: "local",
+    taskNotificationBusy: false,
     taskNotificationPermission: "unsupported",
     automaticUpdateChecksEnabled: true,
     updateInfo: null,
@@ -326,6 +329,79 @@ function partitionState(): State {
     dismissedUpdateVersion: null,
   };
 }
+
+describe("Git folder actions", () => {
+  test.each([
+    ["stage", -1],
+    ["unstage", 0],
+    ["discard_unstaged", 1],
+    ["delete_untracked", 2],
+  ] as const)(
+    "%s reports progress and refreshes after failure at %d",
+    async (gitAction, failAt) => {
+      const previousState = store.get();
+      const originalConnection = bridge.connection;
+      const entries = ["one.ts", "two.ts", "three.ts"].map((path) => ({
+        path,
+        old_path: `old/${path}`,
+        mtime_ms: 123,
+        size: 456,
+      }));
+      const mutations: Record<string, unknown>[] = [];
+      const refreshCalls: string[] = [];
+      bridge.connection = () => ({
+        connectionId: "alpha",
+        generation: 10,
+        serverRuntimeGeneration: 1,
+        isCurrent: () => true,
+        acceptsServerGeneration: (generation) => generation === 1,
+        call: async (method, params) => {
+          if (method === "git.file_action") {
+            mutations.push(params!);
+            if (mutations.length - 1 === failAt)
+              throw new Error("File changed");
+            return {};
+          }
+          refreshCalls.push(method);
+          return {};
+        },
+      });
+      try {
+        __storeTesting.replaceState(partitionState());
+        const result = await store.runGitFileActionBatch(
+          "same-workspace",
+          gitAction,
+          entries,
+        );
+        const completed = failAt < 0 ? entries.length : failAt;
+        expect(result).toBe(failAt < 0 ? completed : undefined);
+        expect(mutations).toEqual(
+          entries
+            .slice(0, failAt < 0 ? entries.length : failAt + 1)
+            .map((entry) => ({
+              workspace_id: "same-workspace",
+              action: gitAction,
+              ...entry,
+            })),
+        );
+        expect(refreshCalls).toEqual(
+          completed
+            ? ["workspace.list", "tab.list", "pane.list", "agent.list"]
+            : [],
+        );
+        expect(store.get().notice?.kind).toBe(failAt < 0 ? "success" : "error");
+        if (failAt >= 0) {
+          expect(store.get().notice?.detail).toBe(
+            `${completed} of 3 files completed. File changed`,
+          );
+        }
+      } finally {
+        bridge.connection = originalConnection;
+        __storeTesting.replaceState(previousState);
+      }
+    },
+  );
+});
 
 describe("connection-partitioned store state", () => {
   test("keeps the store generation aligned when pausing an already-disconnected bridge", () => {

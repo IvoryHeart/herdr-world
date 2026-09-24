@@ -1,4 +1,9 @@
 import { worldLocalStorage, worldSessionStorage } from "./browserStorage";
+import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
+import {
+  prepareTaskNotifications,
+  showTaskNotification,
+} from "./taskNotifications";
 import { withAgentActivity } from "./agentOrder";
 import {
   type EndpointAvailability,
@@ -35,6 +40,13 @@ import {
   forgetTerminalRelayViewportsExcept,
   terminalRelayViewportForTab,
 } from "./terminalResize";
+import {
+  clearTabLayouts,
+  forgetTabLayoutsExcept,
+  provisionalTabLayout,
+  rememberTabLayout,
+  tabLayoutFor,
+} from "./tabLayout";
 import type { GitDiffEntry, Pane, PaneLayout, Tab, Workspace } from "./types";
 import {
   gitFileActionLabel,
@@ -76,6 +88,9 @@ export interface State extends ServerSessionState {
   sessionsByConnectionId: Record<string, ServerSessionState>;
   notice: Notice | null;
   taskNotificationsEnabled: boolean;
+  taskNotificationPreferences: TaskNotificationPreferences;
+  taskNotificationTransport: "local" | "push";
+  taskNotificationBusy: boolean;
   taskNotificationPermission: NotificationPermission | "unsupported";
   automaticUpdateChecksEnabled: boolean;
   updateInfo: UpdateInfo | null;
@@ -143,6 +158,7 @@ type WorktreeRemovalCleanup = {
 };
 
 const TASK_NOTIFICATIONS_KEY = "taskNotificationsEnabled";
+const TASK_NOTIFICATION_PREFERENCES_KEY = "taskNotificationPreferences";
 const AUTOMATIC_UPDATE_CHECKS_KEY = "automaticUpdateChecksEnabled";
 const PENDING_UPDATE_RELOAD_KEY = "pendingUpdateReloadVersion";
 export const DEFAULT_NOTICE_AUTO_DISMISS_MS = 15 * 1000;
@@ -279,6 +295,20 @@ function storedTaskNotificationsEnabled() {
   );
 }
 
+function storedTaskNotificationPreferences(): TaskNotificationPreferences {
+  try {
+    const stored = JSON.parse(
+      worldLocalStorage.getItem(TASK_NOTIFICATION_PREFERENCES_KEY) ?? "{}",
+    );
+    return {
+      completed: stored.completed !== false,
+      blocked: stored.blocked !== false,
+    };
+  } catch {
+    return { completed: true, blocked: true };
+  }
+}
+
 export function automaticUpdateChecksEnabledFromStorage(
   storage: Pick<Storage, "getItem"> | undefined,
 ): boolean {
@@ -346,6 +376,12 @@ const initial: State = {
   ...initialSession,
   notice: null,
   taskNotificationsEnabled: storedTaskNotificationsEnabled(),
+  taskNotificationPreferences: storedTaskNotificationPreferences(),
+  taskNotificationTransport:
+    worldLocalStorage.getItem("taskNotificationTransport") === "push"
+      ? "push"
+      : "local",
+  taskNotificationBusy: false,
   taskNotificationPermission: notificationPermission(),
   automaticUpdateChecksEnabled: storedAutomaticUpdateChecksEnabled(),
   updateInfo: null,
@@ -814,7 +850,9 @@ export class TaskCompletionTracker {
       if (
         tracker.ready &&
         previousStatus === "working" &&
-        (nextStatus === "done" || nextStatus === "idle")
+        (nextStatus === "done" ||
+          nextStatus === "idle" ||
+          nextStatus === "blocked")
       ) {
         completed.push(pane);
       }
@@ -829,6 +867,23 @@ export class TaskCompletionTracker {
 }
 
 const taskCompletionTracker = new TaskCompletionTracker();
+let taskNotificationPreferenceVersion = 0;
+
+function reportTaskNotificationFailure(error: unknown, version: number) {
+  if (version !== taskNotificationPreferenceVersion) return;
+  taskNotificationPreferenceVersion++;
+  set({
+    taskNotificationsEnabled: false,
+    taskNotificationBusy: false,
+    taskNotificationPermission: notificationPermission(),
+    notice: {
+      kind: "error",
+      message: "Task notifications are unavailable",
+      detail: error instanceof Error ? error.message : String(error),
+    },
+  });
+  worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
+}
 
 function taskNotificationBody(
   pane: Pane,
@@ -853,17 +908,23 @@ function maybeShowBrowserTaskNotification(
   tag: string,
   target: TaskNotificationTarget,
 ) {
-  if (!state.taskNotificationsEnabled) return;
+  if (
+    !state.taskNotificationsEnabled ||
+    state.taskNotificationBusy ||
+    state.taskNotificationTransport === "push"
+  )
+    return;
+  const version = taskNotificationPreferenceVersion;
   if (notificationPermission() !== "granted") return;
-  try {
-    const notification = new Notification(title, {
-      body,
-      tag,
-    });
-    bindTaskNotificationActivation(notification, target);
-  } catch {
-    // Browser notification support varies by browser and deployment context.
-  }
+  void showTaskNotification(
+    title,
+    { body, tag },
+    target,
+    () =>
+      state.taskNotificationsEnabled &&
+      version === taskNotificationPreferenceVersion &&
+      taskNotificationTargetIsCurrent(state, target),
+  ).catch((error) => reportTaskNotificationFailure(error, version));
 }
 
 export function taskNotificationTarget(
@@ -918,11 +979,18 @@ export function taskNotificationTargetFromNotice(
 }
 
 function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
-  if (!state.taskNotificationsEnabled) return;
+  const blocked = pane.agent_status === "blocked";
+  if (
+    !state.taskNotificationsEnabled ||
+    !state.taskNotificationPreferences[blocked ? "blocked" : "completed"]
+  )
+    return;
   const runtimeGeneration = state.serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const body = taskNotificationBody(pane, workspaces, tabs);
-  const title = "Herdr World task completed";
+  const title = blocked
+    ? "Herdr World agent needs input"
+    : "Herdr World task completed";
   const target = taskNotificationTarget(
     state.activeConnectionId,
     runtimeGeneration,
@@ -936,8 +1004,8 @@ function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
   );
   set({
     notice: {
-      kind: "success",
-      message: "Task completed",
+      kind: blocked ? "info" : "success",
+      message: blocked ? "Agent needs input" : "Task completed",
       detail: body,
       actionLabel: pane.agent ? "Open agent" : "Open workspace",
       actionConnectionId: state.activeConnectionId,
@@ -1147,6 +1215,11 @@ async function refreshNow(lease = captureConnectionLease()) {
       lease.generation,
       new Set(tabs.map((tab) => tab.tab_id)),
     );
+    forgetTabLayoutsExcept(
+      lease.connectionId,
+      lease.generation,
+      new Set(tabs.map((tab) => tab.tab_id)),
+    );
     const completedPanes = trackTaskCompletions(lease.connectionId, panes);
 
     const navigationMode =
@@ -1235,6 +1308,7 @@ async function refreshNow(lease = captureConnectionLease()) {
               )));
         const layout = staleLayout ? null : observedLayout;
         if (staleLayout) queuedConnectionKeys.add(refreshKey);
+        rememberTabLayout(lease.connectionId, lease.generation, layout);
         next.layout =
           navigationMode === "browser-local"
             ? projectBrowserLayout(layout, next.selectedPaneId ?? null)
@@ -1474,6 +1548,7 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
     true,
   );
   clearTerminalRelayViewports();
+  clearTabLayouts();
   focusActionChain = Promise.resolve();
   const generation = bridge.setActiveConnection(connectionId);
   state = activateConnectionState(state, connectionId, generation);
@@ -1504,6 +1579,7 @@ function resetActiveConnectionLease(
     false,
   );
   clearTerminalRelayViewports();
+  clearTabLayouts();
   focusActionChain = Promise.resolve();
   taskCompletionTracker.reset(state.activeConnectionId);
   const generation = bridge.advanceActiveConnectionGeneration();
@@ -2047,12 +2123,21 @@ function navigateBrowser(workspaceId: string, tabId?: string, paneId?: string) {
     state.panes,
   );
   const activeTabId = projected.browserNavigation.tabIds[workspaceId];
+  const nextLayout =
+    state.layout?.tab_id === activeTabId
+      ? state.layout
+      : provisionalTabLayout(
+          tabLayoutFor(
+            state.activeConnectionId,
+            state.connectionGeneration,
+            activeTabId,
+          ),
+          state.panes,
+          activeTabId,
+        );
   set({
     ...projected,
-    layout:
-      state.layout?.tab_id === activeTabId
-        ? projectBrowserLayout(state.layout, projected.selectedPaneId)
-        : null,
+    layout: projectBrowserLayout(nextLayout, projected.selectedPaneId),
     pendingFocusWorkspaceId: null,
     pendingFocusWorkspaceSettledAt: null,
     error: null,
@@ -2143,6 +2228,7 @@ export const store = {
         terminalReattachPending = true;
         bridge.setConnectionRuntimeGenerations([]);
         clearTerminalRelayViewports();
+        clearTabLayouts();
         focusActionChain = Promise.resolve();
         queuedConnectionKeys.clear();
       }
@@ -2859,6 +2945,52 @@ export const store = {
     );
   },
 
+  runGitFileActionBatch(
+    workspaceId: string,
+    gitAction: GitFileAction,
+    entries: Pick<GitDiffEntry, "path" | "old_path" | "mtime_ms" | "size">[],
+  ) {
+    const label = gitFileActionLabel(gitAction);
+    let completed = 0;
+    return action(
+      async (lease) => {
+        try {
+          for (const entry of entries) {
+            await lease.client.call("git.file_action", {
+              workspace_id: workspaceId,
+              action: gitAction,
+              path: entry.path,
+              old_path: entry.old_path,
+              mtime_ms: entry.mtime_ms,
+              size: entry.size,
+            });
+            completed += 1;
+          }
+        } catch (error) {
+          if (completed && leaseIsCurrent(lease)) void refreshNow(lease);
+          throw error;
+        }
+        setForConnection(lease, {
+          notice: {
+            kind: "success",
+            message: `${gitFileActionSuccessMessage(gitAction)} (${completed} ${completed === 1 ? "file" : "files"})`,
+            autoDismissMs: 5000,
+          },
+        });
+        return completed;
+      },
+      {
+        refresh: "immediate",
+        failureNotice: (error) => ({
+          kind: "error",
+          message: `${label} failed`,
+          detail: `${completed} of ${entries.length} files completed. ${error.message}`,
+          detailMode: "text",
+        }),
+      },
+    );
+  },
+
   runGitRepoAction(
     workspaceId: string,
     gitAction: GitRepoAction,
@@ -3175,11 +3307,96 @@ export const store = {
     set({ notice });
   },
 
+  async restoreTaskNotifications() {
+    const version = ++taskNotificationPreferenceVersion;
+    set({ taskNotificationBusy: true });
+    try {
+      if (state.taskNotificationsEnabled) await prepareTaskNotifications();
+      const transport = await syncTaskPush(
+        state.taskNotificationsEnabled,
+        state.taskNotificationPreferences,
+      );
+      if (version !== taskNotificationPreferenceVersion) return;
+      worldLocalStorage.setItem("taskNotificationTransport", transport);
+      set({ taskNotificationTransport: transport });
+    } catch (error) {
+      if (version === taskNotificationPreferenceVersion)
+        set({
+          notice: {
+            kind: "error",
+            message: "Background notification sync failed",
+            detail: (error as Error).message,
+          },
+        });
+    } finally {
+      if (version === taskNotificationPreferenceVersion)
+        set({ taskNotificationBusy: false });
+    }
+  },
+
+  async setTaskNotificationPreference(
+    kind: keyof TaskNotificationPreferences,
+    enabled: boolean,
+  ) {
+    const version = ++taskNotificationPreferenceVersion;
+    const preferences = {
+      ...state.taskNotificationPreferences,
+      [kind]: enabled,
+    };
+    set({ taskNotificationBusy: true });
+    try {
+      const transport = await syncTaskPush(
+        state.taskNotificationsEnabled,
+        preferences,
+      );
+      if (version !== taskNotificationPreferenceVersion) return;
+      worldLocalStorage.setItem("taskNotificationTransport", transport);
+      worldLocalStorage.setItem(
+        TASK_NOTIFICATION_PREFERENCES_KEY,
+        JSON.stringify(preferences),
+      );
+      set({
+        taskNotificationPreferences: preferences,
+        taskNotificationTransport: transport,
+      });
+    } catch (error) {
+      if (version === taskNotificationPreferenceVersion)
+        set({
+          notice: {
+            kind: "error",
+            message: "Notification preference was not saved",
+            detail: (error as Error).message,
+          },
+        });
+    } finally {
+      if (version === taskNotificationPreferenceVersion)
+        set({ taskNotificationBusy: false });
+    }
+  },
+
   async setTaskNotificationsEnabled(enabled: boolean) {
+    const version = ++taskNotificationPreferenceVersion;
+    set({ taskNotificationBusy: true });
     if (!enabled) {
+      try {
+        await syncTaskPush(false, state.taskNotificationPreferences);
+      } catch (error) {
+        if (version === taskNotificationPreferenceVersion)
+          set({
+            taskNotificationBusy: false,
+            notice: {
+              kind: "error",
+              message: "Notification revocation failed",
+              detail: (error as Error).message,
+            },
+          });
+        return;
+      }
       worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
       set({
         taskNotificationsEnabled: false,
+        taskNotificationBusy: false,
+        taskNotificationTransport: "local",
         taskNotificationPermission: notificationPermission(),
         notice: {
           kind: "info",
@@ -3194,6 +3411,7 @@ export const store = {
       worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
       set({
         taskNotificationsEnabled: false,
+        taskNotificationBusy: false,
         taskNotificationPermission: "unsupported",
         notice: {
           kind: "error",
@@ -3214,6 +3432,7 @@ export const store = {
       worldLocalStorage.setItem(TASK_NOTIFICATIONS_KEY, "false");
       set({
         taskNotificationsEnabled: false,
+        taskNotificationBusy: false,
         taskNotificationPermission: notificationPermission(),
         notice: {
           kind: "error",
@@ -3225,12 +3444,29 @@ export const store = {
     }
 
     const granted = permission === "granted";
+    let transport: "local" | "push" = "local";
+    if (granted) {
+      try {
+        await prepareTaskNotifications();
+        if (version !== taskNotificationPreferenceVersion) return;
+        transport = await syncTaskPush(
+          true,
+          state.taskNotificationPreferences,
+          true,
+        );
+      } catch (error) {
+        reportTaskNotificationFailure(error, version);
+        return;
+      }
+    }
     worldLocalStorage.setItem(
       TASK_NOTIFICATIONS_KEY,
       granted ? "true" : "false",
     );
     set({
       taskNotificationsEnabled: granted,
+      taskNotificationTransport: transport,
+      taskNotificationBusy: false,
       taskNotificationPermission: permission,
       notice: granted
         ? {

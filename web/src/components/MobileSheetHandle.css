@@ -1,0 +1,58 @@
+.mobile-sheet-handle {
+  display: none;
+}
+
+:where(html[data-layout="mobile"]) .mobile-sheet-handle {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.mobile-sheet-handle > span {
+  width: 36px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.mobile-sheet-handle:active {
+  cursor: grabbing;
+}
+
+:where(html[data-layout="mobile"]) {
+  .mobile-sheet {
+    --sheet-duration: 200ms;
+    transition: transform var(--sheet-duration) ease-out;
+  }
+
+  .mobile-sheet-more {
+    display: none;
+    visibility: hidden;
+  }
+
+  .mobile-sheet:is(.is-expanded, .is-dragging, .is-resizing)
+    .mobile-sheet-more {
+    display: block;
+    visibility: visible;
+  }
+
+  .mobile-sheet:is(.is-dragging, .is-resizing) {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(html[data-layout="mobile"]) .mobile-sheet {
+    --sheet-duration: 0ms;
+  }
+}
