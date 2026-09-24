@@ -168,6 +168,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @types/react-dom | 18.3.7 | MIT |
 | @types/react | 18.3.31 | MIT |
 | @types/unist | 3.0.3 | MIT |
+| @types/web-push | 3.6.4 | MIT |
 | @typescript-eslint/eslint-plugin | 8.62.0 | MIT |
 | @typescript-eslint/parser | 8.62.0 | MIT |
 | @typescript-eslint/project-service | 8.62.0 | MIT |
@@ -180,7 +181,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @typescript-eslint/visitor-keys | 8.62.0 | MIT |
 | @ungap/structured-clone | 1.3.3 | ISC |
 | @vitejs/plugin-react | 4.7.0 | MIT |
-| @webgpu/types | 0.1.72 | BSD-3-Clause |
+| @webgpu/types | 0.1.74 | BSD-3-Clause |
 | @xmldom/xmldom | 0.8.15 | MIT |
 | @xterm/addon-clipboard | 0.2.0 | MIT |
 | @xterm/addon-fit | 0.12.0-beta.301 | MIT |
@@ -189,15 +190,19 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | abbrev | 1.1.1 | ISC |
 | acorn-jsx | 5.3.2 | MIT |
 | acorn | 8.17.0 | MIT |
+| agent-base | 7.1.4 | MIT |
 | ajv | 6.15.0 | MIT |
 | ansi-regex | 6.3.0 | MIT |
 | aria-hidden | 1.2.6 | MIT |
+| asn1.js | 5.4.1 | MIT |
 | balanced-match | 4.0.4 | MIT |
 | baseline-browser-mapping | 2.10.40 | Apache-2.0 |
 | beautiful-mermaid | 1.1.3 | MIT |
+| bn.js | 4.12.5 | MIT |
 | brace-expansion | 5.0.6 | MIT |
 | braces | 3.0.3 | MIT |
 | browserslist | 4.28.4 | MIT |
+| buffer-equal-constant-time | 1.0.1 | BSD-3-Clause |
 | bun-types | 1.4.1 | MIT |
 | caniuse-lite | 1.0.30001799 | CC-BY-4.0 |
 | ccount | 2.0.1 | MIT |
@@ -225,6 +230,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | diff | 9.0.0 | BSD-3-Clause |
 | diff2html | 3.4.56 | MIT |
 | earcut | 2.2.4 | ISC |
+| ecdsa-sig-formatter | 1.0.11 | Apache-2.0 |
 | electron-to-chromium | 1.5.380 | ISC |
 | elkjs | 0.11.1 | EPL-2.0 |
 | entities | 7.0.1 | BSD-2-Clause |
@@ -257,7 +263,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | flat-cache | 4.0.1 | MIT |
 | flatted | 3.4.2 | ISC |
 | gensync | 1.0.0-beta.2 | MIT |
-| get-east-asian-width | 1.6.0 | MIT |
+| get-east-asian-width | 1.7.0 | MIT |
 | get-nonce | 1.0.1 | MIT |
 | glob-parent | 5.1.2 | ISC |
 | glob-parent | 6.0.2 | ISC |
@@ -268,10 +274,13 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | hermes-parser | 0.25.1 | MIT |
 | highlight.js | 11.11.1 | BSD-3-Clause |
 | html-void-elements | 3.0.0 | MIT |
+| http_ece | 1.2.0 | MIT |
+| https-proxy-agent | 7.0.6 | MIT |
 | iconv-lite | 0.7.3 | MIT |
 | ignore | 5.3.2 | MIT |
 | ignore | 7.0.5 | MIT |
 | imurmurhash | 0.1.4 | MIT |
+| inherits | 2.0.4 | ISC |
 | is-extglob | 2.1.1 | MIT |
 | is-glob | 4.0.3 | MIT |
 | is-interactive | 2.0.0 | MIT |
@@ -286,6 +295,8 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | json-schema-traverse | 0.4.1 | MIT |
 | json-stable-stringify-without-jsonify | 1.0.1 | MIT |
 | json5 | 2.2.3 | MIT |
+| jwa | 2.0.1 | MIT |
+| jws | 4.0.1 | MIT |
 | keyv | 4.5.4 | MIT |
 | levn | 0.4.1 | MIT |
 | locate-path | 6.0.0 | MIT |
@@ -304,7 +315,9 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | micromark-util-types | 2.0.2 | MIT |
 | micromatch | 4.0.8 | MIT |
 | mimic-function | 5.0.1 | MIT |
+| minimalistic-assert | 1.0.1 | ISC |
 | minimatch | 10.2.5 | BlueOak-1.0.0 |
+| minimist | 1.2.8 | MIT |
 | ms | 2.1.3 | MIT |
 | mute-stream | 3.0.0 | ISC |
 | nanoid | 3.3.15 | MIT |
@@ -343,6 +356,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | reusify | 1.1.0 | MIT |
 | rollup | 4.62.2 | MIT |
 | run-parallel | 1.2.0 | MIT |
+| safe-buffer | 5.2.1 | MIT |
 | safer-buffer | 2.1.2 | MIT |
 | scheduler | 0.23.2 | MIT |
 | semver | 6.3.1 | ISC |
@@ -380,6 +394,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | vfile | 6.0.3 | MIT |
 | vite | 5.4.21 | MIT |
 | w3c-keyname | 2.2.8 | MIT |
+| web-push | 3.6.7 | MPL-2.0 |
 | which | 2.0.2 | ISC |
 | word-wrap | 1.2.5 | MIT |
 | yallist | 3.1.1 | ISC |
