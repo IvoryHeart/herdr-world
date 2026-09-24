@@ -249,13 +249,13 @@ export function resolveWorkspaceForScope(
 }
 
 /**
- * Return one open workspace for each resource owner, keeping a preferred
- * workspace first when several agents share a checkout.
+ * Return one open workspace route for each open Git worktree, keeping a
+ * preferred route first when several agents share a checkout.
  *
  * Files and Changes are checkout-scoped, so showing duplicate workspace rows
- * for the same checkout would suggest that they have different content.
+ * for the same worktree would suggest that they have different content.
  */
-export function workspaceResourceCandidates(
+export function worktreeResourceCandidates(
   connectionId: string,
   workspaces: Workspace[],
   preferredWorkspaceId?: string,
@@ -272,6 +272,7 @@ export function workspaceResourceCandidates(
     : workspaces;
   const owners = new Set<string>();
   return ordered.filter((workspace) => {
+    if (!workspace.worktree) return false;
     const owner = resourceOwnerKey(
       resourceScopeForWorkspace(connectionId, workspace),
     );

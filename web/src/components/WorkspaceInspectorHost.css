@@ -66,7 +66,7 @@
   white-space: nowrap;
 }
 
-.workspace-inspector-target-picker {
+.workspace-inspector-worktree-picker {
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -76,7 +76,7 @@
   white-space: nowrap;
 }
 
-.workspace-inspector-target-picker select {
+.workspace-inspector-worktree-picker select {
   min-width: 0;
   max-width: min(34vw, 360px);
   height: 28px;
@@ -88,7 +88,7 @@
   font: inherit;
 }
 
-.workspace-inspector-target-picker select:focus-visible {
+.workspace-inspector-worktree-picker select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -368,13 +368,13 @@
   grid-column: 1;
 }
 
-.workspace-inspector.is-compact .workspace-inspector-target-picker {
+.workspace-inspector.is-compact .workspace-inspector-worktree-picker {
   grid-column: 1 / -1;
   grid-row: 2;
   justify-content: space-between;
 }
 
-.workspace-inspector.is-compact .workspace-inspector-target-picker select {
+.workspace-inspector.is-compact .workspace-inspector-worktree-picker select {
   flex: 1 1 auto;
   max-width: none;
 }
@@ -391,7 +391,7 @@
 }
 
 .workspace-inspector.is-compact
-  .workspace-inspector-head.has-target-picker
+  .workspace-inspector-head.has-worktree-picker
   .workspace-inspector-tabs {
   grid-row: 3;
 }

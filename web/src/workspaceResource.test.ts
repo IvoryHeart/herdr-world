@@ -23,7 +23,7 @@ import {
   resourceStateKey,
   resolveWorkspaceForScope,
   sameResourceOwner,
-  workspaceResourceCandidates,
+  worktreeResourceCandidates,
   writeInspectorNavigationRatio,
   writeInspectorPreferences,
   writeResourceFileSelection,
@@ -173,16 +173,21 @@ describe("workspace resource scope", () => {
     expect(pinned.view).toBe("changes");
   });
 
-  test("offers one selector target per checkout and keeps the selected target first", () => {
+  test("offers one worktree target per checkout and keeps the selected target first", () => {
     const main = workspace("main", "/repo");
     const agent = workspace("agent", "/repo/.worktrees/agent");
     const duplicate = workspace("duplicate", "/repo/.worktrees/agent");
+    const plain = workspace("plain");
 
     expect(
-      workspaceResourceCandidates("local", [main, agent, duplicate], "agent"),
+      worktreeResourceCandidates(
+        "local",
+        [main, agent, duplicate, plain],
+        "agent",
+      ),
     ).toEqual([agent, main]);
     expect(
-      workspaceResourceCandidates("local", [main, agent, duplicate]),
+      worktreeResourceCandidates("local", [main, agent, duplicate]),
     ).toEqual([main, agent]);
   });
 

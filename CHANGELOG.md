@@ -41,9 +41,9 @@ retain their original Herdr Web lineage.
 
 ### Changed
 
-- Made the Inspector's Files and Changes surfaces selectable by open checkout,
-  with one target per worktree and explicit selections pinned independently of
-  terminal focus.
+- Made the Inspector's Files and Changes surfaces selectable by open worktree,
+  with one target per Git checkout and explicit selections pinned independently
+  of terminal focus.
   [Herdr World PR #98](https://github.com/IvoryHeart/herdr-world/pull/98)
 - Based the active application source on Roamgate commit
   `81c506e6135f5f3b47f7042252ffdac0ec2bf679` while retaining Herdr as an

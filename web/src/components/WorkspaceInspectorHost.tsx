@@ -42,7 +42,7 @@ import {
   readInspectorPreferences,
   resourceOwnerKey,
   resourceStateKey,
-  workspaceResourceCandidates,
+  worktreeResourceCandidates,
   writeInspectorNavigationRatio,
   type InspectorDock,
   type InspectorSplitView,
@@ -90,12 +90,12 @@ function checkoutLabel(workspace?: Workspace) {
   );
 }
 
-function workspaceSelectorLabel(workspace: Workspace) {
+function worktreeSelectorLabel(workspace: Workspace) {
   const checkout = checkoutLabel(workspace);
   const path = workspace.worktree?.checkout_path ?? workspace.cwd;
   const kind = workspace.worktree?.is_linked_worktree
     ? "linked worktree"
-    : "workspace";
+    : "main worktree";
   return `${checkout} · ${kind}${path ? ` — ${path}` : ""}`;
 }
 
@@ -310,7 +310,7 @@ export function WorkspaceInspectorHost({
   }));
   const resourceKey = resourceOwnerKey(state.scope);
   const contentResourceKey = resourceStateKey(state.scope);
-  const workspaceCandidates = workspaceResourceCandidates(
+  const worktreeCandidates = worktreeResourceCandidates(
     state.scope.connectionId,
     workspaces,
     workspace?.workspace_id,
@@ -497,8 +497,8 @@ export function WorkspaceInspectorHost({
               ? "is-window-drag-handle is-docked-window-drag-handle"
               : ""
         } ${
-          workspaceCandidates.length > 1 && onWorkspaceChange
-            ? "has-target-picker"
+          worktreeCandidates.length > 1 && onWorkspaceChange
+            ? "has-worktree-picker"
             : ""
         }`}
         tabIndex={controlMode === "floating" || windowMovable ? 0 : undefined}
@@ -576,20 +576,20 @@ export function WorkspaceInspectorHost({
             ) : null}
           </div>
         )}
-        {workspaceCandidates.length > 1 && onWorkspaceChange ? (
-          <label className="workspace-inspector-target-picker">
-            <span>Inspect</span>
+        {worktreeCandidates.length > 1 && onWorkspaceChange ? (
+          <label className="workspace-inspector-worktree-picker">
+            <span>Worktree</span>
             <select
-              aria-label="Inspect checkout"
+              aria-label="Select worktree"
               value={workspace?.workspace_id ?? ""}
               onChange={(event) => onWorkspaceChange(event.target.value)}
             >
-              {workspaceCandidates.map((candidate) => (
+              {worktreeCandidates.map((candidate) => (
                 <option
                   key={candidate.workspace_id}
                   value={candidate.workspace_id}
                 >
-                  {workspaceSelectorLabel(candidate)}
+                  {worktreeSelectorLabel(candidate)}
                 </option>
               ))}
             </select>
