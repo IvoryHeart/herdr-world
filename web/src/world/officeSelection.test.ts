@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import type { HerdrOfficeProjection, OfficeAgent } from "./herdrOfficeProjection";
+import { describe, expect, test } from "bun:test";
+
+const it = test;
+import type {
+  HerdrOfficeProjection,
+  OfficeAgent,
+} from "./herdrOfficeProjection";
 import {
   findOfficeSelection,
   formatOfficeActivityAge,
@@ -11,37 +16,43 @@ function projection(): HerdrOfficeProjection {
   return {
     version: 1,
     generatedAt: 1,
-    hosts: [{
-      key: "host-a",
-      displayLabel: "Office A",
-      displayOrder: 0,
-      location: "local",
-      connectionState: "compatible",
-      observed: true,
-      stale: false,
-      compatibleWithWorld: true,
-      compatibleWithSpaces: true,
-      deterministicSkin: { themeIndex: 0, badge: "HOST 01" },
-    }],
+    hosts: [
+      {
+        key: "host-a",
+        displayLabel: "Office A",
+        displayOrder: 0,
+        connectionState: "active",
+        observed: true,
+        stale: false,
+        compatibleWithWorld: true,
+        compatibleWithSpaces: true,
+        selected: true,
+        deterministicSkin: { themeIndex: 0, badge: "HOST 01" },
+      },
+    ],
     rooms: [],
     receptions: [],
     barAgents: [],
-    roomRoster: [{
-      key: "host-a:workspace:room-a",
-      hostKey: "host-a",
-      hostLabel: "Office A",
-      workspaceRef: {
-        profileId: "host-a",
-        kind: "workspace",
-        nativeTargetId: "room-a",
+    roomRoster: [
+      {
+        key: "host-a:workspace:room-a",
+        hostKey: "host-a",
+        hostLabel: "Office A",
+        workspaceRef: {
+          connectionId: "host-a",
+          generation: 1,
+          kind: "workspace",
+          nativeId: "room-a",
+          worldId: "host-a:workspace:room-a",
+        },
+        observedGeneration: 1,
+        displayLabel: "Room A",
+        order: 1,
+        stale: false,
+        canOpenInSpaces: true,
+        presented: true,
       },
-      observedGeneration: "generation-a",
-      displayLabel: "Room A",
-      order: 1,
-      stale: false,
-      canOpenInSpaces: true,
-      presented: true,
-    }],
+    ],
     deskRoster: [],
     roster: [],
     unresolved: [],
@@ -51,8 +62,6 @@ function projection(): HerdrOfficeProjection {
       compatibleHosts: 1,
       connectingHosts: 0,
       staleHosts: 0,
-      incompatibleHosts: 0,
-      disabledHosts: 0,
       observedWorkspaces: 1,
       observedDesks: 0,
       observedAgents: 0,
@@ -96,7 +105,9 @@ describe("Office selection", () => {
       kind: "host",
       host: { displayLabel: "Office A" },
     });
-    expect(findOfficeSelection(current, "host-a:workspace:room-a")).toMatchObject({
+    expect(
+      findOfficeSelection(current, "host-a:workspace:room-a"),
+    ).toMatchObject({
       kind: "room",
       room: { displayLabel: "Room A" },
     });
@@ -137,7 +148,7 @@ describe("Office selection", () => {
     expect(officeCalloutForKey(current, "host-a")).toEqual({
       kind: "host",
       title: "Office A",
-      detail: "compatible · live Office state",
+      detail: "active · live Office state",
       status: null,
     });
     expect(officeCalloutForKey(current, "host-a:workspace:room-a")).toEqual({
@@ -153,11 +164,30 @@ describe("Office selection", () => {
     const current = projection();
     const agent = {
       key: "agent-a",
-      currentPaneRef: { profileId: "host-a", kind: "pane", nativeTargetId: "pane-a" },
-      currentTerminalRef: { profileId: "host-a", kind: "terminal", nativeTargetId: "terminal-a" },
-      currentTabRef: { profileId: "host-a", kind: "tab", nativeTargetId: "tab-a" },
+      nodeId: "agent-a",
+      currentPaneRef: {
+        connectionId: "host-a",
+        generation: 1,
+        kind: "pane",
+        nativeId: "pane-a",
+        worldId: "agent-a",
+      },
+      currentTerminalRef: {
+        connectionId: "host-a",
+        generation: 1,
+        kind: "terminal",
+        nativeId: "terminal-a",
+        worldId: "agent-a",
+      },
+      currentTabRef: {
+        connectionId: "host-a",
+        generation: 1,
+        kind: "tab",
+        nativeId: "tab-a",
+        worldId: "agent-a",
+      },
       deskKey: null,
-      observedGeneration: "generation-a",
+      observedGeneration: 1,
       roomKey: "host-a:workspace:room-a",
       hostKey: "host-a",
       displayLabel: "Codex",
@@ -171,16 +201,18 @@ describe("Office selection", () => {
       canOpenInSpaces: true,
       characterIndex: 0,
     } satisfies OfficeAgent;
-    current.roster = [{
-      agent,
-      roomKey: "host-a:workspace:room-a",
-      roomLabel: "Room A",
-      hostKey: "host-a",
-      hostLabel: "Office A",
-      roomPresented: true,
-      deskPresented: false,
-      destinationPresented: true,
-    }];
+    current.roster = [
+      {
+        agent,
+        roomKey: "host-a:workspace:room-a",
+        roomLabel: "Room A",
+        hostKey: "host-a",
+        hostLabel: "Office A",
+        roomPresented: true,
+        deskPresented: false,
+        destinationPresented: true,
+      },
+    ];
 
     expect(officeCalloutForKey(current, "agent-a")).toMatchObject({
       title: "Codex",

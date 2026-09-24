@@ -42,7 +42,7 @@ export function PixelOfficeCanvas({
   onSelect,
   onActivateAgent,
   onActivateRoom,
-  canCreateSeat,
+  showCreateSeat,
   onNewSeat,
   onHover,
   onAnchorChange,
@@ -61,7 +61,7 @@ export function PixelOfficeCanvas({
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
   onActivateRoom: (key: string) => void;
-  canCreateSeat: (roomKey: string) => boolean;
+  showCreateSeat: (roomKey: string) => boolean;
   onNewSeat: (roomKey: string) => void;
   onHover?: (hover: OfficeCanvasHover | null) => void;
   onAnchorChange?: (anchors: OfficeConversationAnchors | null) => void;
@@ -83,7 +83,7 @@ export function PixelOfficeCanvas({
     onSelect,
     onActivateAgent,
     onActivateRoom,
-    canCreateSeat,
+    showCreateSeat,
     onNewSeat,
     onHover,
     onAnchorChange,
@@ -103,7 +103,7 @@ export function PixelOfficeCanvas({
     onSelect,
     onActivateAgent,
     onActivateRoom,
-    canCreateSeat,
+    showCreateSeat,
     onNewSeat,
     onHover,
     onAnchorChange,
@@ -123,7 +123,9 @@ export function PixelOfficeCanvas({
     const controller = controllerRef.current;
     const host = hostRef.current;
     const scroll = host?.closest<HTMLElement>(".world-stage-scroll");
-    const canvas = host?.querySelector<HTMLCanvasElement>("canvas[data-office-canvas='true']");
+    const canvas = host?.querySelector<HTMLCanvasElement>(
+      "canvas[data-office-canvas='true']",
+    );
     if (!scroll || !canvas || !controller) {
       callback?.(null);
       selectedCallback?.(null);
@@ -144,40 +146,51 @@ export function PixelOfficeCanvas({
         x <= scrollRect.right &&
         y >= scrollRect.top &&
         y <= scrollRect.bottom;
-      const horizontalDistance = x < scrollRect.left
-        ? scrollRect.left - x
-        : x > scrollRect.right
-          ? x - scrollRect.right
-          : 0;
-      const verticalDistance = y < scrollRect.top
-        ? scrollRect.top - y
-        : y > scrollRect.bottom
-          ? y - scrollRect.bottom
-          : 0;
+      const horizontalDistance =
+        x < scrollRect.left
+          ? scrollRect.left - x
+          : x > scrollRect.right
+            ? x - scrollRect.right
+            : 0;
+      const verticalDistance =
+        y < scrollRect.top
+          ? scrollRect.top - y
+          : y > scrollRect.bottom
+            ? y - scrollRect.bottom
+            : 0;
       const edge: OfficeCanvasAnchor["edge"] = visible
         ? null
         : horizontalDistance > verticalDistance
-          ? x < scrollRect.left ? "left" : "right"
-          : y < scrollRect.top ? "top" : "bottom";
+          ? x < scrollRect.left
+            ? "left"
+            : "right"
+          : y < scrollRect.top
+            ? "top"
+            : "bottom";
       const edgeInset = 10;
       return {
-        x: edge === "left"
-          ? scrollRect.left + edgeInset
-          : edge === "right"
-            ? scrollRect.right - edgeInset
-            : x,
-        y: edge === "top"
-          ? scrollRect.top + edgeInset
-          : edge === "bottom"
-            ? scrollRect.bottom - edgeInset
-            : y,
+        x:
+          edge === "left"
+            ? scrollRect.left + edgeInset
+            : edge === "right"
+              ? scrollRect.right - edgeInset
+              : x,
+        y:
+          edge === "top"
+            ? scrollRect.top + edgeInset
+            : edge === "bottom"
+              ? scrollRect.bottom - edgeInset
+              : y,
         visible,
         edge,
       };
     };
     const anchors: OfficeConversationAnchors = {};
     for (const target of latestRef.current.conversationTargets) {
-      const sceneAnchors = controller.getAnchors(target.selectedKey, target.targetKey);
+      const sceneAnchors = controller.getAnchors(
+        target.selectedKey,
+        target.targetKey,
+      );
       if (!sceneAnchors) {
         continue;
       }
@@ -187,8 +200,13 @@ export function PixelOfficeCanvas({
       };
     }
     callback?.(anchors);
-    const selectedAnchors = controller.getAnchors(latestRef.current.selectedKey, null);
-    selectedCallback?.(toViewportAnchor(selectedAnchors.agent ?? selectedAnchors.workbench));
+    const selectedAnchors = controller.getAnchors(
+      latestRef.current.selectedKey,
+      null,
+    );
+    selectedCallback?.(
+      toViewportAnchor(selectedAnchors.agent ?? selectedAnchors.workbench),
+    );
   };
   const reportAnchorsRef = useRef(reportAnchors);
   reportAnchorsRef.current = reportAnchors;
@@ -205,12 +223,15 @@ export function PixelOfficeCanvas({
   const scheduleAnchorReportRef = useRef(scheduleAnchorReport);
   scheduleAnchorReportRef.current = scheduleAnchorReport;
 
-  useEffect(() => () => {
-    if (anchorFrameRef.current !== null) {
-      window.cancelAnimationFrame(anchorFrameRef.current);
-      anchorFrameRef.current = null;
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (anchorFrameRef.current !== null) {
+        window.cancelAnimationFrame(anchorFrameRef.current);
+        anchorFrameRef.current = null;
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const element = hostRef.current;
@@ -218,6 +239,7 @@ export function PixelOfficeCanvas({
       return;
     }
     let disposed = false;
+    const initialization = new AbortController();
     officeDebug("renderer:mount-request", {
       rooms: latestRef.current.projection.rooms.length,
       agents: latestRef.current.projection.roster.length,
@@ -232,13 +254,14 @@ export function PixelOfficeCanvas({
       (key) => latestRef.current.onSelect(key),
       (key) => latestRef.current.onActivateAgent(key),
       (key) => latestRef.current.onActivateRoom(key),
-      (roomKey) => latestRef.current.canCreateSeat(roomKey),
+      (roomKey) => latestRef.current.showCreateSeat(roomKey),
       (roomKey) => latestRef.current.onNewSeat(roomKey),
       (hover) => latestRef.current.onHover?.(hover),
       (layout) => latestRef.current.onLayoutChange?.(layout),
       (revision) => latestRef.current.onCanvasRendered?.(revision),
       latestRef.current.roomAlignment,
       latestRef.current.longRoomTitleMode,
+      initialization.signal,
     )
       .then((controller) => {
         if (disposed) {
@@ -269,14 +292,19 @@ export function PixelOfficeCanvas({
           });
           if (window.__HERDR_WORLD_RENDERER__) {
             window.__HERDR_WORLD_RENDERER__.lastError =
-              error instanceof Error ? error.message.slice(0, 160) : "renderer initialization failed";
+              error instanceof Error
+                ? error.message.slice(0, 160)
+                : "renderer initialization failed";
           }
           setFailure(true);
         }
       });
     return () => {
       disposed = true;
+      initialization.abort();
       officeDebug("renderer:destroy");
+      latestRef.current.onAnchorChange?.(null);
+      latestRef.current.onSelectedAnchorChange?.(null);
       controllerRef.current?.destroy();
       controllerRef.current = null;
     };

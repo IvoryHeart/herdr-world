@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "bun:test";
+
+const it = test;
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import { OfficeLayoutPublisher, resolveOfficeGeometry } from "./officeLayout";
-import { officeSemanticTargets, MIN_OFFICE_TOUCH_TARGET } from "./officeSemanticTargets";
+import {
+  officeSemanticTargets,
+  MIN_OFFICE_TOUCH_TARGET,
+} from "./officeSemanticTargets";
 
 describe("Office semantic targets", () => {
   it("publishes exact room and station identities with touch-sized rectangles", () => {
@@ -20,6 +25,7 @@ describe("Office semantic targets", () => {
     const targets = officeSemanticTargets(projection, layout);
 
     expect(targets.map(({ key }) => key)).toEqual([
+      "agent-done",
       "room-a",
       "agent-seated",
       "desk-empty",
@@ -28,13 +34,22 @@ describe("Office semantic targets", () => {
     expect(targets.find(({ key }) => key === "agent-seated")).toMatchObject({
       kind: "agent",
       canActivate: true,
-      label: "Codex, Reviewing, desk Build, Platform, Forge, Running release checks",
+      label:
+        "Codex, Reviewing, desk Build, Platform, Forge, Running release checks",
     });
-    expect(targets.find(({ key }) => key === "desk-empty")?.label)
-      .toBe("Empty desk Review, Platform, Forge");
-    expect(targets.every(({ rect }) =>
-      rect.width >= MIN_OFFICE_TOUCH_TARGET && rect.height >= MIN_OFFICE_TOUCH_TARGET,
-    )).toBe(true);
+    expect(targets.find(({ key }) => key === "desk-empty")?.label).toBe(
+      "Empty desk Review, Platform, Forge",
+    );
+    expect(targets.find(({ key }) => key === "desk-empty")?.canActivate).toBe(
+      true,
+    );
+    expect(
+      targets.every(
+        ({ rect }) =>
+          rect.width >= MIN_OFFICE_TOUCH_TARGET &&
+          rect.height >= MIN_OFFICE_TOUCH_TARGET,
+      ),
+    ).toBe(true);
   });
 
   function fixtureProjection() {
@@ -59,12 +74,22 @@ describe("Office semantic targets", () => {
       taskSummary: undefined,
       placement: "standing",
     };
+    const done = {
+      ...seated,
+      key: "agent-done",
+      deskKey: null,
+      displayLabel: "Gemini",
+      taskSummary: "Completed review",
+      semanticStatus: "done",
+      placement: "bar",
+    };
     const buildDesk = {
       key: "desk-build",
       hostKey: "host-a",
       roomKey: "room-a",
       displayLabel: "Build",
       occupantAgentKey: seated.key,
+      canOpenInSpaces: true,
     };
     const emptyDesk = {
       ...buildDesk,
@@ -76,17 +101,21 @@ describe("Office semantic targets", () => {
       version: 1,
       generatedAt: 1,
       hosts: [{ key: "host-a", displayLabel: "Forge" }],
-      rooms: [{
-        key: "room-a",
-        hostKey: "host-a",
-        displayLabel: "Platform",
-        canOpenInSpaces: true,
-        desks: [buildDesk, emptyDesk],
-        roomAgents: [seated, standing],
-      }],
+      rooms: [
+        {
+          key: "room-a",
+          hostKey: "host-a",
+          displayLabel: "Platform",
+          canOpenInSpaces: true,
+          desks: [buildDesk, emptyDesk],
+          roomAgents: [seated, standing],
+        },
+      ],
       receptions: [],
-      barAgents: [],
-      roomRoster: [{ key: "room-a", hostLabel: "Forge", displayLabel: "Platform" }],
+      barAgents: [done],
+      roomRoster: [
+        { key: "room-a", hostLabel: "Forge", displayLabel: "Platform" },
+      ],
       deskRoster: [
         { desk: buildDesk, roomLabel: "Platform", hostLabel: "Forge" },
         { desk: emptyDesk, roomLabel: "Platform", hostLabel: "Forge" },
@@ -94,6 +123,7 @@ describe("Office semantic targets", () => {
       roster: [
         { agent: seated, roomLabel: "Platform", hostLabel: "Forge" },
         { agent: standing, roomLabel: "Platform", hostLabel: "Forge" },
+        { agent: done, roomLabel: "Platform", hostLabel: "Forge" },
       ],
       unresolved: [],
       coverage: {},

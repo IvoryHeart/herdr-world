@@ -1,34 +1,53 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
-  readWorldCompletionSeenKeys,
-  writeWorldCompletionSeenKeys,
+  COMPLETION_SEEN_STORAGE_KEY,
+  officeCompletionIdentity,
+  readCompletionSeen,
+  writeCompletionSeen,
 } from "./completionSeenState";
 
-function memoryStorage(initial?: string) {
-  let value = initial ?? null;
-  return {
-    getItem: vi.fn(() => value),
-    setItem: vi.fn((_key: string, next: string) => {
-      value = next;
-    }),
-  };
-}
-
-describe("world completion seen state", () => {
-  it("round-trips acknowledged completion identities", () => {
-    const storage = memoryStorage();
-    writeWorldCompletionSeenKeys(new Set(["host-a:terminal-1", "host-b:terminal-2"]), storage);
-
-    expect(readWorldCompletionSeenKeys(storage)).toEqual(
-      new Set(["host-a:terminal-1", "host-b:terminal-2"]),
-    );
-    expect(storage.setItem).toHaveBeenCalledOnce();
+describe("completion seen state", () => {
+  test("qualifies acknowledgement by host, generation, terminal and agent", () => {
+    expect(
+      officeCompletionIdentity({
+        hostKey: "host-a",
+        observedGeneration: 7,
+        key: "agent-a",
+        currentTerminalRef: { nativeId: "terminal-a" },
+      } as never),
+    ).toBe('["host-a",7,"terminal-a","agent-a"]');
   });
 
-  it("ignores malformed browser state", () => {
-    expect(readWorldCompletionSeenKeys(memoryStorage("not-json"))).toEqual(new Set());
-    expect(readWorldCompletionSeenKeys(memoryStorage(JSON.stringify({ key: "value" })))).toEqual(
-      new Set(),
-    );
+  test("filters malformed storage and writes admitted identities", () => {
+    const storage = memoryStorage(JSON.stringify(["ok", 2, "", "next"]));
+    expect([...readCompletionSeen(storage)]).toEqual(["ok", "next"]);
+
+    writeCompletionSeen(storage, new Set(["first", "second"]));
+    expect(storage.written).toEqual({
+      key: COMPLETION_SEEN_STORAGE_KEY,
+      value: JSON.stringify(["first", "second"]),
+    });
+  });
+
+  test("fails closed when storage is unavailable", () => {
+    expect(
+      readCompletionSeen({
+        getItem() {
+          throw new Error("denied");
+        },
+        setItem() {},
+      }),
+    ).toEqual(new Set());
   });
 });
+
+function memoryStorage(initial: string | null) {
+  const storage = {
+    written: null as { key: string; value: string } | null,
+    getItem: () => initial,
+    setItem(key: string, value: string) {
+      storage.written = { key, value };
+    },
+  };
+  return storage;
+}

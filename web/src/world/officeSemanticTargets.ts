@@ -5,6 +5,7 @@ import type {
   OfficeRoom,
 } from "./herdrOfficeProjection";
 import {
+  agentBarSlot,
   deskAnchor,
   OFFICE_GEOMETRY,
   receptionAgentAnchor,
@@ -33,18 +34,43 @@ export function officeSemanticTargets(
   const targets: OfficeSemanticTarget[] = [];
 
   projection.receptions.forEach((reception, receptionIndex) => {
-    const rect = layout.ceoBlocks.receptions.find(({ index }) => index === receptionIndex);
+    const rect = layout.ceoBlocks.receptions.find(
+      ({ index }) => index === receptionIndex,
+    );
     if (!rect) {
       return;
     }
     reception.waitingAgents.forEach((agent, agentIndex) => {
       const anchor = receptionAgentAnchor(rect, agentIndex);
-      targets.push(agentTarget(
+      targets.push(
+        agentTarget(
+          projection,
+          agent,
+          touchRect(
+            anchor.x,
+            anchor.nameY - 5,
+            anchor.stationSpan - 4,
+            anchor.characterFeetY - anchor.nameY + 10,
+          ),
+        ),
+      );
+    });
+  });
+
+  projection.barAgents.forEach((agent, index) => {
+    const slot = agentBarSlot(layout.ceoBlocks, index);
+    targets.push(
+      agentTarget(
         projection,
         agent,
-        touchRect(anchor.x, anchor.nameY - 5, anchor.stationSpan - 4, anchor.characterFeetY - anchor.nameY + 10),
-      ));
-    });
+        touchRect(
+          slot.x,
+          slot.rowY - 5,
+          Math.max(MIN_OFFICE_TOUCH_TARGET, 52),
+          slot.characterFeetY - slot.rowY + 10,
+        ),
+      ),
+    );
   });
 
   projection.rooms.forEach((room, roomIndex) => {
@@ -57,7 +83,8 @@ export function officeSemanticTargets(
       MIN_OFFICE_TOUCH_TARGET,
       Math.min(
         rect.headerRect.width,
-        header?.titleBoxWidth ?? rect.headerRect.width - OFFICE_GEOMETRY.roomHeaderChromeWidth,
+        header?.titleBoxWidth ??
+          rect.headerRect.width - OFFICE_GEOMETRY.roomHeaderChromeWidth,
       ),
     );
     targets.push({
@@ -65,8 +92,11 @@ export function officeSemanticTargets(
       kind: "room",
       label: roomTargetLabel(projection, room),
       rect: touchRect(
-        rect.headerRect.x + (header?.titleBoxX ?? (rect.headerRect.width - titleWidth) / 2) + titleWidth / 2,
-        rect.headerRect.y - (MIN_OFFICE_TOUCH_TARGET - rect.headerRect.height) / 2,
+        rect.headerRect.x +
+          (header?.titleBoxX ?? (rect.headerRect.width - titleWidth) / 2) +
+          titleWidth / 2,
+        rect.headerRect.y -
+          (MIN_OFFICE_TOUCH_TARGET - rect.headerRect.height) / 2,
         titleWidth,
         MIN_OFFICE_TOUCH_TARGET,
       ),
@@ -84,38 +114,47 @@ export function officeSemanticTargets(
         anchor.stationSpan - 4,
         anchor.characterFeetY - anchor.nameY + OFFICE_GEOMETRY.deskHeight + 8,
       );
-      targets.push(occupant
-        ? agentTarget(projection, occupant, stationRect, desk)
-        : {
-            key: desk.key,
-            kind: "desk",
-            label: deskTargetLabel(projection, desk),
-            rect: stationRect,
-            canActivate: false,
-          });
+      targets.push(
+        occupant
+          ? agentTarget(projection, occupant, stationRect, desk)
+          : {
+              key: desk.key,
+              kind: "desk",
+              label: deskTargetLabel(projection, desk),
+              rect: stationRect,
+              canActivate: desk.canOpenInSpaces,
+            },
+      );
     });
 
     room.roomAgents
       .filter(({ placement }) => placement === "standing")
       .forEach((agent, agentIndex) => {
         const anchor = standingAnchor(rect, agentIndex);
-        targets.push(agentTarget(
-          projection,
-          agent,
-          touchRect(
-            anchor.x,
-            anchor.nameY - 5,
-            anchor.stationSpan - 4,
-            anchor.characterFeetY - anchor.nameY + 10,
+        targets.push(
+          agentTarget(
+            projection,
+            agent,
+            touchRect(
+              anchor.x,
+              anchor.nameY - 5,
+              anchor.stationSpan - 4,
+              anchor.characterFeetY - anchor.nameY + 10,
+            ),
           ),
-        ));
+        );
       });
   });
 
   return targets;
 }
 
-function touchRect(centerX: number, top: number, requestedWidth: number, requestedHeight: number): OfficeRect {
+function touchRect(
+  centerX: number,
+  top: number,
+  requestedWidth: number,
+  requestedHeight: number,
+): OfficeRect {
   const width = Math.max(MIN_OFFICE_TOUCH_TARGET, requestedWidth);
   const height = Math.max(MIN_OFFICE_TOUCH_TARGET, requestedHeight);
   return {
@@ -132,14 +171,19 @@ function agentTarget(
   rect: OfficeRect,
   desk?: OfficeDesk,
 ): OfficeSemanticTarget {
-  const entry = projection.roster.find(({ agent: candidate }) => candidate.key === agent.key);
+  const entry = projection.roster.find(
+    ({ agent: candidate }) => candidate.key === agent.key,
+  );
   const state = agent.stale
     ? "stale"
-    : agent.stateLabels[agent.semanticStatus] ?? agent.semanticStatus;
+    : (agent.stateLabels[agent.semanticStatus] ?? agent.semanticStatus);
   const location = desk
     ? `desk ${desk.displayLabel}, ${entry?.roomLabel ?? "Office"}`
-    : entry?.roomLabel ?? "Office";
-  const host = entry?.hostLabel ?? projection.hosts.find(({ key }) => key === agent.hostKey)?.displayLabel ?? "host";
+    : (entry?.roomLabel ?? "Office");
+  const host =
+    entry?.hostLabel ??
+    projection.hosts.find(({ key }) => key === agent.hostKey)?.displayLabel ??
+    "host";
   const summary = agent.taskSummary ? `, ${agent.taskSummary}` : "";
   return {
     key: agent.key,
@@ -151,7 +195,9 @@ function agentTarget(
 }
 
 function deskTargetLabel(projection: HerdrOfficeProjection, desk: OfficeDesk) {
-  const entry = projection.deskRoster.find(({ desk: candidate }) => candidate.key === desk.key);
+  const entry = projection.deskRoster.find(
+    ({ desk: candidate }) => candidate.key === desk.key,
+  );
   return `Empty desk ${desk.displayLabel}, ${entry?.roomLabel ?? "Office"}, ${entry?.hostLabel ?? "host"}`;
 }
 

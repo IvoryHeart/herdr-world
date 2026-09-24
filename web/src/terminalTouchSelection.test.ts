@@ -1,93 +1,141 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test, jest } from "bun:test";
+import { Terminal } from "@xterm/xterm";
 import {
-  beginTouchSelectionEndpointDrag,
-  commitTouchSelectionStart,
-  completeTouchSelection,
-  moveTouchSelectionEndpoint,
-  moveTouchSelectionPlacement,
-  startTouchSelectionPlacement,
-  terminalTouchSelectionEndpointFromDrag,
+  TerminalTouchSelection,
+  TERMINAL_LONG_PRESS_MS,
 } from "./terminalTouchSelection";
+import { TerminalEndpointPresentation } from "./terminalEndpointPresentation";
 
-describe("terminal touch selection flow", () => {
-  it("commits a refined long-press point as the selection start", () => {
-    const placing = startTouchSelectionPlacement(
-      { col: 1, row: 2 },
-      { clientX: 20, clientY: 40 },
-    );
-    const refined = moveTouchSelectionPlacement(placing, { col: 3, row: 2 }, { clientX: 42, clientY: 40 });
-    const waiting = commitTouchSelectionStart(refined);
-
-    expect(waiting).toMatchObject({
-      phase: "waiting-endpoint",
-      start: { col: 3, row: 2 },
-      endpoint: { col: 3, row: 2 },
+describe("TerminalTouchSelection deadlines", () => {
+  test("slop, cancel and reset invalidate even a parser-deferred long press", () => {
+    jest.useFakeTimers();
+    const term = { clearSelection() {} } as Terminal;
+    let begins = 0,
+      releases = 0;
+    let activate: (() => void) | null = null;
+    const selection = new TerminalTouchSelection(term, {
+      begin: (callback) => {
+        begins++;
+        activate = callback;
+      },
+      changed() {},
+      release() {
+        releases++;
+      },
     });
-  });
-
-  it("anchors the endpoint to the committed start when dragging begins", () => {
-    const waiting = commitTouchSelectionStart(
-      startTouchSelectionPlacement({ col: 2, row: 1 }, { clientX: 18, clientY: 30 }),
-    );
-    const dragging = beginTouchSelectionEndpointDrag(waiting, { clientX: 63, clientY: 30 });
-
-    expect(dragging).toMatchObject({
-      phase: "dragging-endpoint",
-      start: { col: 2, row: 1 },
-      endpoint: { col: 2, row: 1 },
-    });
-  });
-
-  it("derives the moving endpoint from finger displacement without a transition jump", () => {
-    const start = { col: 2, row: 1 };
-    const dragStart = { clientX: 63, clientY: 30 };
-    const grid = { cellWidth: 9, cellHeight: 16, cols: 10, rows: 4 };
-
-    expect(terminalTouchSelectionEndpointFromDrag(start, dragStart, dragStart, grid)).toEqual(start);
-    expect(
-      terminalTouchSelectionEndpointFromDrag(
-        start,
-        dragStart,
-        { clientX: 108, clientY: 14 },
-        grid,
-      ),
-    ).toEqual({ col: 7, row: 0 });
-  });
-
-  it("clamps endpoint displacement to the terminal grid", () => {
-    expect(
-      terminalTouchSelectionEndpointFromDrag(
-        { col: 2, row: 1 },
-        { clientX: 63, clientY: 30 },
-        { clientX: -100, clientY: 200 },
-        { cellWidth: 9, cellHeight: 16, cols: 10, rows: 4 },
-      ),
-    ).toEqual({ col: 0, row: 3 });
-  });
-
-  it("completes forward endpoint drags", () => {
-    const waiting = commitTouchSelectionStart(
-      startTouchSelectionPlacement({ col: 2, row: 1 }, { clientX: 18, clientY: 30 }),
-    );
-    const dragging = beginTouchSelectionEndpointDrag(waiting, { clientX: 63, clientY: 30 });
-    const moved = moveTouchSelectionEndpoint(dragging, { col: 7, row: 1 }, { clientX: 108, clientY: 30 });
-
-    expect(completeTouchSelection(moved)).toEqual({
-      start: { col: 2, row: 1 },
-      end: { col: 7, row: 1 },
-    });
-  });
-
-  it("completes backward endpoint drags without reordering the anchor", () => {
-    const waiting = commitTouchSelectionStart(
-      startTouchSelectionPlacement({ col: 8, row: 3 }, { clientX: 72, clientY: 58 }),
-    );
-    const dragging = beginTouchSelectionEndpointDrag(waiting, { clientX: 36, clientY: 42 });
-    const moved = moveTouchSelectionEndpoint(dragging, { col: 1, row: 2 }, { clientX: 9, clientY: 42 });
-
-    expect(completeTouchSelection(moved)).toEqual({
-      start: { col: 8, row: 3 },
-      end: { col: 1, row: 2 },
-    });
+    try {
+      selection.start({ x: 10, y: 10 });
+      selection.move({ x: 19, y: 10 });
+      jest.advanceTimersByTime(TERMINAL_LONG_PRESS_MS);
+      expect(begins).toBe(0);
+      selection.start({ x: 10, y: 10 });
+      selection.cancelPending();
+      jest.advanceTimersByTime(TERMINAL_LONG_PRESS_MS);
+      expect(begins).toBe(0);
+      selection.start({ x: 10, y: 10 });
+      jest.advanceTimersByTime(TERMINAL_LONG_PRESS_MS);
+      expect(begins).toBe(1);
+      selection.reset();
+      (activate as unknown as () => void)();
+      expect(selection.active).toBe(false);
+      expect(releases).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
+
+describe("incremental selection presentation", () => {
+  test("waits for parsing, drains every queued chunk in order, and resumes live output", () => {
+    let selected = false;
+    const writes: string[] = [];
+    const parsers: (() => void)[] = [];
+    const presentation = new TerminalEndpointPresentation(
+      () => selected,
+      (text, parsed) => {
+        writes.push(text);
+        parsers.push(parsed);
+      },
+    );
+    const overflow = () => {
+      throw new Error("unexpected overflow");
+    };
+    presentation.updateIncremental("first", overflow);
+    expect(
+      presentation.beginSelection(() => {
+        selected = true;
+      }),
+    ).toBe(false);
+    presentation.updateIncremental("second", overflow);
+    presentation.updateIncremental("third", overflow);
+    expect(writes).toEqual(["first"]);
+    parsers.shift()!();
+    expect(selected).toBe(true);
+    expect(writes).toEqual(["first"]);
+    selected = false;
+    presentation.cancelSelection();
+    expect(writes).toEqual(["first", "secondthird"]);
+    parsers.shift()!();
+    presentation.updateIncremental("fourth", overflow);
+    expect(writes.join("")).toBe("firstsecondthirdfourth");
+    parsers.shift()!();
+  });
+
+  test("1 MiB UTF-16 cap releases display hold without dropping the triggering chunk", () => {
+    let selected = true,
+      overflows = 0;
+    const writes: string[] = [];
+    const presentation = new TerminalEndpointPresentation(
+      () => selected,
+      (text, parsed) => {
+        writes.push(text);
+        parsed();
+      },
+    );
+    const overflow = () => {
+      overflows++;
+      selected = false;
+      presentation.cancelSelection();
+    };
+    const payload = "a".repeat(512 * 1024);
+    presentation.updateIncremental(payload, overflow);
+    presentation.updateIncremental("", overflow);
+    expect(writes).toEqual([]);
+    presentation.updateIncremental("END", overflow);
+    presentation.updateIncremental("LIVE", overflow);
+    expect(overflows).toBe(1);
+    expect(writes.join("")).toBe(`${payload}ENDLIVE`);
+  });
+});
+
+test.each([false, true])(
+  "incremental reset distinguishes same route from disposal (%s)",
+  (discard) => {
+    const writes: string[] = [];
+    const parsers: (() => void)[] = [];
+    const presentation = new TerminalEndpointPresentation(
+      () => false,
+      (text, parsed) => {
+        writes.push(text);
+        parsers.push(parsed);
+      },
+    );
+    const overflow = () => {
+      throw new Error("unexpected overflow");
+    };
+    presentation.updateIncremental("parsed first", overflow);
+    presentation.beginSelection(() => {
+      throw new Error("stale activation");
+    });
+    presentation.updateIncremental("pending second", overflow);
+    presentation.reset(discard);
+    presentation.updateIncremental("live third", overflow);
+    parsers.shift()!();
+    expect(writes.join("")).toBe(
+      discard
+        ? "parsed firstlive third"
+        : "parsed firstpending secondlive third",
+    );
+    parsers.shift()!();
+  },
+);

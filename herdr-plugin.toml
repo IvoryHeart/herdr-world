@@ -1,48 +1,64 @@
 id = "ivoryheart.herdr-world"
 name = "Herdr World"
 version = "0.1.1"
-min_herdr_version = "0.8.2"
-description = "Browser and mobile client for monitoring and controlling Herdr agents."
-platforms = ["linux", "macos"]
+min_herdr_version = "0.9.0"
+description = "Visual control plane for Herdr agents with managed local and SSH connections."
+platforms = ["linux", "macos", "windows"]
+
+# Thin launcher: every action delegates to scripts/world-plugin.ts, which
+# downloads the checksum-verified prebuilt release binary matching this
+# checkout's version on demand and forwards service verbs to it (systemd,
+# launchd, or Windows Task Scheduler). The verb set is a frozen contract; see
+# scripts/world-plugin.ts. The shim itself runs on Bun. For an unreleased
+# checkout, run `bun scripts/world-plugin.ts build-source`, then
+# `herdr plugin link .`; see docs/DEPLOYMENT.md#herdr-plugin.
+# The panel opens as a session-modal popup in the Herdr TUI by default. Open
+# it with --placement split (or tab/zoomed/overlay) to get a regular pane
+# that other Herdr clients, including Herdr World itself, can see.
 
 [[build]]
-command = ["bash", "scripts/herdr-world-plugin.sh", "build"]
+command = ["bun", "scripts/world-plugin.ts", "build"]
 
-[[startup]]
-command = ["bash", "scripts/herdr-world-plugin.sh", "startup"]
+[[panes]]
+id = "panel"
+title = "Herdr World"
+placement = "popup"
+width = "72%"
+height = 12
+command = ["bun", "scripts/world-plugin.ts", "panel"]
 
 [[actions]]
 id = "start"
 title = "Start Herdr World"
 contexts = ["workspace"]
-command = ["bash", "scripts/herdr-world-plugin.sh", "start"]
-
-[[actions]]
-id = "stop"
-title = "Stop Herdr World"
-contexts = ["workspace"]
-command = ["bash", "scripts/herdr-world-plugin.sh", "stop"]
+command = ["bun", "scripts/world-plugin.ts", "start"]
 
 [[actions]]
 id = "restart"
 title = "Restart Herdr World"
 contexts = ["workspace"]
-command = ["bash", "scripts/herdr-world-plugin.sh", "restart"]
+command = ["bun", "scripts/world-plugin.ts", "restart"]
 
 [[actions]]
 id = "status"
-title = "Herdr World Status"
+title = "Herdr World status"
 contexts = ["workspace"]
-command = ["bash", "scripts/herdr-world-plugin.sh", "status"]
+command = ["bun", "scripts/world-plugin.ts", "status"]
 
 [[actions]]
-id = "open"
-title = "Open Herdr World"
+id = "url"
+title = "Show Herdr World URL"
 contexts = ["workspace"]
-command = ["bash", "scripts/herdr-world-plugin.sh", "open"]
+command = ["bun", "scripts/world-plugin.ts", "url"]
 
 [[actions]]
-id = "doctor"
-title = "Diagnose Herdr World"
+id = "version"
+title = "Show Herdr World version"
 contexts = ["workspace"]
-command = ["bash", "scripts/herdr-world-plugin.sh", "doctor"]
+command = ["bun", "scripts/world-plugin.ts", "version"]
+
+[[actions]]
+id = "uninstall"
+title = "Uninstall Herdr World service"
+contexts = ["workspace"]
+command = ["bun", "scripts/world-plugin.ts", "uninstall"]

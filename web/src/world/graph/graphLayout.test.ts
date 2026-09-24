@@ -1,144 +1,121 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, test } from "bun:test";
+import {
+  graphBounds,
+  reconcileGraphLayout,
+  savedGraphPositions,
+  stepGraphLayout,
+} from "./graphLayout";
+import type { WorldGraphNode, WorldGraphProjection } from "./graphProjection";
 
-import type { HerdrGraphProjection, WorldGraphNode } from "./herdrGraphProjection";
-import { reconcileGraphLayout, stepGraphLayout } from "./graphLayout";
+describe("Graph force layout", () => {
+  test("seeds all three qualified tiers deterministically", () => {
+    const first = reconcileGraphLayout(null, projection(), new Set()).state;
+    const second = reconcileGraphLayout(null, projection(), new Set()).state;
+    expect([...first.nodes].map(([id, { x, y }]) => [id, x, y])).toEqual(
+      [...second.nodes].map(([id, { x, y }]) => [id, x, y]),
+    );
+    expect(first.nodes.size).toBe(4);
+    expect(first.edges).toHaveLength(3);
+    expect(graphBounds(first.nodes.values()).maxX).toBeGreaterThan(
+      graphBounds(first.nodes.values()).minX,
+    );
+  });
 
-describe("Graph layout reconciliation", () => {
-  it("reuses node objects and settled geometry for status-only revisions", () => {
-    const first = reconcileGraphLayout(null, projection("working"), new Set());
-    const agent = first.state.nodes.get("agent");
-    if (!agent) throw new Error("agent missing");
-    agent.x = 321;
-    agent.y = -45;
-    agent.pinned = true;
+  test("reuses settled nodes and pins across status-only refreshes", () => {
+    const first = reconcileGraphLayout(null, projection(), new Set()).state;
+    const leaf = first.nodes.get("leaf")!;
+    leaf.x = 321;
+    leaf.y = -87;
+    leaf.pinned = true;
+    const refreshed = projection();
+    refreshed.nodes.find(({ id }) => id === "leaf")!.status = "done";
+    const result = reconcileGraphLayout(first, refreshed, new Set());
 
-    const changed = reconcileGraphLayout(first.state, projection("blocked"), new Set());
-    expect(changed.topologyChanged).toBe(false);
-    expect(changed.state.nodes.get("agent")).toBe(agent);
-    expect(changed.state.nodes.get("agent")).toMatchObject({
+    expect(result.topologyChanged).toBe(false);
+    expect(result.state.nodes.get("leaf")).toBe(leaf);
+    expect(result.state.nodes.get("leaf")).toMatchObject({
       x: 321,
-      y: -45,
+      y: -87,
       pinned: true,
-      source: { status: "blocked" },
+      source: { status: "done" },
     });
+    expect(savedGraphPositions(result.state).leaf?.pinned).toBe(true);
   });
 
-  it("does not treat status-priority reordering as a topology change", () => {
-    const firstProjection = projection("idle", true);
-    const first = reconcileGraphLayout(null, firstProjection, new Set());
-    const reordered = {
-      ...firstProjection,
-      nodes: [firstProjection.nodes[0]!, firstProjection.nodes[2]!, firstProjection.nodes[1]!],
-      edges: [firstProjection.edges[1]!, firstProjection.edges[0]!],
-    };
+  test("hides complete descendant branches without dangling edges", () => {
+    const hostCollapsed = reconcileGraphLayout(
+      null,
+      projection(),
+      new Set(["host"]),
+    ).state;
+    expect([...hostCollapsed.nodes.keys()]).toEqual(["host"]);
+    expect(hostCollapsed.edges).toEqual([]);
 
-    const changed = reconcileGraphLayout(first.state, reordered, new Set());
-
-    expect(changed.topologyChanged).toBe(false);
-    expect(changed.state.nodes.get("agent")).toBe(first.state.nodes.get("agent"));
-    expect(changed.state.nodes.get("agent-2")).toBe(first.state.nodes.get("agent-2"));
-  });
-
-  it("adds and removes only affected topology and honors collapse", () => {
-    const first = reconcileGraphLayout(null, projection("working"), new Set());
-    const space = first.state.nodes.get("space");
-    const withSecond = reconcileGraphLayout(first.state, projection("working", true), new Set());
-    expect(withSecond.topologyChanged).toBe(true);
-    expect(withSecond.state.nodes.get("space")).toBe(space);
-    expect(withSecond.state.nodes.has("agent-2")).toBe(true);
-
-    const collapsed = reconcileGraphLayout(withSecond.state, projection("working", true), new Set(["space"]));
-    expect(collapsed.topologyChanged).toBe(true);
-    expect([...collapsed.state.nodes.keys()]).toEqual(["space"]);
-    expect(collapsed.state.edges).toHaveLength(0);
-  });
-
-  it("repels movable spaces away from pinned spaces without moving the pin", () => {
-    const pinnedSource = node({ id: "pinned", kind: "space", parentId: null, selectionKey: "pinned" });
-    const movableSource = node({ id: "movable", kind: "space", parentId: null, selectionKey: "movable" });
-    const pinned = {
-      id: "pinned",
-      source: pinnedSource,
-      kind: "space" as const,
-      parentId: null,
-      x: 0,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      pinned: true,
-    };
-    const movable = {
-      id: "movable",
-      source: movableSource,
-      kind: "space" as const,
-      parentId: null,
-      x: 40,
-      y: 0,
-      vx: 0,
-      vy: 0,
-      pinned: false,
-    };
-
-    stepGraphLayout({
-      nodes: new Map([[pinned.id, pinned], [movable.id, movable]]),
-      edges: [],
-      topologyKey: "two-spaces",
-    }, 1);
-
-    expect(pinned).toMatchObject({ x: 0, y: 0, vx: 0, vy: 0 });
-    expect(movable.x).toBeGreaterThan(40);
+    const spaceCollapsed = reconcileGraphLayout(
+      null,
+      projection(),
+      new Set(["space"]),
+    ).state;
+    expect([...spaceCollapsed.nodes.keys()]).toEqual(["host", "space"]);
+    expect(spaceCollapsed.edges).toEqual([
+      { sourceId: "host", targetId: "space", kind: "contains" },
+    ]);
+    expect(stepGraphLayout(spaceCollapsed, 1)).toBeGreaterThanOrEqual(0);
   });
 });
 
-function projection(status: WorldGraphNode["status"], includeSecond = false): HerdrGraphProjection {
-  const space = node({ id: "space", kind: "space", parentId: null, selectionKey: "space" });
-  const agent = node({ id: "agent", kind: "terminal", parentId: "space", selectionKey: "terminal", status });
-  const terminals = includeSecond
-    ? [agent, node({ id: "agent-2", kind: "terminal", parentId: "space", selectionKey: "terminal-2" })]
-    : [agent];
+function projection(): WorldGraphProjection {
+  const host = node("host", "host", null);
+  const space = node("space", "space", "host");
+  const leaf = node("leaf", "agent", "space");
+  const shell = node("shell", "terminal", "space");
   return {
     version: 1,
-    nodes: [space, ...terminals],
-    edges: terminals.map(({ id }) => ({ sourceId: "space", targetId: id, kind: "contains" })),
-    spaces: [{ node: space, terminals, observedTerminalCount: terminals.length, omittedTerminalCount: 0 }],
+    nodes: [host, space, leaf, shell],
+    edges: [
+      { sourceId: "host", targetId: "space", kind: "contains" },
+      { sourceId: "space", targetId: "leaf", kind: "contains" },
+      { sourceId: "space", targetId: "shell", kind: "contains" },
+    ],
+    hosts: [],
+    spaces: [],
+    omittedHostCount: 0,
     omittedSpaceCount: 0,
     coverage: {
+      configuredHosts: 1,
+      presentedHosts: 1,
       observedSpaces: 1,
       presentedSpaces: 1,
-      observedAgents: terminals.length,
-      presentedAgents: terminals.length,
+      observedAgents: 1,
+      presentedAgents: 1,
       omittedAgents: 0,
-      omittedAgentsInPresentedSpaces: 0,
-      omittedAgentsInOmittedSpaces: 0,
-      observedTerminals: terminals.length,
-      presentedTerminals: terminals.length,
+      observedTerminals: 2,
+      presentedTerminals: 2,
       omittedTerminals: 0,
-      observedShells: 0,
-      presentedShells: 0,
-      status: { idle: 0, working: 1, blocked: 0, done: 0, unknown: 0 },
+      observedShells: 1,
+      presentedShells: 1,
     },
-    presentationBounds: { spaces: 128, terminalsPerSpace: 16 },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
 }
 
-function node(overrides: Partial<WorldGraphNode> & Pick<WorldGraphNode, "id" | "kind" | "parentId" | "selectionKey">): WorldGraphNode {
+function node(
+  id: string,
+  kind: WorldGraphNode["kind"],
+  parentId: string | null,
+): WorldGraphNode {
   return {
-    hostKey: "host",
-    hostLabel: "Host",
-    label: overrides.id,
-    status: "unknown",
+    id,
+    kind,
+    parentId,
+    label: id,
+    hostLabel: "host",
+    status: "working",
     focused: false,
     stale: false,
-    disconnected: false,
-    connectionState: "compatible",
-    actionable: false,
+    actionable: true,
     omittedChildCount: 0,
-    searchText: overrides.id,
-    handoff: null,
-    ...overrides,
-    paneId: overrides.paneId ?? (overrides.kind === "terminal" ? overrides.id : null),
-    observedGeneration: overrides.observedGeneration ?? "generation",
-    agentRunning: overrides.agentRunning ?? overrides.kind === "terminal",
-    agentKind: overrides.agentKind ?? null,
+    searchText: id,
+    source: {} as WorldGraphNode["source"],
   };
 }

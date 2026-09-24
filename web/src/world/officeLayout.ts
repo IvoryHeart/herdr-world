@@ -126,7 +126,10 @@ export type NormalizedOfficeContentItemDescriptor = Omit<
   valid: boolean;
 };
 
-export type NormalizedOfficeGeometryRoomDescriptor = Omit<OfficeGeometryRoomDescriptor, "contentItems"> & {
+export type NormalizedOfficeGeometryRoomDescriptor = Omit<
+  OfficeGeometryRoomDescriptor,
+  "contentItems"
+> & {
   contentItems: readonly NormalizedOfficeContentItemDescriptor[];
   contentItemCount: number;
   sourceIndex: number;
@@ -150,7 +153,9 @@ export type OfficeGeometryOmissionSummary = {
   byReason: Partial<Record<OfficeGeometryOmissionReason, number>>;
   byImportance: Partial<Record<OfficeContentImportance, number>>;
   samples: Partial<Record<OfficeGeometryOmissionReason, readonly string[]>>;
-  samplesByImportance: Partial<Record<OfficeContentImportance, readonly string[]>>;
+  samplesByImportance: Partial<
+    Record<OfficeContentImportance, readonly string[]>
+  >;
 };
 
 export type OfficeContentItemRect = OfficeRect & {
@@ -177,7 +182,7 @@ export type OfficeGeometryResult = {
   contentItems: readonly OfficeContentItemRect[];
   omissions: readonly OfficeGeometryOmission[];
   omissionSummary: OfficeGeometryOmissionSummary;
-  normalizationErrors: readonly ("invalid-style-capacity")[];
+  normalizationErrors: readonly "invalid-style-capacity"[];
   fallbackMessage: string | null;
   accessibleOverflow: OfficeOverflowMarker | null;
   resolvedCanvasWidth: number;
@@ -198,7 +203,7 @@ export type PublishedOfficeLayout = OfficeLayout & {
   contentItems: readonly OfficeContentItemRect[];
   omissions: readonly OfficeGeometryOmission[];
   omissionSummary: OfficeGeometryOmissionSummary;
-  normalizationErrors: readonly ("invalid-style-capacity")[];
+  normalizationErrors: readonly "invalid-style-capacity"[];
   fallbackMessage: string | null;
   accessibleOverflow: OfficeOverflowMarker | null;
   resolvedCanvasWidth: number;
@@ -250,17 +255,23 @@ function normalizeFullOfficeGeometryInput(
     style.fixedHeaderChromeWidth,
     style.roomSafeInset,
   );
-  const minimumRoomWidth = Math.min(HARD_MAX_ROOM_WIDTH, Math.max(
-    OFFICE_GEOMETRY.minRoomWidth,
-    minimumHeaderRoomWidth,
-    style.overflowMarkerMinWidth,
-  ));
-  const minimumRoomHeight = Math.min(HARD_MAX_ROOM_HEIGHT, Math.max(
-    OFFICE_GEOMETRY.minRoomHeight,
-    style.fixedHeaderChromeHeight +
-      style.overflowMarkerMinHeight +
-      style.overflowMarkerGap,
-  ));
+  const minimumRoomWidth = Math.min(
+    HARD_MAX_ROOM_WIDTH,
+    Math.max(
+      OFFICE_GEOMETRY.minRoomWidth,
+      minimumHeaderRoomWidth,
+      style.overflowMarkerMinWidth,
+    ),
+  );
+  const minimumRoomHeight = Math.min(
+    HARD_MAX_ROOM_HEIGHT,
+    Math.max(
+      OFFICE_GEOMETRY.minRoomHeight,
+      style.fixedHeaderChromeHeight +
+        style.overflowMarkerMinHeight +
+        style.overflowMarkerGap,
+    ),
+  );
   const requestedRoomWidthCap = normalizeMetric(
     input.maximumExpandedRoomWidth,
     HARD_MAX_ROOM_WIDTH,
@@ -291,22 +302,40 @@ function normalizeFullOfficeGeometryInput(
     OFFICE_GEOMETRY.ceoBandHeight + OFFICE_GEOMETRY.hallwayHeight,
     HARD_MAX_HEIGHT,
   );
-  const maximumExpandedCanvasWidth = Math.min(HARD_MAX_WIDTH, Math.max(
-    minimumLogicalCanvasWidth,
-    minimumRoomWidth,
-    normalizeMetric(input.maximumExpandedCanvasWidth, HARD_MAX_WIDTH, HARD_MAX_WIDTH),
-  ));
-  const maximumExpandedCanvasHeight = Math.min(HARD_MAX_HEIGHT, Math.max(
-    minimumLogicalCanvasHeight,
-    minimumRoomHeight,
-    normalizeMetric(input.maximumExpandedCanvasHeight, HARD_MAX_HEIGHT, HARD_MAX_HEIGHT),
-  ));
+  const maximumExpandedCanvasWidth = Math.min(
+    HARD_MAX_WIDTH,
+    Math.max(
+      minimumLogicalCanvasWidth,
+      minimumRoomWidth,
+      normalizeMetric(
+        input.maximumExpandedCanvasWidth,
+        HARD_MAX_WIDTH,
+        HARD_MAX_WIDTH,
+      ),
+    ),
+  );
+  const maximumExpandedCanvasHeight = Math.min(
+    HARD_MAX_HEIGHT,
+    Math.max(
+      minimumLogicalCanvasHeight,
+      minimumRoomHeight,
+      normalizeMetric(
+        input.maximumExpandedCanvasHeight,
+        HARD_MAX_HEIGHT,
+        HARD_MAX_HEIGHT,
+      ),
+    ),
+  );
   const maximumExpandedRoomWidth = Math.min(
     HARD_MAX_ROOM_WIDTH,
     maximumExpandedCanvasWidth,
     Math.max(
       minimumRoomWidth,
-      normalizeMetric(input.maximumExpandedRoomWidth, HARD_MAX_ROOM_WIDTH, HARD_MAX_ROOM_WIDTH),
+      normalizeMetric(
+        input.maximumExpandedRoomWidth,
+        HARD_MAX_ROOM_WIDTH,
+        HARD_MAX_ROOM_WIDTH,
+      ),
     ),
   );
   const maximumExpandedRoomHeight = Math.min(
@@ -314,10 +343,17 @@ function normalizeFullOfficeGeometryInput(
     maximumExpandedCanvasHeight,
     Math.max(
       minimumRoomHeight,
-      normalizeMetric(input.maximumExpandedRoomHeight, HARD_MAX_ROOM_HEIGHT, HARD_MAX_ROOM_HEIGHT),
+      normalizeMetric(
+        input.maximumExpandedRoomHeight,
+        HARD_MAX_ROOM_HEIGHT,
+        HARD_MAX_ROOM_HEIGHT,
+      ),
     ),
   );
-  const maxContentItems = normalizeCapacity(input.maxContentItems, DEFAULT_MAX_CONTENT_ITEMS);
+  const maxContentItems = normalizeCapacity(
+    input.maxContentItems,
+    DEFAULT_MAX_CONTENT_ITEMS,
+  );
   const maxLayoutRows = Math.max(
     1,
     Math.min(
@@ -326,12 +362,14 @@ function normalizeFullOfficeGeometryInput(
     ),
   );
   const rooms = input.rooms
-    .map((room, index) => normalizeRoomDescriptor(
-      room,
-      index,
-      maximumExpandedRoomWidth,
-      maximumExpandedRoomHeight,
-    ))
+    .map((room, index) =>
+      normalizeRoomDescriptor(
+        room,
+        index,
+        maximumExpandedRoomWidth,
+        maximumExpandedRoomHeight,
+      ),
+    )
     .sort(compareRoomDescriptors)
     .slice(0, OFFICE_GEOMETRY.maxRooms);
   return {
@@ -359,13 +397,21 @@ function normalizeFullOfficeGeometryInput(
     fontKey: input.fontKey ?? "Inter, ui-sans-serif, system-ui, sans-serif",
     fontReady: input.fontReady !== false,
     titleMode: input.titleMode === "compact" ? "compact" : "expand",
-    roomAlignment: input.roomAlignment === "center" || input.roomAlignment === "right"
-      ? input.roomAlignment
-      : "left",
-    ceoReceptionCount: normalizeMetric(input.ceoReceptionCount, 0, OFFICE_GEOMETRY.maxReceptionDesks),
-    ceoContentItems: (input.ceoContentItems ?? []).map((item, index) => normalizeContentDescriptor(item, index)),
+    roomAlignment:
+      input.roomAlignment === "center" || input.roomAlignment === "right"
+        ? input.roomAlignment
+        : "left",
+    ceoReceptionCount: normalizeMetric(
+      input.ceoReceptionCount,
+      0,
+      OFFICE_GEOMETRY.maxReceptionDesks,
+    ),
+    ceoContentItems: (input.ceoContentItems ?? []).map((item, index) =>
+      normalizeContentDescriptor(item, index),
+    ),
     ceoContentItemCount: input.ceoContentItems?.length ?? 0,
-    styleCapacityInvalid: minimumHeaderRoomWidth > HARD_MAX_ROOM_WIDTH ||
+    styleCapacityInvalid:
+      minimumHeaderRoomWidth > HARD_MAX_ROOM_WIDTH ||
       requestedRoomWidthCap < minimumHeaderRoomWidth ||
       requestedCanvasWidthCap < minimumHeaderRoomWidth ||
       requestedRoomWidthCap < minimumRoomWidth ||
@@ -380,41 +426,60 @@ function normalizeFullOfficeGeometryInput(
 export function normalizeOfficeGeometryInput(
   input: OfficeGeometryInput,
 ): NormalizedOfficeGeometryInput {
-  return boundNormalizedOfficeGeometryInput(normalizeFullOfficeGeometryInput(input));
+  return boundNormalizedOfficeGeometryInput(
+    normalizeFullOfficeGeometryInput(input),
+  );
 }
 
-export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometryResult {
+export function resolveOfficeGeometry(
+  input: OfficeGeometryInput,
+): OfficeGeometryResult {
   const normalizedInput = normalizeFullOfficeGeometryInput(input);
   const inputDigest = stableDigest(canonicalSerialize(normalizedInput));
-  const boundedNormalizedInput = boundNormalizedOfficeGeometryInput(normalizedInput);
-  const styleInvalid = normalizedInput.minimumRoomWidth > normalizedInput.maximumExpandedRoomWidth
-    || normalizedInput.styleCapacityInvalid
-    || normalizedInput.style.fixedHeaderChromeHeight +
-      normalizedInput.style.overflowMarkerMinHeight + normalizedInput.style.overflowMarkerGap >
+  const boundedNormalizedInput =
+    boundNormalizedOfficeGeometryInput(normalizedInput);
+  const styleInvalid =
+    normalizedInput.minimumRoomWidth >
+      normalizedInput.maximumExpandedRoomWidth ||
+    normalizedInput.styleCapacityInvalid ||
+    normalizedInput.style.fixedHeaderChromeHeight +
+      normalizedInput.style.overflowMarkerMinHeight +
+      normalizedInput.style.overflowMarkerGap >
       normalizedInput.maximumExpandedRoomHeight;
   const baseWidth = Math.min(
     normalizedInput.maximumExpandedCanvasWidth,
     Math.max(
       normalizedInput.minimumLogicalCanvasWidth,
       normalizedInput.availableViewportWidth,
-      ...normalizedInput.rooms.map((room) => Math.max(
-        resolveOfficeRoomHeader(room, normalizedInput).width,
-        room.headerMinWidth ?? 0,
-        room.headerMinTitleBoxWidth ?? 0,
-        room.contentMinWidth ?? 0,
-        minimumContentWidth(room.contentItems, room.flow, normalizedInput.maxContentItems) +
-          OFFICE_GEOMETRY.roomPadding * 2,
-        room.preferredWidth ?? 0,
-      ) + 24),
+      ...normalizedInput.rooms.map(
+        (room) =>
+          Math.max(
+            resolveOfficeRoomHeader(room, normalizedInput).width,
+            room.headerMinWidth ?? 0,
+            room.headerMinTitleBoxWidth ?? 0,
+            room.contentMinWidth ?? 0,
+            minimumContentWidth(
+              room.contentItems,
+              room.flow,
+              normalizedInput.maxContentItems,
+            ) +
+              OFFICE_GEOMETRY.roomPadding * 2,
+            room.preferredWidth ?? 0,
+          ) + 24,
+      ),
       minimumContentWidth(
         normalizedInput.ceoContentItems,
         "wrap-row",
         normalizedInput.maxContentItems,
-      ) + OFFICE_GEOMETRY.ceoEdgePadding * 2,
+      ) +
+        OFFICE_GEOMETRY.ceoEdgePadding * 2,
     ),
   );
-  const invalidMinimumCapacity = normalizedInput.minimumRoomWidth > normalizedInput.maximumExpandedRoomWidth ||
-    normalizedInput.minimumRoomHeight > normalizedInput.maximumExpandedRoomHeight;
+  const invalidMinimumCapacity =
+    normalizedInput.minimumRoomWidth >
+      normalizedInput.maximumExpandedRoomWidth ||
+    normalizedInput.minimumRoomHeight >
+      normalizedInput.maximumExpandedRoomHeight;
   if (styleInvalid || invalidMinimumCapacity) {
     const fallbackLayout = resolveOfficeLayout(
       normalizedInput.minimumLogicalCanvasWidth,
@@ -424,14 +489,17 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
       0,
       normalizedInput.maximumExpandedCanvasHeight,
     );
-    const fallback = withLayoutBounds({
-      ...fallbackLayout,
-      totalHeight: Math.min(
-        normalizedInput.maximumExpandedCanvasHeight,
-        fallbackLayout.totalHeight,
-      ),
-      fallbackMessage: "Office layout unavailable",
-    }, []);
+    const fallback = withLayoutBounds(
+      {
+        ...fallbackLayout,
+        totalHeight: Math.min(
+          normalizedInput.maximumExpandedCanvasHeight,
+          fallbackLayout.totalHeight,
+        ),
+        fallbackMessage: "Office layout unavailable",
+      },
+      [],
+    );
     fallback.ceoOverflowMarkerRect = overflowMarkerRect(
       contentRegionRoom(fallback, fallback.ceoContentRect, -1),
       normalizedInput,
@@ -450,7 +518,10 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
       omissionSummary: emptyOmissionSummary(),
       normalizationErrors: ["invalid-style-capacity"],
       fallbackMessage: "Office layout unavailable",
-      accessibleOverflow: { label: "Office layout unavailable", required: true },
+      accessibleOverflow: {
+        label: "Office layout unavailable",
+        required: true,
+      },
       resolvedCanvasWidth: fallback.officeWidth,
       resolvedCanvasHeight: fallback.totalHeight,
     };
@@ -478,7 +549,11 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
     headerMinHeight: room.headerMinHeight,
     contentMinWidth: Math.max(
       room.contentMinWidth ?? 0,
-      minimumContentWidth(room.contentItems, room.flow, normalizedInput.maxContentItems) +
+      minimumContentWidth(
+        room.contentItems,
+        room.flow,
+        normalizedInput.maxContentItems,
+      ) +
         OFFICE_GEOMETRY.roomPadding * 2,
     ),
     preferredWidth: Math.min(
@@ -504,12 +579,15 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
     ),
   );
   const omissionAccumulator = createOmissionAccumulator();
-  const availableRooms = baseLayout.rooms.filter((room) =>
-    room.row < normalizedInput.maxLayoutRows &&
-    room.y + room.height <= normalizedInput.maximumExpandedCanvasHeight,
+  const availableRooms = baseLayout.rooms.filter(
+    (room) =>
+      room.row < normalizedInput.maxLayoutRows &&
+      room.y + room.height <= normalizedInput.maximumExpandedCanvasHeight,
   );
   normalizedInput.rooms.forEach((room) => {
-    if (!availableRooms.some((candidate) => candidate.index === room.sourceIndex)) {
+    if (
+      !availableRooms.some((candidate) => candidate.index === room.sourceIndex)
+    ) {
       omissionAccumulator.add({
         reason: "canvas-capacity-exhausted",
         importance: "required",
@@ -517,30 +595,47 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
       });
     }
   });
-  const layout = withLayoutBounds({
-    ...baseLayout,
-    officeWidth: baseWidth,
-    totalHeight: Math.min(
-      normalizedInput.maximumExpandedCanvasHeight,
-      Math.max(baseLayout.totalHeight, normalizedInput.minimumLogicalCanvasHeight),
+  const layout = withLayoutBounds(
+    {
+      ...baseLayout,
+      officeWidth: baseWidth,
+      totalHeight: Math.min(
+        normalizedInput.maximumExpandedCanvasHeight,
+        Math.max(
+          baseLayout.totalHeight,
+          normalizedInput.minimumLogicalCanvasHeight,
+        ),
+      ),
+      rooms: availableRooms,
+    },
+    normalizedInput.rooms.reduce<(OfficeRoomHeaderLayout | null)[]>(
+      (headers, room) => {
+        headers[room.sourceIndex] = resolveOfficeRoomHeader(
+          room,
+          normalizedInput,
+        );
+        return headers;
+      },
+      [],
     ),
-    rooms: availableRooms,
-  }, normalizedInput.rooms.reduce<(OfficeRoomHeaderLayout | null)[]>((headers, room) => {
-    headers[room.sourceIndex] = resolveOfficeRoomHeader(room, normalizedInput);
-    return headers;
-  }, []));
+  );
   const contentItems: OfficeContentItemRect[] = [];
   normalizedInput.rooms.forEach((room) => {
     const rect = layout.rooms.find(({ index }) => index === room.sourceIndex);
     if (!rect) {
       return;
     }
-    const selectedItems = normalizeContentItems(room.contentItems ?? [], normalizedInput.maxContentItems);
-    selectedItems.omitted.forEach((item) => omissionAccumulator.add({
-      reason: "content-item-count-cap",
-      importance: item.importance,
-      id: item.id,
-    }));
+    const selectedItems = normalizeContentItems(
+      room.contentItems ?? [],
+      normalizedInput.maxContentItems,
+    );
+    selectedItems.omitted.forEach((item) =>
+      omissionAccumulator.add({
+        reason: "content-item-count-cap",
+        importance: item.importance,
+        id: item.id,
+      }),
+    );
     const placed = placeContentItems(
       rect,
       room,
@@ -549,7 +644,10 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
     );
     placed.items.forEach((item) => contentItems.push(item));
     placed.omissions.forEach((omission) => omissionAccumulator.add(omission));
-    if (placed.requiredOverflow || selectedItems.omitted.some(({ importance }) => importance === "required")) {
+    if (
+      placed.requiredOverflow ||
+      selectedItems.omitted.some(({ importance }) => importance === "required")
+    ) {
       rect.overflowMarkerRect = overflowMarkerRect(rect, normalizedInput);
     }
   });
@@ -578,12 +676,17 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
     standingCount: 0,
     contentItems: normalizedInput.ceoContentItems,
   };
-  const ceoItems = normalizeContentItems(normalizedInput.ceoContentItems, normalizedInput.maxContentItems);
-  ceoItems.omitted.forEach((item) => omissionAccumulator.add({
-    reason: "content-item-count-cap",
-    importance: item.importance,
-    id: item.id,
-  }));
+  const ceoItems = normalizeContentItems(
+    normalizedInput.ceoContentItems,
+    normalizedInput.maxContentItems,
+  );
+  ceoItems.omitted.forEach((item) =>
+    omissionAccumulator.add({
+      reason: "content-item-count-cap",
+      importance: item.importance,
+      id: item.id,
+    }),
+  );
   const ceoPlaced = placeContentItems(
     contentRegionRoom(layout, layout.ceoContentRect, -1),
     ceoDescriptor,
@@ -629,11 +732,17 @@ export function resolveOfficeGeometry(input: OfficeGeometryInput): OfficeGeometr
 }
 
 export function resolveOfficeRoomHeader(
-  room: Pick<OfficeGeometryRoomDescriptor, "title" | "hostTitle" | "visualTitle" | "visualHostTitle"> & {
+  room: Pick<
+    OfficeGeometryRoomDescriptor,
+    "title" | "hostTitle" | "visualTitle" | "visualHostTitle"
+  > & {
     headerMinWidth?: number;
     headerMinTitleBoxWidth?: number;
   },
-  input: Pick<NormalizedOfficeGeometryInput, "titleMode" | "maximumExpandedRoomWidth" | "style" | "fontKey" | "fontReady">,
+  input: Pick<
+    NormalizedOfficeGeometryInput,
+    "titleMode" | "maximumExpandedRoomWidth" | "style" | "fontKey" | "fontReady"
+  >,
 ): OfficeRoomHeaderLayout {
   const { workspace, host } = officeHeaderLabels(
     String(room.title ?? "ROOM"),
@@ -652,15 +761,21 @@ export function resolveOfficeRoomHeader(
   );
   const maxTitleBoxWidth = Math.max(
     titleChromeWidth,
-    maxWidth - input.style.roomSafeInset * 2 -
+    maxWidth -
+      input.style.roomSafeInset * 2 -
       2 * (actionWidth + actionGap + actionWidth + closeGap),
   );
   let titleBoxWidth = Math.max(
     titleChromeWidth,
     room.headerMinTitleBoxWidth ?? 0,
-    titleChromeWidth + measureOfficeText(visualWorkspace) + measureOfficeText(visualHost),
+    titleChromeWidth +
+      measureOfficeText(visualWorkspace) +
+      measureOfficeText(visualHost),
   );
-  let width = minimumRoomWidthForTitleBox(titleBoxWidth, input.style.roomSafeInset);
+  let width = minimumRoomWidthForTitleBox(
+    titleBoxWidth,
+    input.style.roomSafeInset,
+  );
   let emergencyEllipsis = false;
   if (titleBoxWidth > maxTitleBoxWidth) {
     emergencyEllipsis = true;
@@ -671,9 +786,14 @@ export function resolveOfficeRoomHeader(
     visualHost = fitOfficeLabel(visualHost, hostBudget);
     titleBoxWidth = Math.min(
       maxTitleBoxWidth,
-      titleChromeWidth + measureOfficeText(visualWorkspace) + measureOfficeText(visualHost),
+      titleChromeWidth +
+        measureOfficeText(visualWorkspace) +
+        measureOfficeText(visualHost),
     );
-    width = minimumRoomWidthForTitleBox(titleBoxWidth, input.style.roomSafeInset);
+    width = minimumRoomWidthForTitleBox(
+      titleBoxWidth,
+      input.style.roomSafeInset,
+    );
   }
   width = Math.max(width, room.headerMinWidth ?? 0);
   return {
@@ -689,7 +809,10 @@ export function resolveOfficeRoomHeader(
     actionWidth,
     actionGap,
     closeGap,
-    height: Math.max(OFFICE_GEOMETRY.roomHeaderHeight, input.style.fixedHeaderChromeHeight),
+    height: Math.max(
+      OFFICE_GEOMETRY.roomHeaderHeight,
+      input.style.fixedHeaderChromeHeight,
+    ),
     emergencyEllipsis,
   };
 }
@@ -701,7 +824,8 @@ export function officeHeaderLabels(
 ) {
   return {
     workspace: titleMode === "compact" ? compactOfficeLabel(title, 18) : title,
-    host: titleMode === "compact" ? compactOfficeLabel(hostTitle, 16) : hostTitle,
+    host:
+      titleMode === "compact" ? compactOfficeLabel(hostTitle, 16) : hostTitle,
   };
 }
 
@@ -711,11 +835,19 @@ export class OfficeLayoutPublisher {
   private currentLayout: PublishedOfficeLayout | null = null;
   private renderedRevision = 0;
 
-  publish(generation: OfficeInputGeneration, geometry: OfficeGeometryResult): PublishedOfficeLayout {
+  publish(
+    generation: OfficeInputGeneration,
+    geometry: OfficeGeometryResult,
+  ): PublishedOfficeLayout {
     if (geometry.inputDigest !== generation.canonicalDigest) {
-      throw new Error("Office layout geometry does not match its input generation.");
+      throw new Error(
+        "Office layout geometry does not match its input generation.",
+      );
     }
-    if (this.currentLayout && this.currentDigest === generation.canonicalDigest) {
+    if (
+      this.currentLayout &&
+      this.currentDigest === generation.canonicalDigest
+    ) {
       return this.currentLayout;
     }
     this.revision += 1;
@@ -737,7 +869,9 @@ export class OfficeLayoutPublisher {
       resolvedCanvasWidth: geometry.resolvedCanvasWidth,
       resolvedCanvasHeight: geometry.resolvedCanvasHeight,
     };
-    this.currentLayout = deepFreeze(cloneValue(snapshot)) as PublishedOfficeLayout;
+    this.currentLayout = deepFreeze(
+      cloneValue(snapshot),
+    ) as PublishedOfficeLayout;
     return this.currentLayout;
   }
 
@@ -754,7 +888,10 @@ export class OfficeLayoutPublisher {
   }
 
   isCanvasReady(revision: number) {
-    return this.currentLayout?.layoutRevision === revision && this.renderedRevision === revision;
+    return (
+      this.currentLayout?.layoutRevision === revision &&
+      this.renderedRevision === revision
+    );
   }
 }
 
@@ -774,7 +911,9 @@ function cloneValue<T>(value: T): T {
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === "object" && !Object.isFrozen(value)) {
-    Object.values(value as Record<string, unknown>).forEach((child) => deepFreeze(child));
+    Object.values(value as Record<string, unknown>).forEach((child) =>
+      deepFreeze(child),
+    );
     Object.freeze(value);
   }
   return value;
@@ -784,17 +923,28 @@ function normalizeContentItems(
   items: readonly OfficeContentItemLike[],
   maxContentItems: number,
 ) {
-  const normalized = items.map((item, index) => normalizeContentDescriptor(item, index));
+  const normalized = items.map((item, index) =>
+    normalizeContentDescriptor(item, index),
+  );
   const ordered = [...normalized].sort((left, right) => {
-    const importance = importanceRank(isImportance(left.importance) ? left.importance : "optional") -
-      importanceRank(isImportance(right.importance) ? right.importance : "optional");
+    const importance =
+      importanceRank(
+        isImportance(left.importance) ? left.importance : "optional",
+      ) -
+      importanceRank(
+        isImportance(right.importance) ? right.importance : "optional",
+      );
     if (importance !== 0) {
       return importance;
     }
     if (left.importance === "required" && right.importance === "required") {
       return left.order - right.order || left.id.localeCompare(right.id);
     }
-    return right.priority - left.priority || left.order - right.order || left.id.localeCompare(right.id);
+    return (
+      right.priority - left.priority ||
+      left.order - right.order ||
+      left.id.localeCompare(right.id)
+    );
   });
   return {
     selected: ordered.slice(0, maxContentItems),
@@ -819,9 +969,15 @@ function placeContentItems(
   const gap = 8;
   const flow = descriptor.flow ?? "wrap-row";
   items.forEach((item) => {
-    const importance = isImportance(item.importance) ? item.importance : "optional";
+    const importance = isImportance(item.importance)
+      ? item.importance
+      : "optional";
     if (!item.valid) {
-      omissions.push({ reason: "invalid-content-descriptor", importance, id: item.id });
+      omissions.push({
+        reason: "invalid-content-descriptor",
+        importance,
+        id: item.id,
+      });
       if (importance === "required") {
         requiredOverflow = true;
       }
@@ -833,9 +989,10 @@ function placeContentItems(
       item.minWidth > room.contentSafeRect.width ||
       item.minHeight > room.contentSafeRect.height
     ) {
-      const reason: OfficeGeometryOmissionReason = importance === "required"
-        ? "required-minimum-exceeds-room-cap"
-        : "non-required-minimum-exceeds-room-cap";
+      const reason: OfficeGeometryOmissionReason =
+        importance === "required"
+          ? "required-minimum-exceeds-room-cap"
+          : "non-required-minimum-exceeds-room-cap";
       omissions.push({ reason, importance, id: item.id });
       if (importance === "required") {
         requiredOverflow = true;
@@ -851,18 +1008,25 @@ function placeContentItems(
       0,
       room.contentSafeRect.x + availableWidth - cursorX,
     );
-    const width = descriptor.spanPolicy === "multi-row"
-      ? availableWidth
-      : descriptor.spanPolicy === "remaining" && rowItemCount > 0
-        ? Math.max(item.minWidth, Math.min(preferredWidth, remainingWidth))
-        : preferredWidth;
-    const height = Math.max(item.minHeight, Math.min(item.preferredHeight, input.maximumExpandedRoomHeight));
-    const wouldWrap = flow === "column"
-      ? rowItemCount > 0
-      : flow === "wrap-row" || flow === "grid"
-        ? rowItemCount > 0 && cursorX + width > room.contentSafeRect.x + availableWidth
-        : false;
-    const spansCurrentRow = descriptor.spanPolicy === "multi-row" && rowItemCount > 0;
+    const width =
+      descriptor.spanPolicy === "multi-row"
+        ? availableWidth
+        : descriptor.spanPolicy === "remaining" && rowItemCount > 0
+          ? Math.max(item.minWidth, Math.min(preferredWidth, remainingWidth))
+          : preferredWidth;
+    const height = Math.max(
+      item.minHeight,
+      Math.min(item.preferredHeight, input.maximumExpandedRoomHeight),
+    );
+    const wouldWrap =
+      flow === "column"
+        ? rowItemCount > 0
+        : flow === "wrap-row" || flow === "grid"
+          ? rowItemCount > 0 &&
+            cursorX + width > room.contentSafeRect.x + availableWidth
+          : false;
+    const spansCurrentRow =
+      descriptor.spanPolicy === "multi-row" && rowItemCount > 0;
     if (wouldWrap || spansCurrentRow) {
       rowIndex += 1;
       cursorX = room.contentSafeRect.x;
@@ -870,8 +1034,16 @@ function placeContentItems(
       rowHeight = 0;
       rowItemCount = 0;
     }
-    if (flow === "row" && rowItemCount > 0 && cursorX + width > room.contentSafeRect.x + availableWidth) {
-      omissions.push({ reason: "canvas-capacity-exhausted", importance, id: item.id });
+    if (
+      flow === "row" &&
+      rowItemCount > 0 &&
+      cursorX + width > room.contentSafeRect.x + availableWidth
+    ) {
+      omissions.push({
+        reason: "canvas-capacity-exhausted",
+        importance,
+        id: item.id,
+      });
       if (importance === "required") {
         requiredOverflow = true;
       }
@@ -881,7 +1053,11 @@ function placeContentItems(
       rowIndex >= input.maxLayoutRows ||
       cursorY + height > room.contentSafeRect.y + room.contentSafeRect.height
     ) {
-      omissions.push({ reason: "canvas-capacity-exhausted", importance, id: item.id });
+      omissions.push({
+        reason: "canvas-capacity-exhausted",
+        importance,
+        id: item.id,
+      });
       if (importance === "required") {
         requiredOverflow = true;
       }
@@ -891,8 +1067,14 @@ function placeContentItems(
     const clipRect = {
       x: Math.max(room.clipRect.x, rect.x),
       y: Math.max(room.clipRect.y, rect.y),
-      width: Math.min(rect.width, room.clipRect.x + room.clipRect.width - rect.x),
-      height: Math.min(rect.height, room.clipRect.y + room.clipRect.height - rect.y),
+      width: Math.min(
+        rect.width,
+        room.clipRect.x + room.clipRect.width - rect.x,
+      ),
+      height: Math.min(
+        rect.height,
+        room.clipRect.y + room.clipRect.height - rect.y,
+      ),
     };
     result.push({
       ...rect,
@@ -936,11 +1118,18 @@ function estimateCeoBandHeight(
   let contentHeight = 0;
   let rowHeight = 0;
   selected.forEach((item) => {
-    if (!item.valid || item.minWidth > width || item.minHeight > input.maximumExpandedRoomHeight) {
+    if (
+      !item.valid ||
+      item.minWidth > width ||
+      item.minHeight > input.maximumExpandedRoomHeight
+    ) {
       return;
     }
     const itemWidth = Math.min(item.preferredWidth, width);
-    const itemHeight = Math.min(item.preferredHeight, input.maximumExpandedRoomHeight);
+    const itemHeight = Math.min(
+      item.preferredHeight,
+      input.maximumExpandedRoomHeight,
+    );
     if (cursorX > 0 && cursorX + itemWidth > width) {
       contentHeight += rowHeight + gap;
       cursorX = 0;
@@ -957,7 +1146,11 @@ function estimateCeoBandHeight(
   );
 }
 
-function contentRegionRoom(layout: OfficeLayout, contentRect: OfficeRect, index: number): OfficeRoomRect {
+function contentRegionRoom(
+  layout: OfficeLayout,
+  contentRect: OfficeRect,
+  index: number,
+): OfficeRoomRect {
   return {
     index,
     column: 0,
@@ -1013,22 +1206,33 @@ export function minimumRoomWidthForTitleBox(
 ) {
   return Math.ceil(
     Math.max(0, titleBoxWidth) +
-      2 * (
-        OFFICE_GEOMETRY.roomHeaderActionWidth +
-        OFFICE_GEOMETRY.roomHeaderActionGap +
-        OFFICE_GEOMETRY.roomHeaderActionWidth +
-        OFFICE_GEOMETRY.roomHeaderCloseGap
-      ) +
+      2 *
+        (OFFICE_GEOMETRY.roomHeaderActionWidth +
+          OFFICE_GEOMETRY.roomHeaderActionGap +
+          OFFICE_GEOMETRY.roomHeaderActionWidth +
+          OFFICE_GEOMETRY.roomHeaderCloseGap) +
       Math.max(0, roomSafeInset) * 2,
   );
 }
 
-function overflowMarkerRect(room: OfficeRoomRect, input: NormalizedOfficeGeometryInput): OfficeRect {
-  const width = Math.min(input.style.overflowMarkerMinWidth, room.contentSafeRect.width);
-  const height = Math.min(input.style.overflowMarkerMinHeight, room.contentSafeRect.height);
+function overflowMarkerRect(
+  room: OfficeRoomRect,
+  input: NormalizedOfficeGeometryInput,
+): OfficeRect {
+  const width = Math.min(
+    input.style.overflowMarkerMinWidth,
+    room.contentSafeRect.width,
+  );
+  const height = Math.min(
+    input.style.overflowMarkerMinHeight,
+    room.contentSafeRect.height,
+  );
   return {
     x: room.contentSafeRect.x,
-    y: Math.max(room.contentSafeRect.y, room.contentSafeRect.y + room.contentSafeRect.height - height),
+    y: Math.max(
+      room.contentSafeRect.y,
+      room.contentSafeRect.y + room.contentSafeRect.height - height,
+    ),
     width,
     height,
   };
@@ -1039,7 +1243,8 @@ function createOmissionAccumulator() {
   const byReason: OfficeGeometryOmissionSummary["byReason"] = {};
   const byImportance: OfficeGeometryOmissionSummary["byImportance"] = {};
   const samples: OfficeGeometryOmissionSummary["samples"] = {};
-  const samplesByImportance: OfficeGeometryOmissionSummary["samplesByImportance"] = {};
+  const samplesByImportance: OfficeGeometryOmissionSummary["samplesByImportance"] =
+    {};
   let total = 0;
   return {
     add({ reason, importance, id }: OfficeGeometryOmission) {
@@ -1049,15 +1254,21 @@ function createOmissionAccumulator() {
       if (id && (samples[reason]?.length ?? 0) < MAX_OMISSION_SAMPLES) {
         samples[reason] = [...(samples[reason] ?? []), id];
       }
-      if (id && (samplesByImportance[importance]?.length ?? 0) < MAX_OMISSION_SAMPLES) {
+      if (
+        id &&
+        (samplesByImportance[importance]?.length ?? 0) < MAX_OMISSION_SAMPLES
+      ) {
         samplesByImportance[importance] = [
           ...(samplesByImportance[importance] ?? []),
           id,
         ];
       }
-      if ((records.filter((record) =>
-        record.reason === reason && record.importance === importance,
-      ).length) < MAX_OMISSION_SAMPLES) {
+      if (
+        records.filter(
+          (record) =>
+            record.reason === reason && record.importance === importance,
+        ).length < MAX_OMISSION_SAMPLES
+      ) {
         records.push({ reason, importance, id });
       }
     },
@@ -1071,7 +1282,13 @@ function createOmissionAccumulator() {
 }
 
 function emptyOmissionSummary(): OfficeGeometryOmissionSummary {
-  return { total: 0, byReason: {}, byImportance: {}, samples: {}, samplesByImportance: {} };
+  return {
+    total: 0,
+    byReason: {},
+    byImportance: {},
+    samples: {},
+    samplesByImportance: {},
+  };
 }
 
 function unionRects(left: OfficeRect, right: OfficeRect): OfficeRect {
@@ -1082,8 +1299,13 @@ function unionRects(left: OfficeRect, right: OfficeRect): OfficeRect {
   return { x, y, width: rightEdge - x, height: bottom - y };
 }
 
-function normalizeMetric(value: number | undefined, fallback: number, maximum: number) {
-  const numeric = typeof value === "number" && Number.isFinite(value) ? value : fallback;
+function normalizeMetric(
+  value: number | undefined,
+  fallback: number,
+  maximum: number,
+) {
+  const numeric =
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
   return Math.max(0, Math.min(maximum, Math.floor(numeric)));
 }
 
@@ -1093,21 +1315,30 @@ function normalizeRoomDescriptor(
   maximumRoomWidth: number,
   maximumRoomHeight: number,
 ): NormalizedOfficeGeometryRoomDescriptor {
-  const flow = room.flow === "row" || room.flow === "column" || room.flow === "grid"
-    || room.flow === "wrap-row"
-    ? room.flow
-    : undefined;
-  const spanPolicy = room.spanPolicy === "single" || room.spanPolicy === "multi-row"
-    || room.spanPolicy === "remaining"
-    ? room.spanPolicy
-    : undefined;
-  const region = room.region === "ceo" || room.region === "agent-bar" || room.region === "work"
-    ? room.region
-    : undefined;
+  const flow =
+    room.flow === "row" ||
+    room.flow === "column" ||
+    room.flow === "grid" ||
+    room.flow === "wrap-row"
+      ? room.flow
+      : undefined;
+  const spanPolicy =
+    room.spanPolicy === "single" ||
+    room.spanPolicy === "multi-row" ||
+    room.spanPolicy === "remaining"
+      ? room.spanPolicy
+      : undefined;
+  const region =
+    room.region === "ceo" ||
+    room.region === "agent-bar" ||
+    room.region === "work"
+      ? room.region
+      : undefined;
   return {
-    id: typeof room.id === "string" && room.id.trim().length > 0
-      ? room.id
-      : `room-${index}`,
+    id:
+      typeof room.id === "string" && room.id.trim().length > 0
+        ? room.id
+        : `room-${index}`,
     role: typeof room.role === "string" ? room.role : undefined,
     precedence: normalizeMetric(room.precedence, 0, OFFICE_GEOMETRY.maxRooms),
     region,
@@ -1116,17 +1347,29 @@ function normalizeRoomDescriptor(
     spanPolicy,
     title: String(room.title ?? "ROOM"),
     hostTitle: String(room.hostTitle ?? "HOST"),
-    visualTitle: typeof room.visualTitle === "string" ? room.visualTitle : undefined,
-    visualHostTitle: typeof room.visualHostTitle === "string" ? room.visualHostTitle : undefined,
+    visualTitle:
+      typeof room.visualTitle === "string" ? room.visualTitle : undefined,
+    visualHostTitle:
+      typeof room.visualHostTitle === "string"
+        ? room.visualHostTitle
+        : undefined,
     actions: {
       rename: Boolean(room.actions?.rename),
       close: Boolean(room.actions?.close),
       createSeat: Boolean(room.actions?.createSeat),
     },
     deskCount: normalizeMetric(room.deskCount, 0, OFFICE_GEOMETRY.desksPerRoom),
-    standingCount: normalizeMetric(room.standingCount, 0, OFFICE_GEOMETRY.standingColumns * 2),
+    standingCount: normalizeMetric(
+      room.standingCount,
+      0,
+      OFFICE_GEOMETRY.standingColumns * 2,
+    ),
     headerMinWidth: normalizeMetric(room.headerMinWidth, 0, maximumRoomWidth),
-    headerMinTitleBoxWidth: normalizeMetric(room.headerMinTitleBoxWidth, 0, maximumRoomWidth),
+    headerMinTitleBoxWidth: normalizeMetric(
+      room.headerMinTitleBoxWidth,
+      0,
+      maximumRoomWidth,
+    ),
     headerMinHeight: normalizeMetric(
       room.headerMinHeight,
       OFFICE_GEOMETRY.roomHeaderHeight,
@@ -1134,9 +1377,14 @@ function normalizeRoomDescriptor(
     ),
     contentMinWidth: normalizeMetric(room.contentMinWidth, 0, maximumRoomWidth),
     preferredWidth: normalizeMetric(room.preferredWidth, 0, maximumRoomWidth),
-    preferredHeight: normalizeMetric(room.preferredHeight, 0, maximumRoomHeight),
+    preferredHeight: normalizeMetric(
+      room.preferredHeight,
+      0,
+      maximumRoomHeight,
+    ),
     contentItems: (room.contentItems ?? []).map((item, itemIndex) =>
-      normalizeContentDescriptor(item, itemIndex)),
+      normalizeContentDescriptor(item, itemIndex),
+    ),
     contentItemCount: room.contentItems?.length ?? 0,
     sourceIndex: index,
   };
@@ -1146,13 +1394,23 @@ function compareRoomDescriptors(
   left: NormalizedOfficeGeometryRoomDescriptor,
   right: NormalizedOfficeGeometryRoomDescriptor,
 ) {
-  const regionRank = (region: NormalizedOfficeGeometryRoomDescriptor["region"]) =>
-    region === "ceo" ? 0 : region === "agent-bar" ? 1 : region === "work" ? 2 : 3;
-  return regionRank(left.region) - regionRank(right.region) ||
+  const regionRank = (
+    region: NormalizedOfficeGeometryRoomDescriptor["region"],
+  ) =>
+    region === "ceo"
+      ? 0
+      : region === "agent-bar"
+        ? 1
+        : region === "work"
+          ? 2
+          : 3;
+  return (
+    regionRank(left.region) - regionRank(right.region) ||
     (left.precedence ?? 0) - (right.precedence ?? 0) ||
     (left.order ?? 0) - (right.order ?? 0) ||
     left.id.localeCompare(right.id) ||
-    left.sourceIndex - right.sourceIndex;
+    left.sourceIndex - right.sourceIndex
+  );
 }
 
 function boundNormalizedOfficeGeometryInput(
@@ -1160,10 +1418,16 @@ function boundNormalizedOfficeGeometryInput(
 ): NormalizedOfficeGeometryInput {
   return {
     ...input,
-    ceoContentItems: normalizeContentItems(input.ceoContentItems, input.maxContentItems).selected,
+    ceoContentItems: normalizeContentItems(
+      input.ceoContentItems,
+      input.maxContentItems,
+    ).selected,
     rooms: input.rooms.map((room) => ({
       ...room,
-      contentItems: normalizeContentItems(room.contentItems, input.maxContentItems).selected,
+      contentItems: normalizeContentItems(
+        room.contentItems,
+        input.maxContentItems,
+      ).selected,
     })),
   };
 }
@@ -1172,29 +1436,48 @@ function normalizeContentDescriptor(
   item: OfficeContentItemLike,
   index: number,
 ): NormalizedOfficeContentItemDescriptor {
-  const valid = item.valid !== false &&
-    typeof item.id === "string" && item.id.trim().length > 0 &&
-    typeof item.kind === "string" && item.kind.trim().length > 0 &&
+  const valid =
+    item.valid !== false &&
+    typeof item.id === "string" &&
+    item.id.trim().length > 0 &&
+    typeof item.kind === "string" &&
+    item.kind.trim().length > 0 &&
     isImportance(item.importance) &&
-    typeof item.order === "number" && Number.isFinite(item.order) && item.order >= 0 &&
-    typeof item.minWidth === "number" && Number.isFinite(item.minWidth) && item.minWidth >= 0 &&
-    typeof item.minHeight === "number" && Number.isFinite(item.minHeight) && item.minHeight >= 0;
+    typeof item.order === "number" &&
+    Number.isFinite(item.order) &&
+    item.order >= 0 &&
+    typeof item.minWidth === "number" &&
+    Number.isFinite(item.minWidth) &&
+    item.minWidth >= 0 &&
+    typeof item.minHeight === "number" &&
+    Number.isFinite(item.minHeight) &&
+    item.minHeight >= 0;
   const minWidth = normalizeMetric(item.minWidth, 0, HARD_MAX_ROOM_WIDTH);
   const minHeight = normalizeMetric(item.minHeight, 0, HARD_MAX_ROOM_HEIGHT);
   return {
-    id: typeof item.id === "string" && item.id.trim().length > 0
-      ? item.id
-      : `item-${index}`,
-    kind: typeof item.kind === "string" && item.kind.trim().length > 0
-      ? item.kind
-      : "unknown",
+    id:
+      typeof item.id === "string" && item.id.trim().length > 0
+        ? item.id
+        : `item-${index}`,
+    kind:
+      typeof item.kind === "string" && item.kind.trim().length > 0
+        ? item.kind
+        : "unknown",
     importance: isImportance(item.importance) ? item.importance : "optional",
     order: normalizeMetric(item.order, index, HARD_MAX_ROWS),
     priority: normalizeMetric(item.priority, 0, HARD_MAX_ROWS),
     minWidth,
     minHeight,
-    preferredWidth: normalizeMetric(item.preferredWidth, minWidth, HARD_MAX_ROOM_WIDTH),
-    preferredHeight: normalizeMetric(item.preferredHeight, minHeight, HARD_MAX_ROOM_HEIGHT),
+    preferredWidth: normalizeMetric(
+      item.preferredWidth,
+      minWidth,
+      HARD_MAX_ROOM_WIDTH,
+    ),
+    preferredHeight: normalizeMetric(
+      item.preferredHeight,
+      minHeight,
+      HARD_MAX_ROOM_HEIGHT,
+    ),
     valid,
   };
 }
@@ -1203,7 +1486,11 @@ function canonicalSerialize(value: unknown): string {
   if (value === null || value === undefined) {
     return "null";
   }
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
@@ -1211,8 +1498,10 @@ function canonicalSerialize(value: unknown): string {
   }
   if (typeof value === "object") {
     const record = value as Record<string, unknown>;
-    return `{${Object.keys(record).sort().map((key) =>
-      `${JSON.stringify(key)}:${canonicalSerialize(record[key])}`).join(",")}}`;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalSerialize(record[key])}`)
+      .join(",")}}`;
   }
   return "null";
 }
@@ -1238,14 +1527,19 @@ function minimumContentWidth(
   }
   const itemWidths = validItems.map((item) => item.minWidth);
   if (flow === "row") {
-    return itemWidths.reduce((total, width) => total + width, 0) +
-      Math.max(0, itemWidths.length - 1) * 8;
+    return (
+      itemWidths.reduce((total, width) => total + width, 0) +
+      Math.max(0, itemWidths.length - 1) * 8
+    );
   }
   return Math.max(...itemWidths);
 }
 
 function normalizeCapacity(value: number | undefined, fallback: number) {
-  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.floor(value) : fallback;
+  const numeric =
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.floor(value)
+      : fallback;
   return Math.max(1, Math.min(DEFAULT_MAX_CONTENT_ITEMS, numeric));
 }
 
@@ -1261,7 +1555,11 @@ function compactOfficeLabel(value: string, limit: number) {
   return fitOfficeLabel(value, measureOfficeText(value.slice(0, limit)), limit);
 }
 
-function fitOfficeLabel(value: string, maximumWidth: number, fallbackLimit = 256) {
+function fitOfficeLabel(
+  value: string,
+  maximumWidth: number,
+  fallbackLimit = 256,
+) {
   const points = [...value];
   if (maximumWidth <= 0) {
     return "";
@@ -1274,7 +1572,11 @@ function fitOfficeLabel(value: string, maximumWidth: number, fallbackLimit = 256
     return "";
   }
   let end = Math.max(1, Math.min(points.length, fallbackLimit));
-  while (end > 1 && measureOfficeText(`${points.slice(0, end).join("")}${ellipsis}`) > maximumWidth) {
+  while (
+    end > 1 &&
+    measureOfficeText(`${points.slice(0, end).join("")}${ellipsis}`) >
+      maximumWidth
+  ) {
     end -= 1;
   }
   if (measureOfficeText(`${points[0]}${ellipsis}`) > maximumWidth) {

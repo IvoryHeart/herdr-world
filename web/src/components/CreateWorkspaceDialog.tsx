@@ -1,0 +1,100 @@
+import { useEffect, useRef, useState } from "react";
+import { luckyWorkspaceName } from "../luckyName";
+import { store, useEndpointCreationReason } from "../store";
+import { CloseButton } from "./CloseButton";
+import { focusDialogElement } from "./dialogFocus";
+
+export function CreateWorkspaceDialog({
+  open,
+  initialName,
+  initialCwd,
+  onClose,
+}: {
+  open: boolean;
+  initialName?: string;
+  initialCwd?: string;
+  onClose: () => void;
+}) {
+  const createReason = useEndpointCreationReason("workspace.create");
+  const [label, setLabel] = useState("");
+  const [cwd, setCwd] = useState("");
+  const labelRef = useRef<HTMLInputElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    setLabel(initialName?.trim() || luckyWorkspaceName());
+    setCwd(initialCwd?.trim() ?? "");
+    const cancelFocus = focusDialogElement(labelRef.current, { select: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      cancelFocus();
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, initialName, initialCwd]);
+
+  if (!open) return null;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (createReason) return;
+    store.createWorkspace(label.trim() || undefined, cwd.trim() || undefined);
+    onClose();
+  };
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose}>
+      <form
+        className="modal compact-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create workspace"
+        onSubmit={submit}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>Create Workspace</h2>
+          <CloseButton onClick={onClose} />
+        </div>
+
+        <label className="form-field">
+          <span>Name</span>
+          <input
+            ref={labelRef}
+            value={label}
+            onChange={(e) => setLabel(e.currentTarget.value)}
+            placeholder="Optional"
+          />
+        </label>
+
+        <label className="form-field">
+          <span>CWD</span>
+          <input
+            value={cwd}
+            onChange={(e) => setCwd(e.currentTarget.value)}
+            placeholder="Optional path"
+          />
+        </label>
+
+        {createReason ? <p role="status">{createReason}</p> : null}
+        <div className="modal-actions">
+          <button type="button" className="ghost" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!!createReason}
+            title={createReason ?? undefined}
+          >
+            Create
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

@@ -1,4 +1,4 @@
-import type { AgentStatus } from "../types";
+import type { WorldAgentStatus } from "./worldObject";
 import type {
   HerdrOfficeProjection,
   OfficeAgent,
@@ -13,7 +13,7 @@ export type OfficeCallout = {
   title: string;
   detail: string;
   summary?: string;
-  status: AgentStatus | "stale" | null;
+  status: WorldAgentStatus | "stale" | null;
 };
 
 export type OfficeSelection =
@@ -33,9 +33,13 @@ export type OfficeSelection =
   | {
       kind: "host";
       host: OfficeHost;
-  };
+    };
 
-export type OfficeSeatAvailabilityReason = "host" | "workspace" | "capability" | null;
+export type OfficeSeatAvailabilityReason =
+  | "host"
+  | "workspace"
+  | "capability"
+  | null;
 
 export function officeSeatAvailability(
   hasSelectedHost: boolean,
@@ -58,13 +62,14 @@ export function officeCalloutForKey(
   projection: HerdrOfficeProjection,
   key: string,
 ): OfficeCallout | null {
+  key = officePresentationKey(projection, key) ?? key;
   const agentEntry = projection.roster.find(({ agent }) => agent.key === key);
   if (agentEntry) {
     const { agent } = agentEntry;
     return {
       kind: "agent",
       title: agent.displayLabel,
-      detail: `${agent.stale ? "stale" : agent.stateLabels[agent.semanticStatus] ?? agent.semanticStatus} · ${agentEntry.roomLabel} · ${agentEntry.hostLabel}`,
+      detail: `${agent.stale ? "stale" : (agent.stateLabels[agent.semanticStatus] ?? agent.semanticStatus)} · ${agentEntry.roomLabel} · ${agentEntry.hostLabel}`,
       ...(agent.taskSummary ? { summary: agent.taskSummary } : {}),
       status: agent.stale ? "stale" : agent.semanticStatus,
     };
@@ -73,14 +78,18 @@ export function officeCalloutForKey(
   const deskEntry = projection.deskRoster.find(({ desk }) => desk.key === key);
   if (deskEntry) {
     const occupant = deskEntry.desk.occupantAgentKey
-      ? projection.roster.find(({ agent }) => agent.key === deskEntry.desk.occupantAgentKey)?.agent
+      ? projection.roster.find(
+          ({ agent }) => agent.key === deskEntry.desk.occupantAgentKey,
+        )?.agent
       : null;
     return {
       kind: "desk",
       title: deskEntry.desk.displayLabel,
       detail: `${occupant ? `${occupant.displayLabel} · ${occupant.stale ? "stale" : occupant.semanticStatus}` : "empty desk"} · ${deskEntry.roomLabel} · ${deskEntry.hostLabel}`,
       ...(occupant?.taskSummary ? { summary: occupant.taskSummary } : {}),
-      status: deskEntry.desk.stale ? "stale" : occupant?.semanticStatus ?? null,
+      status: deskEntry.desk.stale
+        ? "stale"
+        : (occupant?.semanticStatus ?? null),
     };
   }
 
@@ -112,14 +121,19 @@ export function findOfficeSelection(
   projection: HerdrOfficeProjection,
   selectedKey: string | null,
 ): OfficeSelection | null {
+  selectedKey = officePresentationKey(projection, selectedKey);
   if (!selectedKey) {
     return null;
   }
-  const agent = projection.roster.find(({ agent: entry }) => entry.key === selectedKey);
+  const agent = projection.roster.find(
+    ({ agent: entry }) => entry.key === selectedKey,
+  );
   if (agent) {
     return { kind: "agent", agent: agent.agent, entry: agent };
   }
-  const desk = projection.deskRoster.find(({ desk: entry }) => entry.key === selectedKey);
+  const desk = projection.deskRoster.find(
+    ({ desk: entry }) => entry.key === selectedKey,
+  );
   if (desk) {
     return { kind: "desk", desk };
   }
@@ -131,7 +145,32 @@ export function findOfficeSelection(
   return host ? { kind: "host", host } : null;
 }
 
-export function formatOfficeActivityAge(timestamp: number | undefined, now = Date.now()) {
+export function officePresentationKey(
+  projection: HerdrOfficeProjection,
+  selectedKey: string | null,
+) {
+  if (!selectedKey) {
+    return null;
+  }
+  if (
+    projection.roster.some(({ agent }) => agent.key === selectedKey) ||
+    projection.deskRoster.some(({ desk }) => desk.key === selectedKey) ||
+    projection.roomRoster.some(({ key }) => key === selectedKey) ||
+    projection.hosts.some(({ key }) => key === selectedKey)
+  ) {
+    return selectedKey;
+  }
+  return (
+    projection.deskRoster.find(({ desk }) =>
+      desk.terminalSelectionKeys.includes(selectedKey),
+    )?.desk.key ?? selectedKey
+  );
+}
+
+export function formatOfficeActivityAge(
+  timestamp: number | undefined,
+  now = Date.now(),
+) {
   if (timestamp === undefined || !Number.isFinite(timestamp)) {
     return null;
   }

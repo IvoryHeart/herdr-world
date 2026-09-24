@@ -4,19 +4,70 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#11111b" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/herdr-world-logo.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/herdr-world-icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/herdr-world-icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/herdr-world-icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/herdr-logo-180.png" />
-    <link rel="icon" href="/herdr-logo.svg" type="image/svg+xml" />
+    <meta name="application-name" content="Herdr World" />
+    <meta name="apple-mobile-web-app-title" content="Herdr World" />
     <title>Herdr World</title>
+    <script>
+      // Disable pinch zoom for the terminal UI on touch-primary devices
+      // (phones and tablets). The viewport directive above covers PWAs and
+      // Android, but iOS Safari ignores user-scalable, so suppress the
+      // WebKit gesture events that drive pinch zoom as well. Fine-pointer
+      // desktops keep their trackpad pinch zoom.
+      if (window.matchMedia("(pointer: coarse)").matches) {
+        for (const type of ["gesturestart", "gesturechange", "gestureend"]) {
+          document.addEventListener(type, (event) => event.preventDefault(), {
+            passive: false,
+          });
+        }
+      }
+    </script>
+    <script>
+      // Apply the persisted theme before first paint to avoid a flash of the
+      // default dark theme. "system" resolves via the OS color scheme.
+      try {
+        const storedTheme =
+          localStorage.getItem("herdr-world:foundation-v2:theme");
+        const resolvedTheme =
+          storedTheme === "light" || storedTheme === "dark"
+            ? storedTheme
+            : storedTheme === "system" &&
+                window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+        document.documentElement.dataset.theme = resolvedTheme;
+        document.documentElement.style.colorScheme = resolvedTheme;
+        // Apply the persisted interface scale too so the first paint matches
+        // the Text size preference.
+        const storedUiScale =
+          localStorage.getItem("herdr-world:foundation-v2:uiScale");
+        const uiScale = storedUiScale === null ? 100 : Number(storedUiScale);
+        if (Number.isFinite(uiScale) && uiScale !== 100) {
+          // Keep in sync with clampUiScale in web/src/appearance.ts.
+          const clampedUiScale = Math.min(
+            150,
+            Math.max(80, Math.round(uiScale / 5) * 5),
+          );
+          document.documentElement.style.zoom = String(clampedUiScale / 100);
+        }
+      } catch {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.__log = [];
+      const _ol = console.log, _oe = console.error;
+      console.log = (...a) => { window.__log.push(a.map(x => String(x)).join(" ")); _ol.apply(console, a); };
+      console.error = (...a) => { window.__log.push("ERR: " + a.map(x => String(x)).join(" ")); _oe.apply(console, a); };
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

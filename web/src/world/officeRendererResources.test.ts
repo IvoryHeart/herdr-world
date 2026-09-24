@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, mock, test } from "bun:test";
+
+const it = test;
+const vi = { fn: mock };
 import {
   destroyOfficeSceneChildren,
   OFFICE_SCENE_DESTROY_OPTIONS,
@@ -17,7 +20,9 @@ describe("Office renderer resource cleanup", () => {
       style: true,
     });
     expect(OFFICE_SCENE_DESTROY_OPTIONS).not.toHaveProperty("texture");
-    expect(first.destroy).toHaveBeenCalledExactlyOnceWith(OFFICE_SCENE_DESTROY_OPTIONS);
-    expect(second.destroy).toHaveBeenCalledExactlyOnceWith(OFFICE_SCENE_DESTROY_OPTIONS);
+    expect(first.destroy).toHaveBeenCalledTimes(1);
+    expect(first.destroy).toHaveBeenCalledWith(OFFICE_SCENE_DESTROY_OPTIONS);
+    expect(second.destroy).toHaveBeenCalledTimes(1);
+    expect(second.destroy).toHaveBeenCalledWith(OFFICE_SCENE_DESTROY_OPTIONS);
   });
 });

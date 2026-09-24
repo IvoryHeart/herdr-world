@@ -1,50 +1,55 @@
-const COMPLETION_SEEN_STORAGE_KEY = "herdr-world.completion-seen.v1";
+import type { OfficeAgent } from "./herdrOfficeProjection";
+
+export const COMPLETION_SEEN_STORAGE_KEY = "worldCompletionSeen:v1";
 const MAX_STORED_COMPLETIONS = 4_096;
 
-type CompletionSeenStorage = Pick<Storage, "getItem" | "setItem">;
+type CompletionStorage = Pick<Storage, "getItem" | "setItem">;
 
-export function readWorldCompletionSeenKeys(
-  storage: CompletionSeenStorage | null = browserLocalStorage(),
+export function officeCompletionIdentity(
+  agent: Pick<
+    OfficeAgent,
+    "hostKey" | "observedGeneration" | "key" | "currentTerminalRef"
+  >,
 ) {
-  if (!storage) {
-    return new Set<string>();
-  }
+  return JSON.stringify([
+    agent.hostKey,
+    agent.observedGeneration,
+    agent.currentTerminalRef.nativeId,
+    agent.key,
+  ]);
+}
+
+export function readCompletionSeen(
+  storage: CompletionStorage,
+): ReadonlySet<string> {
   try {
     const raw = storage.getItem(COMPLETION_SEEN_STORAGE_KEY);
-    if (!raw) {
-      return new Set<string>();
-    }
+    if (!raw) return new Set();
     const value: unknown = JSON.parse(raw);
-    if (!Array.isArray(value)) {
-      return new Set<string>();
-    }
+    if (!Array.isArray(value)) return new Set();
     return new Set(
-      value.filter((key): key is string => typeof key === "string" && key.length > 0),
+      value.filter(
+        (entry): entry is string =>
+          typeof entry === "string" &&
+          entry.length > 0 &&
+          entry.length <= 2_048,
+      ),
     );
   } catch {
-    return new Set<string>();
+    return new Set();
   }
 }
 
-export function writeWorldCompletionSeenKeys(
-  keys: ReadonlySet<string>,
-  storage: CompletionSeenStorage | null = browserLocalStorage(),
+export function writeCompletionSeen(
+  storage: CompletionStorage,
+  identities: ReadonlySet<string>,
 ) {
-  if (!storage) {
-    return;
-  }
   try {
-    const values = [...keys].sort().slice(-MAX_STORED_COMPLETIONS);
-    storage.setItem(COMPLETION_SEEN_STORAGE_KEY, JSON.stringify(values));
+    storage.setItem(
+      COMPLETION_SEEN_STORAGE_KEY,
+      JSON.stringify([...identities].slice(-MAX_STORED_COMPLETIONS)),
+    );
   } catch {
-    // Browser storage can be unavailable in private or locked-down contexts.
-  }
-}
-
-function browserLocalStorage(): CompletionSeenStorage | null {
-  try {
-    return typeof globalThis.localStorage === "undefined" ? null : globalThis.localStorage;
-  } catch {
-    return null;
+    // Completion acknowledgement is useful presentation state, not runtime state.
   }
 }

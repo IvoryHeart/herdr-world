@@ -1,20 +1,55 @@
-import "@fontsource-variable/geist/wght.css";
-import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
-import { AppShell } from "./AppShell";
-import { startNativeControls } from "./native";
-import "./styles.css";
+import { initializeLayoutPreferences } from "./layoutPreferences";
+import { initializeShortcutPreferences } from "./shortcutPreferences";
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "./styles/tokens.css";
+import "./styles/base.css";
+import "./styles/vendor.css";
+import { OverlayScrollbarLayer } from "./components/OverlayScrollbarLayer";
 
-startNativeControls();
+const WorldFoundationApp = React.lazy(
+  () => import("./world/WorldFoundationApp"),
+);
 
-const root = document.getElementById("root");
-
-if (!root) {
-  throw new Error("missing root element");
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <pre
+          style={{
+            color: "#ff9a9a",
+            padding: 20,
+            whiteSpace: "pre-wrap",
+            fontFamily: "monospace",
+          }}
+        >
+          {this.state.error.message}
+          {"\n\n"}
+          {this.state.error.stack}
+        </pre>
+      );
+    }
+    return this.props.children;
+  }
 }
 
-createRoot(root).render(
-  <StrictMode>
-    <AppShell />
-  </StrictMode>,
+initializeLayoutPreferences();
+initializeShortcutPreferences();
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <ErrorBoundary>
+      <React.Suspense fallback={null}>
+        <WorldFoundationApp />
+      </React.Suspense>
+      <OverlayScrollbarLayer />
+    </ErrorBoundary>
+  </React.StrictMode>,
 );
