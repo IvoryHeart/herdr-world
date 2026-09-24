@@ -8,9 +8,8 @@ installable application instead of rebuilding the same capabilities beside it. T
 visual experience SHALL be a deep Pixel Office that brings Roamgate's terminal, Files, Changes and
 Agent History context to the selected agent. Office is World's primary default surface; Roamgate's
 current terminal workspace remains available as the first-class Spaces surface. Office is the first
-implementation milestone, but the
-foundation replacement is complete only after Tree, Graph and qualified selected-host
-conversations are migrated over the same seam. The established Pixel Office implementation at
+implementation milestone, with Tree, Graph and qualified selected-host conversations migrated over
+the same seam in this foundation delivery. The established Pixel Office implementation at
 World commit `9c8f650853ad2d598d476dac1eecdeaea16716c6` is retained source, not a design reference
 for a replacement scene. Completion means the replacement contract defined below; departures from
 the former Herdr Web-based application are limited to the explicit runtime and product retirements
@@ -31,7 +30,7 @@ recorded by this change rather than unexplained presentation rewrites.
   surfaces native World capabilities rather than a separately installed Roamgate application.
   Present Pixel Office as the primary World surface while retaining that workspace as Spaces.
 - Project all managed Herdr connections into a shared, host-qualified World hierarchy and migrate
-  Spaces, the mature Pixel Office, connected Tree and spatial Graph as complete first-class views.
+  Spaces, the mature Pixel Office, connected Tree and spatial Graph as native first-class views.
   Keep the aggregate available to the shell, but project only the selected host into each visual
   view until the operational client supports simultaneous active hosts. Port the established Pixel Office
   projection contract, Pixi renderer, geometry, layout publication, semantic targets, assets and
@@ -44,8 +43,10 @@ recorded by this change rather than unexplained presentation rewrites.
   where subsequent entity activations open without creating a terminal-only shell or a separately
   implemented resource UI.
 - Retain the useful Roamgate-derived operational surfaces and extend the Office context with a
-  compact agent identity, authoritative qualified status and optional per-agent observations, a
-  supported bounded task-summary workflow, ancestry and qualified agent/pane pinning.
+  compact agent identity, authoritative qualified status, optional admitted per-agent observations
+  and ancestry. The former World task-summary producer and agent/pane watchlist are not carried into
+  this foundation; their deliberate restoration and expanded cross-view live acceptance are tracked
+  as follow-up work in GitHub issue #95.
 - **BREAKING** Replace the former World's simultaneous cross-host terminal-conversation behavior
   with Roamgate's one-selected-connection model for every operational surface. The shared runtime
   store and WorldObject SHALL continue to retain all managed hosts, including ready-inactive and
@@ -54,8 +55,8 @@ recorded by this change rather than unexplained presentation rewrites.
   selecting an entity SHALL never switch hosts, and explicitly activating another host SHALL retire
   the outgoing terminal and Inspector contexts.
 - Use Office as the first deep migration milestone, then promote the connected branch checkpoint to
-  Tree and restore the prior spatial Graph. Checkpoint implementations SHALL NOT be represented as
-  complete primary product views before their acceptance passes.
+  Tree and restore the prior spatial Graph. Preserve their delivered selected-host Inspector and
+  responsive behavior while taking broader live local/SSH parity through focused follow-up changes.
 - Preserve Herdr as an external runtime. World neither bundles Herdr nor introduces a generic
   provider/plugin SDK in this change.
 - Start the new foundation with fresh World connection and presentation settings. Existing
@@ -91,14 +92,15 @@ None.
   development commands.
 - Retires the current remote-bridge settings, browser federation, vendored `herdr-compat` crate and
   native Android build from the active product tree.
-- Re-establishes the World model and the complete defining Office, Tree and Graph experience over
+- Re-establishes the World model and the defining Office, Tree and Graph experience over
   connection-scoped snapshots, one selected operational host, one docked Inspector, a bounded
   registry of floating Inspector conversations and one shell-owned terminal registry. The current minimal Office cards, list-primary Tree and static
-  branch Graph are implementation checkpoints, not accepted complete views, and the PR remains
-  incomplete until selected-host conversations and all three view migrations pass acceptance.
+  branch Graph were implementation checkpoints replaced by the delivered selected-host views.
 - Does not preserve obsolete shell chrome or behavior explicitly retired by this change.
   Simultaneous cross-host terminal and Inspector contexts are an approved breaking retirement;
-  the established Pixel Office presentation, internally retained aggregate multi-host observation, selected-host
-  multi-Inspector conversations and the explicitly listed view behavior remain required.
+  the established Pixel Office presentation, internally retained aggregate multi-host observation,
+  selected-host multi-Inspector conversations and the explicitly listed delivered view behavior
+  remain required. The retired task-summary producer and agent/pane watchlist are recorded as
+  follow-up issue #95 rather than being represented as present in this foundation.
 - Records the exact Roamgate synchronization point and retains required MIT attribution and
   third-party notices.

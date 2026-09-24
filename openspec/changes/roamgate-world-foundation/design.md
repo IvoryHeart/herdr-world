@@ -20,9 +20,8 @@ shared World model plus Office, Tree and Graph.
   available as one focused, shell-owned Office context.
 - Restore the connected Tree and spatial Graph after Office over the same qualified projection and
   focused Inspector seam.
-- Preserve internal all-host observation, selected-host visual presentation and conversations, the agent/pane watchlist and
-  the supported task-summary reporting workflow without replacing Roamgate's focused-host
-  interaction model.
+- Preserve internal all-host observation plus selected-host visual presentation and conversations
+  without replacing Roamgate's focused-host interaction model.
 - Keep the replacement reviewable through staged commits and requirement-linked checks.
 
 **Non-Goals:**
@@ -46,6 +45,9 @@ shared World model plus Office, Tree and Graph.
   not hidden inside this foundation migration. This intentionally retires behavior delivered by
   the former World implementation, so this change does not claim complete behavioral parity with
   that application.
+- Restoring the former task-summary producer or connection-qualified agent/pane watchlist. Those
+  useful workflows and their expanded live local/SSH acceptance are tracked as focused follow-up
+  work in GitHub issue #95 rather than being represented as present in this foundation.
 
 ## Decisions
 
@@ -314,21 +316,16 @@ click and unwanted focus theft. A desktop floating Inspector may move into the l
 keeping its draggable title region reachable; compact presentation remains fully contained. Its
 resize affordance uses a compact corner bracket without reducing the usable pointer target.
 
-### Restore operational summaries and pane pinning at the new seam
+### Defer operational-summary production and pane pinning
 
-Task summaries remain optional Herdr pane metadata, but optional data needs a supported producer.
-Port the bounded report/update/clear command as a World CLI mode that talks directly to the owning
-Herdr metadata API and does not require the World web service to start. It remains bound to the
-pane's active agent session, expires, normalizes and redacts content, and can run wherever the
-owning local or remote Herdr socket is reachable. SSH display and control remain fully usable when
-that optional producer is not installed on the remote host.
-
-Port the old pane/agent watchlist into the World service with connection-qualified records and a
-bounded World-owned store. This pin means “keep this live agent or terminal in my operational
-watchlist”; it is distinct from Roamgate workspace pins and Graph position pins. Pin, unpin and
-Pinned-only presentation revalidate the owning runtime and prune panes that are authoritatively
-gone. The former free-form notes store remains retired rather than being conflated with review
-annotations.
+The foundation may present bounded task-summary metadata already admitted by Herdr, but it does not
+ship the former `herdr-world task-summary` producer. It also does not carry the former
+connection-qualified pane/agent watchlist into the new service. Neither workflow has a truthful
+implementation at this seam, so retaining their requirements would describe product behavior that
+is absent. GitHub issue #95 records their deliberate restoration as separate, testable changes.
+Workspace pins, Graph position pins and review annotations remain distinct features and are not
+presented as replacements for the deferred agent/pane watchlist or the retired free-form notes
+store.
 
 ### Promote the checkpoint branch diagram to Tree after Office
 
@@ -362,15 +359,15 @@ The selected-entity context remains shared shell behavior. It exposes only admit
 delegates Files, Changes, Agent History, terminal and Spaces actions through generation-fenced
 paths; Tree and Graph do not acquire another Inspector or runtime owner.
 
-### Accept each view sequentially against the retained view contract
+### Accept the delivered views against the retained view contract
 
-Office receives focused unit, mounted-browser and synthetic visual acceptance first. Tree and Graph
-then receive their own acceptance over the proven projection and operational seams. Each comparison
-uses the feature inventory retained by this change at desktop and compact sizes, including dense and
-unequal topologies, stale hosts, colliding native IDs and selected-host terminal continuity. The
-explicitly retired behavior is recorded as a product boundary rather than an unexplained parity
-gap. A green repository check alone cannot establish visual completeness, and passing Office does
-not complete the replacement.
+Office, Tree and Graph receive focused unit, mounted-browser and synthetic desktop/compact checks
+over the shared projection and operational seams. The delivery establishes their selected-host
+composition, bounded projection, guarded actions and shared Inspector ownership. Expanded live
+local-plus-SSH matrices, the deferred task-summary producer and the agent/pane watchlist proceed in
+focused follow-up issue #95; they are not silently inferred from a green repository check. The
+explicitly retired behavior remains recorded as a product boundary rather than an unexplained
+parity gap.
 
 ### Rebrand before release integration
 
@@ -426,11 +423,10 @@ browser keys untouched for rollback but does not read them.
 4. Restore the retained Pixel Office dependency, assets, projection contract, geometry, renderer,
    semantic targets and tests before adapting its `WorldObject`, action and shell boundaries.
 5. Require one selected operational host, expose the qualified shell-owned Inspector registry and
-   independently accept the complete retained Pixel Office while switching between aggregate local
-   plus SSH observations one selected host at a time.
-6. Extend the existing selected-host Inspector and terminal owners to bounded conversation windows, then migrate
-   and independently accept connected Tree and spatial Graph without reopening the runtime or
+   accept the retained Pixel Office through focused unit, mounted-browser and responsive checks.
+6. Extend the existing selected-host Inspector and terminal owners to bounded conversation windows,
+   then migrate and verify connected Tree and spatial Graph without reopening the runtime or
    Inspector boundaries.
 7. Update operational, lineage and release documentation; do not translate old profile stores.
-8. Deliver the complete replacement as a reviewed PR. Existing releases remain the rollback path;
+8. Deliver the foundation replacement as a reviewed PR. Existing releases remain the rollback path;
    installing an older release reuses only the old release's untouched storage.

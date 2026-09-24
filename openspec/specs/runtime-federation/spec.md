@@ -92,6 +92,5 @@ store passwords, private keys, passphrases or arbitrary SSH options.
 
 #### Scenario: Several hosts are connected
 - **WHEN** two or more compatible profiles are ready
-- **THEN** the service keeps their isolated runtimes connected concurrently and World can present
-  all qualified entities while every connection-specific operational surface continues to operate
-  on exactly one selected profile
+- **THEN** the service keeps their isolated runtimes and qualified observations connected
+  concurrently while each browser presents and operates exactly one selected profile

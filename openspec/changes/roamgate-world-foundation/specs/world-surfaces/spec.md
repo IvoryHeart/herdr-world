@@ -159,8 +159,7 @@ remain the first-class operational workspace and profile-management surface rath
 removed or embedded into Office.
 The existing Spaces connection selector SHALL remain the profile-management surface; visual World
 views SHALL not introduce a second host catalogue and SHALL persistently identify the selected
-operational host and its state. Checkpoint Tree or Graph implementations SHALL not be described as
-complete until their view-specific acceptance passes.
+operational host and its state.
 Office room alignment, long-title treatment, Inspector presentation and optional observability
 configuration SHALL live in the common settings menu on desktop, compact and Zen layouts. Office
 SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those infrequent controls.
@@ -214,7 +213,7 @@ SHALL not embed or launch a separately branded Roamgate application.
 
 - **WHEN** a user installs and starts Herdr World
 - **THEN** local and SSH connection management, terminal workspaces, Files, Changes, Agent History
-  and complete World visual views are available without installing Roamgate or another web bridge
+  and native World visual views are available without installing Roamgate or another web bridge
 
 #### Scenario: Use the Inspector without leaving a visual view
 
@@ -404,62 +403,6 @@ existing connection lifecycle.
 - **THEN** its compact identity and available resource tabs remain useful without fabricating what
   the agent is doing or implemented
 
-### Requirement: Qualified task-summary reporting
-
-World SHALL provide and document a supported producer for reporting, updating and clearing an
-optional task summary through the owning Herdr runtime's metadata API. A report SHALL be bound to
-the pane's active agent session, normalized, limited to 160 Unicode characters, filtered for
-obvious credential-shaped values and assigned a bounded expiry no longer than 24 hours. The
-default expiry SHALL be 15 minutes. Reporting SHALL NOT require the World web service to start and
-SHALL NOT make task summaries mandatory for local or SSH operation.
-
-#### Scenario: Harness publishes and updates current work
-
-- **WHEN** a harness reports a task summary for a pane with an active agent session and later
-  reports a replacement
-- **THEN** World presents only the latest bounded summary for that exact qualified pane and session
-
-#### Scenario: Harness clears current work
-
-- **WHEN** the producer clears the task summary for its exact pane and active session
-- **THEN** the summary disappears after Herdr admits the metadata update without restarting World
-
-#### Scenario: Summary expires or the session changes
-
-- **WHEN** a reported summary reaches its expiry or its bound agent session is replaced
-- **THEN** World stops presenting it and never carries it to another pane, session or host
-
-#### Scenario: Remote host has no summary producer
-
-- **WHEN** an SSH-connected Herdr runtime has no optional task-summary producer installed
-- **THEN** its topology, agents, terminals and actions remain usable and World does not infer a
-  summary
-
-### Requirement: Operational agent and pane watchlist
-
-World SHALL let a user Pin and Unpin an exact connection-qualified live agent or terminal pane and
-filter the relevant agent/pane presentation to Pinned only. The bounded World-owned watchlist SHALL
-survive browser refresh, SHALL remain distinct from workspace pins and Graph position pins, and
-SHALL never use a native pane identifier without its connection identity. A stale pinned item MAY
-retain bounded inspection context and be unpinned, but SHALL NOT admit runtime actions. World SHALL
-remove a pin after current authoritative state confirms that exact pane no longer exists.
-
-#### Scenario: Pin colliding pane identifiers
-
-- **WHEN** two hosts expose the same native pane identifier and the user pins one
-- **THEN** only the selected qualified pane is pinned and Pinned only does not include the other
-
-#### Scenario: Pinned host disconnects
-
-- **WHEN** a pinned pane's host becomes stale or reconnects into a new runtime generation
-- **THEN** the pin never redirects to a colliding pane, runtime actions remain unavailable until
-  the exact target is re-admitted, and the user can remove the watchlist entry
-
-#### Scenario: Pinned pane is authoritatively removed
-
-- **WHEN** a current admitted snapshot confirms that the exact pinned pane no longer exists
-- **THEN** World prunes its pin rather than retaining an actionable orphan
-
 ### Requirement: Pixel Office scene
 
 Office SHALL preserve the established Pixel Office composition rather than replace it with generic
@@ -480,11 +423,12 @@ expand-or-ellipsis long-title behavior, title and action containment, nested dec
 logical-canvas scrolling and stable room gaps SHALL remain available. A wide room in one row SHALL
 NOT force unrelated rows to that width.
 
-#### Scenario: Render multiple hosts and unequal rooms
+#### Scenario: Switch between hosts with unequal rooms
 
-- **WHEN** several hosts expose workspaces with different tab counts and title lengths
-- **THEN** Office presents their reception stations and content-sized work rooms without merging
-  identities, clipping required headers or replacing the scene with equal-width cards
+- **WHEN** several managed hosts expose workspaces with different tab counts and title lengths and
+  the user changes the selected host
+- **THEN** Office replaces the complete scene with the selected host's reception and content-sized
+  work rooms without merging identities, clipping required headers or using equal-width cards
 
 #### Scenario: Compare the retained Pixel Office fixture
 
@@ -775,7 +719,7 @@ relationships. Tree SHALL support search with complete ancestor context, indepen
 disclosure, selection, the shared entity context and qualified actions. The connected presentation
 currently used by the foundation checkpoint's Graph view SHALL become Tree; an indented list SHALL
 serve only as an equivalent compact or assistive presentation rather than the primary desktop view.
-Tree SHALL bound presentation to 128 hosts, 128 spaces globally and 16 leaves per presented space,
+Tree SHALL bound presentation to the one selected host, 128 spaces and 16 leaves per presented space,
 using the same relevance priority as Graph. Both its connected and semantic presentations SHALL
 consume that one bounded projection and report exact omitted host, space and leaf counts globally
 and at the affected branch; search SHALL operate only over the honestly presented projection. The
@@ -783,7 +727,7 @@ selected actionable leaf SHALL be able to expand in place as Tree's single inlin
 with the leaf card remaining its contextual header and the shared resource surface appearing below
 it in both the connected desktop and equivalent compact hierarchy.
 
-#### Scenario: Scan an unequal multi-host hierarchy
+#### Scenario: Scan an unequal selected-host hierarchy
 
 - **WHEN** the selected host contains spaces with different numbers of leaves
 - **THEN** Tree keeps each branch visibly connected to its exact parent without dangling lines or
@@ -803,7 +747,7 @@ it in both the connected desktop and equivalent compact hierarchy.
 
 #### Scenario: Tree exceeds its presentation capacity
 
-- **WHEN** a dense unequal hierarchy exceeds Tree's host, global-space or per-space leaf bounds
+- **WHEN** a dense unequal selected-host hierarchy exceeds Tree's global-space or per-space leaf bounds
 - **THEN** Tree prioritizes selected, focused and attention-requiring entities, renders neither
   presentation outside the shared bounds, and reports exact global and affected-branch omissions
 
@@ -815,7 +759,7 @@ dragging and pinning, bounded pan and zoom, Fit, search, independent disclosure,
 shared entity context, saved camera and node positions, visible status changes and live terminal
 conversation connectors. Status-only updates SHALL NOT reset settled positions or camera state.
 
-Graph SHALL bound presentation to 128 hosts, 128 spaces globally and 16 leaves per presented space,
+Graph SHALL bound presentation to the one selected host, 128 spaces and 16 leaves per presented space,
 with exact overflow reporting and priority for focused, working, blocked and detected-agent nodes.
 It SHALL provide an equivalent semantic hierarchy and SHALL pause or release animation, observers,
 listeners and retained layout work when hidden or unmounted.
@@ -823,8 +767,8 @@ listeners and retained layout work when hidden or unmounted.
 #### Scenario: Equal native identifiers exist on two hosts
 
 - **WHEN** two hosts expose the same workspace, pane or terminal identifier
-- **THEN** Graph renders distinct qualified nodes and connects each only inside its owning host
-  subtree
+- **THEN** Graph presents only the selected host and switching hosts replaces it with distinct
+  qualified nodes rather than reusing or connecting the other host's identities
 
 #### Scenario: Live status changes on a settled graph
 
@@ -865,6 +809,26 @@ mounted Spaces or live terminal ownership.
   management, Inspector resources and existing terminals remain usable
 
 ## REMOVED Requirements
+
+### Requirement: Qualified task-summary reporting
+
+**Reason**: The Roamgate-derived foundation can present bounded task-summary metadata admitted by
+Herdr but does not include the former World CLI producer. Restoring report/update/clear semantics
+needs a focused contract at the new runtime boundary and is tracked by GitHub issue #95.
+
+**Migration**: Existing topology, terminals and optional admitted summary metadata remain usable.
+Automation that depended on `herdr-world task-summary` must retain its previous World release until
+the follow-up producer is delivered.
+
+### Requirement: Operational agent and pane watchlist
+
+**Reason**: The former connection-qualified agent/pane watchlist was not carried into the new
+service. Workspace pins and Graph position pins have different meanings and are not substitutes;
+deliberate restoration is tracked by GitHub issue #95.
+
+**Migration**: Continue using workspace pins and Graph position pins only for their documented
+purposes. Retain the previous World release if the agent/pane Pinned-only workflow is required until
+the follow-up lands.
 
 ### Requirement: Tree Operations Console composition
 

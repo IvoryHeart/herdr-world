@@ -13,6 +13,11 @@ retain their original Herdr Web lineage.
   profiles, browser preferences and Roamgate state are not imported; native Android
   packaging is not part of this foundation.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- The replacement foundation does not carry forward the former `herdr-world task-summary`
+  producer or the connection-qualified agent/pane watchlist. Existing Herdr-admitted summary
+  metadata can still be presented; deliberate restoration of both workflows is tracked in
+  [issue #95](https://github.com/IvoryHeart/herdr-world/issues/95).
+  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Added
 
