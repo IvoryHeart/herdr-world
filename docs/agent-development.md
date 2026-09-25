@@ -73,6 +73,22 @@ data. Record exact verification and agent execution in the pull request using th
 [PR template](../.github/pull_request_template.md). Reuse earlier results only
 when their relevant inputs are unchanged. Open a ready PR and stop before merge.
 
+For Codex token usage, run `bun run agent:usage -- --pr <number> --session
+<session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat
+`--session` for contributing agents, or omit it to use the current
+`CODEX_SESSION_ID` for a root agent. Pass each subagent's rollout UUID explicitly:
+its environment may inherit the parent's `CODEX_SESSION_ID` and misattribute usage.
+Omit either time bound only when the whole session belongs
+to the PR. The script reads local Codex rollout files under
+`$CODEX_HOME/sessions` (or `~/.codex/sessions`), sums per-response
+`token_usage_record` entries including compaction, and prints only aggregate
+counts and the chosen boundary. Its `--pr` value labels the report; it cannot
+infer which turns belong to a PR. Record the explicit session/time boundary in
+the PR and rerun near handoff. Cached input is included in input, and reasoning
+is included in output. These counts are not billed cost. The local Prometheus
+`codex_turn_token_usage` series aggregates by model and token type without a
+session label, so it cannot substitute for the PR-specific rollout count.
+
 ## Revisit the process
 
 After a batch of roughly five agent-assisted PRs, and during release preparation,

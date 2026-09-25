@@ -49,6 +49,7 @@
     "release:prepare": "bun scripts/prepare-release.ts",
     "label:pr": "bun scripts/classify-pr-label.ts",
     "agent:worktree": "bun scripts/agent/worktree.mjs",
+    "agent:usage": "bun scripts/agent/pr-usage.ts",
     "notices:generate": "bun scripts/dependency-notices.ts",
     "notices:check": "bun scripts/dependency-notices.ts --check",
     "format": "biome format --write .",
