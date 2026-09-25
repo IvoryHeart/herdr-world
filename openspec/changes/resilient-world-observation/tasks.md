@@ -14,4 +14,4 @@
 
 - [x] 3.1 Add focused service/browser checks for 64 slow profiles, selected-first scheduling, partial response, late success, reconnect, colliding IDs and World WebSocket loss; verify actionable targets only come from current-generation observations.
 - [x] 3.2 Measure serialized response size and refresh frequency in the bounded synthetic fixture; document any remaining capacity limit and verify the selected host remains usable without a second socket or operational client.
-- [ ] 3.3 Update architecture/source maps and an Unreleased entry for the observation behavior, synchronize the accepted delta into current `runtime-federation`, run focused checks and `bun run check`, inspect the final diff/history, then open a ready PR with exact evidence for independent review.
+- [x] 3.3 Update architecture/source maps and an Unreleased entry for the observation behavior, synchronize the accepted delta into current `runtime-federation`, run focused checks and `bun run check`, inspect the final diff/history, then open a ready PR with exact evidence for independent review.
