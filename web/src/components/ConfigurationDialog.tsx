@@ -14,12 +14,18 @@ import {
   SquareTerminal,
   Sun,
   SunMoon,
+  Type,
 } from "lucide-react";
 import type { Theme } from "../App";
 import {
   ACCENT_OPTIONS,
   type AccentColor,
+  clampTerminalFontScale,
   clampUiScale,
+  TERMINAL_FONT_SCALE_DEFAULT,
+  TERMINAL_FONT_SCALE_MAX,
+  TERMINAL_FONT_SCALE_MIN,
+  TERMINAL_FONT_SCALE_STEP,
   UI_SCALE_DEFAULT,
   UI_SCALE_MAX,
   UI_SCALE_MIN,
@@ -71,6 +77,7 @@ export type ConfigurationProps = {
   theme: Theme;
   accentColor: AccentColor;
   uiScale: number;
+  terminalFontScale: number;
   mobileTerminalShortcuts: MobileTerminalShortcutRows;
   mobileTerminalSideShortcuts: MobileTerminalSideShortcuts;
   terminalThemeSelection: TerminalThemeSelection;
@@ -78,6 +85,7 @@ export type ConfigurationProps = {
   onThemeChange: (theme: Theme) => void;
   onAccentColorChange: (accentColor: AccentColor) => void;
   onUiScaleChange: (scale: number) => void;
+  onTerminalFontScaleChange: (scale: number) => void;
   onMobileTerminalShortcutsChange: (rows: MobileTerminalShortcutRows) => void;
   onMobileTerminalSideShortcutsChange: (
     shortcuts: MobileTerminalSideShortcuts,
@@ -97,7 +105,7 @@ export function ConfigurationDialog({
   onClose: () => void;
   initialTab?: ConfigurationTab;
 }) {
-  const { theme, accentColor, uiScale } = props;
+  const { theme, accentColor, uiScale, terminalFontScale } = props;
   const s = useStoreSelector(
     (state) => ({
       taskNotificationPermission: state.taskNotificationPermission,
@@ -341,17 +349,17 @@ export function ConfigurationDialog({
                   <ALargeSmall size={15} />
                 </span>
                 <div className="config-item-copy">
-                  <strong>Text size</strong>
-                  <span>Scale the interface</span>
+                  <strong>Interface scale</strong>
+                  <span>Scale menus, panels, and dialogs</span>
                 </div>
                 <div
                   className="config-scale-control"
                   role="group"
-                  aria-label="Text size"
+                  aria-label="Interface scale"
                 >
                   <button
                     type="button"
-                    aria-label="Decrease text size"
+                    aria-label="Decrease interface scale"
                     disabled={uiScale <= UI_SCALE_MIN}
                     onClick={() =>
                       props.onUiScaleChange(
@@ -364,7 +372,7 @@ export function ConfigurationDialog({
                   <button
                     type="button"
                     className="config-scale-value"
-                    aria-label={`Reset text size, currently ${uiScale}%`}
+                    aria-label={`Reset interface scale, currently ${uiScale}%`}
                     disabled={uiScale === UI_SCALE_DEFAULT}
                     onClick={() => props.onUiScaleChange(UI_SCALE_DEFAULT)}
                   >
@@ -372,11 +380,67 @@ export function ConfigurationDialog({
                   </button>
                   <button
                     type="button"
-                    aria-label="Increase text size"
+                    aria-label="Increase interface scale"
                     disabled={uiScale >= UI_SCALE_MAX}
                     onClick={() =>
                       props.onUiScaleChange(
                         clampUiScale(uiScale + UI_SCALE_STEP),
+                      )
+                    }
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+              </div>
+              <div className="config-preference-row">
+                <span className="config-item-icon">
+                  <Type size={15} />
+                </span>
+                <div className="config-item-copy">
+                  <strong>Terminal font size</strong>
+                  <span>Scale terminal text only</span>
+                </div>
+                <div
+                  className="config-scale-control"
+                  role="group"
+                  aria-label="Terminal font size"
+                >
+                  <button
+                    type="button"
+                    aria-label="Decrease terminal font size"
+                    disabled={terminalFontScale <= TERMINAL_FONT_SCALE_MIN}
+                    onClick={() =>
+                      props.onTerminalFontScaleChange(
+                        clampTerminalFontScale(
+                          terminalFontScale - TERMINAL_FONT_SCALE_STEP,
+                        ),
+                      )
+                    }
+                  >
+                    <Minus size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="config-scale-value"
+                    aria-label={`Reset terminal font size, currently ${terminalFontScale}%`}
+                    disabled={terminalFontScale === TERMINAL_FONT_SCALE_DEFAULT}
+                    onClick={() =>
+                      props.onTerminalFontScaleChange(
+                        TERMINAL_FONT_SCALE_DEFAULT,
+                      )
+                    }
+                  >
+                    {terminalFontScale}%
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Increase terminal font size"
+                    disabled={terminalFontScale >= TERMINAL_FONT_SCALE_MAX}
+                    onClick={() =>
+                      props.onTerminalFontScaleChange(
+                        clampTerminalFontScale(
+                          terminalFontScale + TERMINAL_FONT_SCALE_STEP,
+                        ),
                       )
                     }
                   >

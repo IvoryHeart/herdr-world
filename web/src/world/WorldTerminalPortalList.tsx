@@ -18,7 +18,7 @@ export default function WorldTerminalPortalList({
   connectionGeneration,
   runtimeGeneration,
   terminalTheme,
-  uiScale,
+  terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
   onOpenWorkspaceFile,
@@ -29,7 +29,7 @@ export default function WorldTerminalPortalList({
   connectionGeneration: number;
   runtimeGeneration: number | null;
   terminalTheme: ITheme;
-  uiScale: number;
+  terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
   onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
@@ -70,7 +70,7 @@ export default function WorldTerminalPortalList({
             <TerminalView
               paneId={pane.pane_id}
               terminalTheme={terminalTheme}
-              uiScale={uiScale}
+              terminalFontScale={terminalFontScale}
               mobileShortcuts={mobileShortcuts}
               mobileSideShortcuts={mobileSideShortcuts}
               onOpenWorkspaceFile={onOpenWorkspaceFile}

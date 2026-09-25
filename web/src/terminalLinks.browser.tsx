@@ -173,7 +173,7 @@ const render = (uiScale: number) =>
       <TerminalView
         paneId="pane"
         terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
-        uiScale={uiScale}
+        terminalFontScale={uiScale}
         showMobileKeys={false}
         onOpenWorkspaceFile={(request) => previews.push(request.path)}
       />,

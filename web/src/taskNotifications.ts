@@ -102,10 +102,11 @@ export async function prepareTaskNotifications(): Promise<ServiceWorkerRegistrat
   }
 }
 
+/** A null target (a notification not tied to a pane) only focuses the app. */
 export async function showTaskNotification(
   title: string,
   options: NotificationOptions,
-  target: TaskNotificationTarget,
+  target: TaskNotificationTarget | null,
   isCurrent: () => boolean,
 ): Promise<void> {
   const registration = await prepareTaskNotifications();
@@ -115,8 +116,14 @@ export async function showTaskNotification(
       ...options,
       data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target },
     });
-  } else {
+  } else if (target) {
     bindTaskNotificationActivation(new Notification(title, options), target);
+  } else {
+    const notification = new Notification(title, options);
+    notification.onclick = () => {
+      notification.close();
+      window.focus();
+    };
   }
 }
 

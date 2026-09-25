@@ -21,6 +21,9 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added Herdr semantic task notifications, plugin popup panes, terminal font
+  sizing independent of interface scale, and File Explorer path drag into terminals
+  from the Roamgate source merge.
 - Added UI-managed local and OpenSSH Herdr profiles with isolated runtimes,
   generations, retries and failure states behind one same-origin World application.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
@@ -41,6 +44,10 @@ retain their original Herdr Web lineage.
 
 ### Changed
 
+- Merged Roamgate source through `84d0955d6eb221a20114fb1788a81579f7c472e1`
+  with shared Git ancestry. This includes its v0.7.10 fixes, diff and worktree
+  updates, and tooling refresh. World retains its connection isolation, visual
+  routes, browser regression suite, and session-bound push revocation.
 - Synchronized the active application source with Roamgate v0.7.9 at
   `c07db60b06b1b23a34ed143d47011a6b8330379a`, carrying forward authentication and
   session handling, TLS and configuration, notifications, terminal transport,

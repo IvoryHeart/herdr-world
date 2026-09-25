@@ -4,7 +4,6 @@ import { createHash } from "node:crypto";
 import { readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseConfigFileTextToJson } from "typescript";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const noticeOutputPath = join(root, "DEPENDENCY_NOTICES.md");
@@ -95,9 +94,17 @@ function escapeCell(value: string): string {
 }
 
 export function canonicalPackageIdsFromLock(lockText: string): string[] {
-  const parsed = parseConfigFileTextToJson("bun.lock", lockText);
-  if (parsed.error) throw new Error("bun.lock is not valid JSONC");
-  const packages = parsed.config?.packages;
+  let parsed: { packages?: unknown };
+  try {
+    const value: unknown = Bun.JSONC.parse(lockText);
+    if (!value || typeof value !== "object") {
+      throw new Error("invalid root");
+    }
+    parsed = value;
+  } catch {
+    throw new Error("bun.lock is not valid JSONC");
+  }
+  const packages = parsed.packages;
   if (!packages || typeof packages !== "object" || Array.isArray(packages)) {
     throw new Error("bun.lock has no package inventory");
   }

@@ -15,6 +15,7 @@ import {
 
 import { type PaneInputEvent, encodePaneInput } from "./vt-input-classifier";
 import { isTerminalClipboardPayload } from "./terminal-clipboard";
+import { readSemanticNotification } from "./semantic-notification";
 
 const HANDSHAKE_TIMEOUT_MS = 8_000;
 
@@ -34,6 +35,7 @@ const SM = {
   Clipboard: 5,
   ClientShellSnapshot: 12,
   PaneSurface: 13,
+  SemanticNotification: 14,
   ClientShellError: 15,
   ClientShellEndpointResponseChunk: 18,
   PaneSurfacePatch: 19,
@@ -83,6 +85,15 @@ export interface EndpointSurface {
 }
 
 /**
+ * `terminal` clients render one pane. A `notifications` client is a passive
+ * shell (`surface_active: false`): Herdr never makes it the foreground client
+ * or a tab geometry controller, but still delivers SemanticNotification to it.
+ * Only that role emits `semantic_notification`, so Herdr's one-per-shell
+ * delivery is not multiplied by the number of open terminal views.
+ */
+export type EndpointClientRole = "terminal" | "notifications";
+
+/**
  * Client-owned shell connection to a Herdr >= 0.9.0 server over
  * herdr-client.sock, speaking the stable endpoint generation 1 contract:
  * bincode-envelope `EndpointControl` with JSON payloads, plus the frozen
@@ -125,6 +136,7 @@ export class EndpointClient extends EventEmitter {
   constructor(
     private socketPath: string,
     private surfaceCodecsEnabled = true,
+    private role: EndpointClientRole = "terminal",
   ) {
     super();
   }
@@ -188,6 +200,7 @@ export class EndpointClient extends EventEmitter {
   }
 
   private sendHello(cols: number, rows: number) {
+    const passive = this.role === "notifications";
     const hello = {
       generation: ENDPOINT_GENERATION,
       cell_width_px: 0,
@@ -197,9 +210,9 @@ export class EndpointClient extends EventEmitter {
       direct_graphics: false,
       endpoint_keybindings: false,
       mouse_capture: false,
-      surface_active: true,
-      surface_delta: this.surfaceCodecsEnabled,
-      surface_reuse: this.surfaceCodecsEnabled,
+      surface_active: !passive,
+      surface_delta: this.surfaceCodecsEnabled && !passive,
+      surface_reuse: this.surfaceCodecsEnabled && !passive,
       snapshot_codecs: ["shell.snapshot.v1"],
       surface_codecs: ["shell.surface.v1"],
       input_codecs: ["shell.input.semantic.v1"],
@@ -368,6 +381,8 @@ export class EndpointClient extends EventEmitter {
       } else if (variant === SM.ClientShellSnapshot) {
         // The server delivers snapshots as EndpointControl JSON; this variant
         // exists in the frozen enum but is not currently sent.
+      } else if (variant === SM.SemanticNotification) {
+        if (this.role === "notifications") this.emitSemanticNotification(r);
       } else if (variant === SM.ClientShellError) {
         this.emit("shell_error", r.string());
       } else if (variant === SM.ClientShellEndpointResponseChunk) {
@@ -412,6 +427,21 @@ export class EndpointClient extends EventEmitter {
       this.close();
       this.emit("error", error);
     }
+  }
+
+  private emitSemanticNotification(r: BinReader) {
+    let notification;
+    try {
+      notification = readSemanticNotification(r);
+    } catch (e) {
+      // A malformed optional notification must not tear down the shell.
+      this.emit(
+        "notification_error",
+        e instanceof Error ? e : new Error(String(e)),
+      );
+      return;
+    }
+    this.emit("semantic_notification", notification);
   }
 
   private handleControl(kind: string, data: string) {
@@ -494,6 +524,7 @@ export class EndpointClient extends EventEmitter {
         kind === SURFACE_DELTA_KIND ? "surface_delta" : "surface_reuse";
       if (
         !this.surfaceCodecsEnabled ||
+        this.role === "notifications" ||
         !this.welcome?.capabilities.includes(capability)
       )
         throw new Error(`Herdr sent unnegotiated ${capability}`);

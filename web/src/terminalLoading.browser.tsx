@@ -129,7 +129,7 @@ const render = () =>
     <TerminalView
       key={mountId}
       terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
-      uiScale={100}
+      terminalFontScale={100}
       showMobileKeys={false}
     />,
   );

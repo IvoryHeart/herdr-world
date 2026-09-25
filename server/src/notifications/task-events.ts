@@ -2,9 +2,16 @@ import { herdrEventName } from "../utils/herdr-events";
 
 export interface TaskEvent {
   kind: "completed" | "blocked";
-  workspaceId: string;
-  paneId: string;
+  /** Absent for Herdr notifications that are not tied to a pane. */
+  workspaceId?: string;
+  paneId?: string;
+  tabId?: string;
+  workspaceLabel?: string;
+  tabLabel?: string;
   agent: string;
+  /** Herdr-rendered text; status-derived events leave these unset. */
+  title?: string;
+  body?: string;
 }
 
 type Pane = {
@@ -42,6 +49,7 @@ export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
       kind: status === "blocked" ? "blocked" : "completed",
       workspaceId: pane.workspace_id,
       paneId: pane.pane_id,
+      tabId: typeof pane.tab_id === "string" ? pane.tab_id : undefined,
       agent:
         typeof pane.agent === "string"
           ? pane.agent

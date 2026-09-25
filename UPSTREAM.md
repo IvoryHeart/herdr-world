@@ -6,12 +6,20 @@ separately installed [`herdrdev/herdr`](https://github.com/herdrdev/herdr) runti
 
 Current synchronization points:
 
-- Roamgate: `c07db60b06b1b23a34ed143d47011a6b8330379a` (v0.7.9, synchronized/replayed
-  from the v0.7.9 source before the World rebrand and visual projection)
-- Herdr compatibility: Herdr 0.9.0, terminal protocol 22
+- Roamgate source: `84d0955d6eb221a20114fb1788a81579f7c472e1` (upstream `main`,
+  25 September 2026). The source was merged into World with Roamgate v0.7.9
+  `c07db60b06b1b23a34ed143d47011a6b8330379a` recorded as a Git parent,
+  so subsequent upstream merges share an actual merge base.
+- Herdr compatibility: Herdr 0.9.0, terminal protocol 22.
 
-Git history is the detailed source record. Future Roamgate refreshes are explicit merge
-or replay changes against a pinned commit; World does not depend on a separately installed
+The merge carries upstream changes through this commit as one source integration.
+World retains its product identity, local/SSH connection ownership and generation
+checks, same-origin access, session-bound push revocation, visual views, and
+browser regression coverage. Roamgate's browser-test deletion in `a7bc9022` was
+intentionally excluded; World-specific service, packaging and documentation
+remain downstream. Future source refreshes should merge from the recorded
+upstream head, resolve World-specific conflicts explicitly, and update this
+commit and the changelog. World does not depend on a separately installed
 Roamgate process, data directory, service, or private API.
 
 Use these terms consistently:

@@ -26,6 +26,7 @@ import {
   type ConnectionStatus,
   type ConnectionSummary,
   type HerdrEventMsg,
+  type PopupStatePush,
   parseConnectionSummary,
 } from "./api";
 import {
@@ -69,6 +70,8 @@ export interface ServerSessionState {
   layout: PaneLayout | null;
   selectedPaneId: string | null;
   recentPaneIds: string[];
+  /** A plugin's session-modal floating pane (e.g. Herdr Float), if open. */
+  popup: PopupInfo | null;
   error: string | null;
   pendingFocusWorkspaceId: string | null;
   pendingFocusWorkspaceSeq: number;
@@ -76,6 +79,8 @@ export interface ServerSessionState {
   terminalAttachEpoch: number;
   lastRefresh: number;
 }
+
+export type PopupInfo = NonNullable<PopupStatePush["popup"]>;
 
 export interface State extends ServerSessionState {
   status: ConnectionStatus;
@@ -187,6 +192,7 @@ export function emptyServerSessionState(
     layout: null,
     selectedPaneId: null,
     recentPaneIds: [],
+    popup: null,
     error: null,
     pendingFocusWorkspaceId: null,
     pendingFocusWorkspaceSeq: 0,
@@ -421,6 +427,7 @@ function serverSessionFromState(snapshot: State): ServerSessionState {
     layout: snapshot.layout,
     selectedPaneId: snapshot.selectedPaneId,
     recentPaneIds: snapshot.recentPaneIds,
+    popup: snapshot.popup,
     error: snapshot.error,
     pendingFocusWorkspaceId: snapshot.pendingFocusWorkspaceId,
     pendingFocusWorkspaceSeq: snapshot.pendingFocusWorkspaceSeq,
@@ -906,7 +913,8 @@ function maybeShowBrowserTaskNotification(
   title: string,
   body: string,
   tag: string,
-  target: TaskNotificationTarget,
+  scope: Pick<TaskNotificationTarget, "connectionId" | "runtimeGeneration">,
+  target: TaskNotificationTarget | null,
 ) {
   if (
     !state.taskNotificationsEnabled ||
@@ -923,7 +931,7 @@ function maybeShowBrowserTaskNotification(
     () =>
       state.taskNotificationsEnabled &&
       version === taskNotificationPreferenceVersion &&
-      taskNotificationTargetIsCurrent(state, target),
+      taskNotificationTargetIsCurrent(state, scope),
   ).catch((error) => reportTaskNotificationFailure(error, version));
 }
 
@@ -996,12 +1004,6 @@ function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
     runtimeGeneration,
     pane,
   );
-  maybeShowBrowserTaskNotification(
-    title,
-    body,
-    taskNotificationTag(target),
-    target,
-  );
   set({
     notice: {
       kind: blocked ? "info" : "success",
@@ -1015,6 +1017,116 @@ function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
       autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
     },
   });
+  maybeShowBrowserTaskNotification(
+    title,
+    body,
+    taskNotificationTag(target),
+    target,
+    target,
+  );
+}
+
+/** Server-relayed Herdr SemanticNotification (`herdr-world.task_notification`). */
+export interface HerdrTaskNotification {
+  kind: "completed" | "blocked";
+  agent: string;
+  title: string;
+  body: string | null;
+  workspaceId: string | null;
+  paneId: string | null;
+}
+
+function optionalEventText(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function parseHerdrTaskNotification(
+  data: Record<string, unknown>,
+): HerdrTaskNotification | null {
+  const kind = data.kind;
+  const title = optionalEventText(data.title);
+  if ((kind !== "completed" && kind !== "blocked") || !title) return null;
+  return {
+    kind,
+    agent: optionalEventText(data.agent) ?? "Agent",
+    title,
+    body: optionalEventText(data.body),
+    workspaceId: optionalEventText(data.workspace_id),
+    paneId: optionalEventText(data.pane_id),
+  };
+}
+
+/** True when the bridge relays Herdr's notification decisions. */
+export function herdrTaskNotificationsActive(hello = bridge.hello): boolean {
+  return hello?.capabilities?.herdr_task_notifications === true;
+}
+
+function documentIsVisible() {
+  return (
+    typeof document === "undefined" || document.visibilityState === "visible"
+  );
+}
+
+function notifyHerdrTask(
+  connectionId: string,
+  notification: HerdrTaskNotification,
+) {
+  if (
+    !state.taskNotificationsEnabled ||
+    !state.taskNotificationPreferences[notification.kind]
+  )
+    return;
+  const runtimeGeneration = state.serverRuntimeGeneration;
+  if (runtimeGeneration === null) return;
+  const { workspaceId, paneId } = notification;
+  // Someone looking at the pane already sees it; Herdr stays the policy owner.
+  if (
+    paneId &&
+    paneId === activePaneIdForTaskNotifications(state) &&
+    documentIsVisible()
+  )
+    return;
+  const scope = { connectionId, runtimeGeneration };
+  const target =
+    workspaceId && paneId
+      ? taskNotificationTarget(connectionId, runtimeGeneration, {
+          workspace_id: workspaceId,
+          pane_id: paneId,
+        })
+      : null;
+  const detail = notification.body ?? notification.agent;
+  const blocked = notification.kind === "blocked";
+  set({
+    notice: {
+      kind: blocked ? "info" : "success",
+      message: notification.title,
+      detail,
+      ...(target
+        ? {
+            actionLabel: "Open agent",
+            actionConnectionId: connectionId,
+            actionRuntimeGeneration: runtimeGeneration,
+            actionWorkspaceId: target.workspaceId,
+            actionPaneId: target.paneId,
+          }
+        : {}),
+      autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
+    },
+  });
+  maybeShowBrowserTaskNotification(
+    notification.title,
+    detail,
+    target
+      ? taskNotificationTag(target)
+      : JSON.stringify([
+          "herdr-world-task",
+          connectionId,
+          runtimeGeneration,
+          notification.title,
+        ]),
+    scope,
+    target,
+  );
 }
 
 function activePaneIdForTaskNotifications(snapshot: State) {
@@ -1042,6 +1154,8 @@ function notifyCompletedTasks(
   tabs: Tab[],
 ) {
   if (!leaseIsCurrent(lease)) return;
+  // The bridge relays Herdr's own notifications instead; see notifyHerdrTask.
+  if (herdrTaskNotificationsActive()) return;
   const activePaneId = activePaneIdForTaskNotifications(state);
   for (const pane of completed) {
     if (!leaseIsCurrent(lease)) return;
@@ -1561,6 +1675,10 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
   ) {
     startPolling();
     void refreshNow(captureConnectionLease());
+    // Popup state is tracked per connection on the bridge, so a switch needs
+    // its own query: otherwise only the connection that was active when the
+    // socket came up ever reports one.
+    void store.watchPopup();
   }
   return true;
 }
@@ -2020,6 +2138,19 @@ export function worktreeRemovalCompletionNotice(
   };
 }
 
+function handlePopupPush(push: PopupStatePush) {
+  if (
+    !state.connectionPaused &&
+    connectionEventIsActive(
+      state,
+      push.connection_id,
+      push.connection_generation,
+    )
+  ) {
+    set({ popup: push.popup });
+  }
+}
+
 function handleHerdrEvent(event: HerdrEventMsg) {
   if (
     !state.connectionPaused &&
@@ -2029,6 +2160,11 @@ function handleHerdrEvent(event: HerdrEventMsg) {
       event.connection_generation,
     )
   ) {
+    if (event.event === "herdr-world.task_notification") {
+      const notification = parseHerdrTaskNotification(event.data);
+      if (notification) notifyHerdrTask(event.connection_id, notification);
+      return;
+    }
     if (
       event.event === "workspace.last_step_completed" &&
       typeof event.data.workspace_id === "string"
@@ -2276,6 +2412,9 @@ export const store = {
           rearmTerminalAttachmentsAfterCatalog(true);
           void refreshNow();
           void refreshBridgeStatus();
+          // Popup state is pushed only on change, so ask once per
+          // settled connection.
+          void store.watchPopup();
         });
         if (state.pendingRestartVersion) {
           void reloadWhenUpdatedServerIsReady(state.pendingRestartVersion);
@@ -2283,6 +2422,7 @@ export const store = {
       }
     });
     bridge.onEvent(handleHerdrEvent);
+    bridge.onPopup(handlePopupPush);
     bridge.onControl((control) => {
       if (control.type === "pause_connection") {
         store.pauseConnection(
@@ -3032,9 +3172,9 @@ export const store = {
           notice: {
             kind: "info",
             message: "Creating worktree",
-            detail: `Updating origin/main before creating ${branch}.`,
+            detail: `Updating origin's default branch before creating ${branch}.`,
             detailMode: "output",
-            detailTitle: "git fetch origin main",
+            detailTitle: "Fetch origin's default branch",
             loading: true,
           },
         });
@@ -3055,13 +3195,16 @@ export const store = {
           setForConnection(lease, { notice: setupNotice });
         } else {
           const commit = String(result?.base_sync?.commit ?? "").slice(0, 12);
+          const base = String(
+            result?.base_sync?.base ?? "origin's default branch",
+          );
           setForConnection(lease, {
             notice: {
               kind: "success",
               message: "Worktree created",
               detail: commit
-                ? `${branch} starts from origin/main at ${commit}.`
-                : `${branch} starts from the latest origin/main.`,
+                ? `${branch} starts from ${base} at ${commit}.`
+                : `${branch} starts from the latest ${base}.`,
               autoDismissMs: 5000,
             },
           });
@@ -3712,6 +3855,71 @@ export const store = {
       }
       await refreshNow(lease);
       return result;
+    });
+  },
+
+  /**
+   * Ask the bridge which popup Herdr currently has open. Pushes only fire on
+   * change, so a browser that just connected, or just switched connection, has
+   * to ask once.
+   */
+  watchPopup() {
+    return action(async (lease) => {
+      const result = (await lease.client.call("terminal.watch_popup", {})) as
+        | { popup: PopupInfo | null }
+        | undefined;
+      setForConnection(lease, { popup: result?.popup ?? null });
+    });
+  },
+
+  /** Close the open popup, if any (Herdr's generic popup.close method). */
+  closePopup() {
+    return action((lease) => lease.client.call("popup.close", {}));
+  },
+
+  /**
+   * Hide the popup if one is open, otherwise invoke the plugin action that
+   * opens it.
+   *
+   * Asks Herdr rather than trusting this client's popup state, which can lag
+   * behind: opening on a stale "none" is refused with "a popup pane is already
+   * open", and that refusal only ever reaches the plugin's command log, so the
+   * key would look dead. "popup_not_open" is the definitive answer that
+   * nothing was open and the action should run.
+   */
+  togglePluginPopup(
+    pluginId: string,
+    actionId: string,
+    context: Record<string, unknown> = {},
+  ) {
+    return action(async (lease) => {
+      try {
+        await lease.client.call("popup.close", {});
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes("popup_not_open")) throw error;
+      }
+      if (!leaseIsCurrent(lease)) return;
+      // Herdr opens a popup in whichever Space it has focused, and a plugin
+      // handed a different one declines: herdr-float reports "Space changed"
+      // and exits successfully, so the key looks dead. Match Herdr's focus to
+      // the Space the action is invoked for.
+      const workspaceId = context.workspace_id;
+      if (typeof workspaceId === "string" && workspaceId) {
+        const focused = store.get().workspaces.find((w) => w.focused);
+        if (focused?.workspace_id !== workspaceId) {
+          await lease.client.call("workspace.focus", {
+            workspace_id: workspaceId,
+          });
+          if (!leaseIsCurrent(lease)) return;
+        }
+      }
+      await lease.client.call("plugin.action.invoke", {
+        plugin_id: pluginId,
+        action_id: actionId,
+        context,
+      });
     });
   },
 

@@ -264,7 +264,8 @@ export class EndpointTerminalSession extends EventEmitter {
   }
 
   private onSurface(surface: EndpointSurface) {
-    if (this.closed || !this.paneId) return; // connect() replays after lookup
+    if (this.closed) return;
+    if (!this.paneId) return; // connect() replays after lookup
     const pane = surface.panes.find((p) => p.paneId === this.paneId);
     if (!pane?.mouseReporting) this.pressedMouseButtons.clear();
     if (!pane) {

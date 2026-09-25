@@ -53,15 +53,21 @@ with Herdr's state-change sequence as a fallback, and stores no activity history
 
 ## Terminal endpoints
 
-Interface text size uses root CSS zoom. Terminal surfaces cancel that zoom and
-scale xterm's font size directly, so cell measurements, selection, mouse input,
-and IME positioning stay in viewport CSS pixels. Radix popovers also cancel zoom
-around their positioning wrapper and reapply it to the content; their viewport
-limits convert back to content units.
+Interface scale uses root CSS zoom. Terminal surfaces cancel that zoom and
+apply a separately saved terminal font scale, so cell measurements, selection,
+mouse input, and IME positioning stay in viewport CSS pixels. Radix popovers
+also cancel zoom around their positioning wrapper and reapply it to the
+content; their viewport limits convert back to content units.
 
 Backend selection uses the verified protocol allowlist, not browser version
 inference. See [Herdr compatibility](./DEPLOYMENT.md#herdr-compatibility) for
 versions, fallback configuration, and clipboard limitations.
+
+One passive endpoint shell per ready runtime relays Herdr semantic task
+notifications to qualified browser events and Web Push. Legacy Herdr uses the
+agent-status tracker. The terminal bridge observes session popup state and
+routes its popup terminal through the same connection lease and generation;
+the browser renders that popup over the shared World shell.
 
 Herdr 0.9.0 endpoints require generation 1 and the exact codecs
 `shell.snapshot.v1`, `shell.surface.v1`, `shell.input.semantic.v1`, and

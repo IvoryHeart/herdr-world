@@ -87,6 +87,8 @@ async function run() {
           theme={theme}
           accentColor="blue"
           uiScale={100}
+          terminalFontScale={100}
+          onTerminalFontScaleChange={() => {}}
           zenMode={false}
           mobileTerminalShortcuts={[[], []]}
           mobileTerminalSideShortcuts={[]}

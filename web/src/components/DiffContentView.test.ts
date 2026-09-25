@@ -66,6 +66,18 @@ test("Changes previews every supported binary image without replacing text diffs
   expect(isImageDiff("README.md", "")).toBe(false);
 });
 
+test("parsed patches get fresh worker cache keys even when a file changes in place", () => {
+  const patch =
+    "diff --git a/example.ts b/example.ts\n--- a/example.ts\n+++ b/example.ts\n@@ -1 +1 @@\n-before\n+after\n";
+  const first = highlightedPatch(patch, "example.ts");
+  const refreshed = highlightedPatch(
+    patch.replace("+after", "+newer"),
+    "example.ts",
+  );
+  expect(first.cacheKey).toBeTruthy();
+  expect(refreshed.cacheKey).not.toBe(first.cacheKey);
+});
+
 test("renames preserve per-side languages without losing same-language overrides", () => {
   for (const [previousPath, path, language] of [
     ["config.json", "config.txt", undefined],

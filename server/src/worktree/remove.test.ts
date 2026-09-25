@@ -524,10 +524,8 @@ describe("worktree removal checkout inspection", () => {
       expect(stopped).toContain(sleeper.pid);
       expect(await sleeper.exited).not.toBe(0);
     } finally {
-      try {
-        sleeper.kill();
-      } catch {}
+      if (sleeper.exitCode === null) sleeper.kill();
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 10_000);
 });

@@ -6,7 +6,15 @@ export const SURFACE_DELTA_KIND = "endpoint.surface-delta.v1";
 export const SURFACE_REUSE_KIND = "endpoint.surface-reuse.v1";
 const MAX_FRAME = 32 * 1024 * 1024;
 
-type Popup = { terminalId: string; frame: FrameData };
+/** Cells-or-percent popup sizing, mirroring Herdr's ClientShellPopupSize. */
+export type PopupSize = { kind: "cells" | "percent"; value: number } | null;
+export type Popup = {
+  terminalId: string;
+  title: string;
+  width: PopupSize;
+  height: PopupSize;
+  frame: FrameData;
+};
 export type SurfaceBaseline = EndpointSurface & {
   bootId: string;
   projectionRevision: number;
@@ -133,22 +141,32 @@ function readPanes(r: SurfaceReader, metadata = false): PaneSurfacePaneMeta[] {
   return panes;
 }
 
+/** Same two fields the surface has always carried, now kept: a popup is
+ * presented with its own title and requested size. */
+function readPopupSize(r: SurfaceReader): PopupSize {
+  return r.option(() =>
+    r.number(1) === 0
+      ? { kind: "cells" as const, value: r.number(65535) }
+      : { kind: "percent" as const, value: r.u8() },
+  );
+}
+
 function readPopup(r: SurfaceReader, metadata: boolean): Popup | null {
   return r.option(() => {
     const terminalId = r.string();
-    r.string(); // title
-    for (let i = 0; i < 2; i++)
-      r.option(() => (r.number(1) === 0 ? r.number(65535) : r.u8()));
+    const title = r.string();
+    const width = readPopupSize(r);
+    const height = readPopupSize(r);
     const frame = readFrame(r, metadata);
     r.bool();
     r.bool();
     r.number(0xffffffff);
     r.number(0xffffffff);
-    return { terminalId, frame };
+    return { terminalId, title, width, height, frame };
   });
 }
 
-// The scene precedes delta rows on the wire even though Roamgate does not
+// The scene precedes delta rows on the wire even though World does not
 // render it. Consume every field, without retaining image payloads.
 function skipGraphicsKey(r: SurfaceReader) {
   if (r.number(1) === 0) {

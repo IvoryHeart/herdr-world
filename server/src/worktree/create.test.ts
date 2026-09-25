@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { shQuote } from "../utils/process-utils";
-import { syncWorktreeBase, WORKTREE_BASE_REF } from "./create";
+import { syncWorktreeBase } from "./create";
+
+const defaultCommit = "a".repeat(40);
 
 describe("worktree creation preparation", () => {
-  test("refreshes origin/main and returns the explicit Herdr base", async () => {
+  test("fetches the advertised default commit for Herdr worktree creation", async () => {
     const calls: string[][] = [];
     const result = await syncWorktreeBase({
       workspaceId: "w1",
@@ -11,25 +13,34 @@ describe("worktree creation preparation", () => {
       shQuote,
       runProcessWithCodeTimeout: async (argv) => {
         calls.push(argv);
-        if (calls.length === 1) {
+        if (calls.length === 1)
+          return {
+            code: 0,
+            stdout: `ref: refs/heads/trunk\tHEAD\n${defaultCommit}\tHEAD\n`,
+            stderr: "",
+          };
+        if (calls.length === 2) return { code: 0, stdout: "", stderr: "" };
+        if (calls.length === 3)
           return { code: 0, stdout: "", stderr: "fetched\n" };
-        }
-        return { code: 0, stdout: "abc123\n", stderr: "" };
+        return { code: 0, stdout: `${defaultCommit}\n`, stderr: "" };
       },
     });
 
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(4);
     expect(calls[0]).toEqual([
       "sh",
       "-lc",
-      "GIT_TERMINAL_PROMPT=0 git -C '/repo with spaces' fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main",
+      "GIT_TERMINAL_PROMPT=0 git -C '/repo with spaces' ls-remote --symref origin HEAD",
     ]);
+    expect(calls[2]?.at(-1)).toContain(
+      `fetch --no-tags --no-write-fetch-head --refmap= origin '${defaultCommit}'`,
+    );
     expect(result).toMatchObject({
       workspace_id: "w1",
       root: "/repo with spaces",
-      base: WORKTREE_BASE_REF,
-      commit: "abc123",
-      command: "git fetch origin main",
+      base: "origin/trunk",
+      commit: defaultCommit,
+      command: `git fetch --no-tags --no-write-fetch-head --refmap= origin '${defaultCommit}'`,
       stderr: "fetched",
     });
   });
@@ -41,14 +52,23 @@ describe("worktree creation preparation", () => {
         resolveGitRoot: async () => ({ root: "/repo" }),
         host: "dev@example.test",
         shQuote,
-        runProcessWithCodeTimeout: async () => ({
-          code: 128,
-          stdout: "",
-          stderr: "remote main is unavailable",
-        }),
+        runProcessWithCodeTimeout: async (argv) =>
+          argv.at(-1)?.includes("ls-remote")
+            ? {
+                code: 0,
+                stdout: `ref: refs/heads/trunk\tHEAD\n${defaultCommit}\tHEAD\n`,
+                stderr: "",
+              }
+            : argv.at(-1)?.includes("check-ref-format")
+              ? { code: 0, stdout: "", stderr: "" }
+              : {
+                  code: 128,
+                  stdout: "",
+                  stderr: "remote trunk is unavailable",
+                },
       }),
     ).rejects.toThrow(
-      "Unable to update origin/main before creating the worktree: remote main is unavailable",
+      "Unable to update origin/trunk: remote trunk is unavailable",
     );
   });
 });

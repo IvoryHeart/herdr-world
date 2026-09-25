@@ -14,7 +14,7 @@ import {
   type AnnotationComposerDraft,
 } from "./AnnotationComposerPopover";
 import { isMobileLayout, LAYOUT_CHANGE_EVENT } from "../layoutPreferences";
-import { terminalFontOptions } from "../appearance";
+import { TERMINAL_FONT_FAMILY, terminalFontOptions } from "../appearance";
 import { detectShortcutPlatform } from "../shortcutBindings";
 import {
   getShortcutSnapshot,
@@ -134,6 +134,10 @@ import {
   terminalPasteRequest,
 } from "../terminalPaste";
 import {
+  isWorkspacePathDrag,
+  workspacePathFromDrag,
+} from "../workspacePathDrag";
+import {
   readTerminalRecoveryReloadAt,
   shouldArmTerminalRecoveryResume,
   shouldReloadTerminalAfterResume,
@@ -147,7 +151,12 @@ import {
   terminalEndpointViewportSize,
   terminalRelayViewportSize,
 } from "../terminalResize";
-import { terminalPageScroll, terminalWheelScroll } from "../terminalScroll";
+import {
+  terminalCellAt,
+  terminalCellAtPoint,
+  terminalPageScroll,
+  terminalWheelScroll,
+} from "../terminalScroll";
 import { TerminalSelectionDragGuard } from "../terminalSelectionGuard";
 import { applyTerminalTheme } from "../terminalThemes";
 import { paneHasAgentHistory } from "./agentSession";
@@ -204,8 +213,6 @@ function sendBytes(
   });
 }
 
-const FONT_FAMILY =
-  'SFMono-Regular, Menlo, Monaco, "0xProto Nerd Font Mono", "JetBrainsMonoNL Nerd Font", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", Consolas, "Liberation Mono", "Courier New", "Noto Sans Mono CJK SC", "Source Han Mono SC", "Sarasa Mono SC", "Herdr Nerd Symbols", monospace';
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
 const TERMINAL_EVICTION_WINDOW_MS = 60_000;
 const TERMINAL_EVICTION_MAX_RETRIES = 3;
@@ -231,9 +238,9 @@ function useDelayedFlag(pending: boolean, delayMs: number): boolean {
   return pending && elapsed;
 }
 
-function terminalDensity(uiScale: number) {
+function terminalDensity(terminalFontScale: number) {
   const compact = typeof window !== "undefined" && isMobileLayout();
-  return terminalFontOptions(compact, uiScale);
+  return terminalFontOptions(compact, terminalFontScale);
 }
 
 function isApplePlatform() {
@@ -242,36 +249,6 @@ function isApplePlatform() {
 
 function shouldAvoidVirtualKeyboard() {
   return isMobileLayout() || window.matchMedia("(any-pointer: coarse)").matches;
-}
-
-function terminalCellAtPoint(term: Terminal, clientX: number, clientY: number) {
-  const element = term.element;
-  if (!element || term.cols <= 0 || term.rows <= 0) return {};
-  const rect = element.getBoundingClientRect();
-  const style = window.getComputedStyle(element);
-  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0;
-  const paddingRight = Number.parseFloat(style.paddingRight) || 0;
-  const paddingTop = Number.parseFloat(style.paddingTop) || 0;
-  const paddingBottom = Number.parseFloat(style.paddingBottom) || 0;
-  const width = rect.width - paddingLeft - paddingRight;
-  const height = rect.height - paddingTop - paddingBottom;
-  if (width <= 0 || height <= 0) return {};
-
-  const x = clientX - rect.left - paddingLeft;
-  const y = clientY - rect.top - paddingTop;
-  const column = Math.max(
-    0,
-    Math.min(term.cols - 1, Math.floor(x / (width / term.cols))),
-  );
-  const row = Math.max(
-    0,
-    Math.min(term.rows - 1, Math.floor(y / (height / term.rows))),
-  );
-  return { column, row };
-}
-
-function terminalCellAt(term: Terminal, e: WheelEvent) {
-  return terminalCellAtPoint(term, e.clientX, e.clientY);
 }
 
 function isEditableElement(target: EventTarget | null) {
@@ -322,7 +299,7 @@ export type TerminalWorkspaceFileRequest = {
 export function TerminalView({
   paneId,
   terminalTheme,
-  uiScale,
+  terminalFontScale,
   showMobileKeys = true,
   mobileShortcuts = defaultMobileTerminalShortcutRows(),
   mobileSideShortcuts = defaultMobileTerminalSideShortcuts(),
@@ -334,7 +311,7 @@ export function TerminalView({
 }: {
   paneId?: string;
   terminalTheme: ITheme;
-  uiScale: number;
+  terminalFontScale: number;
   showMobileKeys?: boolean;
   mobileShortcuts?: MobileTerminalShortcutRows;
   mobileSideShortcuts?: MobileTerminalSideShortcuts;
@@ -467,7 +444,7 @@ export function TerminalView({
   const [termInstance, setTermInstance] = useState<Terminal | null>(null);
   // Theme changes update xterm in place without recreating the terminal.
   const terminalThemeRef = useRef(terminalTheme);
-  const uiScaleRef = useRef(uiScale);
+  const terminalFontScaleRef = useRef(terminalFontScale);
   const fitRef = useRef<FitAddon | null>(null);
   const attachedRef = useRef<string | null>(null);
   const attachingRef = useRef<string | null>(null);
@@ -548,7 +525,7 @@ export function TerminalView({
     pane?.workspace_id,
     pane?.tab_id,
     s.layout?.tab_id,
-    uiScale,
+    terminalFontScale,
     s.status,
     s.connectionPaused,
     s.terminalAttachEpoch,
@@ -882,8 +859,8 @@ export function TerminalView({
     const term = new Terminal({
       cursorBlink: true,
       disableStdin: composerOpenRef.current || shouldAvoidVirtualKeyboard(),
-      fontFamily: FONT_FAMILY,
-      ...terminalDensity(uiScaleRef.current),
+      fontFamily: TERMINAL_FONT_FAMILY,
+      ...terminalDensity(terminalFontScaleRef.current),
       theme: terminalThemeRef.current,
       allowProposedApi: true,
       linkHandler: {
@@ -1306,7 +1283,7 @@ export function TerminalView({
     const applyDensity = () => {
       touchSelection.reset();
       closeTerminalInput();
-      term.options = terminalDensity(uiScaleRef.current);
+      term.options = terminalDensity(terminalFontScaleRef.current);
       const size = fitVisibleTerminal();
       if (size) resizeSync.sendNow(size);
     };
@@ -1948,6 +1925,31 @@ export function TerminalView({
     };
     container.addEventListener("paste", onPaste);
     document.addEventListener("paste", onPaste, { capture: true });
+
+    // A path dragged from the file explorer is typed like a paste, so agents
+    // and shells receive it at the cursor of the active pane.
+    const onPathDragOver = (e: DragEvent) => {
+      if (!e.dataTransfer || !isWorkspacePathDrag(e.dataTransfer)) return;
+      if (!acceptsInput()) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    };
+    const onPathDrop = (e: DragEvent) => {
+      if (!e.dataTransfer || !isWorkspacePathDrag(e.dataTransfer)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const path = workspacePathFromDrag(e.dataTransfer);
+      if (!path || !acceptsInput()) return;
+      const destinationPaneId = paneIdRef.current ?? null;
+      term.focus();
+      void runPasteOperation(() => pasteText(path, destinationPaneId)).catch(
+        (err) => {
+          setUploadError(`Path paste failed: ${(err as Error).message}`);
+        },
+      );
+    };
+    container.addEventListener("dragover", onPathDragOver, { capture: true });
+    container.addEventListener("drop", onPathDrop, { capture: true });
 
     const onCopy = (e: ClipboardEvent) => {
       if (
@@ -2644,6 +2646,10 @@ export function TerminalView({
       });
       container.removeEventListener("paste", onPaste);
       document.removeEventListener("paste", onPaste, { capture: true });
+      container.removeEventListener("dragover", onPathDragOver, {
+        capture: true,
+      });
+      container.removeEventListener("drop", onPathDrop, { capture: true });
       container.removeEventListener("copy", onCopy, { capture: true });
       container.removeEventListener("click", onClick);
       container.removeEventListener("mousedown", onTerminalMouseDown, {
@@ -2913,12 +2919,12 @@ export function TerminalView({
   ]);
 
   useEffect(() => {
-    uiScaleRef.current = uiScale;
+    terminalFontScaleRef.current = terminalFontScale;
     if (!termInstance) return;
-    termInstance.options = terminalDensity(uiScale);
+    termInstance.options = terminalDensity(terminalFontScale);
     const size = fitVisibleTerminal();
     if (size) resizeSyncRef.current?.sendNow(size);
-  }, [uiScale, termInstance, fitVisibleTerminal]);
+  }, [terminalFontScale, termInstance, fitVisibleTerminal]);
 
   useEffect(() => {
     terminalThemeRef.current = terminalTheme;
