@@ -253,7 +253,18 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
   const alpha = await fakeHerdr(root, "alpha", 14, undefined, ({ method }) =>
     method === "workspace.get"
       ? { workspace: { worktree: { checkout_path: root } } }
-      : undefined,
+      : method === "pane.list"
+        ? {
+            panes: [
+              {
+                pane_id: "alpha-pane",
+                terminal_id: "alpha-terminal",
+                workspace_id: "shared-workspace",
+                tab_id: "shared-tab",
+              },
+            ],
+          }
+        : undefined,
   );
   const beta = await fakeHerdr(root, "beta");
   const registryPath = join(root, "connections.json");
@@ -301,8 +312,13 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     const rpcFor = (socket: WebSocket, prefix: string) => {
       let sequence = 0;
       const pending = new Map<string, (message: any) => void>();
+      const controls: Array<Record<string, unknown>> = [];
       socket.onmessage = (event) => {
         const message = JSON.parse(String(event.data));
+        if (message.control) {
+          controls.push(message.control);
+          return;
+        }
         if (typeof message.id === "string") pending.get(message.id)?.(message);
       };
       const raw = async (
@@ -350,7 +366,7 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
         if (message.error) throw new Error(message.error.message);
         return message.result;
       };
-      return { raw, rpc };
+      return { raw, rpc, controls };
     };
     const browserA = rpcFor(wsA, "a");
     const browserB = rpcFor(wsB, "b");
@@ -451,6 +467,74 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     expect(
       aggregate.connections.every(
         (connection: { actionable: boolean }) => connection.actionable,
+      ),
+    ).toBe(true);
+    expect(await browserA.rpc("world.watchlist.list")).toEqual({
+      revision: 0,
+      records: [],
+    });
+    const pinned = await browserA.rpc("world.watchlist.pin", {
+      connection_id: "alpha",
+      connection_generation: oldAlphaGeneration,
+      terminal_id: "alpha-terminal",
+      label: "Synthetic alpha watch",
+    });
+    expect(pinned).toMatchObject({
+      revision: 1,
+      changed: true,
+      records: [
+        {
+          connection_id: "alpha",
+          connection_generation: oldAlphaGeneration,
+          terminal_id: "alpha-terminal",
+        },
+      ],
+    });
+    for (
+      let attempt = 0;
+      attempt < 20 &&
+      !browserB.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 1,
+      );
+      attempt++
+    ) {
+      await Bun.sleep(10);
+    }
+    expect(
+      browserB.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 1,
+      ),
+    ).toBe(true);
+    expect(
+      browserB.controls.some((control) => control.type === "world_invalidated"),
+    ).toBe(true);
+    expect(await browserB.rpc("world.watchlist.list")).toMatchObject({
+      revision: 1,
+      records: [expect.objectContaining({ terminal_id: "alpha-terminal" })],
+    });
+    const unpinned = await browserB.rpc("world.watchlist.unpin", {
+      connection_id: "alpha",
+      connection_generation: oldAlphaGeneration,
+      terminal_id: "alpha-terminal",
+    });
+    expect(unpinned).toMatchObject({ revision: 2, changed: true, records: [] });
+    for (
+      let attempt = 0;
+      attempt < 20 &&
+      !browserA.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 2,
+      );
+      attempt++
+    ) {
+      await Bun.sleep(10);
+    }
+    expect(
+      browserA.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 2,
       ),
     ).toBe(true);
 

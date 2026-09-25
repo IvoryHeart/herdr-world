@@ -14,13 +14,18 @@ retain their original Herdr Web lineage.
   packaging is not part of this foundation.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 - The replacement foundation does not carry forward the former `herdr-world task-summary`
-  producer or the connection-qualified agent/pane watchlist. Existing Herdr-admitted summary
-  metadata can still be presented; deliberate restoration of both workflows is tracked in
+  producer. Existing Herdr-admitted summary metadata can still be presented; deliberate restoration
+  of that workflow is tracked in
   [issue #95](https://github.com/IvoryHeart/herdr-world/issues/95).
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Added
 
+- Added a bounded service-memory watchlist for exact qualified agent and terminal
+  panes. Office, Tree and Graph share Pin/Unpin updates across browser windows;
+  watched topology is reserved within World observation bounds and unavailable
+  records never enable operational actions.
+  [Herdr World PR #106](https://github.com/IvoryHeart/herdr-world/pull/106)
 - Added `herdr-world task-summary` for harnesses to publish a normalized,
   credential-filtered, 80-character, expiring task summary for one exact local or
   fixed-policy SSH Herdr pane. World shows producer text only while its fingerprint

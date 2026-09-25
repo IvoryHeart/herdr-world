@@ -97,6 +97,7 @@ import { rpcLogLevel } from "./utils/rpc-logging";
 import { syncWorktreeBase } from "./worktree/create";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
+import { WorldWatchlistRegistry } from "./world/watchlist";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -379,6 +380,14 @@ try {
 const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
+const worldWatchlist = new WorldWatchlistRegistry();
+
+function publishWatchlistChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_watchlist_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-watchlist");
+}
 
 function publishWorldInvalidation(
   connectionId: string,
@@ -416,6 +425,11 @@ function connectionFailureReporter(connectionId: string): RecoveryReporter {
 const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   connectionBootstrap.defaultConnectionId,
   (status) => {
+    const retired = worldWatchlist.retireConnectionGeneration(
+      status.id,
+      status.generation,
+    );
+    if (retired.changed) publishWatchlistChanged(retired.revision);
     publishWorldInvalidation(status.id, status.generation);
     const fields = {
       connection: status.id,
@@ -451,6 +465,8 @@ worldSnapshots = new WorldSnapshotService(
   Date.now,
   (connectionId, generation) =>
     publishWorldInvalidation(connectionId, generation, true),
+  undefined,
+  () => worldWatchlist.list(),
 );
 
 const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
@@ -798,6 +814,78 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       );
     } catch (error) {
       sendError("world-snapshot-error", error);
+    }
+    return;
+  }
+  if (method === "world.watchlist.list") {
+    sendReply({ id, result: worldWatchlist.list() }, "world-watchlist-list");
+    return;
+  }
+  if (method === "world.watchlist.pin" || method === "world.watchlist.unpin") {
+    try {
+      const identity = params as Record<string, unknown> | undefined;
+      const connectionId = identity?.connection_id;
+      const generation = identity?.connection_generation;
+      const terminalId = identity?.terminal_id;
+      if (
+        typeof connectionId !== "string" ||
+        !connectionId ||
+        !Number.isSafeInteger(generation) ||
+        (generation as number) < 0 ||
+        typeof terminalId !== "string" ||
+        !terminalId
+      ) {
+        throw new Error("invalid World watch identity");
+      }
+      if (method === "world.watchlist.unpin") {
+        const result = worldWatchlist.unpin({
+          connection_id: connectionId,
+          connection_generation: generation as number,
+          terminal_id: terminalId,
+        });
+        if (result.changed) {
+          publishWorldInvalidation(connectionId, generation as number);
+          publishWatchlistChanged(result.revision);
+        }
+        sendReply(
+          { id, result: { ...worldWatchlist.list(), changed: result.changed } },
+          "world-watchlist-unpin",
+        );
+        return;
+      }
+      const lease = connectionManager.readyRuntimeLease(connectionId);
+      if (!lease || lease.generation !== generation || !lease.isCurrent()) {
+        throw new Error("World watch target is unavailable");
+      }
+      const paneResult = await lease.runtime.herdr.call("pane.list", {}, 5_000);
+      const panes = (paneResult as { panes?: unknown })?.panes;
+      const matches = Array.isArray(panes)
+        ? panes.filter(
+            (pane) =>
+              pane &&
+              typeof pane === "object" &&
+              (pane as Record<string, unknown>).terminal_id === terminalId,
+          )
+        : [];
+      if (!lease.isCurrent() || matches.length !== 1) {
+        throw new Error("World watch target is unavailable");
+      }
+      const result = worldWatchlist.pin({
+        connection_id: connectionId,
+        connection_generation: generation as number,
+        terminal_id: terminalId,
+        label: typeof identity?.label === "string" ? identity.label : "Watch",
+      });
+      if (result.changed) {
+        publishWorldInvalidation(connectionId, generation as number);
+        publishWatchlistChanged(result.revision);
+      }
+      sendReply(
+        { id, result: { ...worldWatchlist.list(), changed: result.changed } },
+        "world-watchlist-pin",
+      );
+    } catch (error) {
+      sendError("world-watchlist-error", error);
     }
     return;
   }

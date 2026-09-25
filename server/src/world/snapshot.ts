@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { sanitizeConnectionError } from "../connections/manager";
 import type { ConnectionId, ConnectionStatus } from "../connections/types";
+import type { WorldWatchlist } from "./watchlist";
 
 const MAX_WORKSPACES = 512;
 const MAX_TABS = 2_048;
@@ -65,6 +66,17 @@ export type WorldSnapshot = {
   panes: Record<string, unknown>[];
   agents: Record<string, unknown>[];
   coverage: WorldSnapshotCoverage;
+  watch_admission: WorldWatchAdmission;
+};
+
+export type WorldWatchAdmission = {
+  revision: number;
+  registered: number;
+  missing: number;
+  unresolved: number;
+  matched: number;
+  admitted: number;
+  admission_failed: number;
 };
 
 export type WorldConnectionSnapshot = {
@@ -98,6 +110,7 @@ type CachedSnapshot = {
   snapshot: WorldSnapshot;
   rawDigest: string;
   priorityKey: string;
+  watchRevision: number;
   freshUntil: number;
   dirty: boolean;
 };
@@ -161,37 +174,28 @@ function rankedRelevantRecords(
     .map(({ record }) => record);
 }
 
-function boundedRelevantRecords(
+function boundedReservedRelevantRecords(
   records: readonly Record<string, unknown>[],
   limit: number,
+  reserved: ReadonlySet<Record<string, unknown>>,
   relevance: (record: Record<string, unknown>) => readonly number[],
+  group?: (record: Record<string, unknown>) => string | null,
+  reservedGroups?: ReadonlySet<string>,
+  reservationLimit = 0,
 ) {
-  if (records.length <= limit) return [...records];
-  const admitted = new Set(
-    rankedRelevantRecords(records, relevance).slice(0, limit),
-  );
-  return records.filter((record) => admitted.has(record));
-}
-
-function boundedRelevantRecordsWithGroupReservations(
-  records: readonly Record<string, unknown>[],
-  limit: number,
-  relevance: (record: Record<string, unknown>) => readonly number[],
-  group: (record: Record<string, unknown>) => string | null,
-  reservedGroups: ReadonlySet<string>,
-  reservationLimit: number,
-) {
-  if (records.length <= limit) return [...records];
+  const admitted = new Set<Record<string, unknown>>([...reserved]);
   const ranked = rankedRelevantRecords(records, relevance);
-  const admitted = new Set<Record<string, unknown>>();
-  const groupCounts = new Map<string, number>();
-  for (const record of ranked) {
-    const groupId = group(record);
-    if (!groupId || !reservedGroups.has(groupId)) continue;
-    const count = groupCounts.get(groupId) ?? 0;
-    if (count >= reservationLimit) continue;
-    admitted.add(record);
-    groupCounts.set(groupId, count + 1);
+  if (group && reservedGroups && reservationLimit > 0) {
+    const groupCounts = new Map<string, number>();
+    for (const record of ranked) {
+      if (admitted.has(record)) continue;
+      const groupId = group(record);
+      if (!groupId || !reservedGroups.has(groupId)) continue;
+      const count = groupCounts.get(groupId) ?? 0;
+      if (count >= reservationLimit || admitted.size >= limit) continue;
+      admitted.add(record);
+      groupCounts.set(groupId, count + 1);
+    }
   }
   for (const record of ranked) {
     if (admitted.size >= limit) break;
@@ -409,6 +413,10 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       generation: number,
     ) => void,
     private readonly responseDeadlineMs = SNAPSHOT_RESPONSE_DEADLINE_MS,
+    private readonly watchlist: () => WorldWatchlist = () => ({
+      revision: 0,
+      records: [],
+    }),
   ) {}
 
   invalidate(connectionId?: string): number {
@@ -509,7 +517,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       cached.generation !== status.generation ||
       cached.dirty ||
       this.now() >= cached.freshUntil ||
-      cached.priorityKey !== priorityKey(status.id, priorities)
+      cached.priorityKey !== priorityKey(status.id, priorities) ||
+      cached.watchRevision !== this.watchlist().revision
     ) {
       return null;
     }
@@ -652,6 +661,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           work.status,
           raw,
           work.priorities,
+          this.watchlist(),
         );
         const rawDigest = createHash("sha256")
           .update(JSON.stringify(raw))
@@ -665,6 +675,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           snapshot,
           rawDigest,
           priorityKey: priorityKey(work.status.id, work.priorities),
+          watchRevision: this.watchlist().revision,
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
           dirty: this.wasInvalidatedSinceStart(work),
         });
@@ -754,7 +765,12 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       snapshot_generation: work.lease.generation,
       stale: false,
       actionable: true,
-      snapshot: this.projectSnapshot(status, outcome.raw, priorities),
+      snapshot: this.projectSnapshot(
+        status,
+        outcome.raw,
+        priorities,
+        this.watchlist(),
+      ),
     };
   }
 
@@ -783,6 +799,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     status: ConnectionStatus,
     [workspaceResult, tabResult, paneResult, agentResult]: RawHostSnapshot,
     priorities: readonly WorldSnapshotPriority[],
+    watchlist: WorldWatchlist,
   ): WorldSnapshot {
     const connectionPriorities = priorities.filter(
       ({ connection_id }) => connection_id === status.id,
@@ -791,6 +808,59 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
     const allTabs = records(tabResult, "tabs");
     const allPanes = records(paneResult, "panes");
     const allAgents = records(agentResult, "agents");
+    const watched = watchlist.records.filter(
+      (watch) =>
+        watch.connection_id === status.id &&
+        watch.connection_generation === status.generation,
+    );
+    const workspacesById = new Map<string, Record<string, unknown>[]>();
+    const tabsById = new Map<string, Record<string, unknown>[]>();
+    for (const workspace of allWorkspaces) {
+      const id = nativeId(workspace.workspace_id);
+      if (id)
+        workspacesById.set(id, [...(workspacesById.get(id) ?? []), workspace]);
+    }
+    for (const tab of allTabs) {
+      const id = nativeId(tab.tab_id);
+      if (id) tabsById.set(id, [...(tabsById.get(id) ?? []), tab]);
+    }
+    const matchedWatchedPanes = new Set<Record<string, unknown>>();
+    const watchedWorkspaceIds = new Set<string>();
+    const watchedTabIds = new Set<string>();
+    let missing = 0;
+    let unresolved = 0;
+    for (const watch of watched) {
+      const candidates = allPanes.filter(
+        (pane) => pane.terminal_id === watch.terminal_id,
+      );
+      if (candidates.length === 0) {
+        missing += 1;
+        continue;
+      }
+      const pane = candidates.length === 1 ? candidates[0] : null;
+      const workspaceId = pane && nativeId(pane.workspace_id);
+      const tabId = pane && nativeId(pane.tab_id);
+      const workspace = workspaceId
+        ? workspacesById.get(workspaceId)
+        : undefined;
+      const tab = tabId ? tabsById.get(tabId) : undefined;
+      if (
+        !pane ||
+        !nativeId(pane.pane_id) ||
+        !workspaceId ||
+        !tabId ||
+        workspace?.length !== 1 ||
+        tab?.length !== 1 ||
+        tab[0].workspace_id !== workspaceId
+      ) {
+        unresolved += 1;
+        continue;
+      }
+      matchedWatchedPanes.add(pane);
+      watchedWorkspaceIds.add(workspaceId);
+      watchedTabIds.add(tabId);
+    }
+    const matched = matchedWatchedPanes.size;
     const explicitPanes = allPanes.filter((pane) =>
       connectionPriorities.some(
         (priority) =>
@@ -818,9 +888,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         relevance?.agentCount ?? 0,
       ];
     };
-    const workspaces = boundedRelevantRecords(
+    const workspaces = boundedReservedRelevantRecords(
       allWorkspaces,
       MAX_WORKSPACES,
+      new Set(
+        allWorkspaces.filter((workspace) =>
+          watchedWorkspaceIds.has(String(workspace.workspace_id)),
+        ),
+      ),
       workspaceRelevanceTuple,
     );
     const retainedWorkspaceIds = new Set(
@@ -847,14 +922,20 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           (priority.terminal_id && priority.terminal_id === pane.terminal_id),
       );
     const paneRelevanceTuple = (pane: Record<string, unknown>) => [
+      Number(matchedWatchedPanes.has(pane)),
       Number(paneIsExplicit(pane)),
       Number(pane.focused === true),
       paneStatusPriority(pane),
       Number(isAgentPane(pane)),
     ];
-    const panes = boundedRelevantRecordsWithGroupReservations(
+    const panes = boundedReservedRelevantRecords(
       panesInRetainedWorkspaces,
       MAX_PANES,
+      new Set(
+        panesInRetainedWorkspaces.filter((pane) =>
+          matchedWatchedPanes.has(pane),
+        ),
+      ),
       paneRelevanceTuple,
       (pane) => nativeId(pane.workspace_id),
       presentedWorkspaceIds,
@@ -871,11 +952,12 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       if (activeTabId) priorityTabIds.add(activeTabId);
     }
     const tabRelevance = paneParentRelevance(allPanes, "tab_id");
-    const tabs = boundedRelevantRecordsWithGroupReservations(
+    const tabs = boundedReservedRelevantRecords(
       allTabs.filter((tab) =>
         retainedWorkspaceIds.has(String(tab.workspace_id)),
       ),
       MAX_TABS,
+      new Set(allTabs.filter((tab) => watchedTabIds.has(String(tab.tab_id)))),
       (tab) => {
         const tabId = nativeId(tab.tab_id);
         const relevance = tabId ? tabRelevance.get(tabId) : undefined;
@@ -896,6 +978,9 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         return paneId ? [paneId] : [];
       }),
     );
+    const admitted = [...matchedWatchedPanes].filter((pane) =>
+      panes.includes(pane),
+    ).length;
     const snapshot: WorldSnapshot = {
       workspaces,
       tabs,
@@ -913,6 +998,15 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           ),
       ),
       coverage: topologyCoverage(allWorkspaces, allTabs, allPanes, workspaces),
+      watch_admission: {
+        revision: watchlist.revision,
+        registered: watched.length,
+        missing,
+        unresolved,
+        matched,
+        admitted,
+        admission_failed: matched - admitted,
+      },
     };
     return snapshot;
   }
