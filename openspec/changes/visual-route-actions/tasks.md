@@ -14,4 +14,4 @@
 
 - [x] 3.1 Exercised pointer and keyboard opening, named menu semantics, target labels, unavailable reasons and focus restoration at 1280px and 390px; the shared entry is passed to Office, Tree and Graph.
 - [x] 3.2 Updated Features, the source map and Unreleased notes without implying task assignment, lifecycle control or terminal injection.
-- [ ] 3.3 Synchronize the accepted delta into current `world-surfaces`, run focused checks and `bun run check`, inspect the final diff/history for generated output and sensitive data, then open a ready PR with exact evidence for independent review.
+- [x] 3.3 Synchronized `world-surfaces`; focused resolver, foundation, toolbar and Actions browser checks passed (32 tests), and `bun run check` passed with exit 0. Inspected the final diff/history for generated output and sensitive data; ready PR evidence and link follow.
