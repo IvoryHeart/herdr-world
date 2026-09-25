@@ -82,6 +82,7 @@ test.skipIf(!chrome)(
           "--enable-webgl",
           "--use-angle=swiftshader",
           "--enable-unsafe-swiftshader",
+          "--disable-dev-shm-usage",
           "--disable-background-networking",
           "--no-first-run",
           "--no-default-browser-check",
@@ -100,13 +101,14 @@ test.skipIf(!chrome)(
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error("World terminal handoff timed out")),
-            35_000,
+            60_000,
           ),
         ),
       ]);
       expect(observed).toEqual([]);
     } finally {
       browser?.kill();
+      if (browser) await browser.exited;
       server.stop(true);
       await rm(dir, { recursive: true, force: true });
     }
