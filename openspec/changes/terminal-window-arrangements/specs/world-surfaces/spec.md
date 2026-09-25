@@ -2,11 +2,11 @@
 
 ### Requirement: Arrange existing terminal windows from the shared tab bar
 
-The desktop tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows.
+The desktop tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
 
-In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation on the selected host, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while keeping the other conversations open for later selection. The visual Inspector limit SHALL NOT cap Spaces' existing tabs. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the selected host or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
+In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation on the selected host, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while suspending terminal presentations in other conversations that remain open under the existing dock and floating admission rules. In particular, ordinary selection of B while A is docked SHALL still close A before admitting B; Single SHALL NOT retain A as a hidden extra Inspector or change the one-docked-plus-five-floating limit. The visual Inspector limit SHALL NOT cap Spaces' existing tabs. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT itself create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the selected host or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
 
-Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible windows at invocation. A later new tab or Inspector SHALL use its normal opening presentation until another multiwindow arrangement is chosen. Single SHALL follow the active tab or Inspector, including a newly opened one, while keeping its other windows open and hidden.
+Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible windows at invocation. A later new tab or Inspector SHALL use its normal opening presentation until another multiwindow arrangement is chosen. Single SHALL follow the active tab or Inspector, including a newly admitted one, while hiding only other windows that remain open under normal selection rules.
 
 #### Scenario: Use Single in Spaces
 
@@ -18,6 +18,11 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 - **WHEN** the focused workspace has several open Herdr tabs and the user chooses Columns, Rows, Grid or Cascade in Spaces
 - **THEN** the eligible tabs appear as separate terminal windows in that arrangement without a new Herdr tab, pane, session or connection, and the Spaces Inspector remains bound to the active tab
 
+#### Scenario: Arrange tabs while the Spaces Inspector is on Terminal
+
+- **WHEN** the Spaces Inspector has Terminal selected for an unzoomed split active tab and the user shows that tab in Single, then arranges it with another open tab
+- **THEN** the active tab window presents both panes in both arrangements, the other tab gains its own window in the multiwindow arrangement, and the Inspector keeps Terminal selected but shows a Focus tab window action without a terminal attachment or duplicate input path; activating that action focuses the active tab's selected pane
+
 #### Scenario: Arrange all visible Inspectors
 
 - **WHEN** two or more Inspectors are visible in Office, Tree or Graph and a user chooses an arrangement
@@ -26,11 +31,16 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 #### Scenario: Use Single in a visual view
 
 - **WHEN** several Inspectors are open in Office, Tree or Graph and the user chooses Single
-- **THEN** the active Inspector fills the available stage, the other conversations remain open without live hidden terminal attachments, and selecting one of them brings that Inspector into Single
+- **THEN** the active Inspector fills the available stage, other retained floating conversations stay open without live hidden terminal attachments, and selecting one of them brings that Inspector into Single under its existing presentation rules
+
+#### Scenario: Replace a docked Inspector while Single is active
+
+- **WHEN** A is docked in a visual view's Single arrangement and ordinary selection admits B into the dock
+- **THEN** A's conversation closes before B mounts, A does not consume a hidden Inspector slot or appear on Restore, and B becomes the Single window without a duplicate terminal attachment
 
 #### Scenario: Open another Inspector after arranging
 
-- **WHEN** a user opens another Inspector after arranging the earlier windows
+- **WHEN** a user opens another Inspector after choosing Cascade, Columns, Rows or Grid
 - **THEN** the new Inspector uses its normal opening geometry and the earlier windows do not move until another arrangement is chosen
 
 #### Scenario: Only one eligible window
@@ -148,3 +158,168 @@ Pane placement, zoom and resize inside an Inspector SHALL follow Herdr's tab lay
 
 - **WHEN** a pane closes, moves to another tab or its host generation changes while an Inspector waits for layout data
 - **THEN** an obsolete response is ignored and no pane is attached under an incorrect tab or host
+
+## MODIFIED Requirements
+
+### Requirement: Shared live terminal conversations
+
+Office, Tree and Graph SHALL open qualified agents, occupied desks and terminal nodes in live
+Inspector conversations backed by the shell's existing resource and terminal/session owners.
+Selecting the same qualified entity through another representation SHALL focus its existing
+Inspector instead of creating a competing resource context or terminal attachment. Every open
+conversation SHALL belong to the one selected operational host and its current runtime generation.
+World SHALL use the current Roamgate-derived terminal, Files, Changes and Agent History components
+and existing bridge connection; it SHALL NOT carry or synchronize replacement implementations from
+Herdr Web. Retained World window code MAY provide presentation around the complete Inspector
+without owning resource or terminal transport.
+
+An Office desk activation SHALL open or focus that entity's Inspector on its Terminal tab in the
+presentation selected by the Office preference, preserving direct terminal access without creating
+a terminal-only window. The same qualified terminal SHALL have exactly one live Terminal presentation at a time.
+Docking, undocking or swapping Inspectors SHALL explicitly hand off that attachment after the old
+target detaches while preserving the Inspector's selected tab and other resource state.
+
+If ordinary selection replaces a docked Inspector, World SHALL close the outgoing docked
+conversation before mounting the replacement context and SHALL NOT create a floating window in
+Docked mode. Single arrangement SHALL follow this same admission rule: it SHALL NOT keep the
+outgoing docked Inspector hidden, consume an extra window slot or restore that closed
+conversation later. Floating conversations SHALL arise only from an explicit Dock out action
+or a new Office entity activation while Floating mode is selected. Other retained floating
+conversations MAY be hidden by Single and SHALL continue to count toward the existing limit.
+Explicitly docking a floating conversation into an occupied dock SHALL continue to swap the
+two retained conversations.
+
+The floating Inspector header SHALL expose Dock in and × controls. The docked Inspector SHALL
+expose Dock out and × controls plus its dock-position and expand controls. Closing either
+presentation SHALL close only that qualified Inspector and SHALL NOT silently open another window.
+The Inspector SHALL NOT expose a second Open in Spaces shortcut; Spaces remains available through
+the primary view selector without changing terminal identity or attaching another session.
+
+Desktop SHALL support up to five floating Inspector conversations alongside the one docked
+Inspector, with independent bounded position, size, z-order, selected tab, resource selection and
+close/focus behavior. Terminal tabs SHALL keep text at configured metrics, refit to real dimensions
+and retain usable input, selection, scrolling, uploads and mobile controls. Compact layouts SHALL
+present one active usable Inspector. Spatial views SHALL connect every visible Inspector to its
+represented desk, agent or node. These connectors SHALL track qualified anchors when either endpoint
+moves and SHALL never imply a different runtime ancestry, resource scope or terminal identity.
+Desktop movement SHALL allow a tall Inspector's draggable title region to reach the lower viewport
+while keeping that title region available for recovery; compact Inspectors SHALL remain fully
+contained. The resize affordance SHALL present a compact corner bracket while retaining an
+accessible drag target.
+
+Conversation identity and validity SHALL be qualified by connection and runtime generation inside
+the existing selected-connection browser lease. Opening another window or navigating among Office,
+Tree and Graph SHALL NOT detach, redirect or duplicate conversations while that host and generation
+remain selected. Selecting Spaces SHALL suspend every visual Inspector presentation so the native
+Spaces workspace is unobstructed and SHALL transfer the exact selected terminal presentation only
+after its visual owner detaches. The retained visual conversation state SHALL be restored when the
+user returns to a visual view. Explicitly activating another host SHALL retire every outgoing visual
+and Spaces terminal mount before the replacement becomes operational; World SHALL NOT retain
+simultaneous terminal conversations from several hosts in this change. All conversations SHALL use
+the one World browser WebSocket and existing terminal owner.
+
+Mounted-but-hidden Spaces SHALL NOT keep a competing terminal attachment for a terminal currently
+presented by a visual conversation. A handoff between a visual conversation and visible Spaces MAY
+remount the current terminal UI, but SHALL preserve the qualified Herdr terminal/session identity,
+SHALL NOT close or recreate the server terminal and SHALL order presentation teardown and admission
+so that terminal is never mounted twice. The newly visible presenter SHALL refit to its actual
+dimensions, expose the applicable compact input controls and accept input without a second click;
+returning browser focus SHALL restore the terminal cursor only when that terminal held focus before
+the browser lost it.
+
+While Spaces is visible, its tab window SHALL own every pane presented by the tab's current Herdr
+split or zoom layout in Single and multiwindow arrangements. When the one Spaces Inspector has
+Terminal selected, it SHALL keep that resource selected and offer a Focus tab window action instead
+of attaching the same terminal inside the Inspector. Activating that action SHALL focus the active
+tab's selected pane without creating an attachment. Moving to a visual view SHALL detach the Spaces
+tab window before a visual Inspector can attach that qualified pane.
+
+#### Scenario: Open the same terminal from two representations
+
+- **WHEN** a user opens an agent and then its occupied desk or hierarchy node
+- **THEN** World focuses one qualified Inspector conversation and does not create another resource
+  context, transport or duplicate input path
+
+#### Scenario: Pan the compact Office scene
+
+- **WHEN** a touch user drags over a road, open floor or other non-actionable canvas area
+- **THEN** the logical Office scrolls natively in either axis without requiring the gesture to
+  begin on a scrollbar or control
+
+#### Scenario: Open a terminal from an Office desk
+
+- **WHEN** a user activates an actionable occupied or terminal desk in Office
+- **THEN** World opens or focuses its qualified Inspector on Terminal in the current Docked or
+  Floating default presentation and draws a connector to the represented desk or agent
+
+#### Scenario: Move an Inspector between docked and floating presentations
+
+- **WHEN** a user invokes Dock in or Dock out on an Inspector with Terminal, Files, Changes or
+  History selected
+- **THEN** World transfers the complete Inspector and its resource state, preserves any qualified
+  terminal session and never leaves duplicate content or input ownership in the previous target
+
+#### Scenario: Change selection while an Inspector is docked
+
+- **WHEN** entity A has the docked Inspector and the user selects entity B, including while
+  Single is active
+- **THEN** World closes A's docked conversation before mounting B as the matching docked
+  Inspector, does not hide A or open an A floating window, and cannot resurrect A on Restore
+
+#### Scenario: Select an entity from the common navigator
+
+- **WHEN** the user selects an actionable space or agent in the common workspace navigator while
+  Office, Tree or Graph is active
+- **THEN** the matching qualified World entity opens in the docked Inspector with the same identity
+  and resources as selecting that entity inside the active visual
+
+#### Scenario: Dock into an occupied Inspector target
+
+- **WHEN** entity A is docked and the user docks floating Inspector B
+- **THEN** World swaps A into B's floating presentation and B into the dock without losing either
+  resource context or increasing the floating-window count
+
+#### Scenario: Present a terminal while Spaces remains mounted
+
+- **WHEN** a visual Inspector presents a qualified Terminal tab and Spaces remains mounted but hidden
+- **THEN** the Roamgate-derived terminal uses the existing browser connection and Spaces does not
+  attach a second terminal view for that identity
+
+#### Scenario: Move between visual views and Spaces
+
+- **WHEN** a live conversation exists and the user changes World views, including selecting Spaces
+  through the primary view selector
+- **THEN** Office, Tree and Graph preserve the conversation and its view-local geometry, visible
+  Spaces hides every visual Inspector, presents the exact selected terminal through its native
+  workspace, and each handoff refits without duplicating or recreating the Herdr terminal session
+
+#### Scenario: Return to a previously focused terminal
+
+- **WHEN** a presented terminal held the browser focus and the user returns after focusing another
+  application or browser window
+- **THEN** the same active terminal reclaims its cursor and accepts input without an extra click,
+  while a terminal that did not previously hold focus does not steal it
+
+#### Scenario: Explicitly switch hosts with conversations open
+
+- **WHEN** a user explicitly activates another host while one or more conversations are open
+- **THEN** World retires every outgoing conversation before admitting the new selected-host lease
+  and never redirects input to a colliding terminal on the replacement host
+
+#### Scenario: Selected conversation host reconnects
+
+- **WHEN** the selected host reconnects while one or more conversations are open
+- **THEN** World retires every conversation from the replaced generation and enables a new
+  attachment only after the current generation is admitted
+
+#### Scenario: Conversation target temporarily disappears
+
+- **WHEN** a snapshot refresh or reconnect temporarily omits a conversation target
+- **THEN** World retains the conversation until current admitted state confirms the qualified pane
+  no longer exists
+
+#### Scenario: Desktop conversation limit is reached
+
+- **WHEN** five distinct conversations are open and the user requests a sixth
+- **THEN** World keeps the existing floating and docked Inspectors and reports the bounded limit
+  visibly
