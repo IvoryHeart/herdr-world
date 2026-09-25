@@ -139,6 +139,10 @@ In a rough classification of B–F tool calls by command text, check/test calls
 returned about 0.47 MB of roughly 3.4 MB of tool-result text. Mixed batched
 calls make that estimate imprecise, but it shows that check-output trimming
 alone cannot remove most new tool text, much less the inherited prompt prefix.
+This draft documentation PR also ran formatting checks after several small
+edits; one final check would have been sufficient. Repeated status waits added
+agent turns without advancing the code. Future coordination should let assigned
+agents work asynchronously and consume their final reports once available.
 
 ## What independent review exposed
 
@@ -158,6 +162,12 @@ flat across 14 responses would account for 2,723,434 input tokens (98.5% of
 the observed repair input). This was an ongoing agent session, so even a small
 focused fix replayed a large prior context. The repair figures are separate
 from the initial C row above.
+
+The stacked branch shape also affects wait time. A full check is required for
+each ready implementation PR, and a review repair or changed parent tip makes
+an earlier result insufficient as final evidence. Running focused checks while
+the parent is moving, then one full gate on each final PR tip, avoids duplicate
+full gates without weakening the ready-PR requirement.
 
 For work crossing async or UI boundaries, turn the changed invariant into a
 small set of concrete cases before the final full gate: in-flight invalidation,

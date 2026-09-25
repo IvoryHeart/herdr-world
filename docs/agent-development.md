@@ -47,13 +47,12 @@ risk. `bun run check` is the final candidate gate and includes generated notices
 formatting, lint, type checking, all tests, production builds and strict OpenSpec
 validation. Run `CHROME_BIN=/path/to/chromium bun run test:browser` for browser-heavy
 changes and `bun run build:site` for the project site.
+While a stacked parent or review repair is still changing, use focused checks;
+run the full gate on the final candidate branch tip.
 For long check output, retain the complete log outside the prompt and inspect a
 short success summary or the relevant failure excerpt first.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
-[PR template](../.github/pull_request_template.md). The
-[World package usage retrospective](agent-usage-retrospective.md) explains the
-token fields, measurement limits and patterns worth tracking. Reuse earlier
-results only when their relevant inputs are unchanged. Open a ready PR and stop
-before merge.
+[PR template](../.github/pull_request_template.md). Reuse earlier results only
+when their relevant inputs are unchanged. Open a ready PR and stop before merge.

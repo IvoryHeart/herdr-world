@@ -10,7 +10,7 @@
 
 ## Agent execution and usage
 
-<!-- For a human-only PR, write N/A. For agent work, report measured values or "unknown"; do not estimate a bill from token counts. When using Codex session logs, sum per-response token_usage_record entries so compaction calls are included. See docs/agent-usage-retrospective.md. -->
+<!-- For a human-only PR, write N/A. For agent work, report measured values or "unknown"; do not estimate a bill from token counts. When using Codex session logs, sum per-response token_usage_record entries so compaction calls are included. -->
 
 - Agent/model, reasoning effort and roles:
 - Work pattern (investigation, implementation, checks, review/repair, parallel agents):
