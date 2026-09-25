@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
 import ConnectedTreeView from "./ConnectedTreeView";
-import type { WorldRuntimeConnection } from "./runtimeStore";
+import type { WorldRuntimeConnection, WorldRuntimeState } from "./runtimeStore";
 import { TREE_PREFERENCES_KEY } from "./treePreferences";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import "./world.css";
@@ -107,11 +107,19 @@ async function run() {
   host.style.cssText = "width:100vw;height:100vh;overflow:hidden";
   document.body.append(host);
   const root = createRoot(host);
-  const aggregateWorld = buildWorldObject(
-    [connection("local", "Forge"), connection("remote", "Review host")],
-    "local",
-  );
+  const connections = [
+    connection("local", "Forge"),
+    connection("remote", "Review host"),
+  ];
+  const aggregateWorld = buildWorldObject(connections, "local");
   const world = worldObjectForConnection(aggregateWorld, "local");
+  const runtime: WorldRuntimeState = {
+    status: "ready",
+    revision: 1,
+    observedAt: Date.now(),
+    connections,
+    error: null,
+  };
   const agent = world.leaves.find(
     (node) => node.connectionId === "local" && node.kind === "agent",
   )!;
@@ -139,6 +147,7 @@ async function run() {
     return (
       <ConnectedTreeView
         world={world}
+        runtime={runtime}
         selectedId={selectedId}
         conversationNodeIds={[terminal.id]}
         inlineInspectorNodeId={inlineInspectorNodeId}

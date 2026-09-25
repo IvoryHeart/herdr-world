@@ -42,7 +42,11 @@ import {
   type OfficePreferences,
 } from "./officePreferences";
 import type { WorldObject } from "./worldObject";
-import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
+import {
+  WorldViewToolbar,
+  worldSearchMatches,
+  worldSearchResult,
+} from "./WorldViewToolbar";
 import {
   createdRootPaneId,
   officeCreationActionState,
@@ -72,6 +76,9 @@ const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 
 export default function PixelOfficeView({
   world,
+  query,
+  onQueryChange,
+  showSearch = true,
   toolbarPortal = null,
   selectedId,
   onSelect,
@@ -81,6 +88,9 @@ export default function PixelOfficeView({
   onConversationNodeAnchorsChange,
 }: {
   world: WorldObject;
+  query?: string;
+  onQueryChange?(query: string): void;
+  showSearch?: boolean;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string): void | Promise<boolean>;
@@ -105,6 +115,17 @@ export default function PixelOfficeView({
     }),
     shallowEqual,
   );
+  const [localQuery, setLocalQuery] = useState("");
+  const queryValue = query ?? localQuery;
+  const setQuery = onQueryChange ?? setLocalQuery;
+  const searchMatches = useMemo(
+    () => worldSearchMatches(world, queryValue),
+    [queryValue, world],
+  );
+  const searchResults = useMemo(
+    () => searchMatches.map(worldSearchResult),
+    [searchMatches],
+  );
   const [preferences, setPreferences] = useState(() =>
     readOfficePreferences(worldLocalStorage),
   );
@@ -124,11 +145,6 @@ export default function PixelOfficeView({
     EMPTY_OFFICE_OBSERVABILITY,
   );
   const [observabilityRevision, setObservabilityRevision] = useState(0);
-  const [query, setQuery] = useState("");
-  const searchMatches = useMemo(
-    () => worldSearchMatches(world, query),
-    [query, world],
-  );
   preferencesRef.current = preferences;
   onSelectRef.current = onSelect;
 
@@ -496,17 +512,20 @@ export default function PixelOfficeView({
   const toolbar = (
     <WorldViewToolbar
       viewLabel="Office"
-      query={query}
+      showSearch={showSearch}
+      query={queryValue}
       onQueryChange={setQuery}
+      searchResults={searchResults}
+      onSearchResultSelect={(id) => void onSelect(id)}
       resultLabel={
-        query.trim()
+        queryValue.trim()
           ? searchMatches.length
             ? `${searchMatches.length} matches · Enter to select`
             : "No matches"
           : undefined
       }
       onSubmit={() => {
-        const match = searchMatches[0];
+        const match = searchResults[0];
         if (match) void onSelect(match.id);
       }}
     />

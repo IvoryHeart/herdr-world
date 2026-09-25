@@ -2,42 +2,86 @@ import { ConnectionSwitcher } from "../components/ConnectionSwitcher";
 import type { WorldRuntimeState } from "./runtimeStore";
 import type { WorldObject } from "./worldObject";
 
-export function WorldTopbarStatus({
+function hostStateLabel(state: WorldObject["hosts"][number]["hostState"]) {
+  switch (state) {
+    case "active":
+      return "Active";
+    case "ready-inactive":
+      return "Ready · inactive";
+    case "reconnecting":
+      return "Reconnecting";
+    case "offline-stale":
+      return "Offline · stale";
+  }
+}
+
+export function WorldSummaryPanel({
   runtime,
   world,
-  selectedHostLabel,
 }: {
   runtime: WorldRuntimeState;
   world: WorldObject;
-  selectedHostLabel: string;
 }) {
   const ready = world.hosts.filter(
     (host) =>
       host.hostState === "active" || host.hostState === "ready-inactive",
   ).length;
   const stale = world.hosts.filter((host) => host.stale).length;
+  const selectedHost = world.hosts.find((host) => host.selectedHost);
+  const status = world.coverage.status;
   return (
-    <div
-      className="world-topbar-status"
-      aria-label="World status"
-      aria-live="polite"
-    >
-      <span className="world-live-dot" data-status={runtime.status} />
-      <span className="world-selected-host">{selectedHostLabel}</span>
-      <span title={`${ready} ready hosts`}>{ready} ready</span>
-      <span title={`${world.spaces.length} spaces`}>
-        {world.spaces.length} spaces
-      </span>
-      <span title="Visible agents">
-        {world.leaves.filter((leaf) => leaf.kind === "agent").length} agents
-      </span>
-      {stale ? <span className="world-stale-count">{stale} stale</span> : null}
-      {runtime.error ? (
-        <span className="world-runtime-error" title={runtime.error}>
-          World error
+    <details className="world-summary-panel" open>
+      <summary>
+        <span className="world-summary-title">World summary</span>
+        <span className="world-summary-live">
+          <span className="world-live-dot" data-status={runtime.status} />
+          {runtime.status}
         </span>
-      ) : null}
-    </div>
+      </summary>
+      <div className="world-summary-body" aria-live="polite">
+        <div className="world-summary-host">
+          <span>Selected host</span>
+          <strong>
+            {selectedHost
+              ? `${selectedHost.label} · ${hostStateLabel(selectedHost.hostState)}`
+              : "No host selected"}
+          </strong>
+        </div>
+        <dl className="world-summary-grid">
+          <div>
+            <dt>Ready hosts</dt>
+            <dd>{ready}</dd>
+          </div>
+          <div>
+            <dt>Spaces</dt>
+            <dd>{world.coverage.spaces}</dd>
+          </div>
+          <div>
+            <dt>Agents</dt>
+            <dd>{world.coverage.agents}</dd>
+          </div>
+          <div>
+            <dt>Working</dt>
+            <dd>{status.working}</dd>
+          </div>
+          <div>
+            <dt>Blocked</dt>
+            <dd>{status.blocked}</dd>
+          </div>
+          <div>
+            <dt>Done</dt>
+            <dd>{status.done}</dd>
+          </div>
+        </dl>
+        {stale || runtime.error ? (
+          <p className="world-summary-warning">
+            {stale ? `${stale} stale host${stale === 1 ? "" : "s"}` : null}
+            {stale && runtime.error ? " · " : null}
+            {runtime.error ? "World error" : null}
+          </p>
+        ) : null}
+      </div>
+    </details>
   );
 }
 

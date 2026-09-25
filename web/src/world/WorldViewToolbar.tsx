@@ -30,19 +30,45 @@ export function worldSearchMatches(world: WorldObject, rawQuery: string) {
   );
 }
 
+export type WorldSearchResult = {
+  id: string;
+  label: string;
+  detail: string;
+};
+
+export function worldSearchResult(node: WorldObjectNode): WorldSearchResult {
+  const leaf = node.kind === "agent" || node.kind === "terminal" ? node : null;
+  const status = leaf
+    ? (leaf.stateLabels[leaf.status] ?? leaf.status)
+    : node.hostState;
+  return {
+    id: node.id,
+    label: node.label,
+    detail: [node.kind, status, leaf?.taskSummary, node.hostLabel]
+      .filter(Boolean)
+      .join(" · "),
+  };
+}
+
 export function WorldViewToolbar({
   viewLabel,
+  showSearch = true,
   query,
   onQueryChange,
   resultLabel,
   onSubmit,
+  searchResults = [],
+  onSearchResultSelect,
   children,
 }: {
   viewLabel: string;
+  showSearch?: boolean;
   query: string;
   onQueryChange(query: string): void;
   resultLabel?: string;
   onSubmit?(): void;
+  searchResults?: readonly WorldSearchResult[];
+  onSearchResultSelect?(id: string): void;
   children?: ReactNode;
 }) {
   const [compact, setCompact] = useState(
@@ -95,6 +121,27 @@ export function WorldViewToolbar({
           {resultLabel}
         </span>
       ) : null}
+      {query.trim() && searchResults.length > 0 ? (
+        <div
+          className="world-view-search-results"
+          role="listbox"
+          aria-label={`${viewLabel} search results`}
+        >
+          {searchResults.slice(0, 6).map((result, index) => (
+            <button
+              key={result.id}
+              type="button"
+              role="option"
+              aria-selected={index === 0}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onSearchResultSelect?.(result.id)}
+            >
+              <strong>{result.label}</strong>
+              <small>{result.detail}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
       {compact ? (
         <button
           type="button"
@@ -108,9 +155,11 @@ export function WorldViewToolbar({
     </form>
   );
 
+  if (!showSearch && !children) return null;
+
   return (
     <div className="world-view-toolbar" aria-label={`${viewLabel} controls`}>
-      {compact ? (
+      {showSearch && compact ? (
         <button
           type="button"
           className="world-view-search-toggle"
@@ -120,11 +169,11 @@ export function WorldViewToolbar({
         >
           <Search size={16} aria-hidden="true" />
         </button>
-      ) : (
+      ) : showSearch ? (
         search
-      )}
+      ) : null}
       <div className="world-view-toolbar-actions">{children}</div>
-      {compact && compactSearchOpen
+      {showSearch && compact && compactSearchOpen
         ? createPortal(search, document.body)
         : null}
     </div>

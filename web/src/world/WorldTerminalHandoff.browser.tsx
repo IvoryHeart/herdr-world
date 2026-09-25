@@ -21,10 +21,12 @@ const check = (condition: boolean, message: string) => {
 };
 const settle = () => new Promise((resolve) => setTimeout(resolve, 80));
 function enterSearch(input: HTMLInputElement, value: string) {
-  Object.getOwnPropertyDescriptor(
+  const setter = Object.getOwnPropertyDescriptor(
     HTMLInputElement.prototype,
     "value",
-  )?.set?.call(input, value);
+  )?.set;
+  if (!setter) throw new Error("Input value setter is unavailable");
+  setter.call(input, value);
   input.dispatchEvent(new InputEvent("input", { bubbles: true }));
 }
 async function until(condition: () => unknown, message: string) {
@@ -371,7 +373,12 @@ const client: ConnectionClient = {
           bytes: btoa(`${terminalId}\r\n`),
         });
       }
-      return {};
+      return {
+        endpoint: {
+          methods: ["pane.focus", "tab.create"],
+          capabilities: [],
+        },
+      };
     }
     return {};
   },
@@ -488,17 +495,14 @@ async function run() {
     "the retired Visual Control Plane header still consumes Office height",
   );
   check(
-    Boolean(document.querySelector(".world-topbar-status")),
-    "World status was not moved into the inherited top bar",
+    !document.querySelector(".world-topbar-status"),
+    "World status summary still consumes inherited top-bar space",
   );
   const topbarHost = document.querySelector<HTMLElement>(
     ".connection-switcher",
   );
   const topbarView = document.querySelector<HTMLElement>(
     ".world-primary-view-select",
-  );
-  const topbarDetails = document.querySelector<HTMLElement>(
-    ".world-topbar-status",
   );
   const topbarActions = document.querySelector<HTMLElement>(".command-trigger");
   const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
@@ -510,10 +514,14 @@ async function run() {
     );
   check(
     precedes(topbarHost, topbarView) &&
-      precedes(topbarView, topbarDetails) &&
-      precedes(topbarDetails, topbarActions) &&
+      precedes(topbarView, topbarActions) &&
       precedes(topbarActions, topbarMenu),
-    "top bar did not order host, view, details, Actions and Menu",
+    "top bar did not order host, view, Actions and Menu",
+  );
+  check(
+    document.querySelector<HTMLButtonElement>(".command-trigger")?.disabled ===
+      false,
+    "Actions remained disabled outside Spaces",
   );
   check(
     document
@@ -674,6 +682,12 @@ async function run() {
     "Graph in shared frame",
   );
   check(
+    Boolean(
+      document.querySelector(".world-spatial-graph-shell .world-summary-panel"),
+    ),
+    "Graph did not expose its floating world summary",
+  );
+  check(
     document.querySelector(".sidebar") === sharedNavigator,
     "Graph replaced the shared workspace navigator",
   );
@@ -688,6 +702,14 @@ async function run() {
   await until(
     () => document.querySelector(".world-connected-tree-shell"),
     "Tree in shared frame",
+  );
+  check(
+    Boolean(
+      document.querySelector(
+        ".world-connected-tree-shell .world-summary-panel",
+      ),
+    ),
+    "Tree did not expose its floating world summary",
   );
   check(
     document.querySelector(".sidebar") === sharedNavigator,
@@ -756,15 +778,37 @@ async function run() {
         ?.classList.contains("has-inspector"),
     "close shared navigator Inspector",
   );
-  const officeSearch = document.querySelector<HTMLInputElement>(
-    'input[placeholder="Search Office"]',
-  )!;
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "shared World search palette",
+  );
+  const officeSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
   enterSearch(officeSearch, "Local");
-  officeSearch
-    .closest("form")!
-    .dispatchEvent(
-      new SubmitEvent("submit", { bubbles: true, cancelable: true }),
-    );
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent === "Local",
+      ),
+    "World search result",
+  );
+  check(
+    Boolean(
+      [...document.querySelectorAll<HTMLElement>(".command-item")].find(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent === "Local",
+      ),
+    ),
+    "World search did not expose selectable result items",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent === "Local",
+    )
+    ?.click();
   await until(
     () =>
       document
@@ -2412,6 +2456,218 @@ async function run() {
       ?.textContent?.includes("Reviewing the replacement session") === true,
     "replacement session did not refresh the Inspector context",
   );
+
+  const visualViewBeforeWorldAction = viewSelect.value;
+  const tabFocusBeforeWorldAction = calls.filter(
+    ({ method }) => method === "tab.focus",
+  ).length;
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World terminal focus action palette",
+  );
+  const focusActionSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(focusActionSearch, "focus on your tab builder");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Focus tab: Builder",
+      ),
+    "World terminal focus action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent ===
+        "Focus tab: Builder",
+    )
+    ?.click();
+  await until(
+    () =>
+      viewSelect.value === visualViewBeforeWorldAction &&
+      calls.filter(({ method }) => method === "tab.focus").length >
+        tabFocusBeforeWorldAction &&
+      Boolean(document.querySelector('[aria-label="Builder Inspector"]')),
+    "World terminal focus action visual handoff",
+  );
+  check(
+    document.querySelector(".workspace-terminal-surface > .terminal-shell") ===
+      null,
+    "visual World action attached the hidden Spaces terminal",
+  );
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual action availability palette",
+  );
+  const unsupportedActionSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(unsupportedActionSearch, "close pane");
+  await settle();
+  check(
+    [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent === "Close pane",
+    ),
+    "visual World route removed a shared model action",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent === "Close pane",
+    )
+    ?.click();
+  await until(
+    () =>
+      Boolean(
+        document.querySelector('[role="dialog"][aria-label="Close Pane"]'),
+      ),
+    "visual World action opened the shared close-pane confirmation",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Close Pane"] button.ghost',
+    )
+    ?.click();
+  await until(
+    () => !document.querySelector('[role="dialog"][aria-label="Close Pane"]'),
+    "visual World action close-pane confirmation cancellation",
+  );
+
+  const visualFileListCallsBefore = calls.filter(
+    ({ method }) => method === "file.list",
+  ).length;
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual file action palette",
+  );
+  const visualFileActionSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(visualFileActionSearch, "open file explorer");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Open file explorer",
+      ),
+    "World visual file action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent ===
+        "Open file explorer",
+    )
+    ?.click();
+  await until(
+    () =>
+      document.querySelector(
+        ".world-context-rail .workspace-inspector[data-view=files]",
+      ) !== null,
+    "World visual file action opened the World Inspector",
+  );
+  check(
+    calls.filter(({ method }) => method === "file.list").length >
+      visualFileListCallsBefore,
+    "visual file action did not load the selected workspace",
+  );
+
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual diff action palette",
+  );
+  const visualDiffActionSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(visualDiffActionSearch, "open diff viewer");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Open Diff Viewer",
+      ),
+    "World visual diff action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent ===
+        "Open Diff Viewer",
+    )
+    ?.click();
+  await until(
+    () =>
+      document.querySelector(
+        ".world-context-rail .workspace-inspector[data-view=changes]",
+      ) !== null,
+    "World visual diff action opened the World Inspector",
+  );
+  check(
+    document.querySelector(
+      ".world-context-rail .workspace-inspector .diff-viewer-side",
+    ) !== null,
+    "visual diff action did not render the selected workspace changes",
+  );
+
+  const browserLocalState = store.get();
+  __storeTesting.replaceState({
+    ...browserLocalState,
+    navigationMode: "browser-local",
+    endpointAvailability: {},
+    browserNavigation: {
+      ...browserLocalState.browserNavigation,
+      revision: browserLocalState.browserNavigation.revision + 1,
+      workspaceId: workspaceBase.workspace_id,
+      tabIds: {
+        ...browserLocalState.browserNavigation.tabIds,
+        [workspaceBase.workspace_id]: "work",
+      },
+      paneIds: {
+        ...browserLocalState.browserNavigation.paneIds,
+        work: "builder-pane",
+      },
+    },
+  });
+  const tabCreateCallsBefore = calls.filter(
+    ({ method }) => method === "tab.create",
+  ).length;
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
+  await until(
+    () => Boolean(document.querySelector<HTMLInputElement>(".command-input")),
+    "World visual create-tab action palette",
+  );
+  const visualCreateTabSearch =
+    document.querySelector<HTMLInputElement>(".command-input")!;
+  enterSearch(visualCreateTabSearch, "create tab");
+  await until(
+    () =>
+      [...document.querySelectorAll<HTMLElement>(".command-item")].some(
+        (item) =>
+          item.querySelector(".command-item-title")?.textContent ===
+          "Create tab",
+      ),
+    "World visual create-tab action result",
+  );
+  [...document.querySelectorAll<HTMLElement>(".command-item")]
+    .find(
+      (item) =>
+        item.querySelector(".command-item-title")?.textContent === "Create tab",
+    )
+    ?.click();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "tab.create").length >
+      tabCreateCallsBefore,
+    "World visual create-tab action dispatch",
+  );
+
+  document.querySelector<HTMLButtonElement>(".command-trigger")!.click();
 
   runtimeGeneration += 1;
   worldRevision += 1;

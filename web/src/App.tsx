@@ -71,7 +71,11 @@ import { AgentIcon } from "./components/AgentIcon";
 import { paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
 import { focusIfUnchanged } from "./components/dialogFocus";
-import { CommandCombobox } from "./components/CommandCombobox";
+import {
+  CommandCombobox,
+  type CommandActionResult,
+  type CommandSearchResult,
+} from "./components/CommandCombobox";
 import { CONFIG_MENU_ID, ConfigMenu } from "./components/ConfigMenu";
 import { ConnectionSwitcher } from "./components/ConnectionSwitcher";
 import {
@@ -1228,6 +1232,12 @@ export type WorkspaceSurfaceInspectorControl = {
 
 export default function App({
   operationalShortcutsEnabled = true,
+  commandMenuEnabled = operationalShortcutsEnabled,
+  commandActionCanHandleDisabled = false,
+  worldSearch,
+  onCommandSearchChange,
+  onCommandAction,
+  commandMenuPlaceholder,
   inspectorPortal = null,
   topbarPortal = null,
   primaryViewControl = null,
@@ -1242,6 +1252,12 @@ export default function App({
   inspectorContext = null,
 }: {
   operationalShortcutsEnabled?: boolean;
+  commandMenuEnabled?: boolean;
+  commandActionCanHandleDisabled?: boolean;
+  worldSearch?: (query: string) => readonly CommandSearchResult[];
+  onCommandSearchChange?: (query: string) => void;
+  onCommandAction?: (key: string) => CommandActionResult | void;
+  commandMenuPlaceholder?: string;
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
   primaryViewControl?: ReactNode;
@@ -3640,7 +3656,9 @@ export default function App({
     return true;
   };
   const topbar = (
-    <header className={`topbar ${zenMode && !mobile ? "is-zen" : ""}`}>
+    <header
+      className={`topbar ${topbarPortal ? "world-topbar" : ""} ${zenMode && !mobile ? "is-zen" : ""}`}
+    >
       <div className="topbar-start">
         <div className="brand">
           <img
@@ -3662,7 +3680,12 @@ export default function App({
         <div className="topbar-command-group">
           <CommandCombobox
             key={`${resourceUiKey}:commands`}
-            operationalShortcutsEnabled={operationalShortcutsEnabled}
+            operationalShortcutsEnabled={commandMenuEnabled}
+            allowDisabledActionDispatch={commandActionCanHandleDisabled}
+            worldSearch={worldSearch}
+            onSearchChange={onCommandSearchChange}
+            onActionRun={onCommandAction}
+            placeholder={commandMenuPlaceholder}
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}

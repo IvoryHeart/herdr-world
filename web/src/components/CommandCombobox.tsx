@@ -69,8 +69,19 @@ type ActionDefinition = {
   keywords?: string[];
   danger?: boolean;
   disabledReason?: string | null;
+  dispatchWhenDisabled?: boolean;
   run: () => void;
 };
+
+export type CommandSearchResult = {
+  key: string;
+  title: string;
+  detail?: string;
+  keywords?: string[];
+  run: () => void;
+};
+
+export type CommandActionResult = "handled" | "blocked";
 
 type ActionGroupDefinition = {
   heading: string;
@@ -228,11 +239,21 @@ export function runCommandNumberShortcut<T>(
 
 export function CommandCombobox({
   operationalShortcutsEnabled = true,
+  allowDisabledActionDispatch = false,
+  worldSearch,
+  onSearchChange,
+  onActionRun,
+  placeholder = "Search actions or enter file path...",
   onOpenFileExplorer,
   onOpenFile,
   onOpenDiffViewer,
 }: {
   operationalShortcutsEnabled?: boolean;
+  allowDisabledActionDispatch?: boolean;
+  worldSearch?: (query: string) => readonly CommandSearchResult[];
+  onSearchChange?: (query: string) => void;
+  onActionRun?: (key: string) => CommandActionResult | void;
+  placeholder?: string;
   onOpenFileExplorer?: (workspaceId?: string) => void;
   onOpenFile?: (workspaceId: string, entry: FileExplorerEntry) => void;
   onOpenDiffViewer?: (workspaceId?: string) => void;
@@ -277,6 +298,7 @@ export function CommandCombobox({
     if (operationalShortcutsEnabled) return;
     setOpen(false);
     setSearch("");
+    onSearchChange?.("");
     setSelectedActionValue("");
     setSelectedActionSearch("");
     setCreateWorkspaceOpen(false);
@@ -288,7 +310,7 @@ export function CommandCombobox({
     setPendingCloseTab(null);
     setPendingClosePane(null);
     setPendingRemoveWorktree(null);
-  }, [operationalShortcutsEnabled]);
+  }, [onSearchChange, operationalShortcutsEnabled]);
 
   const composerDraftWarningFor = (paneIds: string[]) =>
     terminalComposerCloseWarning(
@@ -366,18 +388,36 @@ export function CommandCombobox({
       e.stopPropagation();
       setOpen((value) => {
         const next = !value;
-        if (!next) setSearch("");
+        if (!next) {
+          setSearch("");
+          onSearchChange?.("");
+        }
         return next;
       });
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [operationalShortcutsEnabled]);
+  }, [onSearchChange, operationalShortcutsEnabled]);
 
-  const run = (fn: () => void) => {
+  const run = (
+    fn: () => void,
+    actionKey?: string,
+    disabledReason?: string | null,
+    dispatchWhenDisabled = false,
+  ) => {
     setOpen(false);
     setSearch("");
+    onSearchChange?.("");
     if (!operationalShortcutsEnabled) return;
+    if (actionKey) {
+      const result = onActionRun?.(actionKey);
+      if (result === "handled" || result === "blocked") return;
+    }
+    if (
+      disabledReason &&
+      (!dispatchWhenDisabled || !allowDisabledActionDispatch)
+    )
+      return;
     fn();
   };
 
@@ -556,6 +596,7 @@ export function CommandCombobox({
         "tab.create",
         focusedWorkspace.workspace_id,
       ),
+      dispatchWhenDisabled: true,
       run: () => store.createTab(focusedWorkspace.workspace_id),
     });
   }
@@ -736,6 +777,7 @@ export function CommandCombobox({
         "tab.create",
         focusedWorkspace.workspace_id,
       ),
+      dispatchWhenDisabled: true,
       run: () => store.createTab(focusedWorkspace.workspace_id),
     });
     for (const workspace of otherWorkspaces) {
@@ -750,6 +792,7 @@ export function CommandCombobox({
           "tab.create",
           workspace.workspace_id,
         ),
+        dispatchWhenDisabled: true,
         run: () => store.createTab(workspace.workspace_id),
       });
     }
@@ -781,7 +824,14 @@ export function CommandCombobox({
       icon: <PanelTop size={15} />,
       title: `Focus tab: ${tabName(tab)}`,
       detail: tab.tab_id,
-      keywords: ["switch tab", "open tab", "go tab", tabName(tab)],
+      keywords: [
+        "switch tab",
+        "open tab",
+        "go tab",
+        "focus tab",
+        "focus on your tab",
+        tabName(tab),
+      ],
       run: () => store.focusTab(tab.tab_id),
     });
   }
@@ -906,7 +956,16 @@ export function CommandCombobox({
     });
   }
 
+  const worldActions: ActionDefinition[] = (worldSearch?.(search) ?? []).map(
+    (result) => ({
+      ...result,
+      icon: <PanelTop size={15} />,
+    }),
+  );
   const actionGroups: ActionGroupDefinition[] = [
+    ...(worldActions.length
+      ? [{ heading: "World", actions: worldActions }]
+      : []),
     { heading: "Current", actions: currentActions },
     { heading: "Files", actions: fileActions },
     { heading: "Workspaces", actions: workspaceActions },
@@ -1004,7 +1063,10 @@ export function CommandCombobox({
   const setCommandOpen = (next: boolean) => {
     if (next && !operationalShortcutsEnabled) return;
     setOpen(next);
-    if (!next) setSearch("");
+    if (!next) {
+      setSearch("");
+      onSearchChange?.("");
+    }
   };
 
   return (
@@ -1034,7 +1096,17 @@ export function CommandCombobox({
             runCommandNumberShortcut(
               event,
               numberedActions,
-              (action) => !action.disabledReason && run(action.run),
+              (action) =>
+                (!action.disabledReason ||
+                  (action.dispatchWhenDisabled &&
+                    allowDisabledActionDispatch &&
+                    onActionRun)) &&
+                run(
+                  action.run,
+                  action.key,
+                  action.disabledReason,
+                  action.dispatchWhenDisabled,
+                ),
             );
           }}
         >
@@ -1049,8 +1121,11 @@ export function CommandCombobox({
           >
             <CommandInput
               value={search}
-              onValueChange={setSearch}
-              placeholder="Search actions or enter file path..."
+              onValueChange={(value) => {
+                setSearch(value);
+                onSearchChange?.(value);
+              }}
+              placeholder={placeholder}
             />
             <CommandList>
               <CommandEmpty>No actions found.</CommandEmpty>
@@ -1069,13 +1144,27 @@ export function CommandCombobox({
                       )}
                       keywords={action.keywords}
                       danger={action.danger}
-                      disabledReason={action.disabledReason}
+                      disabledReason={
+                        action.dispatchWhenDisabled &&
+                        allowDisabledActionDispatch &&
+                        onActionRun
+                          ? null
+                          : action.disabledReason
+                      }
                       onSelect={() => {
                         if (
                           operationalShortcutsEnabled &&
-                          !action.disabledReason
+                          (!action.disabledReason ||
+                            (action.dispatchWhenDisabled &&
+                              allowDisabledActionDispatch &&
+                              onActionRun))
                         )
-                          run(action.run);
+                          run(
+                            action.run,
+                            action.key,
+                            action.disabledReason,
+                            action.dispatchWhenDisabled,
+                          );
                       }}
                     />
                   ))}

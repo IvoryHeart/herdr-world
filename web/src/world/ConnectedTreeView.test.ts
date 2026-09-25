@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { connectedTreeMatches } from "./ConnectedTreeView";
 import { projectWorldTree } from "./treeProjection";
 import type { WorldObject } from "./worldObject";
+import { worldSearchMatches, worldSearchResult } from "./WorldViewToolbar";
 
 describe("connected Tree search", () => {
   test("keeps complete ancestor context for a matching task without mutating disclosure", () => {
@@ -25,6 +26,17 @@ describe("connected Tree search", () => {
     expect(
       connectedTreeMatches(projectWorldTree(fixtureWorld()), "  "),
     ).toBeNull();
+  });
+
+  test("provides selectable result summaries for the shared search overlay", () => {
+    const matches = worldSearchMatches(fixtureWorld(), "release checks");
+    expect(matches.map((node) => worldSearchResult(node))).toEqual([
+      {
+        id: "agent-a",
+        label: "Codex",
+        detail: "agent · working · Running release checks · Forge",
+      },
+    ]);
   });
 });
 

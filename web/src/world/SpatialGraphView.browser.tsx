@@ -5,7 +5,7 @@ import type { Pane, Tab, Workspace } from "../types";
 import SpatialGraphView from "./SpatialGraphView";
 import { LatestFrameValue } from "./graph/GraphCanvas";
 import { GRAPH_PREFERENCES_KEY } from "./graph/graphPreferences";
-import type { WorldRuntimeConnection } from "./runtimeStore";
+import type { WorldRuntimeConnection, WorldRuntimeState } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import "./world.css";
 
@@ -168,9 +168,23 @@ async function run() {
       );
       return worldObjectForConnection(aggregate, "local");
     }, [agentStatus]);
+    const runtime = useMemo<WorldRuntimeState>(() => {
+      const connections = [
+        connection("local", "Forge", agentStatus),
+        connection("remote", "Review host", "blocked"),
+      ];
+      return {
+        status: "ready",
+        revision: 1,
+        observedAt: Date.now(),
+        connections,
+        error: null,
+      };
+    }, [agentStatus]);
     return (
       <SpatialGraphView
         world={world}
+        runtime={runtime}
         selectedId={selectedId}
         conversationNodeIds={[terminal.id]}
         onSelect={(id) => {

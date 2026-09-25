@@ -37,10 +37,16 @@ import {
   type WorldGraphSpace,
 } from "./graph/graphProjection";
 import type { WorldObject } from "./worldObject";
+import type { WorldRuntimeState } from "./runtimeStore";
+import { WorldSummaryPanel } from "./WorldStatus";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 
 export default function SpatialGraphView({
   world,
+  runtime,
+  query,
+  onQueryChange,
+  showSearch = true,
   toolbarPortal = null,
   selectedId,
   conversationNodeIds,
@@ -50,6 +56,10 @@ export default function SpatialGraphView({
   onNodeAnchorsChange,
 }: {
   world: WorldObject;
+  runtime: WorldRuntimeState;
+  query?: string;
+  onQueryChange?(query: string): void;
+  showSearch?: boolean;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
@@ -71,15 +81,17 @@ export default function SpatialGraphView({
   const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(
     () => new Set(initialPrefs.collapsedIds),
   );
-  const [query, setQuery] = useState("");
+  const [localQuery, setLocalQuery] = useState("");
+  const queryValue = query ?? localQuery;
+  const setQuery = onQueryChange ?? setLocalQuery;
   const [actionError, setActionError] = useState<string | null>(null);
   const canvasRef = useRef<GraphCanvasHandle | null>(null);
   const prefsRef = useRef<GraphPreferences>(initialPrefs);
   const collapsedIdsRef = useRef(collapsedIds);
   const persistTimerRef = useRef<number | null>(null);
   const matches = useMemo(
-    () => graphMatches(projection.hosts, query),
-    [projection.hosts, query],
+    () => graphMatches(projection.hosts, queryValue),
+    [projection.hosts, queryValue],
   );
   const searchActive = matches !== null;
   const effectiveCollapsedIds = useMemo(
@@ -247,7 +259,8 @@ export default function SpatialGraphView({
   const toolbar = (
     <WorldViewToolbar
       viewLabel="Graph"
-      query={query}
+      showSearch={showSearch}
+      query={queryValue}
       onQueryChange={setQuery}
       resultLabel={
         searchActive
@@ -293,6 +306,7 @@ export default function SpatialGraphView({
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <div ref={rootRef} className="world-spatial-graph-shell">
+        <WorldSummaryPanel runtime={runtime} world={world} />
         <div className="world-spatial-graph-content">
           <aside
             className="world-spatial-graph-outline"

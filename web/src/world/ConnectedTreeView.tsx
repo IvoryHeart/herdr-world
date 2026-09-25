@@ -19,12 +19,18 @@ import {
   type WorldTreeSpace,
 } from "./treeProjection";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
+import type { WorldRuntimeState } from "./runtimeStore";
+import { WorldSummaryPanel } from "./WorldStatus";
 import { WorldViewToolbar } from "./WorldViewToolbar";
 
 export type WorldNodeAnchors = Record<string, OfficeCanvasAnchor>;
 
 export default function ConnectedTreeView({
   world,
+  runtime,
+  query,
+  onQueryChange,
+  showSearch = true,
   toolbarPortal = null,
   selectedId,
   conversationNodeIds,
@@ -36,6 +42,10 @@ export default function ConnectedTreeView({
   onNodeAnchorsChange,
 }: {
   world: WorldObject;
+  runtime: WorldRuntimeState;
+  query?: string;
+  onQueryChange?(query: string): void;
+  showSearch?: boolean;
   toolbarPortal?: Element | null;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
@@ -50,7 +60,9 @@ export default function ConnectedTreeView({
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 720px)").matches,
   );
-  const [query, setQuery] = useState("");
+  const [localQuery, setLocalQuery] = useState("");
+  const queryValue = query ?? localQuery;
+  const setQuery = onQueryChange ?? setLocalQuery;
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(
     () => new Set(readTreePreferences(worldLocalStorage).collapsedIds),
   );
@@ -59,8 +71,8 @@ export default function ConnectedTreeView({
     [selectedId, world],
   );
   const matches = useMemo(
-    () => connectedTreeMatches(projection, query),
-    [projection, query],
+    () => connectedTreeMatches(projection, queryValue),
+    [projection, queryValue],
   );
   const searchActive = matches !== null;
   const visibleHosts = searchActive
@@ -95,7 +107,7 @@ export default function ConnectedTreeView({
   useEffect(() => {
     if (!inlineInspectorNodeId) return;
     setQuery("");
-  }, [inlineInspectorNodeId]);
+  }, [inlineInspectorNodeId, setQuery]);
 
   useEffect(() => {
     writeTreePreferences(worldLocalStorage, { collapsedIds: [...collapsed] });
@@ -179,7 +191,8 @@ export default function ConnectedTreeView({
   const toolbar = (
     <WorldViewToolbar
       viewLabel="Tree"
-      query={query}
+      showSearch={showSearch}
+      query={queryValue}
       onQueryChange={setQuery}
       resultLabel={
         searchActive
@@ -195,6 +208,7 @@ export default function ConnectedTreeView({
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
       <div ref={rootRef} className="world-connected-tree-shell">
+        <WorldSummaryPanel runtime={runtime} world={world} />
         {projection.omittedHostCount ||
         projection.omittedSpaceCount ||
         projection.coverage.omittedLeaves ? (
