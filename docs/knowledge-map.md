@@ -8,7 +8,7 @@ operational guidance.
 | --- | --- | --- |
 | Managed local/SSH runtimes, qualification, retries | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | `server/src/connections/`, `server/src/bridge/`, [architecture](ARCHITECTURE.md), [deployment](DEPLOYMENT.md) |
 | Browser RPC, authentication and same-origin access | [Bridge access](../openspec/specs/bridge-access/spec.md) | `server/src/index.ts`, `server/src/http/`, `web/src/api.ts`, [security](../SECURITY.md) |
-| Aggregate WorldObject, Spaces, Office, Tree and Graph | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `server/src/world/snapshot.ts`, `web/src/world/`, `web/src/App.tsx`, [features](../FEATURES.md) |
+| Aggregate WorldObject, Spaces, Office, Tree, Graph and visual Actions | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `server/src/world/snapshot.ts`, `web/src/world/WorldFoundationApp.tsx`, `web/src/world/VisualRouteActionsMenu.tsx`, `web/src/world/visualRouteActions.ts`, `web/src/App.tsx`, [features](../FEATURES.md) |
 | Terminals, Files, Changes and Agent History | [World surfaces](../openspec/specs/world-surfaces/spec.md) | `server/src/bridge/`, `server/src/workspace/`, `server/src/herdr/agent-checkout.ts`, `server/src/agent/checkout-context.ts`, `web/src/components/`, [architecture](ARCHITECTURE.md) |
 | Upstream, packages, plugin and releases | [Distribution boundaries](../openspec/specs/distribution-boundaries/spec.md) | [UPSTREAM](../UPSTREAM.md), [packaging](packaging.md), [release](release.md), `scripts/`, `herdr-plugin.toml` |
 

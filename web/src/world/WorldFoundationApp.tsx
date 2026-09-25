@@ -47,6 +47,7 @@ import {
 } from "./officePreferences";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import WorldIntentProfile from "./WorldIntentProfile";
+import { VisualRouteActions } from "./VisualRouteActionsMenu";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
 import {
@@ -496,6 +497,7 @@ export default function WorldFoundationApp() {
                 registerWorkspaceSurfaceSelection
               }
               viewToolbarPortal={viewToolbarPortal}
+              onGoToSpaces={() => setView("spaces")}
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
@@ -565,6 +567,7 @@ function WorldControlPlane({
   onInspectorTerminalPortal,
   onWorkspaceSurfaceSelectionReady,
   viewToolbarPortal,
+  onGoToSpaces,
 }: {
   view: Exclude<WorldView, "spaces">;
   active: boolean;
@@ -584,6 +587,7 @@ function WorldControlPlane({
       | null,
   ): void;
   viewToolbarPortal: HTMLDivElement | null;
+  onGoToSpaces(): void;
 }) {
   const runtime = useWorldRuntime();
   const connectionSelection = useStoreSelector(
@@ -591,6 +595,7 @@ function WorldControlPlane({
       activeConnectionId: snapshot.activeConnectionId,
       connections: snapshot.connections,
       defaultConnectionId: snapshot.defaultConnectionId,
+      runtimeGeneration: snapshot.serverRuntimeGeneration,
       status: snapshot.status,
     }),
     shallowEqual,
@@ -1525,6 +1530,40 @@ function WorldControlPlane({
         !currentSelectionGeneration ||
         !selected.actionable),
   );
+  const visualActions = (
+    <VisualRouteActions
+      selection={selected}
+      world={world}
+      activeConnectionId={connectionSelection.activeConnectionId}
+      runtimeGeneration={connectionSelection.runtimeGeneration}
+      onResource={(node, requestedView) =>
+        applySelection(node.id, requestedView)
+      }
+      onGoToSpaces={async (node) => {
+        const requestId = intentRequestRef.current + 1;
+        intentRequestRef.current = requestId;
+        setIntentError(null);
+        setIntentOpening(true);
+        try {
+          await focusWorldNode(node);
+          if (intentRequestRef.current !== requestId) return false;
+          setSelection(node);
+          onGoToSpaces();
+          return true;
+        } catch (cause) {
+          if (intentRequestRef.current === requestId) {
+            setIntentError(
+              cause instanceof Error ? cause.message : String(cause),
+            );
+          }
+          return false;
+        } finally {
+          if (intentRequestRef.current === requestId) setIntentOpening(false);
+        }
+      }}
+      onError={setIntentError}
+    />
+  );
 
   return (
     <main
@@ -1565,6 +1604,7 @@ function WorldControlPlane({
                         }
                         onOpenTerminal={openTerminalById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
+                        actions={visualActions}
                       />
                     </Suspense>
                   ) : view === "tree" ? (
@@ -1586,6 +1626,7 @@ function WorldControlPlane({
                         }
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
+                        actions={visualActions}
                       />
                     </Suspense>
                   ) : (
@@ -1598,6 +1639,7 @@ function WorldControlPlane({
                       onOpenTerminal={openTerminalById}
                       onSelectedAnchorChange={setSelectedVisualAnchor}
                       onNodeAnchorsChange={setVisualConversationAnchors}
+                      actions={visualActions}
                     />
                   )}
                 </WorldViewErrorBoundary>

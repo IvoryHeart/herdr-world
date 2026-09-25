@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
@@ -79,6 +79,7 @@ export default function PixelOfficeView({
   onSelectedAnchorChange,
   floatingTerminals,
   onConversationNodeAnchorsChange,
+  actions,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -90,6 +91,7 @@ export default function PixelOfficeView({
   onConversationNodeAnchorsChange?(
     anchors: Record<string, OfficeCanvasAnchor> | null,
   ): void;
+  actions?: ReactNode;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -509,6 +511,7 @@ export default function PixelOfficeView({
         const match = searchMatches[0];
         if (match) void onSelect(match.id);
       }}
+      actions={actions}
     />
   );
 
