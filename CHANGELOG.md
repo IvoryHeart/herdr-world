@@ -21,6 +21,12 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added connection- and generation-qualified Actions to Office, Tree and Graph.
+  Actions capture the visible selected entity, reopen its existing Inspector
+  resources or focus it before entering Spaces, and reject retired selections
+  without using hidden Spaces focus. They provide no terminal injection, task
+  assignment or agent lifecycle controls.
+  [Herdr World PR #108](https://github.com/IvoryHeart/herdr-world/pull/108)
 - Added `herdr-world agent-checkout` and a read-only Agent checkout Inspector
   scope. Harnesses report a bounded, session-fingerprinted checkout once; World
   reads its branch and changed files on the same qualified connection, offers an

@@ -19,6 +19,13 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   refreshes them when their observations complete.
 - Office, Tree, and Graph share search in the application top bar; Graph adds Fit
   and zoom there instead of consuming a second stage header.
+- **Actions** in that top bar captures the selected visual space, agent or
+  terminal. It opens only the target's existing Terminal, Files, Changes and
+  Agent History Inspector resources, or focuses that exact target before Go to
+  Spaces. The same shortcut as the Spaces command menu opens Actions while a
+  visual view is active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
+  host, generation or observation change invalidates the open target; Actions
+  does not send terminal input, assign tasks or control agents.
 - **Pin** a live agent or terminal in Office, Tree, or Graph to keep its exact
   connection-qualified pane in visual triage. Pins are shared by browsers served
   by this World process, survive page reload, and clear when the process restarts

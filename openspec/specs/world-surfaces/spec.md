@@ -186,6 +186,52 @@ semantic hierarchy and operational controls without requiring precision pointer 
 - **WHEN** a user selects an entity through semantic keyboard or assistive navigation
 - **THEN** the same connection-qualified entity is selected as through a pointer action
 
+### Requirement: Visual-route Actions
+
+Office, Tree and Graph SHALL expose a common named Actions control for the explicitly selected
+space, agent or terminal. The control SHALL be reachable by pointer and keyboard on desktop and
+compact layouts, identify the captured host, space and pane as applicable, and offer only the
+target's existing applicable Terminal, Files, Changes, Agent History and Go to Spaces actions.
+It SHALL reuse the shared Inspector and selected-connection focus path; it SHALL NOT use hidden
+Spaces focus, create another terminal owner, send terminal input, assign tasks or control an
+agent lifecycle. A missing or unavailable target SHALL explain why no action can run.
+
+Before dispatch, Actions SHALL validate the captured connection ID, runtime generation, entity
+identity and current selected entity against the selected-host projection. Changing selection,
+host or generation, or losing the current observation, SHALL invalidate the capture and prevent
+an action from falling through to a colliding entity or hidden Spaces state. Go to Spaces SHALL
+focus the exact validated target before changing the visible view and SHALL leave the visual view
+visible if that focus fails.
+
+#### Scenario: Open Actions for a selected agent
+
+- **WHEN** a user selects an actionable agent in Office, Tree or Graph and opens Actions
+- **THEN** the menu identifies that agent and offers its admitted Inspector resources and Go to
+  Spaces
+
+#### Scenario: No actionable selection exists
+
+- **WHEN** a user opens Actions without an actionable space or pane selected
+- **THEN** it asks the user to select a visual entity and does not use the last focused Spaces pane
+
+#### Scenario: Choose an Inspector resource
+
+- **WHEN** a user chooses Terminal, Files, Changes or Agent History from Actions
+- **THEN** the shared Inspector opens or focuses that resource for the exact selected entity while
+  preserving the current visual view and terminal ownership
+
+#### Scenario: Go to Spaces
+
+- **WHEN** a user chooses Go to Spaces for a current space or pane
+- **THEN** World focuses that qualified target before Spaces becomes visible without changing the
+  selected host or creating a pane
+
+#### Scenario: The capture retires before dispatch
+
+- **WHEN** selection, selected host, runtime generation or observed entity changes while Actions
+  is open
+- **THEN** World invalidates the capture, reports that it is unavailable, and performs no action
+
 ### Requirement: Common view navigation
 
 The native World shell SHALL offer Spaces, Office, Tree and Graph once each and SHALL keep rendered

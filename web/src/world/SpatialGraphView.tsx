@@ -50,6 +50,7 @@ export default function SpatialGraphView({
   onOpenTerminal,
   onSelectedAnchorChange,
   onNodeAnchorsChange,
+  actions,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
@@ -60,6 +61,7 @@ export default function SpatialGraphView({
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onNodeAnchorsChange(anchors: Record<string, OfficeCanvasAnchor> | null): void;
+  actions?: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(
@@ -259,6 +261,7 @@ export default function SpatialGraphView({
             : "No matches"
           : undefined
       }
+      actions={actions}
     >
       {toolbarActions}
       <div

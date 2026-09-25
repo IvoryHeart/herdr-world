@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { basename, join } from "node:path";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -11,13 +11,12 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome)(
-  "World keeps navigator, docked, floating, and terminal identities aligned",
-  async () => {
-    const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
+test.skipIf(!chrome).each([1280, 390])(
+  "visual Actions stay accessible and invalidate retired targets at %ipx",
+  async (width) => {
+    const dir = await mkdtemp(join(tmpdir(), "visual-route-actions-"));
     const assets = new Map<string, Blob>();
-    const result = Promise.withResolvers<unknown>();
-    const publicDir = join(import.meta.dir, "..", "..", "public");
+    const result = Promise.withResolvers<Record<string, unknown>>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -29,45 +28,21 @@ test.skipIf(!chrome)(
         }
         const asset = assets.get(path);
         if (asset) return new Response(asset);
-        if (path.startsWith("/world/") || path.endsWith(".svg")) {
-          const file = Bun.file(join(publicDir, path.slice(1)));
-          if (await file.exists()) return new Response(file);
+        if (path === "/") {
+          return new Response(
+            '<meta name="viewport" content="width=device-width, initial-scale=1"><body><div id="root"></div><script type="module" src="/VisualRouteActions.browser.js"></script></body>',
+            { headers: { "Content-Type": "text/html" } },
+          );
         }
-        return new Response(
-          '<head><link rel="stylesheet" href="/WorldTerminalHandoff.browser.css"></head><body><script type="module" src="/WorldTerminalHandoff.browser.js"></script></body>',
-          { headers: { "Content-Type": "text/html" } },
-        );
+        return new Response("Not found", { status: 404 });
       },
     });
     let browser: ReturnType<typeof Bun.spawn> | undefined;
     try {
       const build = await Bun.build({
-        entrypoints: [
-          join(import.meta.dir, "WorldTerminalHandoff.browser.tsx"),
-        ],
+        entrypoints: [join(import.meta.dir, "VisualRouteActions.browser.tsx")],
         outdir: dir,
         target: "browser",
-        plugins: [
-          {
-            name: "vite-raw-svg",
-            setup(builder) {
-              builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
-                path: Bun.resolveSync(
-                  args.path.slice(0, -"?raw".length),
-                  dirname(args.importer),
-                ),
-                namespace: "vite-raw-svg",
-              }));
-              builder.onLoad(
-                { filter: /.*/, namespace: "vite-raw-svg" },
-                async (args) => ({
-                  contents: `export default ${JSON.stringify(await Bun.file(args.path).text())}`,
-                  loader: "js",
-                }),
-              );
-            },
-          },
-        ],
       });
       expect(build.success).toBe(true);
       for (const output of build.outputs) {
@@ -78,16 +53,12 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          "--window-size=1440,1000",
-          "--enable-webgl",
-          "--use-angle=swiftshader",
-          "--enable-unsafe-swiftshader",
-          "--disable-dev-shm-usage",
+          `--window-size=${width},900`,
           "--disable-background-networking",
           "--no-first-run",
           "--no-default-browser-check",
           `--user-data-dir=${join(dir, "profile")}`,
-          `${server.url.href}office`,
+          server.url.href,
         ],
         { stdout: "ignore", stderr: Bun.file(browserLog) },
       );
@@ -100,12 +71,24 @@ test.skipIf(!chrome)(
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () => reject(new Error("World terminal handoff timed out")),
-            60_000,
+            () => reject(new Error("Actions browser check timed out")),
+            15_000,
           ),
         ),
       ]);
-      expect(observed).toEqual([]);
+      expect(observed).toMatchObject({
+        initialVisible: true,
+        keyboardOpened: true,
+        calls: ["changes"],
+        resourceFocusRestored: true,
+      });
+      expect(String(observed.initialMenu)).toContain("Agent History");
+      expect(String(observed.selectionReason)).toContain(
+        "selected item changed",
+      );
+      expect(String(observed.generationReason)).toContain(
+        "generation is no longer available",
+      );
     } finally {
       browser?.kill();
       if (browser) await browser.exited;
@@ -113,5 +96,5 @@ test.skipIf(!chrome)(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  45_000,
+  30_000,
 );
