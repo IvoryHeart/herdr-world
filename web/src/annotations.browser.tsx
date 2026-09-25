@@ -481,10 +481,39 @@ export async function checkAnnotationUX(
     );
     const paneSnapshot = store.get();
     const replacePaneState = (panes: Pane[], zoomed: boolean) => {
+      const area = paneSnapshot.layout!.area;
+      const activeTabPanes = panes.filter(
+        (candidate) => candidate.tab_id === pane.tab_id,
+      );
+      const width = area.width / activeTabPanes.length;
       __storeTesting.replaceState({
         ...store.get(),
         panes,
-        layout: { ...paneSnapshot.layout!, zoomed },
+        layout: {
+          ...paneSnapshot.layout!,
+          zoomed,
+          panes: activeTabPanes.map((candidate, index) => ({
+            pane_id: candidate.pane_id,
+            focused: candidate.pane_id === pane.pane_id,
+            rect: {
+              x: area.x + index * width,
+              y: area.y,
+              width,
+              height: area.height,
+            },
+          })),
+          splits:
+            activeTabPanes.length > 1
+              ? [
+                  {
+                    id: "annotation-test-split",
+                    direction: "right" as const,
+                    rect: area,
+                    ratio: 0.5,
+                  },
+                ]
+              : [],
+        },
       });
       flushSync(() => store.clearNotice());
     };

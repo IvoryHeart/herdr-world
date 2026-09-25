@@ -50,6 +50,12 @@ worldLocalStorage.setItem(
 
 function Fixture() {
   const [conversation, setConversation] = useState(first);
+  const [arrangedGeometry, setArrangedGeometry] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [portals, setPortals] = useState<Record<string, HTMLDivElement | null>>(
     {},
   );
@@ -67,6 +73,22 @@ function Fixture() {
       >
         Select another agent
       </button>
+      <button
+        type="button"
+        data-testid="arrange"
+        onClick={() =>
+          setArrangedGeometry({ left: 100, top: 100, width: 700, height: 500 })
+        }
+      >
+        Arrange
+      </button>
+      <button
+        type="button"
+        data-testid="restore"
+        onClick={() => setArrangedGeometry(null)}
+      >
+        Restore
+      </button>
       <output data-testid="portal-state">
         {portals[first.nodeId] ? "ready" : "missing"}
       </output>
@@ -74,6 +96,8 @@ function Fixture() {
         conversation={conversation}
         cascadeIndex={0}
         compactActive
+        arrangedGeometry={arrangedGeometry}
+        onArrangedGeometryChange={setArrangedGeometry}
         onFocus={() => {}}
         onRaise={() => {}}
         onAnchorChange={() => {}}
@@ -160,6 +184,45 @@ setTimeout(() => {
         clientY: 80,
       }),
     );
+    const stableGeometryBeforeArrangement = worldLocalStorage.getItem(
+      FLOATING_TERMINAL_GEOMETRY_KEY,
+    );
+    host.querySelector<HTMLButtonElement>('[data-testid="arrange"]')?.click();
+    await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    const arrangedLeft = floatingWindow.getBoundingClientRect().left;
+    moveHandle.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        pointerId: 13,
+        clientX: arrangedLeft + 40,
+        clientY: 120,
+      }),
+    );
+    window.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        buttons: 1,
+        pointerId: 13,
+        clientX: arrangedLeft + 140,
+        clientY: 120,
+      }),
+    );
+    window.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 13,
+      }),
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    const arrangedMoveLeft = floatingWindow.getBoundingClientRect().left;
+    const stableGeometryAfterArrangement = worldLocalStorage.getItem(
+      FLOATING_TERMINAL_GEOMETRY_KEY,
+    );
+    host.querySelector<HTMLButtonElement>('[data-testid="restore"]')?.click();
+    await new Promise<void>((resolve) => setTimeout(resolve, 40));
+    const restoredLeft = floatingWindow.getBoundingClientRect().left;
     const result = {
       failures,
       portal: host.querySelector('[data-testid="portal-state"]')?.textContent,
@@ -170,6 +233,11 @@ setTimeout(() => {
       stableDrag:
         firstMoveLeft >= startLeft + 140 &&
         secondMoveLeft >= firstMoveLeft + 140,
+      arrangementRestoresGeometry:
+        arrangedLeft === 100 &&
+        arrangedMoveLeft >= arrangedLeft + 90 &&
+        Math.abs(restoredLeft - secondMoveLeft) <= 1 &&
+        stableGeometryBeforeArrangement === stableGeometryAfterArrangement,
     };
     void fetch("/result", {
       method: "POST",

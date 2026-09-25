@@ -824,11 +824,77 @@ async function run() {
     ),
     "Floating mode did not use equally sized cascaded Inspector windows",
   );
-  preferredFloatingWindows
-    .find((floatingWindow) =>
-      floatingWindow.getAttribute("aria-label")?.startsWith("Builder "),
+  const arrangeWindows = async (label: string) => {
+    document
+      .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
+      .click();
+    const getChoice = () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
+        ),
+      ].find((button) => button.querySelector("strong")?.textContent === label);
+    await until(getChoice, `${label} arrangement choice`);
+    const choice = getChoice();
+    check(
+      Boolean(choice) && choice?.getAttribute("aria-disabled") !== "true",
+      `${label} arrangement was unavailable: ${choice?.querySelector("small")?.textContent}`,
+    );
+    choice?.click();
+  };
+  await arrangeWindows("Columns");
+  await until(() => {
+    const arranged = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ];
+    if (arranged.length !== 2) return false;
+    const [left, right] = arranged
+      .map((window) => window.getBoundingClientRect())
+      .sort((a, b) => a.left - b.left);
+    return left && right && left.right <= right.left;
+  }, "two visual Inspectors in Columns");
+  for (const visualView of ["tree", "graph", "office"] as const) {
+    viewSelect.value = visualView;
+    viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(
+      () =>
+        document.querySelector(
+          visualView === "tree"
+            ? ".world-connected-tree-shell"
+            : visualView === "graph"
+              ? ".world-spatial-graph-shell"
+              : "canvas[data-office-canvas='true']",
+        ) &&
+        document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+          .length === 2,
+      `arranged Inspector continuity in ${visualView}`,
+    );
+  }
+  const attachedBeforeSingle = calls.filter(
+    ({ method }) => method === "terminal.detach",
+  ).length;
+  await arrangeWindows("Single");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 1 &&
+      calls.filter(({ method }) => method === "terminal.detach").length >
+        attachedBeforeSingle,
+    "Single suspended the other visual terminal",
+  );
+  await arrangeWindows("Restore positions");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "Restore reopened both retained visual Inspectors",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Dock Inspector"]',
     )
-    ?.querySelector<HTMLButtonElement>('button[aria-label="Dock Inspector"]')
     ?.click();
   await until(
     () =>
@@ -2053,6 +2119,79 @@ async function run() {
       ) !== null,
     "Tree did not replace the detached overlay with the exact expanded leaf",
   );
+  const selectTreeNode = (label: string) => {
+    const button = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".world-tree-outline-select",
+      ),
+    ].find((candidate) =>
+      candidate.querySelector("strong")?.textContent?.includes(label),
+    );
+    check(Boolean(button), `Tree omitted ${label} selection`);
+    button?.click();
+  };
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-tree-inline-inspector button[aria-label="Float Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "Builder floated before Tree Restore regression",
+  );
+  selectTreeNode("Reviewer");
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer"),
+    "Reviewer inline before Tree Restore regression",
+  );
+  await arrangeWindows("Columns");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "Tree Columns included floating and inline Inspectors",
+  );
+  document
+    .querySelector<HTMLElement>('.tabbar-tab[title="created-tab-3"]')!
+    .click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("terminal"),
+    "later terminal opened inline during Tree arrangement",
+  );
+  await arrangeWindows("Restore positions");
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("terminal") &&
+      !document
+        .querySelector(".world-context-rail")
+        ?.classList.contains("has-inspector"),
+    "Restore retained the later terminal in its Tree leaf",
+  );
+  selectTreeNode("Builder");
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder"),
+    "Builder inline after Tree Restore regression",
+  );
   document
     .querySelector<HTMLButtonElement>(
       '.world-tree-inline-inspector button[aria-label="Float Inspector"]',
@@ -2330,7 +2469,7 @@ async function run() {
     "visible Spaces remained obstructed by a visual Inspector presentation",
   );
   const spacesTerminal = document.querySelector<HTMLElement>(
-    ".workspace-terminal-surface > .terminal-shell",
+    ".workspace-terminal-surface .terminal-shell",
   );
   check(
     Boolean(

@@ -90,6 +90,9 @@ import { AnnotationPanel } from "./components/AnnotationPanel";
 import { GlobalTooltip } from "./components/GlobalTooltip";
 import { MobileTabSheet } from "./components/MobileTabSheet";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
+import type { WindowArrangementControl } from "./components/TabBar";
+import { TabTerminalPaneLayout } from "./TabTerminalPaneLayout";
+import { useVisibleTabLayoutState } from "./visibleTabLayout";
 import type { TerminalWorkspaceFileRequest } from "./components/TerminalView";
 import { WorkspaceTree } from "./components/WorkspaceTree";
 import { isIosDevice } from "./downloadFile";
@@ -597,24 +600,6 @@ function tabShortcutIndex(e: KeyboardEvent) {
   return number === undefined ? null : number - 1;
 }
 
-// Herdr reports pane rectangles in terminal-cell coordinates. The GUI maps
-// those rectangles into CSS percentages so panes scale with the browser.
-function rectPercent(value: number, start: number, size: number) {
-  if (size <= 0) return 0;
-  return ((value - start) / size) * 100;
-}
-
-function paneTitle(
-  paneId: string,
-  panes: ReturnType<typeof store.get>["panes"],
-) {
-  const pane = panes.find((p) => p.pane_id === paneId);
-  if (pane?.agent) return pane.agent;
-  const cwd = pane?.foreground_cwd ?? pane?.cwd;
-  const name = cwd?.split(/[\\/]/).filter(Boolean).pop();
-  return name || paneId;
-}
-
 function PaneJumpOverlay({
   entries,
   selectedIndex,
@@ -765,423 +750,6 @@ function PaneJumpOverlay({
   );
 }
 
-type PaneLayoutSnapshot = NonNullable<ReturnType<typeof store.get>["layout"]>;
-type PaneLayoutPaneSnapshot = PaneLayoutSnapshot["panes"][number];
-type PaneLayoutSplitSnapshot = PaneLayoutSnapshot["splits"][number];
-type PaneResizeDirection = "left" | "right" | "up" | "down";
-
-function overlapLength(
-  aStart: number,
-  aSize: number,
-  bStart: number,
-  bSize: number,
-) {
-  return Math.max(
-    0,
-    Math.min(aStart + aSize, bStart + bSize) - Math.max(aStart, bStart),
-  );
-}
-
-function bestPaneNearSplit(
-  panes: PaneLayoutPaneSnapshot[],
-  split: PaneLayoutSplitSnapshot,
-  side: "before" | "after",
-  pointerPerpendicular: number,
-) {
-  const boundary =
-    split.direction === "right"
-      ? split.rect.x + split.rect.width * split.ratio
-      : split.rect.y + split.rect.height * split.ratio;
-  const edgeTolerance = 6;
-  const containsPointer = (pane: PaneLayoutPaneSnapshot) =>
-    split.direction === "right"
-      ? pointerPerpendicular >= pane.rect.y &&
-        pointerPerpendicular <= pane.rect.y + pane.rect.height
-      : pointerPerpendicular >= pane.rect.x &&
-        pointerPerpendicular <= pane.rect.x + pane.rect.width;
-  const candidates = panes
-    .map((pane) => {
-      const edge =
-        split.direction === "right"
-          ? side === "before"
-            ? pane.rect.x + pane.rect.width
-            : pane.rect.x
-          : side === "before"
-            ? pane.rect.y + pane.rect.height
-            : pane.rect.y;
-      const perpendicularOverlap =
-        split.direction === "right"
-          ? overlapLength(
-              pane.rect.y,
-              pane.rect.height,
-              split.rect.y,
-              split.rect.height,
-            )
-          : overlapLength(
-              pane.rect.x,
-              pane.rect.width,
-              split.rect.x,
-              split.rect.width,
-            );
-      return {
-        pane,
-        edgeDistance: Math.abs(edge - boundary),
-        perpendicularOverlap,
-      };
-    })
-    .filter(
-      ({ pane, edgeDistance, perpendicularOverlap }) =>
-        edgeDistance <= edgeTolerance &&
-        perpendicularOverlap > 0 &&
-        containsPointer(pane),
-    )
-    .sort((a, b) => b.perpendicularOverlap - a.perpendicularOverlap);
-  return candidates[0]?.pane ?? null;
-}
-
-function splitBoundaryFromPaneRects(
-  panes: PaneLayoutPaneSnapshot[],
-  split: PaneLayoutSplitSnapshot,
-) {
-  const ratioBoundary =
-    split.direction === "right"
-      ? split.rect.x + split.rect.width * split.ratio
-      : split.rect.y + split.rect.height * split.ratio;
-  const before = bestPaneNearSplit(
-    panes,
-    split,
-    "before",
-    split.direction === "right"
-      ? split.rect.y + split.rect.height / 2
-      : split.rect.x + split.rect.width / 2,
-  );
-  const after = bestPaneNearSplit(
-    panes,
-    split,
-    "after",
-    split.direction === "right"
-      ? split.rect.y + split.rect.height / 2
-      : split.rect.x + split.rect.width / 2,
-  );
-  if (!before || !after) return ratioBoundary;
-  const beforeEdge =
-    split.direction === "right"
-      ? before.rect.x + before.rect.width
-      : before.rect.y + before.rect.height;
-  const afterEdge = split.direction === "right" ? after.rect.x : after.rect.y;
-  return (beforeEdge + afterEdge) / 2;
-}
-
-function resizeTargetForSplit(
-  layout: PaneLayoutSnapshot,
-  split: PaneLayoutSplitSnapshot,
-  dragSign: 1 | -1,
-  pointerPerpendicular: number,
-): { paneId: string; direction: PaneResizeDirection } | null {
-  if (split.direction === "right") {
-    const side = dragSign > 0 ? "before" : "after";
-    const pane = bestPaneNearSplit(
-      layout.panes,
-      split,
-      side,
-      pointerPerpendicular,
-    );
-    return pane
-      ? { paneId: pane.pane_id, direction: dragSign > 0 ? "right" : "left" }
-      : null;
-  }
-  const side = dragSign > 0 ? "before" : "after";
-  const pane = bestPaneNearSplit(
-    layout.panes,
-    split,
-    side,
-    pointerPerpendicular,
-  );
-  return pane
-    ? { paneId: pane.pane_id, direction: dragSign > 0 ? "down" : "up" }
-    : null;
-}
-
-// Render the active tab's Herdr pane layout; single-pane and zoomed tabs keep
-// the old full terminal view.
-function TerminalPaneLayout({
-  terminalTheme,
-  terminalFontScale,
-  mobileShortcuts,
-  mobileSideShortcuts,
-  composerOpen,
-  onComposerOpenChange,
-  agentHistoryOpen,
-  onAgentHistoryOpenChange,
-  onOpenWorkspaceFile,
-  excludedPaneIds = new Set(),
-}: {
-  terminalTheme: ITheme;
-  terminalFontScale: number;
-  mobileShortcuts: MobileTerminalShortcutRows;
-  mobileSideShortcuts: MobileTerminalSideShortcuts;
-  composerOpen: boolean;
-  onComposerOpenChange: (open: boolean) => void;
-  agentHistoryOpen: boolean;
-  onAgentHistoryOpenChange: (open: boolean) => void;
-  onOpenWorkspaceFile: (request: TerminalWorkspaceFileRequest) => void;
-  excludedPaneIds?: ReadonlySet<string>;
-}) {
-  const s = useStoreSelector(
-    (state) => ({
-      activeConnectionId: state.activeConnectionId,
-      connectionGeneration: state.connectionGeneration,
-      layout: state.layout,
-      panes: state.panes,
-      selectedPaneId: state.selectedPaneId,
-    }),
-    shallowEqual,
-  );
-  const { mobile } = useLayoutPreferences();
-  const layoutRef = useRef<HTMLDivElement | null>(null);
-  const layout = s.layout;
-  const visiblePanes =
-    layout?.panes.filter(
-      (lp) =>
-        s.panes.some((pane) => pane.pane_id === lp.pane_id) &&
-        !excludedPaneIds.has(lp.pane_id),
-    ) ?? [];
-  const fallbackPaneId = visiblePanes[0]?.pane_id ?? null;
-  const activePaneId =
-    visiblePanes.find((lp) => lp.pane_id === s.selectedPaneId)?.pane_id ??
-    visiblePanes.find((lp) => lp.pane_id === layout?.focused_pane_id)
-      ?.pane_id ??
-    fallbackPaneId;
-  const mountKeyForPane = (paneId: string | null) => {
-    const terminalId =
-      s.panes.find((pane) => pane.pane_id === paneId)?.terminal_id ?? null;
-    return terminalMountKey(
-      {
-        connectionId: s.activeConnectionId,
-        generation: s.connectionGeneration,
-      },
-      paneId,
-      terminalId,
-    );
-  };
-
-  if (layout && visiblePanes.length === 0 && excludedPaneIds.size > 0) {
-    return (
-      <div className="terminal-empty" role="status">
-        This terminal remains open in its World Inspector.
-      </div>
-    );
-  }
-
-  if (!layout || layout.zoomed || visiblePanes.length <= 1) {
-    return (
-      <TerminalView
-        key={mountKeyForPane(activePaneId)}
-        terminalTheme={terminalTheme}
-        terminalFontScale={terminalFontScale}
-        mobileShortcuts={mobileShortcuts}
-        mobileSideShortcuts={mobileSideShortcuts}
-        composerOpen={composerOpen}
-        onComposerOpenChange={onComposerOpenChange}
-        agentHistoryOpen={agentHistoryOpen}
-        onAgentHistoryOpenChange={onAgentHistoryOpenChange}
-        onOpenWorkspaceFile={onOpenWorkspaceFile}
-      />
-    );
-  }
-
-  if (mobile && activePaneId) {
-    const activeIndex = Math.max(
-      0,
-      visiblePanes.findIndex((lp) => lp.pane_id === activePaneId),
-    );
-    const previousPane =
-      visiblePanes[
-        (activeIndex - 1 + visiblePanes.length) % visiblePanes.length
-      ];
-    const nextPane = visiblePanes[(activeIndex + 1) % visiblePanes.length];
-    return (
-      <div className="pane-switcher-layout" aria-label="Terminal pane switcher">
-        <div className="pane-switcher">
-          <button
-            type="button"
-            className="pane-switcher-button"
-            aria-label="Previous pane"
-            tabIndex={-1}
-            onPointerDown={blurActiveInput}
-            onClick={() => void store.focusPane(previousPane.pane_id)}
-          >
-            <ChevronLeft size={15} />
-          </button>
-          <div className="pane-switcher-label">
-            <strong>
-              Pane {activeIndex + 1} / {visiblePanes.length}
-            </strong>
-            <span>{paneTitle(activePaneId, s.panes)}</span>
-          </div>
-          <button
-            type="button"
-            className="pane-switcher-button"
-            aria-label="Next pane"
-            tabIndex={-1}
-            onPointerDown={blurActiveInput}
-            onClick={() => void store.focusPane(nextPane.pane_id)}
-          >
-            <ChevronRight size={15} />
-          </button>
-        </div>
-        <TerminalView
-          key={mountKeyForPane(activePaneId)}
-          paneId={activePaneId}
-          terminalTheme={terminalTheme}
-          terminalFontScale={terminalFontScale}
-          mobileShortcuts={mobileShortcuts}
-          mobileSideShortcuts={mobileSideShortcuts}
-          composerOpen={composerOpen}
-          onComposerOpenChange={onComposerOpenChange}
-          agentHistoryOpen={agentHistoryOpen}
-          onAgentHistoryOpenChange={onAgentHistoryOpenChange}
-          onOpenWorkspaceFile={onOpenWorkspaceFile}
-        />
-      </div>
-    );
-  }
-
-  const area = layout.area;
-  const areaWidth = Math.max(1, area.width);
-  const areaHeight = Math.max(1, area.height);
-  const startPaneResize = (
-    e: React.PointerEvent<HTMLDivElement>,
-    split: PaneLayoutSplitSnapshot,
-  ) => {
-    if (e.button !== 0) return;
-    const container = layoutRef.current;
-    if (!container) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const bounds = container.getBoundingClientRect();
-    const horizontal = split.direction === "right";
-    const startAxis = horizontal ? e.clientX : e.clientY;
-    const pointerPerpendicular = horizontal
-      ? area.y +
-        ((e.clientY - bounds.top) / Math.max(1, bounds.height)) * areaHeight
-      : area.x +
-        ((e.clientX - bounds.left) / Math.max(1, bounds.width)) * areaWidth;
-    const splitPixelSize = horizontal
-      ? (split.rect.width / areaWidth) * bounds.width
-      : (split.rect.height / areaHeight) * bounds.height;
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = horizontal ? "col-resize" : "row-resize";
-    document.body.style.userSelect = "none";
-    // Capture the pointer so pointerup still reaches the window (and restores
-    // cursor/user-select) even when released outside the browser window.
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Pointer capture is best-effort; window listeners still apply.
-    }
-
-    const finish = (event: PointerEvent) => {
-      window.removeEventListener("pointerup", finish, true);
-      window.removeEventListener("pointercancel", cancel, true);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-
-      const endAxis = horizontal ? event.clientX : event.clientY;
-      const deltaPx = endAxis - startAxis;
-      if (Math.abs(deltaPx) < 4) return;
-      const dragSign = deltaPx > 0 ? 1 : -1;
-      const target = resizeTargetForSplit(
-        layout,
-        split,
-        dragSign,
-        pointerPerpendicular,
-      );
-      if (!target) return;
-      const amount = Math.min(
-        0.5,
-        Math.abs(deltaPx) / Math.max(1, splitPixelSize),
-      );
-      void store.resizePane(target.paneId, target.direction, amount);
-    };
-    const cancel = () => {
-      window.removeEventListener("pointerup", finish, true);
-      window.removeEventListener("pointercancel", cancel, true);
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-    };
-    window.addEventListener("pointerup", finish, true);
-    window.addEventListener("pointercancel", cancel, true);
-  };
-
-  return (
-    <div ref={layoutRef} className="pane-layout" aria-label="Terminal panes">
-      {visiblePanes.map((layoutPane) => {
-        const rect = layoutPane.rect;
-        const isActive = layoutPane.pane_id === activePaneId;
-        return (
-          <div
-            key={mountKeyForPane(layoutPane.pane_id)}
-            className={`pane-layout-cell ${isActive ? "is-active" : ""}`}
-            style={{
-              left: `${rectPercent(rect.x, area.x, areaWidth)}%`,
-              top: `${rectPercent(rect.y, area.y, areaHeight)}%`,
-              width: `${(rect.width / areaWidth) * 100}%`,
-              height: `${(rect.height / areaHeight) * 100}%`,
-            }}
-            onPointerDownCapture={() => {
-              if (!isActive) void store.focusPane(layoutPane.pane_id);
-            }}
-          >
-            <TerminalView
-              key={mountKeyForPane(layoutPane.pane_id)}
-              paneId={layoutPane.pane_id}
-              terminalTheme={terminalTheme}
-              terminalFontScale={terminalFontScale}
-              showMobileKeys={isActive}
-              mobileShortcuts={mobileShortcuts}
-              mobileSideShortcuts={mobileSideShortcuts}
-              composerOpen={isActive ? composerOpen : false}
-              onComposerOpenChange={isActive ? onComposerOpenChange : undefined}
-              agentHistoryOpen={isActive ? agentHistoryOpen : false}
-              onAgentHistoryOpenChange={onAgentHistoryOpenChange}
-              onOpenWorkspaceFile={onOpenWorkspaceFile}
-            />
-          </div>
-        );
-      })}
-      {layout.splits.map((split) => {
-        const horizontal = split.direction === "right";
-        const boundary = splitBoundaryFromPaneRects(layout.panes, split);
-        return (
-          <div
-            key={split.id}
-            className={`pane-resize-handle ${horizontal ? "is-vertical" : "is-horizontal"}`}
-            style={
-              horizontal
-                ? {
-                    left: `${rectPercent(boundary, area.x, areaWidth)}%`,
-                    top: `${rectPercent(split.rect.y, area.y, areaHeight)}%`,
-                    height: `${(split.rect.height / areaHeight) * 100}%`,
-                  }
-                : {
-                    top: `${rectPercent(boundary, area.y, areaHeight)}%`,
-                    left: `${rectPercent(split.rect.x, area.x, areaWidth)}%`,
-                    width: `${(split.rect.width / areaWidth) * 100}%`,
-                  }
-            }
-            onPointerDown={(event) => startPaneResize(event, split)}
-            role="separator"
-            aria-orientation={horizontal ? "vertical" : "horizontal"}
-          />
-        );
-      })}
-    </div>
-  );
-}
-
 export function appShouldHandleGlobalShortcut(
   operationalShortcutsEnabled: boolean,
   event: Pick<KeyboardEvent, "defaultPrevented" | "isComposing" | "keyCode">,
@@ -1202,6 +770,7 @@ export function terminalPresentationTarget(
   > | null,
   floating: boolean,
 ): "spaces" | "inspector" | "floating" | null {
+  if (spacesOperational) return "spaces";
   if (floating) return "floating";
   if (
     inspector?.open &&
@@ -1210,7 +779,70 @@ export function terminalPresentationTarget(
   ) {
     return "inspector";
   }
-  return spacesOperational ? "spaces" : null;
+  return null;
+}
+
+export type SpacesTabWindow = { tabId: string; portal: Element | null };
+
+function SpacesTabTerminal({
+  tabId,
+  workspaceId,
+  panes,
+  selectedPaneId,
+  connectionId,
+  connectionGeneration,
+  terminalTheme,
+  terminalFontScale,
+  mobileShortcuts,
+  mobileSideShortcuts,
+  composerOpen,
+  onComposerOpenChange,
+  agentHistoryOpen,
+  onAgentHistoryOpenChange,
+  onOpenWorkspaceFile,
+  onFocusTabWindow,
+}: {
+  tabId: string;
+  workspaceId: string;
+  panes: readonly Pane[];
+  selectedPaneId: string | null;
+  connectionId: string;
+  connectionGeneration: number;
+  terminalTheme: ITheme;
+  terminalFontScale: number;
+  mobileShortcuts: MobileTerminalShortcutRows;
+  mobileSideShortcuts: MobileTerminalSideShortcuts;
+  composerOpen: boolean;
+  onComposerOpenChange(open: boolean): void;
+  agentHistoryOpen: boolean;
+  onAgentHistoryOpenChange(open: boolean): void;
+  onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
+  onFocusTabWindow?: (tabId: string, paneId: string | null) => void;
+}) {
+  const { layout, error } = useVisibleTabLayoutState(workspaceId, tabId);
+  return (
+    <TabTerminalPaneLayout
+      layout={layout}
+      unavailableMessage={error ?? undefined}
+      panes={panes}
+      selectedPaneId={selectedPaneId}
+      onFocusPane={(paneId) => {
+        onFocusTabWindow?.(tabId, paneId);
+        void store.focusPane(paneId);
+      }}
+      connectionId={connectionId}
+      connectionGeneration={connectionGeneration}
+      terminalTheme={terminalTheme}
+      terminalFontScale={terminalFontScale}
+      mobileShortcuts={mobileShortcuts}
+      mobileSideShortcuts={mobileSideShortcuts}
+      composerOpen={composerOpen}
+      onComposerOpenChange={onComposerOpenChange}
+      agentHistoryOpen={agentHistoryOpen}
+      onAgentHistoryOpenChange={onAgentHistoryOpenChange}
+      onOpenWorkspaceFile={onOpenWorkspaceFile}
+    />
+  );
 }
 
 export type WorkspaceSurfaceSelection = {
@@ -1236,6 +868,10 @@ export default function App({
   workspaceSurfaceInspector = null,
   onWorkspaceSurfaceSelect,
   worldTerminalPresentations = [],
+  spacesTabWindows,
+  arrangementControl,
+  onFocusSpacesTabWindow,
+  onSpacesWindowLayerReady,
   onInspectorVisibilityChange,
   onInspectorViewChange,
   onTerminalPopOut,
@@ -1252,6 +888,10 @@ export default function App({
     selection: WorkspaceSurfaceSelection,
   ) => void | Promise<unknown>;
   worldTerminalPresentations?: readonly WorldTerminalPresentation[];
+  spacesTabWindows?: readonly SpacesTabWindow[];
+  arrangementControl?: WindowArrangementControl;
+  onFocusSpacesTabWindow?: (tabId: string, paneId: string | null) => void;
+  onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
   onTerminalPopOut?: () => void;
@@ -1279,22 +919,6 @@ export default function App({
       workspaces: state.workspaces,
     }),
     shallowEqual,
-  );
-  const worldOwnedPaneIds = useMemo(
-    () =>
-      new Set(
-        worldTerminalPresentations.flatMap((presentation) =>
-          presentation.connectionId === s.activeConnectionId &&
-          presentation.runtimeGeneration === s.serverRuntimeGeneration
-            ? [presentation.paneId]
-            : [],
-        ),
-      ),
-    [
-      s.activeConnectionId,
-      s.serverRuntimeGeneration,
-      worldTerminalPresentations,
-    ],
   );
   const connectionClient = useConnectionClient();
   const { mobile, preferences: layoutPreferences } = useLayoutPreferences();
@@ -1439,6 +1063,25 @@ export default function App({
   const fileQuickOpenRequestRef = useRef(0);
   const resourceRuntimeKeyRef = useRef(resourceUiKey);
   const focusedWorkspace = s.workspaces.find((w) => w.focused);
+  const activeSpacesTabId =
+    focusedWorkspace?.active_tab_id ??
+    s.tabs.find(
+      (tab) =>
+        tab.workspace_id === focusedWorkspace?.workspace_id && tab.focused,
+    )?.tab_id ??
+    s.tabs.find((tab) => tab.workspace_id === focusedWorkspace?.workspace_id)
+      ?.tab_id ??
+    null;
+  const visibleSpacesTabWindows = (spacesTabWindows ?? []).filter(
+    (window, index, entries) =>
+      Boolean(window.portal) &&
+      entries.findIndex((entry) => entry.tabId === window.tabId) === index &&
+      s.tabs.some(
+        (tab) =>
+          tab.tab_id === window.tabId &&
+          tab.workspace_id === focusedWorkspace?.workspace_id,
+      ),
+  );
   const focusedWorkspaceTabCount = focusedWorkspace
     ? s.tabs.filter((tab) => tab.workspace_id === focusedWorkspace.workspace_id)
         .length
@@ -1550,6 +1193,8 @@ export default function App({
     inspectorState,
     Boolean(inspectorFloatingTerminal),
   );
+  const worldPresentationsForView =
+    terminalPresentation === "spaces" ? [] : worldTerminalPresentations;
   const presentedTerminalPane =
     terminalPresentation === "inspector" ? inspectorTerminalPane : undefined;
   const presentedTerminalPortal =
@@ -2756,42 +2401,39 @@ export default function App({
     s.pendingFocusWorkspaceId,
     s.workspaces,
   ]);
-  // Follow tab switches while History is open: the view pins its session to
-  // originPaneId, which tab changes never update on their own. Pane focus
-  // changes within the same tab keep the current pin.
-  const inspectorHistoryTabRef = useRef<string | null>(null);
+  // The Spaces Inspector is one workspace resource surface. Its pane context
+  // follows the active tab, including sibling focus inside a split.
   useLayoutEffect(() => {
+    if (!operationalShortcutsEnabled || hasWorkspaceSurface) return;
     const current = inspectorStateRef.current;
-    const workspace =
-      current?.open && current.view === "history"
-        ? resolveWorkspaceForScope(current.scope, s.workspaces)
-        : undefined;
-    const activeTabId = workspace?.active_tab_id ?? null;
-    const previousTabId = inspectorHistoryTabRef.current;
-    inspectorHistoryTabRef.current = activeTabId;
-    if (!current?.open || current.view !== "history" || !workspace) return;
-    if (s.pendingFocusWorkspaceId) return;
-    const originMissing =
-      !!current.originPaneId &&
-      !s.panes.some((pane) => pane.pane_id === current.originPaneId);
-    const tabSwitched =
-      previousTabId !== null &&
-      activeTabId !== null &&
-      previousTabId !== activeTabId;
-    if (!originMissing && !tabSwitched) return;
-    const workspacePanes = s.panes.filter(
-      (pane) => pane.workspace_id === workspace.workspace_id,
+    const workspace = current?.open
+      ? resolveWorkspaceForScope(current.scope, s.workspaces)
+      : undefined;
+    if (!current?.open || !workspace || s.pendingFocusWorkspaceId) return;
+    const tabId =
+      workspace.active_tab_id ??
+      s.tabs.find(
+        (tab) => tab.workspace_id === workspace.workspace_id && tab.focused,
+      )?.tab_id;
+    const tabPanes = s.panes.filter(
+      (pane) =>
+        pane.workspace_id === workspace.workspace_id && pane.tab_id === tabId,
     );
-    const activePaneId = activePaneIdForSnapshot(s);
-    const routedPane =
-      workspacePanes.find((pane) => pane.pane_id === activePaneId) ??
-      workspacePanes.find((pane) => pane.focused);
-    const historyPane = paneHasAgentHistory(routedPane)
-      ? routedPane
-      : workspacePanes.find(paneHasAgentHistory);
-    if (!historyPane || historyPane.pane_id === current.originPaneId) return;
-    commitInspectorState({ ...current, originPaneId: historyPane.pane_id });
-  }, [commitInspectorState, s]);
+    const layoutFocusedPaneId =
+      s.layout?.tab_id === tabId ? s.layout?.focused_pane_id : null;
+    const pane =
+      tabPanes.find((candidate) => candidate.pane_id === s.selectedPaneId) ??
+      tabPanes.find((candidate) => candidate.pane_id === layoutFocusedPaneId) ??
+      tabPanes.find((candidate) => candidate.focused) ??
+      tabPanes[0];
+    if (!pane || pane.pane_id === current.originPaneId) return;
+    commitInspectorState({ ...current, originPaneId: pane.pane_id });
+  }, [
+    commitInspectorState,
+    hasWorkspaceSurface,
+    operationalShortcutsEnabled,
+    s,
+  ]);
   // Search keeps the current pane listed for context, but focusing it is a
   // no-op, so selection lands on the first entry a jump can actually reach.
   useEffect(() => {
@@ -3611,6 +3253,45 @@ export default function App({
           onTerminalPortalChange={setInspectorTerminalPortal}
           onTerminalPopOut={onTerminalPopOut}
           terminalDetached={Boolean(inspectorFloatingTerminal)}
+          onFocusTabWindow={
+            terminalPresentation === "spaces" && activeSpacesTabId
+              ? () => {
+                  const pane =
+                    s.panes.find(
+                      (candidate) =>
+                        candidate.pane_id === activePaneId &&
+                        candidate.tab_id === activeSpacesTabId,
+                    ) ??
+                    s.panes.find(
+                      (candidate) =>
+                        candidate.tab_id === activeSpacesTabId &&
+                        candidate.focused,
+                    ) ??
+                    s.panes.find(
+                      (candidate) => candidate.tab_id === activeSpacesTabId,
+                    );
+                  const source = document.activeElement;
+                  onFocusSpacesTabWindow?.(
+                    activeSpacesTabId,
+                    pane?.pane_id ?? null,
+                  );
+                  if (!pane) return;
+                  void store.focusPane(pane.pane_id).then(() => {
+                    window.requestAnimationFrame(() => {
+                      const target =
+                        visibleSpacesTabWindows.find(
+                          (window) => window.tabId === activeSpacesTabId,
+                        )?.portal ?? inspectorStageRef.current;
+                      const input =
+                        target?.querySelector<HTMLElement>(
+                          ".pane-layout-cell.is-active .xterm-helper-textarea, .pane-layout-single .xterm-helper-textarea, .pane-switcher-layout .xterm-helper-textarea",
+                        ) ?? null;
+                      focusIfUnchanged(input, source);
+                    });
+                  });
+                }
+              : undefined
+          }
           onViewChange={setInspectorView}
           onDockChange={setInspectorDock}
           onExpandedChange={setInspectorExpanded}
@@ -4149,6 +3830,7 @@ export default function App({
             onToggleInspector={toggleWorkspaceInspector}
             onToggleAnnotations={toggleAnnotations}
             onFocusSurface={onWorkspaceSurfaceSelect}
+            arrangementControl={arrangementControl}
           />
           <div
             className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""}`}
@@ -4167,7 +3849,9 @@ export default function App({
                   : ""
               }`}
             >
-              <div className="workspace-terminal-surface">
+              <div
+                className={`workspace-terminal-surface ${onSpacesWindowLayerReady ? "has-window-layer" : ""}`}
+              >
                 {workspaceSurface !== null ? (
                   <div
                     className={`workspace-surface-owner ${hasWorkspaceSurface ? "is-active" : "is-inactive"}`}
@@ -4175,8 +3859,18 @@ export default function App({
                     {workspaceSurface}
                   </div>
                 ) : null}
-                {!hasWorkspaceSurface && terminalPresentation === "spaces" ? (
-                  <TerminalPaneLayout
+                {onSpacesWindowLayerReady &&
+                !hasWorkspaceSurface &&
+                terminalPresentation === "spaces" ? (
+                  <div
+                    className="spaces-window-layer"
+                    ref={onSpacesWindowLayerReady}
+                  />
+                ) : null}
+                {!hasWorkspaceSurface &&
+                terminalPresentation === "spaces" &&
+                (!focusedWorkspace || !activeSpacesTabId) ? (
+                  <TerminalView
                     terminalTheme={terminalTheme}
                     terminalFontScale={terminalFontScale}
                     mobileShortcuts={mobileTerminalShortcuts}
@@ -4186,7 +3880,30 @@ export default function App({
                     agentHistoryOpen={agentHistoryOpen}
                     onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
                     onOpenWorkspaceFile={handleTerminalWorkspaceFile}
-                    excludedPaneIds={worldOwnedPaneIds}
+                  />
+                ) : null}
+                {!hasWorkspaceSurface &&
+                terminalPresentation === "spaces" &&
+                visibleSpacesTabWindows.length === 0 &&
+                focusedWorkspace &&
+                activeSpacesTabId ? (
+                  <SpacesTabTerminal
+                    tabId={activeSpacesTabId}
+                    workspaceId={focusedWorkspace.workspace_id}
+                    panes={s.panes}
+                    selectedPaneId={s.selectedPaneId}
+                    connectionId={s.activeConnectionId}
+                    connectionGeneration={s.connectionGeneration}
+                    terminalTheme={terminalTheme}
+                    terminalFontScale={terminalFontScale}
+                    mobileShortcuts={mobileTerminalShortcuts}
+                    mobileSideShortcuts={mobileTerminalSideShortcuts}
+                    composerOpen={terminalComposerOpen}
+                    onComposerOpenChange={setTerminalComposerOpen}
+                    agentHistoryOpen={agentHistoryOpen}
+                    onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
+                    onOpenWorkspaceFile={handleTerminalWorkspaceFile}
+                    onFocusTabWindow={onFocusSpacesTabWindow}
                   />
                 ) : null}
               </div>
@@ -4283,6 +4000,35 @@ export default function App({
       >
         {inspectorSlot}
       </WorkspaceInspectorPortal>
+      {!hasWorkspaceSurface &&
+      terminalPresentation === "spaces" &&
+      focusedWorkspace
+        ? visibleSpacesTabWindows.map((window) =>
+            createPortal(
+              <SpacesTabTerminal
+                key={window.tabId}
+                tabId={window.tabId}
+                workspaceId={focusedWorkspace.workspace_id}
+                panes={s.panes}
+                selectedPaneId={s.selectedPaneId}
+                connectionId={s.activeConnectionId}
+                connectionGeneration={s.connectionGeneration}
+                terminalTheme={terminalTheme}
+                terminalFontScale={terminalFontScale}
+                mobileShortcuts={mobileTerminalShortcuts}
+                mobileSideShortcuts={mobileTerminalSideShortcuts}
+                composerOpen={terminalComposerOpen}
+                onComposerOpenChange={setTerminalComposerOpen}
+                agentHistoryOpen={agentHistoryOpen}
+                onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
+                onOpenWorkspaceFile={handleTerminalWorkspaceFile}
+                onFocusTabWindow={onFocusSpacesTabWindow}
+              />,
+              window.portal!,
+              window.tabId,
+            ),
+          )
+        : null}
       {terminalPresentation === "inspector" &&
       presentedTerminalPortal &&
       presentedTerminalPane
@@ -4308,10 +4054,10 @@ export default function App({
             presentedTerminalPortal,
           )
         : null}
-      {worldTerminalPresentations.length ? (
+      {worldPresentationsForView.length ? (
         <Suspense fallback={null}>
           <WorldTerminalPortalList
-            presentations={worldTerminalPresentations}
+            presentations={worldPresentationsForView}
             panes={s.panes}
             activeConnectionId={s.activeConnectionId}
             connectionGeneration={s.connectionGeneration}

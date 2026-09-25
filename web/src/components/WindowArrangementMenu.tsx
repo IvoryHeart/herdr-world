@@ -1,0 +1,198 @@
+import { LayoutGrid, RotateCcw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import type { TerminalWindowArrangementPreset } from "../world/terminalWindowArrangement";
+import "./WindowArrangementMenu.css";
+
+export type WindowArrangementCommand =
+  | TerminalWindowArrangementPreset
+  | "restore";
+
+export type WindowArrangementControl = {
+  activePreset: TerminalWindowArrangementPreset | null;
+  disabledReasons: Partial<Record<WindowArrangementCommand, string>>;
+  onSelect: (command: WindowArrangementCommand) => void;
+};
+
+const choices: readonly {
+  command: WindowArrangementCommand;
+  label: string;
+  description: string;
+}[] = [
+  { command: "single", label: "Single", description: "Show the active window" },
+  {
+    command: "cascade",
+    label: "Cascade",
+    description: "Overlap windows diagonally",
+  },
+  {
+    command: "columns",
+    label: "Columns",
+    description: "Fit windows side by side",
+  },
+  { command: "rows", label: "Rows", description: "Fit windows top to bottom" },
+  { command: "grid", label: "Grid", description: "Tile four corners" },
+  {
+    command: "restore",
+    label: "Restore positions",
+    description: "Return still-open windows to their previous positions",
+  },
+];
+
+export function WindowArrangementMenu({
+  control,
+}: {
+  control: WindowArrangementControl;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeMenu = () => setOpen(false);
+    const items =
+      menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');
+    const firstEnabled = [...(items ?? [])].find(
+      (item) => item.getAttribute("aria-disabled") !== "true",
+    );
+    (firstEnabled ?? items?.[0])?.focus();
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (
+        !menuRef.current?.contains(target) &&
+        !triggerRef.current?.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      } else if (event.key === "Tab") {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", closeMenu);
+    const onScroll = (event: Event) => {
+      if (!menuRef.current?.contains(event.target as Node)) closeMenu();
+    };
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  const triggerRect = open ? triggerRef.current?.getBoundingClientRect() : null;
+  const menuWidth = 246;
+  const position: React.CSSProperties | undefined = triggerRect
+    ? {
+        left: Math.max(
+          8,
+          Math.min(
+            triggerRect.right - menuWidth,
+            window.innerWidth - menuWidth - 8,
+          ),
+        ),
+        top: Math.max(
+          8,
+          Math.min(triggerRect.bottom + 4, window.innerHeight - 300),
+        ),
+      }
+    : undefined;
+
+  const onMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const items = [
+      ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitem"]',
+      ),
+    ];
+    const current = items.findIndex((item) => item === document.activeElement);
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : (current + (event.key === "ArrowDown" ? 1 : -1) + items.length) %
+            items.length;
+    items[next]?.focus();
+  };
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`tabbar-arrangement-trigger ${open ? "is-active" : ""}`}
+        aria-label="Arrange windows"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Arrange windows"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <LayoutGrid size={16} aria-hidden="true" />
+      </button>
+      {open && position
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              aria-label="Arrange windows"
+              className="window-arrangement-menu"
+              style={position}
+              onKeyDown={onMenuKeyDown}
+            >
+              {choices.map(({ command, label, description }) => {
+                const reason = control.disabledReasons[command];
+                return (
+                  <button
+                    key={command}
+                    type="button"
+                    role="menuitem"
+                    aria-disabled={!!reason}
+                    className={`window-arrangement-option ${control.activePreset === command ? "is-active" : ""}`}
+                    title={reason ?? description}
+                    onClick={() => {
+                      if (reason) return;
+                      setOpen(false);
+                      control.onSelect(command);
+                      queueMicrotask(() => triggerRef.current?.focus());
+                    }}
+                  >
+                    {command === "restore" ? (
+                      <RotateCcw size={19} aria-hidden="true" />
+                    ) : (
+                      <span
+                        className={`window-arrangement-preview is-${command}`}
+                        aria-hidden="true"
+                      >
+                        <i />
+                        <i />
+                        <i />
+                        <i />
+                      </span>
+                    )}
+                    <span className="window-arrangement-copy">
+                      <strong>{label}</strong>
+                      <small>{reason ?? description}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}

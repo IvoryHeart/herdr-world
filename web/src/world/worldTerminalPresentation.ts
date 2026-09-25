@@ -12,6 +12,7 @@ export type WorldInspectorConversation = {
   runtimeGeneration: number;
   resourceIdentity: string;
   workspaceId: string;
+  tabId?: string;
   paneId?: string;
   terminalId?: string;
   agentSessionFingerprint?: string;
@@ -42,6 +43,7 @@ export type WorldTerminalPresentation = Pick<
   | "nodeId"
   | "connectionId"
   | "runtimeGeneration"
+  | "workspaceId"
   | "paneId"
   | "terminalId"
   | "label"
@@ -49,11 +51,39 @@ export type WorldTerminalPresentation = Pick<
   | "spaceLabel"
 > & {
   paneId: string;
+  tabId: string;
   terminalId: string;
   portal: Element | null;
+  onFocusPane?: (paneId: string) => void;
 };
 
 export const MAX_WORLD_FLOATING_INSPECTORS = 5;
+
+export function worldInspectorWindowId(
+  inspector: Pick<
+    WorldInspectorConversation,
+    "connectionId" | "runtimeGeneration" | "workspaceId" | "tabId" | "nodeId"
+  >,
+) {
+  return JSON.stringify([
+    inspector.connectionId,
+    inspector.runtimeGeneration,
+    inspector.workspaceId,
+    inspector.tabId ?? inspector.nodeId,
+  ]);
+}
+
+export function worldInspectorWindowIdForNode(node: WorldObjectNode) {
+  return worldInspectorWindowId({
+    connectionId: node.connectionId,
+    runtimeGeneration: node.generation,
+    workspaceId: "workspaceId" in node ? node.workspaceId : node.nativeId,
+    ...(node.kind === "agent" || node.kind === "terminal"
+      ? { tabId: node.tabId }
+      : {}),
+    nodeId: node.id,
+  });
+}
 
 export function upsertWorldInspectorConversation(
   current: readonly WorldInspectorConversation[],
@@ -85,20 +115,10 @@ export function retainWorldInspectorConversations(
 }
 
 export function sameWorldInspector(
-  left: Pick<
-    WorldInspectorConversation,
-    "connectionId" | "runtimeGeneration" | "nodeId"
-  >,
-  right: Pick<
-    WorldInspectorConversation,
-    "connectionId" | "runtimeGeneration" | "nodeId"
-  >,
+  left: Parameters<typeof worldInspectorWindowId>[0],
+  right: Parameters<typeof worldInspectorWindowId>[0],
 ) {
-  return (
-    left.connectionId === right.connectionId &&
-    left.runtimeGeneration === right.runtimeGeneration &&
-    left.nodeId === right.nodeId
-  );
+  return worldInspectorWindowId(left) === worldInspectorWindowId(right);
 }
 
 export function reconcileWorldInspectorConversation(
@@ -106,12 +126,17 @@ export function reconcileWorldInspectorConversation(
   observed: WorldInspectorConversation,
 ): WorldInspectorConversation {
   const sameResource = current.resourceIdentity === observed.resourceIdentity;
+  const sameWorkspace =
+    current.connectionId === observed.connectionId &&
+    current.runtimeGeneration === observed.runtimeGeneration &&
+    current.workspaceId === observed.workspaceId;
+  const keepView =
+    sameWorkspace &&
+    observed.availableViews.includes(current.view) &&
+    (current.paneId !== observed.paneId || sameResource);
   const next: WorldInspectorConversation = {
     ...observed,
-    view:
-      sameResource && observed.availableViews.includes(current.view)
-        ? current.view
-        : observed.view,
+    view: keepView ? current.view : observed.view,
     dock: current.dock,
     expanded: current.expanded,
     size: current.size,
@@ -129,6 +154,7 @@ function inspectorConversationEqual(
     left.runtimeGeneration === right.runtimeGeneration &&
     left.resourceIdentity === right.resourceIdentity &&
     left.workspaceId === right.workspaceId &&
+    left.tabId === right.tabId &&
     left.paneId === right.paneId &&
     left.terminalId === right.terminalId &&
     left.agentSessionFingerprint === right.agentSessionFingerprint &&
@@ -187,6 +213,7 @@ export function worldInspectorForNode(
     runtimeGeneration: node.generation,
     resourceIdentity,
     workspaceId: leaf?.workspaceId ?? node.nativeId,
+    ...(leaf ? { tabId: leaf.tabId } : {}),
     ...(leaf ? { paneId: leaf.nativeId, terminalId: leaf.terminalId } : {}),
     ...(leaf?.kind === "agent" && leaf.agentSessionFingerprint
       ? { agentSessionFingerprint: leaf.agentSessionFingerprint }

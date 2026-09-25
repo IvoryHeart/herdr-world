@@ -260,11 +260,23 @@
 
 .workspace-inspector-terminal-detached {
   min-height: 100%;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   padding: 24px;
   color: var(--text-secondary);
   text-align: center;
+}
+
+.workspace-inspector-focus-tab-action {
+  padding: 8px 12px;
+  border: 1px solid var(--viewer-border);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text-strong);
+  cursor: pointer;
 }
 
 .workspace-inspector-terminal-portal > .terminal-shell {

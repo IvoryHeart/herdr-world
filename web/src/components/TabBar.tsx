@@ -17,7 +17,13 @@ import {
   terminalComposerDraftPaneIds,
 } from "../terminalComposer";
 import { summarizeTabAgents } from "./agentSession";
+import {
+  WindowArrangementMenu,
+  type WindowArrangementControl,
+} from "./WindowArrangementMenu";
 import "./TabBar.css";
+
+export type { WindowArrangementControl } from "./WindowArrangementMenu";
 
 const LONG_PRESS_MS = 550;
 const LONG_PRESS_MOVE_PX = 10;
@@ -68,6 +74,7 @@ export function TabBar({
   onToggleInspector,
   onToggleAnnotations,
   onFocusSurface,
+  arrangementControl,
 }: {
   mobile?: boolean;
   inspectorOpen?: boolean;
@@ -76,6 +83,7 @@ export function TabBar({
   annotationCount?: number;
   onToggleInspector?: () => void;
   onToggleAnnotations?: () => void;
+  arrangementControl?: WindowArrangementControl;
   onFocusSurface?: (selection: {
     connectionId: string;
     runtimeGeneration: number;
@@ -329,6 +337,9 @@ export function TabBar({
           </button>
           <span className="tabbar-spacer" />
           <div className="tabbar-utilities">
+            {arrangementControl ? (
+              <WindowArrangementMenu control={arrangementControl} />
+            ) : null}
             {showInspector ? (
               <button
                 type="button"

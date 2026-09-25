@@ -14,10 +14,19 @@ type SavedGeometry = { id: string; geometry: FloatingTerminalGeometry };
 
 export function floatingTerminalGeometryId(
   inspector: Pick<WorldInspectorConversation, "connectionId"> & {
+    workspaceId?: string;
+    tabId?: string;
     nodeId?: string;
     terminalId?: string;
   },
 ) {
+  if (inspector.workspaceId && inspector.tabId) {
+    return JSON.stringify([
+      inspector.connectionId,
+      inspector.workspaceId,
+      inspector.tabId,
+    ]);
+  }
   return JSON.stringify([
     inspector.connectionId,
     inspector.nodeId ?? inspector.terminalId,
@@ -29,10 +38,18 @@ export function readFloatingTerminalGeometry(
   id: string,
   fallback: FloatingTerminalGeometry,
   viewport: FloatingTerminalSize,
+  legacyId?: string,
 ) {
   try {
     const saved = parseSaved(storage.getItem(FLOATING_TERMINAL_GEOMETRY_KEY));
-    const geometry = saved.find((entry) => entry.id === id)?.geometry;
+    const stable = saved.find((entry) => entry.id === id)?.geometry;
+    const legacy = legacyId
+      ? saved.find((entry) => entry.id === legacyId)?.geometry
+      : undefined;
+    if (!stable && legacy) {
+      writeFloatingTerminalGeometry(storage, id, legacy);
+    }
+    const geometry = stable ?? legacy;
     return clampFloatingTerminalGeometry(geometry ?? fallback, viewport);
   } catch {
     return clampFloatingTerminalGeometry(fallback, viewport);

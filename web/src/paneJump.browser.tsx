@@ -184,14 +184,26 @@ async function run() {
       workspace_id: "w1",
       tab_id: "w1:t1",
       zoomed: false,
-      splits: [],
+      splits: [
+        {
+          id: "w1:split",
+          direction: "right",
+          rect: { x: 0, y: 0, width: 80, height: 24 },
+          ratio: 0.5,
+        },
+      ],
       area: { x: 0, y: 0, width: 80, height: 24 },
       focused_pane_id: "w1:p1",
       panes: [
         {
           pane_id: "w1:p1",
           focused: true,
-          rect: { x: 0, y: 0, width: 80, height: 24 },
+          rect: { x: 0, y: 0, width: 40, height: 24 },
+        },
+        {
+          pane_id: "w1:p2",
+          focused: false,
+          rect: { x: 40, y: 0, width: 40, height: 24 },
         },
       ],
     },

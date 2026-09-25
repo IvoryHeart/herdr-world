@@ -59,6 +59,55 @@ describe("floating terminal preferences", () => {
       }),
     ).toBe('["host-a","terminal-a"]');
   });
+
+  test("migrates pane geometry once and keeps the latest tab position after reconnect", () => {
+    const legacyId = '["host-a","pane-node-a"]';
+    const stableId = floatingTerminalGeometryId({
+      connectionId: "host-a",
+      workspaceId: "workspace-a",
+      tabId: "tab-a",
+      nodeId: "pane-node-a",
+    });
+    const oldPosition = { left: 24, top: 40, width: 420, height: 300 };
+    const latestPosition = { left: 280, top: 100, width: 500, height: 360 };
+    const viewport = { width: 1200, height: 800 };
+    const storage = memoryStorage(
+      JSON.stringify([{ id: legacyId, geometry: oldPosition }]),
+    );
+
+    expect(
+      readFloatingTerminalGeometry(
+        storage,
+        stableId,
+        latestPosition,
+        viewport,
+        legacyId,
+      ),
+    ).toEqual(oldPosition);
+    expect(JSON.parse(storage.written!.value)).toContainEqual({
+      id: stableId,
+      geometry: oldPosition,
+    });
+
+    writeFloatingTerminalGeometry(storage, stableId, latestPosition);
+    expect(
+      readFloatingTerminalGeometry(
+        storage,
+        stableId,
+        oldPosition,
+        viewport,
+        legacyId,
+      ),
+    ).toEqual(latestPosition);
+    expect(
+      floatingTerminalGeometryId({
+        connectionId: "host-a",
+        workspaceId: "workspace-a",
+        tabId: "tab-a",
+        nodeId: "pane-node-b",
+      }),
+    ).toBe(stableId);
+  });
 });
 
 function memoryStorage(initial: string | null) {

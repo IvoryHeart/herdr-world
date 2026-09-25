@@ -239,6 +239,13 @@
   flex: 1 1 auto;
 }
 
+.world-terminal-owner > .pane-layout,
+.world-terminal-owner > .pane-switcher-layout {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
 .world-terminal-parking {
   display: none;
 }
@@ -416,6 +423,9 @@
   min-height: 0;
   flex: 1 1 auto;
   overflow: hidden;
+}
+.world-inspector-transfer-owner {
+  display: contents;
 }
 .world-inspector-portal:empty {
   display: none;

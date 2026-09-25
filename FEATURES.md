@@ -11,6 +11,16 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   at a time. The service and browser store still observe one host-qualified
   aggregate, so switching the connection selector replaces the whole view without
   conflating equal workspace, pane, or terminal IDs from different hosts.
+- Use **Arrange windows** on the shared tab bar to show the active terminal alone,
+  cascade open windows, fit them in columns or rows, tile them in a grid, or
+  restore their previous positions. Spaces arranges the focused workspace's
+  existing tabs; Office, Tree, and Graph arrange their open Inspectors, including
+  a docked or inline Inspector. Layout choices that cannot fit explain why.
+- A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
+  view also shows the selected tab's split panes in one window; selecting a sibling
+  pane keeps the same Inspector and updates its pane-specific resources. When the
+  Spaces Inspector is on Terminal, **Focus tab window** goes to the active tab
+  without attaching a second terminal.
 - A failed selected host may retain its last observed topology as visibly stale,
   never actionable. Selecting a live entity revalidates its connection generation
   before opening the same terminal or host-specific Inspector context.
