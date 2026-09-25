@@ -84,6 +84,7 @@ export type WorldLeafObject = WorldObjectBase & {
   agentSessionIdentity?: string;
   agentSessionFingerprint?: string;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
+  watched?: boolean;
   lastActivityAt?: number;
   spaceLabel: string;
 };
@@ -793,5 +794,94 @@ export function worldObjectForConnection(
           shells: 0,
           status: emptyStatusCounts(),
         },
+  };
+}
+
+/** Keeps ancestry for a browser-local watched-only presentation. */
+export function worldObjectForWatches(
+  world: WorldObject,
+  watches: readonly {
+    connectionId: string;
+    generation: number;
+    terminalId: string;
+  }[],
+): WorldObject {
+  const keys = new Set(
+    watches.map(({ connectionId, generation, terminalId }) =>
+      JSON.stringify([connectionId, generation, terminalId]),
+    ),
+  );
+  const hosts = world.hosts.flatMap((host) => {
+    const spaces = host.spaces.flatMap((space) => {
+      const children = space.children.filter((leaf) =>
+        keys.has(
+          JSON.stringify([leaf.connectionId, leaf.generation, leaf.terminalId]),
+        ),
+      );
+      return children.length ? [{ ...space, children }] : [];
+    });
+    return spaces.length ? [{ ...host, spaces }] : [];
+  });
+  const spaces = hosts.flatMap((host) => host.spaces);
+  const leaves = spaces.flatMap((space) => space.children);
+  const nodes: WorldObjectNode[] = hosts.flatMap((host) => [
+    host,
+    ...host.spaces.flatMap((space): WorldObjectNode[] => [
+      space,
+      ...space.children,
+    ]),
+  ]);
+  return {
+    ...world,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById: new Map(nodes.map((node) => [node.id, node])),
+  };
+}
+
+export function worldObjectWithWatches(
+  world: WorldObject,
+  watches: readonly {
+    connectionId: string;
+    generation: number;
+    terminalId: string;
+  }[],
+): WorldObject {
+  const keys = new Set(
+    watches.map(({ connectionId, generation, terminalId }) =>
+      JSON.stringify([connectionId, generation, terminalId]),
+    ),
+  );
+  const hosts = world.hosts.map((host) => ({
+    ...host,
+    spaces: host.spaces.map((space) => ({
+      ...space,
+      children: space.children.map((leaf) =>
+        keys.has(
+          JSON.stringify([leaf.connectionId, leaf.generation, leaf.terminalId]),
+        )
+          ? { ...leaf, watched: true }
+          : leaf,
+      ),
+    })),
+  }));
+  const spaces = hosts.flatMap((host) => host.spaces);
+  const leaves = spaces.flatMap((space) => space.children);
+  const nodes: WorldObjectNode[] = hosts.flatMap((host) => [
+    host,
+    ...host.spaces.flatMap((space): WorldObjectNode[] => [
+      space,
+      ...space.children,
+    ]),
+  ]);
+  return {
+    ...world,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById: new Map(nodes.map((node) => [node.id, node])),
   };
 }

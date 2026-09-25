@@ -212,6 +212,48 @@ describe("World aggregate runtime store", () => {
     ]);
   });
 
+  test("sends the selected-host hint and discards an earlier host's delayed response", async () => {
+    const calls: Array<{
+      params?: Record<string, unknown>;
+      resolve(value: unknown): void;
+    }> = [];
+    const runtime = new WorldRuntimeStore({
+      call: (_method, params) =>
+        new Promise((resolve) => {
+          calls.push({ params, resolve });
+        }),
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+
+    runtime.setSelectedConnectionId("host-a");
+    const first = runtime.refresh();
+    expect(calls[0].params).toMatchObject({
+      selected_connection_id: "host-a",
+    });
+    expect(calls[0].params).not.toHaveProperty("connection_id");
+    runtime.setSelectedConnectionId("host-b");
+    calls[0].resolve(result("old selected host", 1));
+    await first;
+    await Promise.resolve();
+    expect(runtime.get().connections).toEqual([]);
+    expect(calls).toHaveLength(2);
+    expect(calls[1].params).toMatchObject({
+      selected_connection_id: "host-b",
+    });
+    calls[1].resolve(result("new selected host", 2));
+    for (
+      let attempt = 0;
+      attempt < 10 && runtime.get().revision !== 2;
+      attempt++
+    ) {
+      await Promise.resolve();
+    }
+    expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
+      "new selected host",
+    );
+  });
+
   test("makes retained observations stale and non-actionable on disconnect", async () => {
     let statusListener: (
       status: "connecting" | "connected" | "disconnected",

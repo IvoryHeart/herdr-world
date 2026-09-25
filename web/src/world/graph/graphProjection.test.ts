@@ -89,6 +89,22 @@ describe("World Graph projection", () => {
     });
   });
 
+  test("reports watched overflow separately from ordinary omissions", () => {
+    const crowded = fixtureSpace("local", 0, 19);
+    crowded.children = crowded.children.map((leaf) => ({
+      ...leaf,
+      watched: true,
+    }));
+    const graph = projectWorldGraph(
+      fixtureWorld([fixtureHost("local", [crowded])]),
+    );
+    expect(graph.hosts[0]?.spaces[0]).toMatchObject({
+      omittedChildCount: 3,
+      watchedOmittedChildCount: 3,
+    });
+    expect(graph.coverage.watchedOmittedLeaves).toBe(3);
+  });
+
   test("bounds hosts and spaces globally and reports exact omissions", () => {
     const hostBound = projectWorldGraph(
       fixtureWorld(

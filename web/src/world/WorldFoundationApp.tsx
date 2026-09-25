@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import App, { type WorkspaceSurfaceSelection } from "../App";
-import type { ConnectionSummary } from "../api";
+import { bridge, type ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import { lazyWithReload } from "../lazyWithReload";
 import { shallowEqual, store, useStoreSelector } from "../store";
@@ -37,7 +37,10 @@ import {
   type WorldObject,
   type WorldObjectNode,
   worldObjectForConnection,
+  worldObjectForWatches,
+  worldObjectWithWatches,
 } from "./worldObject";
+import { useWorldWatchlist, WorldWatchlistStore } from "./watchlistStore";
 import "./world.css";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
@@ -586,6 +589,13 @@ function WorldControlPlane({
   viewToolbarPortal: HTMLDivElement | null;
 }) {
   const runtime = useWorldRuntime();
+  const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
+  const watchlist = useWorldWatchlist(watchlistStore);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
+  useEffect(() => {
+    watchlistStore.start();
+    return () => watchlistStore.stop();
+  }, [watchlistStore]);
   const connectionSelection = useStoreSelector(
     (snapshot) => ({
       activeConnectionId: snapshot.activeConnectionId,
@@ -674,7 +684,78 @@ function WorldControlPlane({
       hasSelectedConnection,
     ],
   );
+  const watchedWorld = useMemo(
+    () => worldObjectWithWatches(world, watchlist.records),
+    [watchlist.records, world],
+  );
+  const presentedWorld = useMemo(
+    () =>
+      pinnedOnly
+        ? worldObjectForWatches(watchedWorld, watchlist.records)
+        : watchedWorld,
+    [pinnedOnly, watchedWorld, watchlist.records],
+  );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
+  const selectedWatch =
+    selection && (selection.kind === "agent" || selection.kind === "terminal")
+      ? {
+          connectionId: selection.connectionId,
+          generation: selection.generation,
+          terminalId: selection.terminalId,
+          label: selection.label,
+        }
+      : null;
+  const selectedPinned = Boolean(
+    selectedWatch &&
+      watchlist.records.some(
+        (watch) =>
+          watch.connectionId === selectedWatch.connectionId &&
+          watch.generation === selectedWatch.generation &&
+          watch.terminalId === selectedWatch.terminalId,
+      ),
+  );
+  const watchAdmission = runtime.connections.find(
+    ({ connectionId }) =>
+      connectionId === connectionSelection.activeConnectionId,
+  )?.snapshot?.watchAdmission;
+  const watchStatus = watchlist.error
+    ? watchlist.error
+    : !watchlist.verified
+      ? "Watches unavailable while disconnected"
+      : !watchAdmission || watchAdmission.revision !== watchlist.revision
+        ? "Watch availability pending"
+        : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
+  const watchToolbarActions = (
+    <>
+      <button
+        type="button"
+        aria-pressed={pinnedOnly}
+        onClick={() => setPinnedOnly((value) => !value)}
+      >
+        Pinned only
+      </button>
+      <span className="world-view-toolbar-results" aria-live="polite">
+        {watchStatus}
+      </span>
+      {selectedWatch ? (
+        <button
+          type="button"
+          disabled={
+            !watchlist.verified || (!selectedPinned && !selection?.actionable)
+          }
+          title={watchlist.error ?? undefined}
+          onClick={() =>
+            void watchlistStore.mutate(
+              selectedPinned ? "world.watchlist.unpin" : "world.watchlist.pin",
+              selectedWatch,
+            )
+          }
+        >
+          {selectedPinned ? "Unpin" : "Pin"}
+        </button>
+      ) : null}
+    </>
+  );
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
@@ -791,6 +872,17 @@ function WorldControlPlane({
     [inspectorConversations, pendingSurfacePriority, selection],
   );
   dockedInspectorGeometryRef.current = dockedInspectorGeometry;
+
+  useLayoutEffect(() => {
+    worldRuntimeStore.setSelectedConnectionId(
+      hasValidSelectedConnection(
+        connectionSelection.activeConnectionId,
+        connectionSelection.connections,
+      )
+        ? connectionSelection.activeConnectionId
+        : null,
+    );
+  }, [connectionSelection.activeConnectionId, connectionSelection.connections]);
 
   useLayoutEffect(() => {
     worldRuntimeStore.setPriorities(snapshotPriorities);
@@ -1555,8 +1647,9 @@ function WorldControlPlane({
                       }
                     >
                       <PixelOfficeView
-                        world={world}
+                        world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
+                        toolbarActions={watchToolbarActions}
                         selectedId={selectedId}
                         onSelect={selectNode}
                         floatingTerminals={inspectorConversations}
@@ -1574,8 +1667,9 @@ function WorldControlPlane({
                       }
                     >
                       <ConnectedTreeView
-                        world={world}
+                        world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
+                        toolbarActions={watchToolbarActions}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
                         inlineInspectorNodeId={treeInlineInspectorNodeId}
@@ -1590,8 +1684,9 @@ function WorldControlPlane({
                     </Suspense>
                   ) : (
                     <SpatialGraphView
-                      world={world}
+                      world={presentedWorld}
                       toolbarPortal={viewToolbarPortal}
+                      toolbarActions={watchToolbarActions}
                       selectedId={selectedId}
                       conversationNodeIds={conversationNodeIds}
                       onSelect={selectNode}

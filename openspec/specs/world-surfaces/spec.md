@@ -881,3 +881,59 @@ mounted Spaces or live terminal ownership.
 - **WHEN** a view-specific renderer cannot load or throws during presentation
 - **THEN** World reports a bounded failure with navigation to another view while Spaces, connection
   management, Inspector resources and existing terminals remain usable
+
+### Requirement: Shared qualified pane watchlist
+
+World SHALL keep at most 128 terminal-backed watches in service memory, keyed by
+connection ID, runtime generation and terminal ID. Pins are shared across browser
+connections, survive a browser reload, and clear on service restart or runtime
+generation replacement. Pin validates a current live pane, while exact Unpin may
+remove an unavailable record. A watch is observational only and grants no resource
+or mutation authority.
+
+#### Scenario: Native IDs collide across hosts
+
+- **WHEN** two hosts expose the same native terminal ID
+- **THEN** a watch on one exact qualified host never resolves or opens the other
+
+### Requirement: Revisioned watchlist observation
+
+The service SHALL return a process-local watchlist revision and notify browsers on
+real mutations. Browsers SHALL reload the list after connection and notification,
+reject older replies for that socket, and mark cached records unverified while
+disconnected. A reconnect SHALL accept a new empty revision-zero list after a
+service restart.
+
+#### Scenario: Service restart
+
+- **WHEN** a browser reconnects to a restarted World process
+- **THEN** its prior cached watches are replaced by the restarted process's list
+
+### Requirement: Watch admission within snapshot bounds
+
+World snapshots SHALL reserve uniquely matched current-generation watched panes
+and valid workspace/tab ancestry before ordinary relevance, without consuming the
+eight browser priority hints. Fresh hosts SHALL report a watch revision and
+registered, missing, unresolved, matched, admitted and admission-failed counts,
+where `registered = missing + unresolved + matched` and
+`matched = admitted + admission-failed`. Stale or unfinished hosts SHALL not
+claim current watch classification.
+
+#### Scenario: Duplicate terminal identity
+
+- **WHEN** one watched terminal ID occurs in two raw panes
+- **THEN** it is counted once as unresolved and never admitted or guessed
+
+### Requirement: Watched visual projection
+
+Office, Tree and Graph SHALL offer accessible Pin, Unpin and browser-local Pinned
+only controls. Pinned only retains selected-host hierarchy context and filters
+search within that set. Tree and Graph SHALL prioritize watched leaves while
+retaining their 16-child presentation bound; unavailable, stale, missing or
+unresolved watches SHALL not expose operational actions.
+
+#### Scenario: A watched pane exceeds a view bound
+
+- **WHEN** a space has more than 16 watched panes
+- **THEN** the snapshot still admits its valid watches and the view reports its
+  presentation omission without calling it missing
