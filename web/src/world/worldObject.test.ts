@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import {
   buildWorldObject,
+  taskSummarySessionFingerprint,
   worldObjectForConnection,
   worldObjectId,
 } from "./worldObject";
@@ -256,7 +257,12 @@ describe("WorldObject", () => {
         pane_id: "shared-pane",
         terminal_id: "shared-terminal",
         agent: "codex",
-        agent_session: { agent: "codex", kind: "id", value: "session-a" },
+        agent_session: {
+          source: "herdr:codex",
+          agent: "codex",
+          kind: "id",
+          value: "session-a",
+        },
       },
     ];
     second.snapshot.agents = [
@@ -264,7 +270,12 @@ describe("WorldObject", () => {
         pane_id: "shared-pane",
         terminal_id: "shared-terminal",
         agent: "codex",
-        agent_session: { agent: "codex", kind: "id", value: "session-b" },
+        agent_session: {
+          source: "herdr:codex",
+          agent: "codex",
+          kind: "id",
+          value: "session-b",
+        },
       },
     ];
 
@@ -275,6 +286,104 @@ describe("WorldObject", () => {
     expect(firstLeaf?.agentSessionIdentity).not.toBe(
       secondLeaf?.agentSessionIdentity,
     );
+  });
+
+  test("admits a producer token only for the exact current session", () => {
+    const source = connection("local");
+    if (!source.snapshot) throw new Error("fixture snapshot missing");
+    const session = {
+      source: "herdr:codex",
+      agent: "codex",
+      kind: "id",
+      value: "session-a",
+    };
+    const fingerprint = taskSummarySessionFingerprint(session);
+    expect(fingerprint).toBe(
+      "5e1cd9d951b5d79f43f31e4c8bbe940b94860a3f9695d6a36794e3a4f84e0cc2",
+    );
+    source.snapshot.panes[0] = {
+      ...source.snapshot.panes[0],
+      agent_session: session,
+      tokens: {
+        task_summary: "Reviewing CI",
+        task_summary_session: fingerprint,
+      },
+    } as never;
+    source.snapshot.agents = [
+      {
+        pane_id: "shared-pane",
+        terminal_id: "shared-terminal",
+        agent: "codex",
+        agent_session: session,
+      },
+    ];
+
+    expect(buildWorldObject([source], "local").leaves[0]?.taskSummary).toBe(
+      "Reviewing CI",
+    );
+  });
+
+  test("derives the checkout session fingerprint from an actionable pane without agent observation", () => {
+    const source = connection("local");
+    if (!source.snapshot) throw new Error("fixture snapshot missing");
+    const session = {
+      source: "herdr:codex",
+      agent: "codex",
+      kind: "id",
+      value: "pane-only-session",
+    };
+    source.snapshot.panes[0] = {
+      ...source.snapshot.panes[0],
+      agent_session: session,
+    } as never;
+    source.snapshot.agents = [];
+
+    expect(
+      buildWorldObject([source], "local").leaves[0]?.agentSessionFingerprint,
+    ).toBe(taskSummarySessionFingerprint(session));
+  });
+
+  test("hides producer text after session replacement, mismatch, or absence", () => {
+    const source = connection("local");
+    if (!source.snapshot) throw new Error("fixture snapshot missing");
+    const reported = {
+      source: "herdr:codex",
+      agent: "codex",
+      kind: "id",
+      value: "session-a",
+    };
+    source.snapshot.panes[0] = {
+      ...source.snapshot.panes[0],
+      agent_session: { ...reported, value: "session-b" },
+      tokens: {
+        task_summary: "Old report",
+        task_summary_session: taskSummarySessionFingerprint(reported),
+      },
+    } as never;
+    source.snapshot.agents = [
+      {
+        pane_id: "shared-pane",
+        terminal_id: "shared-terminal",
+        agent: "codex",
+        agent_session: { ...reported, value: "session-b" },
+      },
+    ];
+
+    expect(
+      buildWorldObject([source], "local").leaves[0]?.taskSummary,
+    ).toBeUndefined();
+
+    source.snapshot.panes[0] = {
+      ...source.snapshot.panes[0],
+      agent_session: reported,
+    } as never;
+    source.snapshot.agents[0] = {
+      ...source.snapshot.agents[0],
+      agent_session: { ...reported, value: "session-b" },
+    };
+    expect(
+      buildWorldObject([source], "local").leaves[0]?.taskSummary,
+    ).toBeUndefined();
   });
 
   test("labels reconnecting and offline retained hosts without making them operational", () => {

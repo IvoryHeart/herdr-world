@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
@@ -26,6 +27,7 @@ export type WorldNodeAnchors = Record<string, OfficeCanvasAnchor>;
 export default function ConnectedTreeView({
   world,
   toolbarPortal = null,
+  toolbarActions,
   selectedId,
   conversationNodeIds,
   inlineInspectorNodeId,
@@ -34,9 +36,11 @@ export default function ConnectedTreeView({
   onInlineInspectorPortalChange,
   onSelectedAnchorChange,
   onNodeAnchorsChange,
+  actions,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
+  toolbarActions?: ReactNode;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
   inlineInspectorNodeId: string | null;
@@ -45,6 +49,7 @@ export default function ConnectedTreeView({
   onInlineInspectorPortalChange(element: HTMLDivElement | null): void;
   onSelectedAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onNodeAnchorsChange(anchors: WorldNodeAnchors | null): void;
+  actions?: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(
@@ -188,7 +193,10 @@ export default function ConnectedTreeView({
             : "No matches"
           : undefined
       }
-    />
+      actions={actions}
+    >
+      {toolbarActions}
+    </WorldViewToolbar>
   );
 
   return (
@@ -335,6 +343,12 @@ function VisualSpace({
               +{space.omittedChildCount} omitted leaves
             </p>
           ) : null}
+          {space.watchedOmittedChildCount ? (
+            <p className="world-connected-tree-overflow">
+              +{space.watchedOmittedChildCount} watched leaves hidden by view
+              limit
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>
@@ -464,6 +478,12 @@ function SemanticSpace({
           {space.omittedChildCount ? (
             <li className="is-overflow">
               +{space.omittedChildCount} omitted leaves
+            </li>
+          ) : null}
+          {space.watchedOmittedChildCount ? (
+            <li className="is-overflow">
+              +{space.watchedOmittedChildCount} watched leaves hidden by view
+              limit
             </li>
           ) : null}
         </ul>

@@ -14,6 +14,7 @@ export type WorldInspectorConversation = {
   workspaceId: string;
   paneId?: string;
   terminalId?: string;
+  agentSessionFingerprint?: string;
   label: string;
   hostLabel: string;
   spaceLabel: string;
@@ -130,6 +131,7 @@ function inspectorConversationEqual(
     left.workspaceId === right.workspaceId &&
     left.paneId === right.paneId &&
     left.terminalId === right.terminalId &&
+    left.agentSessionFingerprint === right.agentSessionFingerprint &&
     left.label === right.label &&
     left.hostLabel === right.hostLabel &&
     left.spaceLabel === right.spaceLabel &&
@@ -176,6 +178,7 @@ export function worldInspectorForNode(
         leaf.kind,
         leaf.kind === "agent" ? leaf.pane.agent : null,
         leaf.agentSessionIdentity ?? null,
+        leaf.agentSessionFingerprint ?? null,
       ])
     : JSON.stringify([node.connectionId, node.generation, node.nativeId]);
   return {
@@ -185,6 +188,9 @@ export function worldInspectorForNode(
     resourceIdentity,
     workspaceId: leaf?.workspaceId ?? node.nativeId,
     ...(leaf ? { paneId: leaf.nativeId, terminalId: leaf.terminalId } : {}),
+    ...(leaf?.kind === "agent" && leaf.agentSessionFingerprint
+      ? { agentSessionFingerprint: leaf.agentSessionFingerprint }
+      : {}),
     label: node.label,
     hostLabel: node.hostLabel,
     spaceLabel: leaf?.spaceLabel ?? node.label,

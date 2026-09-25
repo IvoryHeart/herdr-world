@@ -136,6 +136,39 @@ and the browser SHALL NOT receive provider credentials.
 - **WHEN** no optional provider is available
 - **THEN** core topology and terminals remain available without invented agent activity
 
+### Requirement: Session-qualified task summaries
+
+The packaged `herdr-world task-summary` command SHALL report a normalized, redacted,
+80-Unicode-code-point-or-shorter `task_summary` token and a SHA-256 fingerprint token
+for one explicitly identified Herdr pane without starting the World web service. The
+fingerprint SHALL cover `JSON.stringify([source, agent, kind, value])` for that pane's
+current Herdr `agent_session`; World SHALL show the producer token only when the exact
+current session still matches it. The command SHALL accept `--pane` or `HERDR_PANE_ID`,
+the existing named-session selection, and an explicitly requested fixed-policy SSH
+transport. It SHALL use the same TTL for both tokens, default to 900,000 milliseconds,
+accept only 1 through 86,400,000 milliseconds, and leave expiry to Herdr. It SHALL NOT
+offer `--clear`, because Herdr cannot conditionally delete pane-global token keys by
+expected session identity.
+
+#### Scenario: Current session reports work
+
+- **WHEN** a harness reports `Reviewing CI` for an exact pane with an active session
+- **THEN** Herdr receives the summary and its paired fingerprint in one metadata call,
+  and Office, Tree, Graph and Inspector show the text after their existing observation
+  path refreshes
+
+#### Scenario: Session is replaced or observations disagree
+
+- **WHEN** a pane starts another session, has no complete session, or pane and agent
+  observations disagree about the session
+- **THEN** a summary fingerprinted for the prior session is absent from World surfaces
+
+#### Scenario: Delayed cleanup is invoked
+
+- **WHEN** a former hook invokes `herdr-world task-summary --clear`
+- **THEN** the command exits with a usage error before requesting pane metadata, leaving
+  any newer summary intact
+
 ### Requirement: Accessible navigation
 
 World SHALL expose named, keyboard-reachable controls for view navigation, hierarchy disclosure,
@@ -152,6 +185,52 @@ semantic hierarchy and operational controls without requiring precision pointer 
 
 - **WHEN** a user selects an entity through semantic keyboard or assistive navigation
 - **THEN** the same connection-qualified entity is selected as through a pointer action
+
+### Requirement: Visual-route Actions
+
+Office, Tree and Graph SHALL expose a common named Actions control for the explicitly selected
+space, agent or terminal. The control SHALL be reachable by pointer and keyboard on desktop and
+compact layouts, identify the captured host, space and pane as applicable, and offer only the
+target's existing applicable Terminal, Files, Changes, Agent History and Go to Spaces actions.
+It SHALL reuse the shared Inspector and selected-connection focus path; it SHALL NOT use hidden
+Spaces focus, create another terminal owner, send terminal input, assign tasks or control an
+agent lifecycle. A missing or unavailable target SHALL explain why no action can run.
+
+Before dispatch, Actions SHALL validate the captured connection ID, runtime generation, entity
+identity and current selected entity against the selected-host projection. Changing selection,
+host or generation, or losing the current observation, SHALL invalidate the capture and prevent
+an action from falling through to a colliding entity or hidden Spaces state. Go to Spaces SHALL
+focus the exact validated target before changing the visible view and SHALL leave the visual view
+visible if that focus fails.
+
+#### Scenario: Open Actions for a selected agent
+
+- **WHEN** a user selects an actionable agent in Office, Tree or Graph and opens Actions
+- **THEN** the menu identifies that agent and offers its admitted Inspector resources and Go to
+  Spaces
+
+#### Scenario: No actionable selection exists
+
+- **WHEN** a user opens Actions without an actionable space or pane selected
+- **THEN** it asks the user to select a visual entity and does not use the last focused Spaces pane
+
+#### Scenario: Choose an Inspector resource
+
+- **WHEN** a user chooses Terminal, Files, Changes or Agent History from Actions
+- **THEN** the shared Inspector opens or focuses that resource for the exact selected entity while
+  preserving the current visual view and terminal ownership
+
+#### Scenario: Go to Spaces
+
+- **WHEN** a user chooses Go to Spaces for a current space or pane
+- **THEN** World focuses that qualified target before Spaces becomes visible without changing the
+  selected host or creating a pane
+
+#### Scenario: The capture retires before dispatch
+
+- **WHEN** selection, selected host, runtime generation or observed entity changes while Actions
+  is open
+- **THEN** World invalidates the capture, reports that it is unavailable, and performs no action
 
 ### Requirement: Common view navigation
 
@@ -393,6 +472,31 @@ existing connection lifecycle.
   agent session
 - **THEN** the compact identity area may show those values, while unavailable or host-only values
   remain absent
+
+### Requirement: Agent checkout source-control context
+
+For an actionable agent Inspector, World SHALL read Agent checkout context only from
+a complete versioned report whose session fingerprint matches the exact active pane
+session on the Inspector's connection and generation. It SHALL use a bounded
+read-only Git query on that reported checkout, show its branch and changed files,
+and keep Workspace changes as an explicit separate choice. World SHALL NOT infer
+the checkout from workspace or terminal CWD, another session, or another host. A
+reported HTTPS PR link SHALL be labelled Reported PR. Agent checkout SHALL expose no
+Git mutations. Reports omit TTL and Clear; they become unavailable on session
+replacement, pane closure, or Herdr restart.
+
+#### Scenario: Agent checkout differs from workspace changes
+
+- **WHEN** two agents in one workspace report different current-session worktrees
+- **THEN** each Inspector shows its own reported branch and changed files, while
+  Workspace changes remains separately labelled and selectable
+
+#### Scenario: Checkout report is absent or replaced
+
+- **WHEN** metadata is absent, malformed, lost after restart, or its session or
+  generation changes while a request is pending
+- **THEN** Agent checkout shows an unavailable reason and a Workspace changes
+  choice, and no old checkout, PR, or changed files enter that Inspector
 
 #### Scenario: Inspect an agent on an inactive host
 
@@ -823,3 +927,59 @@ mounted Spaces or live terminal ownership.
 - **WHEN** a view-specific renderer cannot load or throws during presentation
 - **THEN** World reports a bounded failure with navigation to another view while Spaces, connection
   management, Inspector resources and existing terminals remain usable
+
+### Requirement: Shared qualified pane watchlist
+
+World SHALL keep at most 128 terminal-backed watches in service memory, keyed by
+connection ID, runtime generation and terminal ID. Pins are shared across browser
+connections, survive a browser reload, and clear on service restart or runtime
+generation replacement. Pin validates a current live pane, while exact Unpin may
+remove an unavailable record. A watch is observational only and grants no resource
+or mutation authority.
+
+#### Scenario: Native IDs collide across hosts
+
+- **WHEN** two hosts expose the same native terminal ID
+- **THEN** a watch on one exact qualified host never resolves or opens the other
+
+### Requirement: Revisioned watchlist observation
+
+The service SHALL return a process-local watchlist revision and notify browsers on
+real mutations. Browsers SHALL reload the list after connection and notification,
+reject older replies for that socket, and mark cached records unverified while
+disconnected. A reconnect SHALL accept a new empty revision-zero list after a
+service restart.
+
+#### Scenario: Service restart
+
+- **WHEN** a browser reconnects to a restarted World process
+- **THEN** its prior cached watches are replaced by the restarted process's list
+
+### Requirement: Watch admission within snapshot bounds
+
+World snapshots SHALL reserve uniquely matched current-generation watched panes
+and valid workspace/tab ancestry before ordinary relevance, without consuming the
+eight browser priority hints. Fresh hosts SHALL report a watch revision and
+registered, missing, unresolved, matched, admitted and admission-failed counts,
+where `registered = missing + unresolved + matched` and
+`matched = admitted + admission-failed`. Stale or unfinished hosts SHALL not
+claim current watch classification.
+
+#### Scenario: Duplicate terminal identity
+
+- **WHEN** one watched terminal ID occurs in two raw panes
+- **THEN** it is counted once as unresolved and never admitted or guessed
+
+### Requirement: Watched visual projection
+
+Office, Tree and Graph SHALL offer accessible Pin, Unpin and browser-local Pinned
+only controls. Pinned only retains selected-host hierarchy context and filters
+search within that set. Tree and Graph SHALL prioritize watched leaves while
+retaining their 16-child presentation bound; unavailable, stale, missing or
+unresolved watches SHALL not expose operational actions.
+
+#### Scenario: A watched pane exceeds a view bound
+
+- **WHEN** a space has more than 16 watched panes
+- **THEN** the snapshot still admits its valid watches and the view reports its
+  presentation omission without calling it missing

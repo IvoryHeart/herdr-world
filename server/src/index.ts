@@ -24,6 +24,8 @@ import {
   SERVICE_COMMAND_CONTINUE,
 } from "./config/service-manager";
 import { runHerdrCommand } from "./herdr/cli";
+import { runTaskSummaryCommand } from "./herdr/task-summary";
+import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
 import {
@@ -96,6 +98,7 @@ import { rpcLogLevel } from "./utils/rpc-logging";
 import { syncWorktreeBase } from "./worktree/create";
 import { DOWNLOAD_TIMEOUT_MS } from "./workspace/file-constants";
 import { WorldSnapshotService } from "./world/snapshot";
+import { WorldWatchlistRegistry } from "./world/watchlist";
 import {
   createOfficeObservabilityHttpHandler,
   resolveOfficeObservabilityBootstrap,
@@ -116,6 +119,19 @@ if (serviceCommandResult === SERVICE_COMMAND_CONTINUE) {
   process.argv.splice(2);
 } else if (serviceCommandResult !== null) {
   process.exit(serviceCommandResult);
+}
+const taskSummaryCommandResult = await runTaskSummaryCommand(
+  process.argv.slice(2),
+  APP_VERSION,
+);
+const agentCheckoutCommandResult = await runAgentCheckoutCommand(
+  process.argv.slice(2),
+  APP_VERSION,
+);
+if (agentCheckoutCommandResult !== null)
+  process.exit(agentCheckoutCommandResult);
+if (taskSummaryCommandResult !== null) {
+  process.exit(taskSummaryCommandResult);
 }
 const herdrCommandResult = await runHerdrCommand(
   process.argv.slice(2),
@@ -193,6 +209,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
+  "agent_checkout.get",
   "file.read",
   "git.diff_file",
   "git.file_action",
@@ -371,12 +388,23 @@ try {
 const connectionFailureReporters = new Map<string, RecoveryReporter>();
 const readyConnectionGenerations = new Map<string, number>();
 let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
+const worldWatchlist = new WorldWatchlistRegistry();
+
+function publishWatchlistChanged(revision: number) {
+  const line = JSON.stringify({
+    control: { type: "world_watchlist_changed", revision },
+  });
+  for (const ws of clients) safeSend(ws, line, "world-watchlist");
+}
 
 function publishWorldInvalidation(
   connectionId: string,
   connectionGeneration: number,
+  observedLate = false,
 ) {
-  const revision = worldSnapshots?.invalidate();
+  const revision = worldSnapshots?.invalidate(
+    observedLate ? undefined : connectionId,
+  );
   if (revision === undefined) return;
   const line = JSON.stringify({
     control: {
@@ -405,6 +433,11 @@ function connectionFailureReporter(connectionId: string): RecoveryReporter {
 const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   connectionBootstrap.defaultConnectionId,
   (status) => {
+    const retired = worldWatchlist.retireConnectionGeneration(
+      status.id,
+      status.generation,
+    );
+    if (retired.changed) publishWatchlistChanged(retired.revision);
     publishWorldInvalidation(status.id, status.generation);
     const fields = {
       connection: status.id,
@@ -435,7 +468,14 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   },
   logger.child("connections"),
 );
-worldSnapshots = new WorldSnapshotService(connectionManager);
+worldSnapshots = new WorldSnapshotService(
+  connectionManager,
+  Date.now,
+  (connectionId, generation) =>
+    publishWorldInvalidation(connectionId, generation, true),
+  undefined,
+  () => worldWatchlist.list(),
+);
 
 const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
   ping: () => {
@@ -785,6 +825,78 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     }
     return;
   }
+  if (method === "world.watchlist.list") {
+    sendReply({ id, result: worldWatchlist.list() }, "world-watchlist-list");
+    return;
+  }
+  if (method === "world.watchlist.pin" || method === "world.watchlist.unpin") {
+    try {
+      const identity = params as Record<string, unknown> | undefined;
+      const connectionId = identity?.connection_id;
+      const generation = identity?.connection_generation;
+      const terminalId = identity?.terminal_id;
+      if (
+        typeof connectionId !== "string" ||
+        !connectionId ||
+        !Number.isSafeInteger(generation) ||
+        (generation as number) < 0 ||
+        typeof terminalId !== "string" ||
+        !terminalId
+      ) {
+        throw new Error("invalid World watch identity");
+      }
+      if (method === "world.watchlist.unpin") {
+        const result = worldWatchlist.unpin({
+          connection_id: connectionId,
+          connection_generation: generation as number,
+          terminal_id: terminalId,
+        });
+        if (result.changed) {
+          publishWorldInvalidation(connectionId, generation as number);
+          publishWatchlistChanged(result.revision);
+        }
+        sendReply(
+          { id, result: { ...worldWatchlist.list(), changed: result.changed } },
+          "world-watchlist-unpin",
+        );
+        return;
+      }
+      const lease = connectionManager.readyRuntimeLease(connectionId);
+      if (!lease || lease.generation !== generation || !lease.isCurrent()) {
+        throw new Error("World watch target is unavailable");
+      }
+      const paneResult = await lease.runtime.herdr.call("pane.list", {}, 5_000);
+      const panes = (paneResult as { panes?: unknown })?.panes;
+      const matches = Array.isArray(panes)
+        ? panes.filter(
+            (pane) =>
+              pane &&
+              typeof pane === "object" &&
+              (pane as Record<string, unknown>).terminal_id === terminalId,
+          )
+        : [];
+      if (!lease.isCurrent() || matches.length !== 1) {
+        throw new Error("World watch target is unavailable");
+      }
+      const result = worldWatchlist.pin({
+        connection_id: connectionId,
+        connection_generation: generation as number,
+        terminal_id: terminalId,
+        label: typeof identity?.label === "string" ? identity.label : "Watch",
+      });
+      if (result.changed) {
+        publishWorldInvalidation(connectionId, generation as number);
+        publishWatchlistChanged(result.revision);
+      }
+      sendReply(
+        { id, result: { ...worldWatchlist.list(), changed: result.changed } },
+        "world-watchlist-pin",
+      );
+    } catch (error) {
+      sendError("world-watchlist-error", error);
+    }
+    return;
+  }
   if (method.startsWith("world.")) {
     sendError(
       "unknown-world-method",
@@ -952,6 +1064,15 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-session-get");
     } catch (e) {
       sendError("agent-session-get-error", e);
+    }
+    return;
+  }
+  if (method === "agent_checkout.get") {
+    try {
+      const result = await connection.agentCheckout(params ?? {});
+      sendReply({ id, result }, "agent-checkout-get");
+    } catch (e) {
+      sendError("agent-checkout-get-error", e);
     }
     return;
   }

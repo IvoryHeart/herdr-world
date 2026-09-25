@@ -40,6 +40,7 @@ export type WorldGraphSpace = {
   children: WorldGraphNode[];
   observedChildCount: number;
   omittedChildCount: number;
+  watchedOmittedChildCount: number;
 };
 
 export type WorldGraphHost = {
@@ -70,6 +71,7 @@ export type WorldGraphProjection = {
     omittedTerminals: number;
     observedShells: number;
     presentedShells: number;
+    watchedOmittedLeaves?: number;
   };
   presentationBounds: typeof GRAPH_PRESENTATION_BOUNDS;
 };
@@ -172,6 +174,10 @@ export function projectWorldGraph(
       ),
       observedShells: world.coverage.shells,
       presentedShells: presentedLeaves.length - presentedAgents,
+      watchedOmittedLeaves: graphSpaces.reduce(
+        (total, space) => total + space.watchedOmittedChildCount,
+        0,
+      ),
     },
     presentationBounds: GRAPH_PRESENTATION_BOUNDS,
   };
@@ -220,6 +226,15 @@ function projectSpace(
     children,
     observedChildCount: space.coverage.leaves,
     omittedChildCount,
+    watchedOmittedChildCount: Math.max(
+      0,
+      space.children.filter(({ watched }) => watched).length -
+        children.filter(({ source }) =>
+          source.kind === "agent" || source.kind === "terminal"
+            ? source.watched
+            : false,
+        ).length,
+    ),
   };
 }
 
@@ -301,6 +316,7 @@ function compareLeaves(
   return (
     Number(right.leaf.id === selectedLeafId) -
       Number(left.leaf.id === selectedLeafId) ||
+    Number(right.leaf.watched) - Number(left.leaf.watched) ||
     Number(right.leaf.focused) - Number(left.leaf.focused) ||
     statusPriority(right.leaf.status) - statusPriority(left.leaf.status) ||
     Number(right.leaf.kind === "agent") - Number(left.leaf.kind === "agent") ||

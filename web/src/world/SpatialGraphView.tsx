@@ -13,6 +13,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
@@ -42,21 +43,25 @@ import { WorldViewToolbar } from "./WorldViewToolbar";
 export default function SpatialGraphView({
   world,
   toolbarPortal = null,
+  toolbarActions,
   selectedId,
   conversationNodeIds,
   onSelect,
   onOpenTerminal,
   onSelectedAnchorChange,
   onNodeAnchorsChange,
+  actions,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
+  toolbarActions?: ReactNode;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
   onSelect(id: string): void;
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onNodeAnchorsChange(anchors: Record<string, OfficeCanvasAnchor> | null): void;
+  actions?: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(
@@ -256,7 +261,9 @@ export default function SpatialGraphView({
             : "No matches"
           : undefined
       }
+      actions={actions}
     >
+      {toolbarActions}
       <div
         className="world-spatial-graph-zoom"
         role="group"
@@ -444,6 +451,12 @@ function SemanticSpace({
           {space.omittedChildCount ? (
             <li className="is-overflow">
               +{space.omittedChildCount} omitted leaves
+            </li>
+          ) : null}
+          {space.watchedOmittedChildCount ? (
+            <li className="is-overflow">
+              +{space.watchedOmittedChildCount} watched leaves hidden by view
+              limit
             </li>
           ) : null}
         </ul>

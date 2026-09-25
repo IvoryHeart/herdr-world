@@ -239,7 +239,7 @@ export interface TerminalClosedPush {
 }
 
 export interface BridgeControlMsg {
-  type: "pause_connection" | "world_invalidated";
+  type: "pause_connection" | "world_invalidated" | "world_watchlist_changed";
   reason?: string;
   connection_id?: string;
   connection_generation?: number;

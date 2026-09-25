@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
@@ -73,15 +73,18 @@ const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 export default function PixelOfficeView({
   world,
   toolbarPortal = null,
+  toolbarActions,
   selectedId,
   onSelect,
   onOpenTerminal,
   onSelectedAnchorChange,
   floatingTerminals,
   onConversationNodeAnchorsChange,
+  actions,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
+  toolbarActions?: ReactNode;
   selectedId: string | null;
   onSelect(id: string): void | Promise<boolean>;
   onOpenTerminal(id: string): Promise<void>;
@@ -90,6 +93,7 @@ export default function PixelOfficeView({
   onConversationNodeAnchorsChange?(
     anchors: Record<string, OfficeCanvasAnchor> | null,
   ): void;
+  actions?: ReactNode;
 }) {
   const office = useMemo(
     (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
@@ -509,7 +513,10 @@ export default function PixelOfficeView({
         const match = searchMatches[0];
         if (match) void onSelect(match.id);
       }}
-    />
+      actions={actions}
+    >
+      {toolbarActions}
+    </WorldViewToolbar>
   );
 
   return (

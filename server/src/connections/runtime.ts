@@ -14,6 +14,7 @@ import {
 import type { ServerWebSocket } from "bun";
 import { createAgentSessionHandlers } from "../agent/agent-sessions";
 import { createAgentSessionFileAccess } from "../agent/session-file-access";
+import { createAgentCheckoutContext } from "../agent/checkout-context";
 import { HerdrClient } from "../bridge/herdr-client";
 import {
   assertSupportedHerdrProtocol,
@@ -78,6 +79,7 @@ const DEFAULT_EVENTS = [
   "tab.renamed",
   "tab.focused",
   "pane.created",
+  "pane.updated",
   "pane.closed",
   "pane.focused",
   "pane.moved",
@@ -136,6 +138,12 @@ export function createLegacyConnectionRuntime(args: {
   const agentSessions = createAgentSessionHandlers({
     herdrCall: (method, params) => herdr.call(method, params),
     files: agentSessionFiles,
+  });
+  const agentCheckout = createAgentCheckoutContext({
+    herdr,
+    sshHost,
+    runProcessWithCodeTimeout,
+    shQuote,
   });
   const worktreeParents = createWorktreeParentStore({
     connectionId: identity.id,
@@ -614,6 +622,7 @@ export function createLegacyConnectionRuntime(args: {
     worktreeRemovalRuntime,
     terminalBridge,
     agentSessions,
+    agentCheckout,
     taskNotificationSource,
     startTransport,
     startBackground,
