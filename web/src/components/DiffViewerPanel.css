@@ -21,6 +21,45 @@
   background: var(--viewer-panel-bg);
 }
 
+.agent-checkout-panel {
+  display: grid;
+  gap: 9px;
+  min-height: 120px;
+  padding: 12px;
+  color: var(--muted);
+}
+.agent-checkout-panel strong,
+.agent-checkout-panel code,
+.agent-checkout-panel a {
+  color: var(--text);
+}
+.agent-checkout-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.agent-checkout-panel button {
+  justify-self: start;
+  min-height: 30px;
+}
+.agent-checkout-files {
+  display: grid;
+  gap: 3px;
+  overflow: auto;
+  color: var(--text);
+}
+.agent-checkout-files > div {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+}
+.agent-checkout-files span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .diff-tree-row:hover .git-status-code,
 .diff-tree-row.is-selected .git-status-code {
   opacity: 1;

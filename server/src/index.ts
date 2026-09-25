@@ -25,6 +25,7 @@ import {
 } from "./config/service-manager";
 import { runHerdrCommand } from "./herdr/cli";
 import { runTaskSummaryCommand } from "./herdr/task-summary";
+import { runAgentCheckoutCommand } from "./herdr/agent-checkout";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
 import {
@@ -122,6 +123,12 @@ const taskSummaryCommandResult = await runTaskSummaryCommand(
   process.argv.slice(2),
   APP_VERSION,
 );
+const agentCheckoutCommandResult = await runAgentCheckoutCommand(
+  process.argv.slice(2),
+  APP_VERSION,
+);
+if (agentCheckoutCommandResult !== null)
+  process.exit(agentCheckoutCommandResult);
 if (taskSummaryCommandResult !== null) {
   process.exit(taskSummaryCommandResult);
 }
@@ -201,6 +208,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
+  "agent_checkout.get",
   "file.read",
   "git.diff_file",
   "git.file_action",
@@ -960,6 +968,15 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-session-get");
     } catch (e) {
       sendError("agent-session-get-error", e);
+    }
+    return;
+  }
+  if (method === "agent_checkout.get") {
+    try {
+      const result = await connection.agentCheckout(params ?? {});
+      sendReply({ id, result }, "agent-checkout-get");
+    } catch (e) {
+      sendError("agent-checkout-get-error", e);
     }
     return;
   }

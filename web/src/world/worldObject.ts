@@ -82,6 +82,7 @@ export type WorldLeafObject = WorldObjectBase & {
   modelLabel?: string;
   taskSummary?: string;
   agentSessionIdentity?: string;
+  agentSessionFingerprint?: string;
   stateLabels: Partial<Record<WorldAgentStatus, string>>;
   lastActivityAt?: number;
   spaceLabel: string;
@@ -283,6 +284,13 @@ function admittedAgentSessionIdentity(
   const identity = boundedOptionalText(session.value, 512);
   if (!agent && !kind && !identity) return undefined;
   return JSON.stringify([agent ?? null, kind ?? null, identity ?? null]);
+}
+
+function admittedAgentSessionFingerprint(
+  metadata: Record<string, unknown> | null,
+) {
+  const current = agentSession(metadata?.agent_session);
+  return current ? taskSummarySessionFingerprint(current) : undefined;
 }
 
 function taskSummaryFromTokens(
@@ -561,6 +569,9 @@ function buildHost(
           const agentSessionIdentity = isAgent
             ? admittedAgentSessionIdentity(agentMetadata)
             : undefined;
+          const agentSessionFingerprint = isAgent
+            ? admittedAgentSessionFingerprint(agentMetadata)
+            : undefined;
           const lastActivityAt = isAgent
             ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
             : undefined;
@@ -603,6 +614,7 @@ function buildHost(
             ...(modelLabel ? { modelLabel } : {}),
             ...(taskSummary ? { taskSummary } : {}),
             ...(agentSessionIdentity ? { agentSessionIdentity } : {}),
+            ...(agentSessionFingerprint ? { agentSessionFingerprint } : {}),
             stateLabels: isAgent
               ? admittedStateLabels(
                   pane.state_labels ?? agentMetadata?.state_labels,

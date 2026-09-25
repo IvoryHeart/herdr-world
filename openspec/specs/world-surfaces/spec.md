@@ -427,6 +427,31 @@ existing connection lifecycle.
 - **THEN** the compact identity area may show those values, while unavailable or host-only values
   remain absent
 
+### Requirement: Agent checkout source-control context
+
+For an actionable agent Inspector, World SHALL read Agent checkout context only from
+a complete versioned report whose session fingerprint matches the exact active pane
+session on the Inspector's connection and generation. It SHALL use a bounded
+read-only Git query on that reported checkout, show its branch and changed files,
+and keep Workspace changes as an explicit separate choice. World SHALL NOT infer
+the checkout from workspace or terminal CWD, another session, or another host. A
+reported HTTPS PR link SHALL be labelled Reported PR. Agent checkout SHALL expose no
+Git mutations. Reports omit TTL and Clear; they become unavailable on session
+replacement, pane closure, or Herdr restart.
+
+#### Scenario: Agent checkout differs from workspace changes
+
+- **WHEN** two agents in one workspace report different current-session worktrees
+- **THEN** each Inspector shows its own reported branch and changed files, while
+  Workspace changes remains separately labelled and selectable
+
+#### Scenario: Checkout report is absent or replaced
+
+- **WHEN** metadata is absent, malformed, lost after restart, or its session or
+  generation changes while a request is pending
+- **THEN** Agent checkout shows an unavailable reason and a Workspace changes
+  choice, and no old checkout, PR, or changed files enter that Inspector
+
 #### Scenario: Inspect an agent on an inactive host
 
 - **WHEN** a host switch leaves a transient read-only selection from the outgoing host
