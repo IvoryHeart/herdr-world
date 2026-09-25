@@ -185,6 +185,63 @@ describe("task-summary", () => {
     expect(events).toEqual(["start", "cleanup"]);
   });
 
+  test("contains cleanup failures and preserves a report failure", async () => {
+    const cleanup = capture();
+    expect(
+      await runTaskSummaryCommand(
+        ["task-summary", "text", "--pane", "w1:p1"],
+        "0.0.0",
+        {
+          ...cleanup,
+          loadConfig: () => fakeConfig("example.invalid"),
+          createTunnel: () => ({
+            startAutoSshTunnel: async () => undefined,
+            cleanupAutoSshTunnel: async () => {
+              throw new Error("synthetic cleanup failure");
+            },
+          }),
+          createClient: () => ({
+            call: async (method) =>
+              method === "pane.get"
+                ? { pane_id: "w1:p1", agent_session: session }
+                : {},
+          }),
+        },
+      ),
+    ).toBe(1);
+    expect(cleanup.out).toEqual([]);
+    expect(cleanup.err).toEqual([
+      "task-summary: unable to close the requested Herdr transport",
+    ]);
+
+    const primary = capture();
+    expect(
+      await runTaskSummaryCommand(
+        ["task-summary", "text", "--pane", "w1:p1"],
+        "0.0.0",
+        {
+          ...primary,
+          loadConfig: () => fakeConfig("example.invalid"),
+          createTunnel: () => ({
+            startAutoSshTunnel: async () => undefined,
+            cleanupAutoSshTunnel: async () => {
+              throw new Error("synthetic cleanup failure");
+            },
+          }),
+          createClient: () => ({
+            call: async () => {
+              throw new Error("synthetic report failure");
+            },
+          }),
+        },
+      ),
+    ).toBe(1);
+    expect(primary.out).toEqual([]);
+    expect(primary.err).toEqual([
+      "task-summary: unable to report to the requested Herdr pane",
+    ]);
+  });
+
   test("normalizes, redacts, bounds Unicode, and accepts dash-prefixed text after --", async () => {
     expect(normalizeTaskSummary("  Running\n release\tchecks ")).toBe(
       "Running release checks",

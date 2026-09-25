@@ -248,6 +248,7 @@ export async function runTaskSummaryCommand(
   let tunnel:
     | ReturnType<NonNullable<TaskSummaryCommandDeps["createTunnel"]>>
     | undefined;
+  let reportFailed = false;
   try {
     stripTaskSummaryArgv(command.transportArgs);
     const config = (dependencies.loadConfig ?? loadServerConfig)(appVersion);
@@ -267,18 +268,29 @@ export async function runTaskSummaryCommand(
       ((socketPath: string) => new HerdrClient(socketPath))
     )(config.socketPath);
     await reportTaskSummary(client, command);
-    log(
-      JSON.stringify({
-        pane_id: command.paneId,
-        status: "reported",
-        ttl_ms: command.ttlMs,
-      }),
-    );
-    return 0;
   } catch {
+    reportFailed = true;
+  }
+  let cleanupFailed = false;
+  try {
+    await tunnel?.cleanupAutoSshTunnel();
+  } catch {
+    cleanupFailed = true;
+  }
+  if (reportFailed) {
     error("task-summary: unable to report to the requested Herdr pane");
     return 1;
-  } finally {
-    await tunnel?.cleanupAutoSshTunnel();
   }
+  if (cleanupFailed) {
+    error("task-summary: unable to close the requested Herdr transport");
+    return 1;
+  }
+  log(
+    JSON.stringify({
+      pane_id: command.paneId,
+      status: "reported",
+      ttl_ms: command.ttlMs,
+    }),
+  );
+  return 0;
 }
