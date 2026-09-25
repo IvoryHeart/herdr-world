@@ -61,6 +61,10 @@ While a stacked parent or review repair is still changing, use focused checks;
 run the full gate on the final candidate branch tip.
 For long check output, retain the complete log outside the prompt and inspect a
 short success summary or the relevant failure excerpt first.
+For review-only work, inspect the exact-head CI result and recorded evidence first.
+Run a local check only to investigate a specific gap or reproduce a finding; do not
+repeat a successful full gate on the same commit. After a repair, successful CI
+running `bun run check` on the new head can provide the final gate.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
