@@ -88,11 +88,14 @@ retain their original Herdr Web lineage.
 
 - Worktree creation and automatic branch updates now follow `origin`'s advertised
   default branch, including repositories whose default is not `main`.
+  [Herdr World PR #102](https://github.com/IvoryHeart/herdr-world/pull/102)
 - Last step captures now bound scratch data and avoid accumulating temporary Git
   objects in the repository; terminal Ctrl+Enter forwarding and HTTP-link
   handling during endpoint repaints are corrected.
+  [Herdr World PR #102](https://github.com/IvoryHeart/herdr-world/pull/102)
 - Web Push task alerts now include available connection, workspace and tab
   labels instead of only internal identifiers.
+  [Herdr World PR #102](https://github.com/IvoryHeart/herdr-world/pull/102)
 
 - Reconciled Android terminal textarea replacements as tail edits so mobile
   autocorrection, deletion and revised text no longer resend accumulated input
