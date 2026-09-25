@@ -76,7 +76,9 @@ when their relevant inputs are unchanged. Open a ready PR and stop before merge.
 For Codex token usage, run `bun run agent:usage -- --pr <number> --session
 <session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat
 `--session` for contributing agents, or omit it to use the current
-`CODEX_SESSION_ID`. Omit either time bound only when the whole session belongs
+`CODEX_SESSION_ID` for a root agent. Pass each subagent's rollout UUID explicitly:
+its environment may inherit the parent's `CODEX_SESSION_ID` and misattribute usage.
+Omit either time bound only when the whole session belongs
 to the PR. The script reads local Codex rollout files under
 `$CODEX_HOME/sessions` (or `~/.codex/sessions`), sums per-response
 `token_usage_record` entries including compaction, and prints only aggregate

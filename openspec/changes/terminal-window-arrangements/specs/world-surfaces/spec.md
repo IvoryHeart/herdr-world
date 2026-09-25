@@ -111,9 +111,9 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 
 ### Requirement: Present one Inspector per Herdr tab with its split panes
 
-An actionable Herdr tab SHALL have at most one World Inspector conversation. Selecting any pane in that tab through Office, Tree, Graph, the common navigator or inside the Inspector's own split Terminal SHALL focus that conversation, select the requested pane within it and show the current Herdr split-pane layout when Terminal is selected. The Inspector identity and window geometry SHALL remain stable as selection moves among sibling panes; its header and pane-specific resources SHALL follow the selected pane, with Agent History available only when that pane has an admitted agent session. A non-terminal space Inspector SHALL remain a separate conversation. If the selected pane closes while sibling panes remain, the Inspector SHALL select a remaining live pane in the same qualified tab; when the tab no longer exists, the conversation SHALL retire.
+An actionable Herdr tab SHALL have at most one World Inspector conversation. Selecting any pane in that tab through Office, Tree, Graph, the common navigator or inside the Inspector's own split Terminal SHALL focus that conversation, select the requested pane within it and show the current Herdr split-pane layout when Terminal is selected. The Inspector identity and window geometry SHALL remain stable as selection moves among sibling panes; its header and pane/agent-specific resource applicability SHALL follow the selected pane, with Agent History available only when that pane has an admitted agent session. A non-terminal space Inspector SHALL remain a separate conversation. If the selected pane closes while sibling panes remain, the Inspector SHALL select a remaining live pane in the same qualified tab; when the tab no longer exists, the conversation SHALL retire.
 
-Resource replies captured for an earlier selected pane SHALL NOT replace the header, Files, Changes or History content of a later selected sibling. Switching panes through any focus path SHALL preserve only resource state that remains valid for the newly selected pane and its current session. In Spaces, the one workspace Inspector SHALL similarly follow the active tab and selected pane rather than retain resources for a previously active tab.
+Files selections and replies SHALL remain scoped to their workspace or checkout resource owner, and ordinary Changes selections and replies SHALL remain scoped to their workspace. Switching between sibling panes in the same workspace SHALL preserve valid Files and ordinary Changes state. Agent checkout Changes and Agent History SHALL follow the selected pane and session; replies captured for a prior pane or session SHALL NOT replace the newly selected pane's agent-specific content. In Spaces, the one workspace Inspector SHALL similarly update its header and agent-specific applicability with the active tab and selected pane while preserving valid workspace or checkout resources.
 
 The live Inspector tab-window identity SHALL include connection ID, runtime generation, workspace ID and Herdr tab ID. Persisted Inspector tab-window geometry SHALL use a stable connection/workspace/tab key without runtime generation. Existing pane-key geometry MAY be read as a one-time fallback and migrated to the stable key. After migration and a runtime reconnect, the latest saved Inspector geometry SHALL be restored for that same connection, workspace and tab; the live conversation SHALL still retire on generation change. Spaces arrangement geometry SHALL remain separate and session-local, so arranging a tab in Spaces SHALL NOT overwrite its saved visual Inspector position.
 
@@ -131,8 +131,13 @@ Pane placement, zoom and resize inside an Inspector SHALL follow Herdr's tab lay
 
 #### Scenario: Focus a sibling inside a split Inspector
 
-- **WHEN** pane A and pane B share an Inspector and the user focuses B inside its split Terminal while A's Files, Changes or History request is pending
-- **THEN** terminal input and the Inspector's selected-pane header and applicable resources all follow B, and A's late reply cannot replace B's resource content
+- **WHEN** pane A and pane B share an Inspector and the user focuses B inside its split Terminal while A's agent checkout Changes or History request is pending
+- **THEN** terminal input, the Inspector's selected-pane header and agent-specific applicability follow B, and A's late reply cannot replace B's agent-specific content
+
+#### Scenario: Preserve workspace resources across sibling focus
+
+- **WHEN** pane A and pane B share a tab and workspace, Files has a valid selection for that workspace or checkout, ordinary Changes mode has a selected workspace diff, and the user focuses B after selecting A
+- **THEN** the same Inspector updates its header and pane/agent-specific applicability for B while retaining the Files selection and ordinary Changes mode and diff selection and accepting their still-valid scoped replies; A's late agent checkout Changes or History reply cannot appear as B's agent data
 
 #### Scenario: Move between Spaces and a split Inspector
 
@@ -146,8 +151,8 @@ Pane placement, zoom and resize inside an Inspector SHALL follow Herdr's tab lay
 
 #### Scenario: An older resource reply arrives after sibling selection
 
-- **WHEN** pane A's Inspector resource request finishes after the user has selected sibling pane B
-- **THEN** the Inspector keeps B's identity and applicable resources and does not display A's late result as B's data
+- **WHEN** pane A's agent checkout Changes or History request finishes after the user has selected sibling pane B
+- **THEN** the Inspector keeps B's identity and applicable resources and does not display A's late agent result as B's data
 
 #### Scenario: Restore saved geometry after reconnect
 
