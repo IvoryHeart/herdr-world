@@ -26,7 +26,7 @@ For an actionable agent Inspector, World SHALL show source-control context for t
 
 ### Requirement: Keep agent checkout inspection read-only and explicit
 
-Agent checkout context SHALL use a bounded read-only Git query and SHALL NOT expose Stage, Unstage, Discard, Delete or other Git mutations for the reported path in this release. Existing workspace Changes SHALL remain a separate scope with its existing authority and confirmation behavior. A browser SHALL NOT supply an arbitrary filesystem path to the agent context query. A report command SHALL require an explicit pane and active agent session; exact-pane Clear MAY remove earlier checkout tokens after that session ends. Neither command SHALL start a World web listener. The report SHALL use a versioned, bounded token set with a digest of the exact current agent-session identity; it SHALL omit Herdr TTL, require no periodic renewal while that session remains current, and become unavailable after session replacement, pane closure, explicit clear or Herdr server restart.
+Agent checkout context SHALL use a bounded read-only Git query and SHALL NOT expose Stage, Unstage, Discard, Delete or other Git mutations for the reported path in this release. Existing workspace Changes SHALL remain a separate scope with its existing authority and confirmation behavior. A browser SHALL NOT supply an arbitrary filesystem path to the agent context query. A report command SHALL require an explicit pane and active agent session and SHALL NOT offer post-session Clear: the token keys are pane-global and a delayed Clear could erase a newer session's report. The report command SHALL not start a World web listener. The report SHALL use a versioned, bounded token set with a digest of the exact current agent-session identity; it SHALL omit Herdr TTL, require no periodic renewal while that session remains current, and become unavailable after session replacement, pane closure or Herdr server restart.
 
 #### Scenario: Inspect an agent's changed files
 
@@ -58,14 +58,14 @@ Agent checkout context SHALL use a bounded read-only Git query and SHALL NOT exp
 - **WHEN** a current session replaces a long checkout path and PR URL with a shorter path and no PR
 - **THEN** the report atomically clears unused path and PR chunks so no old suffix or link appears
 
-#### Scenario: Clear after the agent ends
+#### Scenario: Delayed cleanup after another session reports
 
-- **WHEN** a harness clears the exact pane's checkout report after its former agent session has ended
-- **THEN** only the namespaced checkout tokens are removed and Workspace changes remains unchanged
+- **WHEN** session B has reported its checkout after session A and a delayed A hook invokes `herdr-world agent-checkout --clear` for that pane
+- **THEN** Clear is rejected before any Herdr metadata request, B's complete token set and Agent checkout remain intact, and Workspace changes remains unchanged
 
 ### Requirement: Bound and atomically replace checkout reports
 
-The `agent-checkout` report SHALL accept an absolute UTF-8 checkout path of at most 540 bytes and an optional HTTPS PR URL of at most 240 UTF-8 bytes. It SHALL encode these and the exact session fingerprint in a versioned set of at most 15 Herdr pane tokens, each no longer than Herdr's 80-character token limit, and update or clear the complete set in one metadata call. It SHALL reject an explicit TTL option because the report's lifetime is the current agent session. A failed capacity or validation check SHALL not leave a partial new checkout report.
+The `agent-checkout` report SHALL accept an absolute UTF-8 checkout path of at most 540 bytes and an optional HTTPS PR URL of at most 240 UTF-8 bytes. It SHALL encode these and the exact session fingerprint in a versioned set of at most 15 Herdr pane tokens, each no longer than Herdr's 80-character token limit, and replace the complete set in one metadata call, clearing only unused chunks within that same replacement report. It SHALL reject an explicit TTL option because the report's lifetime is the current agent session. A failed capacity or validation check SHALL not leave a partial new checkout report.
 
 #### Scenario: Report exceeds the metadata bounds
 

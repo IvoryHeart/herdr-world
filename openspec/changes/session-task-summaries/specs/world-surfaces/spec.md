@@ -2,17 +2,17 @@
 
 ### Requirement: Publish session-qualified task summaries
 
-The packaged `herdr-world task-summary` command SHALL report or clear the `task_summary` metadata token for one explicitly identified Herdr pane without starting the World web service. A report SHALL include a second token containing a fingerprint of that pane's exact active Herdr agent-session identity; World SHALL admit the summary only while the current session matches it. The command SHALL use `--pane` or `HERDR_PANE_ID` and SHALL never infer a pane from another host or the currently focused browser view. It SHALL support the existing Herdr session selection and fixed-policy SSH transport when those are explicitly requested.
+The packaged `herdr-world task-summary` command SHALL report the `task_summary` metadata token for one explicitly identified Herdr pane without starting the World web service. A report SHALL include a second token containing a fingerprint of that pane's exact active Herdr agent-session identity; World SHALL admit the summary only while the current session matches it. The command SHALL use `--pane` or `HERDR_PANE_ID` and SHALL never infer a pane from another host or the currently focused browser view. It SHALL support the existing Herdr session selection and fixed-policy SSH transport when those are explicitly requested. It SHALL NOT offer post-session Clear because Herdr has no conditional delete of these pane-global token keys by expected session.
 
 #### Scenario: Report current work
 
 - **WHEN** a harness reports `Reviewing CI` for a pane with an active agent session
 - **THEN** Herdr receives a summary for that exact pane and session, and Office, Tree, Graph and the Inspector show the admitted text after observation refresh
 
-#### Scenario: Clear reported work
+#### Scenario: Delayed cleanup from an older session
 
-- **WHEN** the harness invokes `herdr-world task-summary --clear` for a pane with a World-reported summary
-- **THEN** only World's task-summary and session-fingerprint tokens on that exact pane are cleared and the text disappears from visual presentations after refresh
+- **WHEN** session B has reported after session A and a delayed A hook invokes `herdr-world task-summary --clear` for that pane
+- **THEN** Clear is rejected before any Herdr metadata request and B's summary and session fingerprint remain intact
 
 #### Scenario: Pane or session is unavailable
 
@@ -26,7 +26,7 @@ The packaged `herdr-world task-summary` command SHALL report or clear the `task_
 
 ### Requirement: Bound task-summary content and lifetime
 
-A report SHALL normalize whitespace, reject empty text, replace obvious credential-shaped values, and cap its reported text to 80 Unicode characters in accordance with Herdr 0.9.0's token value limit. The default time to live SHALL be 900,000 milliseconds; an explicit time to live SHALL be an integer from 1 through 86,400,000 milliseconds. The summary and fingerprint tokens SHALL receive the same TTL. A report or clear result SHALL identify its target and outcome without echoing summary text or credential material into output or logs. Expiry SHALL remove the summary without browser action.
+A report SHALL normalize whitespace, reject empty text, replace obvious credential-shaped values, and cap its reported text to 80 Unicode characters in accordance with Herdr 0.9.0's token value limit. The default time to live SHALL be 900,000 milliseconds; an explicit time to live SHALL be an integer from 1 through 86,400,000 milliseconds. The summary and fingerprint tokens SHALL receive the same TTL. A report result SHALL identify its target and outcome without echoing summary text or credential material into output or logs. Expiry SHALL remove the summary without browser action.
 
 #### Scenario: Summary contains a credential-shaped value
 
@@ -40,5 +40,5 @@ A report SHALL normalize whitespace, reject empty text, replace obvious credenti
 
 #### Scenario: Report options are invalid
 
-- **WHEN** the command receives empty text, an out-of-range lifetime, conflicting clear/text options or no pane identity
+- **WHEN** the command receives empty text, an out-of-range lifetime, `--clear` or no pane identity
 - **THEN** it exits with a usage error before making a Herdr request

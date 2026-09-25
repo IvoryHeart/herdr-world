@@ -4,9 +4,9 @@ Office, Tree and Graph can display a Herdr task summary, but the Roamgate-derive
 
 ## What Changes
 
-- Restore a packaged `herdr-world task-summary` report/clear command that targets an exact Herdr pane and its active agent session without starting the World web service.
+- Restore a packaged `herdr-world task-summary` report command that targets an exact Herdr pane and its active agent session without starting the World web service. Let Herdr TTL expire it; reject `--clear` because a delayed cleanup could erase a newer session's report.
 - Normalize, redact, cap reports to Herdr 0.9.0's 80-character token limit, and expire them; reject missing or stale targets instead of attaching text to a different agent.
-- Admit report, clear and expiry updates through existing Herdr observations in all four views, with local and SSH usage documented.
+- Admit report and expiry updates through existing Herdr observations in all four views, with local and SSH usage documented.
 - Preserve the absence of a summary when Herdr or the agent does not provide one. The command does not assign work to an agent.
 
 ## Capabilities

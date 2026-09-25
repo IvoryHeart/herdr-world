@@ -50,7 +50,7 @@ The service SHALL return a process-local revision with watchlist reads and mutat
 
 ### Requirement: Filter visual views to watched panes
 
-The common Pinned only control SHALL filter Office, Tree and Graph to watched leaves on the selected host while retaining enough host, space, room and desk context to identify each visible leaf. Search SHALL operate within the filtered set. Each view SHALL distinguish raw observed coverage, registered watches, current live/admitted watches, displayed matches, view-bound omissions, missing watches and service-unresolved watches; search exclusions SHALL NOT be counted as view omissions. A stale or admission-pending host SHALL not claim a current missing count. A missing, stale, disconnected or unresolved watched pane SHALL never offer an operational action.
+The common Pinned only control SHALL filter Office, Tree and Graph to watched leaves on the selected host while retaining enough host, space, room and desk context to identify each visible leaf. Search SHALL operate within the filtered set. Each view SHALL distinguish raw observed coverage, registered watches, current live/admitted watches, displayed matches, view-bound omissions, missing watches, unresolved watches and admission failures; search exclusions SHALL NOT be counted as view omissions. For a fresh host, the service SHALL classify zero raw terminal-ID candidates as missing, multiple candidates or invalid hierarchy as unresolved, and one valid candidate as matched; matched records SHALL be admitted with complete ancestry or counted as admission failures. These disjoint counts SHALL satisfy `registered = missing + unresolved + matched` and `matched = admitted + admission_failed`. A stale or admission-pending host SHALL not claim current classification counts. A missing, stale, disconnected or unresolved watched pane SHALL never offer an operational action.
 
 #### Scenario: Filter the selected host
 
@@ -85,6 +85,11 @@ For each ready host, World SHALL derive snapshot admission from its current-gene
 
 - **WHEN** a raw watched pane has no valid matching workspace or tab, or its terminal identity is ambiguous
 - **THEN** World counts it as unresolved, presents no guessed actionable leaf, and does not call it merely missing
+
+#### Scenario: A watched terminal identity is duplicated
+
+- **WHEN** one current watch record matches two raw panes with the same terminal ID in a fresh host snapshot
+- **THEN** its admission counts are registered 1, unresolved 1, missing 0, matched 0, admitted 0 and admission-failed 0, with no guessed actionable leaf
 
 #### Scenario: Pin changes during observation
 
