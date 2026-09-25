@@ -276,7 +276,7 @@ read. The applied skill files are under 1 KB each. These
 materials can add to prompt size, especially if agents read broad contracts or
 repeat large excerpts, but their size alone cannot explain 150,000–229,000
 tokens on a later response. The existing
-[knowledge map](knowledge-map.md) already tells agents to read only relevant
+[knowledge map](../knowledge-map.md) already tells agents to read only relevant
 rows. The stronger opportunity is to locate the relevant requirements within
 a large spec and read those sections first, then widen the read when the change
 crosses boundaries. Do not omit contract review merely to reduce tokens.
@@ -304,7 +304,7 @@ or billing exports would be needed for exact attribution.
 
 ## Changes to try and measure
 
-1. Use the [PR template](../.github/pull_request_template.md) to record model
+1. Use the [PR template](../../.github/pull_request_template.md) to record model
    roles, parent, workflow pattern, exact measurement boundary, input/cached/
    uncached/output/reasoning tokens, elapsed time and actual billed cost when
    available. Write `unknown` rather than inferring dollars. Include every
