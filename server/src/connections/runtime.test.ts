@@ -152,6 +152,7 @@ test("layout subscription ACK and reconnect request browser reconciliation", asy
   runtime.herdr.call = async () => ({ panes: [] });
   runtime.herdr.subscribe = (types) => {
     expect(types).toContain("layout.updated");
+    expect(types).toContain("pane.updated");
     let ack!: () => void;
     let close!: () => void;
     const ready = new Promise<void>((resolve) => {

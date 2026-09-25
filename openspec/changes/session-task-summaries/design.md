@@ -2,6 +2,15 @@
 
 `web/src/world/worldObject.ts` already admits an optional 160-character `task_summary` from pane or agent snapshots; Office, Tree, Graph and Inspector consume it. The current Bun executable dispatches service and Herdr setup commands before starting the web service in `server/src/index.ts`. The former Rust World producer at commit `80e5799` used Herdr pane metadata with source `herdr-world:task-summary` and a default 15-minute TTL. That implementation is reference material, not code to port mechanically. The tagged [Herdr 0.9.0 metadata contract](https://github.com/herdrdev/herdr/blob/v0.9.0/docs/next/website/src/content/docs/socket-api.mdx) caps token values at 80 characters and says `agent`/`applies_to_source` guards do not apply to token patches. The packaged producer therefore reports at most 80 characters and must check session identity itself; the existing 160-character view bound remains for other optional observations.
 
+The tagged contract proves the required seam: `pane.get`, `pane.list`,
+`agent.get` and `agent.list` expose `agent_session` with exact `source`, `agent`,
+`kind` and `value` fields; one `pane.report_metadata` call patches up to 16 token
+keys, applies a per-key TTL from 1 through 86,400,000 milliseconds, and exposes
+the results through pane/agent observations. Token reports are latest-wins and
+have no delete precondition for a session fingerprint. `pane.updated` covers pane
+metadata change and expiry, so the existing subscription needs that event rather
+than a new poller.
+
 ## Goals / Non-Goals
 
 **Goals:** Provide a small report command suitable for harness hooks, leave Herdr authoritative for token expiry, and make report/expiry visible through existing observation.

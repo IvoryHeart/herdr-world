@@ -21,6 +21,12 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added `herdr-world task-summary` for harnesses to publish a normalized,
+  credential-filtered, 80-character, expiring task summary for one exact local or
+  fixed-policy SSH Herdr pane. World shows producer text only while its fingerprint
+  matches the active Herdr session; reports never start the web service and have no
+  Clear command.
+  [Herdr World PR #105](https://github.com/IvoryHeart/herdr-world/pull/105)
 - Added Herdr semantic task notifications, plugin popup panes, terminal font
   sizing independent of interface scale, and File Explorer path drag into terminals
   from the Roamgate source merge.

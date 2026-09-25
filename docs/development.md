@@ -48,3 +48,29 @@ The optional Office Economy provider is service-owned. For local testing, set
 `HERDR_WORLD_OTEL_PROMETHEUS_URL` on `dev:server` or use the Office metrics dialog;
 do not add browser-to-Prometheus requests. The provider intentionally accepts only a
 base URL and fixed queries. See [deployment](DEPLOYMENT.md#optional-office-metrics).
+
+## Harness task summaries
+
+A harness inside an active Herdr agent pane can report a short current-work label
+without starting the World web service:
+
+```bash
+herdr-world task-summary "Reviewing synthetic release checks" --pane w1:p1
+```
+
+`HERDR_PANE_ID` supplies the pane when it is available in the harness environment.
+For a named local Herdr session, pass `--session NAME`. For a remote runtime, select
+one fixed-policy OpenSSH destination explicitly:
+
+```bash
+herdr-world task-summary "Checking fixture topology" --pane w1:p1 \
+  --ssh-host example.invalid --session fixture
+```
+
+The command reads the exact pane and its active Herdr session before it writes one
+summary token plus a session fingerprint. It normalizes text, replaces common
+credential-shaped values, and reports at most 80 Unicode characters. Use concise,
+non-secret text: the filter is only a guard against accidental disclosure. The default
+lifetime is 900,000 ms; `--ttl-ms` accepts 1 through 86,400,000 milliseconds. Herdr
+expires both tokens together. There is no `--clear`, because an old hook could erase
+a newer session's report.

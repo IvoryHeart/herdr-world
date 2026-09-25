@@ -36,6 +36,14 @@ qualified agent/pane watchlist are follow-up work tracked in
 URLs, native Capacitor Android packaging and old visual preference keys are retired;
 the responsive installable PWA is the mobile client.
 
+### Session task summaries
+
+Agent harnesses can use `herdr-world task-summary` to publish a short, expiring,
+session-qualified description of current work for an exact local or fixed-policy SSH
+Herdr pane. Office, Tree, Graph and the Inspector show it only while the current
+agent session matches the report. Herdr owns expiry; the command does not infer work,
+assign tasks, or provide a Clear operation.
+
 ## Workspace, Tab, and Pane Navigation
 
 - Browse workspaces and recognized agents; create, rename, focus, pin, or close

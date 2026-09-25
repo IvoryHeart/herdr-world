@@ -78,6 +78,7 @@ const DEFAULT_EVENTS = [
   "tab.renamed",
   "tab.focused",
   "pane.created",
+  "pane.updated",
   "pane.closed",
   "pane.focused",
   "pane.moved",
