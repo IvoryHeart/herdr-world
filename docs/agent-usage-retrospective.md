@@ -126,8 +126,9 @@ the local log, versus roughly 12.5 minutes of wall time. The same-window,
 model-wide Prometheus `increase` estimate was roughly 13 minutes of
 `gpt-6-sol` inference; its scrape window and missing session label prevent a
 precise attribution. These measurements suggest model generation and repeated
-context dominated this documentation PR's time, while full checks and CI also
-matter for the implementation packages.
+context dominated different parts of this documentation PR: model generation
+occupied most measured time, and repeated context drove the token count. Full
+checks and CI also matter for the implementation packages.
 
 Suppressing all successful tool output would hide source, review and failure
 evidence. A more precise change is to request only the needed sections or
@@ -149,6 +150,14 @@ cleanup rejection; optional agent observation; a full watch registry; and
 keyboard focus after a resource action. Green full checks did not exercise all
 of these combinations. The repairs are still in progress, so the initial
 session and time figures exclude their cost.
+
+The #105 cleanup review repair gives a first measurement of that additional
+cost: 14 model responses used 2,768,108 tokens, including 2,765,061 input.
+Its first response already had 194,531 input tokens; holding that prompt length
+flat across 14 responses would account for 2,723,434 input tokens (98.5% of
+the observed repair input). This was an ongoing agent session, so even a small
+focused fix replayed a large prior context. The repair figures are separate
+from the initial C row above.
 
 For work crossing async or UI boundaries, turn the changed invariant into a
 small set of concrete cases before the final full gate: in-flight invalidation,
@@ -203,9 +212,12 @@ or billing exports would be needed for exact attribution.
    participating agent if a PR has several; avoid silently counting only one.
    Sum per-response usage so compaction calls are included.
 2. Start an independent task in a fresh agent session with a short handoff when
-   the existing conversation is already large. For long cohesive changes,
-   consider a phase handoff before a near-full context window. Compare response
-   count, fresh input, cached input, elapsed time and defects before making
+   the existing conversation is already large. Treat a focused review repair
+   similarly: carry the relevant comment, invariant, diff and check result into
+   a concise handoff instead of replaying the whole implementation transcript.
+   For long cohesive changes, consider a phase handoff before a near-full
+   context window. Compare response count, fresh input, cached input, elapsed
+   time and defects before making
    resets routine; a reset may require costly rereading.
 3. Search the knowledge map and relevant spec headings before printing a large
    contract or source file. Capture full check logs outside the prompt and
