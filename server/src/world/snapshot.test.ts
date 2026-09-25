@@ -701,15 +701,66 @@ describe("WorldSnapshotService", () => {
     expect(invalidated).toEqual(["local"]);
   });
 
-  test("re-notifies a pin that invalidates an identical late observation", async () => {
+  test("re-notifies coalesced requests invalidated before their deadlines", async () => {
+    const release = deferred<void>();
+    const invalidated: string[] = [];
+    let calls = 0;
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          calls += 1;
+          await release.promise;
+          return runtime("Same").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      1_000,
+    );
+
+    const first = service.snapshot();
+    await Promise.resolve();
+    expect(calls).toBe(4);
+    service.invalidate("local");
+    const second = service.snapshot();
+    release.resolve();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(calls).toBe(4);
+    expect(firstResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    expect(secondResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    await Bun.sleep(0);
+    expect(invalidated).toEqual(["local"]);
+  });
+
+  test("re-notifies coalesced requests after a pin invalidates their observation", async () => {
     const release = deferred<void>();
     let gate: Promise<void> | null = null;
     let watchRevision = 0;
     let watched = false;
     const invalidated: string[] = [];
+    let calls = 0;
     const value: Runtime = {
       herdr: {
         async call(method) {
+          calls += 1;
           if (gate) await gate;
           return runtime("Same").herdr.call(method);
         },
@@ -727,7 +778,7 @@ describe("WorldSnapshotService", () => {
       },
       Date.now,
       (id) => invalidated.push(id),
-      15,
+      1_000,
       () => ({
         revision: watchRevision,
         records: watched
@@ -745,16 +796,26 @@ describe("WorldSnapshotService", () => {
     await service.snapshot();
     gate = release.promise;
     service.invalidate("local");
-    await service.snapshot();
+    const first = service.snapshot();
+    await Promise.resolve();
+    expect(calls).toBe(8);
     watchRevision = 1;
     watched = true;
     service.invalidate("local");
-    const coalesced = service.snapshot();
+    const second = service.snapshot();
     release.resolve();
-    await coalesced;
-    for (let attempt = 0; attempt < 20 && invalidated.length === 0; attempt++) {
-      await Bun.sleep(0);
-    }
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(calls).toBe(8);
+    expect(firstResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    expect(secondResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    await Bun.sleep(0);
     expect(invalidated).toEqual(["local"]);
     const refreshed = await service.snapshot();
     expect(refreshed.connections[0]).toMatchObject({
