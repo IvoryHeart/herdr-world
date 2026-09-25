@@ -80,6 +80,7 @@ test.skipIf(!chrome).each([1280, 390])(
         initialVisible: true,
         keyboardOpened: true,
         calls: ["changes"],
+        resourceFocusRestored: true,
       });
       expect(String(observed.initialMenu)).toContain("Agent History");
       expect(String(observed.selectionReason)).toContain(

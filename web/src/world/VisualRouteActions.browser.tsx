@@ -51,12 +51,16 @@ const world = buildWorldObject(
 const agent = world.leaves[0]!;
 const space = world.spaces[0]!;
 
-function click(label: string) {
+function button(label: string) {
   const button = [
     ...document.querySelectorAll<HTMLButtonElement>("button"),
   ].find((candidate) => candidate.textContent?.trim() === label);
   if (!button) throw new Error(`Missing ${label}`);
-  button.click();
+  return button;
+}
+
+function click(label: string) {
+  button(label).click();
 }
 
 async function settle() {
@@ -106,8 +110,11 @@ async function verify() {
   await settle();
   const menu = document.querySelector<HTMLElement>("[role='menu']")!;
   const initialMenu = menu.textContent ?? "";
-  click("Changes");
+  const changes = button("Changes");
+  changes.focus();
+  changes.click();
   await settle();
+  const resourceFocusRestored = document.activeElement === trigger;
 
   window.dispatchEvent(
     new KeyboardEvent("keydown", {
@@ -142,6 +149,7 @@ async function verify() {
       initialVisible,
       keyboardOpened,
       calls,
+      resourceFocusRestored,
       selectionReason,
       generationReason,
     }),

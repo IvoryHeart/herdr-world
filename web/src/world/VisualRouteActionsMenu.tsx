@@ -149,7 +149,9 @@ export function VisualRouteActions({
       action === "spaces"
         ? await onGoToSpaces(resolved.node)
         : await onResource(resolved.node, action);
-    if (admitted) close();
+    if (admitted) {
+      close(action === "files" || action === "changes" || action === "history");
+    }
   };
 
   return (
