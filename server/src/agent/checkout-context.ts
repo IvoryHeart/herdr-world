@@ -95,6 +95,26 @@ function unavailable(reason: string): AgentCheckoutContext {
   return { available: false, reason };
 }
 
+function sameCheckoutTokens(left: unknown, right: unknown) {
+  if (
+    !left ||
+    typeof left !== "object" ||
+    Array.isArray(left) ||
+    !right ||
+    typeof right !== "object" ||
+    Array.isArray(right)
+  )
+    return false;
+  const first = left as Record<string, unknown>;
+  const second = right as Record<string, unknown>;
+  const names = ["agent_checkout_v", "agent_checkout_session"];
+  for (let index = 0; index < 9; index += 1)
+    names.push(`agent_checkout_path_${index}`);
+  for (let index = 0; index < 4; index += 1)
+    names.push(`agent_checkout_pr_${index}`);
+  return names.every((name) => first[name] === second[name]);
+}
+
 export function parseAgentCheckoutTokens(
   tokensValue: unknown,
   currentSession: AgentSession,
@@ -213,6 +233,28 @@ export function createAgentCheckoutContext(args: {
     if (!parsed || !isAbsolute(parsed.checkout_path))
       return unavailable(
         "Agent checkout unavailable: reported path is not a Git checkout.",
+      );
+    const latestPane = paneRecord(
+      await args.herdr.call("pane.get", { pane_id: paneId }),
+    );
+    if (!latestPane || latestPane.pane_id !== paneId)
+      return unavailable(
+        "Agent checkout unavailable: pane is no longer current.",
+      );
+    const latestSession = session(latestPane.agent_session);
+    if (
+      !latestSession ||
+      agentCheckoutSessionFingerprint(latestSession) !== expected
+    )
+      return unavailable(
+        "Agent checkout unavailable: the agent session changed.",
+      );
+    if (
+      !parseAgentCheckoutTokens(latestPane.tokens, latestSession) ||
+      !sameCheckoutTokens(pane.tokens, latestPane.tokens)
+    )
+      return unavailable(
+        "Agent checkout unavailable: the checkout report changed.",
       );
     return {
       available: true,

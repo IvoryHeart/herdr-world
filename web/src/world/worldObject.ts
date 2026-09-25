@@ -287,10 +287,21 @@ function admittedAgentSessionIdentity(
 }
 
 function admittedAgentSessionFingerprint(
+  pane: Pane,
   metadata: Record<string, unknown> | null,
 ) {
-  const current = agentSession(metadata?.agent_session);
-  return current ? taskSummarySessionFingerprint(current) : undefined;
+  const current = agentSession(
+    (pane as Pane & { agent_session?: unknown }).agent_session,
+  );
+  if (!current) return undefined;
+  const observed = metadata?.agent_session;
+  const observedSession = agentSession(observed);
+  if (
+    observed !== undefined &&
+    (!observedSession || !sameAgentSession(current, observedSession))
+  )
+    return undefined;
+  return taskSummarySessionFingerprint(current);
 }
 
 function taskSummaryFromTokens(
@@ -570,7 +581,7 @@ function buildHost(
             ? admittedAgentSessionIdentity(agentMetadata)
             : undefined;
           const agentSessionFingerprint = isAgent
-            ? admittedAgentSessionFingerprint(agentMetadata)
+            ? admittedAgentSessionFingerprint(pane, agentMetadata)
             : undefined;
           const lastActivityAt = isAgent
             ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)

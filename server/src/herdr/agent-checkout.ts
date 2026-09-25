@@ -205,6 +205,7 @@ export async function runAgentCheckoutCommand(
   let tunnel:
     | ReturnType<NonNullable<AgentCheckoutCommandDeps["createTunnel"]>>
     | undefined;
+  let failed = false;
   try {
     stripArgv(command.transportArgs);
     const config = (dependencies.loadConfig ?? loadServerConfig)(appVersion);
@@ -236,12 +237,18 @@ export async function runAgentCheckoutCommand(
         command.prUrl,
       ),
     });
-    log(JSON.stringify({ pane_id: command.paneId, status: "reported" }));
-    return 0;
   } catch {
+    failed = true;
+  }
+  try {
+    await tunnel?.cleanupAutoSshTunnel();
+  } catch {
+    failed = true;
+  }
+  if (failed) {
     error("agent-checkout: unable to report to the requested Herdr pane");
     return 1;
-  } finally {
-    await tunnel?.cleanupAutoSshTunnel();
   }
+  log(JSON.stringify({ pane_id: command.paneId, status: "reported" }));
+  return 0;
 }

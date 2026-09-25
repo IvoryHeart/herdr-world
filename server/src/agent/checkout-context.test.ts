@@ -69,6 +69,111 @@ describe("agent checkout context", () => {
       changed_count: 2,
     });
   });
+  test("does not return a slow read after its agent session is replaced", async () => {
+    let paneReads = 0;
+    let started!: () => void;
+    let finish!: (result: {
+      code: number;
+      stdout: string;
+      stderr: string;
+    }) => void;
+    const queryStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const context = createAgentCheckoutContext({
+      herdr: {
+        call: async () => {
+          paneReads += 1;
+          return paneReads === 1
+            ? {
+                pane_id: "p1",
+                agent_session: session,
+                tokens: agentCheckoutTokens(session, "/worktrees/agent-a"),
+              }
+            : {
+                pane_id: "p1",
+                agent_session: { ...session, value: "synthetic-session-b" },
+                tokens: agentCheckoutTokens(
+                  { ...session, value: "synthetic-session-b" },
+                  "/worktrees/agent-b",
+                ),
+              };
+        },
+      },
+      sshHost: () => undefined,
+      shQuote: (value) => `'${value}'`,
+      runProcessWithCodeTimeout: async () => {
+        started();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    const pending = context({
+      pane_id: "p1",
+      agent_session_fingerprint: agentCheckoutSessionFingerprint(session),
+    });
+    await queryStarted;
+    finish({
+      code: 0,
+      stdout: "/worktrees/agent-a\nagent-a\n/repo/.git/worktrees/agent-a\n",
+      stderr: "",
+    });
+    await expect(pending).resolves.toMatchObject({
+      available: false,
+      reason: expect.stringContaining("session changed"),
+    });
+    expect(paneReads).toBe(2);
+  });
+  test("does not return a slow read after its checkout report is replaced", async () => {
+    let paneReads = 0;
+    let started!: () => void;
+    let finish!: (result: {
+      code: number;
+      stdout: string;
+      stderr: string;
+    }) => void;
+    const queryStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const context = createAgentCheckoutContext({
+      herdr: {
+        call: async () => {
+          paneReads += 1;
+          return {
+            pane_id: "p1",
+            agent_session: session,
+            tokens: agentCheckoutTokens(
+              session,
+              paneReads === 1 ? "/worktrees/agent-a" : "/worktrees/agent-b",
+            ),
+          };
+        },
+      },
+      sshHost: () => undefined,
+      shQuote: (value) => `'${value}'`,
+      runProcessWithCodeTimeout: async () => {
+        started();
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    const pending = context({
+      pane_id: "p1",
+      agent_session_fingerprint: agentCheckoutSessionFingerprint(session),
+    });
+    await queryStarted;
+    finish({
+      code: 0,
+      stdout: "/worktrees/agent-a\nagent-a\n/repo/.git/worktrees/agent-a\n",
+      stderr: "",
+    });
+    await expect(pending).resolves.toMatchObject({
+      available: false,
+      reason: expect.stringContaining("report changed"),
+    });
+  });
   test("bounds changed-file output", () => {
     expect(
       parseAgentCheckoutStatus(`/repo\nHEAD\nfalse\n${"?? x\n".repeat(201)}`),

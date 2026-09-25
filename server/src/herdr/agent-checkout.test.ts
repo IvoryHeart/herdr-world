@@ -113,4 +113,34 @@ describe("agent-checkout", () => {
     expect(short.agent_checkout_pr_0).toBeNull();
     expect(() => agentCheckoutTokens(session, "relative")).toThrow("absolute");
   });
+  test("returns a bounded failure when SSH tunnel cleanup rejects", async () => {
+    const errors: string[] = [];
+    const reports: string[] = [];
+    const code = await runAgentCheckoutCommand(
+      ["agent-checkout", "/worktrees/agent-a", "--pane", "w1:p1"],
+      "0.0.0",
+      {
+        loadConfig: config,
+        error: (message) => errors.push(message),
+        log: (message) => reports.push(message),
+        createTunnel: () => ({
+          startAutoSshTunnel: async () => undefined,
+          cleanupAutoSshTunnel: async () => {
+            throw new Error("synthetic cleanup rejection");
+          },
+        }),
+        createClient: () => ({
+          call: async (method) =>
+            method === "pane.get"
+              ? { pane_id: "w1:p1", agent_session: session }
+              : {},
+        }),
+      },
+    );
+    expect(code).toBe(1);
+    expect(reports).toEqual([]);
+    expect(errors).toEqual([
+      "agent-checkout: unable to report to the requested Herdr pane",
+    ]);
+  });
 });
