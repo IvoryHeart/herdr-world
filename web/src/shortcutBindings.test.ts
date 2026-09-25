@@ -339,6 +339,7 @@ test("older presets gain annotation delivery shortcuts without replacing saved k
     const bindings: Partial<typeof defaults> = { ...defaults };
     delete bindings["annotations.copy"];
     delete bindings["annotations.prefill"];
+    delete bindings["terminal.ctrlEnter"];
     expect(
       validateShortcutPreset({ ...preset(), base, bindings }).bindings,
     ).toEqual(defaults);
@@ -351,6 +352,9 @@ test("older presets gain annotation delivery shortcuts without replacing saved k
     const loaded = validateShortcutPreset({ ...preset(), base, bindings });
     expect(loaded.bindings["annotations.copy"]).toEqual([]);
     expect(loaded.bindings["annotations.prefill"]).toEqual([]);
+    expect(loaded.bindings["terminal.ctrlEnter"]).toEqual(
+      base === "mac" ? defaults["terminal.ctrlEnter"] : [],
+    );
     expect(loaded.bindings["tab.create"]).toEqual(defaults["annotations.copy"]);
     expect(loaded.bindings["tab.close"]).toEqual(
       defaults["annotations.prefill"],
