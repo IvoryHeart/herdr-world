@@ -50,7 +50,7 @@ The service SHALL return a process-local revision with watchlist reads and mutat
 
 ### Requirement: Filter visual views to watched panes
 
-The common Pinned only control SHALL filter Office, Tree and Graph to watched leaves on the selected host while retaining enough host, space, room and desk context to identify each visible leaf. Search SHALL operate within the filtered set. Each view SHALL distinguish displayed counts from total observed coverage and report omissions caused by view bounds. A missing, stale or disconnected watched pane SHALL never offer an operational action.
+The common Pinned only control SHALL filter Office, Tree and Graph to watched leaves on the selected host while retaining enough host, space, room and desk context to identify each visible leaf. Search SHALL operate within the filtered set. Each view SHALL distinguish raw observed coverage, registered watches, current live/admitted watches, displayed matches, view-bound omissions, missing watches and service-unresolved watches; search exclusions SHALL NOT be counted as view omissions. A stale or admission-pending host SHALL not claim a current missing count. A missing, stale, disconnected or unresolved watched pane SHALL never offer an operational action.
 
 #### Scenario: Filter the selected host
 
@@ -66,3 +66,27 @@ The common Pinned only control SHALL filter Office, Tree and Graph to watched le
 
 - **WHEN** a watched pane is absent from the latest admitted topology or its host becomes stale
 - **THEN** the watchlist identifies it as unavailable or retires it, and no Terminal, Inspector or mutation action is offered for it
+
+### Requirement: Admit watched topology within the bounded World snapshot
+
+For each ready host, World SHALL derive snapshot admission from its current-generation service-owned watch records as well as the existing maximum eight browser priorities. A uniquely matched live watched pane and its workspace/tab ancestry SHALL be reserved inside the existing service record limits before ordinary relevance selection. The service SHALL preserve raw Herdr coverage and return watch-admission counts with the watchlist revision. It SHALL distinguish a missing pane from an unresolved hierarchy or a stale/pending observation. An older in-flight snapshot SHALL NOT satisfy a newer watchlist revision, and no watch record SHALL make cached topology actionable.
+
+#### Scenario: Watched pane lies beyond the ordinary pane cap
+
+- **WHEN** a ready host has more than 4,096 panes and a current-generation watched terminal would fall outside ordinary relevance admission
+- **THEN** the snapshot retains that exact pane, its workspace and tab within the existing caps, and its WorldObject leaf resolves to the watched record without spending one of the eight browser priorities
+
+#### Scenario: More watched leaves than a view can show
+
+- **WHEN** 128 live records are admitted and more than 16 watched panes belong to one space
+- **THEN** the service still admits those panes and ancestry, while Tree and Graph keep their 16-child view bound and report the exact number of watched matches omitted by that bound
+
+#### Scenario: A watched pane has invalid ancestry
+
+- **WHEN** a raw watched pane has no valid matching workspace or tab, or its terminal identity is ambiguous
+- **THEN** World counts it as unresolved, presents no guessed actionable leaf, and does not call it merely missing
+
+#### Scenario: Pin changes during observation
+
+- **WHEN** a Pin commits while an older aggregate fetch is in flight
+- **THEN** the older result cannot certify the new watchlist revision; the browser shows admission pending until a matching current-generation refresh is admitted

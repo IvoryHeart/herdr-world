@@ -4,7 +4,7 @@ The Changes resource currently obtains branch, checkout and file status from its
 
 ## What Changes
 
-- Add session-qualified reporting of the active agent's checkout path and optional reported PR link through Herdr metadata, following the task-summary metadata seam once that prerequisite is proven.
+- Add session-qualified reporting of the active agent's checkout path and optional reported PR link through Herdr metadata, following the task-summary metadata seam once that prerequisite is proven. The report lasts for that agent session without a timer or refresh hook; clear, replacement, pane closure or Herdr restart removes it from the current view.
 - In an agent Inspector, distinguish Agent checkout from Workspace changes. Show the exact agent repository/worktree, branch and changed files from a bounded read-only Git query on the selected connection; show a reported PR link only with clear provenance.
 - Show Agent checkout unavailable when trustworthy, current-session metadata is absent or invalid. Never infer it from workspace CWD, terminal CWD, or a previous agent session.
 - Keep existing workspace Changes and Git mutations in their existing workspace scope. Agent checkout is read-only in this first release.

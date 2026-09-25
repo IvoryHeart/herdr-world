@@ -12,7 +12,13 @@
 
 ### Prove a session-bound source before implementing the view
 
-First verify Herdr 0.9.0 can attach source-specific metadata to an exact pane and active agent session, invalidate it on session replacement, and deliver updates to World. Use the same service/CLI transport proven for task summaries. Add a narrow `herdr-world agent-checkout` report/clear command for an explicit pane, absolute checkout path and optional HTTPS PR URL. The producer may run as a harness hook on the target host; it must not inspect browser focus. Store only the bounded checkout and PR fields under a World-owned metadata source with TTL and session binding. If Herdr cannot support these semantics, revise this proposal before using a World cache or inference.
+First verify Herdr 0.9.0 can report bounded pane tokens, expose the active agent-session identity and deliver updates to World. Use the same service/CLI transport proven for task summaries. Add a narrow `herdr-world agent-checkout` report/clear command for an explicit pane, absolute checkout path and optional HTTPS PR URL. The producer may run once as a harness hook on the target host; it must not inspect browser focus. Herdr 0.9.0's [metadata contract](https://github.com/herdrdev/herdr/blob/v0.9.0/docs/next/website/src/content/docs/socket-api.mdx) limits one token to 80 characters and one report to 16 keys; its `agent`/`applies_to_source` guards do not protect token patches. Do not claim that those guards bind checkout tokens to a session.
+
+### Let the exact agent session own report lifetime
+
+At report time, read the target pane's active `agent_session` (`source`, `agent`, `kind`, `value`) and store the lowercase hex SHA-256 of `JSON.stringify([source, agent, kind, value])` alongside the checkout fields. Reject a missing or malformed field; do not normalize the identity before hashing. World recomputes that fingerprint from the current Herdr pane/session before displaying or querying Git. Omit `ttl_ms`: Herdr retains token metadata until replacement, explicit clear, pane closure or server restart. A long-running unchanged session needs no timer or renewal hook; a replacement session immediately fails the fingerprint check even if the old tokens remain on the pane. Clear removes only the namespaced checkout tokens for the exact pane, including after the agent has ended. A new report replaces all chunks atomically and clears unused old chunks in that same metadata call. A failed or unsupported session read fails the report; it never falls back to workspace or terminal CWD.
+
+Use `agent_checkout_v`, `agent_checkout_session`, `agent_checkout_path_0` through `_8`, and `agent_checkout_pr_0` through `_3`: 15 named tokens total, within Herdr's 16-key report limit. The path is absolute UTF-8 text of at most 540 bytes, encoded as up to nine 80-character base64url chunks; the optional HTTPS PR URL is at most 240 UTF-8 bytes in up to four chunks. Base64url avoids Herdr's whitespace normalization changing a path. Every report mentions all 15 keys, setting unused chunks to JSON null, so a shorter update cannot inherit an old suffix or PR. Reject overlong or invalid values before reporting and treat malformed/incomplete token sets as unavailable. Herdr retains at most 32 keys per pane; a full pane returns a bounded failure without partial success. The token set is advisory and untrusted; the server validates the decoded path and uses a fixed read-only Git query. Confirm these bounds and atomic patch behavior against the tagged Herdr 0.9.0 schema before coding; revise this design if the runtime differs.
 
 ### Query Git on the selected connection and exact reported checkout
 
@@ -26,9 +32,11 @@ For an agent Inspector, Changes opens Agent checkout context when current-sessio
 
 - [A reported checkout path points somewhere unexpected] → Treat metadata as untrusted, use a fixed read-only Git query with safe process arguments, validate the exact selected connection and live session, and never accept a path from the browser.
 - [The optional PR link is stale or inaccurate] → Label it Reported PR with its source and validate HTTPS URL shape; do not claim repository verification or infer a PR from branch.
-- [The agent context expires while open] → Clear it to an unavailable state and keep Workspace changes an explicit separate choice.
+- [The agent session is replaced while old tokens remain] → Recompute the exact session fingerprint before each Git query and presentation; show unavailable until that session reports its own checkout.
+- [Herdr restarts and loses metadata] → Show unavailable and allow the harness to report again; do not infer the old path or require periodic renewal during an uninterrupted session.
+- [A pane has too many existing metadata tokens] → Treat Herdr's capacity rejection as a failed report, leave Agent checkout unavailable and preserve existing tokens; do not split the report across calls.
 - [A linked worktree differs from the workspace] → Display both scope names and roots so users can tell which changed-file list they are viewing.
 
 ## Migration Plan
 
-The metadata is optional and expires. Existing workspace Changes behavior and stored state remain valid. No persisted World data or migration is required.
+The metadata is optional and non-durable. Existing workspace Changes behavior and stored state remain valid. No persisted World data or migration is required.

@@ -1,14 +1,14 @@
 ## 1. Prove and define the agent checkout source
 
-- [ ] 1.1 Complete `session-task-summaries` task 1.1 or independently prove Herdr 0.9.0 source/session/TTL metadata semantics on a synthetic pane. Record exact report, clear, event and session-replacement behavior. If unsupported, stop and revise this proposal before implementation.
+- [ ] 1.1 Complete `session-task-summaries` task 1.1 or independently prove Herdr 0.9.0 pane-token limits, atomic patch/clear, no-TTL persistence, active `agent_session` read and update events on a synthetic pane. Record that presentation guards do not bind token patches; if the tagged runtime differs, revise this change before implementation.
 - [ ] 1.2 Trace `WorkspaceInspectorHost.tsx`, workspace Git status/diff/action root selection, `WorldObject` agent-session identity and connection lease routing. Record which existing UI can be reused without treating workspace checkout as agent checkout.
-- [ ] 1.3 Define the bounded `agent-checkout` report/clear fields: explicit pane, absolute checkout path, optional HTTPS PR URL, Herdr session/SSH selection, TTL and source name. Verify missing pane/session, invalid path/link, oversized input and conflicting options fail before metadata write; do not log real paths.
+- [ ] 1.3 Define the fixed 15-key `agent-checkout` token layout from the design: version, SHA-256 fingerprint of the exact active agent-session identity, nine base64url path chunks (at most 540 decoded UTF-8 bytes) and four optional PR chunks (at most 240 decoded UTF-8 bytes). Omit TTL and any refresh timer. Verify report requires an active session, exact clear works after session end, and missing pane, invalid/overlong path or link, stale chunk suffix, full Herdr token capacity and conflicting options fail safely without logging real paths.
 
 ## 2. Publish and read exact context
 
-- [ ] 2.1 Add the packaged report/clear command before World listener startup, reusing the proven task-summary transport and source/session binding. Verify no browser focus inference, another-host fallback or second World process.
-- [ ] 2.2 Add a connection- and generation-routed read-only agent Git context request. Re-read current pane/session metadata server-side, ignore browser-supplied checkout paths, validate the reported absolute checkout as a Git root/worktree, and return bounded branch, worktree state, changed-file statuses/count and optional Reported PR provenance. Verify safe local and SSH process arguments and unavailable/error cases.
-- [ ] 2.3 Add focused cases for two agents in the same workspace with different checkouts, equal pane IDs on two hosts, missing metadata, non-Git path, report clear/TTL, session replacement, runtime reconnect and a slow reply arriving after Inspector selection changes.
+- [ ] 2.1 Add the packaged report/clear command before World listener startup, reusing the proven task-summary transport. Report all 15 tokens in one metadata call, nulling unused chunks, and fingerprint the current agent session; clear only those exact token keys. Verify no browser focus inference, another-host fallback, second World process or periodic renewal job.
+- [ ] 2.2 Add a connection- and generation-routed read-only agent Git context request. Re-read the current pane/session and token set server-side, require the exact session fingerprint and complete versioned chunks, ignore browser-supplied checkout paths, validate the decoded absolute checkout as a Git root/worktree, and return bounded branch, worktree state, changed-file statuses/count and optional Reported PR provenance. Verify safe local/SSH process arguments and unavailable/error cases.
+- [ ] 2.3 Add focused cases for two agents in the same workspace with different checkouts, equal pane IDs on two hosts, missing/malformed chunks, non-Git path, a shorter replacement report, explicit clear, a current session lasting beyond 24 hours without renewal, session replacement, pane closure, Herdr restart, runtime reconnect and a slow reply arriving after Inspector selection changes.
 
 ## 3. Present distinct Changes scopes
 
@@ -19,4 +19,4 @@
 ## 4. Accept and deliver
 
 - [ ] 4.1 Exercise desktop/phone/keyboard/accessibility presentation using synthetic local and deterministic SSH runtimes, including absent context and visibly different workspace/agent roots; capture focused evidence without real paths or repository contents.
-- [ ] 4.2 Document the harness command, privacy/TTL behavior and reported PR provenance, add an Unreleased entry, synchronize the accepted delta into current `world-surfaces`, run focused checks and `bun run check`, inspect final diff/history, then open a ready PR for independent review.
+- [ ] 4.2 Document the one-shot harness command, session-owned/no-TTL lifetime, Herdr-restart loss, size/privacy limits and reported PR provenance; add an Unreleased entry, synchronize the accepted delta into current `world-surfaces`, run focused checks and `bun run check`, inspect final diff/history, then open a ready PR for independent review.

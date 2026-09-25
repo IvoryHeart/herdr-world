@@ -2,7 +2,7 @@
 
 ### Requirement: Publish session-qualified task summaries
 
-The packaged `herdr-world task-summary` command SHALL report or clear the `task_summary` metadata token for one explicitly identified Herdr pane without starting the World web service. A report SHALL be bound to that pane's active agent session and source. The command SHALL use `--pane` or `HERDR_PANE_ID` and SHALL never infer a pane from another host or the currently focused browser view. It SHALL support the existing Herdr session selection and fixed-policy SSH transport when those are explicitly requested.
+The packaged `herdr-world task-summary` command SHALL report or clear the `task_summary` metadata token for one explicitly identified Herdr pane without starting the World web service. A report SHALL include a second token containing a fingerprint of that pane's exact active Herdr agent-session identity; World SHALL admit the summary only while the current session matches it. The command SHALL use `--pane` or `HERDR_PANE_ID` and SHALL never infer a pane from another host or the currently focused browser view. It SHALL support the existing Herdr session selection and fixed-policy SSH transport when those are explicitly requested.
 
 #### Scenario: Report current work
 
@@ -12,7 +12,7 @@ The packaged `herdr-world task-summary` command SHALL report or clear the `task_
 #### Scenario: Clear reported work
 
 - **WHEN** the harness invokes `herdr-world task-summary --clear` for a pane with a World-reported summary
-- **THEN** only World's task-summary token on that exact pane is cleared and the text disappears from visual presentations after refresh
+- **THEN** only World's task-summary and session-fingerprint tokens on that exact pane are cleared and the text disappears from visual presentations after refresh
 
 #### Scenario: Pane or session is unavailable
 
@@ -22,11 +22,11 @@ The packaged `herdr-world task-summary` command SHALL report or clear the `task_
 #### Scenario: Agent session is replaced
 
 - **WHEN** a pane starts another agent session after a summary was reported
-- **THEN** the old summary is not presented as the new session's current work, including across reconnect and delayed observation replies
+- **THEN** the old summary is not presented as the new session's current work, even if Herdr has not yet expired its tokens, including across reconnect and delayed observation replies
 
 ### Requirement: Bound task-summary content and lifetime
 
-A report SHALL normalize whitespace, reject empty text, replace obvious credential-shaped values, and cap the displayed and reported text to 160 Unicode characters. The default time to live SHALL be 900,000 milliseconds; an explicit time to live SHALL be an integer from 1 through 86,400,000 milliseconds. A report or clear result SHALL identify its target and outcome without echoing summary text or credential material into output or logs. Expiry SHALL remove the summary without browser action.
+A report SHALL normalize whitespace, reject empty text, replace obvious credential-shaped values, and cap its reported text to 80 Unicode characters in accordance with Herdr 0.9.0's token value limit. The default time to live SHALL be 900,000 milliseconds; an explicit time to live SHALL be an integer from 1 through 86,400,000 milliseconds. The summary and fingerprint tokens SHALL receive the same TTL. A report or clear result SHALL identify its target and outcome without echoing summary text or credential material into output or logs. Expiry SHALL remove the summary without browser action.
 
 #### Scenario: Summary contains a credential-shaped value
 
