@@ -229,6 +229,41 @@ groups do not represent a combined working tree. Changes describe checkout edits
 not proof that one agent produced them. Last step uses recorded activity snapshots,
 not attribution of arbitrary working-tree edits.
 
+### Last step capture limits and recovery
+
+Last step captures checkout contents at workspace activity boundaries, including
+small untracked files and changes committed during a turn. A private index copy
+preserves staged gitlinks and sparse entries without changing the user's index.
+Materialized regular files use raw on-disk bytes; Git clean filters and working
+tree encodings are not applied. Git metadata inside the checkout is excluded,
+including separate directories used by linked worktrees. An initialized nested
+repository contributes its current commit; an uninitialized submodule retains
+its indexed commit.
+
+Capture refuses a snapshot with a file over 8 MiB, more than 32 MiB of copied
+content, or more than 10,000 regular files. Applicable Git filter attributes,
+symlinks and symlink ancestors, special or unreadable files, newline or tab
+filenames, and shared repositories are unsupported. Capture also requires shell
+file-size limits, hard links, and a GNU/BSD-compatible `dd` byte count. A failed
+capture does not publish a Last step range; the previous completed range remains
+available. Captures are not atomic against concurrent checkout edits.
+
+Each capture owns one private `herdr-world-last-step-capture` directory inside
+that worktree's Git directory. Bounded copies and temporary Git objects stay
+there until complete; finished loose objects are published by non-overwriting
+hard links into Git's object database. They remain subject to ordinary Git
+garbage collection. World does not run Git GC or remove user object files.
+The caller has a ten-second timeout; the host-side script refuses publication
+after nine seconds. A failed SSH transport does not prove the remote capture
+stopped, so an unreachable complete object may still be published remotely.
+
+Normal completion removes the private capture directory. A signal or crash
+retains it so a later capture refuses to overwrite uncertain storage. Disposal
+does not remove it. To recover, stop captures for that checkout and confirm the
+capture shell and all children have exited, rebooting the executing host if
+uncertain. Only then remove that exact directory under the resolved Git
+directory. Never remove `objects`, `objects/pack`, or the user's index.
+
 Git resource keys encode the endpoint-qualified repository identity
 (`worktree.gui_settings_key`) and normalized checkout path as a pair. The path
 separates linked checkouts; the repository identity separates SSH destinations

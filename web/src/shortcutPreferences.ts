@@ -41,6 +41,7 @@ const LATE_SHORTCUT_IDS: ShortcutId[] = [
   "annotations.copy",
   "annotations.prefill",
   "panes.search",
+  "terminal.ctrlEnter",
 ];
 export function validateShortcutPreset(value: unknown): ShortcutPreset {
   if (!value || typeof value !== "object")

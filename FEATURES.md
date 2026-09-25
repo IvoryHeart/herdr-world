@@ -165,7 +165,7 @@ locally accessible transcripts.
 
 ## Git Worktree Lifecycle
 
-- Create a linked worktree from freshly fetched `origin/main` without changing
+- Create a linked worktree from the freshly fetched default branch of `origin` without changing
   the source branch or dirty files; discover/open existing worktrees.
 - See checkout paths, open/closed state, branch status, and uncommitted counts.
 - Focus open worktrees, run `git pull`, or enable per-checkout branch updates.
@@ -225,7 +225,7 @@ unsandboxed code:** review `paseo.json` before creating, opening, or removing.
 
 ### Automatic Branch Updates
 
-Fetch `origin/main` and merge into enabled checkouts' current branches every
+Fetch `origin`'s default branch and merge into enabled checkouts' current branches every
 10 minutes by default. The UI shows interval and last result. Manage saved
 per-checkout settings in **Menu → Automatic branch updates**, workspace context
 menus, or Worktree Lifecycle.

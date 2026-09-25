@@ -52,6 +52,7 @@ const descriptions: [ShortcutId, string, string][] = [
   ["terminal.halfPageDown", "Scroll history down half a page", "Terminal"],
   ["terminal.multiline", "Send multiline Enter to the agent", "Terminal"],
   ["terminal.altEnter", "Send Alt-modified Enter to the agent", "Terminal"],
+  ["terminal.ctrlEnter", "Send Ctrl-modified Enter to the agent", "Terminal"],
   ["terminal.lineStart", "Move to the beginning of the input line", "Terminal"],
   ["terminal.lineEnd", "Move to the end of the input line", "Terminal"],
   [

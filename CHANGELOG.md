@@ -86,6 +86,14 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
+- Worktree creation and automatic branch updates now follow `origin`'s advertised
+  default branch, including repositories whose default is not `main`.
+- Last step captures now bound scratch data and avoid accumulating temporary Git
+  objects in the repository; terminal Ctrl+Enter forwarding and HTTP-link
+  handling during endpoint repaints are corrected.
+- Web Push task alerts now include available connection, workspace and tab
+  labels instead of only internal identifiers.
+
 - Reconciled Android terminal textarea replacements as tail edits so mobile
   autocorrection, deletion and revised text no longer resend accumulated input
   or lose corrections.

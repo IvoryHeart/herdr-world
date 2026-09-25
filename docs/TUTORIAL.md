@@ -196,13 +196,13 @@ committing is not pushing.
 For simultaneous tasks that edit files, use separate worktrees: each has its
 own checkout directory and branch.
 
-1. Confirm that the repository has a fetchable `origin/main`, and inspect
+1. Confirm that the repository has a fetchable default branch on `origin`, and inspect
    `paseo.json` if it exists. If you do not trust its commands, disable hooks
    for this repository through **Worktree hooks** before proceeding.
 2. Open **Worktree Lifecycle** from the workspace context menu, or search for
    `worktree lifecycle` in the command menu.
 3. Create and open a documentation worktree. Herdr World starts it from the latest
-   fetched `origin/main`, without carrying over the source workspace's
+   fetched default branch of `origin`, without carrying over the source workspace's
    uncommitted changes.
 4. In the new worktree's terminal, run `pwd` and `git status`. Confirm the
    directory and branch before starting the agent.
@@ -216,7 +216,7 @@ changes. Group/collapse/pin preferences stay in this browser.
 > see [hook boundaries](../FEATURES.md#paseo-worktree-hooks).
 
 Leave **Automatic branch updates** off for this exercise. When enabled, they
-fetch/merge `origin/main` every 10 minutes by default, never push, skip dirty or
+fetch/merge `origin`'s default branch every 10 minutes by default, never push, skip dirty or
 detached checkouts, and abort conflicts. They run only while the workspace is open
 in this connection. See [update controls](../FEATURES.md#automatic-branch-updates).
 

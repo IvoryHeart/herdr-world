@@ -48,6 +48,7 @@ const base = {
   "terminal.halfPageDown": ["Alt+PageDown"],
   "terminal.multiline": ["Shift+Enter"],
   "terminal.altEnter": ["Alt+Enter"],
+  "terminal.ctrlEnter": ["Ctrl+Enter"],
   "terminal.lineStart": ["Ctrl+A"],
   "terminal.lineEnd": ["Ctrl+E"],
   "terminal.deleteToStart": ["Ctrl+U"],

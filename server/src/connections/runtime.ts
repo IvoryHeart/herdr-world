@@ -329,9 +329,36 @@ export function createLegacyConnectionRuntime(args: {
     failureMessage: "agent status subscription failed",
     recoveryMessage: "agent status subscription recovered",
   });
-  const taskEvents = createTaskEventTracker((event) =>
-    args.onTaskEvent?.(event),
-  );
+  const pendingTaskEvents = new Map<string, TaskEvent>();
+  const taskEvents = createTaskEventTracker(async (event) => {
+    if (!args.onTaskEvent || disposed) return;
+    pendingTaskEvents.set(event.paneId, event);
+    // Resolve labels when needed so push works without an open browser.
+    const [workspaceResult, tabResult] = await Promise.all([
+      herdr
+        .call("workspace.get", { workspace_id: event.workspaceId }, 5000)
+        .catch(() => null),
+      herdr
+        .call("tab.list", { workspace_id: event.workspaceId }, 5000)
+        .catch(() => null),
+    ]);
+    if (disposed || pendingTaskEvents.get(event.paneId) !== event) return;
+    pendingTaskEvents.delete(event.paneId);
+    const workspaceLabel = workspaceResult?.workspace?.label;
+    const tab = Array.isArray(tabResult?.tabs)
+      ? tabResult.tabs.find(
+          (tab: { tab_id?: unknown; workspace_id?: unknown } | null) =>
+            tab?.tab_id === event.tabId &&
+            tab?.workspace_id === event.workspaceId,
+        )
+      : undefined;
+    args.onTaskEvent({
+      ...event,
+      workspaceLabel:
+        typeof workspaceLabel === "string" ? workspaceLabel : undefined,
+      tabLabel: typeof tab?.label === "string" ? tab.label : undefined,
+    });
+  });
   let taskListRevision = 0;
   const agentStatusSubscriptions = createAgentStatusSubscriptionLoop({
     herdr,
@@ -435,6 +462,7 @@ export function createLegacyConnectionRuntime(args: {
     herdr.off("event", onHerdrEvent);
     herdr.off("error", onHerdrError);
     taskEvents.stop();
+    pendingTaskEvents.clear();
     const autoSyncStop = workspaceAutoSync.stop();
     terminalBridge.dispose();
     const subscriptionStop = subscriptionLoop.stop();

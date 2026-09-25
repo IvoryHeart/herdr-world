@@ -25,6 +25,7 @@ export function terminalShortcutSequence(
   const sequences = {
     "terminal.multiline": "\x1b[13;2u",
     "terminal.altEnter": "\x1b[13;3u",
+    "terminal.ctrlEnter": "\x1b[13;5u",
     "terminal.lineStart": "\x01",
     "terminal.lineEnd": "\x05",
     "terminal.deleteToStart": "\x15",
