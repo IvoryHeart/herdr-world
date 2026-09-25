@@ -421,6 +421,21 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
       (await rpc("workspace.list", {}, "beta", betaGeneration)).workspaces[0]
         .name,
     ).toBe("from-beta");
+    const invalidWorldHint = await browserA.raw("world.snapshot", {
+      selected_connection_id: "unknown-host",
+    });
+    expect(invalidWorldHint.error.message).toContain(
+      "unknown selected World connection",
+    );
+    const hintedAggregate = await rpc("world.snapshot", {
+      selected_connection_id: "beta",
+    });
+    expect(
+      hintedAggregate.connections.find(
+        (connection: { connection_id: string }) =>
+          connection.connection_id === "beta",
+      ).actionable,
+    ).toBe(true);
     const aggregate = await rpc("world.snapshot");
     expect(
       aggregate.connections.map(

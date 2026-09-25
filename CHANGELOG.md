@@ -45,6 +45,10 @@ retain their original Herdr Web lineage.
 
 ### Changed
 
+- Bounded aggregate World observation to 20 seconds, prioritizing the selected
+  host while retaining stale, non-actionable topology for unfinished hosts and
+  admitting current-generation late results on a later refresh.
+  [PR #104](https://github.com/IvoryHeart/herdr-world/pull/104)
 - Merged Roamgate source through `84d0955d6eb221a20114fb1788a81579f7c472e1`
   with shared Git ancestry. This includes its v0.7.10 fixes, diff and worktree
   updates, and tooling refresh. World retains its connection isolation, visual

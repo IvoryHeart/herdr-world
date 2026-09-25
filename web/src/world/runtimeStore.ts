@@ -286,6 +286,7 @@ export class WorldRuntimeStore {
   private priorities: WorldRuntimePriority[] = [];
   private priorityVersion = 0;
   private appliedPriorityVersion = 0;
+  private selectedConnectionId: string | null = null;
 
   constructor(private readonly client: WorldRuntimeClient) {}
 
@@ -359,6 +360,15 @@ export class WorldRuntimeStore {
     return this.priorityVersion;
   }
 
+  setSelectedConnectionId(connectionId: string | null) {
+    if (this.selectedConnectionId === connectionId) return;
+    this.selectedConnectionId = connectionId;
+    // The previous response was prioritized for another operational host.
+    this.observationEpoch += 1;
+    if (this.refreshInFlight) this.refreshQueued = true;
+    else if (this.unlistenControl) this.scheduleRefresh();
+  }
+
   async ensurePriorities(values: readonly WorldRuntimePriority[]) {
     const requiredVersion = this.setPriorities(values);
     while (this.appliedPriorityVersion < requiredVersion) {
@@ -399,6 +409,9 @@ export class WorldRuntimeStore {
     try {
       const parsed = parseWorldSnapshotResult(
         await this.client.call("world.snapshot", {
+          ...(this.selectedConnectionId
+            ? { selected_connection_id: this.selectedConnectionId }
+            : {}),
           priorities: priorities.map((priority) => ({
             connection_id: priority.connectionId,
             workspace_id: priority.workspaceId,

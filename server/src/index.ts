@@ -375,8 +375,11 @@ let worldSnapshots: WorldSnapshotService<LegacyConnectionRuntime> | null = null;
 function publishWorldInvalidation(
   connectionId: string,
   connectionGeneration: number,
+  observedLate = false,
 ) {
-  const revision = worldSnapshots?.invalidate();
+  const revision = worldSnapshots?.invalidate(
+    observedLate ? undefined : connectionId,
+  );
   if (revision === undefined) return;
   const line = JSON.stringify({
     control: {
@@ -435,7 +438,12 @@ const connectionManager = new ConnectionManager<LegacyConnectionRuntime>(
   },
   logger.child("connections"),
 );
-worldSnapshots = new WorldSnapshotService(connectionManager);
+worldSnapshots = new WorldSnapshotService(
+  connectionManager,
+  Date.now,
+  (connectionId, generation) =>
+    publishWorldInvalidation(connectionId, generation, true),
+);
 
 const { handleHerdrStatus, handleHerdrSetup } = createHerdrSetupHandlers({
   ping: () => {
