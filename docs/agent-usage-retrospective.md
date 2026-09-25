@@ -92,8 +92,11 @@ count is not a measure of thinking time.
   repair. F made 141 responses and included browser fixture timing repair.
   Their PRs document the actual fixes. Re-running checks and revisiting code
   after feedback naturally extends the session and the prompt carried forward.
-  The logs do not provide a trustworthy decomposition of elapsed time into
-  inference, waiting for tools, checks, CI and human review.
+  Matched outer tool-call spans totaled about 19, 24, 12 and 19 minutes for
+  C–F respectively. Those spans include waiting and wrappers and need not sum
+  to critical-path time; B's background full check makes its 1.6-minute span
+  especially incomplete. The logs do not provide a trustworthy decomposition
+  of elapsed time into inference, checks, CI and human review.
 
 ## A smaller case: this retrospective's PR
 
