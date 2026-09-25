@@ -8,27 +8,34 @@ remain the source for exact scope, verification and merge state.
 ## Campaign boundary and outcome
 
 - [#101](https://github.com/IvoryHeart/herdr-world/pull/101) merged the plan
-  and five focused OpenSpec change plans after the architecture review. It fixed the
+  and five OpenSpec proposals after the architecture review. It fixed the
   first-wave decisions: topology-focused Graph, a World-service watchlist,
   and existing operations in visual Actions.
 - [#102](https://github.com/IvoryHeart/herdr-world/pull/102) proposed a
   selective Roamgate replay, then closed when that approach was replaced.
   [#103](https://github.com/IvoryHeart/herdr-world/pull/103) merged current
   Roamgate source with shared Git ancestry and explicit World adaptations.
-- [#104–#108](https://github.com/IvoryHeart/herdr-world/pulls) delivered bounded
+- PRs [#104](https://github.com/IvoryHeart/herdr-world/pull/104) through
+  [#108](https://github.com/IvoryHeart/herdr-world/pull/108) delivered bounded
   observation, task summaries, the qualified watchlist, agent source-control
-  context and visual-route Actions in two dependent branch stacks. At this
-  snapshot, their repair commits passed CI and the latest reviews reported no
-  remaining findings; merge state belongs to each PR.
+  context and visual-route Actions in two dependent branch stacks. All five
+  merged on 25 September after their repair and integration heads passed CI,
+  the latest reviews reported no remaining findings, and the owner explicitly
+  waived the independent-review requirement.
 - [#109](https://github.com/IvoryHeart/herdr-world/pull/109) records usage and
   process changes. The related [#100](https://github.com/IvoryHeart/herdr-world/pull/100)
   visual action-parity PR remains open and is outside the B–F measurements.
 
+#100 and #108 both edit the three visual views, the World foundation app, the
+shared toolbar, World CSS and `CHANGELOG.md`. Before resuming #100, compare
+its broader shared-action contract with #108's shipped visual-route Actions
+and rebase deliberately. File overlap signals integration work; it does not
+establish that the two contracts or implementations are equivalent.
+
 Parallel agent sessions overlapped across the two stacks. The work also
 produced repeated review/repair cycles and CI runs. There is no controlled
-serial comparison, and the measurements below
-exclude #101, #103 and some later repair work; they cannot establish a
-campaign-wide cost or speedup.
+serial comparison, and the measurements below exclude #101, #103 and some
+later repair work; they cannot establish a campaign-wide cost or speedup.
 
 ## Efficiency assessment
 
@@ -50,6 +57,10 @@ The largest measured token driver was accumulated prompt history across many
 responses, especially the inherited #109 conversation, rather than the small
 startup documents or OTel collection. A fresh bounded handoff and smaller tool
 results are better first experiments than removing necessary product contracts.
+
+The final merge sequence from #104 to #108 took about 24 minutes, from 18:32
+to 18:56 UTC. That includes serialized integration and CI for dependent
+branches; it is not a measure of active implementation or model time.
 
 ## What was measured
 
@@ -201,7 +212,8 @@ within-deadline invalidation and pane-only identity gaps. Green full checks
 had not exercised all of these combinations. The latest reviews report these
 findings resolved, but the initial session and time figures exclude most
 repair work. The review comments came from the PR author's account; they do
-not constitute the repository's required independent approval.
+not constitute the repository's required independent approval. The owner
+explicitly waived that requirement for #104–#108 before merge.
 
 The #105 cleanup review repair gives a first measurement of that additional
 cost: 14 model responses used 2,768,108 tokens, including 2,765,061 input.
@@ -238,6 +250,13 @@ changelog fragments assembled into the release changelog, including a clear
 rule for links and release preparation. That would change the current
 changelog workflow and should be judged against the frequency and cost of
 real conflicts before adding tooling.
+
+The later stack integrations also needed a knowledge-map row reconciliation
+for #107 and a real Office/Tree toolbar reconciliation for #108: watch controls
+and visual Actions both changed the toolbar composition. Both controls must
+remain visible, as they already do together in Graph. Those source conflicts
+are a separate cost of parallel feature work and warrant focused review and
+final combined CI; changelog fragments would not solve them.
 
 For work crossing async or UI boundaries, turn the changed invariant into a
 small set of concrete cases before the final full gate: in-flight invalidation,
