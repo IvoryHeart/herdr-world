@@ -1,13 +1,13 @@
 ## Why
 
-People can open several live World Inspectors but must position every window by hand to compare terminals. A Herdr split is visible in Spaces yet a floating Inspector currently presents only the selected pane, making the two presentation models disagree.
+People can open several live World Inspectors but must position every window by hand to compare terminals. Spaces shows one active tab at a time even when several Herdr tabs are open. A Herdr split is visible in Spaces yet a floating Inspector currently presents only the selected pane, making the two presentation models disagree.
 
 ## What Changes
 
-- Add one compact arrangement control to the shared desktop tab bar for the currently visible, already open windows. Offer diagonal Cascade, side-by-side Columns, top-to-bottom Rows, a four-corner Grid and Restore positions; fitting presets use the available stage without covering the tab bar and preserve reachable window headers. A fifth or sixth Inspector in Grid remains floating above the four tiles.
-- Arrange complete Inspector presentations, including the visible docked Inspector. A Tree inline Inspector temporarily receives window geometry while arranged, retaining its qualified conversation and return path to its leaf. Office, Tree and Graph use the same arrangement model; Spaces participates through the same shell interface, with its single native terminal surface requiring no rearrangement today. Compact layouts keep their current one-active-Inspector presentation.
+- Add one compact arrangement control to the shared desktop tab bar. Offer Single (one active window filling the stage), diagonal Cascade, side-by-side Columns, top-to-bottom Rows, a four-corner Grid and Restore positions. Fitting presets use the available stage without covering the tab bar and preserve reachable window headers. Grid tiles four windows and keeps any additional ones floating above them.
+- Treat Spaces' current full active-tab presentation as Single. In Spaces, arrange the focused workspace's already open Herdr tabs as terminal windows; no new Herdr tabs or sessions are created. Its one workspace Inspector follows only the active tab and pane. In Office, Tree and Graph, arrange only already open Inspector conversations, including the visible docked Inspector. A Tree inline Inspector temporarily receives window geometry while arranged, retaining its qualified conversation and return path to its leaf. All four views use the same arrangement control and geometry resolver; compact layouts show one active window.
 - Present a Herdr tab's actual split-pane layout when Terminal is selected in an Inspector. Sibling panes in one tab share one Inspector window; selecting a pane through any visual view focuses that window and selects its pane-specific resources. Reuse the existing terminal owner and Herdr layout; do not create, close or rearrange Herdr panes as a side effect of arranging windows.
-- Keep arrangements as explicit actions on windows open at the moment of invocation. Later opens retain their normal placement until another arrangement is chosen. Arranging never opens background Herdr tabs as new windows.
+- Keep multiwindow arrangements as explicit actions on eligible windows at the moment of invocation. Later opens retain their normal placement until another arrangement is chosen. Single follows the active tab or Inspector as focus changes. Spaces may reveal already open background tabs in its stage, but arranging never creates a Herdr tab, pane or session.
 
 ## Capabilities
 
@@ -21,6 +21,6 @@ None.
 
 ## Impact
 
-The shared tab bar and World Inspector registry/geometry, the Spaces and Inspector terminal layout presenters, tab-scoped layout observation, terminal ownership and browser acceptance tests are affected. The service and Herdr RPC contract need no new mutation method. The current Roamgate client has split-pane controls but no comparable window arrangement control; this is a Herdr World presentation feature.
+The shared tab bar, Spaces tab presentation, World Inspector registry/geometry, Spaces Inspector focus, tab-scoped layout observation, terminal ownership and browser acceptance tests are affected. The service and Herdr RPC contract need no new mutation method. The current Roamgate client has split-pane controls but no comparable window arrangement control; this is a Herdr World presentation feature.
 
-The design must preserve the Tree inline return path and handle up to one docked plus five floating Inspectors. The scope excludes opening additional Herdr tabs as windows.
+The design must preserve the Tree inline return path and handle up to one docked plus five floating Inspectors. The scope includes displaying existing Herdr tabs together in Spaces and excludes creating tabs as an arrangement side effect. Review of this proposal also found two contracts to make explicit: live tab identity must be separate from saved geometry identity, and pane focus inside a split Inspector must update its resources.
