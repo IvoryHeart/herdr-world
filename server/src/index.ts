@@ -24,6 +24,7 @@ import {
   SERVICE_COMMAND_CONTINUE,
 } from "./config/service-manager";
 import { runHerdrCommand } from "./herdr/cli";
+import { runTaskSummaryCommand } from "./herdr/task-summary";
 import { createWebPushService } from "./notifications/web-push";
 import { enrichIntegrationVersions } from "./herdr/integration-versions";
 import {
@@ -117,6 +118,13 @@ if (serviceCommandResult === SERVICE_COMMAND_CONTINUE) {
   process.argv.splice(2);
 } else if (serviceCommandResult !== null) {
   process.exit(serviceCommandResult);
+}
+const taskSummaryCommandResult = await runTaskSummaryCommand(
+  process.argv.slice(2),
+  APP_VERSION,
+);
+if (taskSummaryCommandResult !== null) {
+  process.exit(taskSummaryCommandResult);
 }
 const herdrCommandResult = await runHerdrCommand(
   process.argv.slice(2),
