@@ -14,6 +14,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 - A failed selected host may retain its last observed topology as visibly stale,
   never actionable. Selecting a live entity revalidates its connection generation
   before opening the same terminal or host-specific Inspector context.
+- A slow inactive host does not hold back the selected host: World returns a
+  complete host list within 20 seconds, marks unfinished host views stale, and
+  refreshes them when their observations complete.
 - Office, Tree, and Graph share search in the application top bar; Graph adds Fit
   and zoom there instead of consuming a second stage header.
 - World runs as one application and one browser origin. No remote World/Roamgate

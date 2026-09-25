@@ -793,6 +793,17 @@ function WorldControlPlane({
   dockedInspectorGeometryRef.current = dockedInspectorGeometry;
 
   useLayoutEffect(() => {
+    worldRuntimeStore.setSelectedConnectionId(
+      hasValidSelectedConnection(
+        connectionSelection.activeConnectionId,
+        connectionSelection.connections,
+      )
+        ? connectionSelection.activeConnectionId
+        : null,
+    );
+  }, [connectionSelection.activeConnectionId, connectionSelection.connections]);
+
+  useLayoutEffect(() => {
     worldRuntimeStore.setPriorities(snapshotPriorities);
   }, [snapshotPriorities]);
 
