@@ -52,6 +52,16 @@ Herdr pane. Office, Tree, Graph and the Inspector show it only while the current
 agent session matches the report. Herdr owns expiry; the command does not infer work,
 assign tasks, or provide a Clear operation.
 
+### Agent checkout context
+
+An active agent can report its exact checkout once with `herdr-world
+agent-checkout /absolute/checkout --pane w1:p1`. The Inspector reads branch and
+bounded changed-file status from that checkout on the same qualified connection,
+and labels any optional HTTPS link as **Reported PR**. Reports belong to the
+exact active session without a timer; session replacement or a Herdr restart makes
+the Agent checkout unavailable. **Workspace changes** remains an explicit, separate
+choice. Agent checkout has no Git mutation controls or Clear command.
+
 ## Workspace, Tab, and Pane Navigation
 
 - Browse workspaces and recognized agents; create, rename, focus, pin, or close

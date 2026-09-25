@@ -323,6 +323,13 @@ const client: ConnectionClient = {
         counts: {},
       };
     }
+    if (method === "agent_checkout.get") {
+      return {
+        available: false,
+        reason:
+          "Agent checkout unavailable: this session has not reported a valid checkout.",
+      };
+    }
     if (method === "agent_history.get") {
       return {
         status: "ok",
@@ -2192,6 +2199,23 @@ async function run() {
   );
   const compactChangesResource = persistentReviewerInspector?.querySelector(
     ".inspector-changes-resource:not(.is-hidden)",
+  );
+  await until(
+    () =>
+      Boolean(compactChangesResource?.querySelector("button:not([disabled])")),
+    "compact Agent checkout unavailable state",
+  );
+  const workspaceChangesChoice = [
+    ...compactChangesResource!.querySelectorAll<HTMLButtonElement>("button"),
+  ].find((button) => button.textContent === "Workspace changes");
+  check(
+    Boolean(workspaceChangesChoice),
+    "Agent checkout unavailable state did not offer Workspace changes",
+  );
+  workspaceChangesChoice?.click();
+  await until(
+    () => Boolean(compactChangesResource?.querySelector(".diff-viewer-side")),
+    "compact Workspace changes choice",
   );
   check(
     (compactChangesResource?.getBoundingClientRect().height ?? 0) > 0 &&

@@ -105,6 +105,14 @@ export default function WorldInspectorConversationView({
         : null,
     [conversation.connectionId, workspace],
   );
+  const [changesScope, setChangesScope] = useState<"agent" | "workspace">(
+    conversation.context.kind === "agent" ? "agent" : "workspace",
+  );
+  useEffect(() => {
+    setChangesScope(
+      conversation.context.kind === "agent" ? "agent" : "workspace",
+    );
+  }, [conversation.context.kind, conversation.resourceIdentity]);
   const [fileSelection, setFileSelection] =
     useState<ActiveFilePreviewSelection>(emptyFile);
   const [diffSelection, setDiffSelection] =
@@ -355,6 +363,17 @@ export default function WorldInspectorConversationView({
               }
             }}
             context={conversation.context}
+            agentCheckout={
+              conversation.view === "changes" &&
+              conversation.context.kind === "agent" &&
+              changesScope === "agent"
+                ? {
+                    paneId: conversation.paneId,
+                    sessionFingerprint: conversation.agentSessionFingerprint,
+                    onWorkspaceChanges: () => setChangesScope("workspace"),
+                  }
+                : undefined
+            }
           />
         </Suspense>
       </div>

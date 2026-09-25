@@ -50,6 +50,7 @@ import {
 } from "../workspaceResource";
 import { AgentIcon } from "./AgentIcon";
 import { AgentHistoryDrawer } from "./AgentHistoryDrawer";
+import { AgentCheckoutPanel } from "./AgentCheckoutPanel";
 import { paneHasAgentHistory } from "./agentSession";
 import {
   type ActiveDiffSelection,
@@ -230,6 +231,7 @@ export function WorkspaceInspectorHost({
   onClose,
   onBack,
   context,
+  agentCheckout,
 }: {
   state: WorkspaceInspectorState;
   onReady?: () => void;
@@ -269,6 +271,11 @@ export function WorkspaceInspectorHost({
   onClose: () => void;
   onBack: () => void;
   context?: WorkspaceInspectorContext | null;
+  agentCheckout?: {
+    paneId?: string;
+    sessionFingerprint?: string;
+    onWorkspaceChanges(): void;
+  };
 }) {
   const hostRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -873,21 +880,30 @@ export function WorkspaceInspectorHost({
               id={navigationIds.changes}
               className="workspace-inspector-navigation"
             >
-              <DiffViewerPanel
-                ref={diffViewerRef}
-                workspaceId={workspace.workspace_id}
-                resourceKey={resourceKey}
-                onOpenFile={onOpenDiffFile}
-                onSelectionChange={(selection, meta) => {
-                  if (selection.entry && meta?.userInitiated) {
-                    setDrillInByView((current) => ({
-                      ...current,
-                      changes: true,
-                    }));
-                  }
-                  onDiffSelectionChange?.(selection, meta);
-                }}
-              />
+              {agentCheckout ? (
+                <AgentCheckoutPanel
+                  paneId={agentCheckout.paneId}
+                  sessionFingerprint={agentCheckout.sessionFingerprint}
+                  client={connectionClient}
+                  onWorkspaceChanges={agentCheckout.onWorkspaceChanges}
+                />
+              ) : (
+                <DiffViewerPanel
+                  ref={diffViewerRef}
+                  workspaceId={workspace.workspace_id}
+                  resourceKey={resourceKey}
+                  onOpenFile={onOpenDiffFile}
+                  onSelectionChange={(selection, meta) => {
+                    if (selection.entry && meta?.userInitiated) {
+                      setDrillInByView((current) => ({
+                        ...current,
+                        changes: true,
+                      }));
+                    }
+                    onDiffSelectionChange?.(selection, meta);
+                  }}
+                />
+              )}
             </div>
             {splitEnabled ? (
               <InspectorSplitResizer
@@ -900,7 +916,7 @@ export function WorkspaceInspectorHost({
               />
             ) : null}
             <div id={detailIds.changes} className="workspace-inspector-detail">
-              {state.view === "changes" ? (
+              {state.view === "changes" && !agentCheckout ? (
                 <Suspense
                   fallback={
                     <div className="diff-content-view">

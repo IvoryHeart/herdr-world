@@ -323,6 +323,26 @@ describe("WorldObject", () => {
     );
   });
 
+  test("derives the checkout session fingerprint from an actionable pane without agent observation", () => {
+    const source = connection("local");
+    if (!source.snapshot) throw new Error("fixture snapshot missing");
+    const session = {
+      source: "herdr:codex",
+      agent: "codex",
+      kind: "id",
+      value: "pane-only-session",
+    };
+    source.snapshot.panes[0] = {
+      ...source.snapshot.panes[0],
+      agent_session: session,
+    } as never;
+    source.snapshot.agents = [];
+
+    expect(
+      buildWorldObject([source], "local").leaves[0]?.agentSessionFingerprint,
+    ).toBe(taskSummarySessionFingerprint(session));
+  });
+
   test("hides producer text after session replacement, mismatch, or absence", () => {
     const source = connection("local");
     if (!source.snapshot) throw new Error("fixture snapshot missing");

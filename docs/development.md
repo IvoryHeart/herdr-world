@@ -74,3 +74,20 @@ non-secret text: the filter is only a guard against accidental disclosure. The d
 lifetime is 900,000 ms; `--ttl-ms` accepts 1 through 86,400,000 milliseconds. Herdr
 expires both tokens together. There is no `--clear`, because an old hook could erase
 a newer session's report.
+
+## Harness agent checkouts
+
+An active agent harness can report its own checkout without starting the World web
+service:
+
+```bash
+herdr-world agent-checkout /worktrees/synthetic-agent --pane w1:p1 \
+  --pr https://example.invalid/org/repo/pull/7
+```
+
+The report is an absolute checkout path plus an optional HTTPS link, each bounded
+before one 15-token metadata update. It is fingerprinted to the pane's exact active
+agent session and has no TTL or renewal job. It disappears from the Inspector when
+the session changes, the pane closes, or Herdr restarts. Do not use real paths or
+repository links in shared harness output. `--clear` and `--ttl-ms` are rejected
+before any metadata request because delayed cleanup could erase a newer report.

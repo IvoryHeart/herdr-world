@@ -21,6 +21,12 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added `herdr-world agent-checkout` and a read-only Agent checkout Inspector
+  scope. Harnesses report a bounded, session-fingerprinted checkout once; World
+  reads its branch and changed files on the same qualified connection, offers an
+  explicit Workspace changes scope, and labels unverified links as Reported PR.
+  Reports have no TTL, renewal hook, Clear command, or agent-path Git mutations.
+  [Herdr World PR #107](https://github.com/IvoryHeart/herdr-world/pull/107)
 - Added a bounded service-memory watchlist for exact qualified agent and terminal
   panes. Office, Tree and Graph share Pin/Unpin updates across browser windows;
   watched topology is reserved within World observation bounds and unavailable
