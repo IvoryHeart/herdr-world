@@ -1,7 +1,7 @@
 schema: spec-driven
 context: |
-  Herdr World is a downstream React/TypeScript/Vite app with a Rust bridge and
-  minimal vendor/herdr-compat crate. Herdr is an external runtime authority.
+  Herdr World is one Bun service and same-origin React/TypeScript/Vite browser
+  app, derived from Roamgate source. Herdr is an external runtime authority.
   Read AGENTS.md and docs/agent-development.md for delivery and knowledge rules.
   Current contracts live in openspec/specs. docs contains implementation maps
   and runbooks; docs/specs preserves historical decisions.
