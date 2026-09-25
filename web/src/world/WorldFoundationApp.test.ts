@@ -28,6 +28,7 @@ import {
   reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
   upsertWorldInspectorConversation,
+  worldInspectorForNode,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
 
@@ -1061,6 +1062,114 @@ describe("World view preference", () => {
       expanded: true,
       size: 640,
     });
+  });
+
+  test("resets Inspector resource state when a pane-only agent session is replaced", () => {
+    const first = {
+      connectionId: "local",
+      label: "Local",
+      source: "startup-config" as const,
+      isDefault: true,
+      state: "ready" as const,
+      generation: 4,
+      snapshotGeneration: 4,
+      stale: false,
+      actionable: true,
+      snapshot: {
+        workspaces: [
+          {
+            workspace_id: "workspace",
+            number: 1,
+            label: "Workspace",
+            focused: true,
+            pane_count: 1,
+            tab_count: 1,
+            agent_status: "working" as const,
+          },
+        ],
+        tabs: [
+          {
+            tab_id: "tab",
+            workspace_id: "workspace",
+            number: 1,
+            label: "Tab",
+            focused: true,
+            pane_count: 1,
+            agent_status: "working" as const,
+          },
+        ],
+        panes: [
+          {
+            pane_id: "pane",
+            terminal_id: "terminal",
+            workspace_id: "workspace",
+            tab_id: "tab",
+            focused: true,
+            agent: "codex",
+            agent_status: "working" as const,
+            revision: 1,
+            agent_session: {
+              source: "herdr:codex",
+              agent: "codex",
+              kind: "id",
+              value: "first-pane-session",
+            },
+          },
+        ],
+        agents: [],
+      },
+    };
+    const second = {
+      ...first,
+      snapshot: {
+        ...first.snapshot,
+        panes: [
+          {
+            ...first.snapshot.panes[0],
+            agent_session: {
+              source: "herdr:codex",
+              agent: "codex",
+              kind: "id",
+              value: "second-pane-session",
+            },
+          },
+        ],
+      },
+    };
+    const context = {
+      kind: "agent" as const,
+      label: "Codex",
+      stateLabel: "Working",
+      locationLabel: "Workspace · Local",
+    };
+    const preferences = { dock: "right" as const, expanded: false, size: 520 };
+    const availableViews = ["terminal", "files", "changes"] as const;
+    const firstNode = buildWorldObject([first], "local").leaves[0]!;
+    const secondNode = buildWorldObject([second], "local").leaves[0]!;
+    const current = worldInspectorForNode(
+      firstNode,
+      "changes",
+      [...availableViews],
+      context,
+      preferences,
+    )!;
+    const observed = worldInspectorForNode(
+      secondNode,
+      "terminal",
+      [...availableViews],
+      context,
+      preferences,
+    )!;
+
+    expect(firstNode.agentSessionIdentity).toBeUndefined();
+    expect(secondNode.agentSessionIdentity).toBeUndefined();
+    expect(firstNode.agentSessionFingerprint).not.toBe(
+      secondNode.agentSessionFingerprint,
+    );
+    expect(current.resourceIdentity).not.toBe(observed.resourceIdentity);
+    expect(reconcileWorldInspectorConversation(current, observed).view).toBe(
+      "terminal",
+    );
   });
 
   test("refreshes Inspector metadata without discarding same-session resource state", () => {

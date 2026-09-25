@@ -178,6 +178,7 @@ export function worldInspectorForNode(
         leaf.kind,
         leaf.kind === "agent" ? leaf.pane.agent : null,
         leaf.agentSessionIdentity ?? null,
+        leaf.agentSessionFingerprint ?? null,
       ])
     : JSON.stringify([node.connectionId, node.generation, node.nativeId]);
   return {
