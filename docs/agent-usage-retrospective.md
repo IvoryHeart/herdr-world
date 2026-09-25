@@ -1,15 +1,17 @@
 # Agent usage retrospective: World packages B–F
 
-This records the 25 September 2026 delivery of the next World packages in
-[PRs #104–#108](https://github.com/IvoryHeart/herdr-world/pulls). It is a
+This records the 25 September 2026 implementation and PR handoff of the next
+World packages in [PRs #104–#108](https://github.com/IvoryHeart/herdr-world/pulls). It is a
 measurement of those agent sessions, not a cost report or a budget for future
-work. The pull requests remain the source for each package's exact scope and
-verification.
+work. At this snapshot, the pull requests were open for independent review and
+repair; they are the source for each package's exact scope and verification.
 
 ## What was measured
 
-The agent session logs report token usage per model response. Input includes
-cached input; output includes reasoning output; total is input plus output.
+The agent session logs report token usage per model response. The table sums
+the `token_usage_record` for each response, including context-compaction
+responses. Input includes cached input; output includes reasoning output; total
+is input plus output.
 Reasoning is a subset, so adding it to output or total would double count it.
 The figures below cover the recorded session or interval through each PR
 handoff. B is an interval in an ongoing primary-agent session and includes a
@@ -18,6 +20,9 @@ the elapsed session window, not active model time; the windows overlap, so
 their sum is not the calendar time for the overall delivery.
 
 The primary agent delivered B and delegated C–F as bounded package assignments.
+The session contexts record `gpt-6-sol` at `xhigh` effort for B and
+`gpt-5.6-terra` at `high` effort for C–F. Different scopes prevent a controlled
+model or effort comparison from these totals.
 The branch shape was B and C from the merged #103 main; D stacked on B; E
 stacked on C; F stacked on E. Each package used an isolated worktree, focused
 checks, a full repository gate, and a PR handoff. Parallel assignment shortened
@@ -26,12 +31,20 @@ heads and carried their context into review and checks.
 
 | Package / PR | Model responses | Input | Cached input | Uncached input | Output (reasoning subset) | Total | Wall window |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| [B / #104](https://github.com/IvoryHeart/herdr-world/pull/104) | 124 | 13,026,559 | 12,858,368 | 168,191 | 60,802 (33,278) | 13,087,361 | 27 min |
+| [B / #104](https://github.com/IvoryHeart/herdr-world/pull/104) | 124 | 13,359,438 | 13,180,672 | 178,766 | 63,926 (33,902) | 13,423,364 | 27 min |
 | [C / #105](https://github.com/IvoryHeart/herdr-world/pull/105) | 101 | 14,513,988 | 14,263,040 | 250,948 | 36,567 (10,372) | 14,550,555 | 30 min |
-| [D / #106](https://github.com/IvoryHeart/herdr-world/pull/106) | 180 | 24,129,925 | 23,723,264 | 406,661 | 59,350 (11,551) | 24,189,275 | 54 min |
-| [E / #107](https://github.com/IvoryHeart/herdr-world/pull/107) | 100 | 13,636,350 | 13,335,808 | 300,542 | 38,168 (7,970) | 13,674,518 | 27 min |
-| [F / #108](https://github.com/IvoryHeart/herdr-world/pull/108) | 141 | 20,579,356 | 19,951,616 | 627,740 | 44,807 (15,194) | 20,624,163 | 42 min |
-| **Sum** | **646** | **85,886,178** | **84,132,096** | **1,754,082** | **239,694 (78,365)** | **86,125,872** | **Overlapping** |
+| [D / #106](https://github.com/IvoryHeart/herdr-world/pull/106) | 180 | 24,355,002 | 23,940,096 | 414,906 | 62,049 (11,551) | 24,417,051 | 54 min |
+| [E / #107](https://github.com/IvoryHeart/herdr-world/pull/107) | 100 | 13,865,135 | 13,562,880 | 302,255 | 42,179 (7,970) | 13,907,314 | 27 min |
+| [F / #108](https://github.com/IvoryHeart/herdr-world/pull/108) | 141 | 20,796,577 | 20,167,424 | 629,153 | 46,687 (15,194) | 20,843,264 | 42 min |
+| **Sum** | **646** | **86,890,140** | **85,114,112** | **1,776,028** | **251,408 (78,989)** | **87,141,548** | **Overlapping** |
+
+The earlier PR descriptions and first version of this note used the cumulative
+`token_count` event instead. That counter omitted the usage record for one
+compaction response in B, D, E and F; B's interval subtraction also missed its
+first response. The earlier B–F sum was 86,125,872, lower by 1,015,676 tokens.
+The revised per-response sum is the better record of model work for these
+boundaries. PR-local numbers should be reconciled during review; neither
+counter is a billing invoice.
 
 Cached input was **97.96% of input**. This means matching prompt prefixes
 were reused at the provider's cached-input rate; it does not mean the agent
@@ -48,12 +61,12 @@ distinguishes cached input from output and reasoning. The logged counters do
 not provide actual billed dollars. Model rates, cache pricing, and any billing
 adjustments must come from billing records; a token total alone cannot establish
 whether the work was expensive in money.
-Under an illustrative 0.1x cached-read input rate, the 84.13 million cached
-tokens plus 1.75 million uncached tokens correspond to about **10.17 million
+Under an illustrative 0.1x cached-read input rate, the 85.11 million cached
+tokens plus 1.78 million uncached tokens correspond to about **10.29 million
 standard-input-token equivalents** before output, cache writes or model-specific
-rates. This shows why the raw 86.13 million total is a poor bill estimate; it is
+rates. This shows why the raw 87.14 million total is a poor bill estimate; it is
 still substantial model work, and the actual charge remains unknown.
-Reasoning used 78,365 tokens, or 32.7% of the 239,694 output tokens, whereas
+Reasoning used 78,989 tokens, or 31.4% of the 251,408 output tokens, whereas
 input accounts for more than 99% of the logged token total. Reasoning token
 count is not a measure of thinking time.
 
@@ -82,6 +95,61 @@ count is not a measure of thinking time.
   The logs do not provide a trustworthy decomposition of elapsed time into
   inference, waiting for tools, checks, CI and human review.
 
+## A smaller case: this retrospective's PR
+
+[PR #109](https://github.com/IvoryHeart/herdr-world/pull/109) used an ongoing
+`gpt-6-sol` session at `xhigh` reasoning effort. Through its first draft handoff,
+48 response records used 4,601,218 input tokens, including 4,499,584 cached;
+output was 33,642 tokens, including 14,632 reasoning, for 4,634,860 total.
+Reasoning was 43.5% of this PR's output; its effect on elapsed time cannot be
+isolated without a comparable lower-effort run.
+The first PR description used the cumulative counter and omitted a compaction
+response, reporting 4,450,298; this has been corrected in the PR body.
+
+The first response for this task already had 142,351 input tokens. Before
+compaction, 22 responses used 3,656,027 input tokens; a flat 142,351-token
+prompt over those 22 responses would itself account for 3,131,722 (85.7%) of
+that amount. After compaction, the next response fell to 21,367 input tokens,
+and the following 26 responses used 945,191 in total. This identifies the
+inherited long conversation as the strongest immediate lever for this PR.
+It does not prove the savings from starting a fresh session, which would need a
+concise handoff and some rereading.
+
+Through that same draft handoff, the task made 46 tool calls whose returned
+text totaled about 162 KB. The largest three responses were two web results
+and a combined PR-body read,
+totaling about 73 KB. Matched outer tool calls occupied about 16 seconds in
+the local log, versus roughly 12.5 minutes of wall time. The same-window,
+model-wide Prometheus `increase` estimate was roughly 13 minutes of
+`gpt-6-sol` inference; its scrape window and missing session label prevent a
+precise attribution. These measurements suggest model generation and repeated
+context dominated this documentation PR's time, while full checks and CI also
+matter for the implementation packages.
+
+Suppressing all successful tool output would hide source, review and failure
+evidence. A more precise change is to request only the needed sections or
+structured fields: for this PR, the combined pull-request bodies and broad web
+results were larger than the formatter result. Keep complete check logs outside
+the prompt, then return a short success line or the failing excerpt.
+
+## What independent review exposed
+
+The first independent review pass left ten inline comments across #104–#108.
+They concentrate on transitions and failure handling: an early RPC rejection
+releasing a concurrency slot while sibling calls remain live; invalidation
+during an in-flight snapshot; checkout data changing during a Git query; SSH
+cleanup rejection; optional agent observation; a full watch registry; and
+keyboard focus after a resource action. Green full checks did not exercise all
+of these combinations. The repairs are still in progress, so the initial
+session and time figures exclude their cost.
+
+For work crossing async or UI boundaries, turn the changed invariant into a
+small set of concrete cases before the final full gate: in-flight invalidation,
+partial failure, replacement identity, fallible cleanup, optional upstream
+data, capacity errors and post-action focus where applicable. These cases come
+from the actual review misses; they need not become a new generic checklist or
+another required document.
+
 ## Documentation and instrumentation audit
 
 The shared startup reading set (`AGENTS.md`, `README.md`,
@@ -97,6 +165,15 @@ tokens on a later response. The existing
 rows. The stronger opportunity is to locate the relevant requirements within
 a large spec and read those sections first, then widen the read when the change
 crosses boundaries. Do not omit contract review merely to reduce tokens.
+
+The TypeScript and TSX under `server/src/` and `web/src/` total about 172,000
+lines, including tests. Large files such as `web/src/App.tsx` (4,329 lines),
+`web/src/store.ts` (4,030) and `web/src/world/WorldFoundationApp.tsx` (1,998)
+increase navigation cost. The whole repository would exceed one model context;
+printing it all would also crowd out the specific invariant under review.
+Targeted search and local excerpts are appropriate. Splitting a large file may
+help when it gives state or ownership a clearer boundary, but this audit does
+not establish a token-saving refactor by file size alone.
 
 The local Prometheus endpoint exposes `codex_turn_token_usage_sum` and
 `codex_tool_call_duration_ms_milliseconds_sum`. Their visible labels distinguish
@@ -117,10 +194,12 @@ or billing exports would be needed for exact attribution.
    uncached/output/reasoning tokens, elapsed time and actual billed cost when
    available. Write `unknown` rather than inferring dollars. Include every
    participating agent if a PR has several; avoid silently counting only one.
-2. Keep prompts bounded by one coherent package and make a short handoff after
-   a completed phase or before a near-full context window. Compare response
-   count, fresh input, cached input, elapsed time, and defects before making
-   session resets routine; a reset may require costly re-reading.
+   Sum per-response usage so compaction calls are included.
+2. Start an independent task in a fresh agent session with a short handoff when
+   the existing conversation is already large. For long cohesive changes,
+   consider a phase handoff before a near-full context window. Compare response
+   count, fresh input, cached input, elapsed time and defects before making
+   resets routine; a reset may require costly rereading.
 3. Search the knowledge map and relevant spec headings before printing a large
    contract or source file. Capture full check logs outside the prompt and
    inspect failing sections first, retaining complete logs for diagnosis.
@@ -128,6 +207,8 @@ or billing exports would be needed for exact attribution.
    trace or billing exports if the toolchain supports it. Keep paths, commands,
    repository contents and user data out of telemetry labels and PRs. Measure
    inference, tool and check wall time separately before optimizing latency.
+   Compare model and reasoning-effort choices on similar bounded tasks before
+   declaring one setting cheaper or faster.
 
 These are measurement and reading changes, not reasons to weaken tests, review,
 or the product contract.

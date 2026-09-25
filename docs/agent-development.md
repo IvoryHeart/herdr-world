@@ -7,8 +7,10 @@ supervisor, model scheduler, skill installer, usage collector or evaluation harn
 ## Start work
 
 Read `AGENTS.md`, then use [the knowledge map](knowledge-map.md) to find the relevant
-contract, source, tests and runbook. Resolve any requested parent pull request to its
-actual branch and commit before creating a worktree:
+contract, source, tests and runbook. Locate relevant headings in large contracts
+before reading full sections, and widen the read when the change crosses them.
+Resolve any requested parent pull request to its actual branch and commit before
+creating a worktree:
 
 ```bash
 bun run agent:worktree -- create <slug> <parent-ref>
@@ -45,6 +47,8 @@ risk. `bun run check` is the final candidate gate and includes generated notices
 formatting, lint, type checking, all tests, production builds and strict OpenSpec
 validation. Run `CHROME_BIN=/path/to/chromium bun run test:browser` for browser-heavy
 changes and `bun run build:site` for the project site.
+For long check output, retain the complete log outside the prompt and inspect a
+short success summary or the relevant failure excerpt first.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
