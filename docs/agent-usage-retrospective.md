@@ -131,6 +131,10 @@ evidence. A more precise change is to request only the needed sections or
 structured fields: for this PR, the combined pull-request bodies and broad web
 results were larger than the formatter result. Keep complete check logs outside
 the prompt, then return a short success line or the failing excerpt.
+In a rough classification of B–F tool calls by command text, check/test calls
+returned about 0.47 MB of roughly 3.4 MB of tool-result text. Mixed batched
+calls make that estimate imprecise, but it shows that check-output trimming
+alone cannot remove most new tool text, much less the inherited prompt prefix.
 
 ## What independent review exposed
 
@@ -167,7 +171,7 @@ a large spec and read those sections first, then widen the read when the change
 crosses boundaries. Do not omit contract review merely to reduce tokens.
 
 The TypeScript and TSX under `server/src/` and `web/src/` total about 172,000
-lines, including tests. Large files such as `web/src/App.tsx` (4,329 lines),
+lines and 5.49 MB, including tests. Large files such as `web/src/App.tsx` (4,329 lines),
 `web/src/store.ts` (4,030) and `web/src/world/WorldFoundationApp.tsx` (1,998)
 increase navigation cost. The whole repository would exceed one model context;
 printing it all would also crowd out the specific invariant under review.
