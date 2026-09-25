@@ -227,6 +227,18 @@ proven one. Avoid passive CI polling and duplicate local gates; inspect the
 result when a merge or repair decision is due, and investigate a specific
 failure before requesting another run.
 
+Parallel delivery also exposed a shared-file merge cost. After #105 merged,
+#106 conflicted only in the `CHANGELOG.md` Unreleased Added section; its code
+and specification edits merged automatically. The repository requires each
+user-facing PR to add an entry and then its PR link, so unrelated branches
+edit adjacent lines and can conflict at integration. Resolving that conflict
+required a new #106 merge commit and CI run. For this batch, retain both
+entries and verify the combined branch. If this recurs, consider per-PR
+changelog fragments assembled into the release changelog, including a clear
+rule for links and release preparation. That would change the current
+changelog workflow and should be judged against the frequency and cost of
+real conflicts before adding tooling.
+
 For work crossing async or UI boundaries, turn the changed invariant into a
 small set of concrete cases before the final full gate: in-flight invalidation,
 partial failure, replacement identity, fallible cleanup, optional upstream
@@ -301,6 +313,10 @@ or billing exports would be needed for exact attribution.
    Report aggregates and compaction counts without prompt text, file paths or
    raw tool output. It should reduce the counting errors found here without
    becoming a new PR gate or agent supervisor.
+6. Track changelog-only conflicts during parallel delivery. Keep the current
+   direct `CHANGELOG.md` edits for now; if they recur, trial per-PR fragments
+   with one release-time assembly step and compare the added process with the
+   merge/recheck work it replaces.
 
 These are measurement and reading changes, not reasons to weaken tests, review,
 or the product contract.
