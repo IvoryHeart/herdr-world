@@ -25,6 +25,7 @@ retain their original Herdr Web lineage.
   panes. Office, Tree and Graph share Pin/Unpin updates across browser windows;
   watched topology is reserved within World observation bounds and unavailable
   records never enable operational actions.
+  [Herdr World PR #106](https://github.com/IvoryHeart/herdr-world/pull/106)
 
 - Added Herdr semantic task notifications, plugin popup panes, terminal font
   sizing independent of interface scale, and File Explorer path drag into terminals
