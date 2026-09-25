@@ -136,6 +136,39 @@ and the browser SHALL NOT receive provider credentials.
 - **WHEN** no optional provider is available
 - **THEN** core topology and terminals remain available without invented agent activity
 
+### Requirement: Session-qualified task summaries
+
+The packaged `herdr-world task-summary` command SHALL report a normalized, redacted,
+80-Unicode-code-point-or-shorter `task_summary` token and a SHA-256 fingerprint token
+for one explicitly identified Herdr pane without starting the World web service. The
+fingerprint SHALL cover `JSON.stringify([source, agent, kind, value])` for that pane's
+current Herdr `agent_session`; World SHALL show the producer token only when the exact
+current session still matches it. The command SHALL accept `--pane` or `HERDR_PANE_ID`,
+the existing named-session selection, and an explicitly requested fixed-policy SSH
+transport. It SHALL use the same TTL for both tokens, default to 900,000 milliseconds,
+accept only 1 through 86,400,000 milliseconds, and leave expiry to Herdr. It SHALL NOT
+offer `--clear`, because Herdr cannot conditionally delete pane-global token keys by
+expected session identity.
+
+#### Scenario: Current session reports work
+
+- **WHEN** a harness reports `Reviewing CI` for an exact pane with an active session
+- **THEN** Herdr receives the summary and its paired fingerprint in one metadata call,
+  and Office, Tree, Graph and Inspector show the text after their existing observation
+  path refreshes
+
+#### Scenario: Session is replaced or observations disagree
+
+- **WHEN** a pane starts another session, has no complete session, or pane and agent
+  observations disagree about the session
+- **THEN** a summary fingerprinted for the prior session is absent from World surfaces
+
+#### Scenario: Delayed cleanup is invoked
+
+- **WHEN** a former hook invokes `herdr-world task-summary --clear`
+- **THEN** the command exits with a usage error before requesting pane metadata, leaving
+  any newer summary intact
+
 ### Requirement: Accessible navigation
 
 World SHALL expose named, keyboard-reachable controls for view navigation, hierarchy disclosure,
