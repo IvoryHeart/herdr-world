@@ -131,18 +131,35 @@ export class WorldWatchlistStore {
     method: "world.watchlist.pin" | "world.watchlist.unpin",
     watch: WorldWatch,
   ) {
-    if (!this.state.verified)
-      throw new Error("World watchlist is disconnected");
-    const result = parse(
-      await this.client.call(method, {
-        connection_id: watch.connectionId,
-        connection_generation: watch.generation,
-        terminal_id: watch.terminalId,
-        label: watch.label,
-      }),
-    );
-    if (result) this.set({ ...result, verified: true, error: null });
-    else await this.refresh();
+    if (!this.state.verified) {
+      this.set({
+        ...this.state,
+        error: "World watchlist is disconnected",
+      });
+      return false;
+    }
+    try {
+      const result = parse(
+        await this.client.call(method, {
+          connection_id: watch.connectionId,
+          connection_generation: watch.generation,
+          terminal_id: watch.terminalId,
+          label: watch.label,
+        }),
+      );
+      if (result) {
+        this.set({ ...result, verified: true, error: null });
+        return true;
+      }
+      await this.refresh();
+      return this.state.verified && !this.state.error;
+    } catch (error) {
+      this.set({
+        ...this.state,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    }
   }
   private set(state: WorldWatchlistState) {
     this.state = state;

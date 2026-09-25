@@ -701,15 +701,16 @@ describe("WorldSnapshotService", () => {
     expect(invalidated).toEqual(["local"]);
   });
 
-  test("re-notifies coalesced requests invalidated before their deadlines", async () => {
+  test("re-notifies a pin that invalidates an identical late observation", async () => {
     const release = deferred<void>();
+    let gate: Promise<void> | null = null;
+    let watchRevision = 0;
+    let watched = false;
     const invalidated: string[] = [];
-    let calls = 0;
     const value: Runtime = {
       herdr: {
         async call(method) {
-          calls += 1;
-          await release.promise;
+          if (gate) await gate;
           return runtime("Same").herdr.call(method);
         },
       },
@@ -726,28 +727,42 @@ describe("WorldSnapshotService", () => {
       },
       Date.now,
       (id) => invalidated.push(id),
-      1_000,
+      15,
+      () => ({
+        revision: watchRevision,
+        records: watched
+          ? [
+              {
+                connection_id: "local",
+                connection_generation: 1,
+                terminal_id: "shared-terminal",
+                label: "Synthetic watch",
+              },
+            ]
+          : [],
+      }),
     );
-
-    const first = service.snapshot();
-    await Promise.resolve();
-    expect(calls).toBe(4);
+    await service.snapshot();
+    gate = release.promise;
     service.invalidate("local");
-    const second = service.snapshot();
+    await service.snapshot();
+    watchRevision = 1;
+    watched = true;
+    service.invalidate("local");
+    const coalesced = service.snapshot();
     release.resolve();
-    const [firstResult, secondResult] = await Promise.all([first, second]);
-
-    expect(calls).toBe(4);
-    expect(firstResult.connections[0]).toMatchObject({
-      actionable: false,
-      snapshot_error: "observation changed during snapshot",
-    });
-    expect(secondResult.connections[0]).toMatchObject({
-      actionable: false,
-      snapshot_error: "observation changed during snapshot",
-    });
-    await Bun.sleep(0);
+    await coalesced;
+    for (let attempt = 0; attempt < 20 && invalidated.length === 0; attempt++) {
+      await Bun.sleep(0);
+    }
     expect(invalidated).toEqual(["local"]);
+    const refreshed = await service.snapshot();
+    expect(refreshed.connections[0]).toMatchObject({
+      actionable: true,
+      snapshot: {
+        watch_admission: { revision: 1, registered: 1, admitted: 1 },
+      },
+    });
   });
 
   test("does not certify a fetch that was invalidated while in flight", async () => {

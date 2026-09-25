@@ -718,11 +718,13 @@ function WorldControlPlane({
     ({ connectionId }) =>
       connectionId === connectionSelection.activeConnectionId,
   )?.snapshot?.watchAdmission;
-  const watchStatus = !watchlist.verified
-    ? "Watches unavailable while disconnected"
-    : !watchAdmission || watchAdmission.revision !== watchlist.revision
-      ? "Watch availability pending"
-      : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
+  const watchStatus = watchlist.error
+    ? watchlist.error
+    : !watchlist.verified
+      ? "Watches unavailable while disconnected"
+      : !watchAdmission || watchAdmission.revision !== watchlist.revision
+        ? "Watch availability pending"
+        : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
   const watchToolbarActions = (
     <>
       <button

@@ -49,7 +49,7 @@ describe("WorldWatchlistStore", () => {
     });
   });
 
-  test("does not mutate while the cached list is disconnected", async () => {
+  test("shows a disconnected mutation failure without rejecting", async () => {
     const store = new WorldWatchlistStore({
       call: async () => response(1),
       onControl: () => () => undefined,
@@ -62,6 +62,34 @@ describe("WorldWatchlistStore", () => {
         terminalId: "terminal-a",
         label: "Synthetic",
       }),
-    ).rejects.toThrow("disconnected");
+    ).resolves.toBe(false);
+    expect(store.get()).toMatchObject({
+      verified: false,
+      error: "World watchlist is disconnected",
+    });
+  });
+
+  test("shows a full watchlist mutation failure without an unhandled rejection", async () => {
+    const store = new WorldWatchlistStore({
+      call: async (method) => {
+        if (method === "world.watchlist.list") return response(128);
+        throw new Error("World watchlist is full (128 records)");
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    await store.refresh();
+    await expect(
+      store.mutate("world.watchlist.pin", {
+        connectionId: "host-a",
+        generation: 1,
+        terminalId: "terminal-a",
+        label: "Synthetic",
+      }),
+    ).resolves.toBe(false);
+    expect(store.get()).toMatchObject({
+      verified: true,
+      error: "World watchlist is full (128 records)",
+    });
   });
 });
