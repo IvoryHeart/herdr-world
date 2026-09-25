@@ -492,20 +492,24 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     });
     for (
       let attempt = 0;
-      attempt < 20 && browserB.controls.length < 2;
+      attempt < 20 &&
+      !browserB.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 1,
+      );
       attempt++
     ) {
       await Bun.sleep(10);
     }
-    expect(browserB.controls).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "world_watchlist_changed",
-          revision: 1,
-        }),
-        expect.objectContaining({ type: "world_invalidated" }),
-      ]),
-    );
+    expect(
+      browserB.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 1,
+      ),
+    ).toBe(true);
+    expect(
+      browserB.controls.some((control) => control.type === "world_invalidated"),
+    ).toBe(true);
     expect(await browserB.rpc("world.watchlist.list")).toMatchObject({
       revision: 1,
       records: [expect.objectContaining({ terminal_id: "alpha-terminal" })],
@@ -518,19 +522,21 @@ test("production dispatcher isolates two local profiles and profile CRUD", async
     expect(unpinned).toMatchObject({ revision: 2, changed: true, records: [] });
     for (
       let attempt = 0;
-      attempt < 20 && browserA.controls.length < 2;
+      attempt < 20 &&
+      !browserA.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 2,
+      );
       attempt++
     ) {
       await Bun.sleep(10);
     }
-    expect(browserA.controls).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          type: "world_watchlist_changed",
-          revision: 2,
-        }),
-      ]),
-    );
+    expect(
+      browserA.controls.some(
+        (control) =>
+          control.type === "world_watchlist_changed" && control.revision === 2,
+      ),
+    ).toBe(true);
 
     const replacementAlpha = {
       ...beta,
