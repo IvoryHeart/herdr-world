@@ -10,6 +10,10 @@ import { defaultAuthTokenPath, loadOrCreateAuthToken } from "./auth-token";
 import { worldEnv } from "./environment";
 import { type LogLevel, parseLogLevel, serverLogger } from "../utils/logger";
 import { normalizePublicOrigin } from "../http/browser-admission";
+import {
+  parseTaskNotificationSource,
+  type TaskNotificationSource,
+} from "../notifications/herdr-notification-listener";
 
 type CliArgs = Partial<{
   host: string;
@@ -24,6 +28,7 @@ type CliArgs = Partial<{
   "public-dir": string;
   "public-origin": string;
   "log-level": string;
+  "notification-source": string;
   open: boolean;
   help: boolean;
   version: boolean;
@@ -46,6 +51,7 @@ export type ServerConfig = {
   session?: string;
   openBrowserRequested: boolean;
   logLevel: LogLevel;
+  taskNotificationSource: TaskNotificationSource;
   hasExplicitSocketPath: boolean;
   hasExplicitClientSocketPath: boolean;
 };
@@ -63,6 +69,7 @@ const cliOptions = {
   "public-dir": { type: "string" },
   "public-origin": { type: "string" },
   "log-level": { type: "string" },
+  "notification-source": { type: "string" },
   open: { type: "boolean" },
   help: { type: "boolean" },
   version: { type: "boolean", short: "V" },
@@ -138,6 +145,8 @@ Options (flags override HERDR_WORLD_* environment variables):
   --public-dir <path>        static assets dir     (env PUBLIC_DIR,      default: embedded)
   --public-origin <origin>   exact reverse-proxy origin (env HERDR_WORLD_PUBLIC_ORIGIN)
   --log-level <level>        error|warn|info|debug  (env HERDR_WORLD_LOG_LEVEL, default: info)
+  --notification-source <s>  herdr|status: task alerts follow Herdr notifications or
+                             World's own status tracker (env HERDR_WORLD_NOTIFICATION_SOURCE, default: herdr)
   --open                     open browser on start (env OPEN_BROWSER=1)
   -V, --version              show version
   --help                     show this help
@@ -156,6 +165,16 @@ Options (flags override HERDR_WORLD_* environment variables):
     logLevel = resolveServerLogLevel(args["log-level"], worldEnv("LOG_LEVEL"));
     publicOrigin = normalizePublicOrigin(
       args["public-origin"] ?? worldEnv("PUBLIC_ORIGIN"),
+    );
+  } catch (error) {
+    console.error(`[bridge] ${(error as Error).message}`);
+    process.exit(2);
+  }
+
+  let taskNotificationSource: TaskNotificationSource;
+  try {
+    taskNotificationSource = parseTaskNotificationSource(
+      args["notification-source"] ?? worldEnv("NOTIFICATION_SOURCE"),
     );
   } catch (error) {
     console.error(`[bridge] ${(error as Error).message}`);
@@ -236,6 +255,7 @@ Options (flags override HERDR_WORLD_* environment variables):
     openBrowserRequested:
       args.open === true || process.env.OPEN_BROWSER === "1",
     logLevel,
+    taskNotificationSource,
     hasExplicitSocketPath,
     hasExplicitClientSocketPath,
   };

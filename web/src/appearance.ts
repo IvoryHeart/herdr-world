@@ -56,11 +56,48 @@ export function normalizeUiScale(value: string | null): number {
   return value === null ? UI_SCALE_DEFAULT : clampUiScale(Number(value));
 }
 
+// Terminal text scales independently of the interface. Browsers that saved a
+// UI scale before the split keep their terminal size until they choose one.
+export const TERMINAL_FONT_SCALE_DEFAULT = 100;
+export const TERMINAL_FONT_SCALE_MIN = 70;
+export const TERMINAL_FONT_SCALE_MAX = 200;
+export const TERMINAL_FONT_SCALE_STEP = 5;
+
+export function clampTerminalFontScale(value: number): number {
+  if (!Number.isFinite(value)) return TERMINAL_FONT_SCALE_DEFAULT;
+  const stepped =
+    Math.round(value / TERMINAL_FONT_SCALE_STEP) * TERMINAL_FONT_SCALE_STEP;
+  return Math.min(
+    TERMINAL_FONT_SCALE_MAX,
+    Math.max(TERMINAL_FONT_SCALE_MIN, stepped),
+  );
+}
+
+export function normalizeTerminalFontScale(
+  value: string | null,
+  legacyUiScale: string | null,
+): number {
+  if (value !== null) return clampTerminalFontScale(Number(value));
+  return legacyUiScale === null
+    ? TERMINAL_FONT_SCALE_DEFAULT
+    : normalizeUiScale(legacyUiScale);
+}
+
 // The terminal surface cancels page zoom so xterm's mouse coordinates, cell
-// measurements, and IME overlay share CSS pixels. Scale its font explicitly.
-export function terminalFontOptions(compact: boolean, uiScale: number) {
+// measurements, and IME overlay share CSS pixels, and sizes its font from the
+// terminal font scale alone.
+// Every xterm surface shares this stack: the Nerd Font families carry the
+// powerline and icon glyphs prompts draw with, and dropping any of them
+// shows tofu boxes wherever the earlier fonts have no glyph.
+export const TERMINAL_FONT_FAMILY =
+  'SFMono-Regular, Menlo, Monaco, "0xProto Nerd Font Mono", "JetBrainsMonoNL Nerd Font", "MesloLGS NF", "Hack Nerd Font", "FiraCode Nerd Font", Consolas, "Liberation Mono", "Courier New", "Noto Sans Mono CJK SC", "Source Han Mono SC", "Sarasa Mono SC", "Herdr Nerd Symbols", monospace';
+
+export function terminalFontOptions(
+  compact: boolean,
+  terminalFontScale: number,
+) {
   return {
-    fontSize: ((compact ? 12 : 13) * uiScale) / 100,
+    fontSize: ((compact ? 12 : 13) * terminalFontScale) / 100,
     lineHeight: compact ? 1.12 : 1.18,
   };
 }

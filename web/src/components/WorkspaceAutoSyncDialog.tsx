@@ -128,11 +128,11 @@ export function WorkspaceAutoSyncDialog({
         </div>
 
         <p className="auto-sync-description">
-          Every {info?.interval_minutes ?? 10} minutes, fetch{" "}
-          <code>origin/main</code> and merge it into this workspace&apos;s
-          current branch. A dirty workspace is skipped, and conflicting merges
-          are aborted automatically. Updates run only while this workspace is
-          open in the current Herdr World connection.
+          Every {info?.interval_minutes ?? 10} minutes, fetch origin&apos;s
+          default branch and merge it into this workspace&apos;s current branch.
+          A dirty workspace is skipped, and conflicting merges are aborted
+          automatically. Updates run only while this workspace is open in the
+          current Herdr World connection.
         </p>
 
         {loading ? (
@@ -162,7 +162,7 @@ export function WorkspaceAutoSyncDialog({
                 <strong>Keep branch updated</strong>
                 <span>
                   {info?.running
-                    ? "Syncing origin/main now..."
+                    ? "Syncing origin's default branch now..."
                     : statusLabel(info?.last_status)}
                 </span>
               </div>
@@ -213,7 +213,7 @@ function formatLastRun(value?: string) {
 function statusLabel(status?: AutoSyncStatus) {
   switch (status) {
     case "updated":
-      return "Updated from origin/main";
+      return "Updated from origin's default branch";
     case "up_to_date":
       return "Already up to date";
     case "skipped":

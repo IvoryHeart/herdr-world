@@ -335,9 +335,35 @@ export function registerTerminalLinkProvider(
         : null;
       const first = rowText?.text.search(/\S/) ?? -1;
       const columns = new Set<number>();
-      if (first >= 0) columns.add(rowText!.cells[first]!.start.x - 1);
-      for (const link of findTerminalHttpLinks(rowText?.text ?? "")) {
-        columns.add(rowText!.cells[link.start]!.start.x - 1);
+      const rowUrls = findTerminalHttpLinks(rowText?.text ?? "");
+      // A complete visible URL is already authoritative. Probe the endpoint
+      // only for wraps or clipped edges, which need information outside the row.
+      const previousLine = activeBuffer.getLine(bufferLineNumber - 2);
+      const continuation =
+        first === 0 &&
+        previousLine &&
+        lineTextWithCells(previousLine, columnCount, bufferLineNumber - 1)
+          .text.slice(-2)
+          .trim();
+      if (first >= 0 && (rowUrls.length === 0 || continuation))
+        columns.add(rowText!.cells[first]!.start.x - 1);
+      for (const link of rowUrls) {
+        const col = rowText!.cells[link.start]!.start.x - 1;
+        const whitespace = rowText!.text.slice(link.end).search(/\s/);
+        const complete =
+          /(?:^|\s)[("'`[{<]*$/.test(rowText!.text.slice(0, link.start)) &&
+          whitespace >= 0 &&
+          rowText!.cells[link.end + whitespace]!.start.x < columnCount &&
+          links.some(
+            (local) =>
+              local.target.kind === "url" &&
+              local.range.start.y === bufferLineNumber &&
+              local.range.end.y === bufferLineNumber &&
+              local.range.start.x === col + 1 &&
+              local.range.end.x < columnCount - 1 &&
+              link.start > first,
+          );
+        if (!complete) columns.add(col);
       }
       if (touch) {
         columns.clear();

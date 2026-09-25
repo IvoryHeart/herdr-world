@@ -3,6 +3,7 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/layout/app.css";
 import "../styles/layout/topbar.css";
+import "../world/world.css";
 import "./WorktreeLifecycleDialog.css";
 import "./AnnotationPanel.css";
 import "./WorkspaceTree.css";
@@ -24,7 +25,7 @@ async function run() {
   const fixture = document.createElement("div");
   fixture.innerHTML = `
     <div class="app header-fixture" style="width:390px;height:200px;min-height:0">
-      <header class="topbar"><span>Roamgate</span></header>
+      <header class="topbar"><span>Herdr World</span></header>
       <main class="body"></main>
     </div>
     <div class="workspace-stage has-inspector">
@@ -36,6 +37,12 @@ async function run() {
     </div>
     <div class="modal worktree-lifecycle-modal">
       <div class="modal-head lifecycle-head"><h2>Worktrees</h2></div>
+    </div>
+    <div class="world-foundation-shell">
+      <div class="world-topbar-host"><header class="topbar is-zen">World</header></div>
+      <div class="world-spaces-layer is-active">
+        <div class="app zen"><button class="zen-island">Exit Zen</button></div>
+      </div>
     </div>`;
   document.body.append(fixture);
   const shell = fixture.querySelector<HTMLElement>(".header-fixture")!;
@@ -52,6 +59,22 @@ async function run() {
   const header = fixture.querySelector<HTMLElement>(".lifecycle-head")!;
   const title = header.querySelector("h2")!;
   try {
+    const worldZenTopbar = fixture.querySelector<HTMLElement>(
+      ".world-topbar-host .topbar",
+    )!;
+    const worldZenExit =
+      fixture.querySelector<HTMLButtonElement>(".zen-island")!;
+    worldZenTopbar.style.transition = "none";
+    check(
+      getComputedStyle(worldZenTopbar).transform !== "none",
+      "World Zen topbar should start hidden",
+    );
+    worldZenExit.focus();
+    check(
+      getComputedStyle(worldZenTopbar).transform === "none",
+      "focusing the World Zen exit tab should reveal the portaled topbar",
+    );
+    worldZenExit.blur();
     const paneItem = document.createElement("button");
     const statusBadge = document.createElement("span");
     const referenceBadge = document.createElement("span");

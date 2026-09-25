@@ -1,5 +1,3 @@
-/* global self, URL */
-
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -35,9 +33,10 @@ self.addEventListener("push", (event) => {
               : "Open Herdr World to check your agents.",
           tag:
             typeof message?.tag === "string" ? message.tag : "herdr-world-task",
-          data: valid
-            ? { type: "herdr-world:task-notification-activate", target }
-            : null,
+          data: {
+            type: "herdr-world:task-notification-activate",
+            target: valid ? target : null,
+          },
         },
       );
     })(),
@@ -48,6 +47,8 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data;
   if (data?.type !== "herdr-world:task-notification-activate") return;
+  // Pane-less notifications (e.g. observer alerts) only focus or open the app.
+  const target = data.target ?? null;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({
@@ -65,15 +66,16 @@ self.addEventListener("notificationclick", (event) => {
       for (const client of appWindows) {
         try {
           await client.focus().catch(() => {});
-          client.postMessage(data);
+          if (target) client.postMessage(data);
           return;
         } catch {
           // A window can close between discovery and activation.
         }
       }
       const url = new URL("/", self.location.origin);
-      url.hash =
-        "herdr-world-task=" + encodeURIComponent(JSON.stringify(data.target));
+      if (target)
+        url.hash =
+          "herdr-world-task=" + encodeURIComponent(JSON.stringify(target));
       await self.clients.openWindow(url.href);
     })(),
   );

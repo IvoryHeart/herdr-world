@@ -9,11 +9,13 @@ import {
   DEFAULT_NOTICE_AUTO_DISMISS_MS,
   emptyServerSessionState,
   healthMatchesUpdateVersion,
+  herdrTaskNotificationsActive,
   isTaskNotificationTarget,
   mergeConnectionCatalog,
   nextRecentPaneIds,
   noticeAutoDismissDelay,
   numberedCreatedTabRename,
+  parseHerdrTaskNotification,
   reconcileConnectionCatalogSessions,
   stabilizeRefreshPatch,
   type ServerSessionState,
@@ -1824,6 +1826,126 @@ describe("agent activity refresh", () => {
       expect(store.get().panes).toEqual(snapshot.panes);
     } finally {
       bridge.connection = originalConnection;
+      __storeTesting.replaceState(partitionState());
+    }
+  });
+});
+
+describe("Herdr task notifications", () => {
+  const herdrEvent = (data: Record<string, unknown>, connection = "alpha") => ({
+    connection_id: connection,
+    connection_generation: 1,
+    event: "herdr-world.task_notification",
+    data: { type: "herdr-world.task_notification", ...data },
+  });
+
+  function enabledState(overrides: Partial<State> = {}): State {
+    return {
+      ...partitionState(),
+      taskNotificationsEnabled: true,
+      // Push transport keeps the browser Notification API out of unit tests.
+      taskNotificationTransport: "push",
+      ...overrides,
+    };
+  }
+
+  test("parses relayed events and rejects malformed ones", () => {
+    expect(
+      parseHerdrTaskNotification({
+        kind: "blocked",
+        agent: "claude",
+        title: "claude needs attention",
+        body: "",
+        workspace_id: "w1",
+        pane_id: "w1:p2",
+      }),
+    ).toEqual({
+      kind: "blocked",
+      agent: "claude",
+      title: "claude needs attention",
+      body: null,
+      workspaceId: "w1",
+      paneId: "w1:p2",
+    });
+    expect(parseHerdrTaskNotification({ kind: "update", title: "x" })).toBe(
+      null,
+    );
+    expect(parseHerdrTaskNotification({ kind: "completed" })).toBeNull();
+  });
+
+  test("reads the bridge capability", () => {
+    expect(herdrTaskNotificationsActive(null)).toBe(false);
+    expect(
+      herdrTaskNotificationsActive({
+        hello: true,
+        bridge_protocol_version: 2,
+        default_connection_id: "alpha",
+        capabilities: { herdr_task_notifications: true },
+      }),
+    ).toBe(true);
+  });
+
+  test("shows Herdr's text with a pane action, or none for pane-less alerts", () => {
+    try {
+      __storeTesting.replaceState(enabledState());
+      __storeTesting.handleHerdrEvent(
+        herdrEvent({
+          kind: "completed",
+          agent: "claude",
+          title: "claude finished",
+          body: "cvision",
+          workspace_id: "w1",
+          pane_id: "w1:p9",
+        }),
+      );
+      expect(store.get().notice).toMatchObject({
+        kind: "success",
+        message: "claude finished",
+        detail: "cvision",
+        actionLabel: "Open agent",
+        actionConnectionId: "alpha",
+        actionRuntimeGeneration: 1,
+        actionWorkspaceId: "w1",
+        actionPaneId: "w1:p9",
+      });
+
+      __storeTesting.handleHerdrEvent(
+        herdrEvent({ kind: "blocked", title: "codex needs input" }),
+      );
+      const notice = store.get().notice;
+      expect(notice).toMatchObject({
+        kind: "info",
+        message: "codex needs input",
+        detail: "Agent",
+      });
+      expect(notice?.actionPaneId).toBeUndefined();
+    } finally {
+      __storeTesting.replaceState(partitionState());
+    }
+  });
+
+  test("respects the toggle, per-kind preferences and the active connection", () => {
+    const event = herdrEvent({
+      kind: "blocked",
+      title: "claude needs attention",
+      workspace_id: "w1",
+      pane_id: "w1:p9",
+    });
+    try {
+      for (const snapshot of [
+        enabledState({ taskNotificationsEnabled: false }),
+        enabledState({
+          taskNotificationPreferences: { completed: true, blocked: false },
+        }),
+      ]) {
+        __storeTesting.replaceState(snapshot);
+        __storeTesting.handleHerdrEvent(event);
+        expect(store.get().notice).toBeNull();
+      }
+      __storeTesting.replaceState(enabledState());
+      __storeTesting.handleHerdrEvent({ ...event, connection_id: "beta" });
+      expect(store.get().notice).toBeNull();
+    } finally {
       __storeTesting.replaceState(partitionState());
     }
   });

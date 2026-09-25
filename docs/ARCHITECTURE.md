@@ -53,15 +53,21 @@ with Herdr's state-change sequence as a fallback, and stores no activity history
 
 ## Terminal endpoints
 
-Interface text size uses root CSS zoom. Terminal surfaces cancel that zoom and
-scale xterm's font size directly, so cell measurements, selection, mouse input,
-and IME positioning stay in viewport CSS pixels. Radix popovers also cancel zoom
-around their positioning wrapper and reapply it to the content; their viewport
-limits convert back to content units.
+Interface scale uses root CSS zoom. Terminal surfaces cancel that zoom and
+apply a separately saved terminal font scale, so cell measurements, selection,
+mouse input, and IME positioning stay in viewport CSS pixels. Radix popovers
+also cancel zoom around their positioning wrapper and reapply it to the
+content; their viewport limits convert back to content units.
 
 Backend selection uses the verified protocol allowlist, not browser version
 inference. See [Herdr compatibility](./DEPLOYMENT.md#herdr-compatibility) for
 versions, fallback configuration, and clipboard limitations.
+
+One passive endpoint shell per ready runtime relays Herdr semantic task
+notifications to qualified browser events and Web Push. Legacy Herdr uses the
+agent-status tracker. The terminal bridge observes session popup state and
+routes its popup terminal through the same connection lease and generation;
+the browser renders that popup over the shared World shell.
 
 Herdr 0.9.0 endpoints require generation 1 and the exact codecs
 `shell.snapshot.v1`, `shell.surface.v1`, `shell.input.semantic.v1`, and
@@ -228,6 +234,15 @@ is a return location; a pane supplies optional path/session context. Repository
 groups do not represent a combined working tree. Changes describe checkout edits,
 not proof that one agent produced them. Last step uses recorded activity snapshots,
 not attribution of arbitrary working-tree edits.
+
+Last step stages its temporary Git index and objects under the checkout's Git
+directory in `herdr-world-last-step-capture`. If the checkout and Git directory
+are on different filesystems, capture briefly creates a private
+`.herdr-world-last-step-pin.*` directory beside each source file to pin its inode
+while bounded bytes are copied into Git storage. Normal completion and handled
+failure remove these directories. After an interrupted capture, verify that no
+writer is still active before removing a stale capture lock and any leftover pin
+directories; a live writer may still be using them.
 
 Git resource keys encode the endpoint-qualified repository identity
 (`worktree.gui_settings_key`) and normalized checkout path as a pair. The path

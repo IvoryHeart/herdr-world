@@ -10,7 +10,7 @@ import {
 import { __storeTesting, emptyServerSessionState, store } from "./store";
 import { bridge, type ConnectionClient } from "./api";
 
-const origin = "https://roamgate.example";
+const origin = "https://herdr-world.example";
 const target = {
   connectionId: "alpha",
   runtimeGeneration: 1,
@@ -414,10 +414,29 @@ describe("notification service worker clicks", () => {
       },
     });
     await pending;
+    // Malformed and pane-less payloads still open the app on click.
     expect(showNotification.mock.calls.slice(-1)[0]).toMatchObject([
       "Herdr World agent update",
-      { data: null },
+      { data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target: null } },
     ]);
+    listeners.push({
+      data: {
+        json: () => ({
+          title: "codex needs input",
+          body: "idle",
+          target: null,
+        }),
+      },
+      waitUntil: (value: Promise<void>) => {
+        pending = value;
+      },
+    });
+    await pending;
+    expect(showNotification).toHaveBeenLastCalledWith("codex needs input", {
+      body: "idle",
+      tag: "herdr-world-task",
+      data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target: null },
+    });
   });
   test("focuses an app window or opens a same-origin pane link without caching", async () => {
     const listeners: Record<string, (event: any) => void> = {};
@@ -476,5 +495,46 @@ describe("notification service worker clicks", () => {
         "/#herdr-world-task=" +
         encodeURIComponent(JSON.stringify(target)),
     );
+  });
+  test("pane-less clicks focus the app without navigating", async () => {
+    const listeners: Record<string, (event: any) => void> = {};
+    const postMessage = mock();
+    const focus = mock(async () => {});
+    let windows: any[] = [{ url: origin + "/", focus, postMessage }];
+    const openWindow = mock(async () => {});
+    runInNewContext(
+      await readFile(
+        new URL("../public/task-notifications-sw.js", import.meta.url),
+        "utf8",
+      ),
+      {
+        URL,
+        self: {
+          location: { origin },
+          addEventListener: (name: string, handler: (event: any) => void) => {
+            listeners[name] = handler;
+          },
+          clients: { matchAll: async () => windows, openWindow },
+        },
+      },
+    );
+    let pending: Promise<void> | undefined;
+    const event = {
+      notification: {
+        close: mock(),
+        data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target: null },
+      },
+      waitUntil: (promise: Promise<void>) => {
+        pending = promise;
+      },
+    };
+    listeners.notificationclick(event);
+    await pending;
+    expect(focus).toHaveBeenCalledTimes(1);
+    expect(postMessage).not.toHaveBeenCalled();
+    windows = [];
+    listeners.notificationclick(event);
+    await pending;
+    expect(openWindow).toHaveBeenCalledWith(origin + "/");
   });
 });

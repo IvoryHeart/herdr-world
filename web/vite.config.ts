@@ -28,6 +28,8 @@ export default defineConfig({
     format: "es",
   },
   build: {
+    // Retain Vite 5's browser baseline instead of Vite 7's newer default.
+    target: ["es2020", "edge88", "firefox78", "chrome87", "safari14"],
     // The asset check follows static imports from the entry, excluding lazy features.
     manifest: true,
     // Build straight into the server's static dir so the backend can serve it.

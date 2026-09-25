@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import webpush from "web-push";
 import {
   createWebPushService,
+  taskPushPayload,
   pushSessionBinding,
   validatePushDevice,
   validatePushEndpoint,
@@ -48,11 +49,11 @@ function request(
   body?: unknown,
   headers: Record<string, string> = {},
 ) {
-  return new Request("https://roamgate.example/api/notifications/push", {
+  return new Request("https://herdr-world.example/api/notifications/push", {
     method,
     headers: {
       "content-type": "application/json",
-      "x-roamgate-push": "1",
+      "x-herdr-world-push": "1",
       ...headers,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -65,7 +66,7 @@ function fixture(
     headers: {},
   })),
 ) {
-  const dir = mkdtempSync(join(tmpdir(), "roamgate-push-"));
+  const dir = mkdtempSync(join(tmpdir(), "herdr-world-push-"));
   const path = join(dir, "web-push.json");
   const warn = mock();
   const options = { path, subject: "mailto:operator@example.com", send, warn };
@@ -92,7 +93,7 @@ test.each([
   async (subject, expected) => {
     const previous = process.env.ROAMGATE_WEB_PUSH_SUBJECT;
     const legacy = process.env.HERDR_GUI_WEB_PUSH_SUBJECT;
-    const dir = mkdtempSync(join(tmpdir(), "roamgate-push-default-"));
+    const dir = mkdtempSync(join(tmpdir(), "herdr-world-push-default-"));
     const path = join(dir, "web-push.json");
     const send = mock(async () => ({ statusCode: 201, body: "", headers: {} }));
     let service: ReturnType<typeof createWebPushService> | undefined;
@@ -194,7 +195,7 @@ test("authenticated, non-CSRF device mutations persist privately across restart 
     expect(
       (
         await f.service.handle(
-          request("POST", first, { "x-roamgate-push": "" }),
+          request("POST", first, { "x-herdr-world-push": "" }),
         )
       ).status,
     ).toBe(403);
@@ -322,6 +323,71 @@ test("completion and blocked preferences, stale runtimes and expired endpoints a
   }
 });
 
+test.each([
+  [{}, "Example agent · w1 · p1"],
+  [
+    {
+      connectionId: "legacy-default",
+      workspaceLabel: "Agents",
+      tabLabel: "Peter",
+    },
+    "Example agent · Agents · Peter",
+  ],
+  [
+    { connectionLabel: "Remote", workspaceLabel: "Agents", tabLabel: "Peter" },
+    "Example agent · Remote · Agents · Peter",
+  ],
+  [
+    { connectionId: "legacy-default", connectionLabel: "Default", tabId: "t1" },
+    "Example agent · Default · w1 · t1",
+  ],
+  [
+    { workspaceLabel: "  ", tabLabel: "", tabId: "t1" },
+    "Example agent · w1 · t1",
+  ],
+  [
+    { workspaceLabel: "工作区".repeat(80), tabLabel: "Peter".repeat(80) },
+    `Example agent · ${"工作区".repeat(80).slice(0, 80)} · ${"Peter".repeat(80).slice(0, 80)}`,
+  ],
+] satisfies Array<[Partial<PushTask>, string]>)(
+  "push body uses labels with ID fallbacks: %j",
+  async (labels, body) => {
+    const payloads: string[] = [];
+    const f = fixture(async (_subscription, payload) => {
+      payloads.push(String(payload));
+      return { statusCode: 201, body: "", headers: {} };
+    });
+    try {
+      await f.service.handle(request("POST", device()));
+      for (const kind of ["blocked", "completed"] as const) {
+        const input = { ...task, ...labels, kind };
+        f.service.notify(input, () => true);
+        expect(JSON.parse(payloads.at(-1)!)).toEqual({
+          title:
+            kind === "blocked"
+              ? "Herdr World agent needs input"
+              : "Herdr World task completed",
+          body,
+          tag: JSON.stringify([
+            "herdr-world-task",
+            input.connectionId,
+            3,
+            "p1",
+          ]),
+          target: {
+            connectionId: input.connectionId,
+            runtimeGeneration: 3,
+            workspaceId: "w1",
+            paneId: "p1",
+          },
+        });
+      }
+    } finally {
+      f.cleanup();
+    }
+  },
+);
+
 test("native delivery uses encrypted fetch with a hard deadline and no redirects", async () => {
   const f = fixture();
   const originalFetch = globalThis.fetch;
@@ -411,7 +477,103 @@ test("corrupt private data is preserved and disables push instead of rotating ke
   }
 });
 
-test("runtime agent subscriptions deliver without any browser clients and stop with the runtime", async () => {
+test.each(["older first", "newer first"])(
+  "pending label lookups only publish the latest task per pane: %s",
+  async (order) => {
+    const payloads: Array<{ title: string; target: { paneId: string } }> = [];
+    const f = fixture(async (_subscription, payload) => {
+      payloads.push(JSON.parse(String(payload)));
+      return { statusCode: 201, body: "", headers: {} };
+    });
+    const lookups = Array.from({ length: 4 }, () =>
+      Promise.withResolvers<{ workspace: { label: string } }>(),
+    );
+    let lookupIndex = 0;
+    const runtime = createLegacyConnectionRuntime({
+      config: {
+        socketPath: join(dirname(f.path), "control.sock"),
+        clientSocketPath: join(dirname(f.path), "client.sock"),
+        hasExplicitSocketPath: true,
+        hasExplicitClientSocketPath: true,
+      },
+      safeSend: () => {
+        throw new Error("No browser clients expected");
+      },
+      clientLabel: () => "test",
+      markRpcError() {},
+      onEvent() {},
+      onTaskEvent: (event) =>
+        f.service.notify(
+          { ...event, connectionId: "alpha", runtimeGeneration: 3 },
+          () => true,
+        ),
+    });
+    runtime.herdr.call = async (method) => {
+      if (method === "workspace.get") return lookups[lookupIndex++]!.promise;
+      expect(method).toBe("tab.list");
+      return { tabs: [{ tab_id: "t1", workspace_id: "w1", label: "Peter" }] };
+    };
+    function status(paneId: string, agentStatus: string) {
+      runtime.herdr.emit("event", {
+        event: "pane.agent_status_changed",
+        data: {
+          pane_id: paneId,
+          workspace_id: "w1",
+          tab_id: "t1",
+          agent: "Example agent",
+          agent_status: agentStatus,
+        },
+      });
+    }
+    async function finishLookup(index: number) {
+      lookups[index]!.resolve({ workspace: { label: "Agents" } });
+      // Drain the lookup/callback microtasks, including any unwanted delivery.
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    try {
+      await f.service.handle(request("POST", device()));
+      status("p1", "working");
+      status("p1", "blocked");
+      status("p1", "working");
+      status("p1", "done");
+      status("p2", "working");
+      status("p2", "blocked");
+      expect(lookupIndex).toBe(3);
+      await finishLookup(2);
+      expect(payloads.map((payload) => payload.target.paneId)).toEqual(["p2"]);
+      const indexes = order === "older first" ? [0, 1] : [1, 0];
+      await finishLookup(indexes[0]!);
+      expect(payloads).toHaveLength(order === "older first" ? 1 : 2);
+      await finishLookup(indexes[1]!);
+      expect(
+        payloads.map((payload) => [payload.target.paneId, payload.title]),
+      ).toEqual([
+        ["p2", "Herdr World agent needs input"],
+        ["p1", "Herdr World task completed"],
+      ]);
+      status("p1", "working");
+      status("p1", "blocked");
+      expect(lookupIndex).toBe(4);
+      await runtime.stop();
+      await finishLookup(3);
+      expect(payloads).toHaveLength(2);
+    } finally {
+      await runtime.stop();
+      for (const lookup of lookups)
+        lookup.resolve({ workspace: { label: "Agents" } });
+      f.cleanup();
+    }
+  },
+);
+
+test.each([
+  "labels",
+  "renamed",
+  "missing",
+  "malformed",
+  "workspace failure",
+  "tab failure",
+])("runtime resolves push labels without browser clients: %s", async (mode) => {
   const sent = Promise.withResolvers<string>();
   const f = fixture(async (_subscription, payload) => {
     sent.resolve(String(payload));
@@ -420,9 +582,12 @@ test("runtime agent subscriptions deliver without any browser clients and stop w
   const pane = {
     pane_id: "p1",
     workspace_id: "w1",
+    tab_id: "t1",
     agent: "Example agent",
     agent_status: "working",
   };
+  let workspaceLabel = "Agents";
+  let tabLabel = "Peter";
   const subscribed = Promise.withResolvers<void>();
   const runtime = createLegacyConnectionRuntime({
     config: {
@@ -444,7 +609,41 @@ test("runtime agent subscriptions deliver without any browser clients and stop w
       ),
   });
   runtime.workspaceAutoSync.start = () => {};
-  runtime.herdr.call = async () => ({ panes: [pane] });
+  runtime.herdr.call = async (method, params, timeout) => {
+    if (method === "pane.list") return { panes: [pane] };
+    expect(params).toEqual({ workspace_id: "w1" });
+    expect(timeout).toBe(5000);
+    if (method === "workspace.get") {
+      if (mode === "workspace failure") throw new Error("offline");
+      return {
+        workspace: {
+          label:
+            mode === "missing"
+              ? " "
+              : mode === "malformed"
+                ? 42
+                : workspaceLabel,
+        },
+      };
+    }
+    expect(method).toBe("tab.list");
+    if (mode === "tab failure") throw new Error("offline");
+    return {
+      tabs:
+        mode === "malformed"
+          ? {}
+          : [
+              null,
+              { tab_id: "other", workspace_id: "w1", label: "Wrong tab" },
+              { tab_id: "t1", workspace_id: "other", label: "Wrong workspace" },
+              {
+                tab_id: "t1",
+                workspace_id: "w1",
+                label: mode === "missing" ? "" : tabLabel,
+              },
+            ],
+    };
+  };
   runtime.herdr.subscribe = (types) => {
     const closed = Promise.withResolvers<void>();
     if (
@@ -465,12 +664,24 @@ test("runtime agent subscriptions deliver without any browser clients and stop w
     await f.service.handle(request("POST", device()));
     runtime.startBackground();
     await subscribed.promise;
+    if (mode === "renamed") {
+      workspaceLabel = "Renamed workspace";
+      tabLabel = "Renamed tab";
+    }
     runtime.herdr.emit("event", {
       event: "pane.agent_status_changed",
-      data: { ...pane, agent_status: "blocked" },
+      data: { pane_id: "p1", workspace_id: "w1", agent_status: "blocked" },
     });
-    expect(JSON.parse(await sent.promise).title).toBe(
-      "Herdr World agent needs input",
+    const payload = JSON.parse(await sent.promise);
+    expect(payload.title).toBe("Herdr World agent needs input");
+    expect(payload.body).toBe(
+      mode === "missing" || mode === "malformed"
+        ? "Example agent · w1 · t1"
+        : mode === "workspace failure"
+          ? "Example agent · w1 · Peter"
+          : mode === "tab failure"
+            ? "Example agent · Agents · t1"
+            : `Example agent · ${workspaceLabel} · ${tabLabel}`,
     );
     await runtime.stop();
     f.service.stop();
@@ -478,4 +689,45 @@ test("runtime agent subscriptions deliver without any browser clients and stop w
     await runtime.stop();
     f.cleanup();
   }
+});
+
+test("push payload keeps the status wording and target", () => {
+  expect(taskPushPayload(task)).toEqual({
+    title: "Herdr World agent needs input",
+    body: "Example agent \u00b7 w1 \u00b7 p1",
+    tag: JSON.stringify(["herdr-world-task", "alpha", 3, "p1"]),
+    target: {
+      connectionId: "alpha",
+      runtimeGeneration: 3,
+      workspaceId: "w1",
+      paneId: "p1",
+    },
+  });
+});
+
+test("push payload uses Herdr text and tolerates pane-less alerts", () => {
+  expect(
+    taskPushPayload({
+      ...task,
+      kind: "completed",
+      title: "claude finished",
+      body: "cvision \u00b7 tab 2",
+    }),
+  ).toMatchObject({
+    title: "claude finished",
+    body: "cvision \u00b7 tab 2",
+    target: { paneId: "p1" },
+  });
+  const paneless: PushTask = {
+    kind: "blocked",
+    connectionId: "alpha",
+    runtimeGeneration: 3,
+    agent: "Example agent",
+  };
+  expect(taskPushPayload({ ...paneless, title: "codex needs input" })).toEqual({
+    title: "codex needs input",
+    body: "Example agent",
+    tag: JSON.stringify(["herdr-world-task", "alpha", 3, "codex needs input"]),
+    target: null,
+  });
 });

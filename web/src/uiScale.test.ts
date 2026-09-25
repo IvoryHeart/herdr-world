@@ -206,7 +206,14 @@ test.skipIf(!chrome).each([
           if (await evaluate(expression)) return;
           await Bun.sleep(25);
         }
-        throw new Error(`Browser condition timed out: ${expression}`);
+        const fixtureResult = await Promise.race([
+          promise,
+          Bun.sleep(50).then(() => "fixture still running"),
+        ]);
+        const page = await evaluate("document.body.innerText.slice(0, 600)");
+        throw new Error(
+          `Browser condition timed out: ${expression}; fixture: ${JSON.stringify(fixtureResult)}; page: ${JSON.stringify(page)}`,
+        );
       };
       const key = async (value: string, code: number, shift = false) => {
         for (const type of ["keyDown", "keyUp"])

@@ -53,7 +53,7 @@
     "notices:check": "bun scripts/dependency-notices.ts --check",
     "format": "biome format --write .",
     "format:check": "biome format .",
-    "lint": "eslint . --cache --cache-strategy content --cache-location node_modules/.cache/eslint/",
+    "lint": "oxlint .",
     "test": "bun test",
     "test:quick": "bun test --path-ignore-patterns '**/{uiScale,mobileTerminal,filePreviewNavigation,TerminalThemeDialog,VisualPreview,ThemedSelect,HerdrSetupCard}.test.ts'",
     "test:browser": "bun test ./web/src/uiScale.test.ts ./web/src/mobileTerminal.test.ts ./web/src/filePreviewNavigation.test.ts ./web/src/components/TerminalThemeDialog.test.ts ./web/src/components/VisualPreview.test.ts ./web/src/components/ThemedSelect.test.ts ./web/src/components/HerdrSetupCard.test.ts ./web/src/components/WorkspaceInspectorPortal.test.ts ./web/src/world/WorldViewErrorBoundary.test.ts ./web/src/world/PixelOfficeCanvas.test.ts ./web/src/world/ConnectedTreeView.browser.test.ts ./web/src/world/SpatialGraphView.browser.test.ts",
@@ -63,21 +63,17 @@
     "check": "bun run notices:check && bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run build:site && bun run spec:check",
     "install-hooks": "git config core.hooksPath .githooks",
     "clean:bun-build": "find server -maxdepth 1 -name '*.bun-build' -exec rm -rf {} +",
-    "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world-* && bun run clean:bun-build",
+    "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world.map server/herdr-world-* && bun run clean:bun-build",
     "start:server": "bun run --filter herdr-world-server start",
     "spec": "openspec",
     "spec:check": "openspec validate --all --strict --no-interactive"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.9",
-    "@eslint/js": "^10.0.1",
     "@types/web-push": "^3.6.4",
     "bun-types": "^1.4.1",
-    "eslint": "^10.6.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "globals": "^17.7.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0",
-    "@fission-ai/openspec": "1.12.0"
+    "typescript": "^7.0.2",
+    "@fission-ai/openspec": "1.12.0",
+    "oxlint": "1.85.0"
   }
 }

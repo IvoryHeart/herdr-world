@@ -316,6 +316,7 @@ process.on("SIGINT", () => void stop());
       HERDR_WORLD_CONNECTIONS_PATH: registryPath,
       HERDR_WORLD_FAKE_SSH_STATE_DIR: state,
       HERDR_WORLD_FAKE_SSH_HOME: fakeHome,
+      HERDR_WORLD_NOTIFICATION_SOURCE: "status",
       HERDR_SOCKET_PATH: undefined,
       HERDR_CLIENT_SOCKET_PATH: undefined,
       HERDR_SSH_HOST: "legacy-host",

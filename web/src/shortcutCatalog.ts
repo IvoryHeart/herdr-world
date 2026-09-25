@@ -12,6 +12,7 @@ const descriptions: [ShortcutId, string, string][] = [
   ["annotations.toggle", "Toggle Annotations", "Global"],
   ["zen.toggle", "Toggle Zen mode on desktop", "Global"],
   ["panes.recent", "Open the recent pane switcher", "Global"],
+  ["plugin.herdrFloat.toggle", "Toggle the Herdr Float popup shell", "Global"],
   ["panes.search", "Search panes in the pane switcher", "Global"],
   ["workspaces.open", "Open Workspaces", "Global"],
   ["files.toggle", "Toggle File Explorer", "Global"],
@@ -52,6 +53,7 @@ const descriptions: [ShortcutId, string, string][] = [
   ["terminal.halfPageDown", "Scroll history down half a page", "Terminal"],
   ["terminal.multiline", "Send multiline Enter to the agent", "Terminal"],
   ["terminal.altEnter", "Send Alt-modified Enter to the agent", "Terminal"],
+  ["terminal.ctrlEnter", "Send Ctrl-modified Enter to the agent", "Terminal"],
   ["terminal.lineStart", "Move to the beginning of the input line", "Terminal"],
   ["terminal.lineEnd", "Move to the end of the input line", "Terminal"],
   [

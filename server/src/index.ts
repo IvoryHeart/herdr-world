@@ -480,17 +480,29 @@ function runtimeFactoryForProfile(
         config: profileConfig,
         logger: logger.child("connection"),
         safeSend,
+        broadcast: (payload, context) => {
+          for (const ws of clients) safeSend(ws, payload, context);
+        },
         clientLabel,
         markRpcError,
-        onTaskEvent: (event) =>
+        taskNotificationSource: config.taskNotificationSource,
+        onTaskEvent: (event) => {
+          const connections = connectionProfiles.list();
           webPush.notify(
             {
               ...event,
               connectionId: identity.id,
+              connectionLabel:
+                connections.length > 1
+                  ? (connections.find(
+                      (connection) => connection.id === identity.id,
+                    )?.label ?? identity.label)
+                  : undefined,
               runtimeGeneration: context.generation,
             },
             context.isCurrent,
-          ),
+          );
+        },
         onEvent: (event, eventIdentity) => {
           if (!context.isCurrent()) return;
           publishWorldInvalidation(eventIdentity.id, context.generation);
@@ -1046,7 +1058,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       });
       const result = await herdr.call(method, {
         ...(params ?? {}),
-        base: baseSync.base,
+        base: baseSync.commit,
       });
       // Herdr identifies the repository but not which of several workspaces
       // for that repository initiated creation. Keep that GUI relationship.
@@ -1481,6 +1493,8 @@ function main() {
                   connection_scoped_http: true,
                   connection_runtime_generation: true,
                   world_snapshot: true,
+                  herdr_task_notifications:
+                    config.taskNotificationSource === "herdr",
                 },
               }),
               "hello",

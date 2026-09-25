@@ -31,6 +31,7 @@ import {
   Info,
   LoaderCircle,
   MessageSquareText,
+  Minimize2,
   MoreHorizontal,
   PanelTop,
   SquarePen,
@@ -55,6 +56,7 @@ import { WorkspaceInspectorPortal } from "./components/WorkspaceInspectorPortal"
 import {
   type AccentColor,
   normalizeAccentColor,
+  normalizeTerminalFontScale,
   normalizeThemePreference,
   normalizeUiScale,
   normalizeZenMode,
@@ -135,6 +137,7 @@ import {
   type WorktreeRemovedTarget,
 } from "./store";
 import { paneShortcutAction } from "./paneShortcuts";
+import { pluginActionShortcut } from "./pluginActionShortcuts";
 import {
   adjacentTabId,
   closeShortcutTarget,
@@ -211,6 +214,7 @@ const DEFAULT_SIDEBAR = 284;
 const THEME_KEY = "theme";
 const ACCENT_COLOR_KEY = "accentColor";
 const UI_SCALE_KEY = "uiScale";
+const TERMINAL_FONT_SCALE_KEY = "terminalFontScale";
 const ZEN_MODE_KEY = "zenMode";
 const LazyTerminalView = lazyWithReload("terminal-view", () =>
   import("./components/TerminalView").then((module) => ({
@@ -218,10 +222,39 @@ const LazyTerminalView = lazyWithReload("terminal-view", () =>
   })),
 );
 
+// xterm.js is heavy; keep the overlay's own copy out of the initial bundle the
+// same way LazyTerminalView does, since most sessions never open a popup.
+const LazyPopupOverlay = lazyWithReload("popup-overlay", () =>
+  import("./components/PopupOverlay").then((module) => ({
+    default: module.PopupOverlay,
+  })),
+);
+
+function PopupOverlay({
+  terminalTheme,
+  terminalFontScale,
+}: {
+  terminalTheme: ITheme;
+  terminalFontScale: number;
+}) {
+  // Gate the dynamic import on popup presence, not just its content, so a
+  // session that never opens one never fetches xterm.js for it.
+  const hasPopup = useStoreSelector((s) => s.popup !== null);
+  if (!hasPopup) return null;
+  return (
+    <Suspense fallback={null}>
+      <LazyPopupOverlay
+        terminalTheme={terminalTheme}
+        terminalFontScale={terminalFontScale}
+      />
+    </Suspense>
+  );
+}
+
 type TerminalViewProps = {
   paneId?: string;
   terminalTheme: ITheme;
-  uiScale: number;
+  terminalFontScale: number;
   showMobileKeys?: boolean;
   mobileShortcuts?: MobileTerminalShortcutRows;
   mobileSideShortcuts?: MobileTerminalSideShortcuts;
@@ -328,6 +361,13 @@ function loadAccentColor(): AccentColor {
 
 function loadUiScale(): number {
   return normalizeUiScale(worldLocalStorage.getItem(UI_SCALE_KEY));
+}
+
+function loadTerminalFontScale(): number {
+  return normalizeTerminalFontScale(
+    worldLocalStorage.getItem(TERMINAL_FONT_SCALE_KEY),
+    worldLocalStorage.getItem(UI_SCALE_KEY),
+  );
 }
 
 function loadZenMode(): boolean {
@@ -699,14 +739,23 @@ function PaneJumpOverlay({
                       <span className="pane-jump-agent-name">
                         {entry.agent}
                       </span>
-                      {entry.subtitle ? " · " : ""}
+                      {" · "}
                     </>
                   ) : null}
-                  {entry.subtitle}
+                  <span className="pane-jump-tab" title={entry.tabLabel}>
+                    {entry.tabLabel}
+                  </span>
+                  <span className="pane-jump-id" title={entry.paneId}>
+                    {" · "}
+                    {entry.paneLabel}
+                  </span>
+                  {entry.cwd ? (
+                    <span className="pane-jump-cwd" title={entry.cwd}>
+                      {" · "}
+                      {entry.cwd}
+                    </span>
+                  ) : null}
                 </span>
-              </span>
-              <span className="pane-jump-id" title={entry.paneId}>
-                {entry.paneLabel}
               </span>
             </button>
           ))}
@@ -857,7 +906,7 @@ function resizeTargetForSplit(
 // the old full terminal view.
 function TerminalPaneLayout({
   terminalTheme,
-  uiScale,
+  terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
   composerOpen,
@@ -868,7 +917,7 @@ function TerminalPaneLayout({
   excludedPaneIds = new Set(),
 }: {
   terminalTheme: ITheme;
-  uiScale: number;
+  terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
   composerOpen: boolean;
@@ -929,7 +978,7 @@ function TerminalPaneLayout({
       <TerminalView
         key={mountKeyForPane(activePaneId)}
         terminalTheme={terminalTheme}
-        uiScale={uiScale}
+        terminalFontScale={terminalFontScale}
         mobileShortcuts={mobileShortcuts}
         mobileSideShortcuts={mobileSideShortcuts}
         composerOpen={composerOpen}
@@ -985,7 +1034,7 @@ function TerminalPaneLayout({
           key={mountKeyForPane(activePaneId)}
           paneId={activePaneId}
           terminalTheme={terminalTheme}
-          uiScale={uiScale}
+          terminalFontScale={terminalFontScale}
           mobileShortcuts={mobileShortcuts}
           mobileSideShortcuts={mobileSideShortcuts}
           composerOpen={composerOpen}
@@ -1090,7 +1139,7 @@ function TerminalPaneLayout({
               key={mountKeyForPane(layoutPane.pane_id)}
               paneId={layoutPane.pane_id}
               terminalTheme={terminalTheme}
-              uiScale={uiScale}
+              terminalFontScale={terminalFontScale}
               showMobileKeys={isActive}
               mobileShortcuts={mobileShortcuts}
               mobileSideShortcuts={mobileSideShortcuts}
@@ -1267,6 +1316,9 @@ export default function App({
   );
   const [uiScale, setUiScale] = useState<number>(() => loadUiScale());
   useVisualViewportCssVars(uiScale);
+  const [terminalFontScale, setTerminalFontScale] = useState<number>(() =>
+    loadTerminalFontScale(),
+  );
   const [mobileTerminalShortcuts, setMobileTerminalShortcuts] =
     useState<MobileTerminalShortcutRows>(loadMobileTerminalShortcuts);
   const [mobileTerminalSideShortcuts, setMobileTerminalSideShortcuts] =
@@ -2999,6 +3051,36 @@ export default function App({
         store.focusTab(targetTabId);
         return;
       }
+      const pluginAction = pluginActionShortcut(e);
+      if (pluginAction) {
+        e.preventDefault();
+        e.stopPropagation();
+        // Typing into the popup's own terminal never reaches here, since
+        // isEditableElement stops at the xterm textarea.
+        if (
+          isEditableElement(e.target) ||
+          document.querySelector(".modal-backdrop")
+        ) {
+          return;
+        }
+        if (e.repeat) return;
+        const current = store.get();
+        const layoutActivePaneId = activePaneIdForSnapshot(current);
+        const activePane = current.panes.find(
+          (pane) => pane.pane_id === layoutActivePaneId,
+        );
+        // Hide-or-open is resolved against Herdr, not this client's popup
+        // state, which a Space switch can leave stale. See togglePluginPopup.
+        void store.togglePluginPopup(
+          pluginAction.pluginId,
+          pluginAction.actionId,
+          {
+            workspace_id: activePane?.workspace_id,
+            focused_pane_cwd: activePane?.foreground_cwd ?? activePane?.cwd,
+          },
+        );
+        return;
+      }
       const paneAction = paneShortcutAction(e);
       if (paneAction) {
         e.preventDefault();
@@ -3216,6 +3298,12 @@ export default function App({
     }
     worldLocalStorage.setItem(UI_SCALE_KEY, String(uiScale));
   }, [accentColor, resolvedTheme, theme, uiScale]);
+  useEffect(() => {
+    worldLocalStorage.setItem(
+      TERMINAL_FONT_SCALE_KEY,
+      String(terminalFontScale),
+    );
+  }, [terminalFontScale]);
   useEffect(() => {
     worldLocalStorage.setItem(ZEN_MODE_KEY, serializeZenMode(zenMode));
   }, [zenMode]);
@@ -3591,6 +3679,8 @@ export default function App({
             onAccentColorChange={setAccentColor}
             uiScale={uiScale}
             onUiScaleChange={setUiScale}
+            terminalFontScale={terminalFontScale}
+            onTerminalFontScaleChange={setTerminalFontScale}
             zenMode={zenMode}
             onZenModeChange={applyZenMode}
             onMobileTerminalShortcutsChange={setMobileTerminalShortcuts}
@@ -3614,6 +3704,18 @@ export default function App({
       } ${mobileControlsCollapsed ? "mobile-controls-collapsed" : ""}`}
     >
       {topbarPortal ? createPortal(topbar, topbarPortal) : topbar}
+      {zenMode && !mobile ? (
+        <button
+          type="button"
+          className="zen-island"
+          title={shortcutTitle("Exit Zen mode", "zen.toggle")}
+          aria-label={shortcutTitle("Exit Zen mode", "zen.toggle")}
+          onClick={() => applyZenMode(false)}
+        >
+          <Minimize2 size={13} />
+          <span>Exit Zen</span>
+        </button>
+      ) : null}
 
       <nav
         className="mobile-nav"
@@ -4076,7 +4178,7 @@ export default function App({
                 {!hasWorkspaceSurface && terminalPresentation === "spaces" ? (
                   <TerminalPaneLayout
                     terminalTheme={terminalTheme}
-                    uiScale={uiScale}
+                    terminalFontScale={terminalFontScale}
                     mobileShortcuts={mobileTerminalShortcuts}
                     mobileSideShortcuts={mobileTerminalSideShortcuts}
                     composerOpen={terminalComposerOpen}
@@ -4158,6 +4260,10 @@ export default function App({
           <ViewportDebugOverlay />
         </Suspense>
       ) : null}
+      <PopupOverlay
+        terminalTheme={terminalTheme}
+        terminalFontScale={terminalFontScale}
+      />
       {paneJumpOpen ? (
         <PaneJumpOverlay
           entries={paneJumpOptions}
@@ -4192,7 +4298,7 @@ export default function App({
               )}
               paneId={presentedTerminalPane.pane_id}
               terminalTheme={terminalTheme}
-              uiScale={uiScale}
+              terminalFontScale={terminalFontScale}
               mobileShortcuts={mobileTerminalShortcuts}
               mobileSideShortcuts={mobileTerminalSideShortcuts}
               composerOpen={terminalComposerOpen}
@@ -4211,7 +4317,7 @@ export default function App({
             connectionGeneration={s.connectionGeneration}
             runtimeGeneration={s.serverRuntimeGeneration}
             terminalTheme={terminalTheme}
-            uiScale={uiScale}
+            terminalFontScale={terminalFontScale}
             mobileShortcuts={mobileTerminalShortcuts}
             mobileSideShortcuts={mobileTerminalSideShortcuts}
             onOpenWorkspaceFile={handleTerminalWorkspaceFile}

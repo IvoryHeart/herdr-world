@@ -48,7 +48,7 @@ the responsive installable PWA is the mobile client.
   absolute path opens the file.
 - Toggle **Zen mode** (`Cmd+Shift+Z` on macOS, `Ctrl+Alt+Z` elsewhere) to hide
   the topbar, tab strip, and sidebar and run the terminal flush to the window.
-  Hovering the top edge slides the topbar back, and it stays while one of its
+  Hovering the Exit Zen tab slides the topbar back, and it stays while one of its
   menus is open. The sidebar still toggles inside Zen and returns to its prior
   state on exit; split layouts keep pane borders. Desktop only, stored in this
   browser; mobile keeps its floating control collapse.
@@ -96,6 +96,11 @@ macOS preset; see [other platform bindings](#keyboard-shortcuts).
   the selection before scrolling further. Pixel mouse is unsupported.
 - Paste clipboard images to upload to the Herdr host and insert their paths,
   including through `--ssh-host`.
+- Drag a file or directory path from the File Explorer into a terminal to
+  insert its quoted host path. Terminal font size is adjustable independently
+  of interface scale in **Menu → Appearance**.
+- Show Herdr session popup panes over the active workspace when a plugin opens
+  a modal interaction.
 - Relay terminal OSC 52 clipboard writes. Herdr 0.9.0 follows the foreground
   recipient, not proven originating-pane ownership; see
   [clipboard compatibility](docs/DEPLOYMENT.md#herdr-compatibility).
@@ -365,7 +370,9 @@ Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
 - Multiple browsers receive pushed events. Pause/resume yours, see client counts,
-  or pause others. Completion notifications return to the relevant pane.
+  or pause others. Herdr semantic task alerts use the relevant pane when Herdr
+  supplies one; pane-less alerts open World without guessing a target. Older
+  Herdr runtimes use agent-status completion alerts.
 - Choose light/dark/system appearance, persistent accents, and terminal themes
   per appearance mode in **Menu → Appearance → Terminal theme**. Built-ins
   include Solarized, Dracula, One Dark, Nord, Tokyo Night, Catppuccin, and GitHub;

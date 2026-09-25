@@ -120,7 +120,7 @@ const render = (showMobileKeys = false, uiScale = 100) =>
     root.render(
       <TerminalView
         terminalTheme={{ background: "#171922", foreground: "#dddddd" }}
-        uiScale={uiScale}
+        terminalFontScale={uiScale}
         showMobileKeys={showMobileKeys}
       />,
     ),

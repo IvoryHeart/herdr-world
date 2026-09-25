@@ -1,6 +1,6 @@
 # World control plane follow-ups
 
-Planning baseline: `origin/main` at `c7156c5` on 25 September 2026. Recheck main and the relevant upstream tag before starting an implementation branch. This is a task handoff for separate, reviewed changes, not an assertion that the proposed behavior exists today.
+Planning baseline: `origin/main` at `7ac882b6` on 25 September 2026. Recheck main and upstream before starting a branch. This is a task handoff for separate, reviewed changes, not an assertion that the proposed behavior exists today.
 
 ## Architectural frame and decisions
 
@@ -24,7 +24,7 @@ The selected-host lease, runtime generation checks, stale/non-actionable cache r
 | `world.snapshot` waits for all profile observations | A slow catalogue can hide a healthy selected host beyond the browser RPC deadline | [Resilient World observation](../openspec/changes/resilient-world-observation/proposal.md) |
 | Changes reflects workspace checkout, not necessarily an agent's worktree | A selected agent can appear to own another checkout's branch/files | [Agent source-control context](../openspec/changes/agent-source-control-context/proposal.md) |
 | Cross-view live acceptance is narrower than the target operating conditions | Identity and Inspector handoff regressions may survive synthetic unit cases | [Live acceptance assignment](#assignment-g-live-acceptance-and-visual-evidence) |
-| Roamgate has advanced past the pinned v0.7.9 source | Applicable fixes can be missed as World evolves | [Selective upstream assignment](#assignment-a-selective-roamgate-maintenance) |
+| Roamgate has advanced past the pinned v0.7.9 source | Source drift and missing ancestry make future updates harder | [Upstream-first source merge](#assignment-a-upstream-first-roamgate-source-merge) |
 
 The five linked OpenSpec changes each contain a proposal, implementation design, observable requirements/scenarios and an ordered task checklist. Their `tasks.md` files are the executable handoffs. Keep each as one coherent change and one focused PR; do not split the service and browser halves of a product behavior into independently deployable contracts.
 
@@ -32,7 +32,7 @@ The five linked OpenSpec changes each contain a proposal, implementation design,
 
 | Order | Assignment | Suggested agent | Dependency | Done when |
 | --- | --- | --- | --- | --- |
-| A | Selective Roamgate maintenance | Terra | None | Applicable v0.7.10 fixes are reviewed and either replayed with evidence or explicitly deferred |
+| A | Upstream-first Roamgate source merge | Terra | None | Current upstream main is a Git ancestor, with World behavior and checks retained |
 | B | Resilient World observation | Terra | None | 64-profile partial snapshot meets the bounded response contract |
 | C | Session task summaries | Terra | Herdr metadata prerequisite proven first | Report, expiry and replacement reach all views safely; delayed Clear cannot erase a newer report |
 | D | Qualified agent watchlist | Terra | B merged or branch resolved; C is useful but not required | Two browsers agree on exact pins and no stale pin is actionable |
@@ -42,16 +42,38 @@ The five linked OpenSpec changes each contain a proposal, implementation design,
 
 Assignments A, B and C can be worked independently if separate worktrees and reviewers are available. D, E and F touch the shared shell or Inspector and should be rebased in the shown order unless their agents coordinate ownership of overlapping files. The model labels indicate task suitability, not an alternative verification standard; every change still needs independent review.
 
-## Assignment A: selective Roamgate maintenance
+## Assignment A: upstream-first Roamgate source merge
 
-This is ordinary upstream synchronization, not an OpenSpec product proposal. World is derived from Roamgate v0.7.9 at `c07db60b06b1b23a34ed143d47011a6b8330379a` per [UPSTREAM](../UPSTREAM.md). As observed on 25 September 2026, [Roamgate v0.7.10](https://github.com/powerfooI/roamgate/releases/tag/v0.7.10) includes the [Last step snapshot garbage fix](https://github.com/powerfooI/roamgate/commit/54d8697) and several terminal/browser fixes; upstream main adds semantic notifications and font size changes. Review actual source and applicability before replaying any commit. Do not copy upstream's browser-test removal or assume its process/service settings fit World.
+Implementation: [PR #103](https://github.com/IvoryHeart/herdr-world/pull/103).
 
-1. Compare the pinned source commit with v0.7.10 and current upstream main. Record each upstream commit as **applicable**, **already present**, **defer with reason**, or **irrelevant to World**. Prioritize Last step snapshot cleanup, terminal Ctrl+Enter forwarding, terminal link repaint, Web Push name presentation and plugin modal pane behavior if their corresponding World paths exist.
-2. For each applicable change, trace the World path and replay the smallest correct patch with its focused regression coverage. Preserve World connection qualification, same-origin access, selected-host model and existing browser tests. Treat dependency/toolchain upgrades as a separate deliberate update if the targeted fix does not require them.
-3. Inspect the final diff and generated dependency notices. If the resolved dependency graph changes, regenerate `DEPENDENCY_NOTICES.md`. Update `UPSTREAM.md` with the exact source commit(s) and use **derived from** for synchronized source; update an Unreleased changelog entry if user-visible.
-4. Run focused checks and the repository `bun run check` gate, record exact evidence, and open a ready PR for independent review. A full version sync is acceptable only if every included change passes the applicability review and does not discard World-specific behavior.
+This is an upstream source integration, not a new product/API proposal. World is
+derived from Roamgate. Use the exact current source head in [UPSTREAM](../UPSTREAM.md)
+and merge future upstream changes from that ancestor; do not selectively replay
+upstream commits as the normal maintenance path. Roamgate remains source, while
+World owns the service, connection qualification, visual routes and product identity.
 
-Stop condition: if a candidate upstream patch assumes Roamgate owns a different runtime/bridge or removes World test coverage, isolate or defer that patch and state why; never resolve it by weakening World identity checks.
+1. Record the existing v0.7.9 source commit as an ancestry parent and merge
+   current Roamgate `main` as a complete source change. Compare the merged source
+   against World in each conflict, resolving service, browser and tooling behavior
+   deliberately. Keep a concise record of downstream adaptations rather than a
+   commit-by-commit accept/defer ledger.
+2. Carry the upstream terminal, popup, notification, file, diff, worktree,
+   toolchain and UI improvements into World. Preserve the selected-host lease,
+   runtime generation, same-origin access, visual views and shared Inspector.
+   Keep World browser tests when upstream removes its own, and preserve
+   World-specific security behavior such as session-bound push revocation.
+3. Update `UPSTREAM.md` to the exact merged source commit, update user-facing
+   features and the Unreleased changelog, and regenerate dependency notices
+   for the merged dependency graph. Run focused tests and `bun run check`.
+4. Open a ready PR for independent review. Future upstream updates should use
+   normal merges from the recorded head and review only the new delta and
+   downstream conflicts. Do not fork individual upstream fixes into a parallel
+   replay track unless a concrete incompatibility requires an explicit exception.
+
+Handoff proof: Git reports a Roamgate merge base at the recorded source head;
+World's one-origin connection and generation tests pass; upstream's new user
+features work in Spaces and do not break Office, Tree or Graph; the browser suite
+and production builds pass.
 
 ## Assignment B: resilient World observation
 

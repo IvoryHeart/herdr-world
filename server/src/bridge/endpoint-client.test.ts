@@ -1545,3 +1545,186 @@ test("core resize and semantic input wait for verified codecs", () => {
   ).toThrow("not been negotiated");
   client.close();
 });
+
+type SemanticFixture = {
+  kind: number;
+  title: string;
+  body?: string;
+  sound?: number;
+  agent?: string;
+  workspaceId?: string;
+  tabId?: string;
+  paneId?: string;
+  position?: number;
+};
+
+// Mirrors Herdr's `ServerMessage::SemanticNotification` (tag 14) layout.
+function semanticNotificationFrame(n: SemanticFixture): Buffer {
+  const w = new BinWriter();
+  w.variant(14);
+  w.variant(n.kind);
+  w.string(n.title);
+  w.option(n.body, (v) => w.string(v));
+  w.option(n.sound, (v) => w.variant(v));
+  w.option(n.agent, (v) => w.string(v));
+  w.option(n.workspaceId, (v) => w.string(v));
+  w.option(n.tabId, (v) => w.string(v));
+  w.option(n.paneId, (v) => w.string(v));
+  w.option(n.position, (v) => w.variant(v));
+  return encodeFrame(w.toBuffer());
+}
+
+describe("SemanticNotification (tag 14)", () => {
+  test("a notifications client sends a passive hello without surface codecs", async () => {
+    const hello = Promise.withResolvers<any>();
+    const socketPath = await startEndpointServer((value) =>
+      hello.resolve(value),
+    );
+    const client = new EndpointClient(socketPath, true, "notifications");
+    try {
+      await client.connect(80, 24);
+      const sent = await hello.promise;
+      expect(sent.surface_active).toBe(false);
+      expect(sent.surface_delta).toBe(false);
+      expect(sent.surface_reuse).toBe(false);
+    } finally {
+      client.close();
+    }
+  });
+
+  test.each([
+    [
+      "agent transition",
+      {
+        kind: 1,
+        title: "claude finished",
+        body: "cvision · tab 2",
+        sound: 0,
+        agent: "claude",
+        workspaceId: "w1",
+        tabId: "w1:t2",
+        paneId: "w1:p3",
+      },
+      {
+        kind: "finished",
+        title: "claude finished",
+        body: "cvision · tab 2",
+        sound: "done",
+        agent: "claude",
+        workspaceId: "w1",
+        tabId: "w1:t2",
+        paneId: "w1:p3",
+      },
+    ],
+    [
+      "notification.show custom alert",
+      { kind: 3, title: "codex needs input", sound: 1, position: 3 },
+      {
+        kind: "custom",
+        title: "codex needs input",
+        body: null,
+        sound: "request",
+        agent: null,
+        workspaceId: null,
+        tabId: null,
+        paneId: null,
+      },
+    ],
+    [
+      "needs attention without sound",
+      { kind: 0, title: "pi needs attention", paneId: "w2:p1" },
+      {
+        kind: "needs_attention",
+        title: "pi needs attention",
+        body: null,
+        sound: null,
+        agent: null,
+        workspaceId: null,
+        tabId: null,
+        paneId: "w2:p1",
+      },
+    ],
+  ])("decodes %s", async (_name, fixture, expected) => {
+    const socketPath = await startEndpointServer((_hello, socket) =>
+      socket.write(semanticNotificationFrame(fixture as SemanticFixture)),
+    );
+    const client = new EndpointClient(socketPath, false, "notifications");
+    const received = new Promise((resolve) =>
+      client.once("semantic_notification", resolve),
+    );
+    try {
+      await client.connect(80, 24);
+      expect(await received).toEqual(expected);
+    } finally {
+      client.close();
+    }
+  });
+
+  test("terminal clients ignore notifications so open views do not multiply them", async () => {
+    const socketPath = await startEndpointServer((_hello, socket) =>
+      socket.write(semanticNotificationFrame({ kind: 1, title: "done" })),
+    );
+    const client = new EndpointClient(socketPath);
+    const received: unknown[] = [];
+    client.on("semantic_notification", (value) => received.push(value));
+    try {
+      await client.connect(80, 24);
+      await Bun.sleep(20);
+      expect(received).toEqual([]);
+      expect(client.isClosed).toBe(false);
+    } finally {
+      client.close();
+    }
+  });
+
+  test("a malformed notification is reported without closing the shell", async () => {
+    const socketPath = await startEndpointServer((_hello, socket) => {
+      socket.write(semanticNotificationFrame({ kind: 9, title: "future" }));
+      socket.write(
+        encodeFrame(Buffer.from([14, 1, 10, 0x61])), // truncated title
+      );
+      socket.write(semanticNotificationFrame({ kind: 1, title: "ok" }));
+    });
+    const client = new EndpointClient(socketPath, false, "notifications");
+    const errors: Error[] = [];
+    client.on("notification_error", (error) => errors.push(error));
+    const received = new Promise<any>((resolve) =>
+      client.once("semantic_notification", resolve),
+    );
+    try {
+      await client.connect(80, 24);
+      expect((await received).title).toBe("ok");
+      expect(errors.map((error) => error.message)).toEqual([
+        "unknown semantic notification kind",
+        expect.stringContaining("short read"),
+      ]);
+      expect(client.isClosed).toBe(false);
+    } finally {
+      client.close();
+    }
+  });
+
+  test("clips oversized titles and bodies", async () => {
+    const socketPath = await startEndpointServer((_hello, socket) =>
+      socket.write(
+        semanticNotificationFrame({
+          kind: 3,
+          title: "t".repeat(1000),
+          body: "b".repeat(1000),
+        }),
+      ),
+    );
+    const client = new EndpointClient(socketPath, false, "notifications");
+    const received = new Promise<any>((resolve) =>
+      client.once("semantic_notification", resolve),
+    );
+    try {
+      await client.connect(80, 24);
+      const notification = await received;
+      expect(notification.title).toHaveLength(200);
+      expect(notification.body).toHaveLength(400);
+    } finally {
+      client.close();
+    }
+  });
+});

@@ -12,7 +12,6 @@ async function pushRequest(method: "GET" | "POST" | "DELETE", body?: unknown) {
     headers: {
       "Content-Type": "application/json",
       "X-Herdr-World-Push": "1",
-      "X-Roamgate-Push": "1",
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     signal: AbortSignal.timeout(10_000),

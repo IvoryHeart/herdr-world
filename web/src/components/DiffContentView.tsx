@@ -7,7 +7,7 @@ import {
   type SelectedLineRange,
 } from "@pierre/diffs";
 import {
-  PatchDiff,
+  FileDiff,
   Virtualizer,
   WorkerPoolContextProvider,
   type WorkerInitializationRenderOptions,
@@ -70,7 +70,7 @@ import "./DiffContentView.css";
 type DiffViewMode = "split" | "unified";
 type AppTheme = "dark" | "light";
 type PierreDiffOptions = NonNullable<
-  ComponentProps<typeof PatchDiff<DiffReviewAnnotation>>["options"]
+  ComponentProps<typeof FileDiff<DiffReviewAnnotation>>["options"]
 >;
 
 const DIFF_VIEW_MODE_KEY = "diffViewMode";
@@ -313,14 +313,6 @@ export function isImageDiff(path: string, diff: string) {
   return imageMimeForPath(path) !== null && (!diff || isBinaryDiffText(diff));
 }
 
-export function highlightedPatch(patch: string, path: string) {
-  const diff = getSingularPatch(patch);
-  const language = diffSyntaxLanguageForPath(path);
-  if (!diff.prevName || diffSyntaxLanguageForPath(diff.prevName) === language)
-    diff.lang = language;
-  return diff;
-}
-
 function isBinaryDiffText(diff: string) {
   return /^Binary files\b/m.test(diff) || /^GIT binary patch\b/m.test(diff);
 }
@@ -431,6 +423,31 @@ class DiffRenderBoundary extends Component<
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;
   }
+}
+
+let nextPatchCacheKey = 0;
+
+export function highlightedPatch(patch: string, path: string) {
+  const diff = getSingularPatch(patch);
+  // Pierre 1.4 no longer assigns keys; each parsed patch needs its own worker cache entry.
+  diff.cacheKey = `patch:${++nextPatchCacheKey}`;
+  const language = diffSyntaxLanguageForPath(path);
+  // Pierre applies lang to both sides; let it infer each side of a language-changing rename.
+  if (!diff.prevName || diffSyntaxLanguageForPath(diff.prevName) === language)
+    diff.lang = language;
+  return diff;
+}
+
+function HighlightedPatch({
+  patch,
+  path,
+  ...props
+}: Omit<ComponentProps<typeof FileDiff<DiffReviewAnnotation>>, "fileDiff"> & {
+  patch: string;
+  path: string;
+}) {
+  const fileDiff = useMemo(() => highlightedPatch(patch, path), [patch, path]);
+  return <FileDiff<DiffReviewAnnotation> {...props} fileDiff={fileDiff} />;
 }
 
 function RawPatch({ patch }: { patch: string }) {
@@ -683,8 +700,10 @@ const DiffFileSection = memo(function DiffFileSection({
                 fallback={<RawPatch patch={section.file.diff} />}
                 resetKey={section.file.diff}
               >
-                <PatchDiff<DiffReviewAnnotation>
+                <HighlightedPatch
+                  key={section.file.diff}
                   patch={section.file.diff}
+                  path={section.entry.path}
                   options={sectionOptions}
                   lineAnnotations={pierreAnnotations}
                   selectedLines={

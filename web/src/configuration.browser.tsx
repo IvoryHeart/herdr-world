@@ -285,6 +285,8 @@ function Harness() {
       theme={theme}
       accentColor="blue"
       uiScale={scale}
+      terminalFontScale={100}
+      onTerminalFontScaleChange={() => {}}
       zenMode={false}
       mobileTerminalShortcuts={[[], []]}
       mobileTerminalSideShortcuts={[]}
@@ -394,7 +396,7 @@ async function run() {
   );
   check(
     !document.querySelector(
-      "#roamgate-config-menu [aria-label='Task notifications']",
+      "#herdr-world-config-menu [aria-label='Task notifications']",
     ),
     "preferences still live in Menu",
   );
@@ -624,7 +626,7 @@ async function run() {
     "theme preference stopped working",
   );
   for (let i = 0; i < (innerWidth <= 320 ? 10 : 5); i++)
-    click("Increase text size");
+    click("Increase interface scale");
   await settle();
   const rect = dialog.getBoundingClientRect();
   check(
