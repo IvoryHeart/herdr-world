@@ -386,6 +386,85 @@ describe("WorldSnapshotService", () => {
     }
   });
 
+  test("does not reserve a selected slot for a fully cached hinted request", async () => {
+    const release = deferred<void>();
+    const started: string[] = [];
+    let ids = ["selected"];
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: {
+            herdr: {
+              async call(method) {
+                if (id !== "selected" && method === "workspace.list") {
+                  started.push(id);
+                }
+                if (id !== "selected") await release.promise;
+                return runtime(id).herdr.call(method);
+              },
+            },
+          },
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      15,
+    );
+    await service.snapshot();
+    await service.snapshot({ selected_connection_id: "selected" });
+    ids = [
+      "selected",
+      ...Array.from({ length: 4 }, (_, index) => `host-${index}`),
+    ];
+    try {
+      await service.snapshot();
+      expect(started).toEqual(ids.slice(1));
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("keeps a host slot until its required RPC siblings settle", async () => {
+    const release = deferred<void>();
+    const started: string[] = [];
+    const ids = Array.from({ length: 6 }, (_, index) => `host-${index}`);
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: {
+            herdr: {
+              async call(method) {
+                if (method === "workspace.list") {
+                  started.push(id);
+                  throw new Error("synthetic workspace failure");
+                }
+                await release.promise;
+                return runtime(id).herdr.call(method);
+              },
+            },
+          },
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      15,
+    );
+    try {
+      await service.snapshot();
+      expect(started).toEqual(ids.slice(0, 4));
+    } finally {
+      release.resolve();
+    }
+  });
+
   test("marks an unfinished cached host stale and invalidates once when new data arrives", async () => {
     const release = deferred<void>();
     let gate: Promise<void> | null = null;
@@ -441,6 +520,46 @@ describe("WorldSnapshotService", () => {
     });
     expect(invalidated).toEqual(["local"]);
     expect(calls).toBe(beforeReuse);
+  });
+
+  test("re-notifies after an invalidated late result with an unchanged digest", async () => {
+    const release = deferred<void>();
+    let gate: Promise<void> | null = null;
+    const invalidated: string[] = [];
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          if (gate) await gate;
+          return runtime("Same").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      15,
+    );
+    await service.snapshot();
+    gate = release.promise;
+    service.invalidate("local");
+    await service.snapshot();
+    service.invalidate("local");
+    const coalesced = service.snapshot();
+    release.resolve();
+    await coalesced;
+    for (let attempt = 0; attempt < 20 && invalidated.length === 0; attempt++) {
+      await Bun.sleep(0);
+    }
+    expect(invalidated).toEqual(["local"]);
   });
 
   test("does not certify a fetch that was invalidated while in flight", async () => {

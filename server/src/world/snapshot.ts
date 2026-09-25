@@ -445,8 +445,6 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         this.invalidationVersions.delete(invalidatedId);
       }
     }
-    if (selectedConnectionId) this.reserveSelectedSlot = true;
-
     const ordered = selectedConnectionId
       ? [
           ...statuses.filter(({ id }) => id === selectedConnectionId),
@@ -553,6 +551,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       return null;
     }
     if (!lease || lease.generation !== status.generation) return null;
+    if (selected) this.reserveSelectedSlot = true;
     const existing = this.workByConnection.get(status.id);
     if (
       existing &&
@@ -631,14 +630,21 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   private async runWork(work: HostWork<Runtime>) {
     let outcome: HostOutcome;
     try {
-      const raw = (await Promise.all([
+      const [workspace, tabs, panes, agents] = await Promise.allSettled([
         work.lease.runtime.herdr.call("workspace.list", {}, 5_000),
         work.lease.runtime.herdr.call("tab.list", {}, 5_000),
         work.lease.runtime.herdr.call("pane.list", {}, 5_000),
-        work.lease.runtime.herdr
-          .call("agent.list", {}, 5_000)
-          .catch(() => null),
-      ])) as RawHostSnapshot;
+        work.lease.runtime.herdr.call("agent.list", {}, 5_000),
+      ]);
+      if (workspace.status === "rejected") throw workspace.reason;
+      if (tabs.status === "rejected") throw tabs.reason;
+      if (panes.status === "rejected") throw panes.reason;
+      const raw: RawHostSnapshot = [
+        workspace.value,
+        tabs.value,
+        panes.value,
+        agents.status === "fulfilled" ? agents.value : null,
+      ];
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
       } else {
@@ -662,7 +668,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
           dirty: this.wasInvalidatedSinceStart(work),
         });
-        if (work.late && changed) {
+        if (work.late && (changed || this.wasInvalidatedSinceStart(work))) {
           this.queueLateInvalidation(work.status.id, work.lease.generation);
         }
         outcome = { raw };
