@@ -19,4 +19,4 @@
 ## 4. Accept and deliver
 
 - [x] 4.1 Exercised the synthetic compact Inspector fixture with an absent report and explicit Workspace changes choice; the full browser matrix covers desktop and phone layouts with synthetic identities.
-- [ ] 4.2 Document the one-shot harness command, session-owned/no-TTL lifetime, Herdr-restart loss, size/privacy limits and reported PR provenance; add an Unreleased entry, synchronize the accepted delta into current `world-surfaces`, run focused checks and `bun run check`, inspect final diff/history, then open a ready PR for independent review.
+- [x] 4.2 Documented the one-shot command, lifetime, restart loss, limits, and Reported PR provenance; synchronized `world-surfaces`, passed focused checks and `npx --yes bun run check`, inspected diff/history, and opened ready PR #107 for independent review.

@@ -26,6 +26,7 @@ retain their original Herdr Web lineage.
   reads its branch and changed files on the same qualified connection, offers an
   explicit Workspace changes scope, and labels unverified links as Reported PR.
   Reports have no TTL, renewal hook, Clear command, or agent-path Git mutations.
+  [Herdr World PR #107](https://github.com/IvoryHeart/herdr-world/pull/107)
 - Added `herdr-world task-summary` for harnesses to publish a normalized,
   credential-filtered, 80-character, expiring task summary for one exact local or
   fixed-policy SSH Herdr pane. World shows producer text only while its fingerprint
