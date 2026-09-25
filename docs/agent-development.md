@@ -40,6 +40,16 @@ When implementation changes a current contract, source map or operational proced
 update the affected spec, knowledge-map row or runbook in the same PR. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
+## Keep agent work bounded
+
+For an independent PR or focused review repair, start a fresh agent session when
+the current context is large. Hand off the branch tip, requested invariant,
+relevant files, review comments and latest check result; inspect other context
+on demand. For changes across async, identity, failure or UI focus boundaries,
+review those transitions against the diff and add applicable focused regressions
+before the final gate. Match model and reasoning effort to the risk, then assess
+quality and correction rate alongside tokens and time.
+
 ## Verify and hand off
 
 Add a focused regression check for behavior changes, then verify in proportion to
@@ -56,3 +66,13 @@ Inspect the final diff and history for unrelated edits, generated output and sen
 data. Record exact verification and agent execution in the pull request using the
 [PR template](../.github/pull_request_template.md). Reuse earlier results only
 when their relevant inputs are unchanged. Open a ready PR and stop before merge.
+
+## Revisit the process
+
+After a batch of roughly five agent-assisted PRs, and during release preparation,
+the agent closing the batch compares usage boundaries, model responses,
+compactions, elapsed time, repeated full checks and review repairs. Try one
+workflow change at a time and keep it only if it saves work without increasing
+defects. Update this short guide when a practice is supported; keep detailed
+evidence in the relevant PRs, separate from routine startup reading. This
+review is not a gate for individual PRs.

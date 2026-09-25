@@ -238,6 +238,21 @@ or billing exports would be needed for exact attribution.
    inference, tool and check wall time separately before optimizing latency.
    Compare model and reasoning-effort choices on similar bounded tasks before
    declaring one setting cheaper or faster.
+5. If per-PR usage remains manual, add a small optional, read-only summarizer
+   for `token_usage_record` entries within an explicit session/time boundary.
+   Report aggregates and compaction counts without prompt text, file paths or
+   raw tool output. It should reduce the counting errors found here without
+   becoming a new PR gate or agent supervisor.
 
 These are measurement and reading changes, not reasons to weaken tests, review,
 or the product contract.
+
+## Next process review
+
+After roughly five more agent-assisted PRs or at release preparation, compare
+the new PR records with this baseline: per-response tokens (including compaction),
+first and median prompt size, model and reasoning effort, elapsed time split by
+model/tools/checks where available, repeat full gates, and review repairs. Trial
+fresh repair sessions and stable-parent final checks before making either a
+permanent rule. Record the result as a short dated decision, and change
+`docs/agent-development.md` only when the measured practice proves useful.
