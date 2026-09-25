@@ -1,10 +1,55 @@
-# Agent usage retrospective: World packages B–F
+# Agent usage retrospective: World control-plane delivery
 
-This records the 25 September 2026 implementation and PR handoff of the next
-World packages in [PRs #104–#108](https://github.com/IvoryHeart/herdr-world/pulls). It is a
-measurement of those agent sessions, not a cost report or a budget for future
-work. At this snapshot, the pull requests were open for independent review and
-repair; they are the source for each package's exact scope and verification.
+This records the 25 September 2026 control-plane work from planning through the
+five implementation packages. It measures specified agent-session intervals,
+not the whole campaign's cost or a budget for future work. The pull requests
+remain the source for exact scope, verification and merge state.
+
+## Campaign boundary and outcome
+
+- [#101](https://github.com/IvoryHeart/herdr-world/pull/101) merged the plan
+  and five focused OpenSpec change plans after the architecture review. It fixed the
+  first-wave decisions: topology-focused Graph, a World-service watchlist,
+  and existing operations in visual Actions.
+- [#102](https://github.com/IvoryHeart/herdr-world/pull/102) proposed a
+  selective Roamgate replay, then closed when that approach was replaced.
+  [#103](https://github.com/IvoryHeart/herdr-world/pull/103) merged current
+  Roamgate source with shared Git ancestry and explicit World adaptations.
+- [#104–#108](https://github.com/IvoryHeart/herdr-world/pulls) delivered bounded
+  observation, task summaries, the qualified watchlist, agent source-control
+  context and visual-route Actions in two dependent branch stacks. At this
+  snapshot, their repair commits passed CI and the latest reviews reported no
+  remaining findings; merge state belongs to each PR.
+- [#109](https://github.com/IvoryHeart/herdr-world/pull/109) records usage and
+  process changes. The related [#100](https://github.com/IvoryHeart/herdr-world/pull/100)
+  visual action-parity PR remains open and is outside the B–F measurements.
+
+Parallel agent sessions overlapped across the two stacks. The work also
+produced repeated review/repair cycles and CI runs. There is no controlled
+serial comparison, and the measurements below
+exclude #101, #103 and some later repair work; they cannot establish a
+campaign-wide cost or speedup.
+
+## Efficiency assessment
+
+The parallel work produced five implementation PRs in overlapping 27–54 minute
+agent-session windows, but it was token-heavy and needed several repair passes.
+The B–F handoff intervals alone logged 87.14 million tokens. The separate
+#109 root-session snapshot logged another 16.98 million while also coordinating
+reviews; that is more than 104 million across these non-overlapping measured
+boundaries before counting #101, #103 or all later repairs. No billing record
+or serial comparison supports a dollar-cost or speedup claim. The high cached
+share lowers the likely input price relative to uncached reads, but does not
+make the repeated prompt processing or elapsed time disappear.
+
+The setup required a full `bun run check` before a ready implementation PR,
+and GitHub CI ran that command again on each push. It did not require reviewers
+to rerun green suites locally or agents to poll check status while work was
+still in progress. Those extra checks and waits were agent workflow choices.
+The largest measured token driver was accumulated prompt history across many
+responses, especially the inherited #109 conversation, rather than the small
+startup documents or OTel collection. A fresh bounded handoff and smaller tool
+results are better first experiments than removing necessary product contracts.
 
 ## What was measured
 
@@ -144,16 +189,19 @@ edits; one final check would have been sufficient. Repeated status waits added
 agent turns without advancing the code. Future coordination should let assigned
 agents work asynchronously and consume their final reports once available.
 
-## What independent review exposed
+## What review exposed
 
-The first independent review pass left ten inline comments across #104–#108.
+The first review pass left ten inline comments across #104–#108.
 They concentrate on transitions and failure handling: an early RPC rejection
 releasing a concurrency slot while sibling calls remain live; invalidation
 during an in-flight snapshot; checkout data changing during a Git query; SSH
 cleanup rejection; optional agent observation; a full watch registry; and
-keyboard focus after a resource action. Green full checks did not exercise all
-of these combinations. The repairs are still in progress, so the initial
-session and time figures exclude their cost.
+keyboard focus after a resource action. Later passes exposed three more
+within-deadline invalidation and pane-only identity gaps. Green full checks
+had not exercised all of these combinations. The latest reviews report these
+findings resolved, but the initial session and time figures exclude most
+repair work. The review comments came from the PR author's account; they do
+not constitute the repository's required independent approval.
 
 The #105 cleanup review repair gives a first measurement of that additional
 cost: 14 model responses used 2,768,108 tokens, including 2,765,061 input.
@@ -168,6 +216,16 @@ each ready implementation PR, and a review repair or changed parent tip makes
 an earlier result insufficient as final evidence. Running focused checks while
 the parent is moving, then one full gate on each final PR tip, avoids duplicate
 full gates without weakening the ready-PR requirement.
+
+In the final repair pass, #104 needed an extra push and CI run for a formatting
+fix that a focused pre-push format check could have caught. The review agent
+also reran focused suites after green CI on earlier heads; those runs did not
+surface another failure. Five updated PRs then ran full CI at
+once; #109's unchanged Chrome handoff test timed out after 35 seconds despite
+passing on its previous head. Concurrent load is a plausible cause, not a
+proven one. Avoid passive CI polling and duplicate local gates; inspect the
+result when a merge or repair decision is due, and investigate a specific
+failure before requesting another run.
 
 For work crossing async or UI boundaries, turn the changed invariant into a
 small set of concrete cases before the final full gate: in-flight invalidation,

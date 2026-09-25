@@ -65,6 +65,8 @@ For review-only work, inspect the exact-head CI result and recorded evidence fir
 Run a local check only to investigate a specific gap or reproduce a finding; do not
 repeat a successful full gate on the same commit. After a repair, successful CI
 running `bun run check` on the new head can provide the final gate.
+Check CI when its result affects a repair or merge decision; avoid repeated
+status polling while it runs.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
