@@ -78,6 +78,145 @@ function deferred<T>() {
 }
 
 describe("WorldSnapshotService", () => {
+  test("reserves all watched panes and ancestry beyond ordinary bounds", async () => {
+    const panes = Array.from({ length: 4_224 }, (_, index) => ({
+      pane_id: `pane-${index}`,
+      terminal_id: `terminal-${index}`,
+      workspace_id: `workspace-${index}`,
+      tab_id: `tab-${index}`,
+      focused: index < 4_096,
+    }));
+    const watched = Array.from({ length: 128 }, (_, index) => ({
+      connection_id: "local",
+      connection_generation: 1,
+      terminal_id: `terminal-${4_096 + index}`,
+      label: `Late ${index}`,
+    }));
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          if (method === "workspace.list")
+            return {
+              workspaces: panes.map(({ workspace_id }) => ({ workspace_id })),
+            };
+          if (method === "tab.list")
+            return {
+              tabs: panes.map(({ tab_id, workspace_id }) => ({
+                tab_id,
+                workspace_id,
+              })),
+            };
+          if (method === "pane.list") return { panes };
+          return { agents: [] };
+        },
+      },
+    };
+    const service = new WorldSnapshotService(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      undefined,
+      () => ({ revision: 7, records: watched }),
+    );
+    const snapshot = (await service.snapshot()).connections[0]?.snapshot;
+    expect(snapshot?.watch_admission).toEqual({
+      revision: 7,
+      registered: 128,
+      missing: 0,
+      unresolved: 0,
+      matched: 128,
+      admitted: 128,
+      admission_failed: 0,
+    });
+    expect(
+      snapshot?.panes.filter(
+        ({ terminal_id }) => terminal_id === "terminal-4223",
+      ),
+    ).toHaveLength(1);
+    expect(
+      snapshot?.workspaces.filter(
+        ({ workspace_id }) => workspace_id === "workspace-4223",
+      ),
+    ).toHaveLength(1);
+    expect(
+      snapshot?.tabs.filter(({ tab_id }) => tab_id === "tab-4223"),
+    ).toHaveLength(1);
+  });
+
+  test("classifies one duplicate watched terminal as unresolved once", async () => {
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          if (method === "workspace.list")
+            return { workspaces: [{ workspace_id: "space" }] };
+          if (method === "tab.list")
+            return { tabs: [{ tab_id: "tab", workspace_id: "space" }] };
+          if (method === "pane.list")
+            return {
+              panes: [
+                {
+                  pane_id: "a",
+                  terminal_id: "duplicate",
+                  workspace_id: "space",
+                  tab_id: "tab",
+                },
+                {
+                  pane_id: "b",
+                  terminal_id: "duplicate",
+                  workspace_id: "space",
+                  tab_id: "tab",
+                },
+              ],
+            };
+          return { agents: [] };
+        },
+      },
+    };
+    const service = new WorldSnapshotService(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      undefined,
+      () => ({
+        revision: 4,
+        records: [
+          {
+            connection_id: "local",
+            connection_generation: 1,
+            terminal_id: "duplicate",
+            label: "Duplicate",
+          },
+        ],
+      }),
+    );
+    expect(
+      (await service.snapshot()).connections[0]?.snapshot?.watch_admission,
+    ).toEqual({
+      revision: 4,
+      registered: 1,
+      missing: 0,
+      unresolved: 1,
+      matched: 0,
+      admitted: 0,
+      admission_failed: 0,
+    });
+  });
   test("validates the selected host before any runtime is used", async () => {
     let leases = 0;
     const service = new WorldSnapshotService<Runtime>({

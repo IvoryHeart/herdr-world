@@ -50,6 +50,17 @@ export type WorldRuntimeSnapshot = {
   panes: Pane[];
   agents: Record<string, unknown>[];
   coverage?: WorldRuntimeCoverage;
+  watchAdmission?: WorldRuntimeWatchAdmission;
+};
+
+export type WorldRuntimeWatchAdmission = {
+  revision: number;
+  registered: number;
+  missing: number;
+  unresolved: number;
+  matched: number;
+  admitted: number;
+  admissionFailed: number;
 };
 
 export type WorldRuntimeConnection = {
@@ -190,6 +201,41 @@ function parseCoverage(value: unknown): WorldRuntimeCoverage | null {
   return { workspaces, tabs, panes, agentPanes, status, byWorkspace };
 }
 
+function parseWatchAdmission(
+  value: unknown,
+): WorldRuntimeWatchAdmission | null {
+  const item = record(value);
+  if (!item) return null;
+  const revision = count(item.revision);
+  const registered = count(item.registered);
+  const missing = count(item.missing);
+  const unresolved = count(item.unresolved);
+  const matched = count(item.matched);
+  const admitted = count(item.admitted);
+  const admissionFailed = count(item.admission_failed);
+  if (
+    revision === null ||
+    registered === null ||
+    missing === null ||
+    unresolved === null ||
+    matched === null ||
+    admitted === null ||
+    admissionFailed === null ||
+    registered !== missing + unresolved + matched ||
+    matched !== admitted + admissionFailed
+  )
+    return null;
+  return {
+    revision,
+    registered,
+    missing,
+    unresolved,
+    matched,
+    admitted,
+    admissionFailed,
+  };
+}
+
 function parseConnection(value: unknown): WorldRuntimeConnection | null {
   const item = record(value);
   if (
@@ -214,7 +260,13 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
   const rawSnapshot = item.snapshot === null ? null : record(item.snapshot);
   if (item.snapshot !== null && !rawSnapshot) return null;
   const coverage = rawSnapshot ? parseCoverage(rawSnapshot.coverage) : null;
+  const watchAdmission =
+    rawSnapshot?.watch_admission === undefined
+      ? undefined
+      : parseWatchAdmission(rawSnapshot.watch_admission);
   if (rawSnapshot && !coverage) return null;
+  if (rawSnapshot?.watch_admission !== undefined && !watchAdmission)
+    return null;
   const error = record(item.error)?.message;
   return {
     connectionId: item.connection_id,
@@ -237,6 +289,7 @@ function parseConnection(value: unknown): WorldRuntimeConnection | null {
           panes: records<Pane>(rawSnapshot.panes),
           agents: records<Record<string, unknown>>(rawSnapshot.agents),
           coverage: coverage!,
+          ...(watchAdmission ? { watchAdmission } : {}),
         }
       : null,
   };

@@ -37,6 +37,7 @@ describe("World Tree projection", () => {
       observedLeaves: 21,
       presentedLeaves: 18,
       omittedLeaves: 3,
+      watchedOmittedLeaves: 0,
     });
   });
 
@@ -56,6 +57,7 @@ describe("World Tree projection", () => {
       observedLeaves: 4_097,
       presentedLeaves: 16,
       omittedLeaves: 4_081,
+      watchedOmittedLeaves: 0,
     });
   });
 
@@ -114,6 +116,20 @@ describe("World Tree projection", () => {
     expect(selectedHost).toBeDefined();
     expect(selectedSpace).toBeDefined();
     expect(selectedSpace?.children.map(({ id }) => id)).toContain(selected.id);
+  });
+
+  test("reports watched overflow separately from ordinary omissions", () => {
+    const crowded = space("local", 0, 19);
+    crowded.children = crowded.children.map((leaf) => ({
+      ...leaf,
+      watched: true,
+    }));
+    const projected = projectWorldTree(world([host("local", [crowded])]));
+    expect(projected.hosts[0]?.spaces[0]).toMatchObject({
+      omittedChildCount: 3,
+      watchedOmittedChildCount: 3,
+    });
+    expect(projected.coverage.watchedOmittedLeaves).toBe(3);
   });
 });
 

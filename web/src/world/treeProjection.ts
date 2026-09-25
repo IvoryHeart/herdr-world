@@ -17,6 +17,7 @@ export type WorldTreeSpace = {
   children: WorldLeafObject[];
   observedChildCount: number;
   omittedChildCount: number;
+  watchedOmittedChildCount: number;
 };
 
 export type WorldTreeHost = {
@@ -34,6 +35,7 @@ export type WorldTreeProjection = {
     observedLeaves: number;
     presentedLeaves: number;
     omittedLeaves: number;
+    watchedOmittedLeaves: number;
   };
   presentationBounds: typeof TREE_PRESENTATION_BOUNDS;
 };
@@ -108,6 +110,15 @@ export function projectWorldTree(
       observedLeaves: world.coverage.leaves,
       presentedLeaves: presentedLeafCount,
       omittedLeaves: Math.max(0, world.coverage.leaves - presentedLeafCount),
+      watchedOmittedLeaves: hosts.reduce(
+        (total, host) =>
+          total +
+          host.spaces.reduce(
+            (spaceTotal, space) => spaceTotal + space.watchedOmittedChildCount,
+            0,
+          ),
+        0,
+      ),
     },
     presentationBounds: TREE_PRESENTATION_BOUNDS,
   };
@@ -127,6 +138,11 @@ function projectSpace(
     children,
     observedChildCount: space.coverage.leaves,
     omittedChildCount: Math.max(0, space.coverage.leaves - children.length),
+    watchedOmittedChildCount: Math.max(
+      0,
+      space.children.filter(({ watched }) => watched).length -
+        children.filter(({ watched }) => watched).length,
+    ),
   };
 }
 
@@ -171,6 +187,7 @@ function compareLeaves(
   return (
     Number(right.leaf.id === selectedLeafId) -
       Number(left.leaf.id === selectedLeafId) ||
+    Number(right.leaf.watched) - Number(left.leaf.watched) ||
     Number(right.leaf.focused) - Number(left.leaf.focused) ||
     statusPriority(right.leaf.status) - statusPriority(left.leaf.status) ||
     Number(right.leaf.kind === "agent") - Number(left.leaf.kind === "agent") ||
