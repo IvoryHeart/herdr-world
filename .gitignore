@@ -21,6 +21,7 @@ server/herdr-gui
 server/herdr-gui-*
 server/herdr-world
 server/herdr-world.exe
+server/herdr-world.map
 server/herdr-world-*
 server/*.bun-build
 

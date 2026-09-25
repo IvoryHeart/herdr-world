@@ -63,7 +63,7 @@
     "check": "bun run notices:check && bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build && bun run build:site && bun run spec:check",
     "install-hooks": "git config core.hooksPath .githooks",
     "clean:bun-build": "find server -maxdepth 1 -name '*.bun-build' -exec rm -rf {} +",
-    "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world-* && bun run clean:bun-build",
+    "clean": "rm -rf web/dist server/public server/src/public-files.gen.ts server/herdr-world server/herdr-world.exe server/herdr-world.map server/herdr-world-* && bun run clean:bun-build",
     "start:server": "bun run --filter herdr-world-server start",
     "spec": "openspec",
     "spec:check": "openspec validate --all --strict --no-interactive"

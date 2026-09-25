@@ -74,6 +74,9 @@ export quarantine
 xargs -0 sh -c '
   set -eu
   fail() { printf "Last step snapshot refused: %s\\n" "$*" >&2; exit 1; }
+  pin_dir=
+  cleanup_pin() { [ -z "$pin_dir" ] || rm -rf "$pin_dir"; }
+  trap cleanup_pin EXIT
   read count total < "$quarantine/budget"
   for path do
     cd "$snapshot_root"
@@ -116,9 +119,19 @@ xargs -0 sh -c '
     cd -P "$expected" || fail "directory changed: $path"
     [ "$PWD" = "$expected" ] || fail "symlink ancestor: $path"
     file="./\${path##*/}"
-    ln -P "$file" "$quarantine/sources/$count" || fail "cannot pin file: $path"
-    [ -f "$quarantine/sources/$count" ] && [ ! -L "$quarantine/sources/$count" ] || fail "file changed type: $path"
-    report=$(dd if="$quarantine/sources/$count" of="$quarantine/files/$count" bs=8388609 count=1 2>&1) || fail "cannot read: $path"
+    source="$quarantine/sources/$count"
+    if ln -P "$file" "$source" 2>/dev/null; then
+      :
+    else
+      # A linked worktree may live on another filesystem from its Git directory.
+      # Pin beside the source, then copy only from that pinned inode. mktemp
+      # creates an exclusive private directory on the source filesystem.
+      pin_dir=$(mktemp -d "./.herdr-world-last-step-pin.XXXXXXXX") || fail "cannot stage file: $path"
+      ln -P "$file" "$pin_dir/file" || fail "cannot pin file: $path"
+      source="$pin_dir/file"
+    fi
+    [ -f "$source" ] && [ ! -L "$source" ] || fail "file changed type: $path"
+    report=$(dd if="$source" of="$quarantine/files/$count" bs=8388609 count=1 2>&1) || fail "cannot read: $path"
     # GNU/BSD dd reports records in/out followed by the byte count (LC_ALL=C).
     set -- $report
     shift 6
@@ -128,7 +141,9 @@ xargs -0 sh -c '
     total=$((total + size))
     [ "$total" -le 33554432 ] || fail "worktree exceeds 32 MiB"
     mode=100644
-    [ ! -x "$quarantine/sources/$count" ] || mode=100755
+    [ ! -x "$source" ] || mode=100755
+    cleanup_pin
+    pin_dir=
     printf "%s\\t%s\\n" "$mode" "$path" >> "$quarantine/metadata"
     printf "%s\\n" "$quarantine/files/$count" >> "$quarantine/blob-paths"
   done

@@ -320,8 +320,8 @@ describe("bounded worktree snapshot transaction", () => {
       await writeFile(join(root, "file"), "small");
       const runner = instrument((script) =>
         script.replace(
-          '    ln -P "$file"',
-          '    rm "$file"; ln -s /etc/passwd "$file"\n    ln -P "$file"',
+          '    if ln -P "$file"',
+          '    rm "$file"; ln -s /etc/passwd "$file"\n    if ln -P "$file"',
         ),
       );
       const before = await objectFiles(root);
@@ -329,6 +329,100 @@ describe("bounded worktree snapshot transaction", () => {
       expect(await objectFiles(root)).toEqual(before);
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("uses a checkout-local pin when Git storage cannot hard-link the source", async () => {
+    const root = await repository();
+    try {
+      await writeFile(join(root, "tracked"), "before\n");
+      await git(root, "add", "tracked");
+      const index = await readFile(join(root, ".git", "index"));
+      await writeFile(join(root, "tracked"), "after\n");
+      // Force the same branch on hosts without a second test filesystem.
+      const crossDevice = instrument((script) =>
+        script.replace(
+          '    if ln -P "$file" "$source" 2>/dev/null; then',
+          "    if false; then",
+        ),
+      );
+      const tree = await capture(root, crossDevice);
+      expect(await git(root, "show", `${tree}:tracked`)).toBe("after");
+      expect(await capture(root)).toBe(tree);
+      expect(await readFile(join(root, ".git", "index"))).toEqual(index);
+      expect(await readdir(root)).not.toContainEqual(
+        expect.stringMatching(/^\.herdr-world-last-step-pin\./),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("checkout-local pin refuses a raced symlink and removes its staging directory", async () => {
+    const root = await repository();
+    try {
+      await writeFile(join(root, "file"), "inside");
+      const before = await objectFiles(root);
+      const crossDeviceRace = instrument((script) =>
+        script
+          .replace(
+            '    if ln -P "$file" "$source" 2>/dev/null; then',
+            "    if false; then",
+          )
+          .replace(
+            '      ln -P "$file" "$pin_dir/file"',
+            '      rm "$file"; ln -s /etc/passwd "$file"\n      ln -P "$file" "$pin_dir/file"',
+          ),
+      );
+      await expect(capture(root, crossDeviceRace)).rejects.toThrow(
+        "file changed type",
+      );
+      expect(await objectFiles(root)).toEqual(before);
+      expect(await readdir(root)).not.toContainEqual(
+        expect.stringMatching(/^\.herdr-world-last-step-pin\./),
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("captures a linked worktree across real filesystems when available", async () => {
+    const checkoutParent = await mkdtemp(
+      join(tmpdir(), "herdr-world-snapshot-cross-device-"),
+    );
+    let gitStorage: string | undefined;
+    try {
+      // Linux CI provides /dev/shm; other hosts still exercise the forced path above.
+      const sharedMemory = await stat("/dev/shm").catch(() => null);
+      if (
+        !sharedMemory ||
+        sharedMemory.dev === (await stat(checkoutParent)).dev
+      )
+        return;
+      gitStorage = await mkdtemp(join("/dev/shm", "herdr-world-snapshot-git-"));
+      await git(gitStorage, "init");
+      await git(gitStorage, "config", "user.name", "Test");
+      await git(gitStorage, "config", "user.email", "test@example.com");
+      await writeFile(join(gitStorage, "tracked"), "before\n");
+      await git(gitStorage, "add", "tracked");
+      await git(gitStorage, "commit", "-m", "initial");
+      const checkout = join(checkoutParent, "checkout");
+      await git(gitStorage, "worktree", "add", "--detach", checkout);
+      await writeFile(join(checkout, "tracked"), "after\n");
+      await writeFile(join(checkout, "untracked"), "new\n");
+      const tree = await capture(checkout);
+      expect(await git(checkout, "show", `${tree}:tracked`)).toBe("after");
+      expect(await git(checkout, "show", `${tree}:untracked`)).toBe("new");
+      expect(await capture(checkout)).toBe(tree);
+      expect(await readdir(checkout)).toEqual(
+        expect.arrayContaining([".git", "tracked", "untracked"]),
+      );
+      expect(await readdir(checkout)).not.toContainEqual(
+        expect.stringMatching(/^\.herdr-world-last-step-pin\./),
+      );
+    } finally {
+      await rm(checkoutParent, { recursive: true, force: true });
+      if (gitStorage) await rm(gitStorage, { recursive: true, force: true });
     }
   });
 
@@ -343,8 +437,8 @@ describe("bounded worktree snapshot transaction", () => {
             argv
               .at(-1)!
               .replace(
-                '    ln -P "$file"',
-                '    printf "%040d" 0 >> "$file"\n    ln -P "$file"',
+                '    if ln -P "$file"',
+                '    printf "%040d" 0 >> "$file"\n    if ln -P "$file"',
               ),
           ],
           timeout,

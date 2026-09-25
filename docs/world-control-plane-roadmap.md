@@ -44,6 +44,8 @@ Assignments A, B and C can be worked independently if separate worktrees and rev
 
 ## Assignment A: upstream-first Roamgate source merge
 
+Implementation: [PR #103](https://github.com/IvoryHeart/herdr-world/pull/103).
+
 This is an upstream source integration, not a new product/API proposal. World is
 derived from Roamgate. Use the exact current source head in [UPSTREAM](../UPSTREAM.md)
 and merge future upstream changes from that ancestor; do not selectively replay
