@@ -562,6 +562,55 @@ describe("WorldSnapshotService", () => {
     expect(invalidated).toEqual(["local"]);
   });
 
+  test("re-notifies coalesced requests invalidated before their deadlines", async () => {
+    const release = deferred<void>();
+    const invalidated: string[] = [];
+    let calls = 0;
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          calls += 1;
+          await release.promise;
+          return runtime("Same").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      1_000,
+    );
+
+    const first = service.snapshot();
+    await Promise.resolve();
+    expect(calls).toBe(4);
+    service.invalidate("local");
+    const second = service.snapshot();
+    release.resolve();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(calls).toBe(4);
+    expect(firstResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    expect(secondResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    await Bun.sleep(0);
+    expect(invalidated).toEqual(["local"]);
+  });
+
   test("does not certify a fetch that was invalidated while in flight", async () => {
     const release = deferred<void>();
     let calls = 0;

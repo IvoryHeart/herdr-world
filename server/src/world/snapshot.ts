@@ -668,7 +668,10 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
           freshUntil: this.now() + SNAPSHOT_FRESH_MS,
           dirty: this.wasInvalidatedSinceStart(work),
         });
-        if (work.late && (changed || this.wasInvalidatedSinceStart(work))) {
+        if (
+          (work.late && changed) ||
+          this.wasInvalidatedSinceStart(work)
+        ) {
           this.queueLateInvalidation(work.status.id, work.lease.generation);
         }
         outcome = { raw };
