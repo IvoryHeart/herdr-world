@@ -1,5 +1,6 @@
-// All writes before publication belong to one fixed, exclusively created directory.
-// In particular, a killed shell must not unlink storage still used by its child.
+// Git objects and index writes stay in one fixed, exclusively created quarantine.
+// Cross-filesystem source pins are briefly created beside their checkout files.
+// A killed shell must not unlink quarantine storage still used by its child.
 export function worktreeSnapshotCommand(
   root: string,
   quote: (value: string) => string,

@@ -235,6 +235,15 @@ groups do not represent a combined working tree. Changes describe checkout edits
 not proof that one agent produced them. Last step uses recorded activity snapshots,
 not attribution of arbitrary working-tree edits.
 
+Last step stages its temporary Git index and objects under the checkout's Git
+directory in `herdr-world-last-step-capture`. If the checkout and Git directory
+are on different filesystems, capture briefly creates a private
+`.herdr-world-last-step-pin.*` directory beside each source file to pin its inode
+while bounded bytes are copied into Git storage. Normal completion and handled
+failure remove these directories. After an interrupted capture, verify that no
+writer is still active before removing a stale capture lock and any leftover pin
+directories; a live writer may still be using them.
+
 Git resource keys encode the endpoint-qualified repository identity
 (`worktree.gui_settings_key`) and normalized checkout path as a pair. The path
 separates linked checkouts; the repository identity separates SSH destinations
