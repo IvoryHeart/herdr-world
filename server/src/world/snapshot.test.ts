@@ -69,7 +69,855 @@ function runtime(label: string): Runtime {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
 describe("WorldSnapshotService", () => {
+  test("reserves all watched panes and ancestry beyond ordinary bounds", async () => {
+    const panes = Array.from({ length: 4_224 }, (_, index) => ({
+      pane_id: `pane-${index}`,
+      terminal_id: `terminal-${index}`,
+      workspace_id: `workspace-${index}`,
+      tab_id: `tab-${index}`,
+      focused: index < 4_096,
+    }));
+    const watched = Array.from({ length: 128 }, (_, index) => ({
+      connection_id: "local",
+      connection_generation: 1,
+      terminal_id: `terminal-${4_096 + index}`,
+      label: `Late ${index}`,
+    }));
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          if (method === "workspace.list")
+            return {
+              workspaces: panes.map(({ workspace_id }) => ({ workspace_id })),
+            };
+          if (method === "tab.list")
+            return {
+              tabs: panes.map(({ tab_id, workspace_id }) => ({
+                tab_id,
+                workspace_id,
+              })),
+            };
+          if (method === "pane.list") return { panes };
+          return { agents: [] };
+        },
+      },
+    };
+    const service = new WorldSnapshotService(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      undefined,
+      () => ({ revision: 7, records: watched }),
+    );
+    const snapshot = (await service.snapshot()).connections[0]?.snapshot;
+    expect(snapshot?.watch_admission).toEqual({
+      revision: 7,
+      registered: 128,
+      missing: 0,
+      unresolved: 0,
+      matched: 128,
+      admitted: 128,
+      admission_failed: 0,
+    });
+    expect(
+      snapshot?.panes.filter(
+        ({ terminal_id }) => terminal_id === "terminal-4223",
+      ),
+    ).toHaveLength(1);
+    expect(
+      snapshot?.workspaces.filter(
+        ({ workspace_id }) => workspace_id === "workspace-4223",
+      ),
+    ).toHaveLength(1);
+    expect(
+      snapshot?.tabs.filter(({ tab_id }) => tab_id === "tab-4223"),
+    ).toHaveLength(1);
+  });
+
+  test("classifies one duplicate watched terminal as unresolved once", async () => {
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          if (method === "workspace.list")
+            return { workspaces: [{ workspace_id: "space" }] };
+          if (method === "tab.list")
+            return { tabs: [{ tab_id: "tab", workspace_id: "space" }] };
+          if (method === "pane.list")
+            return {
+              panes: [
+                {
+                  pane_id: "a",
+                  terminal_id: "duplicate",
+                  workspace_id: "space",
+                  tab_id: "tab",
+                },
+                {
+                  pane_id: "b",
+                  terminal_id: "duplicate",
+                  workspace_id: "space",
+                  tab_id: "tab",
+                },
+              ],
+            };
+          return { agents: [] };
+        },
+      },
+    };
+    const service = new WorldSnapshotService(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      undefined,
+      () => ({
+        revision: 4,
+        records: [
+          {
+            connection_id: "local",
+            connection_generation: 1,
+            terminal_id: "duplicate",
+            label: "Duplicate",
+          },
+        ],
+      }),
+    );
+    expect(
+      (await service.snapshot()).connections[0]?.snapshot?.watch_admission,
+    ).toEqual({
+      revision: 4,
+      registered: 1,
+      missing: 0,
+      unresolved: 1,
+      matched: 0,
+      admitted: 0,
+      admission_failed: 0,
+    });
+  });
+  test("validates the selected host before any runtime is used", async () => {
+    let leases = 0;
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => {
+        leases += 1;
+        return null;
+      },
+    });
+    for (const hint of [null, "", 3, "unknown"]) {
+      await expect(
+        service.snapshot({ selected_connection_id: hint }),
+      ).rejects.toThrow("selected World connection");
+    }
+    expect(leases).toBe(0);
+    expect((await service.snapshot()).connections).toHaveLength(1);
+    expect(leases).toBe(1);
+  });
+
+  test("returns all 64 catalogue entries with the selected host before slow peers", async () => {
+    const hostIds = Array.from({ length: 64 }, (_, index) => `host-${index}`);
+    const release = deferred<void>();
+    const started: string[] = [];
+    const runtimes = new Map(
+      hostIds.map((id) => {
+        const base = runtime(id);
+        return [
+          id,
+          {
+            herdr: {
+              async call(method: string) {
+                if (method === "workspace.list") started.push(id);
+                if (id !== "host-63") await release.promise;
+                return base.herdr.call(method);
+              },
+            },
+          },
+        ] as const;
+      }),
+    );
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => hostIds.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: runtimes.get(id)!,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      20,
+    );
+    try {
+      const result = await service.snapshot({
+        selected_connection_id: "host-63",
+      });
+      expect(result.connections).toHaveLength(64);
+      expect(
+        result.connections.map(({ connection_id }) => connection_id),
+      ).toEqual(hostIds);
+      expect(started[0]).toBe("host-63");
+      expect(started).toHaveLength(4);
+      expect(result.connections[63]).toMatchObject({
+        actionable: true,
+        stale: false,
+        snapshot: { workspaces: [{ label: "host-63 workspace" }] },
+      });
+      expect(
+        result.connections
+          .slice(0, 63)
+          .every(
+            ({ actionable, snapshot }) => !actionable && snapshot === null,
+          ),
+      ).toBe(true);
+      expect(JSON.stringify(result).length).toBeLessThan(40_000);
+      const repeated = await service.snapshot({
+        selected_connection_id: "host-63",
+      });
+      expect(repeated.connections[63].actionable).toBe(true);
+      expect(started).toHaveLength(4);
+      expect(JSON.stringify(repeated).length).toBeLessThan(40_000);
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("keeps a slow selected host and unavailable peers non-actionable without inventing children", async () => {
+    const release = deferred<void>();
+    const selectedRuntime: Runtime = {
+      herdr: {
+        async call(method) {
+          await release.promise;
+          return runtime("Selected").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [
+          status("selected"),
+          status("incompatible", "error"),
+          status("offline", "disconnected"),
+        ],
+        readyRuntimeLease: (id) =>
+          id === "selected"
+            ? {
+                connectionId: id,
+                generation: 1,
+                runtime: selectedRuntime,
+                isCurrent: () => true,
+              }
+            : null,
+      },
+      Date.now,
+      undefined,
+      15,
+    );
+    try {
+      const result = await service.snapshot({
+        selected_connection_id: "selected",
+      });
+      expect(result.connections).toHaveLength(3);
+      expect(result.connections[0]).toMatchObject({
+        state: "ready",
+        snapshot: null,
+        stale: false,
+        actionable: false,
+        snapshot_error: "observation deadline exceeded",
+      });
+      expect(result.connections[1]).toMatchObject({
+        state: "error",
+        snapshot: null,
+        actionable: false,
+      });
+      expect(result.connections[2]).toMatchObject({
+        state: "disconnected",
+        snapshot: null,
+        actionable: false,
+      });
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("admits a reconnected host only after its new generation is ready", async () => {
+    let connected = false;
+    const value = runtime("Reconnected");
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [
+        status(
+          "remote",
+          connected ? "ready" : "reconnecting",
+          connected ? 2 : 1,
+        ),
+      ],
+      readyRuntimeLease: () =>
+        connected
+          ? {
+              connectionId: "remote",
+              generation: 2,
+              runtime: value,
+              isCurrent: () => connected,
+            }
+          : null,
+    });
+    const unavailable = await service.snapshot({
+      selected_connection_id: "remote",
+    });
+    expect(unavailable.connections[0]).toMatchObject({
+      generation: 1,
+      snapshot: null,
+      actionable: false,
+    });
+    connected = true;
+    const ready = await service.snapshot({ selected_connection_id: "remote" });
+    expect(ready.connections[0]).toMatchObject({
+      generation: 2,
+      snapshot_generation: 2,
+      stale: false,
+      actionable: true,
+      snapshot: { workspaces: [{ label: "Reconnected workspace" }] },
+    });
+  });
+
+  test("coalesces overlapping requests for one host without multiplying Herdr calls", async () => {
+    const release = deferred<void>();
+    const base = runtime("Current");
+    let calls = 0;
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          calls += 1;
+          await release.promise;
+          return base.herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: value,
+        isCurrent: () => true,
+      }),
+    });
+    const first = service.snapshot();
+    const second = service.snapshot();
+    expect(calls).toBe(4);
+    release.resolve();
+    const [left, right] = await Promise.all([first, second]);
+    expect(left.connections[0].snapshot).toEqual(right.connections[0].snapshot);
+    expect(left.connections[0].actionable).toBe(true);
+  });
+
+  test("promotes a newly selected queued host ahead of inactive work", async () => {
+    const release = deferred<void>();
+    const started: string[] = [];
+    const ids = Array.from({ length: 6 }, (_, index) => `host-${index}`);
+    const runtimes = new Map(
+      ids.map((id) => [
+        id,
+        {
+          herdr: {
+            async call(method: string) {
+              if (method === "workspace.list") started.push(id);
+              if (id !== "host-0" && id !== "host-5") {
+                await release.promise;
+              }
+              return runtime(id).herdr.call(method);
+            },
+          },
+        },
+      ]),
+    );
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: runtimes.get(id)!,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      20,
+    );
+    try {
+      const first = await service.snapshot({
+        selected_connection_id: "host-0",
+      });
+      expect(first.connections[0].actionable).toBe(true);
+      expect(started).not.toContain("host-5");
+      const second = await service.snapshot({
+        selected_connection_id: "host-5",
+      });
+      expect(second.connections[5].actionable).toBe(true);
+      expect(started).toContain("host-5");
+      expect(started.indexOf("host-5")).toBeLessThan(
+        started.indexOf("host-4") < 0 ? Infinity : started.indexOf("host-4"),
+      );
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("restores all four slots for an older client after selected work drains", async () => {
+    const release = deferred<void>();
+    const started: string[] = [];
+    let ids = ["selected"];
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: {
+            herdr: {
+              async call(method) {
+                if (method === "workspace.list") started.push(id);
+                if (id !== "selected") await release.promise;
+                return runtime(id).herdr.call(method);
+              },
+            },
+          },
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      15,
+    );
+    await service.snapshot({ selected_connection_id: "selected" });
+    ids = Array.from({ length: 5 }, (_, index) => `host-${index}`);
+    try {
+      await service.snapshot();
+      expect(started.filter((id) => id !== "selected")).toEqual(
+        ids.slice(0, 4),
+      );
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("does not reserve a selected slot for a fully cached hinted request", async () => {
+    const release = deferred<void>();
+    const started: string[] = [];
+    let ids = ["selected"];
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: {
+            herdr: {
+              async call(method) {
+                if (id !== "selected" && method === "workspace.list") {
+                  started.push(id);
+                }
+                if (id !== "selected") await release.promise;
+                return runtime(id).herdr.call(method);
+              },
+            },
+          },
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      15,
+    );
+    await service.snapshot();
+    await service.snapshot({ selected_connection_id: "selected" });
+    ids = [
+      "selected",
+      ...Array.from({ length: 4 }, (_, index) => `host-${index}`),
+    ];
+    try {
+      await service.snapshot();
+      expect(started).toEqual(ids.slice(1));
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("keeps a host slot until its required RPC siblings settle", async () => {
+    const release = deferred<void>();
+    const started: string[] = [];
+    const ids = Array.from({ length: 6 }, (_, index) => `host-${index}`);
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: {
+            herdr: {
+              async call(method) {
+                if (method === "workspace.list") {
+                  started.push(id);
+                  throw new Error("synthetic workspace failure");
+                }
+                await release.promise;
+                return runtime(id).herdr.call(method);
+              },
+            },
+          },
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      undefined,
+      15,
+    );
+    try {
+      await service.snapshot();
+      expect(started).toEqual(ids.slice(0, 4));
+    } finally {
+      release.resolve();
+    }
+  });
+
+  test("marks an unfinished cached host stale and invalidates once when new data arrives", async () => {
+    const release = deferred<void>();
+    let gate: Promise<void> | null = null;
+    let label = "Before";
+    let calls = 0;
+    const invalidated: string[] = [];
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          calls += 1;
+          if (gate) await gate;
+          return runtime(label).herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      15,
+    );
+    await service.snapshot();
+    gate = release.promise;
+    label = "After";
+    service.invalidate("local");
+    const partial = await service.snapshot({ selected_connection_id: "local" });
+    expect(partial.connections[0]).toMatchObject({
+      snapshot_generation: 1,
+      stale: true,
+      actionable: false,
+      snapshot: { workspaces: [{ label: "Before workspace" }] },
+    });
+    release.resolve();
+    for (let attempt = 0; attempt < 20 && invalidated.length === 0; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(invalidated).toEqual(["local"]);
+    gate = deferred<void>().promise;
+    const beforeReuse = calls;
+    const fresh = await service.snapshot({ selected_connection_id: "local" });
+    expect(fresh.connections[0]).toMatchObject({
+      stale: false,
+      actionable: true,
+      snapshot: { workspaces: [{ label: "After workspace" }] },
+    });
+    expect(invalidated).toEqual(["local"]);
+    expect(calls).toBe(beforeReuse);
+  });
+
+  test("re-notifies after an invalidated late result with an unchanged digest", async () => {
+    const release = deferred<void>();
+    let gate: Promise<void> | null = null;
+    const invalidated: string[] = [];
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          if (gate) await gate;
+          return runtime("Same").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      15,
+    );
+    await service.snapshot();
+    gate = release.promise;
+    service.invalidate("local");
+    await service.snapshot();
+    service.invalidate("local");
+    const coalesced = service.snapshot();
+    release.resolve();
+    await coalesced;
+    for (let attempt = 0; attempt < 20 && invalidated.length === 0; attempt++) {
+      await Bun.sleep(0);
+    }
+    expect(invalidated).toEqual(["local"]);
+  });
+
+  test("re-notifies coalesced requests invalidated before their deadlines", async () => {
+    const release = deferred<void>();
+    const invalidated: string[] = [];
+    let calls = 0;
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          calls += 1;
+          await release.promise;
+          return runtime("Same").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      1_000,
+    );
+
+    const first = service.snapshot();
+    await Promise.resolve();
+    expect(calls).toBe(4);
+    service.invalidate("local");
+    const second = service.snapshot();
+    release.resolve();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(calls).toBe(4);
+    expect(firstResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    expect(secondResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    await Bun.sleep(0);
+    expect(invalidated).toEqual(["local"]);
+  });
+
+  test("re-notifies coalesced requests after a pin invalidates their observation", async () => {
+    const release = deferred<void>();
+    let gate: Promise<void> | null = null;
+    let watchRevision = 0;
+    let watched = false;
+    const invalidated: string[] = [];
+    let calls = 0;
+    const value: Runtime = {
+      herdr: {
+        async call(method) {
+          calls += 1;
+          if (gate) await gate;
+          return runtime("Same").herdr.call(method);
+        },
+      },
+    };
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local")],
+        readyRuntimeLease: () => ({
+          connectionId: "local",
+          generation: 1,
+          runtime: value,
+          isCurrent: () => true,
+        }),
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      1_000,
+      () => ({
+        revision: watchRevision,
+        records: watched
+          ? [
+              {
+                connection_id: "local",
+                connection_generation: 1,
+                terminal_id: "shared-terminal",
+                label: "Synthetic watch",
+              },
+            ]
+          : [],
+      }),
+    );
+    await service.snapshot();
+    gate = release.promise;
+    service.invalidate("local");
+    const first = service.snapshot();
+    await Promise.resolve();
+    expect(calls).toBe(8);
+    watchRevision = 1;
+    watched = true;
+    service.invalidate("local");
+    const second = service.snapshot();
+    release.resolve();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(calls).toBe(8);
+    expect(firstResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    expect(secondResult.connections[0]).toMatchObject({
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    await Bun.sleep(0);
+    expect(invalidated).toEqual(["local"]);
+    const refreshed = await service.snapshot();
+    expect(refreshed.connections[0]).toMatchObject({
+      actionable: true,
+      snapshot: {
+        watch_admission: { revision: 1, registered: 1, admitted: 1 },
+      },
+    });
+  });
+
+  test("does not certify a fetch that was invalidated while in flight", async () => {
+    const release = deferred<void>();
+    let calls = 0;
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("local")],
+      readyRuntimeLease: () => ({
+        connectionId: "local",
+        generation: 1,
+        runtime: {
+          herdr: {
+            async call(method) {
+              calls += 1;
+              if (calls <= 4) await release.promise;
+              return runtime("Current").herdr.call(method);
+            },
+          },
+        },
+        isCurrent: () => true,
+      }),
+    });
+    const first = service.snapshot();
+    service.invalidate("local");
+    release.resolve();
+    const uncertain = await first;
+    expect(uncertain.connections[0]).toMatchObject({
+      stale: true,
+      actionable: false,
+      snapshot_error: "observation changed during snapshot",
+    });
+    const refreshed = await service.snapshot();
+    expect(refreshed.connections[0].actionable).toBe(true);
+    expect(calls).toBe(8);
+  });
+
+  test("a replaced generation cannot publish its late result over the new host", async () => {
+    const release = deferred<void>();
+    const oldBase = runtime("Old");
+    const oldRuntime: Runtime = {
+      herdr: {
+        async call(method) {
+          await release.promise;
+          return oldBase.herdr.call(method);
+        },
+      },
+    };
+    const newRuntime = runtime("New");
+    let generation = 1;
+    const invalidated: string[] = [];
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => [status("local", "ready", generation)],
+        readyRuntimeLease: () => {
+          const captured = generation;
+          return {
+            connectionId: "local",
+            generation: captured,
+            runtime: captured === 1 ? oldRuntime : newRuntime,
+            isCurrent: () => generation === captured,
+          };
+        },
+      },
+      Date.now,
+      (id) => invalidated.push(id),
+      15,
+    );
+    try {
+      const partial = await service.snapshot({
+        selected_connection_id: "local",
+      });
+      expect(partial.connections[0]).toMatchObject({
+        actionable: false,
+        snapshot: null,
+      });
+      generation = 2;
+      const newer = await service.snapshot({ selected_connection_id: "local" });
+      expect(newer.connections[0]).toMatchObject({
+        generation: 2,
+        snapshot_generation: 2,
+        actionable: true,
+        snapshot: { workspaces: [{ label: "New workspace" }] },
+      });
+      release.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(invalidated).toEqual([]);
+      const after = await service.snapshot();
+      expect(after.connections[0].snapshot?.workspaces[0]?.label).toBe(
+        "New workspace",
+      );
+    } finally {
+      release.resolve();
+    }
+  });
   test("rejects malformed priority hints at the bridge boundary", async () => {
     const service = new WorldSnapshotService<Runtime>({
       list: () => [],

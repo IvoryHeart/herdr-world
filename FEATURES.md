@@ -14,6 +14,9 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 - A failed selected host may retain its last observed topology as visibly stale,
   never actionable. Selecting a live entity revalidates its connection generation
   before opening the same terminal or host-specific Inspector context.
+- A slow inactive host does not hold back the selected host: World returns a
+  complete host list within 20 seconds, marks unfinished host views stale, and
+  refreshes them when their observations complete.
 - Office, Tree, and Graph share search in the application top bar; Graph adds Fit
   and zoom there instead of consuming a second stage header.
 - **Actions** in that top bar captures the selected visual space, agent or
@@ -23,6 +26,11 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   visual view is active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
   host, generation or observation change invalidates the open target; Actions
   does not send terminal input, assign tasks or control agents.
+- **Pin** a live agent or terminal in Office, Tree, or Graph to keep its exact
+  connection-qualified pane in visual triage. Pins are shared by browsers served
+  by this World process, survive page reload, and clear when the process restarts
+  or that runtime generation is replaced. **Pinned only** is a browser-local view
+  filter; workspace pins and Graph positions remain separate preferences.
 - World runs as one application and one browser origin. No remote World/Roamgate
   service or browser bridge URL is required for an SSH host.
 
@@ -37,8 +45,8 @@ independent of that provider.
 
 The delivered foundation covers the selected-host lifecycle and the focused local,
 SSH, desktop and responsive acceptance recorded by the current contract. Expanded
-simultaneous live local-plus-SSH acceptance, the task-summary producer and the
-qualified agent/pane watchlist are follow-up work tracked in
+simultaneous live local-plus-SSH acceptance and the task-summary producer are
+follow-up work tracked in
 [#95](https://github.com/IvoryHeart/herdr-world/issues/95). Browser-federated bridge
 URLs, native Capacitor Android packaging and old visual preference keys are retired;
 the responsive installable PWA is the mobile client.

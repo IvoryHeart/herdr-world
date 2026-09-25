@@ -73,6 +73,7 @@ const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 export default function PixelOfficeView({
   world,
   toolbarPortal = null,
+  toolbarActions,
   selectedId,
   onSelect,
   onOpenTerminal,
@@ -83,6 +84,7 @@ export default function PixelOfficeView({
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
+  toolbarActions?: ReactNode;
   selectedId: string | null;
   onSelect(id: string): void | Promise<boolean>;
   onOpenTerminal(id: string): Promise<void>;
@@ -512,7 +514,9 @@ export default function PixelOfficeView({
         if (match) void onSelect(match.id);
       }}
       actions={actions}
-    />
+    >
+      {toolbarActions}
+    </WorldViewToolbar>
   );
 
   return (

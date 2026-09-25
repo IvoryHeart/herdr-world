@@ -32,6 +32,21 @@ Spaces keeps one selected connection for operational work. The bridge-global
 qualifies that data by connection and generation into one WorldObject used by Office,
 Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
 Files, Changes, or Agent History revalidates and switches to the exact owning runtime.
+The browser sends its selected connection as a scheduling hint in the global snapshot
+request. The service attempts that host first, reserves one of four observation slots
+from inactive-host work, and returns the complete managed-host catalogue within a
+20-second response deadline. Unfinished hosts expose only stale, non-actionable cached
+topology or no children. Per-host work is shared across overlapping requests; a late
+result enters the cache only for its original current runtime generation and triggers
+a coalesced refresh when its observed data changes. A current result may be reused for
+15 seconds unless that host receives an explicit topology invalidation. The browser
+still has one selected operational host and one World WebSocket.
+In a bounded synthetic 64-profile case with one current selected host and 63 stalled
+hosts, the partial response was 16,090 serialized bytes; an immediate repeated
+request started no additional Herdr calls while inactive fetches remained in flight.
+This is a partial-response measurement, not a maximum payload size. Each fully
+observed host still has its existing 512-workspace, 2,048-tab and 4,096-pane/agent
+record caps, so payload size grows with actual topology across the 64-profile limit.
 
 Office observability is optional and separate from Herdr runtime authority. The World
 service validates one credential-free Prometheus base URL, issues only fixed bounded

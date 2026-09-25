@@ -43,6 +43,7 @@ import { WorldViewToolbar } from "./WorldViewToolbar";
 export default function SpatialGraphView({
   world,
   toolbarPortal = null,
+  toolbarActions,
   selectedId,
   conversationNodeIds,
   onSelect,
@@ -53,6 +54,7 @@ export default function SpatialGraphView({
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
+  toolbarActions?: ReactNode;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
   onSelect(id: string): void;
@@ -261,6 +263,7 @@ export default function SpatialGraphView({
       }
       actions={actions}
     >
+      {toolbarActions}
       <div
         className="world-spatial-graph-zoom"
         role="group"
@@ -448,6 +451,12 @@ function SemanticSpace({
           {space.omittedChildCount ? (
             <li className="is-overflow">
               +{space.omittedChildCount} omitted leaves
+            </li>
+          ) : null}
+          {space.watchedOmittedChildCount ? (
+            <li className="is-overflow">
+              +{space.watchedOmittedChildCount} watched leaves hidden by view
+              limit
             </li>
           ) : null}
         </ul>
