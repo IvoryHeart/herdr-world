@@ -56,14 +56,17 @@ describe("Office room actions", () => {
     ).toEqual({
       visible: true,
       enabled: false,
+      reason: "Endpoint metadata is loading",
     });
     expect(officeCreationActionState(true, null)).toEqual({
       visible: true,
       enabled: true,
+      reason: null,
     });
     expect(officeCreationActionState(false, null)).toEqual({
       visible: false,
       enabled: false,
+      reason: null,
     });
   });
 });

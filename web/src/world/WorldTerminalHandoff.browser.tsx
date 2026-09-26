@@ -40,7 +40,7 @@ async function until(
     await settle();
   }
   throw new Error(
-    `Timed out: ${typeof message === "function" ? message() : message}; selected=${store.get().selectedPaneId}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
+    `Timed out: ${typeof message === "function" ? message() : message}; mode=${store.get().navigationMode}; browser=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; owners=${document.querySelectorAll(".world-terminal-owner").length}; parking=${document.querySelectorAll(".world-terminal-parking").length}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
   );
 }
 
@@ -106,7 +106,8 @@ let runtimeGeneration = 7;
 let rejectNextWorldSnapshot = false;
 let staleNextWorldSnapshot = false;
 let omitNextWorldTopology = false;
-let navigationMode: "shared" | "browser-local" = "shared";
+let navigationMode: "shared" | "browser-local" = "browser-local";
+const initialTerminalAttach = Promise.withResolvers<void>();
 let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let delayedTabList: { promise: Promise<void>; tabs: Tab[] } | null = null;
@@ -407,6 +408,9 @@ const client: ConnectionClient = {
     }
     if (method === "terminal.attach") {
       const terminalId = String(params.terminal_id ?? "");
+      if (terminalId === "builder-terminal") {
+        await initialTerminalAttach.promise;
+      }
       for (const listener of terminalListeners) {
         listener({
           connection_id: client.connectionId,
@@ -418,7 +422,12 @@ const client: ConnectionClient = {
           bytes: btoa(`${terminalId}\r\n`),
         });
       }
-      return {};
+      return {
+        endpoint: {
+          methods: ["pane.focus", "tab.create", "workspace.create"],
+          capabilities: [],
+        },
+      };
     }
     return {};
   },
@@ -487,7 +496,13 @@ async function run() {
     defaultConnectionId: client.connectionId,
     connectionGeneration: client.generation,
     serverRuntimeGeneration: client.serverRuntimeGeneration,
-    navigationMode: "shared",
+    navigationMode,
+    browserNavigation: {
+      revision: 1,
+      workspaceId: workspaceBase.workspace_id,
+      tabIds: { [workspaceBase.workspace_id]: tabs[0]!.tab_id },
+      paneIds: { [tabs[0]!.tab_id]: panes[0]!.pane_id },
+    },
     connections: [
       {
         id: client.connectionId,
@@ -516,13 +531,52 @@ async function run() {
     () => window.__HERDR_WORLD_RENDERER__?.ready === true,
     "Office renderer",
   );
+  const initialSeat = document.querySelector<HTMLButtonElement>(
+    ".world-new-seat-canvas-action",
+  );
+  const initialRoom = document.querySelector<HTMLButtonElement>(
+    ".world-new-room-canvas-action",
+  );
+  const initialTab = document.querySelector<HTMLButtonElement>(".tabbar-add");
+  check(
+    initialSeat?.disabled === true &&
+      initialRoom?.disabled === true &&
+      initialTab?.disabled === true &&
+      initialSeat.title.includes("Endpoint availability is loading") &&
+      initialRoom.title.includes("Endpoint availability is loading") &&
+      initialTab.title.includes("Endpoint availability is loading") &&
+      getComputedStyle(initialSeat).cursor === "not-allowed",
+    "browser-local Office creation controls did not share their pending endpoint state",
+  );
+  const pendingCreationSceneRenders =
+    window.__HERDR_WORLD_RENDERER__!.sceneRenders;
+  initialTerminalAttach.resolve();
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(".world-new-seat-canvas-action")
         ?.disabled === false &&
       document.querySelector<HTMLButtonElement>(".world-new-room-canvas-action")
-        ?.disabled === false,
-    "initial Office room and seat actions",
+        ?.disabled === false &&
+      document.querySelector<HTMLButtonElement>(".tabbar-add")?.disabled ===
+        false &&
+      window.__HERDR_WORLD_RENDERER__!.sceneRenders >
+        pendingCreationSceneRenders,
+    "browser-local Office room, seat and tab-strip actions",
+  );
+  check(
+    calls.filter(
+      ({ method, params }) =>
+        method === "terminal.attach" &&
+        params.terminal_id === "builder-terminal",
+    ).length === 1 &&
+      document.querySelector(".world-context-rail .workspace-inspector") ===
+        null &&
+      getComputedStyle(
+        document.querySelector<HTMLButtonElement>(
+          ".world-new-seat-canvas-action",
+        )!,
+      ).cursor === "pointer",
+    "Office did not establish one parked creation endpoint without opening an Inspector",
   );
   check(
     !calls.some(
@@ -530,6 +584,12 @@ async function run() {
     ),
     "Office required a topology mutation before enabling initial room actions",
   );
+  navigationMode = "shared";
+  __storeTesting.replaceState({
+    ...store.get(),
+    navigationMode,
+  });
+  await settle();
   check(
     document.querySelector(".world-status-header") === null,
     "the retired Visual Control Plane header still consumes Office height",

@@ -1,6 +1,7 @@
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import type { OfficeLayout } from "./officeGeometry";
 import type { OfficeObservability } from "./officeObservability";
+import type { OfficeCreationActionState } from "./officeRoomActions";
 
 export function officeSceneSignature({
   layout,
@@ -8,6 +9,7 @@ export function officeSceneSignature({
   selectedKey,
   completionSeenKeys = new Set<string>(),
   observability,
+  seatCreationStates = {},
   visibleRoomIndices,
 }: {
   layout: OfficeLayout;
@@ -15,6 +17,7 @@ export function officeSceneSignature({
   selectedKey: string | null;
   completionSeenKeys?: ReadonlySet<string>;
   observability?: OfficeObservability;
+  seatCreationStates?: Readonly<Record<string, OfficeCreationActionState>>;
   visibleRoomIndices: readonly number[];
 }) {
   return JSON.stringify({
@@ -36,6 +39,14 @@ export function officeSceneSignature({
     receptions: projection.receptions,
     barAgents: projection.barAgents,
     coverage: projection.coverage,
+    seatCreationStates: Object.fromEntries(
+      visibleRoomIndices.flatMap((index) => {
+        const room = projection.rooms[index];
+        return room && seatCreationStates[room.key]
+          ? [[room.key, seatCreationStates[room.key]]]
+          : [];
+      }),
+    ),
     observability: observability
       ? {
           health: observability.health,

@@ -45,7 +45,7 @@ export default function WorldTerminalPortalList({
       />
       {presentations.map((presentation) => {
         if (
-          !presentation.portal ||
+          (!presentation.portal && !presentation.endpointReadiness) ||
           !presentation.tabId ||
           presentation.connectionId !== activeConnectionId ||
           presentation.runtimeGeneration !== runtimeGeneration

@@ -10,6 +10,7 @@ import type {
 } from "./officeGeometry";
 import type { PublishedOfficeLayout } from "./officeLayout";
 import { officeDebug } from "../officeDebug";
+import type { OfficeCreationActionState } from "./officeRoomActions";
 
 export type OfficeCanvasAnchor = {
   x: number;
@@ -42,7 +43,7 @@ export function PixelOfficeCanvas({
   onSelect,
   onActivateAgent,
   onActivateRoom,
-  showCreateSeat,
+  seatCreationStates,
   onNewSeat,
   onHover,
   onAnchorChange,
@@ -61,7 +62,7 @@ export function PixelOfficeCanvas({
   onSelect: (key: string) => void;
   onActivateAgent: (key: string) => void;
   onActivateRoom: (key: string) => void;
-  showCreateSeat: (roomKey: string) => boolean;
+  seatCreationStates: Readonly<Record<string, OfficeCreationActionState>>;
   onNewSeat: (roomKey: string) => void;
   onHover?: (hover: OfficeCanvasHover | null) => void;
   onAnchorChange?: (anchors: OfficeConversationAnchors | null) => void;
@@ -83,7 +84,7 @@ export function PixelOfficeCanvas({
     onSelect,
     onActivateAgent,
     onActivateRoom,
-    showCreateSeat,
+    seatCreationStates,
     onNewSeat,
     onHover,
     onAnchorChange,
@@ -103,7 +104,7 @@ export function PixelOfficeCanvas({
     onSelect,
     onActivateAgent,
     onActivateRoom,
-    showCreateSeat,
+    seatCreationStates,
     onNewSeat,
     onHover,
     onAnchorChange,
@@ -254,7 +255,7 @@ export function PixelOfficeCanvas({
       (key) => latestRef.current.onSelect(key),
       (key) => latestRef.current.onActivateAgent(key),
       (key) => latestRef.current.onActivateRoom(key),
-      (roomKey) => latestRef.current.showCreateSeat(roomKey),
+      latestRef.current.seatCreationStates,
       (roomKey) => latestRef.current.onNewSeat(roomKey),
       (hover) => latestRef.current.onHover?.(hover),
       (layout) => latestRef.current.onLayoutChange?.(layout),
@@ -282,6 +283,7 @@ export function PixelOfficeCanvas({
           latest.observability,
           latest.roomAlignment,
           latest.longRoomTitleMode,
+          latest.seatCreationStates,
         );
         scheduleAnchorReportRef.current();
       })
@@ -318,6 +320,7 @@ export function PixelOfficeCanvas({
       observability,
       roomAlignment,
       longRoomTitleMode,
+      seatCreationStates,
     );
     scheduleAnchorReportRef.current();
   }, [
@@ -326,6 +329,7 @@ export function PixelOfficeCanvas({
     observability,
     projection,
     roomAlignment,
+    seatCreationStates,
     selectedKey,
   ]);
 

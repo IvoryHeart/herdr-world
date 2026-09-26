@@ -135,6 +135,10 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
+- Kept browser-local Office creation ready without first visiting Spaces or
+  opening an Inspector, unified seat, room and tab-strip availability feedback,
+  and preserved the prior Inspector while bounded exact focus reports failures.
+  [Herdr World PR #114](https://github.com/IvoryHeart/herdr-world/pull/114)
 - Kept open floating Inspectors visible through failed, stale or bounded World
   observations and through focused tab lists fetched before a new Inspector opens.
   [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)

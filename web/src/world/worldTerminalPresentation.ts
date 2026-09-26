@@ -56,6 +56,7 @@ export type WorldTerminalPresentation = Pick<
   tabId: string;
   terminalId: string;
   portal: Element | null;
+  endpointReadiness?: boolean;
   onFocusPane?: (paneId: string) => void;
 };
 

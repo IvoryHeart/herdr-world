@@ -7,13 +7,20 @@ export type OfficeRoomActionCapabilities = {
   close: boolean;
 };
 
+export type OfficeCreationActionState = {
+  visible: boolean;
+  enabled: boolean;
+  reason: string | null;
+};
+
 export function officeCreationActionState(
   admitted: boolean,
   endpointReason: string | null,
-) {
+): OfficeCreationActionState {
   return {
     visible: admitted,
     enabled: admitted && endpointReason === null,
+    reason: admitted ? endpointReason : null,
   };
 }
 

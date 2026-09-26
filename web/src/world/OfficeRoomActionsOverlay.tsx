@@ -68,9 +68,11 @@ export function OfficeRoomActionsOverlay({
   selectedRoomKey,
   showCreateSeat,
   canCreateSeat,
+  createSeatReason,
   onCreateSeat,
   showCreateRoom,
   canCreateRoom,
+  createRoomReason,
   onCreateRoom,
   canRenameRoom,
   onRenameRoom,
@@ -83,9 +85,11 @@ export function OfficeRoomActionsOverlay({
   selectedRoomKey: string | null;
   showCreateSeat(roomKey: string): boolean;
   canCreateSeat(roomKey: string): boolean;
+  createSeatReason(roomKey: string): string | null;
   onCreateSeat(roomKey: string): void;
   showCreateRoom(roomKey: string | null): boolean;
   canCreateRoom(roomKey: string | null): boolean;
+  createRoomReason(roomKey: string | null): string | null;
   onCreateRoom(roomKey: string | null): void;
   canRenameRoom(roomKey: string): boolean;
   onRenameRoom(roomKey: string): void;
@@ -181,7 +185,8 @@ export function OfficeRoomActionsOverlay({
             title={
               full
                 ? `${room.accessibleLabel ?? room.displayLabel} is full`
-                : `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`
+                : (createSeatReason(room.key) ??
+                  `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`)
             }
             disabled={!layoutReady || full || !canCreateSeat(room.key)}
             style={{ left: anchor.x - 25, top: anchor.deskY }}
@@ -194,7 +199,9 @@ export function OfficeRoomActionsOverlay({
           className="world-new-room-canvas-action"
           type="button"
           aria-label="New room"
-          title="Create a new Herdr workspace"
+          title={
+            createRoomReason(selectedRoomKey) ?? "Create a new Herdr workspace"
+          }
           disabled={!layoutReady || !canCreateRoom(selectedRoomKey)}
           style={{ left: layout.officeWidth / 2 - 28, top: roomBottom + 8 }}
           onClick={() => onCreateRoom(selectedRoomKey)}

@@ -58,6 +58,7 @@ import {
   OFFICE_SCENE_DESTROY_OPTIONS,
 } from "./officeRendererResources";
 import type { OfficeObservability } from "./officeObservability";
+import type { OfficeCreationActionState } from "./officeRoomActions";
 import {
   formatOfficeCost,
   formatOfficeModelName,
@@ -167,6 +168,7 @@ export type OfficeRendererController = {
     observability?: OfficeObservability,
     roomAlignment?: OfficeRoomAlignment,
     longRoomTitleMode?: OfficeLongRoomTitleMode,
+    seatCreationStates?: Readonly<Record<string, OfficeCreationActionState>>,
   ) => void;
   getAnchors: (
     selectedKey: string | null,
@@ -200,7 +202,7 @@ export async function createOfficeRenderer(
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
   onActivateRoom: (key: string) => void,
-  showCreateSeat: (roomKey: string) => boolean,
+  seatCreationStates: Readonly<Record<string, OfficeCreationActionState>>,
   onNewSeat: (roomKey: string) => void,
   onHover: (hover: OfficeCanvasHover | null) => void,
   onLayoutChange: (layout: PublishedOfficeLayout | null) => void,
@@ -231,6 +233,7 @@ export async function createOfficeRenderer(
   let currentObservability = observability;
   let currentRoomAlignment = roomAlignment;
   let currentLongRoomTitleMode = longRoomTitleMode;
+  let currentSeatCreationStates = seatCreationStates;
   const layoutPublisher = new OfficeLayoutPublisher();
   let currentLayout: PublishedOfficeLayout | null = null;
   let lastWidth = 0;
@@ -404,6 +407,7 @@ export async function createOfficeRenderer(
       selectedKey: currentSelectedKey,
       completionSeenKeys: currentCompletionSeenKeys,
       observability: currentObservability,
+      seatCreationStates: currentSeatCreationStates,
       visibleRoomIndices: visibleRooms.map(({ index }) => index),
     });
     if (sceneSignature === lastSceneSignature) {
@@ -442,7 +446,11 @@ export async function createOfficeRenderer(
           select,
           activateAgent,
           activateRoom,
-          showCreateSeat,
+          currentSeatCreationStates[room.key] ?? {
+            visible: false,
+            enabled: false,
+            reason: null,
+          },
           onNewSeat,
         );
       }
@@ -522,7 +530,7 @@ export async function createOfficeRenderer(
           headerMinWidth: measuredHeader.roomWidth,
           deskCount:
             room.desks.length +
-            (showCreateSeat(room.key) &&
+            (currentSeatCreationStates[room.key]?.visible &&
             room.desks.length < OFFICE_GEOMETRY.desksPerRoom
               ? 1
               : 0),
@@ -532,7 +540,7 @@ export async function createOfficeRenderer(
           actions: {
             rename: true,
             close: true,
-            createSeat: showCreateSeat(room.key),
+            createSeat: currentSeatCreationStates[room.key]?.visible === true,
           },
         };
       });
@@ -692,6 +700,7 @@ export async function createOfficeRenderer(
       nextObservability = currentObservability,
       nextRoomAlignment = currentRoomAlignment,
       nextLongRoomTitleMode = currentLongRoomTitleMode,
+      nextSeatCreationStates = currentSeatCreationStates,
     ) {
       if (
         nextRoomAlignment !== currentRoomAlignment ||
@@ -705,6 +714,7 @@ export async function createOfficeRenderer(
       currentSelectedKey = nextSelectedKey;
       currentCompletionSeenKeys = nextCompletionSeenKeys;
       currentObservability = nextObservability;
+      currentSeatCreationStates = nextSeatCreationStates;
       build(lastWidth || element.clientWidth);
     },
     getAnchors(selectedKey, conversationTargetKey) {
@@ -1682,7 +1692,7 @@ function drawRoom(
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
   onActivateRoom: (key: string) => void,
-  showCreateSeat: (roomKey: string) => boolean,
+  seatCreationState: OfficeCreationActionState,
   onNewSeat: (roomKey: string) => void,
 ) {
   const host = projection.hosts.find(({ key }) => key === room.hostKey);
@@ -1801,7 +1811,7 @@ function drawRoom(
         onActivateAgent,
       );
     });
-  if (showCreateSeat(room.key)) {
+  if (seatCreationState.visible) {
     if (room.desks.length < OFFICE_GEOMETRY.desksPerRoom) {
       drawNewSeatAction(
         parent,
@@ -1809,6 +1819,7 @@ function drawRoom(
         rect,
         room.desks.length,
         theme.accent,
+        seatCreationState.enabled,
         onNewSeat,
       );
     } else {
@@ -1868,37 +1879,46 @@ function drawNewSeatAction(
   rect: OfficeRoomRect,
   index: number,
   accent: number,
+  enabled: boolean,
   onNewSeat: (roomKey: string) => void,
 ) {
   const anchor = deskAnchor(rect, index);
   const action = new Container();
   action.label = room.key;
   action.eventMode = "static";
-  action.cursor = "pointer";
-  action.on("pointertap", (event) => {
-    event.stopPropagation();
-    onNewSeat(room.key);
-  });
+  action.cursor = enabled ? "pointer" : "not-allowed";
+  if (enabled) {
+    action.on("pointertap", (event) => {
+      event.stopPropagation();
+      onNewSeat(room.key);
+    });
+  }
   const plate = new Graphics();
   // Keep the visible + target self-describing for Pixi's hit-test walk so
   // hover callouts work on the empty-seat action as well as on desks.
   plate.label = room.key;
   plate.eventMode = "static";
+  plate.cursor = enabled ? "pointer" : "not-allowed";
   plate
     .roundRect(anchor.x - 25, anchor.deskY, 50, 27, 5)
-    .fill({ color: accent, alpha: 0.1 })
-    .stroke({ width: 1, color: accent, alpha: 0.8 });
+    .fill({ color: accent, alpha: enabled ? 0.1 : 0.04 })
+    .stroke({ width: 1, color: accent, alpha: enabled ? 0.8 : 0.38 });
   action.addChild(plate);
   const plus = label("+", {
     size: 19,
-    color: 0xf4e6c0,
+    color: enabled ? 0xf4e6c0 : 0x9c947f,
     anchor: 0.5,
     weight: "700",
   });
+  plus.alpha = enabled ? 1 : 0.62;
   plus.eventMode = "none";
   plus.position.set(anchor.x, anchor.deskY + 13);
   action.addChild(plus);
-  const hint = label("NEW SEAT", { size: 7, color: 0xa9c8a4, anchor: 0.5 });
+  const hint = label("NEW SEAT", {
+    size: 7,
+    color: enabled ? 0xa9c8a4 : 0x8e958a,
+    anchor: 0.5,
+  });
   hint.eventMode = "none";
   hint.position.set(anchor.x, anchor.nameY + 7);
   action.addChild(hint);

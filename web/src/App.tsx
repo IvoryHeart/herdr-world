@@ -912,6 +912,8 @@ export default function App({
       activeConnectionId: state.activeConnectionId,
       connectionGeneration: state.connectionGeneration,
       serverRuntimeGeneration: state.serverRuntimeGeneration,
+      navigationMode: state.navigationMode,
+      browserNavigation: state.browserNavigation,
       lastRefresh: state.lastRefresh,
       layout: state.layout,
       notice: state.notice,
@@ -1200,8 +1202,77 @@ export default function App({
     inspectorState,
     Boolean(inspectorFloatingTerminal),
   );
+  const browserCreationPresentation: WorldTerminalPresentation | null = (() => {
+    if (
+      terminalPresentation === "spaces" ||
+      s.navigationMode !== "browser-local" ||
+      s.serverRuntimeGeneration === null
+    ) {
+      return null;
+    }
+    const workspaceId = s.browserNavigation.workspaceId;
+    const tabId = workspaceId
+      ? s.browserNavigation.tabIds[workspaceId]
+      : undefined;
+    const paneId = tabId ? s.browserNavigation.paneIds[tabId] : undefined;
+    const workspace = workspaceId
+      ? s.workspaces.find((candidate) => candidate.workspace_id === workspaceId)
+      : undefined;
+    const pane = paneId
+      ? s.panes.find(
+          (candidate) =>
+            candidate.pane_id === paneId &&
+            candidate.workspace_id === workspaceId &&
+            candidate.tab_id === tabId,
+        )
+      : undefined;
+    if (!workspace || !tabId || !pane) return null;
+    return {
+      nodeId: JSON.stringify([s.activeConnectionId, "pane", pane.pane_id]),
+      connectionId: s.activeConnectionId,
+      runtimeGeneration: s.serverRuntimeGeneration,
+      workspaceId: workspace.workspace_id,
+      tabId,
+      paneId: pane.pane_id,
+      terminalId: pane.terminal_id,
+      label: pane.display_agent ?? pane.agent ?? "Terminal",
+      hostLabel: s.activeConnectionId,
+      spaceLabel: workspace.label ?? `Workspace ${workspace.number}`,
+      portal: null,
+      endpointReadiness: true,
+    };
+  })();
+  const matchingPresentedCreationOwner = browserCreationPresentation
+    ? worldTerminalPresentations.find(
+        (presentation) =>
+          presentation.connectionId ===
+            browserCreationPresentation.connectionId &&
+          presentation.runtimeGeneration ===
+            browserCreationPresentation.runtimeGeneration &&
+          presentation.workspaceId ===
+            browserCreationPresentation.workspaceId &&
+          presentation.tabId === browserCreationPresentation.tabId &&
+          Boolean(presentation.portal),
+      )
+    : undefined;
   const worldPresentationsForView =
-    terminalPresentation === "spaces" ? [] : worldTerminalPresentations;
+    terminalPresentation === "spaces"
+      ? []
+      : browserCreationPresentation && !matchingPresentedCreationOwner
+        ? [
+            ...worldTerminalPresentations.filter(
+              (presentation) =>
+                presentation.connectionId !==
+                  browserCreationPresentation.connectionId ||
+                presentation.runtimeGeneration !==
+                  browserCreationPresentation.runtimeGeneration ||
+                presentation.workspaceId !==
+                  browserCreationPresentation.workspaceId ||
+                presentation.tabId !== browserCreationPresentation.tabId,
+            ),
+            browserCreationPresentation,
+          ]
+        : worldTerminalPresentations;
   const presentedTerminalPane =
     terminalPresentation === "inspector" ? inspectorTerminalPane : undefined;
   const presentedTerminalPortal =
