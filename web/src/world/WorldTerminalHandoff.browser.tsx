@@ -97,6 +97,7 @@ let focusedTabId = tabs[0]!.tab_id;
 let worldRevision = 1;
 let runtimeGeneration = 7;
 let navigationMode: "shared" | "browser-local" = "shared";
+let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
@@ -140,9 +141,9 @@ function layout(): PaneLayout {
   return {
     workspace_id: workspaceBase.workspace_id,
     tab_id: focusedTabId,
-    zoomed: false,
+    zoomed: zoomedFocusedPaneId !== null,
     area: { x: 0, y: 0, width: 160, height: 48 },
-    focused_pane_id: focusedPaneId,
+    focused_pane_id: zoomedFocusedPaneId ?? focusedPaneId,
     panes: tabPanes.map((pane, index) => ({
       pane_id: pane.pane_id,
       focused: pane.focused,
@@ -2770,6 +2771,113 @@ async function run() {
       store.get().selectedPaneId === siblingPane.pane_id,
     "browser-local sibling click started an old-pane focus that could finish last",
   );
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () =>
+      splitBuilderWindow.querySelector<HTMLButtonElement>(
+        'button[aria-label="Previous pane"]',
+      ),
+    "mobile switcher in floating split Inspector",
+  );
+  const delayedMobileOldFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: siblingPane.pane_id,
+    promise: delayedMobileOldFocus.promise,
+  };
+  const oldPaneGetsBeforeMobile = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === siblingPane.pane_id,
+  ).length;
+  const previousPaneButton =
+    splitBuilderWindow.querySelector<HTMLButtonElement>(
+      'button[aria-label="Previous pane"]',
+    )!;
+  previousPaneButton.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      pointerId: 83,
+      pointerType: "touch",
+    }),
+  );
+  previousPaneButton.click();
+  await until(
+    () => store.get().selectedPaneId === "builder-pane",
+    "mobile switcher focused previous pane",
+  );
+  const oldPaneGetsAfterMobile = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === siblingPane.pane_id,
+  ).length;
+  delayedMobileOldFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    oldPaneGetsAfterMobile === oldPaneGetsBeforeMobile &&
+      store.get().selectedPaneId === "builder-pane",
+    "mobile switcher started an old-pane focus that could finish last",
+  );
+  updateLayoutPreferences({ mode: "desktop" });
+  await until(
+    () => document.documentElement.dataset.layout === "desktop",
+    "desktop layout after mobile pane focus",
+  );
+
+  zoomedFocusedPaneId = siblingPane.pane_id;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  __storeTesting.replaceState({
+    ...store.get(),
+    layout: layout(),
+    lastRefresh: Date.now(),
+  });
+  await until(
+    () => splitBuilderWindow.querySelector(".pane-layout-single"),
+    "zoomed sibling pane in floating Inspector",
+  );
+  const delayedZoomOldFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "builder-pane",
+    promise: delayedZoomOldFocus.promise,
+  };
+  const oldPaneGetsBeforeZoom = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  splitBuilderWindow
+    .querySelector<HTMLElement>(".pane-layout-single")!
+    .dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 84,
+        pointerType: "mouse",
+      }),
+    );
+  await until(
+    () => store.get().selectedPaneId === siblingPane.pane_id,
+    "zoomed sibling pane received focus",
+  );
+  const oldPaneGetsAfterZoom = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  delayedZoomOldFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    oldPaneGetsAfterZoom === oldPaneGetsBeforeZoom &&
+      store.get().selectedPaneId === siblingPane.pane_id,
+    "zoomed pane click started an old-pane focus that could finish last",
+  );
+  zoomedFocusedPaneId = null;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  __storeTesting.replaceState({
+    ...store.get(),
+    layout: layout(),
+    lastRefresh: Date.now(),
+  });
   navigationMode = "shared";
   __storeTesting.replaceState({ ...store.get(), navigationMode });
   const afterSiblingBounds = splitBuilderWindow.getBoundingClientRect();
@@ -2857,6 +2965,115 @@ async function run() {
       !laterInspector?.isConnected,
     "Restore moved an Inspector opened and docked after the arrangement",
   );
+
+  const narrowedVisualStage =
+    document.querySelector<HTMLElement>(".world-view-layout")!;
+  narrowedVisualStage.style.width = "700px";
+  narrowedVisualStage.style.height = "740px";
+  await until(
+    () => Math.abs(narrowedVisualStage.getBoundingClientRect().width - 700) < 2,
+    "narrow visual arrangement stage",
+  );
+  const visualWindowBounds = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].map((window) => window.getBoundingClientRect());
+  const clippedVisualControls = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].flatMap((window) => {
+      const bounds = window.getBoundingClientRect();
+      return [
+        ...window.querySelectorAll<HTMLButtonElement>(
+          ".workspace-inspector-head button",
+        ),
+      ].flatMap((button) => {
+        const control = button.getBoundingClientRect();
+        const reachable =
+          control.width > 0 &&
+          control.height > 0 &&
+          control.left >= bounds.left - 1 &&
+          control.right <= bounds.right + 1 &&
+          control.top >= bounds.top - 1 &&
+          control.bottom <= bounds.bottom + 1;
+        return reachable
+          ? []
+          : [
+              {
+                label: button.ariaLabel ?? button.textContent,
+                width: Math.round(bounds.width),
+                leftInset: Math.round(control.left - bounds.left),
+                rightInset: Math.round(bounds.right - control.right),
+                topInset: Math.round(control.top - bounds.top),
+                bottomInset: Math.round(bounds.bottom - control.bottom),
+              },
+            ];
+      });
+    });
+  await arrangeWindows("Columns");
+  await until(() => {
+    const bounds = visualWindowBounds().sort((a, b) => a.left - b.left);
+    return (
+      bounds.length === 3 &&
+      bounds.every((item) => item.width >= 220) &&
+      bounds.every(
+        (item, index) => index === 0 || bounds[index - 1]!.right <= item.left,
+      )
+    );
+  }, "three Inspectors in narrow Columns");
+  await settle();
+  check(
+    clippedVisualControls().length === 0,
+    `narrow Columns clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
+  );
+  narrowedVisualStage.style.height = "512px";
+  narrowedVisualStage.style.maxHeight = "512px";
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 512) < 2,
+    "short visual arrangement stage",
+  );
+  await arrangeWindows("Rows");
+  await until(() => {
+    const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
+    return (
+      bounds.length === 3 &&
+      bounds.every((item) => item.height >= 160) &&
+      bounds.every(
+        (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
+      )
+    );
+  }, "three Inspectors in narrow Rows");
+  check(
+    clippedVisualControls().length === 0,
+    `narrow Rows clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
+  );
+  narrowedVisualStage.style.width = "1000px";
+  narrowedVisualStage.style.height = "740px";
+  narrowedVisualStage.style.removeProperty("max-height");
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().width - 1000) < 2 &&
+      narrowedVisualStage.getBoundingClientRect().height >= 650,
+    "visual stage before default Cascade",
+  );
+  await arrangeWindows("Cascade");
+  await until(
+    () =>
+      visualWindowBounds().length === 3 &&
+      visualWindowBounds().every(
+        (bounds) =>
+          Math.abs(bounds.width - 760) <= 2 &&
+          Math.abs(bounds.height - 520) <= 2,
+      ),
+    "Cascade kept the default floating window size",
+  );
+  narrowedVisualStage.style.removeProperty("width");
+  narrowedVisualStage.style.removeProperty("height");
 
   runtimeGeneration += 1;
   worldRevision += 1;

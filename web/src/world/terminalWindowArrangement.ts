@@ -1,4 +1,8 @@
-import type { FloatingTerminalGeometry } from "./floatingTerminalGeometry";
+import {
+  FLOATING_TERMINAL_DEFAULT_SIZE,
+  TILED_TERMINAL_MIN_SIZE,
+  type FloatingTerminalGeometry,
+} from "./floatingTerminalGeometry";
 
 export type TerminalWindowArrangementPreset =
   | "single"
@@ -32,8 +36,6 @@ export type TerminalWindowArrangementResult =
 const GAP = 8;
 const CASCADE_X_STEP = 32;
 const DEFAULT_TITLE_HEIGHT = 40;
-const DEFAULT_FLOATING_WIDTH = 760;
-const DEFAULT_FLOATING_HEIGHT = 520;
 
 /** Purely resolves browser presentation geometry; Restore belongs to the window registry. */
 export function resolveTerminalWindowArrangement(
@@ -98,7 +100,12 @@ function columns(
   windows: readonly TerminalWindowArrangementWindow[],
 ): TerminalWindowArrangementResult {
   const width = (stage.width - GAP * (windows.length - 1)) / windows.length;
-  if (windows.some((window) => width < window.minWidth)) {
+  if (
+    windows.some(
+      (window) =>
+        width < Math.min(window.minWidth, TILED_TERMINAL_MIN_SIZE.width),
+    )
+  ) {
     return unavailable("Stage width is too small for these columns.");
   }
   if (windows.some((window) => stage.height < window.minHeight)) {
@@ -122,7 +129,12 @@ function rows(
   windows: readonly TerminalWindowArrangementWindow[],
 ): TerminalWindowArrangementResult {
   const height = (stage.height - GAP * (windows.length - 1)) / windows.length;
-  if (windows.some((window) => height < window.minHeight)) {
+  if (
+    windows.some(
+      (window) =>
+        height < Math.min(window.minHeight, TILED_TERMINAL_MIN_SIZE.height),
+    )
+  ) {
     return unavailable("Stage height is too small for these rows.");
   }
   if (windows.some((window) => stage.width < window.minWidth)) {
@@ -151,8 +163,14 @@ function cascade(
       (window) => (window.titleHeight ?? DEFAULT_TITLE_HEIGHT) + GAP,
     ),
   );
-  const width = stage.width - CASCADE_X_STEP * (windows.length - 1);
-  const height = stage.height - yStep * (windows.length - 1);
+  const width = Math.min(
+    FLOATING_TERMINAL_DEFAULT_SIZE.width,
+    stage.width - CASCADE_X_STEP * (windows.length - 1),
+  );
+  const height = Math.min(
+    FLOATING_TERMINAL_DEFAULT_SIZE.height,
+    stage.height - yStep * (windows.length - 1),
+  );
   if (windows.some((window) => width < window.minWidth)) {
     return unavailable("Stage width is too small for this cascade.");
   }
@@ -246,12 +264,12 @@ function grid(
     shelfCounts[shelfIndex]! += 1;
     const prior = validStage(window.geometry) ? window.geometry : null;
     const floatingWidth = clamp(
-      prior?.width ?? DEFAULT_FLOATING_WIDTH,
+      prior?.width ?? FLOATING_TERMINAL_DEFAULT_SIZE.width,
       window.minWidth,
       stage.width,
     );
     const floatingHeight = clamp(
-      prior?.height ?? DEFAULT_FLOATING_HEIGHT,
+      prior?.height ?? FLOATING_TERMINAL_DEFAULT_SIZE.height,
       window.minHeight,
       shelf.bottom - nextTop,
     );

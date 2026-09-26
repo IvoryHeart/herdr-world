@@ -3,7 +3,11 @@ import {
   useRef,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import type { FloatingTerminalGeometry } from "./floatingTerminalGeometry";
+import {
+  resizeMinimumForGeometry,
+  SPACES_TAB_WINDOW_MIN_SIZE,
+  type FloatingTerminalGeometry,
+} from "./floatingTerminalGeometry";
 import "./SpacesTabWindow.css";
 
 type Gesture = {
@@ -69,6 +73,10 @@ export function SpacesTabWindow({
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     const dx = event.clientX - gesture.x;
     const dy = event.clientY - gesture.y;
+    const minimum = resizeMinimumForGeometry(
+      gesture.geometry,
+      SPACES_TAB_WINDOW_MIN_SIZE,
+    );
     if (gesture.mode === "move") {
       onGeometryChange({
         ...gesture.geometry,
@@ -88,12 +96,12 @@ export function SpacesTabWindow({
         ...gesture.geometry,
         width: clamp(
           gesture.geometry.width + dx,
-          320,
+          Math.min(minimum.width, stage.width - gesture.geometry.left),
           stage.width - gesture.geometry.left,
         ),
         height: clamp(
           gesture.geometry.height + dy,
-          180,
+          Math.min(minimum.height, stage.height - gesture.geometry.top),
           stage.height - gesture.geometry.top,
         ),
       });
@@ -111,6 +119,10 @@ export function SpacesTabWindow({
   const nudge = (mode: Gesture["mode"], key: string) => {
     onFocus();
     const delta = key === "ArrowLeft" || key === "ArrowUp" ? -20 : 20;
+    const minimum = resizeMinimumForGeometry(
+      geometry,
+      SPACES_TAB_WINDOW_MIN_SIZE,
+    );
     if (mode === "move") {
       onGeometryChange({
         ...geometry,
@@ -128,11 +140,19 @@ export function SpacesTabWindow({
         ...geometry,
         width:
           key === "ArrowLeft" || key === "ArrowRight"
-            ? clamp(geometry.width + delta, 320, stage.width - geometry.left)
+            ? clamp(
+                geometry.width + delta,
+                Math.min(minimum.width, stage.width - geometry.left),
+                stage.width - geometry.left,
+              )
             : geometry.width,
         height:
           key === "ArrowUp" || key === "ArrowDown"
-            ? clamp(geometry.height + delta, 180, stage.height - geometry.top)
+            ? clamp(
+                geometry.height + delta,
+                Math.min(minimum.height, stage.height - geometry.top),
+                stage.height - geometry.top,
+              )
             : geometry.height,
       });
     }

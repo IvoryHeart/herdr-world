@@ -74,6 +74,39 @@ describe("terminal window arrangements", () => {
     ]);
   });
 
+  test("Columns and Rows shrink normal floating minimums for more windows", () => {
+    const threeColumns = resolveTerminalWindowArrangement(
+      "columns",
+      { ...stage, width: 1000 },
+      windows(3),
+      "tab-3",
+    );
+    const fourColumns = resolveTerminalWindowArrangement(
+      "columns",
+      { ...stage, width: 1000 },
+      windows(4),
+      "tab-4",
+    );
+    const fourRows = resolveTerminalWindowArrangement(
+      "rows",
+      { ...stage, height: 800 },
+      windows(4),
+      "tab-4",
+    );
+    expect(threeColumns.available).toBe(true);
+    expect(fourColumns.available).toBe(true);
+    expect(fourRows.available).toBe(true);
+    if (!threeColumns.available || !fourRows.available) return;
+    expect(threeColumns.placements).toHaveLength(3);
+    if (!fourColumns.available) return;
+    expect(fourColumns.placements).toHaveLength(4);
+    expect(fourRows.placements).toHaveLength(4);
+    expect(threeColumns.placements[0]!.geometry.width).toBeGreaterThanOrEqual(
+      220,
+    );
+    expect(fourRows.placements[0]!.geometry.height).toBeGreaterThanOrEqual(160);
+  });
+
   test("Grid uses two columns, a tall left tile for three, and four corners", () => {
     expect(placements("grid", 2).map(({ geometry }) => geometry)).toEqual(
       placements("columns", 2).map(({ geometry }) => geometry),
@@ -173,6 +206,8 @@ describe("terminal window arrangements", () => {
       20, 52, 84, 116,
     ]);
     expect(result.every(({ geometry }) => geometry.width >= 420)).toBe(true);
+    expect(result.every(({ geometry }) => geometry.width === 760)).toBe(true);
+    expect(result.every(({ geometry }) => geometry.height === 520)).toBe(true);
     const tallerTitle = windows(2);
     tallerTitle[0] = { ...tallerTitle[0]!, titleHeight: 70 };
     const custom = resolveTerminalWindowArrangement(
@@ -191,7 +226,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "columns",
-        { ...stage, width: 800 },
+        { ...stage, width: 400 },
         windows(2),
         "tab-2",
       ),
@@ -199,7 +234,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "rows",
-        { ...stage, height: 800 },
+        { ...stage, height: 440 },
         windows(3),
         "tab-3",
       ),
@@ -233,7 +268,7 @@ describe("terminal window arrangements", () => {
     const stageSnapshot = structuredClone(stage);
     expect(
       terminalWindowArrangementReason("columns", stage, input, "tab-2"),
-    ).toContain("width");
+    ).toBeNull();
     expect(input).toEqual(snapshot);
     expect(
       terminalWindowArrangementReason("single", stage, input, "tab-2"),

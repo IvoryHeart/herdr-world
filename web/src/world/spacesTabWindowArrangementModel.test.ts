@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Tab, Workspace } from "../types";
 import {
   availableSpacesWindowStage,
+  clampSpacesTabWindowGeometry,
   orderedSpacesTabs,
   spacesTabWindowContext,
   spacesTabWindowEntries,
@@ -55,6 +56,15 @@ const scope: TerminalWindowArrangementScope<"native-single" | "floating"> = {
 };
 
 describe("Spaces tab window arrangement model", () => {
+  test("keeps a compact arranged tile within the stage during geometry updates", () => {
+    expect(
+      clampSpacesTabWindowGeometry(
+        { left: 750, top: 50, width: 240, height: 200 },
+        stage,
+      ),
+    ).toEqual({ left: 750, top: 50, width: 240, height: 200 });
+  });
+
   test("subtracts a visible overlay Inspector but keeps an adjacent dock's stage", () => {
     const layer = {
       left: 0,
@@ -189,7 +199,7 @@ describe("Spaces tab window arrangement model", () => {
       compact: true,
     });
     expect(tiny).toEqual([]);
-    const unavailable = spacesTabWindowEntries({
+    const narrower = spacesTabWindowEntries({
       scope,
       tabs: tabs.slice(0, 2),
       activeTabId: "two",
@@ -198,7 +208,19 @@ describe("Spaces tab window arrangement model", () => {
       stage: { width: 500, height: 600 },
       compact: false,
     });
-    expect(unavailable).toEqual([]);
+    expect(narrower).toHaveLength(2);
+    expect(narrower[0]?.geometry).toEqual({
+      left: 0,
+      top: 0,
+      width: 246,
+      height: 600,
+    });
+    expect(narrower[1]?.geometry).toEqual({
+      left: 254,
+      top: 0,
+      width: 246,
+      height: 600,
+    });
     const resized = spacesTabWindowEntries({
       scope,
       tabs: tabs.slice(0, 2),

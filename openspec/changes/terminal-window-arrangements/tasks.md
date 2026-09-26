@@ -18,6 +18,8 @@
 - [x] 2.8 Preserve a floating Inspector when its sibling pane receives focus and preserve a later docked Inspector during Restore; verify both review regressions in the browser handoff test.
 - [x] 2.9 Expose the same placements from Spaces Actions and visual Actions, even without a visual entity selection; verify browser menu dispatch and unavailable reasons.
 - [x] 2.10 Add configurable per-placement shortcuts with numbered defaults and route them to the active view's arrangement control; verify bindings, preset migration and browser shortcut dispatch.
+- [x] 2.11 Keep mobile switcher and zoomed-pane selection to one focus request per pointer action in floating and docked Inspectors; verify delayed, out-of-order browser-local pane reads.
+- [x] 2.12 Reuse shared floating defaults for Cascade and permit evenly shrunk, usable Columns and Rows with more than two windows; verify geometry, controls and compact-tile resizing in focused and browser tests.
 
 ## 3. Accept, document and deliver
 

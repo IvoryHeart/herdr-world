@@ -171,8 +171,9 @@ export default function WorldInspectorConversationView({
     const focusConversation = (event: Event) => {
       const clickedPaneId =
         event.target instanceof Element
-          ? event.target.closest<HTMLElement>(".pane-layout-cell")?.dataset
-              .paneId
+          ? event.target.closest<HTMLElement>(
+              ".pane-layout-cell, .pane-layout-single, .pane-switcher-button",
+            )?.dataset.paneId
           : null;
       if (clickedPaneId && clickedPaneId !== conversation.paneId) return;
       if (

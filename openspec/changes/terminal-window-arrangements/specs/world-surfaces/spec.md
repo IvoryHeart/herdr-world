@@ -65,7 +65,7 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 
 ### Requirement: Fit and restore window arrangements
 
-Columns SHALL place the current windows side by side, and Rows SHALL place them top to bottom, without overlap. Grid SHALL place two windows side by side, three as one full-height column beside two stacked windows, and four in separate corners. With more than four windows, Grid SHALL tile four and leave the remainder floating above them with reachable headers. Cascade SHALL offset all current windows diagonally in focus order so older title regions remain visible behind newer windows. Each arrangement SHALL use the available stage below the tab bar and outside the visible Spaces Inspector dock, with balanced stage insets at supported UI scales, preserve the minimum usable dimensions for its window type, and keep applicable title, close and dock controls reachable. An option that cannot fit every eligible window under these rules SHALL be unavailable with an explanation and SHALL leave current geometry unchanged.
+Columns SHALL place the current windows side by side, and Rows SHALL place them top to bottom, without overlap. They SHALL shrink windows evenly below their normal floating minimum when needed, while keeping window controls and terminal content usable. Grid SHALL place two windows side by side, three as one full-height column beside two stacked windows, and four in separate corners. With more than four windows, Grid SHALL tile four and leave the remainder floating above them with reachable headers. Cascade SHALL use the normal viewport-fitted default floating-window size, shrinking all windows equally only when needed to fit its diagonal offsets, and SHALL keep older title regions visible behind newer windows. Each arrangement SHALL use the available stage below the tab bar and outside the visible Spaces Inspector dock, with balanced stage insets at supported UI scales and reachable title, close and dock controls. A tiled window SHALL retain its usable compact minimum during explicit resize. An option that cannot fit every eligible window at usable dimensions SHALL be unavailable with an explanation and SHALL leave current geometry unchanged.
 
 At the first arrangement of an eligible window set, World SHALL capture its previous presentation and each window's available prior geometry, including the Spaces Single state or an Inspector's dock/inline state. Restore positions SHALL return every still-open participating instance to that captured presentation and geometry without reopening a closed instance, changing the current active tab/pane or moving an instance that has never participated. Restoring Spaces' original Single presentation SHALL show its currently active tab. A Tree inline return SHALL use its exact leaf if that leaf is still visible, and otherwise use the normal docked overlay. Explicit drag, resize, dock and close actions SHALL continue to work after arranging. Viewport changes SHALL keep title controls reachable; a compact layout SHALL keep only one active usable window and preserve desktop arrangement positions for return to desktop. A selected-host or runtime-generation change SHALL discard the prior live arrangement and restore snapshot with the retired windows. Spaces and visual views SHALL retain their respective window placement while inactive without arranging each other's hidden windows. Spaces SHALL keep tab-window placement separate for each focused workspace and SHALL detach the old workspace's terminal presentations when focus changes to another workspace.
 
@@ -73,6 +73,11 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 
 - **WHEN** two eligible windows fit Columns, or three fit Rows, and the user chooses that option in any view
 - **THEN** they occupy nonoverlapping side-by-side columns or top-to-bottom rows within the available stage
+
+#### Scenario: More than two columns or rows
+
+- **WHEN** three or more eligible windows fit after shrinking evenly to usable compact sizes and the user chooses Columns or Rows
+- **THEN** all eligible windows remain in one nonoverlapping row or column with their controls reachable
 
 #### Scenario: Arrange visual Inspectors at a scaled UI
 
@@ -92,7 +97,7 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 #### Scenario: Diagonal Cascade
 
 - **WHEN** two or more eligible windows fit Cascade and the user chooses it
-- **THEN** each later window is offset diagonally above the earlier windows and every title region can be used to raise its window
+- **THEN** each window has the normal default floating size fitted to the stage, each later window is offset diagonally above the earlier windows, and every title region can be used to raise its window
 
 #### Scenario: Requested layout cannot fit
 
@@ -148,6 +153,11 @@ Pane placement, zoom and resize inside an Inspector SHALL follow Herdr's tab lay
 
 - **WHEN** pane A and pane B share an Inspector and the user focuses B inside its split Terminal while A's agent checkout Changes or History request is pending
 - **THEN** terminal input, the Inspector's selected-pane header and agent-specific applicability follow B, and A's late reply cannot replace B's agent-specific content
+
+#### Scenario: Select a pane from a mobile switcher or zoomed terminal
+
+- **WHEN** a user chooses a sibling with the mobile pane switcher or focuses the Herdr-zoomed pane while an earlier pane-focus read is pending
+- **THEN** the chosen pane remains selected, with no older pane-focus request from the same pointer action able to override it
 
 #### Scenario: Preserve workspace resources across sibling focus
 

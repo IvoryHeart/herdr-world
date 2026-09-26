@@ -1,13 +1,16 @@
 import type { Tab, Workspace } from "../types";
 import {
   defaultFloatingTerminalGeometry,
+  resizeMinimumForGeometry,
+  SPACES_TAB_WINDOW_MIN_SIZE,
+  TILED_TERMINAL_MIN_SIZE,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import type { TerminalWindowArrangementScope } from "./terminalWindowArrangementState";
 
-export const SPACES_WINDOW_MIN_WIDTH = 320;
-export const SPACES_WINDOW_MIN_HEIGHT = 180;
+export const SPACES_WINDOW_MIN_WIDTH = SPACES_TAB_WINDOW_MIN_SIZE.width;
+export const SPACES_WINDOW_MIN_HEIGHT = SPACES_TAB_WINDOW_MIN_SIZE.height;
 
 type Bounds = {
   left: number;
@@ -135,7 +138,7 @@ export function spacesTabWindowEntries(input: {
     !scope?.preset ||
     scope.preset === "single" ||
     stage.width < SPACES_WINDOW_MIN_WIDTH + 16 ||
-    stage.height < SPACES_WINDOW_MIN_HEIGHT + 16
+    stage.height < TILED_TERMINAL_MIN_SIZE.height + 16
   ) {
     return [];
   }
@@ -191,8 +194,20 @@ export function clampSpacesTabWindowGeometry(
   geometry: FloatingTerminalGeometry,
   stage: { width: number; height: number },
 ): FloatingTerminalGeometry {
-  const width = clamp(geometry.width, SPACES_WINDOW_MIN_WIDTH, stage.width);
-  const height = clamp(geometry.height, SPACES_WINDOW_MIN_HEIGHT, stage.height);
+  const minimum = resizeMinimumForGeometry(
+    geometry,
+    SPACES_TAB_WINDOW_MIN_SIZE,
+  );
+  const width = clamp(
+    geometry.width,
+    Math.min(minimum.width, stage.width),
+    stage.width,
+  );
+  const height = clamp(
+    geometry.height,
+    Math.min(minimum.height, stage.height),
+    stage.height,
+  );
   return {
     left: clamp(geometry.left, 0, stage.width - width),
     top: clamp(geometry.top, 0, stage.height - height),

@@ -8,8 +8,13 @@ export type FloatingTerminalViewport = FloatingTerminalSize & {
 };
 
 const WINDOW_MARGIN = 8;
-const MIN_WIDTH = 420;
-const MIN_HEIGHT = 280;
+export const FLOATING_TERMINAL_DEFAULT_SIZE = {
+  width: 760,
+  height: 520,
+} as const;
+export const FLOATING_TERMINAL_MIN_SIZE = { width: 420, height: 280 } as const;
+export const SPACES_TAB_WINDOW_MIN_SIZE = { width: 320, height: 180 } as const;
+export const TILED_TERMINAL_MIN_SIZE = { width: 220, height: 160 } as const;
 const COMPACT_VIEWPORT_MAX_WIDTH = 720;
 const MIN_VISIBLE_DESKTOP_TITLE_HEIGHT = 56;
 
@@ -33,9 +38,12 @@ export function defaultFloatingTerminalGeometry(
   cascadeIndex: number,
   viewport: FloatingTerminalSize,
 ): FloatingTerminalGeometry {
-  const width = Math.min(760, Math.max(0, viewport.width - WINDOW_MARGIN * 2));
+  const width = Math.min(
+    FLOATING_TERMINAL_DEFAULT_SIZE.width,
+    Math.max(0, viewport.width - WINDOW_MARGIN * 2),
+  );
   const height = Math.min(
-    520,
+    FLOATING_TERMINAL_DEFAULT_SIZE.height,
     Math.max(0, viewport.height - WINDOW_MARGIN * 2),
   );
   return clampFloatingTerminalGeometry(
@@ -92,10 +100,14 @@ export function clampFloatingTerminalGeometry(
 ): FloatingTerminalGeometry {
   const maxWidth = Math.max(0, viewport.width - WINDOW_MARGIN * 2);
   const maxHeight = Math.max(0, viewport.height - WINDOW_MARGIN * 2);
-  const width = clamp(geometry.width, Math.min(MIN_WIDTH, maxWidth), maxWidth);
+  const width = clamp(
+    geometry.width,
+    Math.min(FLOATING_TERMINAL_MIN_SIZE.width, maxWidth),
+    maxWidth,
+  );
   const height = clamp(
     geometry.height,
-    Math.min(MIN_HEIGHT, maxHeight),
+    Math.min(FLOATING_TERMINAL_MIN_SIZE.height, maxHeight),
     maxHeight,
   );
   return {
@@ -105,11 +117,29 @@ export function clampFloatingTerminalGeometry(
   };
 }
 
+/** A tile may retain its compact minimum when it is resized by the user. */
+export function resizeMinimumForGeometry(
+  geometry: FloatingTerminalSize,
+  normalMinimum: FloatingTerminalSize,
+): FloatingTerminalSize {
+  return {
+    width:
+      geometry.width < normalMinimum.width
+        ? Math.min(normalMinimum.width, TILED_TERMINAL_MIN_SIZE.width)
+        : normalMinimum.width,
+    height:
+      geometry.height < normalMinimum.height
+        ? Math.min(normalMinimum.height, TILED_TERMINAL_MIN_SIZE.height)
+        : normalMinimum.height,
+  };
+}
+
 export function resizeFloatingTerminalGeometry(
   geometry: FloatingTerminalGeometry,
   deltaWidth: number,
   deltaHeight: number,
   viewport: FloatingTerminalSize,
+  minimum: FloatingTerminalSize = FLOATING_TERMINAL_MIN_SIZE,
 ): FloatingTerminalGeometry {
   const maxWidth = Math.max(0, viewport.width - WINDOW_MARGIN - geometry.left);
   const maxHeight = Math.max(0, viewport.height - WINDOW_MARGIN - geometry.top);
@@ -118,12 +148,12 @@ export function resizeFloatingTerminalGeometry(
     top: geometry.top,
     width: clamp(
       geometry.width + deltaWidth,
-      Math.min(MIN_WIDTH, maxWidth),
+      Math.min(minimum.width, maxWidth),
       maxWidth,
     ),
     height: clamp(
       geometry.height + deltaHeight,
-      Math.min(MIN_HEIGHT, maxHeight),
+      Math.min(minimum.height, maxHeight),
       maxHeight,
     ),
   };

@@ -362,6 +362,13 @@
 
 .workspace-inspector.is-compact .workspace-inspector-tabs button {
   flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.workspace-inspector.is-compact .workspace-inspector-tabs button svg {
+  flex: 0 0 auto;
 }
 
 .workspace-inspector.is-compact .workspace-inspector-resource {

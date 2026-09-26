@@ -612,10 +612,6 @@
 .world-floating-terminal {
   position: fixed;
   z-index: 46;
-  left: 24px;
-  bottom: 24px;
-  width: min(760px, calc(100vw - 48px));
-  height: min(520px, calc(100vh - 72px));
   display: flex;
   flex-direction: column;
   overflow: hidden;

@@ -11,9 +11,11 @@ import {
 import {
   clampFloatingTerminalGeometry,
   defaultFloatingTerminalGeometry,
+  FLOATING_TERMINAL_MIN_SIZE,
   floatingTerminalContainingViewport,
   moveFloatingTerminalPosition,
   resizeFloatingTerminalGeometry,
+  resizeMinimumForGeometry,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import type {
@@ -141,8 +143,9 @@ export default function WorldFloatingInspectorWindow({
     const focusFromPointer = (event: PointerEvent) => {
       const clickedPaneId =
         event.target instanceof Element
-          ? event.target.closest<HTMLElement>(".pane-layout-cell")?.dataset
-              .paneId
+          ? event.target.closest<HTMLElement>(
+              ".pane-layout-cell, .pane-layout-single, .pane-switcher-button",
+            )?.dataset.paneId
           : null;
       if (clickedPaneId && clickedPaneId !== conversation.paneId) return;
       if (
@@ -218,6 +221,10 @@ export default function WorldFloatingInspectorWindow({
           deltaX,
           deltaY,
           current.viewport,
+          resizeMinimumForGeometry(
+            current.geometry,
+            FLOATING_TERMINAL_MIN_SIZE,
+          ),
         ),
       );
     };
@@ -350,6 +357,7 @@ export default function WorldFloatingInspectorWindow({
         delta.x,
         delta.y,
         viewportSize(windowRef.current, current),
+        resizeMinimumForGeometry(current, FLOATING_TERMINAL_MIN_SIZE),
       ),
     );
   };

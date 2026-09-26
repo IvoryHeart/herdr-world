@@ -251,7 +251,14 @@ describe("terminal window arrangement state", () => {
       "connection:generation-1",
     );
     const arranged = apply(empty, "columns").state;
-    const failed = apply(arranged, "rows", [first, second, later]);
+    const failed = applyTerminalWindowArrangement(arranged, {
+      leaseKey: "connection:generation-1",
+      scopeKey: "visual",
+      preset: "rows",
+      stage: { ...stage, height: 480 },
+      windows: [first, second, later],
+      activeId: "later",
+    });
     expect(failed.result.available).toBe(false);
     expect(failed.state).toBe(arranged);
   });

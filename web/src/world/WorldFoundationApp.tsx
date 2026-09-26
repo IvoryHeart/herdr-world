@@ -64,6 +64,7 @@ import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
 import {
   defaultFloatingTerminalGeometry,
+  FLOATING_TERMINAL_MIN_SIZE,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import {
@@ -1092,11 +1093,17 @@ function WorldControlPlane({
       return {
         id,
         minWidth: compactArrangement
-          ? Math.min(420, visualArrangementStage.width)
-          : 420,
+          ? Math.min(
+              FLOATING_TERMINAL_MIN_SIZE.width,
+              visualArrangementStage.width,
+            )
+          : FLOATING_TERMINAL_MIN_SIZE.width,
         minHeight: compactArrangement
-          ? Math.min(280, visualArrangementStage.height)
-          : 280,
+          ? Math.min(
+              FLOATING_TERMINAL_MIN_SIZE.height,
+              visualArrangementStage.height,
+            )
+          : FLOATING_TERMINAL_MIN_SIZE.height,
         geometry,
         presentation: docked
           ? inline

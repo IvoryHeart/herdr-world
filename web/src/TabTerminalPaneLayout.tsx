@@ -279,6 +279,7 @@ export function TabTerminalPaneLayout({
     return (
       <div
         className="pane-layout-single"
+        data-pane-id={activePaneId ?? undefined}
         onPointerDownCapture={() => {
           if (activePaneId && activePaneId !== selectedPaneId)
             onFocusPane(activePaneId);
@@ -318,6 +319,7 @@ export function TabTerminalPaneLayout({
             type="button"
             className="pane-switcher-button"
             aria-label="Previous pane"
+            data-pane-id={previousPane.pane_id}
             tabIndex={-1}
             onPointerDown={blurActiveInput}
             onClick={() => onFocusPane(previousPane.pane_id)}
@@ -334,6 +336,7 @@ export function TabTerminalPaneLayout({
             type="button"
             className="pane-switcher-button"
             aria-label="Next pane"
+            data-pane-id={nextPane.pane_id}
             tabIndex={-1}
             onPointerDown={blurActiveInput}
             onClick={() => onFocusPane(nextPane.pane_id)}
