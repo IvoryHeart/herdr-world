@@ -95,6 +95,41 @@ Run `bun run notices:generate` whenever the resolved dependency graph changes an
 commit the byte-stable `DEPENDENCY_NOTICES.md`. Use `bun run build:site` after site or
 tutorial changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full matrix.
 
+## Agentic efficiency
+
+- **Do not poll.** Tools, sub-agents, and CI runs complete, error, or timeout on
+  their own. Fire and wait for the result — do not loop on status checks. If you
+  must check, check once after a reasonable delay.
+- **One review, one fix pass.** Do not create re-review branches. Fix findings
+  in place and move on. If a PR has too many findings, split the PR first.
+- **Functional commits only.** Every commit should change behaviour or docs. Fold
+  metadata (PR links, verification records) into the commit it relates to.
+- **Read once, then act.** Do not re-read files already in context unless they
+  were modified by another process.
+
+## Tool output discipline
+
+Every byte of tool output enters your context and stays until compaction.
+Large outputs are the primary driver of context bloat and token cost.
+
+- **Bound check output.** `bun run check` runs 8 stages and produces ~600K
+  chars. Pipe through `tail -80` and read the exit code. On failure, run only
+  the failing stage (`tsc --noEmit 2>&1 | head -50`, `oxlint . 2>&1 | head -50`)
+  to get actionable errors.
+- **Do not dump full typecheck.** `tsc --noEmit` on this repo produces 200K+
+  tokens of output when there are errors. Always pipe through `head -50`.
+- **Search (rg/grep):** Always use `--max-count 5` and `--max-columns 200`.
+  Scope to specific directories or file globs — never search the whole repo
+  without limits.
+- **File reads:** Use `sed -n 'start,endp'` for specific ranges. Do not
+  `cat` entire files. If you need an overview, use `wc -l` then read the
+  relevant section.
+- **Git diffs:** Use `git diff --stat` first. Then targeted diffs on
+  specific files with default context (not `--unified=100`).
+- **General rule:** If a command might produce >200 lines of output, pipe
+  it through `head -100` or `tail -100`. You can always re-run with
+  different bounds if you need more.
+
 ## Changelog and releases
 
 - Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading.

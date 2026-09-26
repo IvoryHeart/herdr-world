@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { OfficeRoom } from "./herdrOfficeProjection";
 import {
+  CREATED_PANE_ADMISSION_TIMEOUT_MS,
+  createdPaneAdmissionRetryDelay,
   createdRootPaneId,
   officeCreationActionState,
   officeRoomActionCapabilities,
@@ -50,20 +52,31 @@ describe("Office room actions", () => {
     expect(createdRootPaneId({ root_pane: { pane_id: "" } })).toBeNull();
   });
 
+  test("keeps retrying created-pane admission for a full World snapshot window", () => {
+    const deadline = CREATED_PANE_ADMISSION_TIMEOUT_MS;
+    expect(createdPaneAdmissionRetryDelay(deadline, 3_600)).toBe(120);
+    expect(createdPaneAdmissionRetryDelay(deadline, 20_000)).toBe(120);
+    expect(createdPaneAdmissionRetryDelay(deadline, deadline - 50)).toBe(50);
+    expect(createdPaneAdmissionRetryDelay(deadline, deadline)).toBeNull();
+  });
+
   test("keeps an admitted creation affordance visible while endpoint admission is transient", () => {
     expect(
       officeCreationActionState(true, "Endpoint metadata is loading"),
     ).toEqual({
       visible: true,
       enabled: false,
+      reason: "Endpoint metadata is loading",
     });
     expect(officeCreationActionState(true, null)).toEqual({
       visible: true,
       enabled: true,
+      reason: null,
     });
     expect(officeCreationActionState(false, null)).toEqual({
       visible: false,
       enabled: false,
+      reason: null,
     });
   });
 });

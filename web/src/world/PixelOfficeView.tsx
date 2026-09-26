@@ -44,10 +44,13 @@ import {
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import {
+  CREATED_PANE_ADMISSION_TIMEOUT_MS,
+  createdPaneAdmissionRetryDelay,
   createdRootPaneId,
   officeCreationActionState,
   officeRoomActionCapabilities,
   officeRoomKeyForSelection,
+  type OfficeCreationActionState,
 } from "./officeRoomActions";
 import {
   officeCompletionIdentity,
@@ -61,14 +64,13 @@ type RoomDialog =
   | { mode: "rename" | "close"; roomKey: string; label: string };
 
 type PendingCreatedPane = {
+  action: "Room" | "Seat";
   connectionId: string;
   generation: number;
   paneId: string;
   attempt: number;
+  deadlineAt: number;
 };
-
-const CREATED_PANE_ADMISSION_RETRY_MS = 120;
-const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 
 export default function PixelOfficeView({
   world,
@@ -83,7 +85,7 @@ export default function PixelOfficeView({
   world: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
-  onSelect(id: string): void | Promise<boolean>;
+  onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
   floatingTerminals: readonly { nodeId: string }[];
@@ -110,6 +112,7 @@ export default function PixelOfficeView({
   );
   const preferencesRef = useRef(preferences);
   const onSelectRef = useRef(onSelect);
+  const worldRef = useRef(world);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
   const [renderedRevision, setRenderedRevision] = useState(0);
@@ -131,6 +134,14 @@ export default function PixelOfficeView({
   );
   preferencesRef.current = preferences;
   onSelectRef.current = onSelect;
+  worldRef.current = world;
+  const pendingCreatedPaneLeaseCurrent =
+    pendingCreatedPane === null ||
+    world.hosts.some(
+      (host) =>
+        host.connectionId === pendingCreatedPane.connectionId &&
+        host.generation === pendingCreatedPane.generation,
+    );
 
   useEffect(() => {
     let disposed = false;
@@ -243,68 +254,140 @@ export default function PixelOfficeView({
 
   useEffect(() => {
     if (!pendingCreatedPane) return;
-    const host = world.hosts.find(
-      ({ connectionId }) => connectionId === pendingCreatedPane.connectionId,
-    );
-    if (!host || host.generation !== pendingCreatedPane.generation) {
-      setPendingCreatedPane(null);
-      return;
+    let cancelled = false;
+    let finished = false;
+    let retryTimer: number | null = null;
+    let deadlineTimer: number | null = null;
+    const focusAbort = new AbortController();
+    const samePending = (current: PendingCreatedPane | null) =>
+      current?.connectionId === pendingCreatedPane.connectionId &&
+      current.generation === pendingCreatedPane.generation &&
+      current.paneId === pendingCreatedPane.paneId &&
+      current.deadlineAt === pendingCreatedPane.deadlineAt;
+    const clearPending = () =>
+      setPendingCreatedPane((current) =>
+        samePending(current) ? null : current,
+      );
+    const failFocus = (detail: string) => {
+      if (cancelled || finished) return;
+      finished = true;
+      focusAbort.abort();
+      clearPending();
+      store.notify({
+        kind: "error",
+        message: `${pendingCreatedPane.action} created, but Inspector focus failed`,
+        detail,
+      });
+    };
+    const retryFocus = (detail: string) => {
+      if (cancelled || finished) return;
+      const delay = createdPaneAdmissionRetryDelay(
+        pendingCreatedPane.deadlineAt,
+        Date.now(),
+      );
+      if (delay === null) {
+        failFocus(detail);
+        return;
+      }
+      retryTimer = window.setTimeout(
+        () =>
+          setPendingCreatedPane((current) => {
+            if (!current || !samePending(current)) return current;
+            return { ...current, attempt: current.attempt + 1 };
+          }),
+        delay,
+      );
+    };
+    const deadlineDelay = pendingCreatedPane.deadlineAt - Date.now();
+    if (deadlineDelay <= 0) {
+      failFocus(
+        "The created terminal was not admitted within the World snapshot window.",
+      );
+      return undefined;
     }
-    const pane = world.leaves.find(
+    if (!pendingCreatedPaneLeaseCurrent) {
+      failFocus("The selected host or runtime changed before admission.");
+      return undefined;
+    }
+    deadlineTimer = window.setTimeout(
+      () =>
+        failFocus(
+          "The created terminal was not admitted within the World snapshot window.",
+        ),
+      deadlineDelay,
+    );
+    const pane = worldRef.current.leaves.find(
       (leaf) =>
         leaf.connectionId === pendingCreatedPane.connectionId &&
         leaf.nativeId === pendingCreatedPane.paneId &&
         leaf.generation === pendingCreatedPane.generation,
     );
-    if (!pane) return;
-    let cancelled = false;
-    let retryTimer: number | null = null;
-    void Promise.resolve(onSelectRef.current(pane.id)).then((admitted) => {
-      if (cancelled) return;
-      if (admitted !== false) {
-        setPendingCreatedPane(null);
-        return;
-      }
-      if (pendingCreatedPane.attempt + 1 >= CREATED_PANE_ADMISSION_ATTEMPTS) {
-        setPendingCreatedPane(null);
-        return;
-      }
-      retryTimer = window.setTimeout(
-        () =>
-          setPendingCreatedPane((current) =>
-            current?.paneId === pendingCreatedPane.paneId
-              ? { ...current, attempt: current.attempt + 1 }
-              : current,
-          ),
-        CREATED_PANE_ADMISSION_RETRY_MS,
+    if (!pane) {
+      retryFocus(
+        "The created terminal was not admitted within the World snapshot window.",
       );
-    });
+    } else {
+      try {
+        void Promise.resolve(
+          onSelectRef.current(pane.id, focusAbort.signal),
+        ).then(
+          (admitted) => {
+            if (cancelled || finished) return;
+            if (admitted !== false) {
+              finished = true;
+              clearPending();
+              return;
+            }
+            retryFocus("The created terminal could not be focused.");
+          },
+          (cause: unknown) => {
+            if (cancelled) return;
+            retryFocus(cause instanceof Error ? cause.message : String(cause));
+          },
+        );
+      } catch (cause) {
+        retryFocus(cause instanceof Error ? cause.message : String(cause));
+      }
+    }
     return () => {
       cancelled = true;
+      focusAbort.abort();
       if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
     };
-  }, [pendingCreatedPane, world]);
+  }, [pendingCreatedPane, pendingCreatedPaneLeaseCurrent]);
 
   const roomForKey = (roomKey: string | null) =>
     roomKey ? (office.rooms.find(({ key }) => key === roomKey) ?? null) : null;
-  const seatCreationState = (roomKey: string) => {
-    const room = roomForKey(roomKey);
-    if (!room) return officeCreationActionState(false, null);
-    const admitted = officeRoomActionCapabilities(world, room).createSeat;
-    return officeCreationActionState(
-      admitted,
-      admitted
-        ? endpointCreationReason(
-            creationSnapshot,
-            "tab.create",
-            room.workspaceRef.nativeId,
-          )
-        : null,
-    );
-  };
+  const seatCreationStates = useMemo(
+    () =>
+      Object.fromEntries(
+        office.rooms.map((room) => {
+          const admitted = officeRoomActionCapabilities(world, room).createSeat;
+          return [
+            room.key,
+            officeCreationActionState(
+              admitted,
+              admitted
+                ? endpointCreationReason(
+                    creationSnapshot,
+                    "tab.create",
+                    room.workspaceRef.nativeId,
+                  )
+                : null,
+            ),
+          ];
+        }),
+      ) as Record<string, OfficeCreationActionState>,
+    [creationSnapshot, office.rooms, world],
+  );
+  const seatCreationState = (roomKey: string) =>
+    seatCreationStates[roomKey] ?? officeCreationActionState(false, null);
   const showCreateSeat = (roomKey: string) =>
     seatCreationState(roomKey).visible;
   const canCreateSeat = (roomKey: string) => seatCreationState(roomKey).enabled;
+  const createSeatReason = (roomKey: string) =>
+    seatCreationState(roomKey).reason;
   const roomCreationState = (roomKey: string | null) => {
     const room = roomForKey(roomKey);
     const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
@@ -328,19 +411,37 @@ export default function PixelOfficeView({
     roomCreationState(roomKey).visible;
   const canCreateRoom = (roomKey: string | null) =>
     roomCreationState(roomKey).enabled;
+  const createRoomReason = (roomKey: string | null) =>
+    roomCreationState(roomKey).reason;
   const canManageRoom = (roomKey: string, action: "rename" | "close") => {
     const room = roomForKey(roomKey);
     if (!room) return false;
     return officeRoomActionCapabilities(world, room)[action];
   };
   const rememberCreatedPane = (
+    action: PendingCreatedPane["action"],
     connectionId: string,
     generation: number,
     result: unknown,
   ) => {
     const paneId = createdRootPaneId(result);
     if (paneId) {
-      setPendingCreatedPane({ connectionId, generation, paneId, attempt: 0 });
+      setPendingCreatedPane({
+        action,
+        connectionId,
+        generation,
+        paneId,
+        attempt: 0,
+        // Aggregate observation may legitimately occupy its full 20s server
+        // deadline; leave a small delivery/render grace before reporting failure.
+        deadlineAt: Date.now() + CREATED_PANE_ADMISSION_TIMEOUT_MS,
+      });
+    } else {
+      store.notify({
+        kind: "error",
+        message: `${action} created, but Inspector focus failed`,
+        detail: "Herdr did not return the created terminal identity.",
+      });
     }
   };
   const reportRoomActionFailure = (action: string, cause: unknown) => {
@@ -363,6 +464,7 @@ export default function PixelOfficeView({
         { numberedLabel: true },
       );
       rememberCreatedPane(
+        "Seat",
         room.workspaceRef.connectionId,
         room.observedGeneration,
         result,
@@ -384,6 +486,7 @@ export default function PixelOfficeView({
         label.trim() || undefined,
       );
       rememberCreatedPane(
+        "Room",
         selectedHost.connectionId,
         selectedHost.generation,
         result,
@@ -537,7 +640,7 @@ export default function PixelOfficeView({
             onSelect={selectOfficeKey}
             onActivateAgent={openOfficeTerminal}
             onActivateRoom={selectOfficeKey}
-            showCreateSeat={showCreateSeat}
+            seatCreationStates={seatCreationStates}
             onNewSeat={(roomKey) => void createSeat(roomKey)}
             onHover={setSceneHover}
             onSelectedAnchorChange={onSelectedAnchorChange}
@@ -577,9 +680,11 @@ export default function PixelOfficeView({
                   selectedRoomKey={selectedRoomKey}
                   showCreateSeat={showCreateSeat}
                   canCreateSeat={canCreateSeat}
+                  createSeatReason={createSeatReason}
                   onCreateSeat={(roomKey) => void createSeat(roomKey)}
                   showCreateRoom={showCreateRoom}
                   canCreateRoom={canCreateRoom}
+                  createRoomReason={createRoomReason}
                   onCreateRoom={(roomKey) =>
                     setRoomDialog({ mode: "create", roomKey })
                   }
