@@ -755,7 +755,7 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 
 #### Scenario: Compact visual layout preserves desktop positions
 
-- **WHEN** a visual view with arranged Inspectors enters a compact layout and the user attempts a menu choice or assigned shortcut
+- **WHEN** a visual view with arranged Inspectors enters a compact layout and the user attempts a menu choice, assigned shortcut, drag or resize
 - **THEN** the compact view keeps one active Inspector, explains that placement choices are available on desktop, and returns to the same saved Inspector positions on desktop
 
 #### Scenario: Two columns and three rows
@@ -927,7 +927,10 @@ accessible drag target.
 Conversation identity and validity SHALL be qualified by connection and runtime generation inside
 the existing selected-connection browser lease. Opening another window or navigating among Office,
 Tree and Graph SHALL NOT detach, redirect or duplicate conversations while that host and generation
-remain selected. Selecting Spaces SHALL suspend every visual Inspector presentation so the native
+remain selected. A failed, stale or bounded aggregate observation SHALL NOT retire an already open
+Inspector while its focused connection lease remains current and its tab or workspace remains in the
+focused Herdr list. A confirmed focused-list removal or generation change SHALL retire that
+conversation. Selecting Spaces SHALL suspend every visual Inspector presentation so the native
 Spaces workspace is unobstructed and SHALL transfer the exact selected terminal presentation only
 after its visual owner detaches. The retained visual conversation state SHALL be restored when the
 user returns to a visual view. Explicitly activating another host SHALL retire every outgoing visual

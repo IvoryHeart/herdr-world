@@ -100,6 +100,9 @@ let focusedPaneId = panes[0].pane_id;
 let focusedTabId = tabs[0]!.tab_id;
 let worldRevision = 1;
 let runtimeGeneration = 7;
+let rejectNextWorldSnapshot = false;
+let staleNextWorldSnapshot = false;
+let omitNextWorldTopology = false;
 let navigationMode: "shared" | "browser-local" = "shared";
 let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
@@ -221,6 +224,14 @@ const client: ConnectionClient = {
   call: async (method, params = {}) => {
     calls.push({ method, params });
     if (method === "world.snapshot") {
+      if (rejectNextWorldSnapshot) {
+        rejectNextWorldSnapshot = false;
+        throw new Error("Synthetic transient World observation failure");
+      }
+      const stale = staleNextWorldSnapshot;
+      staleNextWorldSnapshot = false;
+      const omitTopology = omitNextWorldTopology;
+      omitNextWorldTopology = false;
       return {
         revision: worldRevision,
         observed_at: Date.now(),
@@ -233,12 +244,12 @@ const client: ConnectionClient = {
             state: "ready",
             generation: runtimeGeneration,
             snapshot_generation: runtimeGeneration,
-            stale: false,
-            actionable: true,
+            stale,
+            actionable: !stale,
             snapshot: {
               workspaces: [currentWorkspace()],
-              tabs: currentTabs(),
-              panes: currentPanes(),
+              tabs: omitTopology ? [] : currentTabs(),
+              panes: omitTopology ? [] : currentPanes(),
               agents,
               coverage: currentWorldCoverage(),
             },
@@ -928,6 +939,58 @@ async function run() {
     ),
     "Floating mode did not use equally sized cascaded Inspector windows",
   );
+  rejectNextWorldSnapshot = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().status === "error",
+    "transient World observation failure",
+  );
+  await settle();
+  if (
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length !== 2
+  ) {
+    throw new Error("transient World observation hid open floating Inspectors");
+  }
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().status === "ready",
+    "World observation recovered with both Inspectors",
+  );
+  staleNextWorldSnapshot = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.stale === true,
+    "selected World host temporarily stale",
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 2,
+    "stale aggregate observation hid live floating Inspectors",
+  );
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.actionable === true,
+    "selected World host observation recovered",
+  );
+  omitNextWorldTopology = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
+    "bounded World projection omitted existing tabs",
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 2,
+    "healthy aggregate observation hid tabs still present in focused Herdr state",
+  );
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 2,
+    "full World projection recovered",
+  );
   const arrangeWindows = async (label: string) => {
     document
       .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
@@ -1123,6 +1186,18 @@ async function run() {
       .length === 1,
     "compact menu or shortcut changed the visible Inspector set",
   );
+  const compactResizeGrip = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label$=" Inspector"] button[aria-label="Resize Inspector window"]',
+  )!;
+  for (const key of ["ArrowLeft", "ArrowUp"]) {
+    const resize = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+    });
+    compactResizeGrip.dispatchEvent(resize);
+    check(resize.defaultPrevented, `compact ${key} resize was not handled`);
+  }
   updateLayoutPreferences({ mode: "desktop" });
   compactVisualStage.style.removeProperty("width");
   compactVisualStage.style.removeProperty("height");
@@ -1939,6 +2014,12 @@ async function run() {
   await until(
     () => document.querySelector(".world-completion-notices button"),
     "Reviewer completion for existing Inspector",
+  );
+  check(
+    document.querySelector(
+      '[role="dialog"][aria-label="Builder Inspector"]',
+    ) !== null,
+    "agent completion hid an unrelated floating Inspector",
   );
   const rejectedBeforeCompletion = rejectedPaneGets;
   rejectNextPaneGetId = "reviewer-pane";
@@ -3316,6 +3397,26 @@ async function run() {
   );
   narrowedVisualStage.style.removeProperty("width");
   narrowedVisualStage.style.removeProperty("height");
+
+  focusedTabId = tabs[0]!.tab_id;
+  focusedPaneId = "builder-pane";
+  tabs.splice(
+    tabs.findIndex((tab) => tab.tab_id === "created-tab-3"),
+    1,
+  );
+  panes.splice(
+    panes.findIndex((pane) => pane.pane_id === "created-pane-3"),
+    1,
+  );
+  worldRevision += 1;
+  await store.refresh();
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "focused Herdr tab closure retired its Inspector",
+  );
 
   runtimeGeneration += 1;
   worldRevision += 1;

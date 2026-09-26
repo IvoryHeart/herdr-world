@@ -813,6 +813,16 @@ function WorldControlPlane({
     }),
     shallowEqual,
   );
+  const focusedTopology = useStoreSelector(
+    (snapshot) => ({
+      workspaces: snapshot.workspaces,
+      tabs: snapshot.tabs,
+      lastRefresh: snapshot.lastRefresh,
+      status: snapshot.status,
+      runtimeGeneration: snapshot.serverRuntimeGeneration,
+    }),
+    shallowEqual,
+  );
   const selectionRestoredRef = useRef(false);
   const [selectionRestored, setSelectionRestored] = useState(false);
 
@@ -868,6 +878,12 @@ function WorldControlPlane({
       connectionSelection.activeConnectionId,
       connectionSelection.connections,
     );
+  const selectedWorldConnection = runtime.connections.find(
+    (connection) =>
+      connection.connectionId === connectionSelection.activeConnectionId,
+  );
+  const selectedWorldObservationActionable =
+    selectedWorldConnection?.actionable ?? false;
   const aggregateWorld = useMemo(
     () =>
       buildWorldObject(
@@ -1869,17 +1885,41 @@ function WorldControlPlane({
   };
 
   useEffect(() => {
-    if (!hasSelectedConnection) return;
+    // A failed or timed-out aggregate observation cannot prove a tab closed.
+    // The focused connection lease still retires windows on host/generation change.
+    if (!hasSelectedConnection || !selectedWorldObservationActionable) return;
     let changed = false;
     const retained = inspectorConversations.flatMap((conversation) => {
       const current = worldNodeForInspectorConversation(world, conversation);
+      // The World projection is bounded and can omit an open tab. Only the
+      // focused Herdr list can confirm that its tab or workspace is gone.
+      const focusedListIsCurrent =
+        focusedTopology.status === "connected" &&
+        focusedTopology.lastRefresh > 0 &&
+        focusedTopology.runtimeGeneration === conversation.runtimeGeneration;
+      const stillOpen = conversation.tabId
+        ? focusedTopology.tabs.some(
+            (tab) =>
+              tab.tab_id === conversation.tabId &&
+              tab.workspace_id === conversation.workspaceId,
+          )
+        : focusedTopology.workspaces.some(
+            (workspace) => workspace.workspace_id === conversation.workspaceId,
+          );
+      if (
+        selectedWorldConnection?.generation !==
+          conversation.runtimeGeneration ||
+        (focusedListIsCurrent && !stillOpen)
+      ) {
+        changed = true;
+        return [];
+      }
       if (
         !current ||
         current.generation !== conversation.runtimeGeneration ||
         !current.actionable
       ) {
-        changed = true;
-        return [];
+        return [conversation];
       }
       const view = worldIntentInitialView(current, null);
       const context = worldInspectorContext(current);
@@ -1943,11 +1983,14 @@ function WorldControlPlane({
     }
   }, [
     dockedInspectorId,
+    focusedTopology,
     hasSelectedConnection,
     inspectorConversations,
     onDockedInspectorIdChange,
     onInspectorConversationsChange,
     onInspectorTerminalPortal,
+    selectedWorldObservationActionable,
+    selectedWorldConnection,
     selection,
     world,
   ]);
@@ -2639,6 +2682,9 @@ function WorldControlPlane({
               );
             }}
             onArrangedGeometryChange={(geometry) => {
+              // Compact Single is a viewport presentation of the desktop tiles.
+              // Its move and resize gestures must not replace their saved geometry.
+              if (compactArrangement) return;
               const id = worldInspectorWindowId(conversation);
               const fitted = fitVisualInspectorArrangementGeometry(
                 geometry,

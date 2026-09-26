@@ -113,5 +113,5 @@ test.skipIf(!chrome)(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  45_000,
+  90_000,
 );

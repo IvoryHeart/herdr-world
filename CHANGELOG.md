@@ -30,8 +30,9 @@ retain their original Herdr Web lineage.
   the tab bar's right edge and mobile places it in the ellipsis-expanded controls.
   The same placements are available through the original shell Actions command
   menu in every view; keyboard shortcuts can be assigned in preferences and
-  are unassigned by default. Compact visual views keep desktop placements for
-  return to desktop, and tiled Inspector headers keep their controls reachable.
+  are unassigned by default. Compact visual views keep desktop placements
+  across arrangement and resize input for return to desktop, and tiled Inspector
+  headers keep their controls reachable.
   [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Added connection- and generation-qualified Actions to Office, Tree and Graph.
   Actions capture the visible selected entity, reopen its existing Inspector
@@ -134,6 +135,9 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
+- Kept open floating Inspectors visible through failed, stale or bounded World
+  observations while their tab remains in the focused Herdr list.
+  [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Reconciled Android terminal textarea replacements as tail edits so mobile
   autocorrection, deletion and revised text no longer resend accumulated input
   or lose corrections.
