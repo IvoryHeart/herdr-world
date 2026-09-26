@@ -1089,7 +1089,8 @@ it in both the connected desktop and equivalent compact hierarchy.
 
 Graph SHALL restore the interactive spatial canvas over the qualified host-space-agent-or-terminal
 hierarchy. It SHALL provide deterministic initial placement, topology-only layout reheating,
-dragging and pinning, bounded pan and zoom, Fit, search, independent disclosure, selection, the
+dragging and pinning, bounded pan and zoom, separate Fit and Arrange controls, search,
+independent disclosure, selection, the
 shared entity context, saved camera and node positions, visible status changes and live terminal
 conversation connectors. Status-only updates SHALL NOT reset settled positions or camera state.
 
@@ -1109,6 +1110,13 @@ listeners and retained layout work when hidden or unmounted.
 - **WHEN** agent labels or statuses change without topology changes
 - **THEN** Graph updates its cues and detail content without resetting zoom, disclosure, selection,
   pinned positions or the settled layout
+
+#### Scenario: Arrange a crowded graph
+
+- **WHEN** a user invokes Arrange after dragging, pinning or panning visible nodes
+- **THEN** Graph spreads the visible hierarchy without changing its qualified links, recenters the
+  camera while preserving zoom when the arranged bounds fit, and retains the arranged positions
+  through view changes and topology updates; Fit remains a separate viewport action
 
 #### Scenario: Operate Graph semantically
 

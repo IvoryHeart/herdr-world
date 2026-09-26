@@ -14,7 +14,7 @@ bun run dev:web
 ```
 
 Open <http://localhost:5173>. Vite proxies API and WebSocket traffic to the World
-service at <http://127.0.0.1:8787>. To use explicit Herdr sockets or SSH, pass service
+service at <http://127.0.0.1:8788>. To use explicit Herdr sockets or SSH, pass service
 options after the workspace command or configure a profile in the UI.
 
 ## Verification
