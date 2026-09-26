@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  arrangeGraph,
   graphBounds,
+  graphNodeRadius,
   reconcileGraphLayout,
   savedGraphPositions,
   stepGraphLayout,
@@ -61,6 +63,55 @@ describe("Graph force layout", () => {
       { sourceId: "host", targetId: "space", kind: "contains" },
     ]);
     expect(stepGraphLayout(spaceCollapsed, 1)).toBeGreaterThanOrEqual(0);
+  });
+
+  test("arrange unpins all nodes and separates overlapping positions", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    for (const n of state.nodes.values()) {
+      n.x = 0;
+      n.y = 0;
+      n.pinned = true;
+    }
+
+    arrangeGraph(state);
+
+    for (const n of state.nodes.values()) {
+      expect(n.pinned).toBe(false);
+      expect(n.vx).toBe(0);
+      expect(n.vy).toBe(0);
+    }
+
+    const positions = [...state.nodes.values()].map(({ id, x, y }) => ({
+      id,
+      x,
+      y,
+    }));
+    for (let i = 0; i < positions.length; i++) {
+      for (let j = i + 1; j < positions.length; j++) {
+        const a = positions[i]!;
+        const b = positions[j]!;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        expect(dist).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  test("arrange preserves parent-child proximity", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    arrangeGraph(state);
+
+    const host = state.nodes.get("host")!;
+    const space = state.nodes.get("space")!;
+    const leaf = state.nodes.get("leaf")!;
+    const hostRadius = graphNodeRadius("host");
+    const spaceRadius = graphNodeRadius("space");
+
+    expect(Math.hypot(space.x - host.x, space.y - host.y)).toBeLessThan(
+      hostRadius + spaceRadius + 200,
+    );
+    expect(Math.hypot(leaf.x - space.x, leaf.y - space.y)).toBeLessThan(
+      spaceRadius + graphNodeRadius("agent") + 150,
+    );
   });
 });
 

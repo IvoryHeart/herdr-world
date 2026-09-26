@@ -2,6 +2,7 @@ import {
   ChevronRight,
   Maximize2,
   Server,
+  Shuffle,
   SquareTerminal,
   ZoomIn,
   ZoomOut,
@@ -260,7 +261,7 @@ export default function SpatialGraphView({
       <div
         className="world-spatial-graph-zoom"
         role="group"
-        aria-label="Graph zoom controls"
+        aria-label="Graph zoom and layout controls"
       >
         <button
           type="button"
@@ -281,10 +282,22 @@ export default function SpatialGraphView({
         <button
           type="button"
           className="world-spatial-graph-fit"
+          aria-label="Fit graph to viewport"
+          title="Fit graph to viewport"
           onClick={() => canvasRef.current?.fit()}
         >
           <Maximize2 size={15} aria-hidden="true" />
           Fit
+        </button>
+        <button
+          type="button"
+          className="world-spatial-graph-fit"
+          aria-label="Arrange graph"
+          title="Arrange graph"
+          onClick={() => canvasRef.current?.arrange()}
+        >
+          <Shuffle size={15} aria-hidden="true" />
+          Arrange
         </button>
       </div>
     </WorldViewToolbar>

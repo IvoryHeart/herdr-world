@@ -185,6 +185,45 @@ export function graphBounds(nodes: Iterable<GraphLayoutNode>) {
     : { minX: -1, minY: -1, maxX: 1, maxY: 1 };
 }
 
+export function arrangeGraph(state: GraphLayoutState) {
+  const nodes = [...state.nodes.values()];
+  const hosts = nodes.filter(({ kind }) => kind === "host");
+  const childrenByParent = new Map<string, GraphLayoutNode[]>();
+  for (const n of nodes) {
+    if (n.kind === "host" || !n.parentId) continue;
+    const list = childrenByParent.get(n.parentId) ?? [];
+    list.push(n);
+    childrenByParent.set(n.parentId, list);
+  }
+
+  const hostCount = Math.max(1, hosts.length);
+  for (let i = 0; i < hosts.length; i++) {
+    const host = hosts[i]!;
+    const angle = i * 2.399963229728653;
+    const radius = Math.max(200, Math.sqrt(hostCount) * 160);
+    host.x = Math.cos(angle) * radius;
+    host.y = Math.sin(angle) * radius;
+    host.vx = 0;
+    host.vy = 0;
+    host.pinned = false;
+  }
+
+  for (const [parentId, children] of childrenByParent) {
+    const parent = state.nodes.get(parentId);
+    if (!parent) continue;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i]!;
+      const angle = (i / children.length) * Math.PI * 2;
+      const dist = child.kind === "space" ? 180 : 105;
+      child.x = parent.x + Math.cos(angle) * dist;
+      child.y = parent.y + Math.sin(angle) * dist;
+      child.vx = 0;
+      child.vy = 0;
+      child.pinned = false;
+    }
+  }
+}
+
 export function savedGraphPositions(state: GraphLayoutState | null) {
   const positions: Record<string, SavedGraphPosition> = {};
   if (!state) return positions;
