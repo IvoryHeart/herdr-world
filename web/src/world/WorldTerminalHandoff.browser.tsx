@@ -530,7 +530,32 @@ async function run() {
   const topbarActions = document.querySelector<HTMLElement>(
     ".topbar-actions .command-trigger",
   );
+  const setShellActionsOpen = async (open: boolean) => {
+    const trigger = () =>
+      document.querySelector<HTMLButtonElement>(
+        ".topbar-actions .command-trigger",
+      );
+    await until(trigger, "shell Actions trigger");
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (
+        (trigger()?.getAttribute("aria-expanded") === "true") === open &&
+        Boolean(document.querySelector(".command-popover")) === open
+      )
+        return;
+      trigger()?.focus();
+      trigger()?.click();
+      await settle();
+    }
+    await until(
+      () =>
+        (trigger()?.getAttribute("aria-expanded") === "true") === open &&
+        Boolean(document.querySelector(".command-popover")) === open,
+      `shell Actions ${open ? "opened" : "closed"}`,
+    );
+  };
   const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
+  const toggleTopbarMenu = () =>
+    document.querySelector<HTMLButtonElement>(".menu-button")?.click();
   const precedes = (left: Element | null, right: Element | null) =>
     Boolean(
       left &&
@@ -544,7 +569,7 @@ async function run() {
       precedes(topbarActions, topbarMenu),
     "top bar did not order host, view, details, Actions and Menu",
   );
-  topbarActions?.click();
+  await setShellActionsOpen(true);
   await until(
     () => document.querySelector(".command-popover"),
     "Roamgate shell Actions menu in the visual view",
@@ -575,7 +600,7 @@ async function run() {
       topbarDetails?.title.includes("spaces") === true,
     "top-bar extras crowded search or made the host summary prominent",
   );
-  topbarActions?.click();
+  await setShellActionsOpen(false);
   check(
     document
       .querySelector(".world-control-plane")
@@ -614,7 +639,7 @@ async function run() {
       sharedNavigator && getComputedStyle(sharedNavigator).display !== "none",
     "restored workspace navigator",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
@@ -690,7 +715,7 @@ async function run() {
     "the Zen workspace navigator did not collapse after losing focus",
   );
   sharedNavigator?.style.removeProperty("top");
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
@@ -765,7 +790,7 @@ async function run() {
     document.querySelector(".world-office-toolbar") === null,
     "Office settings still consumed a scene toolbar",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
@@ -790,7 +815,11 @@ async function run() {
       ),
     "Office controls were not menu-owned or did not default to Floating",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
+  await until(
+    () => !document.querySelector(".config-dropdown"),
+    "Office settings closed before shell Actions",
+  );
   const floatingPreferenceNavigatorRow = [
     ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
   ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
@@ -845,7 +874,7 @@ async function run() {
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "floating preference Builder Inspector",
   );
-  topbarActions?.click();
+  await setShellActionsOpen(true);
   await until(
     () =>
       document
@@ -865,7 +894,7 @@ async function run() {
         ?.textContent?.includes("Create workspace") === true,
     "selected visual commands displaced native shell commands",
   );
-  topbarActions?.click();
+  await setShellActionsOpen(false);
   flushSync(() => agentTarget("Reviewer")!.click());
   await until(
     () =>
@@ -1020,6 +1049,106 @@ async function run() {
   document.documentElement.style.zoom = "";
   window.dispatchEvent(new Event("resize"));
   await settle();
+  const desktopInspectorBounds = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ]
+      .map((inspector) => ({
+        label: inspector.getAttribute("aria-label"),
+        bounds: inspector.getBoundingClientRect(),
+      }))
+      .sort((a, b) => a.label!.localeCompare(b.label!));
+  const beforeCompact = desktopInspectorBounds();
+  const compactVisualStage =
+    document.querySelector<HTMLElement>(".world-view-layout")!;
+  compactVisualStage.style.width = "660px";
+  compactVisualStage.style.height = "650px";
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () =>
+      document.documentElement.dataset.layout === "mobile" &&
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 1,
+    "compact visual presentation showed one Inspector",
+  );
+  const compactArrangeTrigger = () =>
+    document.querySelector<HTMLButtonElement>(
+      '.mobile-nav button[aria-label="Arrange windows"]',
+    );
+  if (!compactArrangeTrigger())
+    document
+      .querySelector<HTMLButtonElement>(".mobile-controls-toggle")
+      ?.click();
+  await until(compactArrangeTrigger, "compact arrangement menu trigger");
+  compactArrangeTrigger()!.click();
+  await until(
+    () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
+        ),
+      ].some(
+        (button) =>
+          button.querySelector("strong")?.textContent === "Columns" &&
+          button.getAttribute("aria-disabled") === "true",
+      ),
+    "compact Columns was unavailable",
+  );
+  const compactColumns = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
+    ),
+  ].find((button) => button.querySelector("strong")?.textContent === "Columns");
+  compactColumns?.click();
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  updateShortcut("arrangement.columns", ["Ctrl+Alt+Shift+3"]);
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "3",
+      code: "Digit3",
+      ctrlKey: true,
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 1,
+    "compact menu or shortcut changed the visible Inspector set",
+  );
+  updateLayoutPreferences({ mode: "desktop" });
+  compactVisualStage.style.removeProperty("width");
+  compactVisualStage.style.removeProperty("height");
+  await until(
+    () =>
+      document.documentElement.dataset.layout === "desktop" &&
+      desktopInspectorBounds().length === 2,
+    "desktop Inspectors returned after compact selection",
+  );
+  await until(
+    () =>
+      desktopInspectorBounds().every((item, index) => {
+        const prior = beforeCompact[index];
+        return (
+          item.label === prior?.label &&
+          ["left", "top", "width", "height"].every(
+            (key) =>
+              Math.abs(
+                (item.bounds[key as keyof DOMRect] as number) -
+                  (prior.bounds[key as keyof DOMRect] as number),
+              ) <= 2,
+          )
+        );
+      }),
+    "desktop Inspector placements survived compact menu and shortcut",
+  );
   for (const visualView of ["tree", "graph", "office"] as const) {
     viewSelect.value = visualView;
     viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
@@ -1325,7 +1454,7 @@ async function run() {
       !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
     "close preference-check Inspectors",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
@@ -1338,7 +1467,7 @@ async function run() {
   )!;
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  topbarMenu?.click();
+  toggleTopbarMenu();
   flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
@@ -3012,7 +3141,7 @@ async function run() {
     () => window.__HERDR_WORLD_RENDERER__?.ready === true,
     "Office before later Inspector opening",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
@@ -3025,7 +3154,7 @@ async function run() {
   )!;
   laterOpeningSelect.value = "floating";
   laterOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  topbarMenu?.click();
+  toggleTopbarMenu();
   const laterDesk = () =>
     document.querySelector<HTMLButtonElement>(
       '.world-semantic-target[data-kind="desk"][data-target-key*="created-tab-3"]:not(:disabled)',
@@ -3123,6 +3252,11 @@ async function run() {
     return (
       bounds.length === 3 &&
       bounds.every((item) => item.width >= 220) &&
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
+        ),
+      ].every((inspector) => inspector.classList.contains("is-compact")) &&
       bounds.every(
         (item, index) => index === 0 || bounds[index - 1]!.right <= item.left,
       )
@@ -3146,6 +3280,11 @@ async function run() {
     return (
       bounds.length === 3 &&
       bounds.every((item) => item.height >= 160) &&
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
+        ),
+      ].every((inspector) => inspector.classList.contains("is-compact")) &&
       bounds.every(
         (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
       )

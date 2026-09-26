@@ -1276,6 +1276,9 @@ function WorldControlPlane({
 
   const selectVisualArrangement = useCallback(
     (command: TerminalWindowArrangementPreset | "restore") => {
+      // Compact presentation is derived from the desktop placement snapshot.
+      // A stale menu or a direct command must not replace that snapshot.
+      if (compactArrangement) return;
       const openIds = visualWindows.map(({ id }) => id);
       if (command === "restore") {
         const restored = restoreTerminalWindowArrangement(
@@ -1329,6 +1332,7 @@ function WorldControlPlane({
     },
     [
       activeInspectorId,
+      compactArrangement,
       dockedInspectorId,
       onDockedInspectorIdChange,
       visualArrangementStage,
@@ -1347,6 +1351,10 @@ function WorldControlPlane({
     ];
     const disabledReasons: WindowArrangementControl["disabledReasons"] = {};
     for (const preset of presets) {
+      if (compactArrangement) {
+        disabledReasons[preset] = "Available in desktop layout.";
+        continue;
+      }
       const reason = terminalWindowArrangementReason(
         preset,
         visualArrangementStage,
@@ -1355,20 +1363,25 @@ function WorldControlPlane({
       );
       if (reason) disabledReasons[preset] = reason;
     }
-    if (
+    if (compactArrangement) {
+      disabledReasons.restore = "Available in desktop layout.";
+    } else if (
       !arrangementScope ||
       Object.keys(arrangementScope.baselines).length === 0
     ) {
       disabledReasons.restore = "No arranged positions to restore.";
     }
     return {
-      activePreset: arrangementScope?.preset ?? null,
+      activePreset: compactArrangement
+        ? "single"
+        : (arrangementScope?.preset ?? null),
       disabledReasons,
       onSelect: selectVisualArrangement,
     };
   }, [
     activeInspectorId,
     arrangementScope,
+    compactArrangement,
     selectVisualArrangement,
     visualArrangementStage,
     visualWindows,

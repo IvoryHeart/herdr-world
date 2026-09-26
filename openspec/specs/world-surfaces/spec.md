@@ -753,6 +753,11 @@ Columns SHALL place the current windows side by side, and Rows SHALL place them 
 
 At the first arrangement of an eligible window set, World SHALL capture its previous presentation and each window's available prior geometry, including the Spaces Single state or an Inspector's dock/inline state. Restore positions SHALL return every still-open participating instance to that captured presentation and geometry without reopening a closed instance, changing the current active tab/pane or moving an instance that has never participated. Restoring Spaces' original Single presentation SHALL show its currently active tab. A Tree inline return SHALL use its exact leaf if that leaf is still visible, and otherwise use the normal docked overlay. Explicit drag, resize, dock and close actions SHALL continue to work after arranging. Viewport changes SHALL keep title controls reachable; a compact layout SHALL keep only one active usable window and preserve desktop arrangement positions for return to desktop. A selected-host or runtime-generation change SHALL discard the prior live arrangement and restore snapshot with the retired windows. Spaces and visual views SHALL retain their respective window placement while inactive without arranging each other's hidden windows. Spaces SHALL keep tab-window placement separate for each focused workspace and SHALL detach the old workspace's terminal presentations when focus changes to another workspace.
 
+#### Scenario: Compact visual layout preserves desktop positions
+
+- **WHEN** a visual view with arranged Inspectors enters a compact layout and the user attempts a menu choice or assigned shortcut
+- **THEN** the compact view keeps one active Inspector, explains that placement choices are available on desktop, and returns to the same saved Inspector positions on desktop
+
 #### Scenario: Two columns and three rows
 
 - **WHEN** two eligible windows fit Columns, or three fit Rows, and the user chooses that option in any view
