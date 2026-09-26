@@ -21,6 +21,13 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added an Arrange graph control beside Fit in Graph view. Arrange spreads visible
+  nodes into a readable hierarchy, wraps multiple hosts, and recenters the camera
+  after manual pan while preserving zoom when possible. Arranged positions stay
+  fixed through graph revisits and topology updates, and nodes remain draggable.
+  Fit remains a separate viewport action; both controls are visible whenever the
+  Graph canvas is shown at narrower desktop widths.
+  [Herdr World PR #116](https://github.com/IvoryHeart/herdr-world/pull/116)
 - Added shared tab-bar arrangements for existing Spaces tabs and open visual
   Inspectors: Single, Cascade, Columns, Rows, Grid, and Restore positions. Split
   panes remain inside one tab window, docked and Tree inline Inspectors can join

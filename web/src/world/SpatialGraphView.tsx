@@ -3,6 +3,7 @@ import {
   Maximize2,
   Server,
   SquareTerminal,
+  Waypoints,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -281,10 +282,19 @@ export default function SpatialGraphView({
         <button
           type="button"
           className="world-spatial-graph-fit"
+          title="Fit graph"
           onClick={() => canvasRef.current?.fit()}
         >
           <Maximize2 size={15} aria-hidden="true" />
           Fit
+        </button>
+        <button
+          type="button"
+          aria-label="Arrange graph"
+          title="Arrange graph"
+          onClick={() => canvasRef.current?.arrange()}
+        >
+          <Waypoints size={16} aria-hidden="true" />
         </button>
       </div>
     </WorldViewToolbar>

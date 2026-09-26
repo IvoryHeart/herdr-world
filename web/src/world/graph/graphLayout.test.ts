@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  arrangeGraphLayout,
   graphBounds,
   reconcileGraphLayout,
   savedGraphPositions,
@@ -61,6 +62,110 @@ describe("Graph force layout", () => {
       { sourceId: "host", targetId: "space", kind: "contains" },
     ]);
     expect(stepGraphLayout(spaceCollapsed, 1)).toBeGreaterThanOrEqual(0);
+  });
+
+  test("arranges stacked and pinned visible nodes without changing links", () => {
+    const graph = projection();
+    for (let index = 0; index < 12; index += 1) {
+      const id = `leaf-${index}`;
+      graph.nodes.push(node(id, index % 2 ? "terminal" : "agent", "space"));
+      graph.edges.push({ sourceId: "space", targetId: id, kind: "contains" });
+    }
+    const state = reconcileGraphLayout(null, graph, new Set()).state;
+    const edges = [...state.edges];
+    for (const value of state.nodes.values()) {
+      value.x = 0;
+      value.y = 0;
+      value.pinned = true;
+    }
+
+    arrangeGraphLayout(state);
+
+    expect(state.edges).toEqual(edges);
+    expect([...state.nodes.values()].every((value) => value.pinned)).toBe(true);
+    const nodes = [...state.nodes.values()];
+    for (let left = 0; left < nodes.length; left += 1) {
+      for (let right = left + 1; right < nodes.length; right += 1) {
+        const a = nodes[left]!;
+        const b = nodes[right]!;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(
+          a.kind === "host" || b.kind === "host" ? 100 : 88,
+        );
+      }
+    }
+  });
+
+  test("wraps nine host groups within a normal Fit viewport", () => {
+    const graph = projection();
+    graph.nodes = [];
+    graph.edges = [];
+    for (let hostIndex = 0; hostIndex < 9; hostIndex += 1) {
+      const hostId = `host-${hostIndex}`;
+      const spaceId = `space-${hostIndex}`;
+      graph.nodes.push(node(hostId, "host", null));
+      graph.nodes.push(node(spaceId, "space", hostId));
+      graph.edges.push({
+        sourceId: hostId,
+        targetId: spaceId,
+        kind: "contains",
+      });
+      for (let leafIndex = 0; leafIndex < 4; leafIndex += 1) {
+        const leafId = `leaf-${hostIndex}-${leafIndex}`;
+        graph.nodes.push(node(leafId, "agent", spaceId));
+        graph.edges.push({
+          sourceId: spaceId,
+          targetId: leafId,
+          kind: "contains",
+        });
+      }
+    }
+    const state = reconcileGraphLayout(null, graph, new Set()).state;
+
+    arrangeGraphLayout(state);
+
+    const bounds = graphBounds(state.nodes.values());
+    expect(bounds.maxX - bounds.minX).toBeLessThanOrEqual((1280 - 96) / 0.25);
+    expect(bounds.maxY - bounds.minY).toBeLessThanOrEqual((900 - 96) / 0.25);
+    expect(
+      new Set([...state.nodes.values()].map(({ x, y }) => `${x},${y}`)).size,
+    ).toBe(54);
+    expect(state.edges).toHaveLength(45);
+  });
+
+  test("keeps arranged positions through remount and a new agent", () => {
+    const graph = projection();
+    const arranged = reconcileGraphLayout(null, graph, new Set()).state;
+    arrangeGraphLayout(arranged);
+    const positions = savedGraphPositions(arranged);
+    const remounted = reconcileGraphLayout(
+      null,
+      graph,
+      new Set(),
+      positions,
+    ).state;
+    for (let index = 0; index < 80; index += 1) {
+      stepGraphLayout(remounted, 1);
+    }
+    for (const [id, position] of Object.entries(positions)) {
+      expect(remounted.nodes.get(id)).toMatchObject(position);
+    }
+
+    const grown = projection();
+    grown.nodes.push(node("new-agent", "agent", "space"));
+    grown.edges.push({
+      sourceId: "space",
+      targetId: "new-agent",
+      kind: "contains",
+    });
+    const updated = reconcileGraphLayout(remounted, grown, new Set()).state;
+    for (let index = 0; index < 80; index += 1) {
+      stepGraphLayout(updated, 1);
+    }
+    for (const [id, position] of Object.entries(positions)) {
+      expect(updated.nodes.get(id)).toMatchObject(position);
+    }
+    expect(updated.nodes.get("new-agent")).toBeDefined();
+    expect(updated.edges).toHaveLength(graph.edges.length + 1);
   });
 });
 
