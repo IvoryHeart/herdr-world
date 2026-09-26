@@ -12,6 +12,7 @@ import {
   graphNodeRadius,
   reconcileGraphLayout,
   savedGraphPositions,
+  separateOverlaps,
   stepGraphLayout,
 } from "./graphLayout";
 import type { GraphLayoutNode, GraphLayoutState } from "./graphLayout";
@@ -215,6 +216,7 @@ class GraphRenderer {
   #width = 1;
   #height = 1;
   #alpha = 0;
+  #arrangeActive = false;
   #frame: number | null = null;
   #pointer: PointerInteraction | null = null;
   #disposed = false;
@@ -360,6 +362,7 @@ class GraphRenderer {
   arrange() {
     if (!this.#layout) return;
     arrangeGraph(this.#layout);
+    this.#arrangeActive = true;
     this.#fitWhenSettled = true;
     this.#alpha = 1;
     this.#requestFrame();
@@ -445,6 +448,10 @@ class GraphRenderer {
     }
     if (this.#alpha <= 0.015) {
       this.#alpha = 0;
+      if (this.#arrangeActive && this.#layout) {
+        this.#arrangeActive = false;
+        separateOverlaps([...this.#layout.nodes.values()]);
+      }
       if (this.#fitWhenSettled && this.#layout?.nodes.size) this.fit();
     }
     this.#draw();

@@ -102,8 +102,7 @@
   align-items: center;
 }
 .world-view-search-toggle,
-.world-view-search-overlay button,
-.world-view-toolbar .world-spatial-graph-zoom button {
+.world-view-search-overlay button {
   width: 30px;
   min-width: 30px;
   height: 30px;
@@ -117,18 +116,10 @@
   color: var(--topbar-control-text, var(--muted, #9da7b4));
   background: var(--topbar-control-bg, var(--bg, #0e1116));
 }
-.world-view-toolbar .world-spatial-graph-fit {
-  width: auto;
-  min-width: 56px;
-  gap: 4px;
-  padding: 0 8px;
-}
 .world-view-search-toggle:hover,
 .world-view-search-toggle:focus-visible,
 .world-view-search-overlay button:hover,
-.world-view-search-overlay button:focus-visible,
-.world-view-toolbar .world-spatial-graph-zoom button:hover,
-.world-view-toolbar .world-spatial-graph-zoom button:focus-visible {
+.world-view-search-overlay button:focus-visible {
   border-color: var(--accent, #79a6ff);
   color: var(--text, #edf2f7);
 }
@@ -1537,8 +1528,11 @@
   border: 0;
 }
 .world-spatial-graph-zoom {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
   display: flex;
-  flex: 0 0 auto;
   gap: 4px;
 }
 .world-spatial-graph-zoom button {
@@ -1552,7 +1546,10 @@
   border: 1px solid var(--border, #343942);
   border-radius: 8px;
   color: inherit;
-  background: rgb(255 255 255 / 4%);
+  background: var(--bg, #0e1116);
+}
+.world-spatial-graph-fit {
+  min-width: 56px;
 }
 .world-spatial-graph-zoom button:hover,
 .world-spatial-graph-zoom button:focus-visible {
@@ -1849,20 +1846,6 @@
   }
   .world-view-graph {
     padding: 0;
-  }
-}
-
-@media (min-width: 721px) and (max-width: 760px) {
-  .world-view-toolbar-actions:has(.world-spatial-graph-zoom) {
-    display: flex;
-  }
-  .world-view-toolbar .world-spatial-graph-fit {
-    min-width: 30px;
-    width: 30px;
-    padding: 0;
-  }
-  .world-view-toolbar .world-spatial-graph-fit span {
-    display: none;
   }
 }
 

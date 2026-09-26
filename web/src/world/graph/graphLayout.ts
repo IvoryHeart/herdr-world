@@ -147,19 +147,6 @@ export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
     }
   }
 
-  const allNodes = [...state.nodes.values()];
-  for (let i = 0; i < allNodes.length; i++) {
-    const a = allNodes[i]!;
-    const ra = graphNodeRadius(a.kind) + LABEL_CLEARANCE;
-    for (let j = i + 1; j < allNodes.length; j++) {
-      const b = allNodes[j]!;
-      if (a.parentId === b.id || b.parentId === a.id) continue;
-      if (a.parentId !== null && a.parentId === b.parentId) continue;
-      const rb = graphNodeRadius(b.kind) + LABEL_CLEARANCE;
-      repel(a, b, ra + rb, 2.5, alpha);
-    }
-  }
-
   let energy = 0;
   for (const node of state.nodes.values()) {
     if (node.pinned) {
@@ -199,6 +186,7 @@ export function graphBounds(nodes: Iterable<GraphLayoutNode>) {
 }
 
 const LABEL_CLEARANCE = 18;
+const MAX_NODE_FOOTPRINT = (62 + LABEL_CLEARANCE) * 2;
 
 export function arrangeGraph(state: GraphLayoutState) {
   const nodes = [...state.nodes.values()];
@@ -211,11 +199,22 @@ export function arrangeGraph(state: GraphLayoutState) {
     childrenByParent.set(n.parentId, list);
   }
 
+  function descendantCount(id: string): number {
+    const children = childrenByParent.get(id);
+    if (!children) return 0;
+    let count = children.length;
+    for (const child of children) count += descendantCount(child.id);
+    return count;
+  }
+
   const hostCount = Math.max(1, hosts.length);
+  const totalDescPerHost = hosts.map((h) => descendantCount(h.id));
+  const maxDesc = Math.max(1, ...totalDescPerHost);
+  const hostSpacing = Math.max(300, Math.sqrt(maxDesc) * 120 + hostCount * 80);
   for (let i = 0; i < hosts.length; i++) {
     const host = hosts[i]!;
     const angle = i * 2.399963229728653;
-    const radius = Math.max(200, Math.sqrt(hostCount) * 160);
+    const radius = Math.max(hostSpacing, Math.sqrt(hostCount) * hostSpacing);
     host.x = Math.cos(angle) * radius;
     host.y = Math.sin(angle) * radius;
     host.vx = 0;
@@ -226,12 +225,24 @@ export function arrangeGraph(state: GraphLayoutState) {
   for (const [parentId, children] of childrenByParent) {
     const parent = state.nodes.get(parentId);
     if (!parent) continue;
+    const ringRadius =
+      children.length <= 1
+        ? children[0]?.kind === "space"
+          ? 180
+          : 105
+        : Math.max(
+            children[0]?.kind === "space" ? 180 : 105,
+            (children.length *
+              (graphNodeRadius(children[0]?.kind ?? "terminal") +
+                LABEL_CLEARANCE) *
+              2) /
+              Math.PI,
+          );
     for (let i = 0; i < children.length; i++) {
       const child = children[i]!;
       const angle = (i / children.length) * Math.PI * 2;
-      const dist = child.kind === "space" ? 180 : 105;
-      child.x = parent.x + Math.cos(angle) * dist;
-      child.y = parent.y + Math.sin(angle) * dist;
+      child.x = parent.x + Math.cos(angle) * ringRadius;
+      child.y = parent.y + Math.sin(angle) * ringRadius;
       child.vx = 0;
       child.vy = 0;
       child.pinned = false;
@@ -241,33 +252,53 @@ export function arrangeGraph(state: GraphLayoutState) {
   separateOverlaps(nodes);
 }
 
-function separateOverlaps(nodes: GraphLayoutNode[]) {
-  for (let pass = 0; pass < 12; pass++) {
+export function separateOverlaps(nodes: GraphLayoutNode[]) {
+  const cellSize = MAX_NODE_FOOTPRINT;
+  for (let pass = 0; pass < 30; pass++) {
+    const grid = new Map<string, GraphLayoutNode[]>();
+    for (const n of nodes) {
+      const cx = Math.floor(n.x / cellSize);
+      const cy = Math.floor(n.y / cellSize);
+      const key = `${cx},${cy}`;
+      const cell = grid.get(key);
+      if (cell) cell.push(n);
+      else grid.set(key, [n]);
+    }
     let displaced = false;
-    for (let i = 0; i < nodes.length; i++) {
-      const a = nodes[i]!;
-      const ra = graphNodeRadius(a.kind) + LABEL_CLEARANCE;
-      for (let j = i + 1; j < nodes.length; j++) {
-        const b = nodes[j]!;
-        const rb = graphNodeRadius(b.kind) + LABEL_CLEARANCE;
-        const minDist = ra + rb;
-        let dx = b.x - a.x;
-        let dy = b.y - a.y;
-        let dist = Math.hypot(dx, dy);
-        if (dist >= minDist) continue;
-        if (dist < 0.01) {
-          dx = stableFraction(a.id) - 0.5;
-          dy = stableFraction(b.id) - 0.5;
-          dist = Math.max(0.01, Math.hypot(dx, dy));
+    for (const [key, cell] of grid) {
+      const [cx, cy] = key.split(",").map(Number) as [number, number];
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const neighborKey = `${cx + dx},${cy + dy}`;
+          const neighbor = dx === 0 && dy === 0 ? cell : grid.get(neighborKey);
+          if (!neighbor) continue;
+          for (const a of cell) {
+            const ra = graphNodeRadius(a.kind) + LABEL_CLEARANCE;
+            const startJ = neighbor === cell ? cell.indexOf(a) + 1 : 0;
+            for (let j = startJ; j < neighbor.length; j++) {
+              const b = neighbor[j]!;
+              const rb = graphNodeRadius(b.kind) + LABEL_CLEARANCE;
+              const minDist = ra + rb;
+              let ddx = b.x - a.x;
+              let ddy = b.y - a.y;
+              let dist = Math.hypot(ddx, ddy);
+              if (dist >= minDist) continue;
+              if (dist < 0.01) {
+                ddx = stableFraction(a.id) - 0.5;
+                ddy = stableFraction(b.id) - 0.5;
+                dist = Math.max(0.01, Math.hypot(ddx, ddy));
+              }
+              const overlap = (minDist - dist) / 2 + 1;
+              const nx = (ddx / dist) * overlap;
+              const ny = (ddy / dist) * overlap;
+              a.x -= nx;
+              a.y -= ny;
+              b.x += nx;
+              b.y += ny;
+              displaced = true;
+            }
+          }
         }
-        const overlap = (minDist - dist) / 2 + 1;
-        const nx = (dx / dist) * overlap;
-        const ny = (dy / dist) * overlap;
-        a.x -= nx;
-        a.y -= ny;
-        b.x += nx;
-        b.y += ny;
-        displaced = true;
       }
     }
     if (!displaced) break;

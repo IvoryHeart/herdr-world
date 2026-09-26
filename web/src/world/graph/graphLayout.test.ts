@@ -5,6 +5,7 @@ import {
   graphNodeRadius,
   reconcileGraphLayout,
   savedGraphPositions,
+  separateOverlaps,
   stepGraphLayout,
 } from "./graphLayout";
 import type { GraphLayoutState } from "./graphLayout";
@@ -101,43 +102,19 @@ describe("Graph force layout", () => {
       new Set(),
     ).state;
 
-    arrangeGraph(state);
-    settleLayout(state);
-
-    const all = [...state.nodes.values()];
-    for (let i = 0; i < all.length; i++) {
-      const a = all[i]!;
-      for (let j = i + 1; j < all.length; j++) {
-        const b = all[j]!;
-        const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        const minSep = graphNodeRadius(a.kind) + graphNodeRadius(b.kind);
-        expect(dist).toBeGreaterThanOrEqual(minSep);
-      }
-    }
+    arrangeAndSettle(state);
+    assertNoCircleOverlaps(state);
   });
 
   test("arrange keeps dense graph separated after settling", () => {
     const state = reconcileGraphLayout(
       null,
-      denseProjection(4, 4),
+      denseProjection(8, 12),
       new Set(),
     ).state;
 
-    arrangeGraph(state);
-    settleLayout(state);
-
-    const all = [...state.nodes.values()];
-    let overlaps = 0;
-    for (let i = 0; i < all.length; i++) {
-      const a = all[i]!;
-      for (let j = i + 1; j < all.length; j++) {
-        const b = all[j]!;
-        const dist = Math.hypot(a.x - b.x, a.y - b.y);
-        const minSep = graphNodeRadius(a.kind) + graphNodeRadius(b.kind);
-        if (dist < minSep) overlaps++;
-      }
-    }
-    expect(overlaps).toBe(0);
+    arrangeAndSettle(state);
+    assertNoCircleOverlaps(state);
   });
 
   test("arrange preserves parent-child proximity", () => {
@@ -272,13 +249,32 @@ function denseProjection(
   };
 }
 
-function settleLayout(state: GraphLayoutState) {
+function arrangeAndSettle(state: GraphLayoutState) {
+  arrangeGraph(state);
   let alpha = 1;
   for (let i = 0; i < 300; i++) {
     const energy = stepGraphLayout(state, alpha);
     alpha *= energy < 0.08 ? 0.78 : 0.93;
     if (alpha <= 0.015) break;
   }
+  separateOverlaps([...state.nodes.values()]);
+}
+
+function assertNoCircleOverlaps(state: GraphLayoutState) {
+  const all = [...state.nodes.values()];
+  const overlaps: string[] = [];
+  for (let i = 0; i < all.length; i++) {
+    const a = all[i]!;
+    for (let j = i + 1; j < all.length; j++) {
+      const b = all[j]!;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const minSep = graphNodeRadius(a.kind) + graphNodeRadius(b.kind);
+      if (dist < minSep) {
+        overlaps.push(`${a.id}/${b.id} dist=${dist.toFixed(1)} min=${minSep}`);
+      }
+    }
+  }
+  expect(overlaps).toEqual([]);
 }
 
 function node(
