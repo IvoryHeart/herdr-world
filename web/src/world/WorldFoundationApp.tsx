@@ -1332,11 +1332,28 @@ function WorldControlPlane({
         }
         return;
       }
+      // The observer can still hold the previous stage during a resize click.
+      // Resolve this arrangement against the bounds visible at selection time.
+      const layout = worldViewLayoutRef.current;
+      const stage = layout
+        ? visualInspectorArrangementStage(
+            layout.getBoundingClientRect(),
+            measuredFixedPositionScale(),
+          )
+        : visualArrangementStage;
+      setVisualArrangementStage((current) =>
+        current.left === stage.left &&
+        current.top === stage.top &&
+        current.width === stage.width &&
+        current.height === stage.height
+          ? current
+          : stage,
+      );
       const applied = applyTerminalWindowArrangement(visualArrangementState, {
         leaseKey: visualLeaseKey,
         scopeKey: VISUAL_ARRANGEMENT_SCOPE,
         preset: command,
-        stage: visualArrangementStage,
+        stage,
         windows: visualWindows,
         activeId: activeInspectorId,
       });

@@ -31,13 +31,16 @@ function enterSearch(input: HTMLInputElement, value: string) {
   )?.set?.call(input, value);
   input.dispatchEvent(new InputEvent("input", { bubbles: true }));
 }
-async function until(condition: () => unknown, message: string) {
+async function until(
+  condition: () => unknown,
+  message: string | (() => string),
+) {
   for (let index = 0; index < 200; index += 1) {
     if (condition()) return;
     await settle();
   }
   throw new Error(
-    `Timed out: ${message}; selected=${store.get().selectedPaneId}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
+    `Timed out: ${typeof message === "function" ? message() : message}; selected=${store.get().selectedPaneId}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
   );
 }
 
@@ -3293,6 +3296,20 @@ async function run() {
         '[role="dialog"][aria-label$=" Inspector"]',
       ),
     ].map((window) => window.getBoundingClientRect());
+  const narrowLayoutDiagnostic = () =>
+    JSON.stringify({
+      stage: narrowedVisualStage.getBoundingClientRect().toJSON(),
+      windows: [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"]',
+        ),
+      ].map((window) => ({
+        bounds: window.getBoundingClientRect().toJSON(),
+        compact: window
+          .querySelector(".workspace-inspector")
+          ?.classList.contains("is-compact"),
+      })),
+    });
   const clippedVisualControls = () =>
     [
       ...document.querySelectorAll<HTMLElement>(
@@ -3328,21 +3345,24 @@ async function run() {
       });
     });
   await arrangeWindows("Columns");
-  await until(() => {
-    const bounds = visualWindowBounds().sort((a, b) => a.left - b.left);
-    return (
-      bounds.length === 3 &&
-      bounds.every((item) => item.width >= 220) &&
-      [
-        ...document.querySelectorAll<HTMLElement>(
-          '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
-        ),
-      ].every((inspector) => inspector.classList.contains("is-compact")) &&
-      bounds.every(
-        (item, index) => index === 0 || bounds[index - 1]!.right <= item.left,
-      )
-    );
-  }, "three Inspectors in narrow Columns");
+  await until(
+    () => {
+      const bounds = visualWindowBounds().sort((a, b) => a.left - b.left);
+      return (
+        bounds.length === 3 &&
+        bounds.every((item) => item.width >= 220) &&
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
+          ),
+        ].every((inspector) => inspector.classList.contains("is-compact")) &&
+        bounds.every(
+          (item, index) => index === 0 || bounds[index - 1]!.right <= item.left,
+        )
+      );
+    },
+    () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
+  );
   await settle();
   check(
     clippedVisualControls().length === 0,
@@ -3356,21 +3376,24 @@ async function run() {
     "short visual arrangement stage",
   );
   await arrangeWindows("Rows");
-  await until(() => {
-    const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
-    return (
-      bounds.length === 3 &&
-      bounds.every((item) => item.height >= 160) &&
-      [
-        ...document.querySelectorAll<HTMLElement>(
-          '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
-        ),
-      ].every((inspector) => inspector.classList.contains("is-compact")) &&
-      bounds.every(
-        (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
-      )
-    );
-  }, "three Inspectors in narrow Rows");
+  await until(
+    () => {
+      const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
+      return (
+        bounds.length === 3 &&
+        bounds.every((item) => item.height >= 160) &&
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
+          ),
+        ].every((inspector) => inspector.classList.contains("is-compact")) &&
+        bounds.every(
+          (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
+        )
+      );
+    },
+    () => `three Inspectors in narrow Rows: ${narrowLayoutDiagnostic()}`,
+  );
   check(
     clippedVisualControls().length === 0,
     `narrow Rows clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
