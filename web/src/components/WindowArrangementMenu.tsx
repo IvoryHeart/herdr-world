@@ -1,6 +1,7 @@
 import { LayoutGrid, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { measuredFixedPositionScale } from "../fixedPositionScale";
 import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
 import type { ShortcutId } from "../shortcutBindings";
 import type { TerminalWindowArrangementPreset } from "../world/terminalWindowArrangement";
@@ -114,21 +115,27 @@ export function WindowArrangementMenu({
   }, [open]);
 
   const triggerRect = open ? triggerRef.current?.getBoundingClientRect() : null;
-  const menuWidth = Math.min(246, window.innerWidth - 16);
-  const menuHeight = Math.min(420, window.innerHeight * 0.8);
+  const scale = open ? measuredFixedPositionScale() : 1;
+  const menuWidth = Math.min(246, (window.innerWidth - 16) / scale);
+  const menuHeight = Math.min(420, (window.innerHeight * 0.8) / scale);
+  const menuWidthOnScreen = menuWidth * scale;
+  const menuHeightOnScreen = menuHeight * scale;
   const position: React.CSSProperties | undefined = triggerRect
     ? {
-        left: Math.max(
-          8,
-          Math.min(
-            triggerRect.right - menuWidth,
-            window.innerWidth - menuWidth - 8,
-          ),
-        ),
+        width: menuWidth,
+        maxHeight: menuHeight,
+        left:
+          Math.max(
+            8,
+            Math.min(
+              triggerRect.right - menuWidthOnScreen,
+              window.innerWidth - menuWidthOnScreen - 8,
+            ),
+          ) / scale,
         top:
-          triggerRect.bottom + menuHeight + 8 <= window.innerHeight
+          (triggerRect.bottom + menuHeightOnScreen + 8 <= window.innerHeight
             ? triggerRect.bottom + 4
-            : Math.max(8, triggerRect.top - menuHeight - 4),
+            : Math.max(8, triggerRect.top - menuHeightOnScreen - 4)) / scale,
       }
     : undefined;
 

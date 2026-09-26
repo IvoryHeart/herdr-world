@@ -28,8 +28,9 @@ retain their original Herdr Web lineage.
   Rows shrink evenly for additional windows while keeping controls usable. Layouts
   that cannot fit explain their size limits. The desktop layout button sits at
   the tab bar's right edge and mobile places it in the ellipsis-expanded controls.
-  The same placements are available from Actions and configurable keyboard
-  shortcuts, with one working visual Actions menu at the right of the top bar.
+  The same placements are available through the original shell Actions command
+  menu in every view; keyboard shortcuts can be assigned in preferences and
+  are unassigned by default.
   [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Added connection- and generation-qualified Actions to Office, Tree and Graph.
   Actions capture the visible selected entity, reopen its existing Inspector

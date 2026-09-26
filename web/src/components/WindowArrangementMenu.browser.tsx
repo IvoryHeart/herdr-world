@@ -128,6 +128,26 @@ async function run() {
     "a menu opened from the mobile floating controls must fit above them",
   );
 
+  trigger.click();
+  await settle();
+  document.documentElement.style.zoom = "1.4";
+  document.getElementById("root")!.style.cssText =
+    "position:fixed;right:8px;top:52px";
+  trigger.click();
+  await settle();
+  const zoomedMenu = document.querySelector<HTMLElement>('[role="menu"]');
+  const zoomedTriggerBounds = trigger.getBoundingClientRect();
+  const zoomedMenuBounds = zoomedMenu?.getBoundingClientRect();
+  check(
+    Boolean(
+      zoomedMenuBounds &&
+        zoomedMenuBounds.left >= 8 &&
+        zoomedMenuBounds.right <= window.innerWidth - 8 &&
+        Math.abs(zoomedMenuBounds.right - zoomedTriggerBounds.right) <= 20,
+    ),
+    `scaled menu was not visible beside its trigger: ${JSON.stringify({ menu: zoomedMenuBounds?.toJSON(), trigger: zoomedTriggerBounds.toJSON(), viewport: window.innerWidth })}`,
+  );
+
   await fetch("/result", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

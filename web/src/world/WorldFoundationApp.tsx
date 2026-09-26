@@ -9,16 +9,23 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import App, {
-  measuredFixedPositionScale,
-  type WorkspaceSurfaceSelection,
-} from "../App";
+import {
+  FolderOpen,
+  History,
+  LayoutGrid,
+  Pin,
+  PinOff,
+  Terminal,
+} from "lucide-react";
+import App, { type WorkspaceSurfaceSelection } from "../App";
+import { measuredFixedPositionScale } from "../fixedPositionScale";
 import { bridge, type ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import {
   WINDOW_ARRANGEMENT_CHOICES,
   type WindowArrangementControl,
 } from "../components/WindowArrangementMenu";
+import type { CommandExtension } from "../components/CommandCombobox";
 import { shortcutMatches } from "../shortcutPreferences";
 import { lazyWithReload } from "../lazyWithReload";
 import { shallowEqual, store, useStoreSelector } from "../store";
@@ -58,7 +65,14 @@ import {
 } from "./officePreferences";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import WorldIntentProfile from "./WorldIntentProfile";
-import { VisualRouteActions } from "./VisualRouteActionsMenu";
+import {
+  resolveVisualRouteActionTarget,
+  visualRouteActionsForNode,
+  visualRouteActionTarget,
+  visualRouteTargetLabel,
+  type VisualRouteAction,
+  type VisualRouteActionTarget,
+} from "./visualRouteActions";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
@@ -95,6 +109,11 @@ export {
   retainWorldFloatingTerminals,
   upsertWorldFloatingTerminal,
 } from "./worldTerminalPresentation";
+
+const EMPTY_VISUAL_ACTION_EXTENSION: CommandExtension = {
+  captureKey: null,
+  groups: [],
+};
 
 const PixelOfficeView = lazyWithReload(
   "world-pixel-office",
@@ -403,8 +422,8 @@ export default function WorldFoundationApp() {
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
   const [viewToolbarPortal, setViewToolbarPortal] =
     useState<HTMLDivElement | null>(null);
-  const [visualActionsPortal, setVisualActionsPortal] =
-    useState<HTMLDivElement | null>(null);
+  const [visualActionExtension, setVisualActionExtension] =
+    useState<CommandExtension>(EMPTY_VISUAL_ACTION_EXTENSION);
   const [visualArrangementControl, setVisualArrangementControl] = useState<
     WindowArrangementControl | undefined
   >();
@@ -598,8 +617,9 @@ export default function WorldFoundationApp() {
       <div className="world-spaces-layer is-active">
         <App
           operationalShortcutsEnabled={view === "spaces"}
+          shellActionsEnabled
           topbarPortal={topbarPortal}
-          onVisualActionsPortalReady={setVisualActionsPortal}
+          visualActionExtension={visualActionExtension}
           primaryViewControl={
             <div className="world-topbar-control-plane">
               <label className="world-primary-view-select">
@@ -657,8 +677,8 @@ export default function WorldFoundationApp() {
                 inspectorPaneFocusRef.current = handler;
               }}
               onVisualArrangementControlReady={setVisualArrangementControl}
+              onVisualActionExtensionReady={setVisualActionExtension}
               viewToolbarPortal={viewToolbarPortal}
-              visualActionsPortal={visualActionsPortal}
               onGoToSpaces={() => setView("spaces")}
             />
           }
@@ -744,8 +764,8 @@ function WorldControlPlane({
   onWorkspaceSurfaceSelectionReady,
   onInspectorPaneFocusReady,
   onVisualArrangementControlReady,
+  onVisualActionExtensionReady,
   viewToolbarPortal,
-  visualActionsPortal,
   onGoToSpaces,
 }: {
   view: Exclude<WorldView, "spaces">;
@@ -771,8 +791,8 @@ function WorldControlPlane({
   onVisualArrangementControlReady(
     control: WindowArrangementControl | undefined,
   ): void;
+  onVisualActionExtensionReady(extension: CommandExtension): void;
   viewToolbarPortal: HTMLDivElement | null;
-  visualActionsPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
 }) {
   const runtime = useWorldRuntime();
@@ -884,24 +904,6 @@ function WorldControlPlane({
     [pinnedOnly, watchedWorld, watchlist.records],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
-  const selectedWatch =
-    selection && (selection.kind === "agent" || selection.kind === "terminal")
-      ? {
-          connectionId: selection.connectionId,
-          generation: selection.generation,
-          terminalId: selection.terminalId,
-          label: selection.label,
-        }
-      : null;
-  const selectedPinned = Boolean(
-    selectedWatch &&
-      watchlist.records.some(
-        (watch) =>
-          watch.connectionId === selectedWatch.connectionId &&
-          watch.generation === selectedWatch.generation &&
-          watch.terminalId === selectedWatch.terminalId,
-      ),
-  );
   const watchAdmission = runtime.connections.find(
     ({ connectionId }) =>
       connectionId === connectionSelection.activeConnectionId,
@@ -913,25 +915,6 @@ function WorldControlPlane({
       : !watchAdmission || watchAdmission.revision !== watchlist.revision
         ? "Watch availability pending"
         : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
-  const watchActions = {
-    pinnedOnly,
-    status: watchStatus,
-    onTogglePinnedOnly: () => setPinnedOnly((value) => !value),
-    pin: selectedWatch
-      ? {
-          label: selectedPinned ? "Unpin selected pane" : "Pin selected pane",
-          disabledReason:
-            !watchlist.verified || (!selectedPinned && !selection?.actionable)
-              ? (watchlist.error ?? "The selected pane is unavailable.")
-              : null,
-          onSelect: () =>
-            void watchlistStore.mutate(
-              selectedPinned ? "world.watchlist.unpin" : "world.watchlist.pin",
-              selectedWatch,
-            ),
-        }
-      : undefined,
-  };
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
@@ -2229,42 +2212,220 @@ function WorldControlPlane({
         !currentSelectionGeneration ||
         !selected.actionable),
   );
-  const visualActions = (
-    <VisualRouteActions
-      selection={selected}
-      world={world}
-      activeConnectionId={connectionSelection.activeConnectionId}
-      runtimeGeneration={connectionSelection.runtimeGeneration}
-      arrangementControl={visualArrangementControl}
-      watchControl={watchActions}
-      onResource={(node, requestedView) =>
-        applySelection(node.id, requestedView)
+  const shellActionContext = useRef({
+    selected,
+    world,
+    activeConnectionId: connectionSelection.activeConnectionId,
+    runtimeGeneration: connectionSelection.runtimeGeneration,
+    applySelection,
+    focusWorldNode,
+    onGoToSpaces,
+    watchlistVerified: watchlist.verified,
+    watchlistRecords: watchlist.records,
+  });
+  shellActionContext.current = {
+    selected,
+    world,
+    activeConnectionId: connectionSelection.activeConnectionId,
+    runtimeGeneration: connectionSelection.runtimeGeneration,
+    applySelection,
+    focusWorldNode,
+    onGoToSpaces,
+    watchlistVerified: watchlist.verified,
+    watchlistRecords: watchlist.records,
+  };
+  const runVisualResource = useCallback(
+    (target: VisualRouteActionTarget, action: VisualRouteAction) => {
+      const current = shellActionContext.current;
+      const resolved = resolveVisualRouteActionTarget(target, current.world, {
+        activeConnectionId: current.activeConnectionId,
+        runtimeGeneration: current.runtimeGeneration,
+        selectedId: current.selected?.id ?? null,
+      });
+      if (
+        !resolved.node ||
+        !visualRouteActionsForNode(resolved.node).includes(action)
+      ) {
+        setIntentError(
+          resolved.reason ?? "The selected action is no longer available.",
+        );
+        return;
       }
-      onGoToSpaces={async (node) => {
-        const requestId = intentRequestRef.current + 1;
-        intentRequestRef.current = requestId;
-        setIntentError(null);
-        setIntentOpening(true);
-        try {
-          await focusWorldNode(node);
-          if (intentRequestRef.current !== requestId) return false;
+      if (action !== "spaces") {
+        void current.applySelection(resolved.node.id, action);
+        return;
+      }
+      const node = resolved.node;
+      const requestId = intentRequestRef.current + 1;
+      intentRequestRef.current = requestId;
+      setIntentError(null);
+      setIntentOpening(true);
+      void current
+        .focusWorldNode(node)
+        .then(() => {
+          if (intentRequestRef.current !== requestId) return;
           setSelection(node);
-          onGoToSpaces();
-          return true;
-        } catch (cause) {
-          if (intentRequestRef.current === requestId) {
+          current.onGoToSpaces();
+        })
+        .catch((cause: unknown) => {
+          if (intentRequestRef.current === requestId)
             setIntentError(
               cause instanceof Error ? cause.message : String(cause),
             );
-          }
-          return false;
-        } finally {
+        })
+        .finally(() => {
           if (intentRequestRef.current === requestId) setIntentOpening(false);
-        }
-      }}
-      onError={setIntentError}
-    />
+        });
+    },
+    [],
   );
+  const visualActionExtension = useMemo<CommandExtension>(() => {
+    const target = visualRouteActionTarget(selected);
+    const resolved = resolveVisualRouteActionTarget(target, world, {
+      activeConnectionId: connectionSelection.activeConnectionId,
+      runtimeGeneration: connectionSelection.runtimeGeneration,
+      selectedId: selected?.id ?? null,
+    });
+    const labels: Record<VisualRouteAction, string> = {
+      terminal: "Open Terminal",
+      files: "Open Files",
+      changes: "Open Changes",
+      history: "Open Agent History",
+      spaces: "Go to Spaces",
+    };
+    const icons = {
+      terminal: <Terminal size={15} />,
+      files: <FolderOpen size={15} />,
+      changes: <LayoutGrid size={15} />,
+      history: <History size={15} />,
+      spaces: <LayoutGrid size={15} />,
+    };
+    const targetActions =
+      target && resolved.node
+        ? visualRouteActionsForNode(resolved.node).map((action) => ({
+            key: `visual-${action}`,
+            icon: icons[action],
+            title: labels[action],
+            detail: visualRouteTargetLabel(resolved.node!),
+            keywords: ["visual", "inspector", action],
+            run: () => runVisualResource(target, action),
+          }))
+        : [
+            {
+              key: "visual-select-target",
+              icon: <LayoutGrid size={15} />,
+              title: "Select a visual entity for target actions",
+              detail: resolved.reason ?? undefined,
+              disabledReason:
+                resolved.reason ?? "Select a space, agent, or terminal first.",
+              run: () => {},
+            },
+          ];
+    const pinNode =
+      resolved.node &&
+      (resolved.node.kind === "agent" || resolved.node.kind === "terminal")
+        ? resolved.node
+        : null;
+    const selectedPinned = Boolean(
+      pinNode &&
+        watchlist.records.some(
+          (record) =>
+            record.connectionId === pinNode.connectionId &&
+            record.generation === pinNode.generation &&
+            record.terminalId === pinNode.terminalId,
+        ),
+    );
+    const pinAction = pinNode
+      ? [
+          {
+            key: "visual-pin",
+            icon: selectedPinned ? <PinOff size={15} /> : <Pin size={15} />,
+            title: selectedPinned ? "Unpin selected pane" : "Pin selected pane",
+            detail: pinNode.label,
+            disabledReason: watchlist.verified
+              ? null
+              : (watchlist.error ?? "Watches unavailable while disconnected"),
+            run: () => {
+              const current = shellActionContext.current;
+              const checked = resolveVisualRouteActionTarget(
+                target,
+                current.world,
+                {
+                  activeConnectionId: current.activeConnectionId,
+                  runtimeGeneration: current.runtimeGeneration,
+                  selectedId: current.selected?.id ?? null,
+                },
+              );
+              if (
+                !checked.node ||
+                (checked.node.kind !== "agent" &&
+                  checked.node.kind !== "terminal") ||
+                !current.watchlistVerified ||
+                !checked.node.terminalId
+              ) {
+                setIntentError(
+                  checked.reason ?? "The selected pane is unavailable.",
+                );
+                return;
+              }
+              const watch = {
+                connectionId: checked.node.connectionId,
+                generation: checked.node.generation,
+                terminalId: checked.node.terminalId,
+                label: checked.node.label,
+              };
+              const pinned = current.watchlistRecords.some(
+                (record) =>
+                  record.connectionId === watch.connectionId &&
+                  record.generation === watch.generation &&
+                  record.terminalId === watch.terminalId,
+              );
+              void watchlistStore.mutate(
+                pinned ? "world.watchlist.unpin" : "world.watchlist.pin",
+                watch,
+              );
+            },
+          },
+        ]
+      : [];
+    return {
+      captureKey: resolved.node && target ? JSON.stringify(target) : null,
+      groups: [
+        { heading: "Visual selection", actions: targetActions },
+        {
+          heading: "Pinned panes",
+          actions: [
+            ...pinAction,
+            {
+              key: "visual-pinned-only",
+              icon: <Pin size={15} />,
+              title: pinnedOnly ? "Show all panes" : "Pinned only",
+              detail: watchStatus,
+              run: () => setPinnedOnly((value) => !value),
+            },
+          ],
+        },
+      ],
+    };
+  }, [
+    selected,
+    world,
+    connectionSelection.activeConnectionId,
+    connectionSelection.runtimeGeneration,
+    watchlist.records,
+    watchlist.verified,
+    watchlist.error,
+    pinnedOnly,
+    watchStatus,
+    watchlistStore,
+    runVisualResource,
+  ]);
+  useLayoutEffect(() => {
+    onVisualActionExtensionReady(
+      active ? visualActionExtension : EMPTY_VISUAL_ACTION_EXTENSION,
+    );
+    return () => onVisualActionExtensionReady(EMPTY_VISUAL_ACTION_EXTENSION);
+  }, [active, onVisualActionExtensionReady, visualActionExtension]);
 
   return (
     <main
@@ -2280,9 +2441,6 @@ function WorldControlPlane({
           className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
-            {active && visualActionsPortal
-              ? createPortal(visualActions, visualActionsPortal)
-              : null}
             {active ? (
               <Suspense
                 fallback={

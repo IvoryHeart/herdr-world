@@ -193,8 +193,9 @@ space, agent or terminal. The control SHALL be reachable by pointer and keyboard
 compact layouts, identify the captured host, space and pane as applicable, and offer the
 target's existing applicable Terminal, Files, Changes, Agent History and Go to Spaces actions.
 It SHALL also expose view-wide window arrangements independently of entity selection. The shell's
-right-side visual Actions menu SHALL contain target actions, Pin, Unpin, Pinned only and arrangements
-without a duplicate view-toolbar Actions control; the view toolbar SHALL keep search available.
+right-side Roamgate-derived Actions command menu SHALL retain its original shell commands and add
+target actions, Pin, Unpin, Pinned only and arrangements in visual views, without a duplicate
+view-toolbar Actions control; the view toolbar SHALL keep search available.
 Target actions SHALL reuse the shared Inspector and selected-connection focus path; they SHALL NOT use
 hidden Spaces focus, create another terminal owner, send terminal input, assign tasks or control
 an agent lifecycle. A missing or unavailable target SHALL explain why no target action can run.
@@ -685,7 +686,7 @@ distinct, nonduplicated semantic targets.
 
 ### Requirement: Arrange existing terminal windows from the shared tab bar
 
-The shared tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. On desktop the control SHALL sit at the right edge of the tab bar; on mobile it SHALL appear inside the existing ellipsis-expanded floating controls, including when the tab strip is hidden for one tab. The Spaces Actions command menu and the visual Actions menu SHALL expose the same view-wide arrangement choices and unavailable reasons. Each choice SHALL have a configurable keyboard shortcut; invoking a shortcut SHALL follow the same availability and Restore rules without sending terminal input. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
+The shared tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. On desktop the control SHALL sit at the right edge of the tab bar; on mobile it SHALL appear inside the existing ellipsis-expanded floating controls, including when the tab strip is hidden for one tab. The shared shell Actions command menu SHALL expose the same view-wide arrangement choices and unavailable reasons in every view. Each choice MAY be given a configurable keyboard shortcut, with none assigned by default; invoking an assigned shortcut SHALL follow the same availability and Restore rules without sending terminal input. The shell's existing shortcut defaults and numbered Actions order SHALL remain unchanged. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
 
 In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation on the selected host, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while suspending terminal presentations in other conversations that remain open under the existing dock and floating admission rules. In particular, ordinary selection of B while A is docked SHALL still close A before admitting B; Single SHALL NOT retain A as a hidden extra Inspector or change the one-docked-plus-five-floating limit. The visual Inspector limit SHALL NOT cap Spaces' existing tabs. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT itself create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the selected host or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
 
@@ -743,8 +744,8 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 
 #### Scenario: Arrange from Actions or a shortcut
 
-- **WHEN** a user chooses a layout from Spaces Actions or visual Actions, or uses its assigned shortcut in the current view
-- **THEN** that view applies the same eligible-window layout as the tab-bar control, or leaves geometry unchanged when the choice is unavailable; visual Actions offers the layouts even without an actionable entity selected
+- **WHEN** a user chooses a layout from the shell Actions menu, or uses its assigned shortcut in the current view
+- **THEN** that view applies the same eligible-window layout as the tab-bar control, or leaves geometry unchanged when the choice is unavailable; the shell menu offers the layouts even without an actionable visual entity selected
 
 ### Requirement: Fit and restore window arrangements
 
@@ -1177,7 +1178,7 @@ claim current watch classification.
 ### Requirement: Watched visual projection
 
 Office, Tree and Graph SHALL offer accessible Pin, Unpin and browser-local Pinned
-only controls in the visual Actions menu. Pinned only retains selected-host hierarchy context and filters
+only controls in the shell Actions menu. Pinned only retains selected-host hierarchy context and filters
 search within that set. Tree and Graph SHALL prioritize watched leaves while
 retaining their 16-child presentation bound; unavailable, stale, missing or
 unresolved watches SHALL not expose operational actions.

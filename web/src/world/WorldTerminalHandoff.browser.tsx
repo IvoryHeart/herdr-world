@@ -5,7 +5,11 @@ import {
   initializeLayoutPreferences,
   updateLayoutPreferences,
 } from "../layoutPreferences";
-import { initializeShortcutPreferences } from "../shortcutPreferences";
+import {
+  initializeShortcutPreferences,
+  shortcutLabel,
+  updateShortcut,
+} from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import "../styles/tokens.css";
@@ -524,7 +528,7 @@ async function run() {
     ".world-topbar-status",
   );
   const topbarActions = document.querySelector<HTMLElement>(
-    ".topbar-actions .world-visual-actions-trigger",
+    ".topbar-actions .command-trigger",
   );
   const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
   const precedes = (left: Element | null, right: Element | null) =>
@@ -542,21 +546,26 @@ async function run() {
   );
   topbarActions?.click();
   await until(
-    () => document.querySelector(".world-visual-actions-menu"),
-    "visual Actions menu in the shell",
+    () => document.querySelector(".command-popover"),
+    "Roamgate shell Actions menu in the visual view",
   );
-  const visualActionsMenu = document.querySelector<HTMLElement>(
-    ".world-visual-actions-menu",
-  )!;
-  const visualMenuBounds = visualActionsMenu.getBoundingClientRect();
+  const shellActionsMenu =
+    document.querySelector<HTMLElement>(".command-popover")!;
+  const shellMenuBounds = shellActionsMenu.getBoundingClientRect();
   check(
-    !document.querySelector(".command-trigger") &&
+    !topbarActions?.hasAttribute("disabled") &&
+      !document.querySelector(".world-visual-actions-trigger") &&
       !document.querySelector(".world-view-toolbar-actions") &&
-      visualActionsMenu.textContent?.includes("Arrange windows") === true &&
-      visualActionsMenu.textContent?.includes("Pinned only") === true &&
-      visualMenuBounds.width > 0 &&
-      visualMenuBounds.right <= window.innerWidth,
-    "visual Actions was duplicated, clipped, or missing arrangements and pins",
+      shellActionsMenu.textContent?.includes("Arrange windows") === true &&
+      shellActionsMenu.textContent?.includes("Pinned only") === true &&
+      shellActionsMenu.textContent?.includes("Create workspace") === true &&
+      shellActionsMenu.textContent?.includes("Select a visual entity") ===
+        true &&
+      shellActionsMenu.textContent.indexOf("Create workspace") <
+        shellActionsMenu.textContent.indexOf("Arrange windows: Single") &&
+      shellMenuBounds.width > 0 &&
+      shellMenuBounds.right <= window.innerWidth,
+    "shell Actions was replaced, clipped, or missing its native commands and extensions",
   );
   check(
     (document
@@ -836,6 +845,27 @@ async function run() {
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "floating preference Builder Inspector",
   );
+  topbarActions?.click();
+  await until(
+    () =>
+      document
+        .querySelector(".command-popover")
+        ?.textContent?.includes("Open Terminal") &&
+      document
+        .querySelector(".command-popover")
+        ?.textContent?.includes("Pin selected pane"),
+    "qualified visual commands in the original shell Actions",
+  );
+  check(
+    document
+      .querySelector(".command-popover")
+      ?.textContent?.includes("Go to Spaces") === true &&
+      document
+        .querySelector(".command-popover")
+        ?.textContent?.includes("Create workspace") === true,
+    "selected visual commands displaced native shell commands",
+  );
+  topbarActions?.click();
   flushSync(() => agentTarget("Reviewer")!.click());
   await until(
     () =>
@@ -885,6 +915,29 @@ async function run() {
       Boolean(choice) && choice?.getAttribute("aria-disabled") !== "true",
       `${label} arrangement was unavailable: ${choice?.querySelector("small")?.textContent}`,
     );
+    const menu = document.querySelector<HTMLElement>(
+      '[role="menu"][aria-label="Arrange windows"]',
+    );
+    const bounds = menu?.getBoundingClientRect();
+    const hit = bounds
+      ? document.elementFromPoint(
+          bounds.left + bounds.width / 2,
+          bounds.top + Math.min(24, bounds.height / 2),
+        )
+      : null;
+    check(
+      Boolean(
+        menu &&
+          bounds &&
+          bounds.left >= 0 &&
+          bounds.right <= window.innerWidth &&
+          bounds.top >= 0 &&
+          bounds.bottom <= window.innerHeight &&
+          hit &&
+          menu.contains(hit),
+      ),
+      `${label} arrangement menu was outside the viewport or obscured: ${JSON.stringify(bounds?.toJSON())}`,
+    );
     choice?.click();
   };
   const tabBarBounds = document
@@ -897,6 +950,11 @@ async function run() {
     arrangementTriggerBounds.right >= tabBarBounds.right - 20,
     `wide desktop did not align Arrange windows with the tab bar's right edge: ${JSON.stringify({ tabBarRight: tabBarBounds.right, arrangementRight: arrangementTriggerBounds.right })}`,
   );
+  check(
+    shortcutLabel("arrangement.grid") === "Unassigned",
+    "arrangement shortcut changed the original shell defaults",
+  );
+  updateShortcut("arrangement.grid", ["Ctrl+Alt+Shift+5"]);
   window.dispatchEvent(
     new KeyboardEvent("keydown", {
       key: "5",

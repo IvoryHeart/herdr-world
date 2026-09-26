@@ -384,7 +384,7 @@ test("older presets keep a key assigned before the popup shortcut existed", () =
   }
 });
 
-test("older presets add arrangement shortcuts without replacing saved keys", () => {
+test("arrangement shortcuts are optional and preserve older assignments", () => {
   const bindings = linux();
   bindings["terminal.history"] = ["Ctrl+Alt+Shift+5"];
   for (const id of SHORTCUT_IDS.filter((item) =>
@@ -395,7 +395,15 @@ test("older presets add arrangement shortcuts without replacing saved keys", () 
   const restored = validateShortcutPreset({ ...preset(), bindings }).bindings;
   expect(restored["terminal.history"]).toEqual(["Ctrl+Alt+Shift+5"]);
   expect(restored["arrangement.grid"]).toEqual([]);
-  expect(restored["arrangement.columns"]).toEqual(["Ctrl+Alt+Shift+3"]);
+  expect(restored["arrangement.columns"]).toEqual([]);
+  for (const platform of ["mac", "windows", "linux"] as const) {
+    const defaults = defaultShortcutBindings(platform);
+    for (const id of SHORTCUT_IDS.filter((item) =>
+      item.startsWith("arrangement."),
+    )) {
+      expect(defaults[id]).toEqual([]);
+    }
+  }
 });
 
 test("older presets gain annotation delivery shortcuts without replacing saved keys", () => {

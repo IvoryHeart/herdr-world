@@ -72,6 +72,8 @@ import { paneHasAgentHistory } from "./components/agentSession";
 import { CloseButton } from "./components/CloseButton";
 import { focusIfUnchanged } from "./components/dialogFocus";
 import { CommandCombobox } from "./components/CommandCombobox";
+import { measuredFixedPositionScale } from "./fixedPositionScale";
+import type { CommandExtension } from "./components/CommandCombobox";
 import { CONFIG_MENU_ID, ConfigMenu } from "./components/ConfigMenu";
 import { ConnectionSwitcher } from "./components/ConnectionSwitcher";
 import {
@@ -580,17 +582,6 @@ function useVisualViewportCssVars(uiScale: number) {
   }, [uiScale]);
 }
 
-/** CSS zoom can make fixed-position CSS pixels differ from DOMRect pixels. */
-export function measuredFixedPositionScale(): number {
-  const probe = document.createElement("div");
-  probe.style.cssText =
-    "position:fixed;top:100px;left:0;width:1px;height:1px;pointer-events:none;visibility:hidden";
-  document.body.append(probe);
-  const ratio = probe.getBoundingClientRect().top / 100;
-  probe.remove();
-  return ratio > 0 ? ratio : 1;
-}
-
 function isEditableElement(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.closest(".xterm")) return false;
@@ -872,9 +863,10 @@ export type WorkspaceSurfaceInspectorControl = {
 
 export default function App({
   operationalShortcutsEnabled = true,
+  shellActionsEnabled = operationalShortcutsEnabled,
   inspectorPortal = null,
   topbarPortal = null,
-  onVisualActionsPortalReady,
+  visualActionExtension,
   primaryViewControl = null,
   workspaceSurface = null,
   workspaceSurfaceVisible = true,
@@ -891,9 +883,10 @@ export default function App({
   inspectorContext = null,
 }: {
   operationalShortcutsEnabled?: boolean;
+  shellActionsEnabled?: boolean;
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
-  onVisualActionsPortalReady?: (element: HTMLDivElement | null) => void;
+  visualActionExtension?: CommandExtension;
   primaryViewControl?: ReactNode;
   workspaceSurface?: ReactNode;
   workspaceSurfaceVisible?: boolean;
@@ -3345,17 +3338,17 @@ export default function App({
       </div>
       <div className="topbar-actions">
         <div className="topbar-command-group">
-          {operationalShortcutsEnabled ? (
-            <CommandCombobox
-              key={`${resourceUiKey}:commands`}
-              arrangementControl={arrangementControl}
-              onOpenFileExplorer={openFileExplorer}
-              onOpenFile={openFileExplorerFile}
-              onOpenDiffViewer={openDiffViewer}
-            />
-          ) : (
-            <div ref={onVisualActionsPortalReady} />
-          )}
+          <CommandCombobox
+            key={`${resourceUiKey}:commands`}
+            operationalShortcutsEnabled={shellActionsEnabled}
+            arrangementControl={arrangementControl}
+            extension={
+              operationalShortcutsEnabled ? undefined : visualActionExtension
+            }
+            onOpenFileExplorer={openFileExplorer}
+            onOpenFile={openFileExplorerFile}
+            onOpenDiffViewer={openDiffViewer}
+          />
           <ConfigMenu
             key={`${resourceUiKey}:config`}
             theme={theme}
