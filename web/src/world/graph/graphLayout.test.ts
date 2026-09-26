@@ -96,6 +96,43 @@ describe("Graph force layout", () => {
       }
     }
   });
+
+  test("wraps nine host groups within a normal Fit viewport", () => {
+    const graph = projection();
+    graph.nodes = [];
+    graph.edges = [];
+    for (let hostIndex = 0; hostIndex < 9; hostIndex += 1) {
+      const hostId = `host-${hostIndex}`;
+      const spaceId = `space-${hostIndex}`;
+      graph.nodes.push(node(hostId, "host", null));
+      graph.nodes.push(node(spaceId, "space", hostId));
+      graph.edges.push({
+        sourceId: hostId,
+        targetId: spaceId,
+        kind: "contains",
+      });
+      for (let leafIndex = 0; leafIndex < 4; leafIndex += 1) {
+        const leafId = `leaf-${hostIndex}-${leafIndex}`;
+        graph.nodes.push(node(leafId, "agent", spaceId));
+        graph.edges.push({
+          sourceId: spaceId,
+          targetId: leafId,
+          kind: "contains",
+        });
+      }
+    }
+    const state = reconcileGraphLayout(null, graph, new Set()).state;
+
+    arrangeGraphLayout(state);
+
+    const bounds = graphBounds(state.nodes.values());
+    expect(bounds.maxX - bounds.minX).toBeLessThanOrEqual((1280 - 96) / 0.25);
+    expect(bounds.maxY - bounds.minY).toBeLessThanOrEqual((900 - 96) / 0.25);
+    expect(
+      new Set([...state.nodes.values()].map(({ x, y }) => `${x},${y}`)).size,
+    ).toBe(54);
+    expect(state.edges).toHaveLength(45);
+  });
 });
 
 function projection(): WorldGraphProjection {

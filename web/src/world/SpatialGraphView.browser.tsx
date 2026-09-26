@@ -387,6 +387,26 @@ async function run() {
         "Status-only refresh reset the settled Graph node",
       );
 
+      await pointer(canvas, "pointerdown", rect.right - 12, rect.bottom - 12);
+      await pointer(
+        canvas,
+        "pointermove",
+        rect.right + rect.width,
+        rect.bottom - 12,
+      );
+      await pointer(
+        canvas,
+        "pointerup",
+        rect.right + rect.width,
+        rect.bottom - 12,
+      );
+      await waitFor(
+        () =>
+          (window.__HERDR_GRAPH_RENDERER__?.publishedNodes[agent.id]?.screenX ??
+            0) > canvas.width,
+        "Graph pan did not move the old layout outside the viewport",
+      );
+
       arrangeButton.click();
       await waitFor(
         () =>
@@ -396,6 +416,16 @@ async function run() {
       );
       const arranged = Object.values(
         window.__HERDR_GRAPH_RENDERER__!.publishedNodes,
+      );
+      check(
+        arranged.every(
+          ({ screenX, screenY }) =>
+            screenX >= 0 &&
+            screenX <= rect.width &&
+            screenY >= 0 &&
+            screenY <= rect.height,
+        ),
+        "Arrange did not bring visible Graph nodes back into the canvas",
       );
       for (let left = 0; left < arranged.length; left += 1) {
         for (let right = left + 1; right < arranged.length; right += 1) {

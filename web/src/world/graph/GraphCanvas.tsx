@@ -337,9 +337,16 @@ class GraphRenderer {
     this.#fitWhenSettled = false;
     this.#cameraMode = "fit";
     const bounds = graphBounds(this.#layout.nodes.values());
+    this.#camera = this.#centeredCamera(bounds, this.#fitZoom(bounds));
+    this.#emitViewChange();
+    this.#anchorSignature = "";
+    this.#requestFrame();
+  }
+
+  #fitZoom(bounds: ReturnType<typeof graphBounds>) {
     const graphWidth = Math.max(1, bounds.maxX - bounds.minX);
     const graphHeight = Math.max(1, bounds.maxY - bounds.minY);
-    const zoom = clamp(
+    return clamp(
       Math.min(
         (this.#width - 96) / graphWidth,
         (this.#height - 96) / graphHeight,
@@ -347,19 +354,24 @@ class GraphRenderer {
       MIN_ZOOM,
       2,
     );
-    this.#camera = {
+  }
+
+  #centeredCamera(bounds: ReturnType<typeof graphBounds>, zoom: number) {
+    return {
       x: (-(bounds.minX + bounds.maxX) / 2) * zoom,
       y: (-(bounds.minY + bounds.maxY) / 2) * zoom,
       zoom,
     };
-    this.#emitViewChange();
-    this.#anchorSignature = "";
-    this.#requestFrame();
   }
 
   arrange() {
     if (!this.#layout) return;
     arrangeGraphLayout(this.#layout);
+    const bounds = graphBounds(this.#layout.nodes.values());
+    this.#camera = this.#centeredCamera(
+      bounds,
+      Math.min(this.#camera.zoom, this.#fitZoom(bounds)),
+    );
     this.#alpha = 0;
     this.#fitWhenSettled = false;
     this.#emitViewChange();

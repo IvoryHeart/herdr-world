@@ -194,35 +194,52 @@ export function arrangeGraphLayout(state: GraphLayoutState) {
       host,
       rows,
       width: Math.max(220, ...rows.map(({ width }) => width)),
+      height: rows.reduce((sum, row) => sum + row.height + 80, 220),
     };
   });
-  const totalWidth =
-    hostRows.reduce((sum, host) => sum + host.width, 0) +
-    Math.max(0, hostRows.length - 1) * 160;
-  let hostLeft = -totalWidth / 2;
-  for (const { host, rows, width } of hostRows) {
-    place(host, hostLeft + width / 2, 0);
-    let rowTop = 220;
-    for (const row of rows) {
-      let spaceLeft = hostLeft + (width - row.width) / 2;
-      for (const space of row.spaces) {
-        const cellWidth = spaceWidth(space);
-        const spaceX = spaceLeft + cellWidth / 2;
-        place(space, spaceX, rowTop);
-        const leaves = children.get(space.id) ?? [];
-        const columns = Math.min(4, leaves.length);
-        for (const [index, leaf] of leaves.entries()) {
-          place(
-            leaf,
-            spaceX + ((index % 4) - (columns - 1) / 2) * 112,
-            rowTop + 140 + Math.floor(index / 4) * 96,
-          );
+  const hostColumns = Math.ceil(Math.sqrt(hostRows.length));
+  const layoutRows = [];
+  for (let index = 0; index < hostRows.length; index += hostColumns) {
+    const rowHosts = hostRows.slice(index, index + hostColumns);
+    layoutRows.push({
+      hosts: rowHosts,
+      width:
+        rowHosts.reduce((sum, host) => sum + host.width, 0) +
+        (rowHosts.length - 1) * 160,
+      height: Math.max(...rowHosts.map(({ height }) => height)),
+    });
+  }
+  const totalHeight =
+    layoutRows.reduce((sum, row) => sum + row.height, 0) +
+    Math.max(0, layoutRows.length - 1) * 160;
+  let hostTop = -totalHeight / 2;
+  for (const layoutRow of layoutRows) {
+    let hostLeft = -layoutRow.width / 2;
+    for (const { host, rows, width } of layoutRow.hosts) {
+      place(host, hostLeft + width / 2, hostTop);
+      let rowTop = hostTop + 220;
+      for (const row of rows) {
+        let spaceLeft = hostLeft + (width - row.width) / 2;
+        for (const space of row.spaces) {
+          const cellWidth = spaceWidth(space);
+          const spaceX = spaceLeft + cellWidth / 2;
+          place(space, spaceX, rowTop);
+          const leaves = children.get(space.id) ?? [];
+          const columns = Math.min(4, leaves.length);
+          for (const [index, leaf] of leaves.entries()) {
+            place(
+              leaf,
+              spaceX + ((index % 4) - (columns - 1) / 2) * 112,
+              rowTop + 140 + Math.floor(index / 4) * 96,
+            );
+          }
+          spaceLeft += cellWidth;
         }
-        spaceLeft += cellWidth;
+        rowTop += row.height + 80;
       }
-      rowTop += row.height + 80;
+      hostLeft += width + 160;
     }
-    hostLeft += width + 160;
+    hostTop += layoutRow.height + 160;
   }
 
   function spaceWidth(space: GraphLayoutNode) {
