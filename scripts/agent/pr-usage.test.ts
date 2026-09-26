@@ -107,6 +107,11 @@ test("reports bounded aggregate tool activity without exposing commands or outpu
           input: command("gh pr view 111 --json headRefOid"),
         }),
         item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: command("gh run view 123 --json conclusion"),
+        }),
+        item({
           type: "custom_tool_call_output",
           output: [
             { type: "text", text: "x".repeat(10_001) },
@@ -126,14 +131,14 @@ test("reports bounded aggregate tool activity without exposing commands or outpu
     "2026-09-25T12:00:00.000Z",
   );
   expect(summary).toEqual({
-    outerCalls: 4,
-    execWrappers: 3,
-    singleNestedExecWrappers: 2,
-    nestedCalls: 4,
+    outerCalls: 5,
+    execWrappers: 4,
+    singleNestedExecWrappers: 3,
+    nestedCalls: 5,
     testCommands: 1,
     quickTypechecks: 1,
     fullChecks: 1,
-    githubCommands: 1,
+    githubCommands: 2,
     outputChars: 10_015,
     largeOutputs: 1,
   });

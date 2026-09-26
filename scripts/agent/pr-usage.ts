@@ -313,8 +313,7 @@ export function summarizeTooling(
               if (words[2] === "typecheck:quick") summary.quickTypechecks++;
               if (words[2] === "check") summary.fullChecks++;
             }
-            if (words[0] === "gh" && ["api", "pr"].includes(words[1] ?? ""))
-              summary.githubCommands++;
+            if (words[0] === "gh") summary.githubCommands++;
           }
         }
       } else if (
