@@ -116,9 +116,13 @@
   color: var(--topbar-control-text, var(--muted, #9da7b4));
   background: var(--topbar-control-bg, var(--bg, #0e1116));
 }
-.world-view-toolbar .world-spatial-graph-fit {
+.world-view-toolbar .world-spatial-graph-zoom .world-spatial-graph-fit {
+  flex: 0 0 auto;
   width: auto;
-  padding: 0 8px;
+  min-width: max-content;
+  gap: 6px;
+  padding: 0 10px;
+  white-space: nowrap;
 }
 .world-view-search-toggle:hover,
 .world-view-search-toggle:focus-visible,
@@ -1846,6 +1850,17 @@
   }
   .world-view-graph {
     padding: 0;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 760px) {
+  .world-view-toolbar-host:has(
+    .world-view-toolbar[aria-label="Graph controls"]
+  ) {
+    flex: 1 1 250px;
+  }
+  .world-view-toolbar[aria-label="Graph controls"] .world-view-toolbar-actions {
+    display: flex;
   }
 }
 

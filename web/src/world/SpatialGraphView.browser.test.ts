@@ -11,7 +11,7 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome).each([1280, 390])(
+test.skipIf(!chrome).each([1280, 740, 390])(
   "the spatial Graph preserves interaction and ownership at %ipx",
   async (width) => {
     const dir = await mkdtemp(join(tmpdir(), "spatial-graph-test-"));

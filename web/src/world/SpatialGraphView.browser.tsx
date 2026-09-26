@@ -215,6 +215,28 @@ async function run() {
       outline.textContent?.includes("Running release checks") === true,
       "Graph omitted the agent task summary",
     );
+    const fitButton = host.querySelector<HTMLButtonElement>(
+      ".world-spatial-graph-fit",
+    )!;
+    const arrangeButton = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Arrange graph"]',
+    )!;
+    if (!compact) {
+      check(
+        fitButton.textContent?.trim() === "Fit" &&
+          fitButton.getBoundingClientRect().width >= 54 &&
+          fitButton.scrollWidth <= fitButton.clientWidth &&
+          Number.parseFloat(getComputedStyle(fitButton).gap) >= 6,
+        "Graph Fit icon and label are clipped or crowded",
+      );
+      check(
+        arrangeButton?.title === "Arrange graph" &&
+          arrangeButton.tagName === "BUTTON" &&
+          fitButton.getBoundingClientRect().right <=
+            arrangeButton.getBoundingClientRect().left,
+        "Graph Arrange is missing or overlaps Fit",
+      );
+    }
     if (compact) {
       check(
         host.querySelector("canvas[data-graph-canvas=true]") === null,
@@ -363,6 +385,36 @@ async function run() {
           refreshed.y === pinned.y &&
           refreshed.pinned,
         "Status-only refresh reset the settled Graph node",
+      );
+
+      arrangeButton.click();
+      await waitFor(
+        () =>
+          window.__HERDR_GRAPH_RENDERER__?.publishedNodes[agent.id]?.pinned ===
+          false,
+        "Arrange did not release dragged Graph positions",
+      );
+      const arranged = Object.values(
+        window.__HERDR_GRAPH_RENDERER__!.publishedNodes,
+      );
+      for (let left = 0; left < arranged.length; left += 1) {
+        for (let right = left + 1; right < arranged.length; right += 1) {
+          const a = arranged[left]!;
+          const b = arranged[right]!;
+          check(
+            Math.hypot(a.x - b.x, a.y - b.y) >= 88,
+            "Arrange left visible Graph nodes stacked",
+          );
+        }
+      }
+      check(
+        graphPrefs().cameraMode === "manual",
+        "Arrange changed the Graph camera mode",
+      );
+      fitButton.click();
+      await waitFor(
+        () => graphPrefs().cameraMode === "fit",
+        "Fit did not work independently after Arrange",
       );
 
       const shell =

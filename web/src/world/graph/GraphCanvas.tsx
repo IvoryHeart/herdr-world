@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { OfficeCanvasAnchor } from "../PixelOfficeCanvas";
 import {
+  arrangeGraphLayout,
   graphBounds,
   graphNodeRadius,
   reconcileGraphLayout,
@@ -54,6 +55,7 @@ declare global {
 }
 
 export type GraphCanvasHandle = {
+  arrange(): void;
   fit(): void;
   zoomIn(): void;
   zoomOut(): void;
@@ -144,6 +146,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
     useImperativeHandle(
       ref,
       () => ({
+        arrange: () => rendererRef.current?.arrange(),
         fit: () => rendererRef.current?.fit(),
         zoomIn: () => rendererRef.current?.zoomIn(),
         zoomOut: () => rendererRef.current?.zoomOut(),
@@ -349,6 +352,16 @@ class GraphRenderer {
       y: (-(bounds.minY + bounds.maxY) / 2) * zoom,
       zoom,
     };
+    this.#emitViewChange();
+    this.#anchorSignature = "";
+    this.#requestFrame();
+  }
+
+  arrange() {
+    if (!this.#layout) return;
+    arrangeGraphLayout(this.#layout);
+    this.#alpha = 0;
+    this.#fitWhenSettled = false;
     this.#emitViewChange();
     this.#anchorSignature = "";
     this.#requestFrame();

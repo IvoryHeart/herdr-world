@@ -1,5 +1,6 @@
 import {
   ChevronRight,
+  LayoutGrid,
   Maximize2,
   Server,
   SquareTerminal,
@@ -281,10 +282,19 @@ export default function SpatialGraphView({
         <button
           type="button"
           className="world-spatial-graph-fit"
+          title="Fit graph"
           onClick={() => canvasRef.current?.fit()}
         >
           <Maximize2 size={15} aria-hidden="true" />
           Fit
+        </button>
+        <button
+          type="button"
+          aria-label="Arrange graph"
+          title="Arrange graph"
+          onClick={() => canvasRef.current?.arrange()}
+        >
+          <LayoutGrid size={16} aria-hidden="true" />
         </button>
       </div>
     </WorldViewToolbar>

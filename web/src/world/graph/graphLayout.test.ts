@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  arrangeGraphLayout,
   graphBounds,
   reconcileGraphLayout,
   savedGraphPositions,
@@ -61,6 +62,39 @@ describe("Graph force layout", () => {
       { sourceId: "host", targetId: "space", kind: "contains" },
     ]);
     expect(stepGraphLayout(spaceCollapsed, 1)).toBeGreaterThanOrEqual(0);
+  });
+
+  test("arranges stacked and pinned visible nodes without changing links", () => {
+    const graph = projection();
+    for (let index = 0; index < 12; index += 1) {
+      const id = `leaf-${index}`;
+      graph.nodes.push(node(id, index % 2 ? "terminal" : "agent", "space"));
+      graph.edges.push({ sourceId: "space", targetId: id, kind: "contains" });
+    }
+    const state = reconcileGraphLayout(null, graph, new Set()).state;
+    const edges = [...state.edges];
+    for (const value of state.nodes.values()) {
+      value.x = 0;
+      value.y = 0;
+      value.pinned = true;
+    }
+
+    arrangeGraphLayout(state);
+
+    expect(state.edges).toEqual(edges);
+    expect([...state.nodes.values()].every((value) => !value.pinned)).toBe(
+      true,
+    );
+    const nodes = [...state.nodes.values()];
+    for (let left = 0; left < nodes.length; left += 1) {
+      for (let right = left + 1; right < nodes.length; right += 1) {
+        const a = nodes[left]!;
+        const b = nodes[right]!;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(
+          a.kind === "host" || b.kind === "host" ? 100 : 88,
+        );
+      }
+    }
   });
 });
 
