@@ -185,6 +185,8 @@ export function graphBounds(nodes: Iterable<GraphLayoutNode>) {
     : { minX: -1, minY: -1, maxX: 1, maxY: 1 };
 }
 
+const LABEL_CLEARANCE = 18;
+
 export function arrangeGraph(state: GraphLayoutState) {
   const nodes = [...state.nodes.values()];
   const hosts = nodes.filter(({ kind }) => kind === "host");
@@ -221,6 +223,41 @@ export function arrangeGraph(state: GraphLayoutState) {
       child.vy = 0;
       child.pinned = false;
     }
+  }
+
+  separateOverlaps(nodes);
+}
+
+function separateOverlaps(nodes: GraphLayoutNode[]) {
+  for (let pass = 0; pass < 12; pass++) {
+    let displaced = false;
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i]!;
+      const ra = graphNodeRadius(a.kind) + LABEL_CLEARANCE;
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j]!;
+        const rb = graphNodeRadius(b.kind) + LABEL_CLEARANCE;
+        const minDist = ra + rb;
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let dist = Math.hypot(dx, dy);
+        if (dist >= minDist) continue;
+        if (dist < 0.01) {
+          dx = stableFraction(a.id) - 0.5;
+          dy = stableFraction(b.id) - 0.5;
+          dist = Math.max(0.01, Math.hypot(dx, dy));
+        }
+        const overlap = (minDist - dist) / 2 + 1;
+        const nx = (dx / dist) * overlap;
+        const ny = (dy / dist) * overlap;
+        a.x -= nx;
+        a.y -= ny;
+        b.x += nx;
+        b.y += ny;
+        displaced = true;
+      }
+    }
+    if (!displaced) break;
   }
 }
 

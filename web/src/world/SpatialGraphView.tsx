@@ -287,7 +287,7 @@ export default function SpatialGraphView({
           onClick={() => canvasRef.current?.fit()}
         >
           <Maximize2 size={15} aria-hidden="true" />
-          Fit
+          <span>Fit</span>
         </button>
         <button
           type="button"
@@ -297,7 +297,7 @@ export default function SpatialGraphView({
           onClick={() => canvasRef.current?.arrange()}
         >
           <Shuffle size={15} aria-hidden="true" />
-          Arrange
+          <span>Arrange</span>
         </button>
       </div>
     </WorldViewToolbar>
