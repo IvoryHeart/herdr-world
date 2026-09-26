@@ -112,6 +112,7 @@ export default function PixelOfficeView({
   );
   const preferencesRef = useRef(preferences);
   const onSelectRef = useRef(onSelect);
+  const worldRef = useRef(world);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
   const [renderedRevision, setRenderedRevision] = useState(0);
@@ -133,6 +134,14 @@ export default function PixelOfficeView({
   );
   preferencesRef.current = preferences;
   onSelectRef.current = onSelect;
+  worldRef.current = world;
+  const pendingCreatedPaneLeaseCurrent =
+    pendingCreatedPane === null ||
+    world.hosts.some(
+      (host) =>
+        host.connectionId === pendingCreatedPane.connectionId &&
+        host.generation === pendingCreatedPane.generation,
+    );
 
   useEffect(() => {
     let disposed = false;
@@ -246,16 +255,21 @@ export default function PixelOfficeView({
   useEffect(() => {
     if (!pendingCreatedPane) return;
     let cancelled = false;
+    let finished = false;
     let retryTimer: number | null = null;
+    let deadlineTimer: number | null = null;
     const samePending = (current: PendingCreatedPane | null) =>
       current?.connectionId === pendingCreatedPane.connectionId &&
       current.generation === pendingCreatedPane.generation &&
-      current.paneId === pendingCreatedPane.paneId;
+      current.paneId === pendingCreatedPane.paneId &&
+      current.deadlineAt === pendingCreatedPane.deadlineAt;
     const clearPending = () =>
       setPendingCreatedPane((current) =>
         samePending(current) ? null : current,
       );
     const failFocus = (detail: string) => {
+      if (cancelled || finished) return;
+      finished = true;
       clearPending();
       store.notify({
         kind: "error",
@@ -264,6 +278,7 @@ export default function PixelOfficeView({
       });
     };
     const retryFocus = (detail: string) => {
+      if (cancelled || finished) return;
       const delay = createdPaneAdmissionRetryDelay(
         pendingCreatedPane.deadlineAt,
         Date.now(),
@@ -281,14 +296,25 @@ export default function PixelOfficeView({
         delay,
       );
     };
-    const host = world.hosts.find(
-      ({ connectionId }) => connectionId === pendingCreatedPane.connectionId,
-    );
-    if (!host || host.generation !== pendingCreatedPane.generation) {
+    const deadlineDelay = pendingCreatedPane.deadlineAt - Date.now();
+    if (deadlineDelay <= 0) {
+      failFocus(
+        "The created terminal was not admitted within the World snapshot window.",
+      );
+      return undefined;
+    }
+    if (!pendingCreatedPaneLeaseCurrent) {
       failFocus("The selected host or runtime changed before admission.");
       return undefined;
     }
-    const pane = world.leaves.find(
+    deadlineTimer = window.setTimeout(
+      () =>
+        failFocus(
+          "The created terminal was not admitted within the World snapshot window.",
+        ),
+      deadlineDelay,
+    );
+    const pane = worldRef.current.leaves.find(
       (leaf) =>
         leaf.connectionId === pendingCreatedPane.connectionId &&
         leaf.nativeId === pendingCreatedPane.paneId &&
@@ -302,8 +328,9 @@ export default function PixelOfficeView({
       try {
         void Promise.resolve(onSelectRef.current(pane.id)).then(
           (admitted) => {
-            if (cancelled) return;
+            if (cancelled || finished) return;
             if (admitted !== false) {
+              finished = true;
               clearPending();
               return;
             }
@@ -321,8 +348,9 @@ export default function PixelOfficeView({
     return () => {
       cancelled = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
     };
-  }, [pendingCreatedPane, world]);
+  }, [pendingCreatedPane, pendingCreatedPaneLeaseCurrent]);
 
   const roomForKey = (roomKey: string | null) =>
     roomKey ? (office.rooms.find(({ key }) => key === roomKey) ?? null) : null;

@@ -634,6 +634,20 @@ async function run() {
       ),
     "delayed browser-local created-seat focus",
   );
+  const gatedBrowserLocalFocusCalls = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "created-pane-3",
+  ).length;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  await settle();
+  check(
+    calls.filter(
+      ({ method, params }) =>
+        method === "pane.get" && params.pane_id === "created-pane-3",
+    ).length === gatedBrowserLocalFocusCalls,
+    "World refresh overlapped an in-flight browser-local created-seat focus",
+  );
   check(
     ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
       (identity) => identity.textContent?.includes("terminal"),
