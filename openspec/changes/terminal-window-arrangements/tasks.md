@@ -20,6 +20,7 @@
 - [x] 2.10 Add configurable per-placement shortcuts with numbered defaults and route them to the active view's arrangement control; verify bindings, preset migration and browser shortcut dispatch.
 - [x] 2.11 Keep mobile switcher and zoomed-pane selection to one focus request per pointer action in floating and docked Inspectors; verify delayed, out-of-order browser-local pane reads.
 - [x] 2.12 Reuse shared floating defaults for Cascade and permit evenly shrunk, usable Columns and Rows with more than two windows; verify geometry, controls and compact-tile resizing in focused and browser tests.
+- [x] 2.13 Use one working right-side visual Actions menu for arrangements and qualified target/watch actions, clear the search toolbar, mute the host summary, place the desktop arrangement icon at the tab bar's right edge and mobile access in the ellipsis-expanded controls; verify menu placement and responsive access in browser tests.
 
 ## 3. Accept, document and deliver
 

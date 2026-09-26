@@ -114,7 +114,8 @@ export function WindowArrangementMenu({
   }, [open]);
 
   const triggerRect = open ? triggerRef.current?.getBoundingClientRect() : null;
-  const menuWidth = 246;
+  const menuWidth = Math.min(246, window.innerWidth - 16);
+  const menuHeight = Math.min(420, window.innerHeight * 0.8);
   const position: React.CSSProperties | undefined = triggerRect
     ? {
         left: Math.max(
@@ -124,10 +125,10 @@ export function WindowArrangementMenu({
             window.innerWidth - menuWidth - 8,
           ),
         ),
-        top: Math.max(
-          8,
-          Math.min(triggerRect.bottom + 4, window.innerHeight - 300),
-        ),
+        top:
+          triggerRect.bottom + menuHeight + 8 <= window.innerHeight
+            ? triggerRect.bottom + 4
+            : Math.max(8, triggerRect.top - menuHeight - 4),
       }
     : undefined;
 

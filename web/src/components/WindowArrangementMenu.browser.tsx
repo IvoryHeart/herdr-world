@@ -115,6 +115,19 @@ async function run() {
     "Escape must restore trigger focus",
   );
 
+  document.getElementById("root")!.style.cssText =
+    "position:fixed;right:8px;bottom:8px";
+  trigger.click();
+  await settle();
+  const floatingMenuBounds = document
+    .querySelector<HTMLElement>('[role="menu"]')!
+    .getBoundingClientRect();
+  check(
+    floatingMenuBounds.top >= 8 &&
+      floatingMenuBounds.bottom <= window.innerHeight - 8,
+    "a menu opened from the mobile floating controls must fit above them",
+  );
+
   await fetch("/result", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

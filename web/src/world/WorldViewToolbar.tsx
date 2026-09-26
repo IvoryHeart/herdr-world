@@ -37,7 +37,6 @@ export function WorldViewToolbar({
   resultLabel,
   onSubmit,
   children,
-  actions,
 }: {
   viewLabel: string;
   query: string;
@@ -45,7 +44,6 @@ export function WorldViewToolbar({
   resultLabel?: string;
   onSubmit?(): void;
   children?: ReactNode;
-  actions?: ReactNode;
 }) {
   const [compact, setCompact] = useState(
     () => window.matchMedia("(max-width: 720px)").matches,
@@ -125,11 +123,6 @@ export function WorldViewToolbar({
       ) : (
         search
       )}
-      {actions ? (
-        <div className="world-view-toolbar-actions world-view-toolbar-primary-actions">
-          {actions}
-        </div>
-      ) : null}
       {children ? (
         <div className="world-view-toolbar-actions">{children}</div>
       ) : null}

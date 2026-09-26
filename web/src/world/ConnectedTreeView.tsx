@@ -6,7 +6,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
@@ -27,7 +26,6 @@ export type WorldNodeAnchors = Record<string, OfficeCanvasAnchor>;
 export default function ConnectedTreeView({
   world,
   toolbarPortal = null,
-  toolbarActions,
   selectedId,
   conversationNodeIds,
   inlineInspectorNodeId,
@@ -36,11 +34,9 @@ export default function ConnectedTreeView({
   onInlineInspectorPortalChange,
   onSelectedAnchorChange,
   onNodeAnchorsChange,
-  actions,
 }: {
   world: WorldObject;
   toolbarPortal?: Element | null;
-  toolbarActions?: ReactNode;
   selectedId: string | null;
   conversationNodeIds: readonly string[];
   inlineInspectorNodeId: string | null;
@@ -49,7 +45,6 @@ export default function ConnectedTreeView({
   onInlineInspectorPortalChange(element: HTMLDivElement | null): void;
   onSelectedAnchorChange(anchor: OfficeCanvasAnchor | null): void;
   onNodeAnchorsChange(anchors: WorldNodeAnchors | null): void;
-  actions?: ReactNode;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(
@@ -193,10 +188,7 @@ export default function ConnectedTreeView({
             : "No matches"
           : undefined
       }
-      actions={actions}
-    >
-      {toolbarActions}
-    </WorldViewToolbar>
+    />
   );
 
   return (

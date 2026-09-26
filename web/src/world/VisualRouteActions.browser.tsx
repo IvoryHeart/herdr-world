@@ -75,6 +75,7 @@ async function settle() {
 function Harness({ onResource }: { onResource(action: string): void }) {
   const [selection, setSelection] = useState<WorldObjectNode>(agent);
   const [generation, setGeneration] = useState(4);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   return (
     <>
       <button type="button" onClick={() => setSelection(space)}>
@@ -92,6 +93,19 @@ function Harness({ onResource }: { onResource(action: string): void }) {
           activePreset: null,
           disabledReasons: { rows: "The stage is too short." },
           onSelect: (command) => onResource(`arrange:${command}`),
+        }}
+        watchControl={{
+          pinnedOnly,
+          status: "1 pinned · 1 admitted",
+          onTogglePinnedOnly: () => {
+            setPinnedOnly((value) => !value);
+            onResource("pinned-only");
+          },
+          pin: {
+            label: "Pin selected pane",
+            disabledReason: null,
+            onSelect: () => onResource("pin"),
+          },
         }}
         onResource={async (_, action) => {
           onResource(action);
@@ -119,6 +133,8 @@ async function verify() {
   await settle();
   const menu = document.querySelector<HTMLElement>("[role='menu']")!;
   const initialMenu = menu.textContent ?? "";
+  click("Pinned only");
+  click("Pin selected pane");
   const changes = button("Changes");
   changes.focus();
   changes.click();

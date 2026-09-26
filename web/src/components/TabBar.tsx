@@ -141,8 +141,7 @@ export function TabBar({
       pendingClosePane ? [pendingClosePane.pane_id] : [],
     ).length,
   );
-  const showTabStrip =
-    !!focusedWs && (!mobile || tabs.length > 1 || !!arrangementControl);
+  const showTabStrip = !!focusedWs && (!mobile || tabs.length > 1);
   const gitStatus = focusedWs?.worktree?.git_status;
   const changedCount = gitStatus
     ? gitStatus.staged +
@@ -336,9 +335,6 @@ export function TabBar({
           >
             +
           </button>
-          {arrangementControl ? (
-            <WindowArrangementMenu control={arrangementControl} />
-          ) : null}
           <span className="tabbar-spacer" />
           <div className="tabbar-utilities">
             {showInspector ? (
@@ -377,6 +373,9 @@ export function TabBar({
                 <span className="tabbar-change-count">{annotationCount}</span>
               ) : null}
             </button>
+            {arrangementControl && !mobile ? (
+              <WindowArrangementMenu control={arrangementControl} />
+            ) : null}
           </div>
         </div>
       ) : null}

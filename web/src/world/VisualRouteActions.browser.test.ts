@@ -79,7 +79,7 @@ test.skipIf(!chrome).each([1280, 390])(
       expect(observed).toMatchObject({
         initialVisible: true,
         keyboardOpened: true,
-        calls: ["changes", "arrange:columns"],
+        calls: ["pinned-only", "pin", "changes", "arrange:columns"],
         resourceFocusRestored: true,
         unavailableRows: true,
         unavailableReasonAccessible: true,

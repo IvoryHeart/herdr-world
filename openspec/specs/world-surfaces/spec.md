@@ -192,8 +192,10 @@ Office, Tree and Graph SHALL expose a common named Actions control for the expli
 space, agent or terminal. The control SHALL be reachable by pointer and keyboard on desktop and
 compact layouts, identify the captured host, space and pane as applicable, and offer the
 target's existing applicable Terminal, Files, Changes, Agent History and Go to Spaces actions.
-It SHALL also expose view-wide window arrangements independently of entity selection. Target
-actions SHALL reuse the shared Inspector and selected-connection focus path; they SHALL NOT use
+It SHALL also expose view-wide window arrangements independently of entity selection. The shell's
+right-side visual Actions menu SHALL contain target actions, Pin, Unpin, Pinned only and arrangements
+without a duplicate view-toolbar Actions control; the view toolbar SHALL keep search available.
+Target actions SHALL reuse the shared Inspector and selected-connection focus path; they SHALL NOT use
 hidden Spaces focus, create another terminal owner, send terminal input, assign tasks or control
 an agent lifecycle. A missing or unavailable target SHALL explain why no target action can run.
 
@@ -238,8 +240,8 @@ visible if that focus fails.
 The native World shell SHALL offer Spaces, Office, Tree and Graph once each and SHALL keep rendered
 view, browser history and canonical paths `/spaces`, `/office`, `/tree` and `/graph` consistent.
 The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
-machine selector; the selected-host/runtime state and bounded space/agent/stale summary SHALL also
-remain in that top bar. The shell SHALL provide one shared view-control slot there: Office, Tree and
+machine selector; a muted selected-host/runtime indicator with the bounded space/agent/stale summary
+in its accessible label and tooltip SHALL remain in that top bar. The shell SHALL provide one shared view-control slot there: Office, Tree and
 Graph SHALL place search in it, and Graph SHALL additionally place Fit and zoom in it. World SHALL
 NOT stack a second view-navigation, Visual Control Plane status bar or view-local search/zoom header
 above the application stage.
@@ -683,7 +685,7 @@ distinct, nonduplicated semantic targets.
 
 ### Requirement: Arrange existing terminal windows from the shared tab bar
 
-The shared tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. The control SHALL remain beside the tab controls on wide desktop layouts and visible in the mobile tab strip, including when only one tab is open. The Spaces Actions command menu and the visual Actions menu SHALL expose the same view-wide arrangement choices and unavailable reasons. Each choice SHALL have a configurable keyboard shortcut; invoking a shortcut SHALL follow the same availability and Restore rules without sending terminal input. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
+The shared tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. On desktop the control SHALL sit at the right edge of the tab bar; on mobile it SHALL appear inside the existing ellipsis-expanded floating controls, including when the tab strip is hidden for one tab. The Spaces Actions command menu and the visual Actions menu SHALL expose the same view-wide arrangement choices and unavailable reasons. Each choice SHALL have a configurable keyboard shortcut; invoking a shortcut SHALL follow the same availability and Restore rules without sending terminal input. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
 
 In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation on the selected host, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while suspending terminal presentations in other conversations that remain open under the existing dock and floating admission rules. In particular, ordinary selection of B while A is docked SHALL still close A before admitting B; Single SHALL NOT retain A as a hidden extra Inspector or change the one-docked-plus-five-floating limit. The visual Inspector limit SHALL NOT cap Spaces' existing tabs. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT itself create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the selected host or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
 
@@ -736,8 +738,8 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 
 #### Scenario: Find the arrangement control at wide and mobile widths
 
-- **WHEN** a user opens the shared tab bar on a wide desktop or a compact mobile viewport with one open tab
-- **THEN** the arrangement control is visible beside the tab controls and its labelled choices remain accessible
+- **WHEN** a user views the desktop tab bar or expands the mobile ellipsis controls with one open tab
+- **THEN** one arrangement control is reachable at the right edge of the desktop tab bar or inside the expanded mobile controls, with no separate mobile tab-strip icon
 
 #### Scenario: Arrange from Actions or a shortcut
 
@@ -1175,7 +1177,7 @@ claim current watch classification.
 ### Requirement: Watched visual projection
 
 Office, Tree and Graph SHALL offer accessible Pin, Unpin and browser-local Pinned
-only controls. Pinned only retains selected-host hierarchy context and filters
+only controls in the visual Actions menu. Pinned only retains selected-host hierarchy context and filters
 search within that set. Tree and Graph SHALL prioritize watched leaves while
 retaining their 16-child presentation bound; unavailable, stale, missing or
 unresolved watches SHALL not expose operational actions.

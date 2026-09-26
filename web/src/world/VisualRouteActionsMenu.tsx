@@ -30,6 +30,17 @@ const actionLabels: Record<VisualRouteAction, string> = {
   spaces: "Go to Spaces",
 };
 
+type WatchControl = {
+  pinnedOnly: boolean;
+  status: string;
+  onTogglePinnedOnly(): void;
+  pin?: {
+    label: string;
+    disabledReason: string | null;
+    onSelect(): void;
+  };
+};
+
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return (
@@ -44,6 +55,7 @@ export function VisualRouteActions({
   activeConnectionId,
   runtimeGeneration,
   arrangementControl,
+  watchControl,
   onResource,
   onGoToSpaces,
   onError,
@@ -53,6 +65,7 @@ export function VisualRouteActions({
   activeConnectionId: string;
   runtimeGeneration: number | null;
   arrangementControl?: WindowArrangementControl;
+  watchControl?: WatchControl;
   onResource(node: WorldObjectNode, view: InspectorView): Promise<boolean>;
   onGoToSpaces(node: WorldObjectNode): Promise<boolean>;
   onError(reason: string): void;
@@ -124,8 +137,18 @@ export function VisualRouteActions({
 
   useEffect(() => {
     if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) close();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [close, open]);
+
+  useEffect(() => {
+    if (!open) return;
     const firstAction = menuRef.current?.querySelector<HTMLButtonElement>(
-      '[role="menuitem"]:not([aria-disabled="true"])',
+      '[role^="menuitem"]:not([aria-disabled="true"])',
     );
     requestAnimationFrame(() => firstAction?.focus());
   }, [open]);
@@ -243,6 +266,39 @@ export function VisualRouteActions({
                   );
                 },
               )}
+            </>
+          ) : null}
+          {watchControl ? (
+            <>
+              <p className="world-visual-actions-target">Pinned panes</p>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={watchControl.pinnedOnly}
+                onClick={watchControl.onTogglePinnedOnly}
+              >
+                Pinned only {watchControl.pinnedOnly ? "✓" : ""}
+              </button>
+              {watchControl.pin ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  aria-disabled={Boolean(watchControl.pin.disabledReason)}
+                  title={watchControl.pin.disabledReason ?? undefined}
+                  onClick={() => {
+                    if (!watchControl.pin?.disabledReason)
+                      watchControl.pin?.onSelect();
+                  }}
+                >
+                  {watchControl.pin.label}
+                  {watchControl.pin.disabledReason ? (
+                    <small>{watchControl.pin.disabledReason}</small>
+                  ) : null}
+                </button>
+              ) : null}
+              <p className="world-visual-actions-reason" role="status">
+                {watchControl.status}
+              </p>
             </>
           ) : null}
         </div>

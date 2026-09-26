@@ -37,7 +37,7 @@
 .world-view-toolbar-host {
   min-width: 36px;
   display: flex;
-  flex: 0 1 430px;
+  flex: 1 1 430px;
   align-items: center;
 }
 .world-view-toolbar-host:empty {
@@ -151,7 +151,7 @@
   font-size: 11px;
   line-height: 1.35;
 }
-.world-visual-actions-menu button[role="menuitem"] {
+.world-visual-actions-menu button[role^="menuitem"] {
   min-height: 30px;
   padding: 5px 8px;
   border: 1px solid transparent;
@@ -162,12 +162,12 @@
   font: inherit;
   font-size: 12px;
 }
-.world-visual-actions-menu button[role="menuitem"]:hover,
-.world-visual-actions-menu button[role="menuitem"]:focus-visible {
+.world-visual-actions-menu button[role^="menuitem"]:hover,
+.world-visual-actions-menu button[role^="menuitem"]:focus-visible {
   border-color: color-mix(in srgb, var(--accent, #79a6ff) 65%, transparent);
   background: color-mix(in srgb, var(--accent, #79a6ff) 14%, transparent);
 }
-.world-visual-actions-menu button[role="menuitem"][aria-disabled="true"] {
+.world-visual-actions-menu button[role^="menuitem"][aria-disabled="true"] {
   color: var(--muted, #9da7b4);
   cursor: not-allowed;
 }
@@ -176,7 +176,7 @@
   margin-left: 8px;
   font-size: 10px;
 }
-.world-visual-actions-menu button[role="menuitem"] small {
+.world-visual-actions-menu button[role^="menuitem"] small {
   display: block;
   font-size: 10px;
   line-height: 1.3;
@@ -294,10 +294,12 @@
 }
 .world-topbar-status {
   display: flex;
-  gap: 9px;
+  max-width: 138px;
+  gap: 6px;
   overflow: hidden;
   color: var(--muted, #9da7b4);
-  font-size: 10px;
+  font-size: 9px;
+  opacity: 0.7;
   white-space: nowrap;
 }
 .world-topbar-status > span:not(.world-live-dot) {
@@ -325,8 +327,8 @@
   color: #ef9b85;
 }
 .world-selected-host {
-  color: var(--text, #edf2f7);
-  font-weight: 650;
+  min-width: 0;
+  font-weight: 500;
 }
 
 .world-connection-required {
@@ -1863,9 +1865,6 @@
   }
   .world-view-toolbar-actions {
     display: none;
-  }
-  .world-view-toolbar-primary-actions {
-    display: flex;
   }
   .world-visual-actions-trigger {
     width: 30px;

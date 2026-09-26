@@ -523,7 +523,9 @@ async function run() {
   const topbarDetails = document.querySelector<HTMLElement>(
     ".world-topbar-status",
   );
-  const topbarActions = document.querySelector<HTMLElement>(".command-trigger");
+  const topbarActions = document.querySelector<HTMLElement>(
+    ".topbar-actions .world-visual-actions-trigger",
+  );
   const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
   const precedes = (left: Element | null, right: Element | null) =>
     Boolean(
@@ -538,6 +540,33 @@ async function run() {
       precedes(topbarActions, topbarMenu),
     "top bar did not order host, view, details, Actions and Menu",
   );
+  topbarActions?.click();
+  await until(
+    () => document.querySelector(".world-visual-actions-menu"),
+    "visual Actions menu in the shell",
+  );
+  const visualActionsMenu = document.querySelector<HTMLElement>(
+    ".world-visual-actions-menu",
+  )!;
+  const visualMenuBounds = visualActionsMenu.getBoundingClientRect();
+  check(
+    !document.querySelector(".command-trigger") &&
+      !document.querySelector(".world-view-toolbar-actions") &&
+      visualActionsMenu.textContent?.includes("Arrange windows") === true &&
+      visualActionsMenu.textContent?.includes("Pinned only") === true &&
+      visualMenuBounds.width > 0 &&
+      visualMenuBounds.right <= window.innerWidth,
+    "visual Actions was duplicated, clipped, or missing arrangements and pins",
+  );
+  check(
+    (document
+      .querySelector<HTMLElement>(".world-view-toolbar-search input")
+      ?.getBoundingClientRect().width ?? 0) >= 180 &&
+      getComputedStyle(topbarDetails!).opacity !== "1" &&
+      topbarDetails?.title.includes("spaces") === true,
+    "top-bar extras crowded search or made the host summary prominent",
+  );
+  topbarActions?.click();
   check(
     document
       .querySelector(".world-control-plane")
@@ -858,15 +887,15 @@ async function run() {
     );
     choice?.click();
   };
-  const addTabBounds = document
-    .querySelector<HTMLButtonElement>(".tabbar-add")!
+  const tabBarBounds = document
+    .querySelector<HTMLElement>(".tabbar")!
     .getBoundingClientRect();
   const arrangementTriggerBounds = document
     .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
     .getBoundingClientRect();
   check(
-    arrangementTriggerBounds.left - addTabBounds.right <= 48,
-    "wide desktop placed Arrange windows away from the tabs",
+    arrangementTriggerBounds.right >= tabBarBounds.right - 20,
+    `wide desktop did not align Arrange windows with the tab bar's right edge: ${JSON.stringify({ tabBarRight: tabBarBounds.right, arrangementRight: arrangementTriggerBounds.right })}`,
   );
   window.dispatchEvent(
     new KeyboardEvent("keydown", {
@@ -2344,19 +2373,35 @@ async function run() {
     () => document.documentElement.dataset.layout === "mobile",
     "forced compact layout",
   );
-  const mobileTabBar = document.querySelector<HTMLElement>(".tabbar")!;
-  mobileTabBar.style.width = "390px";
-  const mobileTabBounds = mobileTabBar.getBoundingClientRect();
-  const mobileArrangementBounds = document
-    .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
-    .getBoundingClientRect();
-  check(
-    mobileArrangementBounds.width > 0 &&
-      mobileArrangementBounds.left >= mobileTabBounds.left &&
-      mobileArrangementBounds.right <= mobileTabBounds.right,
-    "mobile tab strip hid Arrange windows",
+  const mobileTabBar = document.querySelector<HTMLElement>(".tabbar");
+  const mobileControlsToggle = document.querySelector<HTMLButtonElement>(
+    ".mobile-controls-toggle",
+  )!;
+  mobileControlsToggle.click();
+  await until(
+    () =>
+      !document.querySelector(
+        '.mobile-nav button[aria-label="Arrange windows"]',
+      ),
+    "collapsed mobile controls hid window arrangements",
   );
-  mobileTabBar.style.removeProperty("width");
+  mobileControlsToggle.click();
+  await until(
+    () =>
+      document.querySelector(
+        '.mobile-nav button[aria-label="Arrange windows"]',
+      ),
+    "mobile ellipsis revealed window arrangements",
+  );
+  check(
+    !mobileTabBar?.querySelector('button[aria-label="Arrange windows"]') &&
+      document
+        .querySelector<HTMLElement>(
+          '.mobile-nav button[aria-label="Arrange windows"]',
+        )!
+        .getBoundingClientRect().width > 0,
+    "mobile arrangement access created another tab-strip icon",
+  );
   const compactReviewerSlot = persistentReviewerInspector?.closest<HTMLElement>(
     ".workspace-inspector-slot",
   );
@@ -2546,7 +2591,7 @@ async function run() {
       ),
     "Spaces handoff",
   );
-  topbarActions?.click();
+  document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
   await settle();
   check(
     document
@@ -2554,7 +2599,7 @@ async function run() {
       ?.textContent?.includes("Arrange windows") === true,
     "Spaces Actions omitted window arrangements",
   );
-  topbarActions?.click();
+  document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
   await settle();
   check(
     document.querySelector(".world-control-plane") === persistentControlPlane &&

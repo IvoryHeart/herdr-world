@@ -403,6 +403,8 @@ export default function WorldFoundationApp() {
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
   const [viewToolbarPortal, setViewToolbarPortal] =
     useState<HTMLDivElement | null>(null);
+  const [visualActionsPortal, setVisualActionsPortal] =
+    useState<HTMLDivElement | null>(null);
   const [visualArrangementControl, setVisualArrangementControl] = useState<
     WindowArrangementControl | undefined
   >();
@@ -597,6 +599,7 @@ export default function WorldFoundationApp() {
         <App
           operationalShortcutsEnabled={view === "spaces"}
           topbarPortal={topbarPortal}
+          onVisualActionsPortalReady={setVisualActionsPortal}
           primaryViewControl={
             <div className="world-topbar-control-plane">
               <label className="world-primary-view-select">
@@ -655,6 +658,7 @@ export default function WorldFoundationApp() {
               }}
               onVisualArrangementControlReady={setVisualArrangementControl}
               viewToolbarPortal={viewToolbarPortal}
+              visualActionsPortal={visualActionsPortal}
               onGoToSpaces={() => setView("spaces")}
             />
           }
@@ -741,6 +745,7 @@ function WorldControlPlane({
   onInspectorPaneFocusReady,
   onVisualArrangementControlReady,
   viewToolbarPortal,
+  visualActionsPortal,
   onGoToSpaces,
 }: {
   view: Exclude<WorldView, "spaces">;
@@ -767,6 +772,7 @@ function WorldControlPlane({
     control: WindowArrangementControl | undefined,
   ): void;
   viewToolbarPortal: HTMLDivElement | null;
+  visualActionsPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
 }) {
   const runtime = useWorldRuntime();
@@ -907,37 +913,25 @@ function WorldControlPlane({
       : !watchAdmission || watchAdmission.revision !== watchlist.revision
         ? "Watch availability pending"
         : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
-  const watchToolbarActions = (
-    <>
-      <button
-        type="button"
-        aria-pressed={pinnedOnly}
-        onClick={() => setPinnedOnly((value) => !value)}
-      >
-        Pinned only
-      </button>
-      <span className="world-view-toolbar-results" aria-live="polite">
-        {watchStatus}
-      </span>
-      {selectedWatch ? (
-        <button
-          type="button"
-          disabled={
+  const watchActions = {
+    pinnedOnly,
+    status: watchStatus,
+    onTogglePinnedOnly: () => setPinnedOnly((value) => !value),
+    pin: selectedWatch
+      ? {
+          label: selectedPinned ? "Unpin selected pane" : "Pin selected pane",
+          disabledReason:
             !watchlist.verified || (!selectedPinned && !selection?.actionable)
-          }
-          title={watchlist.error ?? undefined}
-          onClick={() =>
+              ? (watchlist.error ?? "The selected pane is unavailable.")
+              : null,
+          onSelect: () =>
             void watchlistStore.mutate(
               selectedPinned ? "world.watchlist.unpin" : "world.watchlist.pin",
               selectedWatch,
-            )
-          }
-        >
-          {selectedPinned ? "Unpin" : "Pin"}
-        </button>
-      ) : null}
-    </>
-  );
+            ),
+        }
+      : undefined,
+  };
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
@@ -2242,6 +2236,7 @@ function WorldControlPlane({
       activeConnectionId={connectionSelection.activeConnectionId}
       runtimeGeneration={connectionSelection.runtimeGeneration}
       arrangementControl={visualArrangementControl}
+      watchControl={watchActions}
       onResource={(node, requestedView) =>
         applySelection(node.id, requestedView)
       }
@@ -2285,6 +2280,9 @@ function WorldControlPlane({
           className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
+            {active && visualActionsPortal
+              ? createPortal(visualActions, visualActionsPortal)
+              : null}
             {active ? (
               <Suspense
                 fallback={
@@ -2303,7 +2301,6 @@ function WorldControlPlane({
                       <PixelOfficeView
                         world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
-                        toolbarActions={watchToolbarActions}
                         selectedId={selectedId}
                         onSelect={selectNode}
                         floatingTerminals={inspectorConversations}
@@ -2312,7 +2309,6 @@ function WorldControlPlane({
                         }
                         onOpenTerminal={openTerminalById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
-                        actions={visualActions}
                       />
                     </Suspense>
                   ) : view === "tree" ? (
@@ -2324,7 +2320,6 @@ function WorldControlPlane({
                       <ConnectedTreeView
                         world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
-                        toolbarActions={watchToolbarActions}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
                         inlineInspectorNodeId={treeInlineInspectorNodeId}
@@ -2335,21 +2330,18 @@ function WorldControlPlane({
                         }
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
-                        actions={visualActions}
                       />
                     </Suspense>
                   ) : (
                     <SpatialGraphView
                       world={presentedWorld}
                       toolbarPortal={viewToolbarPortal}
-                      toolbarActions={watchToolbarActions}
                       selectedId={selectedId}
                       conversationNodeIds={conversationNodeIds}
                       onSelect={selectNode}
                       onOpenTerminal={openTerminalById}
                       onSelectedAnchorChange={setSelectedVisualAnchor}
                       onNodeAnchorsChange={setVisualConversationAnchors}
-                      actions={visualActions}
                     />
                   )}
                 </WorldViewErrorBoundary>

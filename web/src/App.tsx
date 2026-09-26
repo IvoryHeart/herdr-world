@@ -91,6 +91,7 @@ import { GlobalTooltip } from "./components/GlobalTooltip";
 import { MobileTabSheet } from "./components/MobileTabSheet";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
+import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
 import { TabTerminalPaneLayout } from "./TabTerminalPaneLayout";
 import { useVisibleTabLayoutState } from "./visibleTabLayout";
 import type { TerminalWorkspaceFileRequest } from "./components/TerminalView";
@@ -873,6 +874,7 @@ export default function App({
   operationalShortcutsEnabled = true,
   inspectorPortal = null,
   topbarPortal = null,
+  onVisualActionsPortalReady,
   primaryViewControl = null,
   workspaceSurface = null,
   workspaceSurfaceVisible = true,
@@ -891,6 +893,7 @@ export default function App({
   operationalShortcutsEnabled?: boolean;
   inspectorPortal?: Element | null;
   topbarPortal?: Element | null;
+  onVisualActionsPortalReady?: (element: HTMLDivElement | null) => void;
   primaryViewControl?: ReactNode;
   workspaceSurface?: ReactNode;
   workspaceSurfaceVisible?: boolean;
@@ -3342,14 +3345,17 @@ export default function App({
       </div>
       <div className="topbar-actions">
         <div className="topbar-command-group">
-          <CommandCombobox
-            key={`${resourceUiKey}:commands`}
-            operationalShortcutsEnabled={operationalShortcutsEnabled}
-            arrangementControl={arrangementControl}
-            onOpenFileExplorer={openFileExplorer}
-            onOpenFile={openFileExplorerFile}
-            onOpenDiffViewer={openDiffViewer}
-          />
+          {operationalShortcutsEnabled ? (
+            <CommandCombobox
+              key={`${resourceUiKey}:commands`}
+              arrangementControl={arrangementControl}
+              onOpenFileExplorer={openFileExplorer}
+              onOpenFile={openFileExplorerFile}
+              onOpenDiffViewer={openDiffViewer}
+            />
+          ) : (
+            <div ref={onVisualActionsPortalReady} />
+          )}
           <ConfigMenu
             key={`${resourceUiKey}:config`}
             theme={theme}
@@ -3405,6 +3411,9 @@ export default function App({
         aria-label="Workspace view switcher"
         aria-hidden={mobileControlsCollapsed}
       >
+        {mobile && !mobileControlsCollapsed && arrangementControl ? (
+          <WindowArrangementMenu control={arrangementControl} />
+        ) : null}
         <button
           type="button"
           className={
