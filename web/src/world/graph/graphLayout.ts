@@ -261,7 +261,8 @@ export function arrangeGraphLayout(state: GraphLayoutState) {
     node.y = y;
     node.vx = 0;
     node.vy = 0;
-    node.pinned = false;
+    // Layout updates restart the force pass; arranged positions stay fixed.
+    node.pinned = true;
   }
 }
 

@@ -82,9 +82,7 @@ describe("Graph force layout", () => {
     arrangeGraphLayout(state);
 
     expect(state.edges).toEqual(edges);
-    expect([...state.nodes.values()].every((value) => !value.pinned)).toBe(
-      true,
-    );
+    expect([...state.nodes.values()].every((value) => value.pinned)).toBe(true);
     const nodes = [...state.nodes.values()];
     for (let left = 0; left < nodes.length; left += 1) {
       for (let right = left + 1; right < nodes.length; right += 1) {
@@ -132,6 +130,42 @@ describe("Graph force layout", () => {
       new Set([...state.nodes.values()].map(({ x, y }) => `${x},${y}`)).size,
     ).toBe(54);
     expect(state.edges).toHaveLength(45);
+  });
+
+  test("keeps arranged positions through remount and a new agent", () => {
+    const graph = projection();
+    const arranged = reconcileGraphLayout(null, graph, new Set()).state;
+    arrangeGraphLayout(arranged);
+    const positions = savedGraphPositions(arranged);
+    const remounted = reconcileGraphLayout(
+      null,
+      graph,
+      new Set(),
+      positions,
+    ).state;
+    for (let index = 0; index < 80; index += 1) {
+      stepGraphLayout(remounted, 1);
+    }
+    for (const [id, position] of Object.entries(positions)) {
+      expect(remounted.nodes.get(id)).toMatchObject(position);
+    }
+
+    const grown = projection();
+    grown.nodes.push(node("new-agent", "agent", "space"));
+    grown.edges.push({
+      sourceId: "space",
+      targetId: "new-agent",
+      kind: "contains",
+    });
+    const updated = reconcileGraphLayout(remounted, grown, new Set()).state;
+    for (let index = 0; index < 80; index += 1) {
+      stepGraphLayout(updated, 1);
+    }
+    for (const [id, position] of Object.entries(positions)) {
+      expect(updated.nodes.get(id)).toMatchObject(position);
+    }
+    expect(updated.nodes.get("new-agent")).toBeDefined();
+    expect(updated.edges).toHaveLength(graph.edges.length + 1);
   });
 });
 

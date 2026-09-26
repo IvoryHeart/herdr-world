@@ -408,12 +408,15 @@ async function run() {
       );
 
       arrangeButton.click();
-      await waitFor(
-        () =>
-          window.__HERDR_GRAPH_RENDERER__?.publishedNodes[agent.id]?.pinned ===
-          false,
-        "Arrange did not release dragged Graph positions",
-      );
+      await waitFor(() => {
+        const nodes = window.__HERDR_GRAPH_RENDERER__?.publishedNodes;
+        const moved = nodes?.[agent.id];
+        return Boolean(
+          moved &&
+            (moved.x !== pinned.x || moved.y !== pinned.y) &&
+            Object.values(nodes).every(({ pinned }) => pinned),
+        );
+      }, "Arrange did not replace and stabilize dragged Graph positions");
       const arranged = Object.values(
         window.__HERDR_GRAPH_RENDERER__!.publishedNodes,
       );
@@ -445,6 +448,33 @@ async function run() {
       await waitFor(
         () => graphPrefs().cameraMode === "fit",
         "Fit did not work independently after Arrange",
+      );
+
+      const arrangedAgent =
+        window.__HERDR_GRAPH_RENDERER__!.publishedNodes[agent.id]!;
+      await pointer(
+        canvas,
+        "pointerdown",
+        rect.left + arrangedAgent.screenX,
+        rect.top + arrangedAgent.screenY,
+      );
+      await pointer(
+        canvas,
+        "pointermove",
+        rect.left + arrangedAgent.screenX + 24,
+        rect.top + arrangedAgent.screenY,
+      );
+      await pointer(
+        canvas,
+        "pointerup",
+        rect.left + arrangedAgent.screenX + 24,
+        rect.top + arrangedAgent.screenY,
+      );
+      await waitFor(
+        () =>
+          window.__HERDR_GRAPH_RENDERER__?.publishedNodes[agent.id]?.x !==
+          arrangedAgent.x,
+        "Graph drag stopped working after Arrange",
       );
 
       const shell =
@@ -495,6 +525,43 @@ async function run() {
         "Graph resize work did not coalesce to the latest frame value",
       );
       latest.cancel();
+
+      const positionsBeforeRemount = Object.fromEntries(
+        Object.entries(window.__HERDR_GRAPH_RENDERER__!.publishedNodes).map(
+          ([id, { x, y }]) => [id, { x, y }],
+        ),
+      );
+      await waitFor(
+        () =>
+          graphPrefs().positions?.[agent.id]?.x ===
+          positionsBeforeRemount[agent.id]?.x,
+        "Graph did not persist arranged positions before remount",
+      );
+      root.render(null);
+      await waitFor(
+        () => window.__HERDR_GRAPH_RENDERER__?.activeRenderers === 0,
+        "Graph renderer did not retire before remount",
+      );
+      root.render(
+        <StrictMode>
+          <Fixture />
+        </StrictMode>,
+      );
+      await waitFor(
+        () =>
+          window.__HERDR_GRAPH_RENDERER__?.ready === true &&
+          window.__HERDR_GRAPH_RENDERER__.activeAnimationFrames === 0,
+        "Graph renderer did not settle after remount",
+      );
+      for (const [id, position] of Object.entries(positionsBeforeRemount)) {
+        const restored = window.__HERDR_GRAPH_RENDERER__!.publishedNodes[id];
+        check(
+          restored?.x === position.x &&
+            restored.y === position.y &&
+            restored.pinned,
+          "Graph remount changed an arranged position",
+        );
+      }
     }
   } finally {
     root.unmount();
