@@ -531,23 +531,24 @@ async function run() {
     () => window.__HERDR_WORLD_RENDERER__?.ready === true,
     "Office renderer",
   );
-  const initialSeat = document.querySelector<HTMLButtonElement>(
-    ".world-new-seat-canvas-action",
-  );
-  const initialRoom = document.querySelector<HTMLButtonElement>(
-    ".world-new-room-canvas-action",
-  );
-  const initialTab = document.querySelector<HTMLButtonElement>(".tabbar-add");
-  check(
-    initialSeat?.disabled === true &&
-      initialRoom?.disabled === true &&
-      initialTab?.disabled === true &&
-      initialSeat.title.includes("Endpoint availability is loading") &&
-      initialRoom.title.includes("Endpoint availability is loading") &&
-      initialTab.title.includes("Endpoint availability is loading") &&
-      getComputedStyle(initialSeat).cursor === "not-allowed",
-    "browser-local Office creation controls did not share their pending endpoint state",
-  );
+  await until(() => {
+    const seat = document.querySelector<HTMLButtonElement>(
+      ".world-new-seat-canvas-action",
+    );
+    const room = document.querySelector<HTMLButtonElement>(
+      ".world-new-room-canvas-action",
+    );
+    const tab = document.querySelector<HTMLButtonElement>(".tabbar-add");
+    return (
+      seat?.disabled === true &&
+      room?.disabled === true &&
+      tab?.disabled === true &&
+      seat.title.includes("Endpoint availability is loading") &&
+      room.title.includes("Endpoint availability is loading") &&
+      tab.title.includes("Endpoint availability is loading") &&
+      getComputedStyle(seat).cursor === "not-allowed"
+    );
+  }, "browser-local Office creation controls with shared pending endpoint state");
   const pendingCreationSceneRenders =
     window.__HERDR_WORLD_RENDERER__!.sceneRenders;
   initialTerminalAttach.resolve();
@@ -584,6 +585,124 @@ async function run() {
     ),
     "Office required a topology mutation before enabling initial room actions",
   );
+  const browserLocalCreateCount = calls.filter(
+    ({ method }) => method === "tab.create",
+  ).length;
+  await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        ".world-new-seat-canvas-action:not(:disabled)",
+      ),
+    "browser-local enabled seat action before creation",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      ".world-new-seat-canvas-action:not(:disabled)",
+    )!
+    .click();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "tab.create").length ===
+      browserLocalCreateCount + 1,
+    "browser-local Office seat creation",
+  );
+  const browserLocalCreate = [...calls]
+    .reverse()
+    .find(({ method }) => method === "tab.create")!;
+  check(
+    browserLocalCreate.params.focus === false &&
+      JSON.stringify(browserLocalCreate.params.browser_source) ===
+        JSON.stringify({
+          workspace_id: "studio",
+          tab_id: "work",
+          pane_id: "builder-pane",
+          terminal_id: "builder-terminal",
+        }),
+    "browser-local Office seat creation omitted its exact parked source",
+  );
+  const browserLocalFocusGate = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "created-pane-3",
+    promise: browserLocalFocusGate.promise,
+  };
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      calls.some(
+        ({ method, params }) =>
+          method === "pane.get" && params.pane_id === "created-pane-3",
+      ),
+    "delayed browser-local created-seat focus",
+  );
+  check(
+    ![...document.querySelectorAll(".workspace-inspector-agent-identity")].some(
+      (identity) => identity.textContent?.includes("terminal"),
+    ),
+    "pending browser-local created-seat focus opened an unadmitted Inspector",
+  );
+  browserLocalFocusGate.resolve();
+  delayedPaneGet = null;
+  await until(
+    () =>
+      rejectedPaneGets === 1 &&
+      store.get().selectedPaneId === "created-pane-3" &&
+      [
+        ...document.querySelectorAll(".workspace-inspector-agent-identity"),
+      ].some((identity) => identity.textContent?.includes("terminal")),
+    "browser-local created seat exact Inspector after transient focus rejection",
+  );
+  check(
+    calls.filter(
+      ({ method, params }) =>
+        method === "pane.get" && params.pane_id === "created-pane-3",
+    ).length === 2 &&
+      calls.filter(
+        ({ method, params }) =>
+          method === "terminal.attach" &&
+          params.terminal_id === "builder-terminal",
+      ).length === 1 &&
+      calls.filter(
+        ({ method, params }) =>
+          method === "terminal.attach" &&
+          params.terminal_id === "created-terminal-3",
+      ).length === 1,
+    "browser-local creation did not hand the parked endpoint to one created Inspector owner",
+  );
+  for (const close of document.querySelectorAll<HTMLButtonElement>(
+    'button[aria-label="Close floating Inspector"]',
+  )) {
+    close.click();
+  }
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail button[aria-label="Close Workspace Inspector"]',
+    )
+    ?.click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "browser-local creation regression Inspector cleanup",
+  );
+  focusedTabId = "work";
+  focusedPaneId = "builder-pane";
+  tabs.splice(
+    tabs.findIndex(({ tab_id }) => tab_id === "created-tab-3"),
+    1,
+  );
+  panes.splice(
+    panes.findIndex(({ pane_id }) => pane_id === "created-pane-3"),
+    1,
+  );
+  worldRevision += 1;
+  await store.refresh();
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      store.get().browserNavigation.workspaceId === "studio" &&
+      store.get().browserNavigation.tabIds.studio === "work" &&
+      store.get().browserNavigation.paneIds.work === "builder-pane",
+    "browser-local source restoration after creation regression",
+  );
+  rejectedPaneGets = 0;
   navigationMode = "shared";
   __storeTesting.replaceState({
     ...store.get(),
@@ -1710,9 +1829,18 @@ async function run() {
     ".world-new-seat-canvas-action:not(:disabled)",
   );
   check(Boolean(createSeatButton), "Office room omitted its new-seat action");
+  const seatCreatesBeforeClick = calls.filter(
+    ({ method }) => method === "tab.create",
+  ).length;
+  const createdPaneGetsBeforeClick = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "created-pane-3",
+  ).length;
   createSeatButton?.click();
   await until(
-    () => calls.some(({ method }) => method === "tab.create"),
+    () =>
+      calls.filter(({ method }) => method === "tab.create").length ===
+      seatCreatesBeforeClick + 1,
     "Office seat creation",
   );
   await worldRuntimeStore.refresh();
@@ -1731,8 +1859,10 @@ async function run() {
       calls.filter(
         ({ method, params }) =>
           method === "pane.get" && params.pane_id === "created-pane-3",
-      ).length === 2,
-    `created seat did not exercise its bounded exact-focus retry (${rejectedPaneGets}; pane.get=${calls.filter(({ method, params }) => method === "pane.get" && params.pane_id === "created-pane-3").length})`,
+      ).length -
+        createdPaneGetsBeforeClick ===
+        2,
+    `created seat did not exercise its bounded exact-focus retry (${rejectedPaneGets}; pane.get delta=${calls.filter(({ method, params }) => method === "pane.get" && params.pane_id === "created-pane-3").length - createdPaneGetsBeforeClick})`,
   );
   await until(() => agentTarget("Builder"), "Builder desk target");
   flushSync(() => agentTarget("Builder")!.click());

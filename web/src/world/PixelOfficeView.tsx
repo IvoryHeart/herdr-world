@@ -44,6 +44,8 @@ import {
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import {
+  CREATED_PANE_ADMISSION_TIMEOUT_MS,
+  createdPaneAdmissionRetryDelay,
   createdRootPaneId,
   officeCreationActionState,
   officeRoomActionCapabilities,
@@ -67,10 +69,8 @@ type PendingCreatedPane = {
   generation: number;
   paneId: string;
   attempt: number;
+  deadlineAt: number;
 };
-
-const CREATED_PANE_ADMISSION_RETRY_MS = 120;
-const CREATED_PANE_ADMISSION_ATTEMPTS = 30;
 
 export default function PixelOfficeView({
   world,
@@ -264,7 +264,11 @@ export default function PixelOfficeView({
       });
     };
     const retryFocus = (detail: string) => {
-      if (pendingCreatedPane.attempt + 1 >= CREATED_PANE_ADMISSION_ATTEMPTS) {
+      const delay = createdPaneAdmissionRetryDelay(
+        pendingCreatedPane.deadlineAt,
+        Date.now(),
+      );
+      if (delay === null) {
         failFocus(detail);
         return;
       }
@@ -274,7 +278,7 @@ export default function PixelOfficeView({
             if (!current || !samePending(current)) return current;
             return { ...current, attempt: current.attempt + 1 };
           }),
-        CREATED_PANE_ADMISSION_RETRY_MS,
+        delay,
       );
     };
     const host = world.hosts.find(
@@ -292,7 +296,7 @@ export default function PixelOfficeView({
     );
     if (!pane) {
       retryFocus(
-        "The created terminal was not admitted before the retry limit.",
+        "The created terminal was not admitted within the World snapshot window.",
       );
     } else {
       try {
@@ -395,6 +399,9 @@ export default function PixelOfficeView({
         generation,
         paneId,
         attempt: 0,
+        // Aggregate observation may legitimately occupy its full 20s server
+        // deadline; leave a small delivery/render grace before reporting failure.
+        deadlineAt: Date.now() + CREATED_PANE_ADMISSION_TIMEOUT_MS,
       });
     } else {
       store.notify({

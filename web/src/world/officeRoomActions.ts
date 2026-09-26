@@ -13,6 +13,21 @@ export type OfficeCreationActionState = {
   reason: string | null;
 };
 
+// A World snapshot may spend 20s observing hosts. Keep retrying through that
+// complete server window, then allow delivery and rendering a small grace.
+export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 21_000;
+const CREATED_PANE_ADMISSION_RETRY_MS = 120;
+
+export function createdPaneAdmissionRetryDelay(
+  deadlineAt: number,
+  now: number,
+): number | null {
+  const remaining = deadlineAt - now;
+  return remaining > 0
+    ? Math.min(CREATED_PANE_ADMISSION_RETRY_MS, remaining)
+    : null;
+}
+
 export function officeCreationActionState(
   admitted: boolean,
   endpointReason: string | null,
