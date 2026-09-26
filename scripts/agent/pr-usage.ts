@@ -31,11 +31,20 @@ export type UsageSummary = {
   last: string | null;
 };
 
-export function summarizeUsage(
-  logs: readonly { sessionId: string; lines: string }[],
-  from?: string,
-  until?: string,
-): UsageSummary {
+export type ToolingSummary = {
+  outerCalls: number;
+  execWrappers: number;
+  singleNestedExecWrappers: number;
+  nestedCalls: number;
+  testCommands: number;
+  quickTypechecks: number;
+  fullChecks: number;
+  githubCommands: number;
+  outputChars: number;
+  largeOutputs: number;
+};
+
+function timeBounds(from?: string, until?: string) {
   const start = from ? Date.parse(from) : -Infinity;
   const end = until ? Date.parse(until) : Infinity;
   if (Number.isNaN(start) || Number.isNaN(end) || start >= end) {
@@ -43,6 +52,15 @@ export function summarizeUsage(
       "Use valid ISO timestamps with --from earlier than --until",
     );
   }
+  return { start, end };
+}
+
+export function summarizeUsage(
+  logs: readonly { sessionId: string; lines: string }[],
+  from?: string,
+  until?: string,
+): UsageSummary {
+  const { start, end } = timeBounds(from, until);
   const summary: UsageSummary = {
     responses: 0,
     input: 0,
@@ -88,6 +106,238 @@ export function summarizeUsage(
   return summary;
 }
 
+type ToolRecord = {
+  timestamp: string;
+  type: string;
+  payload?: {
+    type?: string;
+    name?: string;
+    input?: string;
+    output?: Array<{ text?: string }> | string;
+  };
+};
+
+function commandLiterals(input: string): string[] {
+  const commands: string[] = [];
+  for (const match of input.matchAll(/\bcmd\s*:\s*("(?:\\.|[^"\\])*")/g)) {
+    try {
+      commands.push(JSON.parse(match[1]) as string);
+    } catch {
+      // Dynamically constructed commands cannot be classified from the rollout.
+    }
+  }
+  return commands;
+}
+
+/** Read executable shell words, leaving quoted arguments and heredoc bodies opaque. */
+function shellCommands(script: string): string[][] {
+  const commands: string[][] = [];
+  let words: string[] = [];
+  let word = "";
+  let wordStarted = false;
+  let quote: "'" | '"' | null = null;
+  const heredocs: Array<{ delimiter: string; stripTabs: boolean }> = [];
+  let inHeredocBody = false;
+  const flushWord = () => {
+    if (!wordStarted) return;
+    words.push(word);
+    word = "";
+    wordStarted = false;
+  };
+  const flushCommand = () => {
+    flushWord();
+    if (words.length > 0) commands.push(words);
+    words = [];
+  };
+  for (let index = 0; index < script.length; ) {
+    if (inHeredocBody) {
+      const end = script.indexOf("\n", index);
+      const line = script
+        .slice(index, end < 0 ? undefined : end)
+        .replace(/\r$/, "");
+      const next = heredocs[0];
+      if (
+        next &&
+        (next.stripTabs ? line.replace(/^\t+/, "") : line) === next.delimiter
+      ) {
+        heredocs.shift();
+        inHeredocBody = heredocs.length > 0;
+      }
+      index = end < 0 ? script.length : end + 1;
+      continue;
+    }
+    const char = script[index]!;
+    if (quote) {
+      if (char === quote) quote = null;
+      else if (quote === '"' && char === "\\" && index + 1 < script.length) {
+        word += script[++index];
+      } else word += char;
+      index++;
+      continue;
+    }
+    if (char === "\\" && index + 1 < script.length) {
+      const next = script[++index]!;
+      if (next !== "\n") {
+        word += next;
+        wordStarted = true;
+      }
+      index++;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      wordStarted = true;
+      index++;
+      continue;
+    }
+    if (char === "#" && !wordStarted) {
+      const end = script.indexOf("\n", index);
+      index = end < 0 ? script.length : end;
+      continue;
+    }
+    if (
+      char === "<" &&
+      script[index + 1] === "<" &&
+      script[index + 2] !== "<"
+    ) {
+      flushWord();
+      index += 2;
+      const stripTabs = script[index] === "-";
+      if (stripTabs) index++;
+      while (script[index] === " " || script[index] === "\t") index++;
+      let delimiter = "";
+      let delimiterQuote: "'" | '"' | null = null;
+      while (index < script.length) {
+        const next = script[index]!;
+        if (delimiterQuote) {
+          if (next === delimiterQuote) delimiterQuote = null;
+          else delimiter += next;
+        } else if (next === "'" || next === '"') delimiterQuote = next;
+        else if (/\s|[;&|()]/.test(next)) break;
+        else delimiter += next;
+        index++;
+      }
+      if (delimiter) heredocs.push({ delimiter, stripTabs });
+      continue;
+    }
+    if (char === " " || char === "\t" || char === "\r") {
+      flushWord();
+      index++;
+      continue;
+    }
+    if (char === "\n") {
+      flushCommand();
+      index++;
+      inHeredocBody = heredocs.length > 0;
+      continue;
+    }
+    if (";&|()".includes(char)) {
+      flushCommand();
+      index++;
+      continue;
+    }
+    word += char;
+    wordStarted = true;
+    index++;
+  }
+  flushCommand();
+  return commands;
+}
+
+function executableWords(words: readonly string[]): readonly string[] {
+  let index = 0;
+  while (
+    ["if", "then", "while", "until", "do", "!"].includes(words[index] ?? "")
+  )
+    index++;
+  if (words[index] === "env") {
+    index++;
+    while (/^[-\w]+=|^-/.test(words[index] ?? "")) index++;
+  }
+  while (/^[A-Za-z_][A-Za-z_0-9]*=/.test(words[index] ?? "")) index++;
+  if (words[index] === "npm" && words[index + 1] === "exec") {
+    const separator = words.indexOf("--", index + 2);
+    if (
+      separator > index + 2 &&
+      words.slice(index + 2, separator).some((word) => /^bun(?:@|$)/.test(word))
+    )
+      return ["bun", ...words.slice(separator + 1)];
+  }
+  return words.slice(index);
+}
+
+export function summarizeTooling(
+  logs: readonly { sessionId: string; lines: string }[],
+  from?: string,
+  until?: string,
+): ToolingSummary {
+  const { start, end } = timeBounds(from, until);
+  const summary: ToolingSummary = {
+    outerCalls: 0,
+    execWrappers: 0,
+    singleNestedExecWrappers: 0,
+    nestedCalls: 0,
+    testCommands: 0,
+    quickTypechecks: 0,
+    fullChecks: 0,
+    githubCommands: 0,
+    outputChars: 0,
+    largeOutputs: 0,
+  };
+  for (const log of logs) {
+    for (const line of log.lines.split("\n")) {
+      if (!line.trim()) continue;
+      const record = JSON.parse(line) as ToolRecord;
+      if (record.type !== "response_item") continue;
+      const timestamp = Date.parse(record.timestamp);
+      if (Number.isNaN(timestamp)) throw new Error("Invalid tool timestamp");
+      if (timestamp < start || timestamp >= end) continue;
+      const payload = record.payload;
+      if (
+        payload?.type === "custom_tool_call" ||
+        payload?.type === "function_call"
+      ) {
+        summary.outerCalls++;
+        if (payload.name !== "exec") continue;
+        summary.execWrappers++;
+        const input = payload.input ?? "";
+        const nested = input.match(/\btools\.[a-zA-Z_]\w*\s*\(/g) ?? [];
+        summary.nestedCalls += nested.length;
+        if (nested.length === 1) summary.singleNestedExecWrappers++;
+        for (const command of commandLiterals(input)) {
+          for (const shellWords of shellCommands(command)) {
+            const words = executableWords(shellWords);
+            if (words[0] === "bun" && words[1] === "test")
+              summary.testCommands++;
+            if (words[0] === "bun" && words[1] === "run") {
+              if (words[2] === "typecheck:quick") summary.quickTypechecks++;
+              if (words[2] === "check") summary.fullChecks++;
+            }
+            if (words[0] === "gh") summary.githubCommands++;
+          }
+        }
+      } else if (
+        payload?.type === "custom_tool_call_output" ||
+        payload?.type === "function_call_output"
+      ) {
+        const output = payload.output;
+        const chars =
+          typeof output === "string"
+            ? output.length
+            : Array.isArray(output)
+              ? output.reduce(
+                  (total, block) => total + (block.text?.length ?? 0),
+                  0,
+                )
+              : 0;
+        summary.outputChars += chars;
+        if (chars >= 10_000) summary.largeOutputs++;
+      }
+    }
+  }
+  return summary;
+}
+
 function validUsage(value: Usage): boolean {
   const fields = [
     value.input_tokens,
@@ -111,6 +361,7 @@ type Options = {
   until?: string;
   sessionsDir: string;
   json: boolean;
+  tooling: boolean;
 };
 
 function parseOptions(args: readonly string[]): Options {
@@ -121,11 +372,16 @@ function parseOptions(args: readonly string[]): Options {
       "sessions",
     ),
     json: false,
+    tooling: false,
   };
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
     if (flag === "--json") {
       options.json = true;
+      continue;
+    }
+    if (flag === "--tooling") {
+      options.tooling = true;
       continue;
     }
     if (
@@ -187,17 +443,25 @@ async function readSessionLogs(options: Options) {
 if (import.meta.main) {
   try {
     const options = parseOptions(process.argv.slice(2));
-    const summary = summarizeUsage(
-      await readSessionLogs(options),
-      options.from,
-      options.until,
-    );
+    const logs = await readSessionLogs(options);
+    const summary = summarizeUsage(logs, options.from, options.until);
+    const tooling = options.tooling
+      ? summarizeTooling(logs, options.from, options.until)
+      : null;
     if (summary.responses === 0) {
       throw new Error("No per-response usage records in the selected interval");
     }
     if (options.json) {
       console.log(
-        JSON.stringify({ pr: options.pr ?? null, ...summary }, null, 2),
+        JSON.stringify(
+          {
+            pr: options.pr ?? null,
+            ...summary,
+            ...(tooling ? { tooling } : {}),
+          },
+          null,
+          2,
+        ),
       );
     } else {
       const label = options.pr ? `PR #${options.pr}` : "Codex usage";
@@ -214,6 +478,17 @@ if (import.meta.main) {
       console.log(
         "These are recorded tokens, not billed cost. The caller defines which sessions and interval belong to the PR.",
       );
+      if (tooling) {
+        console.log(
+          `Tools: ${tooling.outerCalls} outer calls, ${tooling.execWrappers} exec wrappers (${tooling.singleNestedExecWrappers} with one nested call), ${tooling.nestedCalls} nested calls.`,
+        );
+        console.log(
+          `Recognized commands: ${tooling.testCommands} tests, ${tooling.quickTypechecks} quick typechecks, ${tooling.fullChecks} full checks, ${tooling.githubCommands} GitHub commands.`,
+        );
+        console.log(
+          `Tool output: ${tooling.outputChars} characters; ${tooling.largeOutputs} results at least 10000 characters. Command counts are best effort for literal exec_command arguments.`,
+        );
+      }
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

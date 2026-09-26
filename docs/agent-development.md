@@ -2,7 +2,8 @@
 
 Herdr World uses native coding-agent conversations, repository instructions, current
 OpenSpec contracts and ordinary project checks. There is no repository-owned agent
-supervisor, model scheduler, skill installer, usage collector or evaluation harness.
+supervisor, model scheduler, skill installer or evaluation harness. The local
+`agent:usage` script reports recorded usage without scheduling agent work.
 
 ## Start work
 
@@ -52,21 +53,25 @@ quality and correction rate alongside tokens and time.
 
 ## Verify and hand off
 
-Add a focused regression check for behavior changes, then verify in proportion to
-risk. `bun run check` is the final candidate gate and includes generated notices,
-formatting, lint, type checking, all tests, production builds and strict OpenSpec
-validation. Run `CHROME_BIN=/path/to/chromium bun run test:browser` for browser-heavy
-changes and `bun run build:site` for the project site.
-While a stacked parent or review repair is still changing, use focused checks;
-run the full gate on the final candidate branch tip.
-For long check output, retain the complete log outside the prompt and inspect a
-short success summary or the relevant failure excerpt first.
-For review-only work, inspect the exact-head CI result and recorded evidence first.
-Run a local check only to investigate a specific gap or reproduce a finding; do not
-repeat a successful full gate on the same commit. After a repair, successful CI
-running `bun run check` on the new head can provide the final gate.
-Check CI when its result affects a repair or merge decision; avoid repeated
-status polling while it runs.
+Add focused regression tests for behavior changes. During implementation, use
+focused tests or quick type checks when they answer a specific question; do not
+repeat them after every edit. Once the candidate is complete, run `bun run check`
+locally before opening a ready PR. It covers notices, formatting, lint, types,
+tests, builds and OpenSpec. CI repeats it on the PR head. After a repair, run the
+relevant focused check and the full gate on the final candidate before pushing.
+Use `bun run test:browser` for browser-heavy changes and `bun run build:site` for
+site changes.
+
+The pre-commit hook checks format and lint. In an agent worktree without installed
+hooks, use `git -c core.hooksPath=.githooks commit` for that commit.
+
+Batch independent read-only inspections in one tool turn. Keep `rg` results and
+source excerpts bounded, then read more only when needed. Keep complete check logs
+outside the prompt; report a short status on success and the relevant diagnostics
+on failure. Preserve the check's exit status. The hook is silent on success and
+prints failure output. For review-only work, inspect exact-head CI evidence first.
+Run a local check only to investigate a specific gap or reproduce a finding; do
+not repeat a successful full gate on the same commit. Avoid polling while checks run.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
@@ -88,6 +93,11 @@ the PR and rerun near handoff. Cached input is included in input, and reasoning
 is included in output. These counts are not billed cost. The local Prometheus
 `codex_turn_token_usage` series aggregates by model and token type without a
 session label, so it cannot substitute for the PR-specific rollout count.
+Add `--tooling` to report aggregate tool calls, recognized check commands, and
+output size for the same boundary. Command counts recognize executable positions
+in literal shell commands, excluding comments, quoted data and heredoc bodies;
+dynamic or opaque shell scripts may be missed. The report never prints command
+text or tool output.
 
 ## Revisit the process
 

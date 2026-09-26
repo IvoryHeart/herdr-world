@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { summarizeUsage } from "./pr-usage";
+import { summarizeTooling, summarizeUsage } from "./pr-usage";
 
 function record(
   timestamp: string,
@@ -71,4 +71,114 @@ test("rejects duplicate response records and incomplete accounting", () => {
   expect(() =>
     summarizeUsage([{ sessionId: "root", lines: JSON.stringify(invalid) }]),
   ).toThrow("Incomplete token_usage_record");
+});
+
+test("reports bounded aggregate tool activity without exposing commands or output", () => {
+  const timestamp = "2026-09-25T11:00:00.000Z";
+  const item = (payload: Record<string, unknown>, at = timestamp) =>
+    JSON.stringify({ timestamp: at, type: "response_item", payload });
+  const command = (value: string) =>
+    `tools.exec_command({cmd:${JSON.stringify(value)}})`;
+  const logs = [
+    {
+      sessionId: "root",
+      lines: [
+        item(
+          {
+            type: "custom_tool_call",
+            name: "exec",
+            input: command("bun run check"),
+          },
+          "2026-09-25T10:00:00.000Z",
+        ),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: `await Promise.all([${command("bun test web/src/example.test.ts")}, ${command("bun run typecheck:quick")}])`,
+        }),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: command("npm exec --yes bun@1.4.1 -- run check"),
+        }),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: command("gh pr view 111 --json headRefOid"),
+        }),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: command("gh run view 123 --json conclusion"),
+        }),
+        item({
+          type: "custom_tool_call_output",
+          output: [
+            { type: "text", text: "x".repeat(10_001) },
+            { type: "text", text: "secret.example" },
+          ],
+        }),
+      ].join("\n"),
+    },
+    {
+      sessionId: "child",
+      lines: item({ type: "function_call", name: "send_message" }),
+    },
+  ];
+  const summary = summarizeTooling(
+    logs,
+    "2026-09-25T11:00:00.000Z",
+    "2026-09-25T12:00:00.000Z",
+  );
+  expect(summary).toEqual({
+    outerCalls: 5,
+    execWrappers: 4,
+    singleNestedExecWrappers: 3,
+    nestedCalls: 5,
+    testCommands: 1,
+    quickTypechecks: 1,
+    fullChecks: 1,
+    githubCommands: 2,
+    outputChars: 10_015,
+    largeOutputs: 1,
+  });
+  expect(JSON.stringify(summary)).not.toContain("secret.example");
+});
+
+test("counts executed checks without counting heredoc, quoted, or comment text", () => {
+  const timestamp = "2026-09-25T11:00:00.000Z";
+  const command = (value: string) =>
+    JSON.stringify({
+      timestamp,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call",
+        name: "exec",
+        input: `tools.exec_command({cmd:${JSON.stringify(value)}})`,
+      },
+    });
+  const summary = summarizeTooling([
+    {
+      sessionId: "review",
+      lines: [
+        command(
+          "gh api repos/example/project/pulls/1/comments -f body=@- <<'REVIEW'\n" +
+            "I did not run bun run check, bun test, or gh pr view.\n" +
+            "REVIEW\n" +
+            "printf '%s\\n' 'bun run check' \"bun test\" # bun run typecheck:quick\n" +
+            "CI=1 bun run check > /tmp/check.log 2>&1",
+        ),
+        command(
+          "cat <<EOF > /tmp/review.txt\n" +
+            "bun run check\n" +
+            "EOF\n" +
+            "bun test scripts/agent/pr-usage.test.ts",
+        ),
+      ].join("\n"),
+    },
+  ]);
+  expect(summary.fullChecks).toBe(1);
+  expect(summary.testCommands).toBe(1);
+  expect(summary.quickTypechecks).toBe(0);
+  expect(summary.githubCommands).toBe(1);
 });
