@@ -31,11 +31,20 @@ export type UsageSummary = {
   last: string | null;
 };
 
-export function summarizeUsage(
-  logs: readonly { sessionId: string; lines: string }[],
-  from?: string,
-  until?: string,
-): UsageSummary {
+export type ToolingSummary = {
+  outerCalls: number;
+  execWrappers: number;
+  singleNestedExecWrappers: number;
+  nestedCalls: number;
+  testCommands: number;
+  quickTypechecks: number;
+  fullChecks: number;
+  githubCommands: number;
+  outputChars: number;
+  largeOutputs: number;
+};
+
+function timeBounds(from?: string, until?: string) {
   const start = from ? Date.parse(from) : -Infinity;
   const end = until ? Date.parse(until) : Infinity;
   if (Number.isNaN(start) || Number.isNaN(end) || start >= end) {
@@ -43,6 +52,15 @@ export function summarizeUsage(
       "Use valid ISO timestamps with --from earlier than --until",
     );
   }
+  return { start, end };
+}
+
+export function summarizeUsage(
+  logs: readonly { sessionId: string; lines: string }[],
+  from?: string,
+  until?: string,
+): UsageSummary {
+  const { start, end } = timeBounds(from, until);
   const summary: UsageSummary = {
     responses: 0,
     input: 0,
@@ -88,6 +106,108 @@ export function summarizeUsage(
   return summary;
 }
 
+type ToolRecord = {
+  timestamp: string;
+  type: string;
+  payload?: {
+    type?: string;
+    name?: string;
+    input?: string;
+    output?: Array<{ text?: string }> | string;
+  };
+};
+
+function commandLiterals(input: string): string[] {
+  const commands: string[] = [];
+  for (const match of input.matchAll(/\bcmd\s*:\s*("(?:\\.|[^"\\])*")/g)) {
+    try {
+      commands.push(JSON.parse(match[1]) as string);
+    } catch {
+      // Dynamically constructed commands cannot be classified from the rollout.
+    }
+  }
+  return commands;
+}
+
+export function summarizeTooling(
+  logs: readonly { sessionId: string; lines: string }[],
+  from?: string,
+  until?: string,
+): ToolingSummary {
+  const { start, end } = timeBounds(from, until);
+  const summary: ToolingSummary = {
+    outerCalls: 0,
+    execWrappers: 0,
+    singleNestedExecWrappers: 0,
+    nestedCalls: 0,
+    testCommands: 0,
+    quickTypechecks: 0,
+    fullChecks: 0,
+    githubCommands: 0,
+    outputChars: 0,
+    largeOutputs: 0,
+  };
+  for (const log of logs) {
+    for (const line of log.lines.split("\n")) {
+      if (!line.trim()) continue;
+      const record = JSON.parse(line) as ToolRecord;
+      if (record.type !== "response_item") continue;
+      const timestamp = Date.parse(record.timestamp);
+      if (Number.isNaN(timestamp)) throw new Error("Invalid tool timestamp");
+      if (timestamp < start || timestamp >= end) continue;
+      const payload = record.payload;
+      if (
+        payload?.type === "custom_tool_call" ||
+        payload?.type === "function_call"
+      ) {
+        summary.outerCalls++;
+        if (payload.name !== "exec") continue;
+        summary.execWrappers++;
+        const input = payload.input ?? "";
+        const nested = input.match(/\btools\.[a-zA-Z_]\w*\s*\(/g) ?? [];
+        summary.nestedCalls += nested.length;
+        if (nested.length === 1) summary.singleNestedExecWrappers++;
+        for (const command of commandLiterals(input)) {
+          if (command.trimStart().startsWith("python3 ")) continue;
+          if (/(?:bun\s+test|--\s+(?:bun\s+)?test)\b/.test(command)) {
+            summary.testCommands++;
+          }
+          if (
+            /(?:bun\s+run|--\s+(?:bun\s+)?run)\s+typecheck:quick\b/.test(
+              command,
+            )
+          ) {
+            summary.quickTypechecks++;
+          }
+          if (/(?:bun\s+run|--\s+(?:bun\s+)?run)\s+check\b/.test(command)) {
+            summary.fullChecks++;
+          }
+          if (/\bgh\s+(?:api|pr)\b/.test(command)) {
+            summary.githubCommands++;
+          }
+        }
+      } else if (
+        payload?.type === "custom_tool_call_output" ||
+        payload?.type === "function_call_output"
+      ) {
+        const output = payload.output;
+        const chars =
+          typeof output === "string"
+            ? output.length
+            : Array.isArray(output)
+              ? output.reduce(
+                  (total, block) => total + (block.text?.length ?? 0),
+                  0,
+                )
+              : 0;
+        summary.outputChars += chars;
+        if (chars >= 10_000) summary.largeOutputs++;
+      }
+    }
+  }
+  return summary;
+}
+
 function validUsage(value: Usage): boolean {
   const fields = [
     value.input_tokens,
@@ -111,6 +231,7 @@ type Options = {
   until?: string;
   sessionsDir: string;
   json: boolean;
+  tooling: boolean;
 };
 
 function parseOptions(args: readonly string[]): Options {
@@ -121,11 +242,16 @@ function parseOptions(args: readonly string[]): Options {
       "sessions",
     ),
     json: false,
+    tooling: false,
   };
   for (let index = 0; index < args.length; index++) {
     const flag = args[index];
     if (flag === "--json") {
       options.json = true;
+      continue;
+    }
+    if (flag === "--tooling") {
+      options.tooling = true;
       continue;
     }
     if (
@@ -187,17 +313,25 @@ async function readSessionLogs(options: Options) {
 if (import.meta.main) {
   try {
     const options = parseOptions(process.argv.slice(2));
-    const summary = summarizeUsage(
-      await readSessionLogs(options),
-      options.from,
-      options.until,
-    );
+    const logs = await readSessionLogs(options);
+    const summary = summarizeUsage(logs, options.from, options.until);
+    const tooling = options.tooling
+      ? summarizeTooling(logs, options.from, options.until)
+      : null;
     if (summary.responses === 0) {
       throw new Error("No per-response usage records in the selected interval");
     }
     if (options.json) {
       console.log(
-        JSON.stringify({ pr: options.pr ?? null, ...summary }, null, 2),
+        JSON.stringify(
+          {
+            pr: options.pr ?? null,
+            ...summary,
+            ...(tooling ? { tooling } : {}),
+          },
+          null,
+          2,
+        ),
       );
     } else {
       const label = options.pr ? `PR #${options.pr}` : "Codex usage";
@@ -214,6 +348,17 @@ if (import.meta.main) {
       console.log(
         "These are recorded tokens, not billed cost. The caller defines which sessions and interval belong to the PR.",
       );
+      if (tooling) {
+        console.log(
+          `Tools: ${tooling.outerCalls} outer calls, ${tooling.execWrappers} exec wrappers (${tooling.singleNestedExecWrappers} with one nested call), ${tooling.nestedCalls} nested calls.`,
+        );
+        console.log(
+          `Recognized commands: ${tooling.testCommands} tests, ${tooling.quickTypechecks} quick typechecks, ${tooling.fullChecks} full checks, ${tooling.githubCommands} GitHub commands.`,
+        );
+        console.log(
+          `Tool output: ${tooling.outputChars} characters; ${tooling.largeOutputs} results at least 10000 characters. Command counts are best effort for literal exec_command arguments.`,
+        );
+      }
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

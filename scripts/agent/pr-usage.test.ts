@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { summarizeUsage } from "./pr-usage";
+import { summarizeTooling, summarizeUsage } from "./pr-usage";
 
 function record(
   timestamp: string,
@@ -71,4 +71,71 @@ test("rejects duplicate response records and incomplete accounting", () => {
   expect(() =>
     summarizeUsage([{ sessionId: "root", lines: JSON.stringify(invalid) }]),
   ).toThrow("Incomplete token_usage_record");
+});
+
+test("reports bounded aggregate tool activity without exposing commands or output", () => {
+  const timestamp = "2026-09-25T11:00:00.000Z";
+  const item = (payload: Record<string, unknown>, at = timestamp) =>
+    JSON.stringify({ timestamp: at, type: "response_item", payload });
+  const command = (value: string) =>
+    `tools.exec_command({cmd:${JSON.stringify(value)}})`;
+  const logs = [
+    {
+      sessionId: "root",
+      lines: [
+        item(
+          {
+            type: "custom_tool_call",
+            name: "exec",
+            input: command("bun run check"),
+          },
+          "2026-09-25T10:00:00.000Z",
+        ),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: `await Promise.all([${command("bun test web/src/example.test.ts")}, ${command("bun run typecheck:quick")}])`,
+        }),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: command("npm exec --yes bun@1.4.1 -- run check"),
+        }),
+        item({
+          type: "custom_tool_call",
+          name: "exec",
+          input: command("gh pr view 111 --json headRefOid"),
+        }),
+        item({
+          type: "custom_tool_call_output",
+          output: [
+            { type: "text", text: "x".repeat(10_001) },
+            { type: "text", text: "secret.example" },
+          ],
+        }),
+      ].join("\n"),
+    },
+    {
+      sessionId: "child",
+      lines: item({ type: "function_call", name: "send_message" }),
+    },
+  ];
+  const summary = summarizeTooling(
+    logs,
+    "2026-09-25T11:00:00.000Z",
+    "2026-09-25T12:00:00.000Z",
+  );
+  expect(summary).toEqual({
+    outerCalls: 4,
+    execWrappers: 3,
+    singleNestedExecWrappers: 2,
+    nestedCalls: 4,
+    testCommands: 1,
+    quickTypechecks: 1,
+    fullChecks: 1,
+    githubCommands: 1,
+    outputChars: 10_015,
+    largeOutputs: 1,
+  });
+  expect(JSON.stringify(summary)).not.toContain("secret.example");
 });
