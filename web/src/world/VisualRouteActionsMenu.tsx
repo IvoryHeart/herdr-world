@@ -1,10 +1,16 @@
 import { ListFilter } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  shortcutLabel,
   shortcutMatches,
   shortcutTitle,
   useShortcutPreferences,
 } from "../shortcutPreferences";
+import {
+  WINDOW_ARRANGEMENT_CHOICES,
+  type WindowArrangementControl,
+  type WindowArrangementCommand,
+} from "../components/WindowArrangementMenu";
 import type { InspectorView } from "../workspaceResource";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
 import {
@@ -37,6 +43,7 @@ export function VisualRouteActions({
   world,
   activeConnectionId,
   runtimeGeneration,
+  arrangementControl,
   onResource,
   onGoToSpaces,
   onError,
@@ -45,6 +52,7 @@ export function VisualRouteActions({
   world: WorldObject;
   activeConnectionId: string;
   runtimeGeneration: number | null;
+  arrangementControl?: WindowArrangementControl;
   onResource(node: WorldObjectNode, view: InspectorView): Promise<boolean>;
   onGoToSpaces(node: WorldObjectNode): Promise<boolean>;
   onError(reason: string): void;
@@ -117,7 +125,7 @@ export function VisualRouteActions({
   useEffect(() => {
     if (!open) return;
     const firstAction = menuRef.current?.querySelector<HTMLButtonElement>(
-      "[data-world-visual-action]",
+      '[role="menuitem"]:not([aria-disabled="true"])',
     );
     requestAnimationFrame(() => firstAction?.focus());
   }, [open]);
@@ -152,6 +160,12 @@ export function VisualRouteActions({
     if (admitted) {
       close(action === "files" || action === "changes" || action === "history");
     }
+  };
+  const runArrangement = (command: WindowArrangementCommand) => {
+    if (!arrangementControl || arrangementControl.disabledReasons[command])
+      return;
+    arrangementControl.onSelect(command);
+    close(true);
   };
 
   return (
@@ -202,6 +216,35 @@ export function VisualRouteActions({
               {message ?? "Select a space, agent, or terminal first."}
             </p>
           )}
+          {arrangementControl ? (
+            <>
+              <p className="world-visual-actions-target">Arrange windows</p>
+              {WINDOW_ARRANGEMENT_CHOICES.map(
+                ({ command, label, description, shortcutId }) => {
+                  const reason = arrangementControl.disabledReasons[command];
+                  const shortcut = shortcutLabel(shortcutId);
+                  return (
+                    <button
+                      key={command}
+                      type="button"
+                      role="menuitem"
+                      aria-disabled={Boolean(reason)}
+                      title={reason ?? description}
+                      onClick={() => runArrangement(command)}
+                    >
+                      {label}
+                      {shortcut !== "Unassigned" ? (
+                        <span className="world-visual-actions-shortcut">
+                          {shortcut}
+                        </span>
+                      ) : null}
+                      {reason ? <small>{reason}</small> : null}
+                    </button>
+                  );
+                },
+              )}
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>

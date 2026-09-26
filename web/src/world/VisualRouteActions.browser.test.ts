@@ -79,10 +79,13 @@ test.skipIf(!chrome).each([1280, 390])(
       expect(observed).toMatchObject({
         initialVisible: true,
         keyboardOpened: true,
-        calls: ["changes"],
+        calls: ["changes", "arrange:columns"],
         resourceFocusRestored: true,
+        unavailableRows: true,
+        unavailableReasonAccessible: true,
       });
       expect(String(observed.initialMenu)).toContain("Agent History");
+      expect(String(observed.initialMenu)).toContain("Arrange windows");
       expect(String(observed.selectionReason)).toContain(
         "selected item changed",
       );

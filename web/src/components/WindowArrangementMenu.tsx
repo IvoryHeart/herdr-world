@@ -1,6 +1,8 @@
 import { LayoutGrid, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { shortcutLabel, useShortcutPreferences } from "../shortcutPreferences";
+import type { ShortcutId } from "../shortcutBindings";
 import type { TerminalWindowArrangementPreset } from "../world/terminalWindowArrangement";
 import "./WindowArrangementMenu.css";
 
@@ -14,28 +16,47 @@ export type WindowArrangementControl = {
   onSelect: (command: WindowArrangementCommand) => void;
 };
 
-const choices: readonly {
+export const WINDOW_ARRANGEMENT_CHOICES: readonly {
   command: WindowArrangementCommand;
   label: string;
   description: string;
+  shortcutId: ShortcutId;
 }[] = [
-  { command: "single", label: "Single", description: "Show the active window" },
+  {
+    command: "single",
+    label: "Single",
+    description: "Show the active window",
+    shortcutId: "arrangement.single",
+  },
   {
     command: "cascade",
     label: "Cascade",
     description: "Overlap windows diagonally",
+    shortcutId: "arrangement.cascade",
   },
   {
     command: "columns",
     label: "Columns",
     description: "Fit windows side by side",
+    shortcutId: "arrangement.columns",
   },
-  { command: "rows", label: "Rows", description: "Fit windows top to bottom" },
-  { command: "grid", label: "Grid", description: "Tile four corners" },
+  {
+    command: "rows",
+    label: "Rows",
+    description: "Fit windows top to bottom",
+    shortcutId: "arrangement.rows",
+  },
+  {
+    command: "grid",
+    label: "Grid",
+    description: "Tile four corners",
+    shortcutId: "arrangement.grid",
+  },
   {
     command: "restore",
     label: "Restore positions",
     description: "Return still-open windows to their previous positions",
+    shortcutId: "arrangement.restore",
   },
 ];
 
@@ -44,6 +65,7 @@ export function WindowArrangementMenu({
 }: {
   control: WindowArrangementControl;
 }) {
+  useShortcutPreferences();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -152,43 +174,51 @@ export function WindowArrangementMenu({
               style={position}
               onKeyDown={onMenuKeyDown}
             >
-              {choices.map(({ command, label, description }) => {
-                const reason = control.disabledReasons[command];
-                return (
-                  <button
-                    key={command}
-                    type="button"
-                    role="menuitem"
-                    aria-disabled={!!reason}
-                    className={`window-arrangement-option ${control.activePreset === command ? "is-active" : ""}`}
-                    title={reason ?? description}
-                    onClick={() => {
-                      if (reason) return;
-                      setOpen(false);
-                      control.onSelect(command);
-                      queueMicrotask(() => triggerRef.current?.focus());
-                    }}
-                  >
-                    {command === "restore" ? (
-                      <RotateCcw size={19} aria-hidden="true" />
-                    ) : (
-                      <span
-                        className={`window-arrangement-preview is-${command}`}
-                        aria-hidden="true"
-                      >
-                        <i />
-                        <i />
-                        <i />
-                        <i />
+              {WINDOW_ARRANGEMENT_CHOICES.map(
+                ({ command, label, description, shortcutId }) => {
+                  const reason = control.disabledReasons[command];
+                  const shortcut = shortcutLabel(shortcutId);
+                  return (
+                    <button
+                      key={command}
+                      type="button"
+                      role="menuitem"
+                      aria-disabled={!!reason}
+                      className={`window-arrangement-option ${control.activePreset === command ? "is-active" : ""}`}
+                      title={reason ?? description}
+                      onClick={() => {
+                        if (reason) return;
+                        setOpen(false);
+                        control.onSelect(command);
+                        queueMicrotask(() => triggerRef.current?.focus());
+                      }}
+                    >
+                      {command === "restore" ? (
+                        <RotateCcw size={19} aria-hidden="true" />
+                      ) : (
+                        <span
+                          className={`window-arrangement-preview is-${command}`}
+                          aria-hidden="true"
+                        >
+                          <i />
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                      )}
+                      <span className="window-arrangement-copy">
+                        <strong>{label}</strong>
+                        <small>{reason ?? description}</small>
                       </span>
-                    )}
-                    <span className="window-arrangement-copy">
-                      <strong>{label}</strong>
-                      <small>{reason ?? description}</small>
-                    </span>
-                  </button>
-                );
-              })}
+                      {shortcut !== "Unassigned" ? (
+                        <kbd className="window-arrangement-shortcut">
+                          {shortcut}
+                        </kbd>
+                      ) : null}
+                    </button>
+                  );
+                },
+              )}
             </div>,
             document.body,
           )

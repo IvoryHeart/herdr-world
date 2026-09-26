@@ -13,6 +13,11 @@
 - [x] 2.3 Include docked and Tree inline Inspectors through temporary free geometry and reversible portal transfer.
 - [x] 2.4 Add one accessible layout menu with visual choices to the shared tab bar. Label the one-window choice Single with a single-rectangle icon. Disable multiwindow choices with a reason when fewer than two windows are eligible; preserve one active window on compact layouts.
 - [x] 2.5 Verify drag/resize/dock after arranging, Restore, docked A replaced by B during Single, new and closed windows/tabs, stage/viewport changes, connectors, focus and terminal refit without Herdr mutation.
+- [x] 2.6 Keep the arrangement icon beside tabs at wide desktop widths and visible in the mobile strip; verify both placements in the browser handoff test.
+- [x] 2.7 Convert visual stage bounds to fixed-position coordinates at increased UI scale and preserve balanced stage insets; verify scaled Columns in the browser handoff test.
+- [x] 2.8 Preserve a floating Inspector when its sibling pane receives focus and preserve a later docked Inspector during Restore; verify both review regressions in the browser handoff test.
+- [x] 2.9 Expose the same placements from Spaces Actions and visual Actions, even without a visual entity selection; verify browser menu dispatch and unavailable reasons.
+- [x] 2.10 Add configurable per-placement shortcuts with numbered defaults and route them to the active view's arrangement control; verify bindings, preset migration and browser shortcut dispatch.
 
 ## 3. Accept, document and deliver
 

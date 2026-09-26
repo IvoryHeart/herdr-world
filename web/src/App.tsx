@@ -579,6 +579,17 @@ function useVisualViewportCssVars(uiScale: number) {
   }, [uiScale]);
 }
 
+/** CSS zoom can make fixed-position CSS pixels differ from DOMRect pixels. */
+export function measuredFixedPositionScale(): number {
+  const probe = document.createElement("div");
+  probe.style.cssText =
+    "position:fixed;top:100px;left:0;width:1px;height:1px;pointer-events:none;visibility:hidden";
+  document.body.append(probe);
+  const ratio = probe.getBoundingClientRect().top / 100;
+  probe.remove();
+  return ratio > 0 ? ratio : 1;
+}
+
 function isEditableElement(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   if (target.closest(".xterm")) return false;
@@ -2919,25 +2930,15 @@ export default function App({
     // return pre-zoom layout px instead of visual viewport px under CSS
     // zoom, which breaks the static 1/zoom portal compensation. Measure the
     // actual ratio and compensate with it so anchoring works either way.
-    const zoomProbe = document.createElement("div");
-    zoomProbe.style.cssText =
-      "position:fixed;top:100px;left:0;width:1px;height:1px;pointer-events:none;visibility:hidden";
-    document.body.append(zoomProbe);
-    const zoomRectRatio = zoomProbe.getBoundingClientRect().top / 100;
-    zoomProbe.remove();
-    if (zoomRectRatio > 0) {
-      document.documentElement.style.setProperty(
-        "--popover-portal-zoom",
-        String(1 / zoomRectRatio),
-      );
-      document.documentElement.style.setProperty(
-        "--popover-content-zoom",
-        String(zoomRectRatio),
-      );
-    } else {
-      document.documentElement.style.removeProperty("--popover-portal-zoom");
-      document.documentElement.style.removeProperty("--popover-content-zoom");
-    }
+    const zoomRectRatio = measuredFixedPositionScale();
+    document.documentElement.style.setProperty(
+      "--popover-portal-zoom",
+      String(1 / zoomRectRatio),
+    );
+    document.documentElement.style.setProperty(
+      "--popover-content-zoom",
+      String(zoomRectRatio),
+    );
     worldLocalStorage.setItem(UI_SCALE_KEY, String(uiScale));
   }, [accentColor, resolvedTheme, theme, uiScale]);
   useEffect(() => {
@@ -3344,6 +3345,7 @@ export default function App({
           <CommandCombobox
             key={`${resourceUiKey}:commands`}
             operationalShortcutsEnabled={operationalShortcutsEnabled}
+            arrangementControl={arrangementControl}
             onOpenFileExplorer={openFileExplorer}
             onOpenFile={openFileExplorerFile}
             onOpenDiffViewer={openDiffViewer}

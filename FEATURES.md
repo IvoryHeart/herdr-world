@@ -15,7 +15,8 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   cascade open windows, fit them in columns or rows, tile them in a grid, or
   restore their previous positions. Spaces arranges the focused workspace's
   existing tabs; Office, Tree, and Graph arrange their open Inspectors, including
-  a docked or inline Inspector. Layout choices that cannot fit explain why.
+  a docked or inline Inspector. The same placements are in **Actions** and have
+  editable keyboard shortcuts. Layout choices that cannot fit explain why.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
   view also shows the selected tab's split panes in one window; selecting a sibling
   pane keeps the same Inspector and updates its pane-specific resources. When the
@@ -30,9 +31,10 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 - Office, Tree, and Graph share search in the application top bar; Graph adds Fit
   and zoom there instead of consuming a second stage header.
 - **Actions** in that top bar captures the selected visual space, agent or
-  terminal. It opens only the target's existing Terminal, Files, Changes and
+  terminal for resource actions. It opens the target's existing Terminal, Files, Changes and
   Agent History Inspector resources, or focuses that exact target before Go to
-  Spaces. The same shortcut as the Spaces command menu opens Actions while a
+  Spaces. Window arrangements remain available without a selected visual entity.
+  The same shortcut as the Spaces command menu opens Actions while a
   visual view is active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
   host, generation or observation change invalidates the open target; Actions
   does not send terminal input, assign tasks or control agents.
@@ -464,6 +466,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |
 | Split right / down | `Cmd+D` / `Cmd+Shift+D` | `Ctrl+Alt+D` / `Ctrl+Alt+Shift+D` |
 | Zoom / restore pane | `Cmd+Shift+Enter` | `Ctrl+Alt+Enter` |
+| Arrange Single / Cascade / Columns / Rows / Grid / Restore | `Ctrl+Cmd+Shift+1…6` | `Ctrl+Alt+Shift+1…6` |
 | Numbered tab | `Ctrl+1…9` | `Ctrl+Alt+1…9` |
 | Numbered command menu action | `Option+1…9` | `Alt+1…9` |
 | Workspaces | `Ctrl+Shift+W` | `Ctrl+Alt+O` |

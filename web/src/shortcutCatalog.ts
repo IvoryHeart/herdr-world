@@ -28,6 +28,12 @@ const descriptions: [ShortcutId, string, string][] = [
   ["pane.splitRight", "Split the active pane right", "Tabs & panes"],
   ["pane.splitDown", "Split the active pane down", "Tabs & panes"],
   ["pane.zoom", "Zoom or restore the active pane", "Tabs & panes"],
+  ["arrangement.single", "Arrange windows: Single", "Window arrangements"],
+  ["arrangement.cascade", "Arrange windows: Cascade", "Window arrangements"],
+  ["arrangement.columns", "Arrange windows: Columns", "Window arrangements"],
+  ["arrangement.rows", "Arrange windows: Rows", "Window arrangements"],
+  ["arrangement.grid", "Arrange windows: Grid", "Window arrangements"],
+  ["arrangement.restore", "Restore window positions", "Window arrangements"],
   ...SHORTCUT_NUMBERS.map((n): [ShortcutId, string, string] => [
     `tab.${n}`,
     `Switch to tab ${n}`,

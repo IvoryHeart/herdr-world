@@ -141,7 +141,8 @@ export function TabBar({
       pendingClosePane ? [pendingClosePane.pane_id] : [],
     ).length,
   );
-  const showTabStrip = !!focusedWs && (!mobile || tabs.length > 1);
+  const showTabStrip =
+    !!focusedWs && (!mobile || tabs.length > 1 || !!arrangementControl);
   const gitStatus = focusedWs?.worktree?.git_status;
   const changedCount = gitStatus
     ? gitStatus.staged +
@@ -335,11 +336,11 @@ export function TabBar({
           >
             +
           </button>
+          {arrangementControl ? (
+            <WindowArrangementMenu control={arrangementControl} />
+          ) : null}
           <span className="tabbar-spacer" />
           <div className="tabbar-utilities">
-            {arrangementControl ? (
-              <WindowArrangementMenu control={arrangementControl} />
-            ) : null}
             {showInspector ? (
               <button
                 type="button"

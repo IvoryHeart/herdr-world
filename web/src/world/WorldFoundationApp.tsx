@@ -9,10 +9,17 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import App, { type WorkspaceSurfaceSelection } from "../App";
+import App, {
+  measuredFixedPositionScale,
+  type WorkspaceSurfaceSelection,
+} from "../App";
 import { bridge, type ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
-import type { WindowArrangementControl } from "../components/WindowArrangementMenu";
+import {
+  WINDOW_ARRANGEMENT_CHOICES,
+  type WindowArrangementControl,
+} from "../components/WindowArrangementMenu";
+import { shortcutMatches } from "../shortcutPreferences";
 import { lazyWithReload } from "../lazyWithReload";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
@@ -153,12 +160,13 @@ const VISUAL_ARRANGEMENT_SCOPE = "visual";
 
 export function visualInspectorArrangementStage(
   bounds: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  fixedPositionScale = 1,
 ): TerminalWindowArrangementStage {
   return {
-    left: bounds.left + 8,
-    top: bounds.top + 8,
-    width: Math.max(0, bounds.width - 16),
-    height: Math.max(0, bounds.height - 16),
+    left: bounds.left / fixedPositionScale + 8,
+    top: bounds.top / fixedPositionScale + 8,
+    width: Math.max(0, bounds.width / fixedPositionScale - 16),
+    height: Math.max(0, bounds.height / fixedPositionScale - 16),
   };
 }
 
@@ -545,6 +553,42 @@ export default function WorldFoundationApp() {
     }
   };
 
+  const activeArrangementControl =
+    view === "spaces" ? spaces.arrangementControl : visualArrangementControl;
+  useEffect(() => {
+    if (!activeArrangementControl) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        document.querySelector(
+          '.modal-backdrop, .command-popover, .context-menu, .pane-jump-backdrop, [role="menu"]',
+        )
+      )
+        return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        !target.closest(".xterm") &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      )
+        return;
+      const choice = WINDOW_ARRANGEMENT_CHOICES.find(({ shortcutId }) =>
+        shortcutMatches(event, shortcutId),
+      );
+      if (!choice) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!activeArrangementControl.disabledReasons[choice.command])
+        activeArrangementControl.onSelect(choice.command);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [activeArrangementControl]);
+
   return (
     <div className="world-foundation-shell">
       <div className="world-topbar-host" ref={setTopbarPortal} />
@@ -614,11 +658,7 @@ export default function WorldFoundationApp() {
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
-          arrangementControl={
-            view === "spaces"
-              ? spaces.arrangementControl
-              : visualArrangementControl
-          }
+          arrangementControl={activeArrangementControl}
           spacesTabWindows={spaces.spacesTabWindows}
           onFocusSpacesTabWindow={spaces.onFocusSpacesTabWindow}
           onSpacesWindowLayerReady={spaces.onSpacesWindowLayerReady}
@@ -1207,6 +1247,7 @@ function WorldControlPlane({
     const update = () => {
       const next = visualInspectorArrangementStage(
         layout.getBoundingClientRect(),
+        measuredFixedPositionScale(),
       );
       setVisualArrangementStage((current) =>
         current.left === next.left &&
@@ -1264,6 +1305,12 @@ function WorldControlPlane({
         setVisualArrangementState(restored.state);
         setExcludedArrangementIds(new Set());
         setSingleManualGeometry({});
+        if (
+          dockedInspectorId !== null &&
+          !restored.targets.some(({ id }) => id === dockedInspectorId)
+        ) {
+          return;
+        }
         const previousDock = restored.targets.find(
           ({ baseline }) => baseline.presentation.kind !== "floating",
         );
@@ -1718,7 +1765,17 @@ function WorldControlPlane({
         conversation,
         paneId,
       );
-      if (sibling) void applySelection(sibling.id);
+      if (!sibling) return;
+      if (windowId === dockedInspectorIdRef.current) {
+        void applySelection(sibling.id);
+      } else {
+        void focusFloatingInspector(
+          conversation,
+          true,
+          undefined,
+          sibling,
+        ).catch(() => undefined);
+      }
     };
     onInspectorPaneFocusReady(focusPane);
     return () => onInspectorPaneFocusReady(null);
@@ -2177,6 +2234,7 @@ function WorldControlPlane({
       world={world}
       activeConnectionId={connectionSelection.activeConnectionId}
       runtimeGeneration={connectionSelection.runtimeGeneration}
+      arrangementControl={visualArrangementControl}
       onResource={(node, requestedView) =>
         applySelection(node.id, requestedView)
       }

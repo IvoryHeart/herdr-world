@@ -24,7 +24,8 @@ retain their original Herdr Web lineage.
 - Added shared tab-bar arrangements for existing Spaces tabs and open visual
   Inspectors: Single, Cascade, Columns, Rows, Grid, and Restore positions. Split
   panes remain inside one tab window, docked and Tree inline Inspectors can join
-  an arrangement, and unavailable layouts explain their size limits.
+  an arrangement, and unavailable layouts explain their size limits. The same
+  placements are available from Actions and configurable keyboard shortcuts.
   [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Added connection- and generation-qualified Actions to Office, Tree and Graph.
   Actions capture the visible selected entity, reopen its existing Inspector

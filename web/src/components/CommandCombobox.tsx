@@ -22,6 +22,7 @@ import {
   GitCommitHorizontal,
   GitBranch,
   Keyboard,
+  LayoutGrid,
   Maximize2,
   PanelTop,
   SplitSquareHorizontal,
@@ -54,6 +55,10 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { canCreateWorktree, worktreeCreationSource } from "../worktree";
 import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import {
+  WINDOW_ARRANGEMENT_CHOICES,
+  type WindowArrangementControl,
+} from "./WindowArrangementMenu";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
@@ -231,11 +236,13 @@ export function CommandCombobox({
   onOpenFileExplorer,
   onOpenFile,
   onOpenDiffViewer,
+  arrangementControl,
 }: {
   operationalShortcutsEnabled?: boolean;
   onOpenFileExplorer?: (workspaceId?: string) => void;
   onOpenFile?: (workspaceId: string, entry: FileExplorerEntry) => void;
   onOpenDiffViewer?: (workspaceId?: string) => void;
+  arrangementControl?: WindowArrangementControl;
 }) {
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -906,8 +913,29 @@ export function CommandCombobox({
     });
   }
 
+  const arrangementActions: ActionDefinition[] = arrangementControl
+    ? WINDOW_ARRANGEMENT_CHOICES.map(
+        ({ command, label, description, shortcutId }) => {
+          const shortcut = shortcutLabel(shortcutId);
+          return {
+            key: `arrangement-${command}`,
+            icon: <LayoutGrid size={15} />,
+            title:
+              command === "restore"
+                ? "Restore window positions"
+                : `Arrange windows: ${label}`,
+            detail: description,
+            shortcut: shortcut === "Unassigned" ? undefined : shortcut,
+            keywords: ["layout", "tile", "windows", label],
+            disabledReason: arrangementControl.disabledReasons[command],
+            run: () => arrangementControl.onSelect(command),
+          };
+        },
+      )
+    : [];
   const actionGroups: ActionGroupDefinition[] = [
     { heading: "Current", actions: currentActions },
+    { heading: "Arrange windows", actions: arrangementActions },
     { heading: "Files", actions: fileActions },
     { heading: "Workspaces", actions: workspaceActions },
     { heading: "Worktrees", actions: worktreeActions },

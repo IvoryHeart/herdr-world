@@ -54,7 +54,11 @@ const space = world.spaces[0]!;
 function button(label: string) {
   const button = [
     ...document.querySelectorAll<HTMLButtonElement>("button"),
-  ].find((candidate) => candidate.textContent?.trim() === label);
+  ].find(
+    (candidate) =>
+      candidate.textContent?.trim() === label ||
+      candidate.firstChild?.textContent?.trim() === label,
+  );
   if (!button) throw new Error(`Missing ${label}`);
   return button;
 }
@@ -84,6 +88,11 @@ function Harness({ onResource }: { onResource(action: string): void }) {
         world={world}
         activeConnectionId="alpha.example"
         runtimeGeneration={generation}
+        arrangementControl={{
+          activePreset: null,
+          disabledReasons: { rows: "The stage is too short." },
+          onSelect: (command) => onResource(`arrange:${command}`),
+        }}
         onResource={async (_, action) => {
           onResource(action);
           return true;
@@ -141,6 +150,15 @@ async function verify() {
   await settle();
   const generationReason =
     document.querySelector("[role='menu']")?.textContent ?? "";
+  const unavailableRows =
+    button("Rows").getAttribute("aria-disabled") === "true";
+  button("Rows").focus();
+  const unavailableReasonAccessible =
+    document.activeElement === button("Rows") &&
+    button("Rows").textContent?.includes("The stage is too short.") === true;
+  button("Rows").click();
+  click("Columns");
+  await settle();
 
   await fetch("/result", {
     method: "POST",
@@ -152,9 +170,16 @@ async function verify() {
       resourceFocusRestored,
       selectionReason,
       generationReason,
+      unavailableRows,
+      unavailableReasonAccessible,
     }),
   });
   root.unmount();
 }
 
-void verify();
+void verify().catch(async (cause) => {
+  await fetch("/result", {
+    method: "POST",
+    body: JSON.stringify({ error: String(cause) }),
+  });
+});
