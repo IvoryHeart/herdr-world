@@ -1,8 +1,15 @@
 #!/usr/bin/env sh
 set -eu
 
-# Git exports relative GIT_* paths during commit; keep them out of the
-# nested git commands that tests run in their own repositories.
-unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE
+run_check() {
+  if output=$("$@" 2>&1); then
+    return 0
+  else
+    status=$?
+    printf '%s\n' "$output" >&2
+    return "$status"
+  fi
+}
 
-bun run precommit
+run_check bun run format:check
+run_check bun run lint
