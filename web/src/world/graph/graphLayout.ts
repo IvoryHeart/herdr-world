@@ -147,6 +147,19 @@ export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
     }
   }
 
+  const allNodes = [...state.nodes.values()];
+  for (let i = 0; i < allNodes.length; i++) {
+    const a = allNodes[i]!;
+    const ra = graphNodeRadius(a.kind) + LABEL_CLEARANCE;
+    for (let j = i + 1; j < allNodes.length; j++) {
+      const b = allNodes[j]!;
+      if (a.parentId === b.id || b.parentId === a.id) continue;
+      if (a.parentId !== null && a.parentId === b.parentId) continue;
+      const rb = graphNodeRadius(b.kind) + LABEL_CLEARANCE;
+      repel(a, b, ra + rb, 2.5, alpha);
+    }
+  }
+
   let energy = 0;
   for (const node of state.nodes.values()) {
     if (node.pinned) {

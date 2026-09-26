@@ -7,6 +7,7 @@ import {
   savedGraphPositions,
   stepGraphLayout,
 } from "./graphLayout";
+import type { GraphLayoutState } from "./graphLayout";
 import type { WorldGraphNode, WorldGraphProjection } from "./graphProjection";
 
 describe("Graph force layout", () => {
@@ -93,15 +94,15 @@ describe("Graph force layout", () => {
     }
   });
 
-  test("arrange separates cross-tier overlaps", () => {
-    const twoSpaceProjection = multiSpaceProjection();
+  test("arrange separates cross-tier overlaps after settling", () => {
     const state = reconcileGraphLayout(
       null,
-      twoSpaceProjection,
+      multiSpaceProjection(),
       new Set(),
     ).state;
 
     arrangeGraph(state);
+    settleLayout(state);
 
     const all = [...state.nodes.values()];
     for (let i = 0; i < all.length; i++) {
@@ -113,6 +114,30 @@ describe("Graph force layout", () => {
         expect(dist).toBeGreaterThanOrEqual(minSep);
       }
     }
+  });
+
+  test("arrange keeps dense graph separated after settling", () => {
+    const state = reconcileGraphLayout(
+      null,
+      denseProjection(4, 4),
+      new Set(),
+    ).state;
+
+    arrangeGraph(state);
+    settleLayout(state);
+
+    const all = [...state.nodes.values()];
+    let overlaps = 0;
+    for (let i = 0; i < all.length; i++) {
+      const a = all[i]!;
+      for (let j = i + 1; j < all.length; j++) {
+        const b = all[j]!;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const minSep = graphNodeRadius(a.kind) + graphNodeRadius(b.kind);
+        if (dist < minSep) overlaps++;
+      }
+    }
+    expect(overlaps).toBe(0);
   });
 
   test("arrange preserves parent-child proximity", () => {
@@ -202,6 +227,58 @@ function multiSpaceProjection(): WorldGraphProjection {
     },
     presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
+}
+
+function denseProjection(
+  spaceCount: number,
+  leavesPerSpace: number,
+): WorldGraphProjection {
+  const host = node("host", "host", null);
+  const nodes: WorldGraphNode[] = [host];
+  const edges: WorldGraphProjection["edges"] = [];
+  for (let s = 0; s < spaceCount; s++) {
+    const spaceId = `s${s}`;
+    nodes.push(node(spaceId, "space", "host"));
+    edges.push({ sourceId: "host", targetId: spaceId, kind: "contains" });
+    for (let l = 0; l < leavesPerSpace; l++) {
+      const leafId = `s${s}l${l}`;
+      nodes.push(node(leafId, "agent", spaceId));
+      edges.push({ sourceId: spaceId, targetId: leafId, kind: "contains" });
+    }
+  }
+  return {
+    version: 1,
+    nodes,
+    edges,
+    hosts: [],
+    spaces: [],
+    omittedHostCount: 0,
+    omittedSpaceCount: 0,
+    coverage: {
+      configuredHosts: 1,
+      presentedHosts: 1,
+      observedSpaces: spaceCount,
+      presentedSpaces: spaceCount,
+      observedAgents: spaceCount * leavesPerSpace,
+      presentedAgents: spaceCount * leavesPerSpace,
+      omittedAgents: 0,
+      observedTerminals: 0,
+      presentedTerminals: 0,
+      omittedTerminals: 0,
+      observedShells: 0,
+      presentedShells: 0,
+    },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
+  };
+}
+
+function settleLayout(state: GraphLayoutState) {
+  let alpha = 1;
+  for (let i = 0; i < 300; i++) {
+    const energy = stepGraphLayout(state, alpha);
+    alpha *= energy < 0.08 ? 0.78 : 0.93;
+    if (alpha <= 0.015) break;
+  }
 }
 
 function node(

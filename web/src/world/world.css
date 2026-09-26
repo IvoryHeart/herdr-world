@@ -1788,16 +1788,6 @@
   .world-view-toolbar-actions {
     display: none;
   }
-  .world-view-toolbar-actions:has(.world-spatial-graph-zoom) {
-    display: flex;
-  }
-  .world-spatial-graph-fit {
-    min-width: 30px;
-    padding: 0;
-  }
-  .world-spatial-graph-fit span {
-    display: none;
-  }
   .world-view-toolbar-results {
     max-width: 96px;
   }
@@ -1859,6 +1849,20 @@
   }
   .world-view-graph {
     padding: 0;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 760px) {
+  .world-view-toolbar-actions:has(.world-spatial-graph-zoom) {
+    display: flex;
+  }
+  .world-view-toolbar .world-spatial-graph-fit {
+    min-width: 30px;
+    width: 30px;
+    padding: 0;
+  }
+  .world-view-toolbar .world-spatial-graph-fit span {
+    display: none;
   }
 }
 
