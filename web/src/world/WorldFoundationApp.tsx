@@ -1614,12 +1614,29 @@ function WorldControlPlane({
     requestAnimationFrame(() => attempt(2));
   };
 
+  const bindSelectionIntentAbort = (
+    signal: AbortSignal | undefined,
+    requestId: number,
+  ) => {
+    if (!signal) return () => {};
+    const abort = () => {
+      if (intentRequestRef.current !== requestId) return;
+      intentRequestRef.current += 1;
+      setIntentOpening(false);
+    };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    return () => signal.removeEventListener("abort", abort);
+  };
+
   const applySelection = async (
     id: string | null,
     requestedView: InspectorView | null = null,
     focusTarget = true,
     candidateWorld = world,
+    signal?: AbortSignal,
   ): Promise<boolean> => {
+    if (signal?.aborted) return false;
     const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
@@ -1658,9 +1675,11 @@ function WorldControlPlane({
     );
     if (existing) {
       setIntentOpening(true);
+      const unbindAbort = bindSelectionIntentAbort(signal, requestId);
       try {
         if (focusTarget) await focusWorldNode(next);
-        if (intentRequestRef.current !== requestId) return false;
+        if (signal?.aborted || intentRequestRef.current !== requestId)
+          return false;
         const currentConversations = inspectorConversationsRef.current;
         const currentExisting = currentConversations.find(
           (conversation) =>
@@ -1733,6 +1752,7 @@ function WorldControlPlane({
         }
         return false;
       } finally {
+        unbindAbort();
         if (intentRequestRef.current === requestId) setIntentOpening(false);
       }
       return true;
@@ -1740,9 +1760,11 @@ function WorldControlPlane({
     const conversation = conversationFor(next, requestedView);
     if (!conversation) return false;
     setIntentOpening(true);
+    const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
       if (focusTarget) await focusWorldNode(next);
-      if (intentRequestRef.current !== requestId) return false;
+      if (signal?.aborted || intentRequestRef.current !== requestId)
+        return false;
       const currentConversations = inspectorConversationsRef.current;
       const currentDockedInspectorId = dockedInspectorIdRef.current;
       const currentDockedInspector = currentConversations.find(
@@ -1786,6 +1808,7 @@ function WorldControlPlane({
       }
       return false;
     } finally {
+      unbindAbort();
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
     return true;
@@ -1816,7 +1839,8 @@ function WorldControlPlane({
     onInspectorPaneFocusReady(focusPane);
     return () => onInspectorPaneFocusReady(null);
   });
-  const selectNode = (id: string) => {
+  const selectNode = (id: string, signal?: AbortSignal) => {
+    if (signal?.aborted) return Promise.resolve(false);
     const node = world.nodeById.get(id);
     if (
       view === "office" &&
@@ -1834,18 +1858,20 @@ function WorldControlPlane({
         existing &&
         worldInspectorWindowId(existing) === dockedInspectorIdRef.current
       ) {
-        return applySelection(id);
+        return applySelection(id, null, true, world, signal);
       }
-      return openFloatingInspector(node)
+      return openFloatingInspector(node, signal)
         .then(() => true)
         .catch((cause) => {
-          setIntentError(
-            cause instanceof Error ? cause.message : String(cause),
-          );
+          if (!signal?.aborted) {
+            setIntentError(
+              cause instanceof Error ? cause.message : String(cause),
+            );
+          }
           return false;
         });
     }
-    return applySelection(id);
+    return applySelection(id, null, true, world, signal);
   };
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
@@ -2019,7 +2045,13 @@ function WorldControlPlane({
     world,
   ]);
 
-  const openFloatingInspector = async (node: WorldObjectNode) => {
+  const openFloatingInspector = async (
+    node: WorldObjectNode,
+    signal?: AbortSignal,
+  ) => {
+    if (signal?.aborted) {
+      throw new Error("Inspector activation was superseded");
+    }
     const existing = inspectorConversations.find(
       (conversation) =>
         worldInspectorWindowId(conversation) ===
@@ -2036,7 +2068,13 @@ function WorldControlPlane({
           );
         }
         if (
-          !(await focusFloatingInspector(existing, true, requestedView, node))
+          !(await focusFloatingInspector(
+            existing,
+            true,
+            requestedView,
+            node,
+            signal,
+          ))
         ) {
           throw new Error("Inspector activation was superseded");
         }
@@ -2047,7 +2085,13 @@ function WorldControlPlane({
         return;
       }
       if (
-        !(await focusFloatingInspector(existing, true, requestedView, node))
+        !(await focusFloatingInspector(
+          existing,
+          true,
+          requestedView,
+          node,
+          signal,
+        ))
       ) {
         throw new Error("Inspector activation was superseded");
       }
@@ -2065,9 +2109,10 @@ function WorldControlPlane({
     intentRequestRef.current = requestId;
     setIntentError(null);
     setIntentOpening(true);
+    const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
       await focusWorldNode(node);
-      if (intentRequestRef.current !== requestId) {
+      if (signal?.aborted || intentRequestRef.current !== requestId) {
         throw new Error("Inspector activation was superseded");
       }
       setSelection(node);
@@ -2081,6 +2126,7 @@ function WorldControlPlane({
       ]);
       focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
     } finally {
+      unbindAbort();
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
   };
@@ -2177,7 +2223,9 @@ function WorldControlPlane({
     focusTarget = true,
     requestedView?: InspectorView,
     selectedNode?: WorldObjectNode,
+    signal?: AbortSignal,
   ): Promise<boolean> => {
+    if (signal?.aborted) return false;
     const target = selectedNode ?? world.nodeById.get(conversation.nodeId);
     if (!target) throw new Error("This Inspector is no longer available");
     const requestId = focusTarget
@@ -2188,9 +2236,13 @@ function WorldControlPlane({
       setIntentError(null);
       setIntentOpening(true);
     }
+    const unbindAbort = focusTarget
+      ? bindSelectionIntentAbort(signal, requestId)
+      : () => {};
     try {
       if (focusTarget) await focusWorldNode(target);
-      if (intentRequestRef.current !== requestId) return false;
+      if (signal?.aborted || intentRequestRef.current !== requestId)
+        return false;
       const current = inspectorConversationsRef.current;
       const observedConversation = current.find(
         (candidate) =>
@@ -2241,6 +2293,7 @@ function WorldControlPlane({
       }
       throw cause;
     } finally {
+      unbindAbort();
       if (focusTarget && intentRequestRef.current === requestId) {
         setIntentOpening(false);
       }

@@ -16,6 +16,7 @@ import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
 import WorldFoundationApp from "./WorldFoundationApp";
+import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
 
 const failures: string[] = [];
@@ -1857,27 +1858,55 @@ async function run() {
       seatCreatesBeforeClick + 1,
     "Office seat creation",
   );
+  const sharedDeadlineFocusGate = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "created-pane-3",
+    promise: sharedDeadlineFocusGate.promise,
+  };
   await worldRuntimeStore.refresh();
   await until(
     () =>
-      store.get().selectedPaneId === "created-pane-3" &&
-      document
-        .querySelector(
-          ".world-context-rail .workspace-inspector-agent-identity",
-        )
-        ?.textContent?.includes("terminal"),
-    "created seat exact terminal Inspector after transient focus rejection",
-  );
-  check(
-    rejectedPaneGets === 1 &&
       calls.filter(
         ({ method, params }) =>
           method === "pane.get" && params.pane_id === "created-pane-3",
       ).length -
         createdPaneGetsBeforeClick ===
-        2,
-    `created seat did not exercise its bounded exact-focus retry (${rejectedPaneGets}; pane.get delta=${calls.filter(({ method, params }) => method === "pane.get" && params.pane_id === "created-pane-3").length - createdPaneGetsBeforeClick})`,
+      1,
+    "gated shared created-seat focus",
   );
+  await new Promise((resolve) =>
+    window.setTimeout(resolve, CREATED_PANE_ADMISSION_TIMEOUT_MS + 200),
+  );
+  await until(
+    () =>
+      store.get().notice?.message ===
+      "Seat created, but Inspector focus failed",
+    "created-seat admission deadline",
+  );
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Reviewer") === true,
+    "created-seat deadline replaced the prior Reviewer Inspector",
+  );
+  rejectNextPaneGetId = null;
+  sharedDeadlineFocusGate.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("Reviewer") === true &&
+      calls.filter(
+        ({ method, params }) =>
+          method === "pane.get" && params.pane_id === "created-pane-3",
+      ).length -
+        createdPaneGetsBeforeClick ===
+        1,
+    "late created-seat focus completion replaced the prior Reviewer Inspector",
+  );
+  store.clearNotice();
+  await settle();
   await until(() => agentTarget("Builder"), "Builder desk target");
   flushSync(() => agentTarget("Builder")!.click());
   await until(

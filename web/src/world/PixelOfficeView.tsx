@@ -85,7 +85,7 @@ export default function PixelOfficeView({
   world: WorldObject;
   toolbarPortal?: Element | null;
   selectedId: string | null;
-  onSelect(id: string): void | Promise<boolean>;
+  onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
   onOpenTerminal(id: string): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
   floatingTerminals: readonly { nodeId: string }[];
@@ -258,6 +258,7 @@ export default function PixelOfficeView({
     let finished = false;
     let retryTimer: number | null = null;
     let deadlineTimer: number | null = null;
+    const focusAbort = new AbortController();
     const samePending = (current: PendingCreatedPane | null) =>
       current?.connectionId === pendingCreatedPane.connectionId &&
       current.generation === pendingCreatedPane.generation &&
@@ -270,6 +271,7 @@ export default function PixelOfficeView({
     const failFocus = (detail: string) => {
       if (cancelled || finished) return;
       finished = true;
+      focusAbort.abort();
       clearPending();
       store.notify({
         kind: "error",
@@ -326,7 +328,9 @@ export default function PixelOfficeView({
       );
     } else {
       try {
-        void Promise.resolve(onSelectRef.current(pane.id)).then(
+        void Promise.resolve(
+          onSelectRef.current(pane.id, focusAbort.signal),
+        ).then(
           (admitted) => {
             if (cancelled || finished) return;
             if (admitted !== false) {
@@ -347,6 +351,7 @@ export default function PixelOfficeView({
     }
     return () => {
       cancelled = true;
+      focusAbort.abort();
       if (retryTimer !== null) window.clearTimeout(retryTimer);
       if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
     };
