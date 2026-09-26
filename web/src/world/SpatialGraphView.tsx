@@ -2,6 +2,7 @@ import {
   ChevronRight,
   Maximize2,
   Server,
+  Shuffle,
   SquareTerminal,
   ZoomIn,
   ZoomOut,
@@ -256,38 +257,7 @@ export default function SpatialGraphView({
             : "No matches"
           : undefined
       }
-    >
-      <div
-        className="world-spatial-graph-zoom"
-        role="group"
-        aria-label="Graph zoom controls"
-      >
-        <button
-          type="button"
-          aria-label="Zoom out"
-          title="Zoom out"
-          onClick={() => canvasRef.current?.zoomOut()}
-        >
-          <ZoomOut size={16} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          aria-label="Zoom in"
-          title="Zoom in"
-          onClick={() => canvasRef.current?.zoomIn()}
-        >
-          <ZoomIn size={16} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="world-spatial-graph-fit"
-          onClick={() => canvasRef.current?.fit()}
-        >
-          <Maximize2 size={15} aria-hidden="true" />
-          Fit
-        </button>
-      </div>
-    </WorldViewToolbar>
+    />
   );
   return (
     <>
@@ -361,6 +331,48 @@ export default function SpatialGraphView({
                 onViewChange={updateView}
                 onAnchorsChange={publishAnchors}
               />
+              <div
+                className="world-spatial-graph-zoom"
+                role="group"
+                aria-label="Graph zoom and layout controls"
+              >
+                <button
+                  type="button"
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                  onClick={() => canvasRef.current?.zoomOut()}
+                >
+                  <ZoomOut size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                  onClick={() => canvasRef.current?.zoomIn()}
+                >
+                  <ZoomIn size={16} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="world-spatial-graph-fit"
+                  aria-label="Fit graph to viewport"
+                  title="Fit graph to viewport"
+                  onClick={() => canvasRef.current?.fit()}
+                >
+                  <Maximize2 size={15} aria-hidden="true" />
+                  Fit
+                </button>
+                <button
+                  type="button"
+                  className="world-spatial-graph-fit"
+                  aria-label="Arrange graph"
+                  title="Arrange graph"
+                  onClick={() => canvasRef.current?.arrange()}
+                >
+                  <Shuffle size={15} aria-hidden="true" />
+                  Arrange
+                </button>
+              </div>
               <div className="world-spatial-graph-help">
                 Double-click a leaf to open its terminal · drag nodes to pin ·
                 drag empty space to pan

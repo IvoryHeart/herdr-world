@@ -7,10 +7,12 @@ import {
 } from "react";
 import type { OfficeCanvasAnchor } from "../PixelOfficeCanvas";
 import {
+  arrangeGraph,
   graphBounds,
   graphNodeRadius,
   reconcileGraphLayout,
   savedGraphPositions,
+  separateOverlaps,
   stepGraphLayout,
 } from "./graphLayout";
 import type { GraphLayoutNode, GraphLayoutState } from "./graphLayout";
@@ -55,6 +57,7 @@ declare global {
 
 export type GraphCanvasHandle = {
   fit(): void;
+  arrange(): void;
   zoomIn(): void;
   zoomOut(): void;
 };
@@ -145,6 +148,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
       ref,
       () => ({
         fit: () => rendererRef.current?.fit(),
+        arrange: () => rendererRef.current?.arrange(),
         zoomIn: () => rendererRef.current?.zoomIn(),
         zoomOut: () => rendererRef.current?.zoomOut(),
       }),
@@ -212,6 +216,7 @@ class GraphRenderer {
   #width = 1;
   #height = 1;
   #alpha = 0;
+  #arrangeActive = false;
   #frame: number | null = null;
   #pointer: PointerInteraction | null = null;
   #disposed = false;
@@ -354,6 +359,15 @@ class GraphRenderer {
     this.#requestFrame();
   }
 
+  arrange() {
+    if (!this.#layout) return;
+    arrangeGraph(this.#layout);
+    this.#arrangeActive = true;
+    this.#fitWhenSettled = true;
+    this.#alpha = 1;
+    this.#requestFrame();
+  }
+
   zoomIn() {
     this.#zoomAt(this.#camera.zoom * ZOOM_STEP, 0, 0);
   }
@@ -434,6 +448,10 @@ class GraphRenderer {
     }
     if (this.#alpha <= 0.015) {
       this.#alpha = 0;
+      if (this.#arrangeActive && this.#layout) {
+        this.#arrangeActive = false;
+        separateOverlaps([...this.#layout.nodes.values()]);
+      }
       if (this.#fitWhenSettled && this.#layout?.nodes.size) this.fit();
     }
     this.#draw();

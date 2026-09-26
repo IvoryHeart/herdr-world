@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
+  arrangeGraph,
   graphBounds,
+  graphNodeRadius,
   reconcileGraphLayout,
   savedGraphPositions,
+  separateOverlaps,
   stepGraphLayout,
 } from "./graphLayout";
+import type { GraphLayoutState } from "./graphLayout";
 import type { WorldGraphNode, WorldGraphProjection } from "./graphProjection";
 
 describe("Graph force layout", () => {
@@ -62,6 +66,72 @@ describe("Graph force layout", () => {
     ]);
     expect(stepGraphLayout(spaceCollapsed, 1)).toBeGreaterThanOrEqual(0);
   });
+
+  test("arrange unpins all nodes and separates by radii", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    for (const n of state.nodes.values()) {
+      n.x = 0;
+      n.y = 0;
+      n.pinned = true;
+    }
+
+    arrangeGraph(state);
+
+    for (const n of state.nodes.values()) {
+      expect(n.pinned).toBe(false);
+      expect(n.vx).toBe(0);
+      expect(n.vy).toBe(0);
+    }
+
+    const all = [...state.nodes.values()];
+    for (let i = 0; i < all.length; i++) {
+      const a = all[i]!;
+      for (let j = i + 1; j < all.length; j++) {
+        const b = all[j]!;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        const minSep = graphNodeRadius(a.kind) + graphNodeRadius(b.kind);
+        expect(dist).toBeGreaterThanOrEqual(minSep);
+      }
+    }
+  });
+
+  test("arrange separates cross-tier overlaps after settling", () => {
+    const state = reconcileGraphLayout(
+      null,
+      multiSpaceProjection(),
+      new Set(),
+    ).state;
+
+    arrangeAndSettle(state);
+    assertNoCircleOverlaps(state);
+  });
+
+  test("arrange keeps dense graph separated after settling", () => {
+    const state = reconcileGraphLayout(
+      null,
+      denseProjection(8, 12),
+      new Set(),
+    ).state;
+
+    arrangeAndSettle(state);
+    assertNoCircleOverlaps(state);
+  });
+
+  test("arrange preserves parent-child proximity", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    arrangeGraph(state);
+
+    const host = state.nodes.get("host")!;
+    const space = state.nodes.get("space")!;
+    const leaf = state.nodes.get("leaf")!;
+
+    expect(Math.hypot(space.x - host.x, space.y - host.y)).toBeLessThan(
+      graphNodeRadius("host") + graphNodeRadius("space") + 200,
+    );
+    expect(Math.hypot(leaf.x - space.x, leaf.y - space.y)).toBeLessThan(
+      graphNodeRadius("space") + graphNodeRadius("agent") + 150,
+    );
+  });
 });
 
 function projection(): WorldGraphProjection {
@@ -97,6 +167,114 @@ function projection(): WorldGraphProjection {
     },
     presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
+}
+
+function multiSpaceProjection(): WorldGraphProjection {
+  const host = node("host", "host", null);
+  const s1 = node("space1", "space", "host");
+  const s2 = node("space2", "space", "host");
+  const l1 = node("leaf1", "agent", "space1");
+  const l2 = node("leaf2", "agent", "space2");
+  return {
+    version: 1,
+    nodes: [host, s1, s2, l1, l2],
+    edges: [
+      { sourceId: "host", targetId: "space1", kind: "contains" },
+      { sourceId: "host", targetId: "space2", kind: "contains" },
+      { sourceId: "space1", targetId: "leaf1", kind: "contains" },
+      { sourceId: "space2", targetId: "leaf2", kind: "contains" },
+    ],
+    hosts: [],
+    spaces: [],
+    omittedHostCount: 0,
+    omittedSpaceCount: 0,
+    coverage: {
+      configuredHosts: 1,
+      presentedHosts: 1,
+      observedSpaces: 2,
+      presentedSpaces: 2,
+      observedAgents: 2,
+      presentedAgents: 2,
+      omittedAgents: 0,
+      observedTerminals: 0,
+      presentedTerminals: 0,
+      omittedTerminals: 0,
+      observedShells: 0,
+      presentedShells: 0,
+    },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
+  };
+}
+
+function denseProjection(
+  spaceCount: number,
+  leavesPerSpace: number,
+): WorldGraphProjection {
+  const host = node("host", "host", null);
+  const nodes: WorldGraphNode[] = [host];
+  const edges: WorldGraphProjection["edges"] = [];
+  for (let s = 0; s < spaceCount; s++) {
+    const spaceId = `s${s}`;
+    nodes.push(node(spaceId, "space", "host"));
+    edges.push({ sourceId: "host", targetId: spaceId, kind: "contains" });
+    for (let l = 0; l < leavesPerSpace; l++) {
+      const leafId = `s${s}l${l}`;
+      nodes.push(node(leafId, "agent", spaceId));
+      edges.push({ sourceId: spaceId, targetId: leafId, kind: "contains" });
+    }
+  }
+  return {
+    version: 1,
+    nodes,
+    edges,
+    hosts: [],
+    spaces: [],
+    omittedHostCount: 0,
+    omittedSpaceCount: 0,
+    coverage: {
+      configuredHosts: 1,
+      presentedHosts: 1,
+      observedSpaces: spaceCount,
+      presentedSpaces: spaceCount,
+      observedAgents: spaceCount * leavesPerSpace,
+      presentedAgents: spaceCount * leavesPerSpace,
+      omittedAgents: 0,
+      observedTerminals: 0,
+      presentedTerminals: 0,
+      omittedTerminals: 0,
+      observedShells: 0,
+      presentedShells: 0,
+    },
+    presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
+  };
+}
+
+function arrangeAndSettle(state: GraphLayoutState) {
+  arrangeGraph(state);
+  let alpha = 1;
+  for (let i = 0; i < 300; i++) {
+    const energy = stepGraphLayout(state, alpha);
+    alpha *= energy < 0.08 ? 0.78 : 0.93;
+    if (alpha <= 0.015) break;
+  }
+  separateOverlaps([...state.nodes.values()]);
+}
+
+function assertNoCircleOverlaps(state: GraphLayoutState) {
+  const all = [...state.nodes.values()];
+  const overlaps: string[] = [];
+  for (let i = 0; i < all.length; i++) {
+    const a = all[i]!;
+    for (let j = i + 1; j < all.length; j++) {
+      const b = all[j]!;
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const minSep = graphNodeRadius(a.kind) + graphNodeRadius(b.kind);
+      if (dist < minSep) {
+        overlaps.push(`${a.id}/${b.id} dist=${dist.toFixed(1)} min=${minSep}`);
+      }
+    }
+  }
+  expect(overlaps).toEqual([]);
 }
 
 function node(
