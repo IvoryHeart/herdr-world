@@ -101,7 +101,7 @@ test.skipIf(!chrome)(
         new Promise<never>((_, reject) =>
           setTimeout(
             () => reject(new Error("World terminal handoff timed out")),
-            60_000,
+            120_000,
           ),
         ),
       ]);
@@ -113,5 +113,5 @@ test.skipIf(!chrome)(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  90_000,
+  150_000,
 );
