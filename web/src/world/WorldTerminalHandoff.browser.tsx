@@ -96,6 +96,7 @@ let focusedPaneId = panes[0].pane_id;
 let focusedTabId = tabs[0]!.tab_id;
 let worldRevision = 1;
 let runtimeGeneration = 7;
+let navigationMode: "shared" | "browser-local" = "shared";
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
@@ -258,7 +259,10 @@ const client: ConnectionClient = {
       return pane ? { pane: { ...pane, focused: true } } : {};
     }
     if (method === "workspace.list") {
-      return { navigation_mode: "shared", workspaces: [currentWorkspace()] };
+      return {
+        navigation_mode: navigationMode,
+        workspaces: [currentWorkspace()],
+      };
     }
     if (method === "tab.list") return { tabs: currentTabs() };
     if (method === "pane.list") return { panes: currentPanes() };
@@ -2711,6 +2715,34 @@ async function run() {
     "both panes in one floating Builder Inspector",
   );
   const splitBuilderBounds = splitBuilderWindow.getBoundingClientRect();
+  const browserLocalSnapshot = store.get();
+  navigationMode = "browser-local";
+  __storeTesting.replaceState({
+    ...browserLocalSnapshot,
+    navigationMode,
+    browserNavigation: {
+      ...browserLocalSnapshot.browserNavigation,
+      revision: browserLocalSnapshot.browserNavigation.revision + 1,
+      workspaceId: workspaceBase.workspace_id,
+      tabIds: {
+        ...browserLocalSnapshot.browserNavigation.tabIds,
+        [workspaceBase.workspace_id]: "work",
+      },
+      paneIds: {
+        ...browserLocalSnapshot.browserNavigation.paneIds,
+        work: "builder-pane",
+      },
+    },
+  });
+  const delayedOldPaneFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "builder-pane",
+    promise: delayedOldPaneFocus.promise,
+  };
+  const oldPaneGetsBeforeSibling = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
   splitBuilderWindow
     .querySelectorAll<HTMLElement>(".pane-layout-cell")[1]!
     .dispatchEvent(
@@ -2725,6 +2757,21 @@ async function run() {
     () => store.get().selectedPaneId === siblingPane.pane_id,
     "focused sibling inside floating Builder Inspector",
   );
+  const oldPaneGetsAfterSibling = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  delayedOldPaneFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  await settle();
+  check(
+    oldPaneGetsAfterSibling === oldPaneGetsBeforeSibling &&
+      store.get().selectedPaneId === siblingPane.pane_id,
+    "browser-local sibling click started an old-pane focus that could finish last",
+  );
+  navigationMode = "shared";
+  __storeTesting.replaceState({ ...store.get(), navigationMode });
   const afterSiblingBounds = splitBuilderWindow.getBoundingClientRect();
   check(
     splitBuilderWindow.isConnected &&

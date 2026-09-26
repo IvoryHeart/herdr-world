@@ -169,6 +169,12 @@ export default function WorldInspectorConversationView({
   useEffect(() => {
     if (!target || !onFocus) return;
     const focusConversation = (event: Event) => {
+      const clickedPaneId =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".pane-layout-cell")?.dataset
+              .paneId
+          : null;
+      if (clickedPaneId && clickedPaneId !== conversation.paneId) return;
       if (
         event.target instanceof Element &&
         event.target.closest(".workspace-inspector-head.is-window-drag-handle")
@@ -180,7 +186,7 @@ export default function WorldInspectorConversationView({
     target.addEventListener("pointerdown", focusConversation, true);
     return () =>
       target.removeEventListener("pointerdown", focusConversation, true);
-  }, [onFocus, target]);
+  }, [conversation.paneId, onFocus, target]);
   const {
     read: readAnnotationDraft,
     select: selectAnnotationDraft,

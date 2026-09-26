@@ -139,6 +139,12 @@ export default function WorldFloatingInspectorWindow({
     const element = windowRef.current;
     if (!element) return;
     const focusFromPointer = (event: PointerEvent) => {
+      const clickedPaneId =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".pane-layout-cell")?.dataset
+              .paneId
+          : null;
+      if (clickedPaneId && clickedPaneId !== conversation.paneId) return;
       if (
         event.target instanceof Element &&
         (event.target.closest(".world-floating-terminal-resize") ||
@@ -160,7 +166,7 @@ export default function WorldFloatingInspectorWindow({
     element.addEventListener("pointerdown", focusFromPointer, true);
     return () =>
       element.removeEventListener("pointerdown", focusFromPointer, true);
-  }, []);
+  }, [conversation.paneId]);
 
   useEffect(() => {
     const element = windowRef.current;
