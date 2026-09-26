@@ -73,20 +73,17 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Run relevant focused tests after a coherent change and before opening a PR. Run a
-targeted test earlier when diagnosing a failure, but do not repeat type checks and
-tests after each edit or commit. Run a repository-wide quick type check after
-affected interfaces are integrated, or sooner to diagnose a type failure. CI runs
-`bun run check` on the PR head; use that as the final gate rather than repeating it
-locally by default. Run it locally when CI cannot cover the candidate or to
-investigate a failure. The full gate covers notices, formatting, lint, type checking,
-all tests, production builds and strict OpenSpec validation. Browser tests require
-Chrome/Chromium or `CHROME_BIN`:
+Use focused tests and type checks while developing, after coherent changes or to
+investigate a failure; do not rerun them after every edit. Once the candidate is
+complete, run `bun run check` locally before opening a ready PR. It covers notices,
+formatting, lint, types, tests, builds and OpenSpec. CI repeats it on the PR head.
+Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
 bun test <path>
 bun run test:browser
+bun run check
 ```
 
 Let the tracked pre-commit hook check formatting and lint at commit time. In an
