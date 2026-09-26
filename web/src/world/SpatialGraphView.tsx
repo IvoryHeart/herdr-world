@@ -1,9 +1,9 @@
 import {
   ChevronRight,
-  LayoutGrid,
   Maximize2,
   Server,
   SquareTerminal,
+  Waypoints,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -294,7 +294,7 @@ export default function SpatialGraphView({
           title="Arrange graph"
           onClick={() => canvasRef.current?.arrange()}
         >
-          <LayoutGrid size={16} aria-hidden="true" />
+          <Waypoints size={16} aria-hidden="true" />
         </button>
       </div>
     </WorldViewToolbar>
