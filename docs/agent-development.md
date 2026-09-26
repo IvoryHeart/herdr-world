@@ -69,8 +69,9 @@ Batch independent read-only inspections in one tool turn. Keep `rg` results and
 source excerpts bounded, then read more only when needed. Keep complete check logs
 outside the prompt; report a short status on success and the relevant diagnostics
 on failure. Preserve the check's exit status. The hook is silent on success and
-prints failure output. For review-only work, inspect existing CI evidence first;
-avoid polling while checks run.
+prints failure output. For review-only work, inspect exact-head CI evidence first.
+Run a local check only to investigate a specific gap or reproduce a finding; do
+not repeat a successful full gate on the same commit. Avoid polling while checks run.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
@@ -93,8 +94,10 @@ is included in output. These counts are not billed cost. The local Prometheus
 `codex_turn_token_usage` series aggregates by model and token type without a
 session label, so it cannot substitute for the PR-specific rollout count.
 Add `--tooling` to report aggregate tool calls, recognized check commands, and
-output size for the same boundary. Command counts are best effort for literal
-shell commands; the report never prints command text or tool output.
+output size for the same boundary. Command counts recognize executable positions
+in literal shell commands, excluding comments, quoted data and heredoc bodies;
+dynamic or opaque shell scripts may be missed. The report never prints command
+text or tool output.
 
 ## Revisit the process
 

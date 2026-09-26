@@ -139,3 +139,41 @@ test("reports bounded aggregate tool activity without exposing commands or outpu
   });
   expect(JSON.stringify(summary)).not.toContain("secret.example");
 });
+
+test("counts executed checks without counting heredoc, quoted, or comment text", () => {
+  const timestamp = "2026-09-25T11:00:00.000Z";
+  const command = (value: string) =>
+    JSON.stringify({
+      timestamp,
+      type: "response_item",
+      payload: {
+        type: "custom_tool_call",
+        name: "exec",
+        input: `tools.exec_command({cmd:${JSON.stringify(value)}})`,
+      },
+    });
+  const summary = summarizeTooling([
+    {
+      sessionId: "review",
+      lines: [
+        command(
+          "gh api repos/example/project/pulls/1/comments -f body=@- <<'REVIEW'\n" +
+            "I did not run bun run check, bun test, or gh pr view.\n" +
+            "REVIEW\n" +
+            "printf '%s\\n' 'bun run check' \"bun test\" # bun run typecheck:quick\n" +
+            "CI=1 bun run check > /tmp/check.log 2>&1",
+        ),
+        command(
+          "cat <<EOF > /tmp/review.txt\n" +
+            "bun run check\n" +
+            "EOF\n" +
+            "bun test scripts/agent/pr-usage.test.ts",
+        ),
+      ].join("\n"),
+    },
+  ]);
+  expect(summary.fullChecks).toBe(1);
+  expect(summary.testCommands).toBe(1);
+  expect(summary.quickTypechecks).toBe(0);
+  expect(summary.githubCommands).toBe(1);
+});

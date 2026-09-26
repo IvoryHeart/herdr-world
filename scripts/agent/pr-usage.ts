@@ -129,6 +129,143 @@ function commandLiterals(input: string): string[] {
   return commands;
 }
 
+/** Read executable shell words, leaving quoted arguments and heredoc bodies opaque. */
+function shellCommands(script: string): string[][] {
+  const commands: string[][] = [];
+  let words: string[] = [];
+  let word = "";
+  let wordStarted = false;
+  let quote: "'" | '"' | null = null;
+  const heredocs: Array<{ delimiter: string; stripTabs: boolean }> = [];
+  let inHeredocBody = false;
+  const flushWord = () => {
+    if (!wordStarted) return;
+    words.push(word);
+    word = "";
+    wordStarted = false;
+  };
+  const flushCommand = () => {
+    flushWord();
+    if (words.length > 0) commands.push(words);
+    words = [];
+  };
+  for (let index = 0; index < script.length; ) {
+    if (inHeredocBody) {
+      const end = script.indexOf("\n", index);
+      const line = script
+        .slice(index, end < 0 ? undefined : end)
+        .replace(/\r$/, "");
+      const next = heredocs[0];
+      if (
+        next &&
+        (next.stripTabs ? line.replace(/^\t+/, "") : line) === next.delimiter
+      ) {
+        heredocs.shift();
+        inHeredocBody = heredocs.length > 0;
+      }
+      index = end < 0 ? script.length : end + 1;
+      continue;
+    }
+    const char = script[index]!;
+    if (quote) {
+      if (char === quote) quote = null;
+      else if (quote === '"' && char === "\\" && index + 1 < script.length) {
+        word += script[++index];
+      } else word += char;
+      index++;
+      continue;
+    }
+    if (char === "\\" && index + 1 < script.length) {
+      const next = script[++index]!;
+      if (next !== "\n") {
+        word += next;
+        wordStarted = true;
+      }
+      index++;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      quote = char;
+      wordStarted = true;
+      index++;
+      continue;
+    }
+    if (char === "#" && !wordStarted) {
+      const end = script.indexOf("\n", index);
+      index = end < 0 ? script.length : end;
+      continue;
+    }
+    if (
+      char === "<" &&
+      script[index + 1] === "<" &&
+      script[index + 2] !== "<"
+    ) {
+      flushWord();
+      index += 2;
+      const stripTabs = script[index] === "-";
+      if (stripTabs) index++;
+      while (script[index] === " " || script[index] === "\t") index++;
+      let delimiter = "";
+      let delimiterQuote: "'" | '"' | null = null;
+      while (index < script.length) {
+        const next = script[index]!;
+        if (delimiterQuote) {
+          if (next === delimiterQuote) delimiterQuote = null;
+          else delimiter += next;
+        } else if (next === "'" || next === '"') delimiterQuote = next;
+        else if (/\s|[;&|()]/.test(next)) break;
+        else delimiter += next;
+        index++;
+      }
+      if (delimiter) heredocs.push({ delimiter, stripTabs });
+      continue;
+    }
+    if (char === " " || char === "\t" || char === "\r") {
+      flushWord();
+      index++;
+      continue;
+    }
+    if (char === "\n") {
+      flushCommand();
+      index++;
+      inHeredocBody = heredocs.length > 0;
+      continue;
+    }
+    if (";&|()".includes(char)) {
+      flushCommand();
+      index++;
+      continue;
+    }
+    word += char;
+    wordStarted = true;
+    index++;
+  }
+  flushCommand();
+  return commands;
+}
+
+function executableWords(words: readonly string[]): readonly string[] {
+  let index = 0;
+  while (
+    ["if", "then", "while", "until", "do", "!"].includes(words[index] ?? "")
+  )
+    index++;
+  if (words[index] === "env") {
+    index++;
+    while (/^[-\w]+=|^-/.test(words[index] ?? "")) index++;
+  }
+  while (/^[A-Za-z_][A-Za-z_0-9]*=/.test(words[index] ?? "")) index++;
+  if (words[index] === "npm" && words[index + 1] === "exec") {
+    const separator = words.indexOf("--", index + 2);
+    if (
+      separator > index + 2 &&
+      words.slice(index + 2, separator).some((word) => /^bun(?:@|$)/.test(word))
+    )
+      return ["bun", ...words.slice(separator + 1)];
+  }
+  return words.slice(index);
+}
+
 export function summarizeTooling(
   logs: readonly { sessionId: string; lines: string }[],
   from?: string,
@@ -168,22 +305,16 @@ export function summarizeTooling(
         summary.nestedCalls += nested.length;
         if (nested.length === 1) summary.singleNestedExecWrappers++;
         for (const command of commandLiterals(input)) {
-          if (command.trimStart().startsWith("python3 ")) continue;
-          if (/(?:bun\s+test|--\s+(?:bun\s+)?test)\b/.test(command)) {
-            summary.testCommands++;
-          }
-          if (
-            /(?:bun\s+run|--\s+(?:bun\s+)?run)\s+typecheck:quick\b/.test(
-              command,
-            )
-          ) {
-            summary.quickTypechecks++;
-          }
-          if (/(?:bun\s+run|--\s+(?:bun\s+)?run)\s+check\b/.test(command)) {
-            summary.fullChecks++;
-          }
-          if (/\bgh\s+(?:api|pr)\b/.test(command)) {
-            summary.githubCommands++;
+          for (const shellWords of shellCommands(command)) {
+            const words = executableWords(shellWords);
+            if (words[0] === "bun" && words[1] === "test")
+              summary.testCommands++;
+            if (words[0] === "bun" && words[1] === "run") {
+              if (words[2] === "typecheck:quick") summary.quickTypechecks++;
+              if (words[2] === "check") summary.fullChecks++;
+            }
+            if (words[0] === "gh" && ["api", "pr"].includes(words[1] ?? ""))
+              summary.githubCommands++;
           }
         }
       } else if (
