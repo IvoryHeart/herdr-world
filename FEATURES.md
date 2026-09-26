@@ -11,6 +11,20 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   at a time. The service and browser store still observe one host-qualified
   aggregate, so switching the connection selector replaces the whole view without
   conflating equal workspace, pane, or terminal IDs from different hosts.
+- Use **Arrange windows** on the shared tab bar to show the active terminal alone,
+  cascade open windows, fit them in columns or rows, tile them in a grid, or
+  restore their previous positions. Spaces arranges the focused workspace's
+  existing tabs; Office, Tree, and Graph arrange their open Inspectors, including
+  a docked or inline Inspector. The desktop layout button sits at the tab bar's
+  right edge; mobile puts it in the ellipsis-expanded controls. The same
+  placements are in **Actions** and can be given custom keyboard shortcuts;
+  none are assigned by default. Layout
+  choices that cannot fit explain why.
+- A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
+  view also shows the selected tab's split panes in one window; selecting a sibling
+  pane keeps the same Inspector and updates its pane-specific resources. When the
+  Spaces Inspector is on Terminal, **Focus tab window** goes to the active tab
+  without attaching a second terminal.
 - A failed selected host may retain its last observed topology as visibly stale,
   never actionable. Selecting a live entity revalidates its connection generation
   before opening the same terminal or host-specific Inspector context.
@@ -19,13 +33,18 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   refreshes them when their observations complete.
 - Office, Tree, and Graph share search in the application top bar; Graph adds Fit
   and zoom there instead of consuming a second stage header.
-- **Actions** in that top bar captures the selected visual space, agent or
-  terminal. It opens only the target's existing Terminal, Files, Changes and
+- The Roamgate-derived **Actions** command menu stays at the right of the top bar in
+  every view. In Office, Tree and Graph, it also captures the selected visual space, agent or
+  terminal for resource actions. It opens the target's existing Terminal, Files, Changes and
   Agent History Inspector resources, or focuses that exact target before Go to
-  Spaces. The same shortcut as the Spaces command menu opens Actions while a
-  visual view is active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
+  Spaces. Window arrangements remain available without a selected visual entity.
+  Its normal shell commands and shortcut remain available while a visual view is
+  active (`Cmd+K` on macOS, `Ctrl+Alt+K` elsewhere). A selection,
   host, generation or observation change invalidates the open target; Actions
   does not send terminal input, assign tasks or control agents.
+- Pin, Unpin and Pinned only are available in the shared **Actions**, leaving the
+  search field clear. The selected-host summary is a muted top-bar indicator;
+  hover or assistive technology exposes its counts.
 - **Pin** a live agent or terminal in Office, Tree, or Graph to keep its exact
   connection-qualified pane in visual triage. Pins are shared by browsers served
   by this World process, survive page reload, and clear when the process restarts
@@ -454,6 +473,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |
 | Split right / down | `Cmd+D` / `Cmd+Shift+D` | `Ctrl+Alt+D` / `Ctrl+Alt+Shift+D` |
 | Zoom / restore pane | `Cmd+Shift+Enter` | `Ctrl+Alt+Enter` |
+| Arrange Single / Cascade / Columns / Rows / Grid / Restore | Unassigned; use Actions or set custom keys | Unassigned; use Actions or set custom keys |
 | Numbered tab | `Ctrl+1…9` | `Ctrl+Alt+1…9` |
 | Numbered command menu action | `Option+1…9` | `Alt+1…9` |
 | Workspaces | `Ctrl+Shift+W` | `Ctrl+Alt+O` |

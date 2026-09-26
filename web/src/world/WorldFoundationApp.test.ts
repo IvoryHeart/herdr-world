@@ -7,6 +7,7 @@ import {
   activateWorldNodeHost,
   chooseWorldSelectedConnection,
   dispatchWorldInspectorRequest,
+  fitVisualInspectorArrangementGeometry,
   focusWorldNode,
   hasValidSelectedConnection,
   moveDockedInspectorGeometry,
@@ -18,10 +19,13 @@ import {
   worldIntentInitialView,
   worldIntentViews,
   worldInspectorContext,
+  worldNodeForInspectorConversation,
+  worldNodeForInspectorPaneFocus,
   worldNodeForWorkspaceSurfaceSelection,
   worldSelectionIsCurrent,
   worldSnapshotPriorityForNode,
   worldViewFromPath,
+  visualInspectorArrangementStage,
 } from "./WorldFoundationApp";
 import { buildWorldObject } from "./worldObject";
 import {
@@ -29,6 +33,8 @@ import {
   retainWorldInspectorConversations,
   upsertWorldInspectorConversation,
   worldInspectorForNode,
+  worldInspectorWindowId,
+  worldInspectorWindowIdForNode,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
 
@@ -39,6 +45,7 @@ function inspectorConversation(index: number): WorldInspectorConversation {
     runtimeGeneration: 4,
     resourceIdentity: `resource-${index}`,
     workspaceId: "studio",
+    tabId: `tab-${index}`,
     paneId: `pane-${index}`,
     terminalId: `terminal-${index}`,
     label: `Agent ${index}`,
@@ -59,6 +66,26 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("World view preference", () => {
+  test("keeps arranged Inspector title controls in the measured visual stage", () => {
+    const stage = visualInspectorArrangementStage({
+      left: 16,
+      top: 60,
+      width: 1000,
+      height: 700,
+    });
+    expect(stage).toEqual({
+      left: 24,
+      top: 68,
+      width: 984,
+      height: 684,
+    });
+    expect(
+      fitVisualInspectorArrangementGeometry(
+        { left: 2000, top: 2000, width: 500, height: 900 },
+        stage,
+      ),
+    ).toEqual({ left: 508, top: 696, width: 500, height: 684 });
+  });
   test("moves a docked Inspector without allowing it to leave the World stage", () => {
     const geometry = { left: 600, top: 40, width: 320, height: 420 };
     expect(
@@ -853,7 +880,7 @@ describe("World view preference", () => {
         },
         false,
       ),
-    ).toBe("inspector");
+    ).toBe("spaces");
     expect(
       terminalPresentationTarget(
         false,
@@ -885,7 +912,7 @@ describe("World view preference", () => {
         },
         true,
       ),
-    ).toBe("floating");
+    ).toBe("spaces");
   });
 
   test("bounds floating terminals while focusing an existing conversation", () => {
@@ -1016,6 +1043,210 @@ describe("World view preference", () => {
     expect(
       upsertWorldInspectorConversation(conversations, inspectorConversation(6)),
     ).toEqual({ conversations, admitted: false });
+  });
+
+  test("uses one generation-qualified tab window while sibling pane context changes", () => {
+    const first = inspectorConversation(0);
+    const sibling = {
+      ...first,
+      nodeId: "sibling-node",
+      paneId: "sibling-pane",
+      terminalId: "sibling-terminal",
+      resourceIdentity: "sibling-session",
+      label: "Sibling",
+    };
+    const otherTab = { ...sibling, tabId: "other-tab" };
+
+    expect(worldInspectorWindowId(first)).toBe(worldInspectorWindowId(sibling));
+    expect(worldInspectorWindowId(first)).not.toBe(
+      worldInspectorWindowId(otherTab),
+    );
+    expect(
+      worldInspectorWindowId({ ...sibling, runtimeGeneration: 5 }),
+    ).not.toBe(worldInspectorWindowId(first));
+    expect(upsertWorldInspectorConversation([first], sibling)).toEqual({
+      conversations: [sibling],
+      admitted: true,
+    });
+    expect(
+      reconcileWorldInspectorConversation(first, {
+        ...sibling,
+        view: "terminal",
+      }).view,
+    ).toBe("terminal");
+    expect(
+      reconcileWorldInspectorConversation(
+        { ...first, focusedListAdmissionAt: 123 },
+        sibling,
+      ).focusedListAdmissionAt,
+    ).toBe(123);
+    expect(
+      reconcileWorldInspectorConversation(
+        { ...first, view: "files" },
+        { ...sibling, view: "terminal" },
+      ).view,
+    ).toBe("files");
+    expect(
+      reconcileWorldInspectorConversation(
+        { ...first, view: "changes" },
+        { ...sibling, view: "terminal" },
+      ).view,
+    ).toBe("changes");
+  });
+
+  test("reselects only a live sibling from the exact tab and lease", () => {
+    const connection = {
+      connectionId: "host-a",
+      label: "Example Host",
+      source: "saved-profile" as const,
+      isDefault: true,
+      state: "ready" as const,
+      generation: 4,
+      snapshotGeneration: 4,
+      stale: false,
+      actionable: true,
+      snapshot: {
+        workspaces: [
+          {
+            workspace_id: "workspace-a",
+            number: 1,
+            label: "Workspace",
+            focused: true,
+            pane_count: 3,
+            tab_count: 2,
+            agent_status: "working",
+          },
+        ],
+        tabs: [
+          {
+            tab_id: "tab-a",
+            workspace_id: "workspace-a",
+            number: 1,
+            label: "First",
+            focused: true,
+            pane_count: 2,
+            agent_status: "working",
+          },
+          {
+            tab_id: "tab-b",
+            workspace_id: "workspace-a",
+            number: 2,
+            label: "Second",
+            focused: false,
+            pane_count: 1,
+            agent_status: "idle",
+          },
+        ],
+        panes: [
+          {
+            pane_id: "pane-a",
+            terminal_id: "terminal-a",
+            workspace_id: "workspace-a",
+            tab_id: "tab-a",
+            focused: true,
+            agent_status: "working",
+            revision: 1,
+          },
+          {
+            pane_id: "pane-b",
+            terminal_id: "terminal-b",
+            workspace_id: "workspace-a",
+            tab_id: "tab-a",
+            focused: false,
+            agent_status: "idle",
+            revision: 1,
+          },
+          {
+            pane_id: "pane-c",
+            terminal_id: "terminal-c",
+            workspace_id: "workspace-a",
+            tab_id: "tab-b",
+            focused: false,
+            agent_status: "idle",
+            revision: 1,
+          },
+        ],
+        agents: [],
+      },
+    };
+    const world = buildWorldObject([connection], "host-a");
+    const firstNode = world.leaves.find((leaf) => leaf.nativeId === "pane-a")!;
+    const sibling = world.leaves.find((leaf) => leaf.nativeId === "pane-b")!;
+    const conversation = worldInspectorForNode(
+      firstNode,
+      "terminal",
+      ["terminal", "files", "changes"],
+      worldInspectorContext(firstNode)!,
+      { dock: "right", expanded: false, size: 520 },
+    )!;
+
+    expect(worldInspectorWindowIdForNode(firstNode)).toBe(
+      worldInspectorWindowIdForNode(sibling),
+    );
+    expect(worldNodeForInspectorConversation(world, conversation)?.id).toBe(
+      firstNode.id,
+    );
+    expect(
+      worldNodeForInspectorPaneFocus(world, conversation, "pane-b")?.id,
+    ).toBe(sibling.id);
+    expect(
+      worldNodeForInspectorPaneFocus(world, conversation, "pane-c"),
+    ).toBeNull();
+    expect(
+      worldNodeForInspectorPaneFocus(
+        world,
+        { ...conversation, runtimeGeneration: 5 },
+        "pane-b",
+      ),
+    ).toBeNull();
+    const afterClose = buildWorldObject(
+      [
+        {
+          ...connection,
+          snapshot: {
+            ...connection.snapshot,
+            panes: connection.snapshot.panes.filter(
+              (pane) => pane.pane_id !== "pane-a",
+            ),
+          },
+        },
+      ],
+      "host-a",
+    );
+    expect(
+      worldNodeForInspectorConversation(afterClose, conversation)?.nativeId,
+    ).toBe("pane-b");
+    expect(
+      worldNodeForInspectorPaneFocus(afterClose, conversation, "pane-a"),
+    ).toBeNull();
+    const moved = buildWorldObject(
+      [
+        {
+          ...connection,
+          snapshot: {
+            ...connection.snapshot,
+            panes: connection.snapshot.panes
+              .filter((pane) => pane.pane_id !== "pane-b")
+              .map((pane) => ({ ...pane, tab_id: "tab-b" })),
+          },
+        },
+      ],
+      "host-a",
+    );
+    expect(worldNodeForInspectorConversation(moved, conversation)).toBeNull();
+    const reconnected = buildWorldObject(
+      [
+        {
+          ...connection,
+          generation: 5,
+          snapshotGeneration: 5,
+        },
+      ],
+      "host-a",
+    );
+    expect(
+      worldNodeForInspectorConversation(reconnected, conversation),
+    ).toBeNull();
   });
 
   test("retires whole Inspectors outside their exact runtime lease", () => {

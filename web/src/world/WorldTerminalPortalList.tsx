@@ -1,15 +1,16 @@
 import type { ITheme } from "@xterm/xterm";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { TabTerminalPaneLayout } from "../TabTerminalPaneLayout";
 import type { TerminalWorkspaceFileRequest } from "../components/TerminalView";
-import { TerminalView } from "../components/TerminalView";
 import type {
   MobileTerminalShortcutRows,
   MobileTerminalSideShortcuts,
 } from "../mobileTerminalShortcuts";
-import { terminalMountKey } from "../terminalConnection";
 import type { Pane } from "../types";
+import { useVisibleTabLayout } from "../visibleTabLayout";
 import type { WorldTerminalPresentation } from "./worldTerminalPresentation";
+import { worldInspectorWindowId } from "./worldTerminalPresentation";
 
 export default function WorldTerminalPortalList({
   presentations,
@@ -44,6 +45,8 @@ export default function WorldTerminalPortalList({
       />
       {presentations.map((presentation) => {
         if (
+          !presentation.portal ||
+          !presentation.tabId ||
           presentation.connectionId !== activeConnectionId ||
           presentation.runtimeGeneration !== runtimeGeneration
         ) {
@@ -52,23 +55,20 @@ export default function WorldTerminalPortalList({
         const pane = panes.find(
           (candidate) =>
             candidate.pane_id === presentation.paneId &&
-            candidate.terminal_id === presentation.terminalId,
+            candidate.terminal_id === presentation.terminalId &&
+            candidate.workspace_id === presentation.workspaceId &&
+            candidate.tab_id === presentation.tabId,
         );
         return pane ? (
           <WorldTerminalPortalOwner
-            key={terminalMountKey(
-              {
-                connectionId: activeConnectionId,
-                generation: connectionGeneration,
-              },
-              pane.pane_id,
-              pane.terminal_id,
-            )}
+            key={worldInspectorWindowId(presentation)}
             portal={presentation.portal}
             parking={parking}
           >
-            <TerminalView
-              paneId={pane.pane_id}
+            <WorldInspectorTabTerminal
+              presentation={presentation}
+              panes={panes}
+              connectionGeneration={connectionGeneration}
               terminalTheme={terminalTheme}
               terminalFontScale={terminalFontScale}
               mobileShortcuts={mobileShortcuts}
@@ -79,6 +79,56 @@ export default function WorldTerminalPortalList({
         ) : null;
       })}
     </>
+  );
+}
+
+function WorldInspectorTabTerminal({
+  presentation,
+  panes,
+  connectionGeneration,
+  terminalTheme,
+  terminalFontScale,
+  mobileShortcuts,
+  mobileSideShortcuts,
+  onOpenWorkspaceFile,
+}: {
+  presentation: WorldTerminalPresentation & { tabId: string };
+  panes: readonly Pane[];
+  connectionGeneration: number;
+  terminalTheme: ITheme;
+  terminalFontScale: number;
+  mobileShortcuts: MobileTerminalShortcutRows;
+  mobileSideShortcuts: MobileTerminalSideShortcuts;
+  onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
+}) {
+  const layout = useVisibleTabLayout(
+    presentation.workspaceId,
+    presentation.tabId,
+  );
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [agentHistoryOpen, setAgentHistoryOpen] = useState(false);
+  return (
+    <TabTerminalPaneLayout
+      layout={layout}
+      panes={panes.filter(
+        (pane) =>
+          pane.workspace_id === presentation.workspaceId &&
+          pane.tab_id === presentation.tabId,
+      )}
+      selectedPaneId={presentation.paneId}
+      connectionId={presentation.connectionId}
+      connectionGeneration={connectionGeneration}
+      onFocusPane={presentation.onFocusPane}
+      terminalTheme={terminalTheme}
+      terminalFontScale={terminalFontScale}
+      mobileShortcuts={mobileShortcuts}
+      mobileSideShortcuts={mobileSideShortcuts}
+      composerOpen={composerOpen}
+      onComposerOpenChange={setComposerOpen}
+      agentHistoryOpen={agentHistoryOpen}
+      onAgentHistoryOpenChange={setAgentHistoryOpen}
+      onOpenWorkspaceFile={onOpenWorkspaceFile}
+    />
   );
 }
 

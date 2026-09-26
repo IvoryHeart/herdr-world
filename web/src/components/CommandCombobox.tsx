@@ -22,6 +22,7 @@ import {
   GitCommitHorizontal,
   GitBranch,
   Keyboard,
+  LayoutGrid,
   Maximize2,
   PanelTop,
   SplitSquareHorizontal,
@@ -54,13 +55,17 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { canCreateWorktree, worktreeCreationSource } from "../worktree";
 import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import {
+  WINDOW_ARRANGEMENT_CHOICES,
+  type WindowArrangementControl,
+} from "./WindowArrangementMenu";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
   | { type: "rename-tab"; tab: Tab }
   | { type: "create-worktree"; workspace: Workspace; branch: string };
 
-type ActionDefinition = {
+export type ActionDefinition = {
   key: string;
   icon: React.ReactNode;
   title: string;
@@ -72,9 +77,19 @@ type ActionDefinition = {
   run: () => void;
 };
 
-type ActionGroupDefinition = {
+export type ActionGroupDefinition = {
   heading: string;
   actions: ActionDefinition[];
+};
+
+export type CommandExtension = {
+  captureKey: string | null;
+  groups: readonly ActionGroupDefinition[];
+};
+
+const EMPTY_COMMAND_EXTENSION: CommandExtension = {
+  captureKey: null,
+  groups: [],
 };
 
 function isTypingTarget(target: EventTarget | null) {
@@ -231,11 +246,15 @@ export function CommandCombobox({
   onOpenFileExplorer,
   onOpenFile,
   onOpenDiffViewer,
+  arrangementControl,
+  extension = EMPTY_COMMAND_EXTENSION,
 }: {
   operationalShortcutsEnabled?: boolean;
   onOpenFileExplorer?: (workspaceId?: string) => void;
   onOpenFile?: (workspaceId: string, entry: FileExplorerEntry) => void;
   onOpenDiffViewer?: (workspaceId?: string) => void;
+  arrangementControl?: WindowArrangementControl;
+  extension?: CommandExtension;
 }) {
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -252,6 +271,8 @@ export function CommandCombobox({
     shallowEqual,
   );
   const [open, setOpen] = useState(false);
+  const [capturedExtension, setCapturedExtension] =
+    useState<CommandExtension | null>(null);
   const [search, setSearch] = useState("");
   const [selectedActionValue, setSelectedActionValue] = useState("");
   const [selectedActionSearch, setSelectedActionSearch] = useState("");
@@ -364,15 +385,17 @@ export function CommandCombobox({
         return;
       e.preventDefault();
       e.stopPropagation();
-      setOpen((value) => {
-        const next = !value;
-        if (!next) setSearch("");
-        return next;
-      });
+      if (open) {
+        setOpen(false);
+        setSearch("");
+      } else {
+        setCapturedExtension(extension);
+        setOpen(true);
+      }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [operationalShortcutsEnabled]);
+  }, [extension, open, operationalShortcutsEnabled]);
 
   const run = (fn: () => void) => {
     setOpen(false);
@@ -906,6 +929,26 @@ export function CommandCombobox({
     });
   }
 
+  const arrangementActions: ActionDefinition[] = arrangementControl
+    ? WINDOW_ARRANGEMENT_CHOICES.map(
+        ({ command, label, description, shortcutId }) => {
+          const shortcut = shortcutLabel(shortcutId);
+          return {
+            key: `arrangement-${command}`,
+            icon: <LayoutGrid size={15} />,
+            title:
+              command === "restore"
+                ? "Restore window positions"
+                : `Arrange windows: ${label}`,
+            detail: description,
+            shortcut: shortcut === "Unassigned" ? undefined : shortcut,
+            keywords: ["layout", "tile", "windows", label],
+            disabledReason: arrangementControl.disabledReasons[command],
+            run: () => arrangementControl.onSelect(command),
+          };
+        },
+      )
+    : [];
   const actionGroups: ActionGroupDefinition[] = [
     { heading: "Current", actions: currentActions },
     { heading: "Files", actions: fileActions },
@@ -914,6 +957,23 @@ export function CommandCombobox({
     { heading: "Tabs", actions: tabActions },
     { heading: "Panes", actions: paneActions },
     { heading: "Agents", actions: agentActions },
+    { heading: "Arrange windows", actions: arrangementActions },
+    ...(open && capturedExtension ? capturedExtension : extension).groups.map(
+      (group) => ({
+        ...group,
+        actions: group.actions.map((action) =>
+          open &&
+          capturedExtension &&
+          capturedExtension.captureKey !== extension.captureKey &&
+          (group.heading === "Visual selection" || action.key === "visual-pin")
+            ? {
+                ...action,
+                disabledReason: "Selection changed. Reopen Actions.",
+              }
+            : action,
+        ),
+      }),
+    ),
   ].filter((group) => group.actions.length > 0);
 
   const normalizedSearch = normalizeSearchText(search);
@@ -1003,6 +1063,7 @@ export function CommandCombobox({
 
   const setCommandOpen = (next: boolean) => {
     if (next && !operationalShortcutsEnabled) return;
+    if (next && !open) setCapturedExtension(extension);
     setOpen(next);
     if (!next) setSearch("");
   };

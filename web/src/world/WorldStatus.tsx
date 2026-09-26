@@ -16,21 +16,19 @@ export function WorldTopbarStatus({
       host.hostState === "active" || host.hostState === "ready-inactive",
   ).length;
   const stale = world.hosts.filter((host) => host.stale).length;
+  const agentCount = world.leaves.filter(
+    (leaf) => leaf.kind === "agent",
+  ).length;
+  const summary = `${selectedHostLabel} · ${ready} ready · ${world.spaces.length} spaces · ${agentCount} agents${stale ? ` · ${stale} stale` : ""}${runtime.error ? " · World error" : ""}`;
   return (
     <div
       className="world-topbar-status"
-      aria-label="World status"
+      aria-label={`World status: ${summary}`}
       aria-live="polite"
+      title={summary}
     >
       <span className="world-live-dot" data-status={runtime.status} />
       <span className="world-selected-host">{selectedHostLabel}</span>
-      <span title={`${ready} ready hosts`}>{ready} ready</span>
-      <span title={`${world.spaces.length} spaces`}>
-        {world.spaces.length} spaces
-      </span>
-      <span title="Visible agents">
-        {world.leaves.filter((leaf) => leaf.kind === "agent").length} agents
-      </span>
       {stale ? <span className="world-stale-count">{stale} stale</span> : null}
       {runtime.error ? (
         <span className="world-runtime-error" title={runtime.error}>

@@ -21,6 +21,19 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added shared tab-bar arrangements for existing Spaces tabs and open visual
+  Inspectors: Single, Cascade, Columns, Rows, Grid, and Restore positions. Split
+  panes remain inside one tab window, docked and Tree inline Inspectors can join
+  an arrangement, Cascade uses the default floating-window size, and Columns and
+  Rows shrink evenly for additional windows while keeping controls usable. Layouts
+  that cannot fit explain their size limits. The desktop layout button sits at
+  the tab bar's right edge and mobile places it in the ellipsis-expanded controls.
+  The same placements are available through the original shell Actions command
+  menu in every view; keyboard shortcuts can be assigned in preferences and
+  are unassigned by default. Compact visual views keep desktop placements
+  across arrangement and resize input for return to desktop, and tiled Inspector
+  headers keep their controls reachable.
+  [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Added connection- and generation-qualified Actions to Office, Tree and Graph.
   Actions capture the visible selected entity, reopen its existing Inspector
   resources or focus it before entering Spaces, and reject retired selections
@@ -122,6 +135,9 @@ retain their original Herdr Web lineage.
 
 ### Fixed
 
+- Kept open floating Inspectors visible through failed, stale or bounded World
+  observations and through focused tab lists fetched before a new Inspector opens.
+  [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Reconciled Android terminal textarea replacements as tail edits so mobile
   autocorrection, deletion and revised text no longer resend accumulated input
   or lose corrections.

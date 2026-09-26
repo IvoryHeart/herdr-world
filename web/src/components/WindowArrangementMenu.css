@@ -1,0 +1,177 @@
+.tabbar-arrangement-trigger {
+  width: 30px;
+  min-height: 28px;
+  flex: 0 0 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.tabbar-arrangement-trigger:hover,
+.tabbar-arrangement-trigger.is-active {
+  background: var(--accent-soft);
+  color: var(--text-strong);
+}
+
+.window-arrangement-menu {
+  position: fixed;
+  z-index: 1200;
+  width: min(246px, calc(100vw - 16px));
+  max-height: min(80vh, 420px);
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--shell-border);
+  border-radius: 9px;
+  background: var(--shell-panel);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 28%);
+}
+
+.window-arrangement-option {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.window-arrangement-option:hover,
+.window-arrangement-option:focus-visible,
+.window-arrangement-option.is-active {
+  background: var(--accent-soft);
+}
+
+.window-arrangement-option[aria-disabled="true"] {
+  color: var(--muted);
+  cursor: default;
+}
+
+.window-arrangement-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.window-arrangement-copy strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.window-arrangement-copy small {
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.window-arrangement-shortcut {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.window-arrangement-preview {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.window-arrangement-preview i {
+  position: absolute;
+  display: none;
+  box-sizing: border-box;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.window-arrangement-preview.is-single i:first-child {
+  display: block;
+  inset: 1px;
+}
+
+.window-arrangement-preview.is-cascade i {
+  display: block;
+  width: 14px;
+  height: 11px;
+  background: var(--shell-panel);
+}
+
+.window-arrangement-preview.is-cascade i:nth-child(1) {
+  top: 0;
+  left: 0;
+}
+.window-arrangement-preview.is-cascade i:nth-child(2) {
+  top: 2px;
+  left: 3px;
+}
+.window-arrangement-preview.is-cascade i:nth-child(3) {
+  top: 4px;
+  left: 6px;
+}
+.window-arrangement-preview.is-cascade i:nth-child(4) {
+  top: 6px;
+  left: 9px;
+}
+
+.window-arrangement-preview.is-columns i:nth-child(-n + 2) {
+  display: block;
+  top: 1px;
+  bottom: 1px;
+  width: 10px;
+}
+
+.window-arrangement-preview.is-columns i:first-child {
+  left: 1px;
+}
+.window-arrangement-preview.is-columns i:nth-child(2) {
+  right: 1px;
+}
+
+.window-arrangement-preview.is-rows i:nth-child(-n + 2) {
+  display: block;
+  right: 1px;
+  left: 1px;
+  height: 7px;
+}
+
+.window-arrangement-preview.is-rows i:first-child {
+  top: 1px;
+}
+.window-arrangement-preview.is-rows i:nth-child(2) {
+  bottom: 1px;
+}
+
+.window-arrangement-preview.is-grid i {
+  display: block;
+  width: 10px;
+  height: 7px;
+}
+
+.window-arrangement-preview.is-grid i:first-child {
+  top: 1px;
+  left: 1px;
+}
+.window-arrangement-preview.is-grid i:nth-child(2) {
+  top: 1px;
+  right: 1px;
+}
+.window-arrangement-preview.is-grid i:nth-child(3) {
+  bottom: 1px;
+  left: 1px;
+}
+.window-arrangement-preview.is-grid i:nth-child(4) {
+  bottom: 1px;
+  right: 1px;
+}

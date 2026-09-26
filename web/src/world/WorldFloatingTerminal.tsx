@@ -11,9 +11,11 @@ import {
 import {
   clampFloatingTerminalGeometry,
   defaultFloatingTerminalGeometry,
+  FLOATING_TERMINAL_MIN_SIZE,
   floatingTerminalContainingViewport,
   moveFloatingTerminalPosition,
   resizeFloatingTerminalGeometry,
+  resizeMinimumForGeometry,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import type {
@@ -45,6 +47,10 @@ export default function WorldFloatingInspectorWindow({
   onRaise,
   onAnchorChange,
   onPortalChange,
+  arrangedGeometry = null,
+  onArrangedGeometryChange,
+  onGeometryObserved,
+  persistGeometry = true,
 }: {
   conversation: WorldInspectorConversation | WorldFloatingTerminal;
   cascadeIndex: number;
@@ -53,6 +59,10 @@ export default function WorldFloatingInspectorWindow({
   onRaise(): void;
   onAnchorChange(anchor: WorldConnectorTargetBounds | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
+  arrangedGeometry?: FloatingTerminalGeometry | null;
+  onArrangedGeometryChange?(geometry: FloatingTerminalGeometry): void;
+  onGeometryObserved?(geometry: FloatingTerminalGeometry): void;
+  persistGeometry?: boolean;
 }) {
   const windowRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<Interaction | null>(null);
@@ -78,14 +88,28 @@ export default function WorldFloatingInspectorWindow({
       geometryId,
       defaultFloatingTerminalGeometry(cascadeIndex, viewport),
       viewport,
+      "tabId" in conversation && conversation.tabId
+        ? JSON.stringify([conversation.connectionId, conversation.nodeId])
+        : undefined,
     );
   });
-  const geometryRef = useRef(geometry);
-  geometryRef.current = geometry;
+  const effectiveGeometry = arrangedGeometry ?? geometry;
+  const geometryRef = useRef(effectiveGeometry);
+  const setWindowGeometryRef =
+    useRef<(next: FloatingTerminalGeometry) => void>(setGeometry);
+  const onGeometryObservedRef = useRef(onGeometryObserved);
+  geometryRef.current = effectiveGeometry;
+  onGeometryObservedRef.current = onGeometryObserved;
+  setWindowGeometryRef.current = (next) => {
+    if (arrangedGeometry) onArrangedGeometryChange?.(next);
+    else setGeometry(next);
+  };
 
   useEffect(() => {
+    if (!persistGeometry || arrangedGeometry) return;
     writeFloatingTerminalGeometry(worldLocalStorage, geometryId, geometry);
-  }, [geometry, geometryId]);
+    onGeometryObservedRef.current?.(geometry);
+  }, [arrangedGeometry, geometry, geometryId, persistGeometry]);
 
   useLayoutEffect(() => {
     setGeometry((current) =>
@@ -117,6 +141,13 @@ export default function WorldFloatingInspectorWindow({
     const element = windowRef.current;
     if (!element) return;
     const focusFromPointer = (event: PointerEvent) => {
+      const clickedPaneId =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(
+              ".pane-layout-cell, .pane-layout-single, .pane-switcher-button",
+            )?.dataset.paneId
+          : null;
+      if (clickedPaneId && clickedPaneId !== conversation.paneId) return;
       if (
         event.target instanceof Element &&
         (event.target.closest(".world-floating-terminal-resize") ||
@@ -138,7 +169,7 @@ export default function WorldFloatingInspectorWindow({
     element.addEventListener("pointerdown", focusFromPointer, true);
     return () =>
       element.removeEventListener("pointerdown", focusFromPointer, true);
-  }, []);
+  }, [conversation.paneId]);
 
   useEffect(() => {
     const element = windowRef.current;
@@ -172,7 +203,7 @@ export default function WorldFloatingInspectorWindow({
       const deltaX = event.clientX - current.startX;
       const deltaY = event.clientY - current.startY;
       if (current.mode === "moving") {
-        setGeometry({
+        setWindowGeometryRef.current({
           ...current.geometry,
           ...moveFloatingTerminalPosition(
             current.geometry,
@@ -184,12 +215,16 @@ export default function WorldFloatingInspectorWindow({
         });
         return;
       }
-      setGeometry(
+      setWindowGeometryRef.current(
         resizeFloatingTerminalGeometry(
           current.geometry,
           deltaX,
           deltaY,
           current.viewport,
+          resizeMinimumForGeometry(
+            current.geometry,
+            FLOATING_TERMINAL_MIN_SIZE,
+          ),
         ),
       );
     };
@@ -212,7 +247,7 @@ export default function WorldFloatingInspectorWindow({
       if (!delta) return;
       event.preventDefault();
       const current = geometryRef.current;
-      setGeometry({
+      setWindowGeometryRef.current({
         ...current,
         ...moveFloatingTerminalPosition(
           current,
@@ -239,12 +274,12 @@ export default function WorldFloatingInspectorWindow({
 
   useEffect(() => {
     onAnchorChangeRef.current({
-      left: geometry.left,
-      top: geometry.top,
-      right: geometry.left + geometry.width,
-      bottom: geometry.top + geometry.height,
+      left: effectiveGeometry.left,
+      top: effectiveGeometry.top,
+      right: effectiveGeometry.left + effectiveGeometry.width,
+      bottom: effectiveGeometry.top + effectiveGeometry.height,
     });
-  }, [geometry]);
+  }, [effectiveGeometry]);
 
   useEffect(
     () => () => {
@@ -254,7 +289,7 @@ export default function WorldFloatingInspectorWindow({
   );
 
   const currentGeometry = () => {
-    return geometry;
+    return effectiveGeometry;
   };
 
   const beginInteraction = (
@@ -304,7 +339,7 @@ export default function WorldFloatingInspectorWindow({
     if (!current) return;
     event.preventDefault();
     if (mode === "moving") {
-      setGeometry({
+      setWindowGeometryRef.current({
         ...current,
         ...moveFloatingTerminalPosition(
           current,
@@ -316,12 +351,13 @@ export default function WorldFloatingInspectorWindow({
       });
       return;
     }
-    setGeometry(
+    setWindowGeometryRef.current(
       resizeFloatingTerminalGeometry(
         current,
         delta.x,
         delta.y,
         viewportSize(windowRef.current, current),
+        resizeMinimumForGeometry(current, FLOATING_TERMINAL_MIN_SIZE),
       ),
     );
   };
@@ -337,10 +373,10 @@ export default function WorldFloatingInspectorWindow({
       data-interaction={interaction ?? undefined}
       style={
         {
-          left: geometry.left,
-          top: geometry.top,
-          width: geometry.width,
-          height: geometry.height,
+          left: effectiveGeometry.left,
+          top: effectiveGeometry.top,
+          width: effectiveGeometry.width,
+          height: effectiveGeometry.height,
           right: "auto",
           bottom: "auto",
         } satisfies CSSProperties

@@ -2,6 +2,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -29,6 +30,7 @@ import { useReviewAnnotationDraft } from "../useReviewAnnotationDraft";
 import {
   readResourceFileSelection,
   resourceScopeForWorkspace,
+  resourceStateKey,
   writeInspectorPreferences,
   writeResourceFileSelection,
   type InspectorDock,
@@ -37,7 +39,10 @@ import {
   WORKSPACE_ANNOTATION_REQUEST_EVENT,
   type WorkspaceAnnotationRequest,
 } from "../workspaceResource";
-import type { WorldInspectorConversation } from "./worldTerminalPresentation";
+import {
+  worldInspectorWindowId,
+  type WorldInspectorConversation,
+} from "./worldTerminalPresentation";
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -61,6 +66,7 @@ export default function WorldInspectorConversationView({
   conversation,
   target,
   floating,
+  terminalActive,
   embedded = false,
   onChange,
   onClose,
@@ -72,6 +78,7 @@ export default function WorldInspectorConversationView({
   conversation: WorldInspectorConversation;
   target: Element | null;
   floating: boolean;
+  terminalActive: boolean;
   embedded?: boolean;
   onChange(change: Partial<WorldInspectorConversation>): void;
   onClose(): void;
@@ -81,6 +88,25 @@ export default function WorldInspectorConversationView({
   onTerminalPortalChange(element: HTMLDivElement | null): void;
 }) {
   const connectionClient = useConnectionClient();
+  const portalOwnerRef = useRef<HTMLDivElement | null>(null);
+  if (!portalOwnerRef.current) {
+    portalOwnerRef.current = document.createElement("div");
+    portalOwnerRef.current.className = "world-inspector-transfer-owner";
+  }
+  const portalOwner = portalOwnerRef.current;
+  useLayoutEffect(() => {
+    const destination = target ?? document.body;
+    if (portalOwner.parentElement !== destination) {
+      destination.appendChild(portalOwner);
+    }
+    portalOwner.style.display = target ? "contents" : "none";
+  }, [portalOwner, target]);
+  useLayoutEffect(
+    () => () => {
+      portalOwner.remove();
+    },
+    [portalOwner],
+  );
   const runtimeKey = connectionClientScopeKey(
     connectionClient,
     "world-inspector",
@@ -96,7 +122,12 @@ export default function WorldInspectorConversationView({
     (candidate) => candidate.workspace_id === conversation.workspaceId,
   );
   const historyPane = conversation.paneId
-    ? panes.find((candidate) => candidate.pane_id === conversation.paneId)
+    ? panes.find(
+        (candidate) =>
+          candidate.pane_id === conversation.paneId &&
+          candidate.workspace_id === conversation.workspaceId &&
+          candidate.tab_id === conversation.tabId,
+      )
     : undefined;
   const scope = useMemo(
     () =>
@@ -109,15 +140,22 @@ export default function WorldInspectorConversationView({
     conversation.context.kind === "agent" ? "agent" : "workspace",
   );
   useEffect(() => {
-    setChangesScope(
-      conversation.context.kind === "agent" ? "agent" : "workspace",
-    );
-  }, [conversation.context.kind, conversation.resourceIdentity]);
+    if (conversation.context.kind !== "agent") setChangesScope("workspace");
+  }, [conversation.context.kind]);
   const [fileSelection, setFileSelection] =
     useState<ActiveFilePreviewSelection>(emptyFile);
   const [diffSelection, setDiffSelection] =
     useState<ActiveDiffSelection>(emptyDiff);
   const previewRequestRef = useRef(0);
+  const scopeKey = scope ? resourceStateKey(scope) : null;
+  const scopeKeyRef = useRef(scopeKey);
+  useLayoutEffect(() => {
+    if (scopeKeyRef.current === scopeKey) return;
+    scopeKeyRef.current = scopeKey;
+    previewRequestRef.current += 1;
+    setFileSelection(emptyFile());
+    setDiffSelection(emptyDiff());
+  }, [scopeKey]);
   const terminalPortalChangeRef = useRef(onTerminalPortalChange);
   const focusRef = useRef(onFocus);
   terminalPortalChangeRef.current = onTerminalPortalChange;
@@ -131,6 +169,13 @@ export default function WorldInspectorConversationView({
   useEffect(() => {
     if (!target || !onFocus) return;
     const focusConversation = (event: Event) => {
+      const clickedPaneId =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(
+              ".pane-layout-cell, .pane-layout-single, .pane-switcher-button",
+            )?.dataset.paneId
+          : null;
+      if (clickedPaneId && clickedPaneId !== conversation.paneId) return;
       if (
         event.target instanceof Element &&
         event.target.closest(".workspace-inspector-head.is-window-drag-handle")
@@ -142,7 +187,7 @@ export default function WorldInspectorConversationView({
     target.addEventListener("pointerdown", focusConversation, true);
     return () =>
       target.removeEventListener("pointerdown", focusConversation, true);
-  }, [onFocus, target]);
+  }, [conversation.paneId, onFocus, target]);
   const {
     read: readAnnotationDraft,
     select: selectAnnotationDraft,
@@ -227,7 +272,7 @@ export default function WorldInspectorConversationView({
     );
   }, [fileSelection.entry?.path, scope]);
 
-  if (!scope || !target) return null;
+  if (!scope) return null;
 
   const inspectorState: WorkspaceInspectorState = {
     scope,
@@ -306,9 +351,10 @@ export default function WorldInspectorConversationView({
         <Suspense fallback={null}>
           <WorkspaceInspectorHost
             state={inspectorState}
-            visible
+            visible={Boolean(target)}
             workspace={workspace}
             historyPane={historyPane}
+            historySessionFingerprint={conversation.agentSessionFingerprint}
             fileSelection={fileSelection}
             previewRequestRef={previewRequestRef}
             diffSelection={diffSelection}
@@ -344,7 +390,9 @@ export default function WorldInspectorConversationView({
                 loadFile(fileSelection.entry, fileSelection.fragment);
               }
             }}
-            onTerminalPortalChange={setTerminalPortal}
+            onTerminalPortalChange={
+              terminalActive ? setTerminalPortal : undefined
+            }
             onViewChange={changeView}
             onDockChange={changeDock}
             onExpandedChange={changeExpanded}
@@ -380,5 +428,9 @@ export default function WorldInspectorConversationView({
     </div>
   );
 
-  return createPortal(content, target, conversation.nodeId);
+  return createPortal(
+    content,
+    portalOwner,
+    worldInspectorWindowId(conversation),
+  );
 }

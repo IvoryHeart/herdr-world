@@ -5,7 +5,11 @@ import {
   initializeLayoutPreferences,
   updateLayoutPreferences,
 } from "../layoutPreferences";
-import { initializeShortcutPreferences } from "../shortcutPreferences";
+import {
+  initializeShortcutPreferences,
+  shortcutLabel,
+  updateShortcut,
+} from "../shortcutPreferences";
 import { __storeTesting, store } from "../store";
 import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import "../styles/tokens.css";
@@ -27,13 +31,16 @@ function enterSearch(input: HTMLInputElement, value: string) {
   )?.set?.call(input, value);
   input.dispatchEvent(new InputEvent("input", { bubbles: true }));
 }
-async function until(condition: () => unknown, message: string) {
+async function until(
+  condition: () => unknown,
+  message: string | (() => string),
+) {
   for (let index = 0; index < 200; index += 1) {
     if (condition()) return;
     await settle();
   }
   throw new Error(
-    `Timed out: ${message}; selected=${store.get().selectedPaneId}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
+    `Timed out: ${typeof message === "function" ? message() : message}; selected=${store.get().selectedPaneId}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
   );
 }
 
@@ -96,7 +103,13 @@ let focusedPaneId = panes[0].pane_id;
 let focusedTabId = tabs[0]!.tab_id;
 let worldRevision = 1;
 let runtimeGeneration = 7;
+let rejectNextWorldSnapshot = false;
+let staleNextWorldSnapshot = false;
+let omitNextWorldTopology = false;
+let navigationMode: "shared" | "browser-local" = "shared";
+let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
+let delayedTabList: { promise: Promise<void>; tabs: Tab[] } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
 let agents: Record<string, unknown>[] = [
@@ -133,20 +146,31 @@ function currentWorkspace() {
 }
 
 function layout(): PaneLayout {
+  const tabPanes = currentPanes().filter(
+    (pane) => pane.tab_id === focusedTabId,
+  );
   return {
     workspace_id: workspaceBase.workspace_id,
     tab_id: focusedTabId,
-    zoomed: false,
+    zoomed: zoomedFocusedPaneId !== null,
     area: { x: 0, y: 0, width: 160, height: 48 },
-    focused_pane_id: focusedPaneId,
-    panes: currentPanes()
-      .filter((pane) => pane.tab_id === focusedTabId)
-      .map((pane, index) => ({
-        pane_id: pane.pane_id,
-        focused: pane.focused,
-        rect: { x: index * 80, y: 0, width: 80, height: 48 },
-      })),
-    splits: [],
+    focused_pane_id: zoomedFocusedPaneId ?? focusedPaneId,
+    panes: tabPanes.map((pane, index) => ({
+      pane_id: pane.pane_id,
+      focused: pane.focused,
+      rect: { x: index * 80, y: 0, width: 80, height: 48 },
+    })),
+    splits:
+      tabPanes.length > 1
+        ? [
+            {
+              id: `${focusedTabId}-split`,
+              direction: "right",
+              ratio: 0.5,
+              rect: { x: 0, y: 0, width: 160, height: 48 },
+            },
+          ]
+        : [],
   };
 }
 
@@ -204,6 +228,14 @@ const client: ConnectionClient = {
   call: async (method, params = {}) => {
     calls.push({ method, params });
     if (method === "world.snapshot") {
+      if (rejectNextWorldSnapshot) {
+        rejectNextWorldSnapshot = false;
+        throw new Error("Synthetic transient World observation failure");
+      }
+      const stale = staleNextWorldSnapshot;
+      staleNextWorldSnapshot = false;
+      const omitTopology = omitNextWorldTopology;
+      omitNextWorldTopology = false;
       return {
         revision: worldRevision,
         observed_at: Date.now(),
@@ -216,12 +248,12 @@ const client: ConnectionClient = {
             state: "ready",
             generation: runtimeGeneration,
             snapshot_generation: runtimeGeneration,
-            stale: false,
-            actionable: true,
+            stale,
+            actionable: !stale,
             snapshot: {
               workspaces: [currentWorkspace()],
-              tabs: currentTabs(),
-              panes: currentPanes(),
+              tabs: omitTopology ? [] : currentTabs(),
+              panes: omitTopology ? [] : currentPanes(),
               agents,
               coverage: currentWorldCoverage(),
             },
@@ -247,9 +279,17 @@ const client: ConnectionClient = {
       return pane ? { pane: { ...pane, focused: true } } : {};
     }
     if (method === "workspace.list") {
-      return { navigation_mode: "shared", workspaces: [currentWorkspace()] };
+      return {
+        navigation_mode: navigationMode,
+        workspaces: [currentWorkspace()],
+      };
     }
-    if (method === "tab.list") return { tabs: currentTabs() };
+    if (method === "tab.list") {
+      const delayed = delayedTabList;
+      const listed = delayed?.tabs ?? currentTabs();
+      if (delayed) await delayed.promise;
+      return { tabs: listed };
+    }
     if (method === "pane.list") return { panes: currentPanes() };
     if (method === "tab.create") {
       const number = tabs.length + 1;
@@ -507,8 +547,35 @@ async function run() {
   const topbarDetails = document.querySelector<HTMLElement>(
     ".world-topbar-status",
   );
-  const topbarActions = document.querySelector<HTMLElement>(".command-trigger");
+  const topbarActions = document.querySelector<HTMLElement>(
+    ".topbar-actions .command-trigger",
+  );
+  const setShellActionsOpen = async (open: boolean) => {
+    const trigger = () =>
+      document.querySelector<HTMLButtonElement>(
+        ".topbar-actions .command-trigger",
+      );
+    await until(trigger, "shell Actions trigger");
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      if (
+        (trigger()?.getAttribute("aria-expanded") === "true") === open &&
+        Boolean(document.querySelector(".command-popover")) === open
+      )
+        return;
+      trigger()?.focus();
+      trigger()?.click();
+      await settle();
+    }
+    await until(
+      () =>
+        (trigger()?.getAttribute("aria-expanded") === "true") === open &&
+        Boolean(document.querySelector(".command-popover")) === open,
+      `shell Actions ${open ? "opened" : "closed"}`,
+    );
+  };
   const topbarMenu = document.querySelector<HTMLElement>(".menu-button");
+  const toggleTopbarMenu = () =>
+    document.querySelector<HTMLButtonElement>(".menu-button")?.click();
   const precedes = (left: Element | null, right: Element | null) =>
     Boolean(
       left &&
@@ -522,6 +589,38 @@ async function run() {
       precedes(topbarActions, topbarMenu),
     "top bar did not order host, view, details, Actions and Menu",
   );
+  await setShellActionsOpen(true);
+  await until(
+    () => document.querySelector(".command-popover"),
+    "Roamgate shell Actions menu in the visual view",
+  );
+  const shellActionsMenu =
+    document.querySelector<HTMLElement>(".command-popover")!;
+  const shellMenuBounds = shellActionsMenu.getBoundingClientRect();
+  check(
+    !topbarActions?.hasAttribute("disabled") &&
+      !document.querySelector(".world-visual-actions-trigger") &&
+      !document.querySelector(".world-view-toolbar-actions") &&
+      shellActionsMenu.textContent?.includes("Arrange windows") === true &&
+      shellActionsMenu.textContent?.includes("Pinned only") === true &&
+      shellActionsMenu.textContent?.includes("Create workspace") === true &&
+      shellActionsMenu.textContent?.includes("Select a visual entity") ===
+        true &&
+      shellActionsMenu.textContent.indexOf("Create workspace") <
+        shellActionsMenu.textContent.indexOf("Arrange windows: Single") &&
+      shellMenuBounds.width > 0 &&
+      shellMenuBounds.right <= window.innerWidth,
+    "shell Actions was replaced, clipped, or missing its native commands and extensions",
+  );
+  check(
+    (document
+      .querySelector<HTMLElement>(".world-view-toolbar-search input")
+      ?.getBoundingClientRect().width ?? 0) >= 180 &&
+      getComputedStyle(topbarDetails!).opacity !== "1" &&
+      topbarDetails?.title.includes("spaces") === true,
+    "top-bar extras crowded search or made the host summary prominent",
+  );
+  await setShellActionsOpen(false);
   check(
     document
       .querySelector(".world-control-plane")
@@ -560,7 +659,7 @@ async function run() {
       sharedNavigator && getComputedStyle(sharedNavigator).display !== "none",
     "restored workspace navigator",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
@@ -636,7 +735,7 @@ async function run() {
     "the Zen workspace navigator did not collapse after losing focus",
   );
   sharedNavigator?.style.removeProperty("top");
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLButtonElement>(
@@ -711,7 +810,7 @@ async function run() {
     document.querySelector(".world-office-toolbar") === null,
     "Office settings still consumed a scene toolbar",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
@@ -736,7 +835,11 @@ async function run() {
       ),
     "Office controls were not menu-owned or did not default to Floating",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
+  await until(
+    () => !document.querySelector(".config-dropdown"),
+    "Office settings closed before shell Actions",
+  );
   const floatingPreferenceNavigatorRow = [
     ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
   ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
@@ -791,6 +894,27 @@ async function run() {
       document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
     "floating preference Builder Inspector",
   );
+  await setShellActionsOpen(true);
+  await until(
+    () =>
+      document
+        .querySelector(".command-popover")
+        ?.textContent?.includes("Open Terminal") &&
+      document
+        .querySelector(".command-popover")
+        ?.textContent?.includes("Pin selected pane"),
+    "qualified visual commands in the original shell Actions",
+  );
+  check(
+    document
+      .querySelector(".command-popover")
+      ?.textContent?.includes("Go to Spaces") === true &&
+      document
+        .querySelector(".command-popover")
+        ?.textContent?.includes("Create workspace") === true,
+    "selected visual commands displaced native shell commands",
+  );
+  await setShellActionsOpen(false);
   flushSync(() => agentTarget("Reviewer")!.click());
   await until(
     () =>
@@ -824,11 +948,331 @@ async function run() {
     ),
     "Floating mode did not use equally sized cascaded Inspector windows",
   );
-  preferredFloatingWindows
-    .find((floatingWindow) =>
-      floatingWindow.getAttribute("aria-label")?.startsWith("Builder "),
+  rejectNextWorldSnapshot = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().status === "error",
+    "transient World observation failure",
+  );
+  await settle();
+  if (
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length !== 2
+  ) {
+    throw new Error("transient World observation hid open floating Inspectors");
+  }
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().status === "ready",
+    "World observation recovered with both Inspectors",
+  );
+  staleNextWorldSnapshot = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.stale === true,
+    "selected World host temporarily stale",
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 2,
+    "stale aggregate observation hid live floating Inspectors",
+  );
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.actionable === true,
+    "selected World host observation recovered",
+  );
+  omitNextWorldTopology = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
+    "bounded World projection omitted existing tabs",
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 2,
+    "healthy aggregate observation hid tabs still present in focused Herdr state",
+  );
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 2,
+    "full World projection recovered",
+  );
+  const arrangeWindows = async (label: string) => {
+    document
+      .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
+      .click();
+    const getChoice = () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
+        ),
+      ].find((button) => button.querySelector("strong")?.textContent === label);
+    await until(getChoice, `${label} arrangement choice`);
+    const choice = getChoice();
+    check(
+      Boolean(choice) && choice?.getAttribute("aria-disabled") !== "true",
+      `${label} arrangement was unavailable: ${choice?.querySelector("small")?.textContent}`,
+    );
+    const menu = document.querySelector<HTMLElement>(
+      '[role="menu"][aria-label="Arrange windows"]',
+    );
+    const bounds = menu?.getBoundingClientRect();
+    const hit = bounds
+      ? document.elementFromPoint(
+          bounds.left + bounds.width / 2,
+          bounds.top + Math.min(24, bounds.height / 2),
+        )
+      : null;
+    check(
+      Boolean(
+        menu &&
+          bounds &&
+          bounds.left >= 0 &&
+          bounds.right <= window.innerWidth &&
+          bounds.top >= 0 &&
+          bounds.bottom <= window.innerHeight &&
+          hit &&
+          menu.contains(hit),
+      ),
+      `${label} arrangement menu was outside the viewport or obscured: ${JSON.stringify(bounds?.toJSON())}`,
+    );
+    choice?.click();
+  };
+  const tabBarBounds = document
+    .querySelector<HTMLElement>(".tabbar")!
+    .getBoundingClientRect();
+  const arrangementTriggerBounds = document
+    .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
+    .getBoundingClientRect();
+  check(
+    arrangementTriggerBounds.right >= tabBarBounds.right - 20,
+    `wide desktop did not align Arrange windows with the tab bar's right edge: ${JSON.stringify({ tabBarRight: tabBarBounds.right, arrangementRight: arrangementTriggerBounds.right })}`,
+  );
+  check(
+    shortcutLabel("arrangement.grid") === "Unassigned",
+    "arrangement shortcut changed the original shell defaults",
+  );
+  updateShortcut("arrangement.grid", ["Ctrl+Alt+Shift+5"]);
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "5",
+      code: "Digit5",
+      ctrlKey: true,
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await settle();
+  const shortcutGrid = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ]
+    .map((window) => window.getBoundingClientRect())
+    .sort((left, right) => left.left - right.left);
+  check(
+    shortcutGrid.length === 2 &&
+      shortcutGrid[0]!.right <= shortcutGrid[1]!.left,
+    "Grid keyboard shortcut did not arrange visual Inspectors",
+  );
+  document.documentElement.style.zoom = "1.2";
+  window.dispatchEvent(new Event("resize"));
+  await settle();
+  await arrangeWindows("Columns");
+  await until(() => {
+    const arranged = [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ];
+    if (arranged.length !== 2) return false;
+    const [left, right] = arranged
+      .map((window) => window.getBoundingClientRect())
+      .sort((a, b) => a.left - b.left);
+    return left && right && left.right <= right.left;
+  }, "two visual Inspectors in Columns");
+  const zoomedStage = document
+    .querySelector(".world-view-layout")!
+    .getBoundingClientRect();
+  check(
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].every((window) => {
+      const bounds = window.getBoundingClientRect();
+      return (
+        bounds.left >= zoomedStage.left - 2 &&
+        bounds.right <= zoomedStage.right + 2 &&
+        bounds.top >= zoomedStage.top - 2 &&
+        bounds.bottom <= zoomedStage.bottom + 2 &&
+        Math.abs(
+          bounds.top - zoomedStage.top - (zoomedStage.bottom - bounds.bottom),
+        ) <= 3
+      );
+    }),
+    "120% UI scale placed arranged Inspectors outside the visual stage",
+  );
+  document.documentElement.style.zoom = "";
+  window.dispatchEvent(new Event("resize"));
+  await settle();
+  const desktopInspectorBounds = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ]
+      .map((inspector) => ({
+        label: inspector.getAttribute("aria-label"),
+        bounds: inspector.getBoundingClientRect(),
+      }))
+      .sort((a, b) => a.label!.localeCompare(b.label!));
+  const beforeCompact = desktopInspectorBounds();
+  const compactVisualStage =
+    document.querySelector<HTMLElement>(".world-view-layout")!;
+  compactVisualStage.style.width = "660px";
+  compactVisualStage.style.height = "650px";
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () =>
+      document.documentElement.dataset.layout === "mobile" &&
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 1,
+    "compact visual presentation showed one Inspector",
+  );
+  const compactArrangeTrigger = () =>
+    document.querySelector<HTMLButtonElement>(
+      '.mobile-nav button[aria-label="Arrange windows"]',
+    );
+  if (!compactArrangeTrigger())
+    document
+      .querySelector<HTMLButtonElement>(".mobile-controls-toggle")
+      ?.click();
+  await until(compactArrangeTrigger, "compact arrangement menu trigger");
+  compactArrangeTrigger()!.click();
+  await until(
+    () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
+        ),
+      ].some(
+        (button) =>
+          button.querySelector("strong")?.textContent === "Columns" &&
+          button.getAttribute("aria-disabled") === "true",
+      ),
+    "compact Columns was unavailable",
+  );
+  const compactColumns = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
+    ),
+  ].find((button) => button.querySelector("strong")?.textContent === "Columns");
+  compactColumns?.click();
+  document.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+  );
+  updateShortcut("arrangement.columns", ["Ctrl+Alt+Shift+3"]);
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "3",
+      code: "Digit3",
+      ctrlKey: true,
+      altKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 1,
+    "compact menu or shortcut changed the visible Inspector set",
+  );
+  const compactResizeGrip = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label$=" Inspector"] button[aria-label="Resize Inspector window"]',
+  )!;
+  for (const key of ["ArrowLeft", "ArrowUp"]) {
+    const resize = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+    });
+    compactResizeGrip.dispatchEvent(resize);
+    check(resize.defaultPrevented, `compact ${key} resize was not handled`);
+  }
+  updateLayoutPreferences({ mode: "desktop" });
+  compactVisualStage.style.removeProperty("width");
+  compactVisualStage.style.removeProperty("height");
+  await until(
+    () =>
+      document.documentElement.dataset.layout === "desktop" &&
+      desktopInspectorBounds().length === 2,
+    "desktop Inspectors returned after compact selection",
+  );
+  await until(
+    () =>
+      desktopInspectorBounds().every((item, index) => {
+        const prior = beforeCompact[index];
+        return (
+          item.label === prior?.label &&
+          ["left", "top", "width", "height"].every(
+            (key) =>
+              Math.abs(
+                (item.bounds[key as keyof DOMRect] as number) -
+                  (prior.bounds[key as keyof DOMRect] as number),
+              ) <= 2,
+          )
+        );
+      }),
+    "desktop Inspector placements survived compact menu and shortcut",
+  );
+  for (const visualView of ["tree", "graph", "office"] as const) {
+    viewSelect.value = visualView;
+    viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(
+      () =>
+        document.querySelector(
+          visualView === "tree"
+            ? ".world-connected-tree-shell"
+            : visualView === "graph"
+              ? ".world-spatial-graph-shell"
+              : "canvas[data-office-canvas='true']",
+        ) &&
+        document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+          .length === 2,
+      `arranged Inspector continuity in ${visualView}`,
+    );
+  }
+  const attachedBeforeSingle = calls.filter(
+    ({ method }) => method === "terminal.detach",
+  ).length;
+  await arrangeWindows("Single");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 1 &&
+      calls.filter(({ method }) => method === "terminal.detach").length >
+        attachedBeforeSingle,
+    "Single suspended the other visual terminal",
+  );
+  await arrangeWindows("Restore positions");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "Restore reopened both retained visual Inspectors",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Dock Inspector"]',
     )
-    ?.querySelector<HTMLButtonElement>('button[aria-label="Dock Inspector"]')
     ?.click();
   await until(
     () =>
@@ -1094,7 +1538,7 @@ async function run() {
       !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
     "close preference-check Inspectors",
   );
-  topbarMenu?.click();
+  toggleTopbarMenu();
   await until(
     () =>
       document.querySelector<HTMLSelectElement>(
@@ -1107,7 +1551,7 @@ async function run() {
   )!;
   dockedOpeningSelect.value = "docked";
   dockedOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
-  topbarMenu?.click();
+  toggleTopbarMenu();
   flushSync(() => agentTarget("Builder")!.click());
   await until(
     () =>
@@ -1579,6 +2023,12 @@ async function run() {
   await until(
     () => document.querySelector(".world-completion-notices button"),
     "Reviewer completion for existing Inspector",
+  );
+  check(
+    document.querySelector(
+      '[role="dialog"][aria-label="Builder Inspector"]',
+    ) !== null,
+    "agent completion hid an unrelated floating Inspector",
   );
   const rejectedBeforeCompletion = rejectedPaneGets;
   rejectNextPaneGetId = "reviewer-pane";
@@ -2053,6 +2503,79 @@ async function run() {
       ) !== null,
     "Tree did not replace the detached overlay with the exact expanded leaf",
   );
+  const selectTreeNode = (label: string) => {
+    const button = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".world-tree-outline-select",
+      ),
+    ].find((candidate) =>
+      candidate.querySelector("strong")?.textContent?.includes(label),
+    );
+    check(Boolean(button), `Tree omitted ${label} selection`);
+    button?.click();
+  };
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-tree-inline-inspector button[aria-label="Float Inspector"]',
+    )!
+    .click();
+  await until(
+    () =>
+      document.querySelector('[role="dialog"][aria-label="Builder Inspector"]'),
+    "Builder floated before Tree Restore regression",
+  );
+  selectTreeNode("Reviewer");
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer"),
+    "Reviewer inline before Tree Restore regression",
+  );
+  await arrangeWindows("Columns");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "Tree Columns included floating and inline Inspectors",
+  );
+  document
+    .querySelector<HTMLElement>('.tabbar-tab[title="created-tab-3"]')!
+    .click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("terminal"),
+    "later terminal opened inline during Tree arrangement",
+  );
+  await arrangeWindows("Restore positions");
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("terminal") &&
+      !document
+        .querySelector(".world-context-rail")
+        ?.classList.contains("has-inspector"),
+    "Restore retained the later terminal in its Tree leaf",
+  );
+  selectTreeNode("Builder");
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-tree-inline-inspector .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Builder"),
+    "Builder inline after Tree Restore regression",
+  );
   document
     .querySelector<HTMLButtonElement>(
       '.world-tree-inline-inspector button[aria-label="Float Inspector"]',
@@ -2126,6 +2649,35 @@ async function run() {
   await until(
     () => document.documentElement.dataset.layout === "mobile",
     "forced compact layout",
+  );
+  const mobileTabBar = document.querySelector<HTMLElement>(".tabbar");
+  const mobileControlsToggle = document.querySelector<HTMLButtonElement>(
+    ".mobile-controls-toggle",
+  )!;
+  mobileControlsToggle.click();
+  await until(
+    () =>
+      !document.querySelector(
+        '.mobile-nav button[aria-label="Arrange windows"]',
+      ),
+    "collapsed mobile controls hid window arrangements",
+  );
+  mobileControlsToggle.click();
+  await until(
+    () =>
+      document.querySelector(
+        '.mobile-nav button[aria-label="Arrange windows"]',
+      ),
+    "mobile ellipsis revealed window arrangements",
+  );
+  check(
+    !mobileTabBar?.querySelector('button[aria-label="Arrange windows"]') &&
+      document
+        .querySelector<HTMLElement>(
+          '.mobile-nav button[aria-label="Arrange windows"]',
+        )!
+        .getBoundingClientRect().width > 0,
+    "mobile arrangement access created another tab-strip icon",
   );
   const compactReviewerSlot = persistentReviewerInspector?.closest<HTMLElement>(
     ".workspace-inspector-slot",
@@ -2316,6 +2868,15 @@ async function run() {
       ),
     "Spaces handoff",
   );
+  document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
+  await settle();
+  check(
+    document
+      .querySelector(".command-popover")
+      ?.textContent?.includes("Arrange windows") === true,
+    "Spaces Actions omitted window arrangements",
+  );
+  document.querySelector<HTMLButtonElement>(".command-trigger")?.click();
   await settle();
   check(
     document.querySelector(".world-control-plane") === persistentControlPlane &&
@@ -2330,7 +2891,7 @@ async function run() {
     "visible Spaces remained obstructed by a visual Inspector presentation",
   );
   const spacesTerminal = document.querySelector<HTMLElement>(
-    ".workspace-terminal-surface > .terminal-shell",
+    ".workspace-terminal-surface .terminal-shell",
   );
   check(
     Boolean(
@@ -2435,6 +2996,487 @@ async function run() {
       .querySelector(".world-context-rail .workspace-inspector")
       ?.textContent?.includes("Reviewing the replacement session") === true,
     "replacement session did not refresh the Inspector context",
+  );
+
+  const splitBuilderWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Builder Inspector"]',
+  )!;
+  splitBuilderWindow.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      pointerId: 81,
+      pointerType: "mouse",
+    }),
+  );
+  await until(
+    () => store.get().selectedPaneId === "builder-pane",
+    "Builder floating before sibling focus",
+  );
+  const siblingPane: Pane = {
+    ...panes[0]!,
+    pane_id: "builder-sibling-pane",
+    terminal_id: "builder-sibling-terminal",
+    focused: false,
+    agent: "builder-sibling",
+    display_agent: "Builder Sibling",
+  };
+  panes.push(siblingPane);
+  tabs[0]!.pane_count = 2;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  __storeTesting.replaceState({
+    ...store.get(),
+    workspaces: [currentWorkspace()],
+    tabs: currentTabs(),
+    panes: currentPanes(),
+    layout: layout(),
+    lastRefresh: Date.now(),
+  });
+  await until(
+    () => splitBuilderWindow.querySelectorAll(".pane-layout-cell").length === 2,
+    "both panes in one floating Builder Inspector",
+  );
+  const splitBuilderBounds = splitBuilderWindow.getBoundingClientRect();
+  const browserLocalSnapshot = store.get();
+  navigationMode = "browser-local";
+  __storeTesting.replaceState({
+    ...browserLocalSnapshot,
+    navigationMode,
+    browserNavigation: {
+      ...browserLocalSnapshot.browserNavigation,
+      revision: browserLocalSnapshot.browserNavigation.revision + 1,
+      workspaceId: workspaceBase.workspace_id,
+      tabIds: {
+        ...browserLocalSnapshot.browserNavigation.tabIds,
+        [workspaceBase.workspace_id]: "work",
+      },
+      paneIds: {
+        ...browserLocalSnapshot.browserNavigation.paneIds,
+        work: "builder-pane",
+      },
+    },
+  });
+  const delayedOldPaneFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "builder-pane",
+    promise: delayedOldPaneFocus.promise,
+  };
+  const oldPaneGetsBeforeSibling = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  splitBuilderWindow
+    .querySelectorAll<HTMLElement>(".pane-layout-cell")[1]!
+    .dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 82,
+        pointerType: "mouse",
+      }),
+    );
+  await until(
+    () => store.get().selectedPaneId === siblingPane.pane_id,
+    "focused sibling inside floating Builder Inspector",
+  );
+  const oldPaneGetsAfterSibling = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  delayedOldPaneFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  await settle();
+  check(
+    oldPaneGetsAfterSibling === oldPaneGetsBeforeSibling &&
+      store.get().selectedPaneId === siblingPane.pane_id,
+    "browser-local sibling click started an old-pane focus that could finish last",
+  );
+  updateLayoutPreferences({ mode: "mobile" });
+  await until(
+    () =>
+      splitBuilderWindow.querySelector<HTMLButtonElement>(
+        'button[aria-label="Previous pane"]',
+      ),
+    "mobile switcher in floating split Inspector",
+  );
+  const delayedMobileOldFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: siblingPane.pane_id,
+    promise: delayedMobileOldFocus.promise,
+  };
+  const oldPaneGetsBeforeMobile = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === siblingPane.pane_id,
+  ).length;
+  const previousPaneButton =
+    splitBuilderWindow.querySelector<HTMLButtonElement>(
+      'button[aria-label="Previous pane"]',
+    )!;
+  previousPaneButton.dispatchEvent(
+    new PointerEvent("pointerdown", {
+      bubbles: true,
+      button: 0,
+      pointerId: 83,
+      pointerType: "touch",
+    }),
+  );
+  previousPaneButton.click();
+  await until(
+    () => store.get().selectedPaneId === "builder-pane",
+    "mobile switcher focused previous pane",
+  );
+  const oldPaneGetsAfterMobile = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === siblingPane.pane_id,
+  ).length;
+  delayedMobileOldFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    oldPaneGetsAfterMobile === oldPaneGetsBeforeMobile &&
+      store.get().selectedPaneId === "builder-pane",
+    "mobile switcher started an old-pane focus that could finish last",
+  );
+  updateLayoutPreferences({ mode: "desktop" });
+  await until(
+    () => document.documentElement.dataset.layout === "desktop",
+    "desktop layout after mobile pane focus",
+  );
+
+  zoomedFocusedPaneId = siblingPane.pane_id;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  __storeTesting.replaceState({
+    ...store.get(),
+    layout: layout(),
+    lastRefresh: Date.now(),
+  });
+  await until(
+    () => splitBuilderWindow.querySelector(".pane-layout-single"),
+    "zoomed sibling pane in floating Inspector",
+  );
+  const delayedZoomOldFocus = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "builder-pane",
+    promise: delayedZoomOldFocus.promise,
+  };
+  const oldPaneGetsBeforeZoom = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  splitBuilderWindow
+    .querySelector<HTMLElement>(".pane-layout-single")!
+    .dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 84,
+        pointerType: "mouse",
+      }),
+    );
+  await until(
+    () => store.get().selectedPaneId === siblingPane.pane_id,
+    "zoomed sibling pane received focus",
+  );
+  const oldPaneGetsAfterZoom = calls.filter(
+    ({ method, params }) =>
+      method === "pane.get" && params.pane_id === "builder-pane",
+  ).length;
+  delayedZoomOldFocus.resolve();
+  delayedPaneGet = null;
+  await settle();
+  check(
+    oldPaneGetsAfterZoom === oldPaneGetsBeforeZoom &&
+      store.get().selectedPaneId === siblingPane.pane_id,
+    "zoomed pane click started an old-pane focus that could finish last",
+  );
+  zoomedFocusedPaneId = null;
+  worldRevision += 1;
+  await worldRuntimeStore.refresh();
+  __storeTesting.replaceState({
+    ...store.get(),
+    layout: layout(),
+    lastRefresh: Date.now(),
+  });
+  navigationMode = "shared";
+  __storeTesting.replaceState({ ...store.get(), navigationMode });
+  const afterSiblingBounds = splitBuilderWindow.getBoundingClientRect();
+  check(
+    splitBuilderWindow.isConnected &&
+      splitBuilderWindow
+        .getAttribute("aria-label")
+        ?.includes("Builder Sibling") === true &&
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("Reviewer Next") === true &&
+      Math.abs(afterSiblingBounds.left - splitBuilderBounds.left) <= 2 &&
+      Math.abs(afterSiblingBounds.top - splitBuilderBounds.top) <= 2,
+    "sibling focus moved or docked its floating Inspector",
+  );
+
+  await arrangeWindows("Columns");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "arranged Builder and Reviewer before opening a later Inspector",
+  );
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    "Office before later Inspector opening",
+  );
+  toggleTopbarMenu();
+  await until(
+    () =>
+      document.querySelector<HTMLSelectElement>(
+        'select[aria-label="Office Inspector opening"]',
+      ),
+    "Office opening preference before Restore regression",
+  );
+  const laterOpeningSelect = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="Office Inspector opening"]',
+  )!;
+  laterOpeningSelect.value = "floating";
+  laterOpeningSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  toggleTopbarMenu();
+  const laterDesk = () =>
+    document.querySelector<HTMLButtonElement>(
+      '.world-semantic-target[data-kind="desk"][data-target-key*="created-tab-3"]:not(:disabled)',
+    );
+  await until(laterDesk, "later terminal desk in Office");
+  // World can expose a new tab while the focused list still predates it.
+  const staleFocusedTabs = store
+    .get()
+    .tabs.filter((tab) => tab.tab_id !== "created-tab-3");
+  __storeTesting.replaceState({ ...store.get(), tabs: staleFocusedTabs });
+  const delayedOpeningList = Promise.withResolvers<void>();
+  delayedTabList = {
+    promise: delayedOpeningList.promise,
+    tabs: staleFocusedTabs,
+  };
+  const tabListsBeforeOpening = calls.filter(
+    ({ method }) => method === "tab.list",
+  ).length;
+  laterDesk()!.click();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "tab.list").length >
+      tabListsBeforeOpening,
+    "focused tab list delayed during Inspector opening",
+  );
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 3,
+    "later floating Inspector outside the arranged set",
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 3,
+    "pre-admission focused list retired a newly opened Inspector",
+  );
+  delayedTabList = null;
+  delayedOpeningList.resolve();
+  await store.refresh();
+  await until(
+    () => store.get().tabs.some((tab) => tab.tab_id === "created-tab-3"),
+    "focused tab list caught up after opening",
+  );
+  const laterInspector = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ].find(
+    (candidate) =>
+      !candidate.getAttribute("aria-label")?.includes("Builder") &&
+      !candidate.getAttribute("aria-label")?.includes("Reviewer"),
+  );
+  check(Boolean(laterInspector), "later terminal Inspector was not floating");
+  laterInspector
+    ?.querySelector<HTMLButtonElement>('button[aria-label="Dock Inspector"]')
+    ?.click();
+  await until(
+    () =>
+      document
+        .querySelector(
+          ".world-context-rail .workspace-inspector-agent-identity",
+        )
+        ?.textContent?.includes("terminal") === true,
+    "explicitly docked the later Inspector",
+  );
+  await arrangeWindows("Restore positions");
+  check(
+    document
+      .querySelector(".world-context-rail .workspace-inspector-agent-identity")
+      ?.textContent?.includes("terminal") === true &&
+      !laterInspector?.isConnected,
+    "Restore moved an Inspector opened and docked after the arrangement",
+  );
+
+  const narrowedVisualStage =
+    document.querySelector<HTMLElement>(".world-view-layout")!;
+  narrowedVisualStage.style.width = "700px";
+  narrowedVisualStage.style.height = "740px";
+  await until(
+    () => Math.abs(narrowedVisualStage.getBoundingClientRect().width - 700) < 2,
+    "narrow visual arrangement stage",
+  );
+  const visualWindowBounds = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].map((window) => window.getBoundingClientRect());
+  const narrowLayoutDiagnostic = () =>
+    JSON.stringify({
+      stage: narrowedVisualStage.getBoundingClientRect().toJSON(),
+      windows: [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"]',
+        ),
+      ].map((window) => ({
+        bounds: window.getBoundingClientRect().toJSON(),
+        compact: window
+          .querySelector(".workspace-inspector")
+          ?.classList.contains("is-compact"),
+      })),
+    });
+  const clippedVisualControls = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="dialog"][aria-label$=" Inspector"]',
+      ),
+    ].flatMap((window) => {
+      const bounds = window.getBoundingClientRect();
+      return [
+        ...window.querySelectorAll<HTMLButtonElement>(
+          ".workspace-inspector-head button",
+        ),
+      ].flatMap((button) => {
+        const control = button.getBoundingClientRect();
+        const reachable =
+          control.width > 0 &&
+          control.height > 0 &&
+          control.left >= bounds.left - 1 &&
+          control.right <= bounds.right + 1 &&
+          control.top >= bounds.top - 1 &&
+          control.bottom <= bounds.bottom + 1;
+        return reachable
+          ? []
+          : [
+              {
+                label: button.ariaLabel ?? button.textContent,
+                width: Math.round(bounds.width),
+                leftInset: Math.round(control.left - bounds.left),
+                rightInset: Math.round(bounds.right - control.right),
+                topInset: Math.round(control.top - bounds.top),
+                bottomInset: Math.round(bounds.bottom - control.bottom),
+              },
+            ];
+      });
+    });
+  await arrangeWindows("Columns");
+  await until(
+    () => {
+      const bounds = visualWindowBounds().sort((a, b) => a.left - b.left);
+      return (
+        bounds.length === 3 &&
+        bounds.every((item) => item.width >= 220) &&
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
+          ),
+        ].every((inspector) => inspector.classList.contains("is-compact")) &&
+        bounds.every(
+          (item, index) => index === 0 || bounds[index - 1]!.right <= item.left,
+        )
+      );
+    },
+    () => `three Inspectors in narrow Columns: ${narrowLayoutDiagnostic()}`,
+  );
+  await settle();
+  check(
+    clippedVisualControls().length === 0,
+    `narrow Columns clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
+  );
+  narrowedVisualStage.style.height = "512px";
+  narrowedVisualStage.style.maxHeight = "512px";
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 512) < 2,
+    "short visual arrangement stage",
+  );
+  await arrangeWindows("Rows");
+  await until(
+    () => {
+      const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
+      return (
+        bounds.length === 3 &&
+        bounds.every((item) => item.height >= 160) &&
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
+          ),
+        ].every((inspector) => inspector.classList.contains("is-compact")) &&
+        bounds.every(
+          (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
+        )
+      );
+    },
+    () => `three Inspectors in narrow Rows: ${narrowLayoutDiagnostic()}`,
+  );
+  check(
+    clippedVisualControls().length === 0,
+    `narrow Rows clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
+  );
+  narrowedVisualStage.style.width = "1000px";
+  narrowedVisualStage.style.height = "740px";
+  narrowedVisualStage.style.removeProperty("max-height");
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().width - 1000) < 2 &&
+      narrowedVisualStage.getBoundingClientRect().height >= 650,
+    "visual stage before default Cascade",
+  );
+  await arrangeWindows("Cascade");
+  await until(
+    () =>
+      visualWindowBounds().length === 3 &&
+      visualWindowBounds().every(
+        (bounds) =>
+          Math.abs(bounds.width - 760) <= 2 &&
+          Math.abs(bounds.height - 520) <= 2,
+      ),
+    "Cascade kept the default floating window size",
+  );
+  narrowedVisualStage.style.removeProperty("width");
+  narrowedVisualStage.style.removeProperty("height");
+
+  focusedTabId = tabs[0]!.tab_id;
+  focusedPaneId = "builder-pane";
+  tabs.splice(
+    tabs.findIndex((tab) => tab.tab_id === "created-tab-3"),
+    1,
+  );
+  panes.splice(
+    panes.findIndex((pane) => pane.pane_id === "created-pane-3"),
+    1,
+  );
+  worldRevision += 1;
+  await store.refresh();
+  await worldRuntimeStore.refresh();
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 2,
+    "focused Herdr tab closure retired its Inspector",
   );
 
   runtimeGeneration += 1;

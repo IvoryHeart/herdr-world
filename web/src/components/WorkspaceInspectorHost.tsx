@@ -225,6 +225,7 @@ export function WorkspaceInspectorHost({
   controlMode = "docked",
   windowMovable = false,
   terminalDetached = false,
+  onFocusTabWindow,
   onViewChange,
   onDockChange,
   onExpandedChange,
@@ -232,6 +233,7 @@ export function WorkspaceInspectorHost({
   onBack,
   context,
   agentCheckout,
+  historySessionFingerprint,
 }: {
   state: WorkspaceInspectorState;
   onReady?: () => void;
@@ -255,6 +257,7 @@ export function WorkspaceInspectorHost({
   controlMode?: "docked" | "floating";
   windowMovable?: boolean;
   terminalDetached?: boolean;
+  onFocusTabWindow?: () => void;
   onOpenDiffFile: (entry: ActiveDiffSelection["entry"]) => void;
   annotations: readonly ReviewAnnotation[];
   onCreateAnnotation: (input: NewReviewAnnotation) => void;
@@ -276,6 +279,7 @@ export function WorkspaceInspectorHost({
     sessionFingerprint?: string;
     onWorkspaceChanges(): void;
   };
+  historySessionFingerprint?: string;
 }) {
   const hostRef = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -641,7 +645,8 @@ export function WorkspaceInspectorHost({
             </button>
           ) : state.view === "terminal" &&
             onTerminalPopOut &&
-            !terminalDetached ? (
+            !terminalDetached &&
+            !onFocusTabWindow ? (
             <button
               type="button"
               className="workspace-inspector-terminal-popout-action"
@@ -882,6 +887,10 @@ export function WorkspaceInspectorHost({
             >
               {agentCheckout ? (
                 <AgentCheckoutPanel
+                  key={JSON.stringify([
+                    agentCheckout.paneId ?? null,
+                    agentCheckout.sessionFingerprint ?? null,
+                  ])}
                   paneId={agentCheckout.paneId}
                   sessionFingerprint={agentCheckout.sessionFingerprint}
                   client={connectionClient}
@@ -975,6 +984,10 @@ export function WorkspaceInspectorHost({
           >
             {historyAvailable && historyPane ? (
               <AgentHistoryDrawer
+                key={JSON.stringify([
+                  historyPane.pane_id,
+                  historySessionFingerprint ?? null,
+                ])}
                 pane={historyPane}
                 open={visible && state.open && state.view === "history"}
                 embedded
@@ -996,7 +1009,21 @@ export function WorkspaceInspectorHost({
                 state.view === "terminal" ? "" : "is-hidden"
               }`}
             >
-              {state.view === "terminal" && terminalDetached ? (
+              {state.view === "terminal" && onFocusTabWindow ? (
+                <div
+                  className="workspace-inspector-terminal-detached"
+                  role="status"
+                >
+                  <span>The terminal is in its tab window.</span>
+                  <button
+                    type="button"
+                    className="workspace-inspector-focus-tab-action"
+                    onClick={onFocusTabWindow}
+                  >
+                    Focus tab window
+                  </button>
+                </div>
+              ) : state.view === "terminal" && terminalDetached ? (
                 <div
                   className="workspace-inspector-terminal-detached"
                   role="status"

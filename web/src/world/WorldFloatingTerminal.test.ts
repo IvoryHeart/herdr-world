@@ -83,6 +83,7 @@ test.skipIf(!chrome)(
         inspectorLabel: "Reviewer Inspector",
         windows: 1,
         stableDrag: true,
+        arrangementRestoresGeometry: true,
       });
     } finally {
       browser?.kill();

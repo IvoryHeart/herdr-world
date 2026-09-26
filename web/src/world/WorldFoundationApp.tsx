@@ -9,9 +9,24 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
+import {
+  FolderOpen,
+  History,
+  LayoutGrid,
+  Pin,
+  PinOff,
+  Terminal,
+} from "lucide-react";
 import App, { type WorkspaceSurfaceSelection } from "../App";
+import { measuredFixedPositionScale } from "../fixedPositionScale";
 import { bridge, type ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import {
+  WINDOW_ARRANGEMENT_CHOICES,
+  type WindowArrangementControl,
+} from "../components/WindowArrangementMenu";
+import type { CommandExtension } from "../components/CommandCombobox";
+import { shortcutMatches } from "../shortcutPreferences";
 import { lazyWithReload } from "../lazyWithReload";
 import { shallowEqual, store, useStoreSelector } from "../store";
 import {
@@ -50,13 +65,43 @@ import {
 } from "./officePreferences";
 import type { WorldConnectorTargetBounds } from "./worldConnectorGeometry";
 import WorldIntentProfile from "./WorldIntentProfile";
-import { VisualRouteActions } from "./VisualRouteActionsMenu";
+import {
+  resolveVisualRouteActionTarget,
+  visualRouteActionsForNode,
+  visualRouteActionTarget,
+  visualRouteTargetLabel,
+  type VisualRouteAction,
+  type VisualRouteActionTarget,
+} from "./visualRouteActions";
+import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
+import {
+  defaultFloatingTerminalGeometry,
+  FLOATING_TERMINAL_MIN_SIZE,
+  type FloatingTerminalGeometry,
+} from "./floatingTerminalGeometry";
+import {
+  terminalWindowArrangementReason,
+  type TerminalWindowArrangementPreset,
+  type TerminalWindowArrangementStage,
+} from "./terminalWindowArrangement";
+import {
+  applyTerminalWindowArrangement,
+  createTerminalWindowArrangementState,
+  restoreTerminalWindowArrangement,
+  retainTerminalWindowArrangementWindows,
+  terminalWindowArrangementForLease,
+  terminalWindowArrangementPlacements,
+  updateTerminalWindowArrangementGeometry,
+  type TerminalWindowArrangementParticipant,
+} from "./terminalWindowArrangementState";
 import {
   reconcileWorldInspectorConversation,
   retainWorldInspectorConversations,
   worldInspectorForNode,
+  worldInspectorWindowId,
+  worldInspectorWindowIdForNode,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
 
@@ -64,6 +109,11 @@ export {
   retainWorldFloatingTerminals,
   upsertWorldFloatingTerminal,
 } from "./worldTerminalPresentation";
+
+const EMPTY_VISUAL_ACTION_EXTENSION: CommandExtension = {
+  captureKey: null,
+  groups: [],
+};
 
 const PixelOfficeView = lazyWithReload(
   "world-pixel-office",
@@ -120,6 +170,45 @@ type DockedInspectorMove = {
   startY: number;
   geometry: DockedInspectorGeometry;
 };
+
+type VisualInspectorPresentation =
+  | { kind: "floating" }
+  | { kind: "docked" }
+  | { kind: "inline"; leafId: string };
+
+const VISUAL_ARRANGEMENT_SCOPE = "visual";
+
+export function visualInspectorArrangementStage(
+  bounds: Pick<DOMRect, "left" | "top" | "width" | "height">,
+  fixedPositionScale = 1,
+): TerminalWindowArrangementStage {
+  return {
+    left: bounds.left / fixedPositionScale + 8,
+    top: bounds.top / fixedPositionScale + 8,
+    width: Math.max(0, bounds.width / fixedPositionScale - 16),
+    height: Math.max(0, bounds.height / fixedPositionScale - 16),
+  };
+}
+
+export function fitVisualInspectorArrangementGeometry(
+  geometry: FloatingTerminalGeometry,
+  stage: TerminalWindowArrangementStage,
+): FloatingTerminalGeometry {
+  const width = Math.min(geometry.width, stage.width);
+  const height = Math.min(geometry.height, stage.height);
+  return {
+    left: Math.max(
+      stage.left,
+      Math.min(geometry.left, stage.left + stage.width - width),
+    ),
+    top: Math.max(
+      stage.top,
+      Math.min(geometry.top, stage.top + stage.height - Math.min(height, 56)),
+    ),
+    width,
+    height,
+  };
+}
 
 export function moveDockedInspectorGeometry(
   geometry: DockedInspectorGeometry,
@@ -206,6 +295,42 @@ export function worldNodeForWorkspaceSurfaceSelection(
   );
 }
 
+export function worldNodeForInspectorConversation(
+  world: WorldObject,
+  conversation: WorldInspectorConversation,
+): WorldObjectNode | null {
+  const valid = (node: WorldObjectNode) =>
+    node.actionable &&
+    node.selectedHost &&
+    node.connectionId === conversation.connectionId &&
+    node.generation === conversation.runtimeGeneration &&
+    worldInspectorWindowIdForNode(node) ===
+      worldInspectorWindowId(conversation);
+  const selected = world.nodeById.get(conversation.nodeId);
+  if (selected && valid(selected)) return selected;
+  if (!conversation.tabId) return null;
+  const siblings = world.leaves.filter(valid);
+  return siblings.find((node) => node.focused) ?? siblings[0] ?? null;
+}
+
+export function worldNodeForInspectorPaneFocus(
+  world: WorldObject,
+  conversation: WorldInspectorConversation,
+  paneId: string,
+) {
+  if (!conversation.tabId) return null;
+  const windowId = worldInspectorWindowId(conversation);
+  return (
+    world.leaves.find(
+      (node) =>
+        node.nativeId === paneId &&
+        node.actionable &&
+        node.selectedHost &&
+        worldInspectorWindowIdForNode(node) === windowId,
+    ) ?? null
+  );
+}
+
 export function worldIntentViews(node: WorldObjectNode): InspectorView[] {
   if (node.kind === "host") return [];
   return [
@@ -287,6 +412,7 @@ function initialView() {
 
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
+  const spaces = useSpacesTabWindowArrangement(view === "spaces");
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
     () => {
       const initial = initialView();
@@ -296,6 +422,11 @@ export default function WorldFoundationApp() {
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
   const [viewToolbarPortal, setViewToolbarPortal] =
     useState<HTMLDivElement | null>(null);
+  const [visualActionExtension, setVisualActionExtension] =
+    useState<CommandExtension>(EMPTY_VISUAL_ACTION_EXTENSION);
+  const [visualArrangementControl, setVisualArrangementControl] = useState<
+    WindowArrangementControl | undefined
+  >();
   const [inspectorConversations, setInspectorConversations] = useState<
     WorldInspectorConversation[]
   >([]);
@@ -308,6 +439,9 @@ export default function WorldFoundationApp() {
   const [officeMetricsOpen, setOfficeMetricsOpen] = useState(false);
   const workspaceSurfaceSelectionRef = useRef<
     ((selection: WorkspaceSurfaceSelection) => Promise<boolean>) | null
+  >(null);
+  const inspectorPaneFocusRef = useRef<
+    ((windowId: string, paneId: string) => void) | null
   >(null);
   const registerWorkspaceSurfaceSelection = useCallback(
     (
@@ -340,7 +474,8 @@ export default function WorldFoundationApp() {
   );
   const workspaceSurfaceInspectorConversation =
     inspectorConversations.find(
-      (conversation) => conversation.nodeId === dockedInspectorId,
+      (conversation) =>
+        worldInspectorWindowId(conversation) === dockedInspectorId,
     ) ?? inspectorConversations[inspectorConversations.length - 1];
   const changeWorkspaceSurfaceInspectorView = useCallback(
     (nextView: InspectorView) => {
@@ -348,7 +483,8 @@ export default function WorldFoundationApp() {
       if (!conversation?.availableViews.includes(nextView)) return;
       setInspectorConversations((current) =>
         current.map((candidate) =>
-          candidate.nodeId === conversation.nodeId
+          worldInspectorWindowId(candidate) ===
+          worldInspectorWindowId(conversation)
             ? { ...candidate, view: nextView }
             : candidate,
         ),
@@ -387,7 +523,7 @@ export default function WorldFoundationApp() {
       lease,
     );
     if (retained.length === inspectorConversations.length) return;
-    const retainedIds = new Set(retained.map(({ nodeId }) => nodeId));
+    const retainedIds = new Set(retained.map(worldInspectorWindowId));
     setInspectorConversations(retained);
     setDockedInspectorId((current) =>
       current && retainedIds.has(current) ? current : null,
@@ -439,13 +575,51 @@ export default function WorldFoundationApp() {
     }
   };
 
+  const activeArrangementControl =
+    view === "spaces" ? spaces.arrangementControl : visualArrangementControl;
+  useEffect(() => {
+    if (!activeArrangementControl) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.repeat ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        document.querySelector(
+          '.modal-backdrop, .command-popover, .context-menu, .pane-jump-backdrop, [role="menu"]',
+        )
+      )
+        return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        !target.closest(".xterm") &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      )
+        return;
+      const choice = WINDOW_ARRANGEMENT_CHOICES.find(({ shortcutId }) =>
+        shortcutMatches(event, shortcutId),
+      );
+      if (!choice) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!activeArrangementControl.disabledReasons[choice.command])
+        activeArrangementControl.onSelect(choice.command);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [activeArrangementControl]);
+
   return (
     <div className="world-foundation-shell">
       <div className="world-topbar-host" ref={setTopbarPortal} />
       <div className="world-spaces-layer is-active">
         <App
           operationalShortcutsEnabled={view === "spaces"}
+          shellActionsEnabled
           topbarPortal={topbarPortal}
+          visualActionExtension={visualActionExtension}
           primaryViewControl={
             <div className="world-topbar-control-plane">
               <label className="world-primary-view-select">
@@ -489,21 +663,30 @@ export default function WorldFoundationApp() {
               dockedInspectorId={dockedInspectorId}
               onDockedInspectorIdChange={setDockedInspectorId}
               onInspectorConversationsChange={setInspectorConversations}
-              onInspectorTerminalPortal={(nodeId, portal) =>
+              onInspectorTerminalPortal={(windowId, portal) =>
                 setInspectorTerminalPortals((current) =>
-                  current[nodeId] === portal
+                  current[windowId] === portal
                     ? current
-                    : { ...current, [nodeId]: portal },
+                    : { ...current, [windowId]: portal },
                 )
               }
               onWorkspaceSurfaceSelectionReady={
                 registerWorkspaceSurfaceSelection
               }
+              onInspectorPaneFocusReady={(handler) => {
+                inspectorPaneFocusRef.current = handler;
+              }}
+              onVisualArrangementControlReady={setVisualArrangementControl}
+              onVisualActionExtensionReady={setVisualActionExtension}
               viewToolbarPortal={viewToolbarPortal}
               onGoToSpaces={() => setView("spaces")}
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
+          arrangementControl={activeArrangementControl}
+          spacesTabWindows={spaces.spacesTabWindows}
+          onFocusSpacesTabWindow={spaces.onFocusSpacesTabWindow}
+          onSpacesWindowLayerReady={spaces.onSpacesWindowLayerReady}
           workspaceSurfaceInspector={
             view !== "spaces" && workspaceSurfaceInspectorConversation
               ? {
@@ -525,21 +708,31 @@ export default function WorldFoundationApp() {
             view === "spaces"
               ? []
               : inspectorConversations.flatMap((conversation) =>
-                  conversation.paneId && conversation.terminalId
+                  conversation.tabId &&
+                  conversation.paneId &&
+                  conversation.terminalId
                     ? [
                         {
                           ...conversation,
+                          tabId: conversation.tabId,
                           paneId: conversation.paneId,
                           terminalId: conversation.terminalId,
                           portal:
-                            inspectorTerminalPortals[conversation.nodeId] ??
-                            null,
+                            inspectorTerminalPortals[
+                              worldInspectorWindowId(conversation)
+                            ] ?? null,
+                          onFocusPane: (paneId: string) =>
+                            inspectorPaneFocusRef.current?.(
+                              worldInspectorWindowId(conversation),
+                              paneId,
+                            ),
                         },
                       ]
                     : [],
                 )
           }
         />
+        {spaces.renderWindows}
       </div>
       {officeMetricsOpen
         ? createPortal(
@@ -569,6 +762,9 @@ function WorldControlPlane({
   onInspectorConversationsChange,
   onInspectorTerminalPortal,
   onWorkspaceSurfaceSelectionReady,
+  onInspectorPaneFocusReady,
+  onVisualArrangementControlReady,
+  onVisualActionExtensionReady,
   viewToolbarPortal,
   onGoToSpaces,
 }: {
@@ -576,12 +772,12 @@ function WorldControlPlane({
   active: boolean;
   inspectorConversations: readonly WorldInspectorConversation[];
   dockedInspectorId: string | null;
-  onDockedInspectorIdChange(nodeId: string | null): void;
+  onDockedInspectorIdChange(windowId: string | null): void;
   onInspectorConversationsChange(
     conversations: WorldInspectorConversation[],
   ): void;
   onInspectorTerminalPortal(
-    nodeId: string,
+    windowId: string,
     element: HTMLDivElement | null,
   ): void;
   onWorkspaceSurfaceSelectionReady(
@@ -589,6 +785,13 @@ function WorldControlPlane({
       | ((selection: WorkspaceSurfaceSelection) => Promise<boolean>)
       | null,
   ): void;
+  onInspectorPaneFocusReady(
+    handler: ((windowId: string, paneId: string) => void) | null,
+  ): void;
+  onVisualArrangementControlReady(
+    control: WindowArrangementControl | undefined,
+  ): void;
+  onVisualActionExtensionReady(extension: CommandExtension): void;
   viewToolbarPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
 }) {
@@ -607,6 +810,17 @@ function WorldControlPlane({
       defaultConnectionId: snapshot.defaultConnectionId,
       runtimeGeneration: snapshot.serverRuntimeGeneration,
       status: snapshot.status,
+    }),
+    shallowEqual,
+  );
+  const focusedTopology = useStoreSelector(
+    (snapshot) => ({
+      workspaces: snapshot.workspaces,
+      tabs: snapshot.tabs,
+      lastTopologyObservationStartedAt:
+        snapshot.lastTopologyObservationStartedAt,
+      status: snapshot.status,
+      runtimeGeneration: snapshot.serverRuntimeGeneration,
     }),
     shallowEqual,
   );
@@ -665,6 +879,12 @@ function WorldControlPlane({
       connectionSelection.activeConnectionId,
       connectionSelection.connections,
     );
+  const selectedWorldConnection = runtime.connections.find(
+    (connection) =>
+      connection.connectionId === connectionSelection.activeConnectionId,
+  );
+  const selectedWorldObservationActionable =
+    selectedWorldConnection?.actionable ?? false;
   const aggregateWorld = useMemo(
     () =>
       buildWorldObject(
@@ -701,24 +921,6 @@ function WorldControlPlane({
     [pinnedOnly, watchedWorld, watchlist.records],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
-  const selectedWatch =
-    selection && (selection.kind === "agent" || selection.kind === "terminal")
-      ? {
-          connectionId: selection.connectionId,
-          generation: selection.generation,
-          terminalId: selection.terminalId,
-          label: selection.label,
-        }
-      : null;
-  const selectedPinned = Boolean(
-    selectedWatch &&
-      watchlist.records.some(
-        (watch) =>
-          watch.connectionId === selectedWatch.connectionId &&
-          watch.generation === selectedWatch.generation &&
-          watch.terminalId === selectedWatch.terminalId,
-      ),
-  );
   const watchAdmission = runtime.connections.find(
     ({ connectionId }) =>
       connectionId === connectionSelection.activeConnectionId,
@@ -730,37 +932,6 @@ function WorldControlPlane({
       : !watchAdmission || watchAdmission.revision !== watchlist.revision
         ? "Watch availability pending"
         : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
-  const watchToolbarActions = (
-    <>
-      <button
-        type="button"
-        aria-pressed={pinnedOnly}
-        onClick={() => setPinnedOnly((value) => !value)}
-      >
-        Pinned only
-      </button>
-      <span className="world-view-toolbar-results" aria-live="polite">
-        {watchStatus}
-      </span>
-      {selectedWatch ? (
-        <button
-          type="button"
-          disabled={
-            !watchlist.verified || (!selectedPinned && !selection?.actionable)
-          }
-          title={watchlist.error ?? undefined}
-          onClick={() =>
-            void watchlistStore.mutate(
-              selectedPinned ? "world.watchlist.unpin" : "world.watchlist.pin",
-              selectedWatch,
-            )
-          }
-        >
-          {selectedPinned ? "Unpin" : "Pin"}
-        </button>
-      ) : null}
-    </>
-  );
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
@@ -811,6 +982,29 @@ function WorldControlPlane({
   const [floatingWindowAnchors, setFloatingWindowAnchors] = useState<
     Record<string, WorldConnectorTargetBounds | null>
   >({});
+  const [floatingWindowGeometries, setFloatingWindowGeometries] = useState<
+    Record<string, FloatingTerminalGeometry>
+  >({});
+  const [visualArrangementState, setVisualArrangementState] = useState(() =>
+    createTerminalWindowArrangementState<VisualInspectorPresentation>(""),
+  );
+  const [visualArrangementStage, setVisualArrangementStage] =
+    useState<TerminalWindowArrangementStage>({
+      left: 0,
+      top: 0,
+      width: 0,
+      height: 0,
+    });
+  const [excludedArrangementIds, setExcludedArrangementIds] = useState<
+    ReadonlySet<string>
+  >(new Set());
+  const [singleManualGeometry, setSingleManualGeometry] = useState<
+    Record<string, FloatingTerminalGeometry>
+  >({});
+  const [inlineReturnNodeId, setInlineReturnNodeId] = useState<string | null>(
+    null,
+  );
+  const worldViewLayoutRef = useRef<HTMLDivElement | null>(null);
   const [intentOverlayAnchor, setIntentOverlayAnchor] =
     useState<WorldConnectorTargetBounds | null>(null);
   const inspectorConversationsRef = useRef(inspectorConversations);
@@ -831,34 +1025,189 @@ function WorldControlPlane({
     ? (selection?.id ?? null)
     : null;
   const dockedInspector = inspectorConversations.find(
-    ({ nodeId }) => nodeId === dockedInspectorId,
+    (conversation) =>
+      worldInspectorWindowId(conversation) === dockedInspectorId,
   );
   const dockedInspectorNode = dockedInspector
     ? (world.nodeById.get(dockedInspector.nodeId) ?? null)
     : null;
-  const treeInlineInspectorNodeId =
+  const naturalTreeInlineInspectorNodeId =
     view === "tree" &&
     dockedInspectorNode &&
     (dockedInspectorNode.kind === "agent" ||
       dockedInspectorNode.kind === "terminal")
       ? dockedInspectorNode.id
       : null;
-  const contextRailInspector = treeInlineInspectorNodeId
-    ? null
-    : dockedInspector;
-  const dockedInspectorPortal = treeInlineInspectorNodeId
-    ? treeInlineInspectorPortal
-    : contextRailInspectorPortal;
+  const floatingInspectors = useMemo(
+    () =>
+      inspectorConversations.filter(
+        (conversation) =>
+          worldInspectorWindowId(conversation) !== dockedInspectorId,
+      ),
+    [dockedInspectorId, inspectorConversations],
+  );
+  const visualLeaseKey = JSON.stringify([
+    connectionSelection.activeConnectionId,
+    connectionSelection.runtimeGeneration,
+  ]);
+  const arrangementScope =
+    visualArrangementState.leaseKey === visualLeaseKey
+      ? visualArrangementState.scopes[VISUAL_ARRANGEMENT_SCOPE]
+      : undefined;
+  const compactArrangement =
+    window.innerWidth <= 720 ||
+    document.documentElement.dataset.layout === "mobile";
+  const visualWindows = useMemo(() => {
+    const viewport = { width: window.innerWidth, height: window.innerHeight };
+    return inspectorConversations.map((conversation, index) => {
+      const id = worldInspectorWindowId(conversation);
+      const docked = id === dockedInspectorId;
+      const inline =
+        docked && view === "tree" && naturalTreeInlineInspectorNodeId !== null;
+      const measured = docked
+        ? (inline
+            ? treeInlineInspectorPortal
+            : contextRailRef.current
+          )?.getBoundingClientRect()
+        : null;
+      const geometry = docked
+        ? (dockedInspectorGeometry ??
+          (measured && measured.width > 0 && measured.height > 0
+            ? {
+                left: measured.left,
+                top: measured.top,
+                width: measured.width,
+                height: measured.height,
+              }
+            : (arrangementScope?.baselines[id]?.geometry ??
+              defaultFloatingTerminalGeometry(index, viewport))))
+        : (floatingWindowGeometries[id] ??
+          arrangementScope?.baselines[id]?.geometry ??
+          defaultFloatingTerminalGeometry(index, viewport));
+      return {
+        id,
+        minWidth: compactArrangement
+          ? Math.min(
+              FLOATING_TERMINAL_MIN_SIZE.width,
+              visualArrangementStage.width,
+            )
+          : FLOATING_TERMINAL_MIN_SIZE.width,
+        minHeight: compactArrangement
+          ? Math.min(
+              FLOATING_TERMINAL_MIN_SIZE.height,
+              visualArrangementStage.height,
+            )
+          : FLOATING_TERMINAL_MIN_SIZE.height,
+        geometry,
+        presentation: docked
+          ? inline
+            ? ({
+                kind: "inline",
+                leafId: naturalTreeInlineInspectorNodeId!,
+              } as const)
+            : ({ kind: "docked" } as const)
+          : ({ kind: "floating" } as const),
+      } satisfies TerminalWindowArrangementParticipant<VisualInspectorPresentation>;
+    });
+  }, [
+    arrangementScope,
+    compactArrangement,
+    dockedInspectorGeometry,
+    dockedInspectorId,
+    floatingWindowGeometries,
+    inspectorConversations,
+    naturalTreeInlineInspectorNodeId,
+    treeInlineInspectorPortal,
+    view,
+    visualArrangementStage.height,
+    visualArrangementStage.width,
+  ]);
+  const selectedInspectorId = selected
+    ? worldInspectorWindowIdForNode(selected)
+    : null;
+  const activeInspectorId = visualWindows.some(
+    ({ id }) => id === selectedInspectorId,
+  )
+    ? selectedInspectorId
+    : (dockedInspectorId ??
+      visualWindows[visualWindows.length - 1]?.id ??
+      null);
+  const visualPlacements =
+    arrangementScope?.preset && visualArrangementStage.width > 0
+      ? terminalWindowArrangementPlacements(visualArrangementState, {
+          leaseKey: visualLeaseKey,
+          scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+          stage: visualArrangementStage,
+          windows: visualWindows,
+          activeId: activeInspectorId,
+          compact: compactArrangement,
+        })
+      : null;
+  const visualPlacementMap = new Map(
+    (visualPlacements ?? [])
+      .filter(({ id }) => !excludedArrangementIds.has(id))
+      .map(({ id, geometry }) => [
+        id,
+        fitVisualInspectorArrangementGeometry(
+          !compactArrangement && arrangementScope?.preset === "single"
+            ? (singleManualGeometry[id] ?? geometry)
+            : geometry,
+          visualArrangementStage,
+        ),
+      ]),
+  );
+  const arrangedDocked =
+    dockedInspectorId !== null && visualPlacementMap.has(dockedInspectorId);
+  const dockedSuppressed =
+    dockedInspectorId !== null &&
+    (arrangementScope?.preset === "single" ||
+      (arrangementScope?.preset && compactArrangement)) &&
+    !arrangedDocked;
+  const requestedInlineNodeId =
+    inlineReturnNodeId ?? naturalTreeInlineInspectorNodeId;
+  const requestedInlineNode = requestedInlineNodeId
+    ? world.nodeById.get(requestedInlineNodeId)
+    : null;
+  const treeInlineInspectorNodeId =
+    !arrangedDocked &&
+    !dockedSuppressed &&
+    view === "tree" &&
+    requestedInlineNodeId &&
+    dockedInspectorId &&
+    requestedInlineNode &&
+    worldInspectorWindowIdForNode(requestedInlineNode) === dockedInspectorId
+      ? requestedInlineNodeId
+      : null;
+  const contextRailInspector =
+    arrangedDocked ||
+    dockedSuppressed ||
+    (treeInlineInspectorNodeId && treeInlineInspectorPortal)
+      ? null
+      : dockedInspector;
+  const dockedInspectorPortal =
+    arrangedDocked || dockedSuppressed
+      ? null
+      : treeInlineInspectorNodeId && treeInlineInspectorPortal
+        ? treeInlineInspectorPortal
+        : contextRailInspectorPortal;
   const dockedInspectorPortalRef = useRef<Element | null>(null);
   dockedInspectorPortalRef.current = dockedInspectorPortal;
   const dockedInspectorNodeId = contextRailInspector?.nodeId ?? null;
   const dockedInspectorExpanded = contextRailInspector?.expanded ?? false;
-  const floatingInspectors = useMemo(
-    () =>
-      inspectorConversations.filter(
-        ({ nodeId }) => nodeId !== dockedInspectorId,
-      ),
-    [dockedInspectorId, inspectorConversations],
+  const visibleFloatingInspectors = inspectorConversations.filter(
+    (conversation) => {
+      const id = worldInspectorWindowId(conversation);
+      if (
+        arrangementScope?.preset === "single" ||
+        (arrangementScope?.preset && compactArrangement)
+      ) {
+        return visualPlacementMap.has(id);
+      }
+      return id !== dockedInspectorId || visualPlacementMap.has(id);
+    },
+  );
+  const visibleFloatingInspectorIds = new Set(
+    visibleFloatingInspectors.map(worldInspectorWindowId),
   );
   const conversationNodeIds = useMemo(
     () => inspectorConversations.map(({ nodeId }) => nodeId),
@@ -892,6 +1241,189 @@ function WorldControlPlane({
   useLayoutEffect(() => {
     worldRuntimeStore.setPriorities(snapshotPriorities);
   }, [snapshotPriorities]);
+
+  useLayoutEffect(() => {
+    const layout = worldViewLayoutRef.current;
+    if (!layout || !active) return;
+    const update = () => {
+      const next = visualInspectorArrangementStage(
+        layout.getBoundingClientRect(),
+        measuredFixedPositionScale(),
+      );
+      setVisualArrangementStage((current) =>
+        current.left === next.left &&
+        current.top === next.top &&
+        current.width === next.width &&
+        current.height === next.height
+          ? current
+          : next,
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(layout);
+    window.addEventListener("resize", update);
+    window.visualViewport?.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("resize", update);
+    };
+  }, [active, hasSelectedConnection]);
+
+  useEffect(() => {
+    setVisualArrangementState((current) =>
+      terminalWindowArrangementForLease(current, visualLeaseKey),
+    );
+    setExcludedArrangementIds(new Set());
+    setSingleManualGeometry({});
+    setInlineReturnNodeId(null);
+  }, [visualLeaseKey]);
+
+  useEffect(() => {
+    const openIds = inspectorConversations.map(worldInspectorWindowId);
+    setVisualArrangementState((current) =>
+      retainTerminalWindowArrangementWindows(current, {
+        leaseKey: visualLeaseKey,
+        scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+        openIds,
+      }),
+    );
+  }, [inspectorConversations, visualLeaseKey]);
+
+  const selectVisualArrangement = useCallback(
+    (command: TerminalWindowArrangementPreset | "restore") => {
+      // Compact presentation is derived from the desktop placement snapshot.
+      // A stale menu or a direct command must not replace that snapshot.
+      if (compactArrangement) return;
+      const openIds = visualWindows.map(({ id }) => id);
+      if (command === "restore") {
+        const restored = restoreTerminalWindowArrangement(
+          visualArrangementState,
+          {
+            leaseKey: visualLeaseKey,
+            scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+            openIds,
+          },
+        );
+        setVisualArrangementState(restored.state);
+        setExcludedArrangementIds(new Set());
+        setSingleManualGeometry({});
+        if (
+          dockedInspectorId !== null &&
+          !restored.targets.some(({ id }) => id === dockedInspectorId)
+        ) {
+          return;
+        }
+        const previousDock = restored.targets.find(
+          ({ baseline }) => baseline.presentation.kind !== "floating",
+        );
+        if (previousDock) {
+          onDockedInspectorIdChange(previousDock.id);
+          setInlineReturnNodeId(
+            previousDock.baseline.presentation.kind === "inline"
+              ? previousDock.baseline.presentation.leafId
+              : "",
+          );
+        } else if (
+          restored.targets.some(({ id }) => id === dockedInspectorId)
+        ) {
+          onDockedInspectorIdChange(null);
+          setInlineReturnNodeId(null);
+        }
+        return;
+      }
+      // The observer can still hold the previous stage during a resize click.
+      // Resolve this arrangement against the bounds visible at selection time.
+      const layout = worldViewLayoutRef.current;
+      const stage = layout
+        ? visualInspectorArrangementStage(
+            layout.getBoundingClientRect(),
+            measuredFixedPositionScale(),
+          )
+        : visualArrangementStage;
+      setVisualArrangementStage((current) =>
+        current.left === stage.left &&
+        current.top === stage.top &&
+        current.width === stage.width &&
+        current.height === stage.height
+          ? current
+          : stage,
+      );
+      const applied = applyTerminalWindowArrangement(visualArrangementState, {
+        leaseKey: visualLeaseKey,
+        scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+        preset: command,
+        stage,
+        windows: visualWindows,
+        activeId: activeInspectorId,
+      });
+      if (!applied.result.available) return;
+      setVisualArrangementState(applied.state);
+      setExcludedArrangementIds(new Set());
+      setSingleManualGeometry({});
+      setInlineReturnNodeId(null);
+    },
+    [
+      activeInspectorId,
+      compactArrangement,
+      dockedInspectorId,
+      onDockedInspectorIdChange,
+      visualArrangementStage,
+      visualArrangementState,
+      visualLeaseKey,
+      visualWindows,
+    ],
+  );
+  const visualArrangementControl = useMemo<WindowArrangementControl>(() => {
+    const presets: TerminalWindowArrangementPreset[] = [
+      "single",
+      "cascade",
+      "columns",
+      "rows",
+      "grid",
+    ];
+    const disabledReasons: WindowArrangementControl["disabledReasons"] = {};
+    for (const preset of presets) {
+      if (compactArrangement) {
+        disabledReasons[preset] = "Available in desktop layout.";
+        continue;
+      }
+      const reason = terminalWindowArrangementReason(
+        preset,
+        visualArrangementStage,
+        visualWindows,
+        activeInspectorId,
+      );
+      if (reason) disabledReasons[preset] = reason;
+    }
+    if (compactArrangement) {
+      disabledReasons.restore = "Available in desktop layout.";
+    } else if (
+      !arrangementScope ||
+      Object.keys(arrangementScope.baselines).length === 0
+    ) {
+      disabledReasons.restore = "No arranged positions to restore.";
+    }
+    return {
+      activePreset: compactArrangement
+        ? "single"
+        : (arrangementScope?.preset ?? null),
+      disabledReasons,
+      onSelect: selectVisualArrangement,
+    };
+  }, [
+    activeInspectorId,
+    arrangementScope,
+    compactArrangement,
+    selectVisualArrangement,
+    visualArrangementStage,
+    visualWindows,
+  ]);
+  useLayoutEffect(() => {
+    onVisualArrangementControlReady(visualArrangementControl);
+    return () => onVisualArrangementControlReady(undefined);
+  }, [onVisualArrangementControlReady, visualArrangementControl]);
 
   useEffect(() => {
     setDockedInspectorGeometry(null);
@@ -1056,7 +1588,7 @@ function WorldControlPlane({
     });
   };
 
-  const focusInspectorTerminal = (nodeId: string) => {
+  const focusInspectorTerminal = (windowId: string) => {
     if (
       document.documentElement.dataset.layout === "mobile" ||
       window.matchMedia?.("(any-pointer: coarse)").matches
@@ -1065,9 +1597,9 @@ function WorldControlPlane({
     }
     const attempt = (remaining: number) => {
       const target =
-        dockedInspectorIdRef.current === nodeId
+        dockedInspectorIdRef.current === windowId
           ? dockedInspectorPortalRef.current
-          : floatingInspectorPortalsRef.current[nodeId];
+          : floatingInspectorPortalsRef.current[windowId];
       const input = target?.querySelector<HTMLElement>(
         ".xterm-helper-textarea",
       );
@@ -1094,6 +1626,7 @@ function WorldControlPlane({
     setIntentError(null);
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
+    setInlineReturnNodeId(null);
     if (
       !next ||
       next.kind === "host" ||
@@ -1104,17 +1637,24 @@ function WorldControlPlane({
       if (dockedInspector) {
         onInspectorConversationsChange(
           inspectorConversations.filter(
-            ({ nodeId }) => nodeId !== dockedInspector.nodeId,
+            (conversation) =>
+              worldInspectorWindowId(conversation) !==
+              worldInspectorWindowId(dockedInspector),
           ),
         );
-        onInspectorTerminalPortal(dockedInspector.nodeId, null);
+        onInspectorTerminalPortal(
+          worldInspectorWindowId(dockedInspector),
+          null,
+        );
         onDockedInspectorIdChange(null);
       }
       setIntentOpening(false);
       return true;
     }
     const existing = inspectorConversations.find(
-      ({ nodeId }) => nodeId === next.id,
+      (conversation) =>
+        worldInspectorWindowId(conversation) ===
+        worldInspectorWindowIdForNode(next),
     );
     if (existing) {
       setIntentOpening(true);
@@ -1123,48 +1663,67 @@ function WorldControlPlane({
         if (intentRequestRef.current !== requestId) return false;
         const currentConversations = inspectorConversationsRef.current;
         const currentExisting = currentConversations.find(
-          ({ nodeId }) => nodeId === next.id,
+          (conversation) =>
+            worldInspectorWindowId(conversation) ===
+            worldInspectorWindowIdForNode(next),
         );
         if (!currentExisting) return false;
         const currentDockedInspectorId = dockedInspectorIdRef.current;
-        const currentDockedInspector = currentConversations.find(
-          ({ nodeId }) => nodeId === currentDockedInspectorId,
-        );
         setSelection(next);
+        const observed = conversationFor(next, requestedView);
+        if (!observed) return false;
+        const reconciled = reconcileWorldInspectorConversation(
+          currentExisting,
+          observed,
+        );
         const admitted =
-          requestedView &&
-          currentExisting.availableViews.includes(requestedView)
-            ? { ...currentExisting, view: requestedView }
-            : currentExisting;
-        const displacedDockedInspector =
-          currentExisting.nodeId !== currentDockedInspectorId
-            ? (currentDockedInspector ?? null)
-            : null;
-        if (displacedDockedInspector) {
-          onInspectorTerminalPortal(displacedDockedInspector.nodeId, null);
+          requestedView && reconciled.availableViews.includes(requestedView)
+            ? { ...reconciled, view: requestedView }
+            : reconciled;
+        if (
+          worldInspectorWindowId(currentExisting) !== currentDockedInspectorId
+        ) {
+          const displacedDocked = currentConversations.find(
+            (candidate) =>
+              worldInspectorWindowId(candidate) === currentDockedInspectorId,
+          );
+          if (displacedDocked) {
+            onInspectorTerminalPortal(
+              worldInspectorWindowId(displacedDocked),
+              null,
+            );
+          }
+          const nextConversations = [
+            ...currentConversations.filter((candidate) => {
+              const id = worldInspectorWindowId(candidate);
+              return (
+                id !== worldInspectorWindowId(currentExisting) &&
+                id !== currentDockedInspectorId
+              );
+            }),
+            admitted,
+          ];
+          inspectorConversationsRef.current = nextConversations;
+          onInspectorConversationsChange(nextConversations);
+          dockedInspectorIdRef.current = worldInspectorWindowId(admitted);
+          onDockedInspectorIdChange(worldInspectorWindowId(admitted));
+          if (admitted.view === "terminal") {
+            focusInspectorTerminal(worldInspectorWindowId(admitted));
+          }
+          return true;
         }
-        if (admitted !== currentExisting || displacedDockedInspector) {
-          const nextConversations = currentConversations.flatMap(
-            (conversation) => {
-              if (conversation.nodeId === displacedDockedInspector?.nodeId) {
-                return [];
-              }
-              return [
-                conversation.nodeId === currentExisting.nodeId
-                  ? admitted
-                  : conversation,
-              ];
-            },
+        if (admitted !== currentExisting) {
+          const nextConversations = currentConversations.map((conversation) =>
+            worldInspectorWindowId(conversation) ===
+            worldInspectorWindowId(currentExisting)
+              ? admitted
+              : conversation,
           );
           inspectorConversationsRef.current = nextConversations;
           onInspectorConversationsChange(nextConversations);
         }
-        if (currentExisting.nodeId !== currentDockedInspectorId) {
-          dockedInspectorIdRef.current = admitted.nodeId;
-          onDockedInspectorIdChange(admitted.nodeId);
-        }
         if (admitted.view === "terminal") {
-          focusInspectorTerminal(admitted.nodeId);
+          focusInspectorTerminal(worldInspectorWindowId(admitted));
         }
       } catch (cause) {
         if (intentRequestRef.current === requestId) {
@@ -1187,26 +1746,39 @@ function WorldControlPlane({
       const currentConversations = inspectorConversationsRef.current;
       const currentDockedInspectorId = dockedInspectorIdRef.current;
       const currentDockedInspector = currentConversations.find(
-        ({ nodeId }) => nodeId === currentDockedInspectorId,
+        (conversation) =>
+          worldInspectorWindowId(conversation) === currentDockedInspectorId,
       );
       setSelection(next);
       if (currentDockedInspector) {
-        onInspectorTerminalPortal(currentDockedInspector.nodeId, null);
+        onInspectorTerminalPortal(
+          worldInspectorWindowId(currentDockedInspector),
+          null,
+        );
       }
+      const admittedConversation = {
+        ...conversation,
+        focusedListAdmissionAt: performance.now(),
+      };
       const nextConversations = [
         ...currentConversations.filter(
-          ({ nodeId }) =>
-            nodeId !== currentDockedInspector?.nodeId &&
-            nodeId !== conversation.nodeId,
+          (candidate) =>
+            worldInspectorWindowId(candidate) !==
+              (currentDockedInspector
+                ? worldInspectorWindowId(currentDockedInspector)
+                : null) &&
+            worldInspectorWindowId(candidate) !==
+              worldInspectorWindowId(conversation),
         ),
-        conversation,
+        admittedConversation,
       ];
       inspectorConversationsRef.current = nextConversations;
       onInspectorConversationsChange(nextConversations);
-      dockedInspectorIdRef.current = conversation.nodeId;
-      onDockedInspectorIdChange(conversation.nodeId);
-      if (conversation.view === "terminal") {
-        focusInspectorTerminal(conversation.nodeId);
+      dockedInspectorIdRef.current =
+        worldInspectorWindowId(admittedConversation);
+      onDockedInspectorIdChange(worldInspectorWindowId(admittedConversation));
+      if (admittedConversation.view === "terminal") {
+        focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
       }
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
@@ -1218,6 +1790,32 @@ function WorldControlPlane({
     }
     return true;
   };
+  useLayoutEffect(() => {
+    const focusPane = (windowId: string, paneId: string) => {
+      const conversation = inspectorConversationsRef.current.find(
+        (candidate) => worldInspectorWindowId(candidate) === windowId,
+      );
+      if (!conversation) return;
+      const sibling = worldNodeForInspectorPaneFocus(
+        world,
+        conversation,
+        paneId,
+      );
+      if (!sibling) return;
+      if (windowId === dockedInspectorIdRef.current) {
+        void applySelection(sibling.id);
+      } else {
+        void focusFloatingInspector(
+          conversation,
+          true,
+          undefined,
+          sibling,
+        ).catch(() => undefined);
+      }
+    };
+    onInspectorPaneFocusReady(focusPane);
+    return () => onInspectorPaneFocusReady(null);
+  });
   const selectNode = (id: string) => {
     const node = world.nodeById.get(id);
     if (
@@ -1228,9 +1826,14 @@ function WorldControlPlane({
       node.selectedHost
     ) {
       const existing = inspectorConversationsRef.current.find(
-        ({ nodeId }) => nodeId === node.id,
+        (conversation) =>
+          worldInspectorWindowId(conversation) ===
+          worldInspectorWindowIdForNode(node),
       );
-      if (existing?.nodeId === dockedInspectorIdRef.current) {
+      if (
+        existing &&
+        worldInspectorWindowId(existing) === dockedInspectorIdRef.current
+      ) {
         return applySelection(id);
       }
       return openFloatingInspector(node)
@@ -1305,17 +1908,42 @@ function WorldControlPlane({
   };
 
   useEffect(() => {
-    if (!hasSelectedConnection) return;
+    // A failed or timed-out aggregate observation cannot prove a tab closed.
+    // The focused connection lease still retires windows on host/generation change.
+    if (!hasSelectedConnection || !selectedWorldObservationActionable) return;
     let changed = false;
     const retained = inspectorConversations.flatMap((conversation) => {
-      const current = world.nodeById.get(conversation.nodeId);
+      const current = worldNodeForInspectorConversation(world, conversation);
+      // The World projection is bounded and can omit an open tab. Only the
+      // focused Herdr list can confirm that its tab or workspace is gone.
+      const focusedListIsCurrent =
+        focusedTopology.status === "connected" &&
+        focusedTopology.lastTopologyObservationStartedAt >
+          (conversation.focusedListAdmissionAt ?? 0) &&
+        focusedTopology.runtimeGeneration === conversation.runtimeGeneration;
+      const stillOpen = conversation.tabId
+        ? focusedTopology.tabs.some(
+            (tab) =>
+              tab.tab_id === conversation.tabId &&
+              tab.workspace_id === conversation.workspaceId,
+          )
+        : focusedTopology.workspaces.some(
+            (workspace) => workspace.workspace_id === conversation.workspaceId,
+          );
+      if (
+        selectedWorldConnection?.generation !==
+          conversation.runtimeGeneration ||
+        (focusedListIsCurrent && !stillOpen)
+      ) {
+        changed = true;
+        return [];
+      }
       if (
         !current ||
         current.generation !== conversation.runtimeGeneration ||
         !current.actionable
       ) {
-        changed = true;
-        return [];
+        return [conversation];
       }
       const view = worldIntentInitialView(current, null);
       const context = worldInspectorContext(current);
@@ -1342,17 +1970,18 @@ function WorldControlPlane({
       return [next];
     });
     if (changed) {
-      const retainedIds = new Set(retained.map(({ nodeId }) => nodeId));
-      const selectedInspectorRetired = Boolean(
-        selection &&
-          inspectorConversations.some(
-            ({ nodeId }) => nodeId === selection.id,
-          ) &&
-          !retainedIds.has(selection.id),
-      );
+      const retainedIds = new Set(retained.map(worldInspectorWindowId));
+      const selectedConversation = selection
+        ? inspectorConversations.find(({ nodeId }) => nodeId === selection.id)
+        : null;
+      const selectedWindowId = selectedConversation
+        ? worldInspectorWindowId(selectedConversation)
+        : null;
+      const selectedInspectorRetired =
+        selectedWindowId !== null && !retainedIds.has(selectedWindowId);
       for (const conversation of inspectorConversations) {
-        if (!retainedIds.has(conversation.nodeId)) {
-          onInspectorTerminalPortal(conversation.nodeId, null);
+        if (!retainedIds.has(worldInspectorWindowId(conversation))) {
+          onInspectorTerminalPortal(worldInspectorWindowId(conversation), null);
         }
       }
       onInspectorConversationsChange(retained);
@@ -1366,46 +1995,63 @@ function WorldControlPlane({
         setSelection(null);
         setSelectedVisualAnchor(null);
         setVisualConversationAnchors(null);
+      } else if (selectedWindowId) {
+        const replacement = retained.find(
+          (conversation) =>
+            worldInspectorWindowId(conversation) === selectedWindowId,
+        );
+        if (replacement && replacement.nodeId !== selection?.id) {
+          setSelection(world.nodeById.get(replacement.nodeId) ?? null);
+        }
       }
     }
   }, [
     dockedInspectorId,
+    focusedTopology,
     hasSelectedConnection,
     inspectorConversations,
     onDockedInspectorIdChange,
     onInspectorConversationsChange,
     onInspectorTerminalPortal,
+    selectedWorldObservationActionable,
+    selectedWorldConnection,
     selection,
     world,
   ]);
 
   const openFloatingInspector = async (node: WorldObjectNode) => {
     const existing = inspectorConversations.find(
-      ({ nodeId }) => nodeId === node.id,
+      (conversation) =>
+        worldInspectorWindowId(conversation) ===
+        worldInspectorWindowIdForNode(node),
     );
     if (existing) {
       const requestedView = existing.availableViews.includes("terminal")
         ? "terminal"
         : undefined;
-      if (existing.nodeId === dockedInspectorId) {
+      if (worldInspectorWindowId(existing) === dockedInspectorId) {
         if (floatingInspectors.length >= 5) {
           throw new Error(
             "Five Inspectors are already floating. Close one before floating another.",
           );
         }
-        if (!(await focusFloatingInspector(existing, true, requestedView))) {
+        if (
+          !(await focusFloatingInspector(existing, true, requestedView, node))
+        ) {
           throw new Error("Inspector activation was superseded");
         }
-        if (dockedInspectorIdRef.current === existing.nodeId) {
+        if (dockedInspectorIdRef.current === worldInspectorWindowId(existing)) {
           onDockedInspectorIdChange(null);
         }
-        focusInspectorTerminal(existing.nodeId);
+        focusInspectorTerminal(worldInspectorWindowId(existing));
         return;
       }
-      if (!(await focusFloatingInspector(existing, true, requestedView))) {
+      if (
+        !(await focusFloatingInspector(existing, true, requestedView, node))
+      ) {
         throw new Error("Inspector activation was superseded");
       }
-      focusInspectorTerminal(existing.nodeId);
+      focusInspectorTerminal(worldInspectorWindowId(existing));
       return;
     }
     if (floatingInspectors.length >= 5) {
@@ -1425,11 +2071,15 @@ function WorldControlPlane({
         throw new Error("Inspector activation was superseded");
       }
       setSelection(node);
+      const admittedConversation = {
+        ...conversation,
+        focusedListAdmissionAt: performance.now(),
+      };
       onInspectorConversationsChange([
         ...inspectorConversationsRef.current,
-        conversation,
+        admittedConversation,
       ]);
-      focusInspectorTerminal(conversation.nodeId);
+      focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
     } finally {
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }
@@ -1440,12 +2090,15 @@ function WorldControlPlane({
     if (!node) throw new Error("This terminal is no longer available");
     try {
       const existing = inspectorConversationsRef.current.find(
-        ({ nodeId }) => nodeId === node.id,
+        (conversation) =>
+          worldInspectorWindowId(conversation) ===
+          worldInspectorWindowIdForNode(node),
       );
       if (
         view === "office" &&
         (officeInspectorPresentation === "docked" ||
-          existing?.nodeId === dockedInspectorIdRef.current)
+          (existing &&
+            worldInspectorWindowId(existing) === dockedInspectorIdRef.current))
       ) {
         if (!(await applySelection(id, "terminal"))) {
           throw new Error("This terminal could not be opened");
@@ -1475,14 +2128,18 @@ function WorldControlPlane({
       await focusWorldNode(target);
       if (intentRequestRef.current !== requestId) return false;
       const currentConversation = inspectorConversationsRef.current.find(
-        ({ nodeId }) => nodeId === conversation.nodeId,
+        (candidate) =>
+          worldInspectorWindowId(candidate) ===
+          worldInspectorWindowId(conversation),
       );
       if (!currentConversation) return false;
       setSelection(target);
-      dockedInspectorIdRef.current = currentConversation.nodeId;
-      onDockedInspectorIdChange(currentConversation.nodeId);
+      setInlineReturnNodeId(null);
+      dockedInspectorIdRef.current =
+        worldInspectorWindowId(currentConversation);
+      onDockedInspectorIdChange(worldInspectorWindowId(currentConversation));
       if (currentConversation.view === "terminal") {
-        focusInspectorTerminal(currentConversation.nodeId);
+        focusInspectorTerminal(worldInspectorWindowId(currentConversation));
       }
       return true;
     } catch (cause) {
@@ -1497,16 +2154,18 @@ function WorldControlPlane({
 
   const closeInspector = (conversation: WorldInspectorConversation) => {
     const remaining = inspectorConversationsRef.current.filter(
-      ({ nodeId }) => nodeId !== conversation.nodeId,
+      (candidate) =>
+        worldInspectorWindowId(candidate) !==
+        worldInspectorWindowId(conversation),
     );
     inspectorConversationsRef.current = remaining;
     onInspectorConversationsChange(remaining);
-    onInspectorTerminalPortal(conversation.nodeId, null);
+    onInspectorTerminalPortal(worldInspectorWindowId(conversation), null);
     setFloatingInspectorPortals((current) => ({
       ...current,
-      [conversation.nodeId]: null,
+      [worldInspectorWindowId(conversation)]: null,
     }));
-    if (dockedInspectorIdRef.current === conversation.nodeId) {
+    if (dockedInspectorIdRef.current === worldInspectorWindowId(conversation)) {
       dockedInspectorIdRef.current = null;
       onDockedInspectorIdChange(null);
     }
@@ -1517,8 +2176,9 @@ function WorldControlPlane({
     conversation: WorldInspectorConversation,
     focusTarget = true,
     requestedView?: InspectorView,
+    selectedNode?: WorldObjectNode,
   ): Promise<boolean> => {
-    const target = world.nodeById.get(conversation.nodeId);
+    const target = selectedNode ?? world.nodeById.get(conversation.nodeId);
     if (!target) throw new Error("This Inspector is no longer available");
     const requestId = focusTarget
       ? intentRequestRef.current + 1
@@ -1533,32 +2193,46 @@ function WorldControlPlane({
       if (intentRequestRef.current !== requestId) return false;
       const current = inspectorConversationsRef.current;
       const observedConversation = current.find(
-        ({ nodeId }) => nodeId === conversation.nodeId,
+        (candidate) =>
+          worldInspectorWindowId(candidate) ===
+          worldInspectorWindowId(conversation),
       );
       if (!observedConversation) return false;
+      const observed = conversationFor(target, requestedView ?? null);
+      if (!observed) return false;
+      const reconciled = reconcileWorldInspectorConversation(
+        observedConversation,
+        observed,
+      );
       const currentConversation =
-        requestedView &&
-        observedConversation.availableViews.includes(requestedView)
-          ? { ...observedConversation, view: requestedView }
-          : observedConversation;
+        requestedView && reconciled.availableViews.includes(requestedView)
+          ? { ...reconciled, view: requestedView }
+          : reconciled;
       const currentFloating = current.filter(
-        ({ nodeId }) => nodeId !== dockedInspectorIdRef.current,
+        (conversation) =>
+          worldInspectorWindowId(conversation) !== dockedInspectorIdRef.current,
       );
       if (
         currentConversation !== observedConversation ||
-        currentFloating[currentFloating.length - 1]?.nodeId !==
-          conversation.nodeId
+        (currentFloating.length
+          ? worldInspectorWindowId(currentFloating[currentFloating.length - 1]!)
+          : null) !== worldInspectorWindowId(conversation)
       ) {
         const nextConversations = [
-          ...current.filter(({ nodeId }) => nodeId !== conversation.nodeId),
+          ...current.filter(
+            (candidate) =>
+              worldInspectorWindowId(candidate) !==
+              worldInspectorWindowId(conversation),
+          ),
           currentConversation,
         ];
         inspectorConversationsRef.current = nextConversations;
         onInspectorConversationsChange(nextConversations);
       }
       setSelection(target);
+      setInlineReturnNodeId(null);
       if (currentConversation.view === "terminal") {
-        focusInspectorTerminal(conversation.nodeId);
+        focusInspectorTerminal(worldInspectorWindowId(conversation));
       }
       return true;
     } catch (cause) {
@@ -1575,7 +2249,7 @@ function WorldControlPlane({
 
   const retireInspectors = () => {
     for (const conversation of inspectorConversations) {
-      onInspectorTerminalPortal(conversation.nodeId, null);
+      onInspectorTerminalPortal(worldInspectorWindowId(conversation), null);
     }
     onInspectorConversationsChange([]);
     onDockedInspectorIdChange(null);
@@ -1622,40 +2296,220 @@ function WorldControlPlane({
         !currentSelectionGeneration ||
         !selected.actionable),
   );
-  const visualActions = (
-    <VisualRouteActions
-      selection={selected}
-      world={world}
-      activeConnectionId={connectionSelection.activeConnectionId}
-      runtimeGeneration={connectionSelection.runtimeGeneration}
-      onResource={(node, requestedView) =>
-        applySelection(node.id, requestedView)
+  const shellActionContext = useRef({
+    selected,
+    world,
+    activeConnectionId: connectionSelection.activeConnectionId,
+    runtimeGeneration: connectionSelection.runtimeGeneration,
+    applySelection,
+    focusWorldNode,
+    onGoToSpaces,
+    watchlistVerified: watchlist.verified,
+    watchlistRecords: watchlist.records,
+  });
+  shellActionContext.current = {
+    selected,
+    world,
+    activeConnectionId: connectionSelection.activeConnectionId,
+    runtimeGeneration: connectionSelection.runtimeGeneration,
+    applySelection,
+    focusWorldNode,
+    onGoToSpaces,
+    watchlistVerified: watchlist.verified,
+    watchlistRecords: watchlist.records,
+  };
+  const runVisualResource = useCallback(
+    (target: VisualRouteActionTarget, action: VisualRouteAction) => {
+      const current = shellActionContext.current;
+      const resolved = resolveVisualRouteActionTarget(target, current.world, {
+        activeConnectionId: current.activeConnectionId,
+        runtimeGeneration: current.runtimeGeneration,
+        selectedId: current.selected?.id ?? null,
+      });
+      if (
+        !resolved.node ||
+        !visualRouteActionsForNode(resolved.node).includes(action)
+      ) {
+        setIntentError(
+          resolved.reason ?? "The selected action is no longer available.",
+        );
+        return;
       }
-      onGoToSpaces={async (node) => {
-        const requestId = intentRequestRef.current + 1;
-        intentRequestRef.current = requestId;
-        setIntentError(null);
-        setIntentOpening(true);
-        try {
-          await focusWorldNode(node);
-          if (intentRequestRef.current !== requestId) return false;
+      if (action !== "spaces") {
+        void current.applySelection(resolved.node.id, action);
+        return;
+      }
+      const node = resolved.node;
+      const requestId = intentRequestRef.current + 1;
+      intentRequestRef.current = requestId;
+      setIntentError(null);
+      setIntentOpening(true);
+      void current
+        .focusWorldNode(node)
+        .then(() => {
+          if (intentRequestRef.current !== requestId) return;
           setSelection(node);
-          onGoToSpaces();
-          return true;
-        } catch (cause) {
-          if (intentRequestRef.current === requestId) {
+          current.onGoToSpaces();
+        })
+        .catch((cause: unknown) => {
+          if (intentRequestRef.current === requestId)
             setIntentError(
               cause instanceof Error ? cause.message : String(cause),
             );
-          }
-          return false;
-        } finally {
+        })
+        .finally(() => {
           if (intentRequestRef.current === requestId) setIntentOpening(false);
-        }
-      }}
-      onError={setIntentError}
-    />
+        });
+    },
+    [],
   );
+  const visualActionExtension = useMemo<CommandExtension>(() => {
+    const target = visualRouteActionTarget(selected);
+    const resolved = resolveVisualRouteActionTarget(target, world, {
+      activeConnectionId: connectionSelection.activeConnectionId,
+      runtimeGeneration: connectionSelection.runtimeGeneration,
+      selectedId: selected?.id ?? null,
+    });
+    const labels: Record<VisualRouteAction, string> = {
+      terminal: "Open Terminal",
+      files: "Open Files",
+      changes: "Open Changes",
+      history: "Open Agent History",
+      spaces: "Go to Spaces",
+    };
+    const icons = {
+      terminal: <Terminal size={15} />,
+      files: <FolderOpen size={15} />,
+      changes: <LayoutGrid size={15} />,
+      history: <History size={15} />,
+      spaces: <LayoutGrid size={15} />,
+    };
+    const targetActions =
+      target && resolved.node
+        ? visualRouteActionsForNode(resolved.node).map((action) => ({
+            key: `visual-${action}`,
+            icon: icons[action],
+            title: labels[action],
+            detail: visualRouteTargetLabel(resolved.node!),
+            keywords: ["visual", "inspector", action],
+            run: () => runVisualResource(target, action),
+          }))
+        : [
+            {
+              key: "visual-select-target",
+              icon: <LayoutGrid size={15} />,
+              title: "Select a visual entity for target actions",
+              detail: resolved.reason ?? undefined,
+              disabledReason:
+                resolved.reason ?? "Select a space, agent, or terminal first.",
+              run: () => {},
+            },
+          ];
+    const pinNode =
+      resolved.node &&
+      (resolved.node.kind === "agent" || resolved.node.kind === "terminal")
+        ? resolved.node
+        : null;
+    const selectedPinned = Boolean(
+      pinNode &&
+        watchlist.records.some(
+          (record) =>
+            record.connectionId === pinNode.connectionId &&
+            record.generation === pinNode.generation &&
+            record.terminalId === pinNode.terminalId,
+        ),
+    );
+    const pinAction = pinNode
+      ? [
+          {
+            key: "visual-pin",
+            icon: selectedPinned ? <PinOff size={15} /> : <Pin size={15} />,
+            title: selectedPinned ? "Unpin selected pane" : "Pin selected pane",
+            detail: pinNode.label,
+            disabledReason: watchlist.verified
+              ? null
+              : (watchlist.error ?? "Watches unavailable while disconnected"),
+            run: () => {
+              const current = shellActionContext.current;
+              const checked = resolveVisualRouteActionTarget(
+                target,
+                current.world,
+                {
+                  activeConnectionId: current.activeConnectionId,
+                  runtimeGeneration: current.runtimeGeneration,
+                  selectedId: current.selected?.id ?? null,
+                },
+              );
+              if (
+                !checked.node ||
+                (checked.node.kind !== "agent" &&
+                  checked.node.kind !== "terminal") ||
+                !current.watchlistVerified ||
+                !checked.node.terminalId
+              ) {
+                setIntentError(
+                  checked.reason ?? "The selected pane is unavailable.",
+                );
+                return;
+              }
+              const watch = {
+                connectionId: checked.node.connectionId,
+                generation: checked.node.generation,
+                terminalId: checked.node.terminalId,
+                label: checked.node.label,
+              };
+              const pinned = current.watchlistRecords.some(
+                (record) =>
+                  record.connectionId === watch.connectionId &&
+                  record.generation === watch.generation &&
+                  record.terminalId === watch.terminalId,
+              );
+              void watchlistStore.mutate(
+                pinned ? "world.watchlist.unpin" : "world.watchlist.pin",
+                watch,
+              );
+            },
+          },
+        ]
+      : [];
+    return {
+      captureKey: resolved.node && target ? JSON.stringify(target) : null,
+      groups: [
+        { heading: "Visual selection", actions: targetActions },
+        {
+          heading: "Pinned panes",
+          actions: [
+            ...pinAction,
+            {
+              key: "visual-pinned-only",
+              icon: <Pin size={15} />,
+              title: pinnedOnly ? "Show all panes" : "Pinned only",
+              detail: watchStatus,
+              run: () => setPinnedOnly((value) => !value),
+            },
+          ],
+        },
+      ],
+    };
+  }, [
+    selected,
+    world,
+    connectionSelection.activeConnectionId,
+    connectionSelection.runtimeGeneration,
+    watchlist.records,
+    watchlist.verified,
+    watchlist.error,
+    pinnedOnly,
+    watchStatus,
+    watchlistStore,
+    runVisualResource,
+  ]);
+  useLayoutEffect(() => {
+    onVisualActionExtensionReady(
+      active ? visualActionExtension : EMPTY_VISUAL_ACTION_EXTENSION,
+    );
+    return () => onVisualActionExtensionReady(EMPTY_VISUAL_ACTION_EXTENSION);
+  }, [active, onVisualActionExtensionReady, visualActionExtension]);
 
   return (
     <main
@@ -1667,6 +2521,7 @@ function WorldControlPlane({
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
+          ref={worldViewLayoutRef}
           className={`world-view-layout ${showSelectionProfile || contextRailInspector ? "has-context" : ""}`}
         >
           <section className="world-view-stage" aria-label={`${view} view`}>
@@ -1688,7 +2543,6 @@ function WorldControlPlane({
                       <PixelOfficeView
                         world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
-                        toolbarActions={watchToolbarActions}
                         selectedId={selectedId}
                         onSelect={selectNode}
                         floatingTerminals={inspectorConversations}
@@ -1697,7 +2551,6 @@ function WorldControlPlane({
                         }
                         onOpenTerminal={openTerminalById}
                         onSelectedAnchorChange={setSelectedVisualAnchor}
-                        actions={visualActions}
                       />
                     </Suspense>
                   ) : view === "tree" ? (
@@ -1709,7 +2562,6 @@ function WorldControlPlane({
                       <ConnectedTreeView
                         world={presentedWorld}
                         toolbarPortal={viewToolbarPortal}
-                        toolbarActions={watchToolbarActions}
                         selectedId={selectedId}
                         conversationNodeIds={conversationNodeIds}
                         inlineInspectorNodeId={treeInlineInspectorNodeId}
@@ -1720,21 +2572,18 @@ function WorldControlPlane({
                         }
                         onSelectedAnchorChange={setSelectedVisualAnchor}
                         onNodeAnchorsChange={setVisualConversationAnchors}
-                        actions={visualActions}
                       />
                     </Suspense>
                   ) : (
                     <SpatialGraphView
                       world={presentedWorld}
                       toolbarPortal={viewToolbarPortal}
-                      toolbarActions={watchToolbarActions}
                       selectedId={selectedId}
                       conversationNodeIds={conversationNodeIds}
                       onSelect={selectNode}
                       onOpenTerminal={openTerminalById}
                       onSelectedAnchorChange={setSelectedVisualAnchor}
                       onNodeAnchorsChange={setVisualConversationAnchors}
-                      actions={visualActions}
                     />
                   )}
                 </WorldViewErrorBoundary>
@@ -1751,11 +2600,16 @@ function WorldControlPlane({
               />
             </Suspense>
           ) : null}
-          {floatingInspectors.map((conversation) => {
+          {visibleFloatingInspectors.map((conversation) => {
             const source = visualConversationAnchors?.[conversation.nodeId];
-            const target = floatingWindowAnchors[conversation.nodeId] ?? null;
+            const target =
+              floatingWindowAnchors[worldInspectorWindowId(conversation)] ??
+              null;
             return source && target ? (
-              <Suspense key={conversation.nodeId} fallback={null}>
+              <Suspense
+                key={worldInspectorWindowId(conversation)}
+                fallback={null}
+              >
                 <WorldIntentConnector source={source} target={target} />
               </Suspense>
             ) : null;
@@ -1826,14 +2680,60 @@ function WorldControlPlane({
         </div>
       )}
       <Suspense fallback={null}>
-        {floatingInspectors.map((conversation, index) => (
+        {visibleFloatingInspectors.map((conversation, index) => (
           <WorldFloatingTerminalWindow
-            key={conversation.nodeId}
+            key={worldInspectorWindowId(conversation)}
             conversation={conversation}
             cascadeIndex={index}
             compactActive={
-              !dockedInspector && index === floatingInspectors.length - 1
+              arrangementScope?.preset
+                ? worldInspectorWindowId(conversation) === activeInspectorId
+                : !dockedInspector && index === floatingInspectors.length - 1
             }
+            arrangedGeometry={
+              visualPlacementMap.get(worldInspectorWindowId(conversation)) ??
+              null
+            }
+            persistGeometry={
+              worldInspectorWindowId(conversation) !== dockedInspectorId
+            }
+            onGeometryObserved={(geometry) => {
+              const id = worldInspectorWindowId(conversation);
+              setFloatingWindowGeometries((current) =>
+                current[id] &&
+                current[id].left === geometry.left &&
+                current[id].top === geometry.top &&
+                current[id].width === geometry.width &&
+                current[id].height === geometry.height
+                  ? current
+                  : { ...current, [id]: geometry },
+              );
+            }}
+            onArrangedGeometryChange={(geometry) => {
+              // Compact Single is a viewport presentation of the desktop tiles.
+              // Its move and resize gestures must not replace their saved geometry.
+              if (compactArrangement) return;
+              const id = worldInspectorWindowId(conversation);
+              const fitted = fitVisualInspectorArrangementGeometry(
+                geometry,
+                visualArrangementStage,
+              );
+              if (arrangementScope?.preset === "single") {
+                setSingleManualGeometry((current) => ({
+                  ...current,
+                  [id]: fitted,
+                }));
+              } else {
+                setVisualArrangementState((current) =>
+                  updateTerminalWindowArrangementGeometry(current, {
+                    leaseKey: visualLeaseKey,
+                    scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+                    id,
+                    geometry: fitted,
+                  }),
+                );
+              }
+            }}
             onFocus={() => {
               void focusFloatingInspector(conversation).catch(() => undefined);
             }}
@@ -1841,40 +2741,76 @@ function WorldControlPlane({
               void focusFloatingInspector(conversation, false);
             }}
             onAnchorChange={(anchor) =>
-              setFloatingWindowAnchors((current) => ({
-                ...current,
-                [conversation.nodeId]: anchor,
-              }))
+              setFloatingWindowAnchors((current) => {
+                const id = worldInspectorWindowId(conversation);
+                const previous = current[id];
+                if (
+                  previous === anchor ||
+                  (previous &&
+                    anchor &&
+                    previous.left === anchor.left &&
+                    previous.top === anchor.top &&
+                    previous.right === anchor.right &&
+                    previous.bottom === anchor.bottom)
+                ) {
+                  return current;
+                }
+                return { ...current, [id]: anchor };
+              })
             }
             onPortalChange={(portal) =>
               setFloatingInspectorPortals((current) => ({
                 ...current,
-                [conversation.nodeId]: portal,
+                [worldInspectorWindowId(conversation)]: portal,
               }))
             }
           />
         ))}
         {inspectorConversations.map((conversation) => (
           <WorldInspectorConversationView
-            key={`${conversation.nodeId}:${conversation.resourceIdentity}`}
+            key={worldInspectorWindowId(conversation)}
             conversation={conversation}
             target={
-              conversation.nodeId === dockedInspectorId
+              worldInspectorWindowId(conversation) === dockedInspectorId &&
+              !arrangedDocked
                 ? dockedInspectorPortal
-                : (floatingInspectorPortals[conversation.nodeId] ?? null)
+                : visibleFloatingInspectorIds.has(
+                      worldInspectorWindowId(conversation),
+                    )
+                  ? (floatingInspectorPortals[
+                      worldInspectorWindowId(conversation)
+                    ] ?? null)
+                  : null
             }
-            floating={conversation.nodeId !== dockedInspectorId}
+            floating={
+              worldInspectorWindowId(conversation) !== dockedInspectorId ||
+              arrangedDocked
+            }
+            terminalActive={
+              worldInspectorWindowId(conversation) === dockedInspectorId
+                ? !dockedSuppressed
+                : visibleFloatingInspectorIds.has(
+                    worldInspectorWindowId(conversation),
+                  )
+            }
             embedded={
-              conversation.nodeId === dockedInspectorId &&
+              worldInspectorWindowId(conversation) === dockedInspectorId &&
+              !arrangedDocked &&
               conversation.nodeId === treeInlineInspectorNodeId
             }
             onChange={(change) => {
               if (change.dock !== undefined || change.expanded !== undefined) {
                 setDockedInspectorGeometry(null);
+                if (arrangementScope?.preset) {
+                  setExcludedArrangementIds((current) =>
+                    new Set(current).add(worldInspectorWindowId(conversation)),
+                  );
+                }
               }
               onInspectorConversationsChange(
                 inspectorConversations.map((candidate) =>
-                  candidate.nodeId === conversation.nodeId
+                  worldInspectorWindowId(candidate) ===
+                  worldInspectorWindowId(conversation)
                     ? { ...candidate, ...change }
                     : candidate,
                 ),
@@ -1882,7 +2818,13 @@ function WorldControlPlane({
             }}
             onClose={() => closeInspector(conversation)}
             onDockIn={() => {
-              void dockFloatingInspector(conversation);
+              void dockFloatingInspector(conversation).then((docked) => {
+                if (docked && arrangementScope?.preset) {
+                  setExcludedArrangementIds((current) =>
+                    new Set(current).add(worldInspectorWindowId(conversation)),
+                  );
+                }
+              });
             }}
             onDockOut={() => {
               if (floatingInspectors.length >= 5) {
@@ -1896,7 +2838,7 @@ function WorldControlPlane({
               onDockedInspectorIdChange(null);
             }}
             onFocus={
-              conversation.nodeId === dockedInspectorId
+              worldInspectorWindowId(conversation) === dockedInspectorId
                 ? () => {
                     const target = world.nodeById.get(conversation.nodeId);
                     if (!target) return;
@@ -1910,7 +2852,10 @@ function WorldControlPlane({
                 : undefined
             }
             onTerminalPortalChange={(portal) =>
-              onInspectorTerminalPortal(conversation.nodeId, portal)
+              onInspectorTerminalPortal(
+                worldInspectorWindowId(conversation),
+                portal,
+              )
             }
           />
         ))}

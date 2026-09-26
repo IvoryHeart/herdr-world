@@ -5,6 +5,7 @@ import {
   floatingTerminalContainingViewport,
   moveFloatingTerminalPosition,
   resizeFloatingTerminalGeometry,
+  TILED_TERMINAL_MIN_SIZE,
 } from "./floatingTerminalGeometry";
 
 describe("floating terminal geometry", () => {
@@ -83,5 +84,17 @@ describe("floating terminal geometry", () => {
         { width: 800, height: 600 },
       ),
     ).toEqual({ left: 100, top: 80, width: 420, height: 280 });
+  });
+
+  test("lets an arranged tile resize to its compact usable minimum", () => {
+    expect(
+      resizeFloatingTerminalGeometry(
+        { left: 100, top: 80, width: 260, height: 200 },
+        -100,
+        -100,
+        { width: 800, height: 600 },
+        TILED_TERMINAL_MIN_SIZE,
+      ),
+    ).toEqual({ left: 100, top: 80, width: 220, height: 160 });
   });
 });

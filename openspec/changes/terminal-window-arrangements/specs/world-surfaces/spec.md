@@ -2,7 +2,7 @@
 
 ### Requirement: Arrange existing terminal windows from the shared tab bar
 
-The desktop tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
+The shared tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. On desktop the control SHALL sit at the right edge of the tab bar; on mobile it SHALL appear inside the existing ellipsis-expanded floating controls, including when the tab strip is hidden for one tab. The shared shell Actions command menu SHALL expose the same view-wide arrangement choices and unavailable reasons in every view. Each choice MAY be given a configurable keyboard shortcut, with none assigned by default; invoking an assigned shortcut SHALL follow the same availability and Restore rules without sending terminal input. The shell's existing shortcut defaults and numbered Actions order SHALL remain unchanged. Single SHALL show one active window fitted to the available stage. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
 
 In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation on the selected host, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while suspending terminal presentations in other conversations that remain open under the existing dock and floating admission rules. In particular, ordinary selection of B while A is docked SHALL still close A before admitting B; Single SHALL NOT retain A as a hidden extra Inspector or change the one-docked-plus-five-floating limit. The visual Inspector limit SHALL NOT cap Spaces' existing tabs. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT itself create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the selected host or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
 
@@ -53,9 +53,19 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 - **WHEN** a keyboard user opens the arrangement control, chooses a labelled placement or dismisses it
 - **THEN** focus moves predictably among its options and returns to the control or previously focused terminal without sending that navigation as terminal input
 
+#### Scenario: Find the arrangement control at wide and mobile widths
+
+- **WHEN** a user views the desktop tab bar or expands the mobile ellipsis controls with one open tab
+- **THEN** one arrangement control is reachable at the right edge of the desktop tab bar or inside the expanded mobile controls, with no separate mobile tab-strip icon
+
+#### Scenario: Arrange from Actions or a shortcut
+
+- **WHEN** a user chooses a layout from the shell Actions menu, or uses its assigned shortcut in the current view
+- **THEN** that view applies the same eligible-window layout as the tab-bar control, or leaves geometry unchanged when the choice is unavailable; the shell menu offers the layouts even without an actionable visual entity selected
+
 ### Requirement: Fit and restore window arrangements
 
-Columns SHALL place the current windows side by side, and Rows SHALL place them top to bottom, without overlap. Grid SHALL place two windows side by side, three as one full-height column beside two stacked windows, and four in separate corners. With more than four windows, Grid SHALL tile four and leave the remainder floating above them with reachable headers. Cascade SHALL offset all current windows diagonally in focus order so older title regions remain visible behind newer windows. Each arrangement SHALL use the available stage below the tab bar and outside the visible Spaces Inspector dock, preserve the minimum usable dimensions for its window type, and keep applicable title, close and dock controls reachable. An option that cannot fit every eligible window under these rules SHALL be unavailable with an explanation and SHALL leave current geometry unchanged.
+Columns SHALL place the current windows side by side, and Rows SHALL place them top to bottom, without overlap. They SHALL shrink windows evenly below their normal floating minimum when needed, while keeping window controls and terminal content usable. Grid SHALL place two windows side by side, three as one full-height column beside two stacked windows, and four in separate corners. With more than four windows, Grid SHALL tile four and leave the remainder floating above them with reachable headers. Cascade SHALL use the normal viewport-fitted default floating-window size, shrinking all windows equally only when needed to fit its diagonal offsets, and SHALL keep older title regions visible behind newer windows. Each arrangement SHALL use the available stage below the tab bar and outside the visible Spaces Inspector dock, with balanced stage insets at supported UI scales and reachable title, close and dock controls. A tiled window SHALL retain its usable compact minimum during explicit resize. An option that cannot fit every eligible window at usable dimensions SHALL be unavailable with an explanation and SHALL leave current geometry unchanged.
 
 At the first arrangement of an eligible window set, World SHALL capture its previous presentation and each window's available prior geometry, including the Spaces Single state or an Inspector's dock/inline state. Restore positions SHALL return every still-open participating instance to that captured presentation and geometry without reopening a closed instance, changing the current active tab/pane or moving an instance that has never participated. Restoring Spaces' original Single presentation SHALL show its currently active tab. A Tree inline return SHALL use its exact leaf if that leaf is still visible, and otherwise use the normal docked overlay. Explicit drag, resize, dock and close actions SHALL continue to work after arranging. Viewport changes SHALL keep title controls reachable; a compact layout SHALL keep only one active usable window and preserve desktop arrangement positions for return to desktop. A selected-host or runtime-generation change SHALL discard the prior live arrangement and restore snapshot with the retired windows. Spaces and visual views SHALL retain their respective window placement while inactive without arranging each other's hidden windows. Spaces SHALL keep tab-window placement separate for each focused workspace and SHALL detach the old workspace's terminal presentations when focus changes to another workspace.
 
@@ -63,6 +73,16 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 
 - **WHEN** two eligible windows fit Columns, or three fit Rows, and the user chooses that option in any view
 - **THEN** they occupy nonoverlapping side-by-side columns or top-to-bottom rows within the available stage
+
+#### Scenario: More than two columns or rows
+
+- **WHEN** three or more eligible windows fit after shrinking evenly to usable compact sizes and the user chooses Columns or Rows
+- **THEN** all eligible windows remain in one nonoverlapping row or column with their controls reachable
+
+#### Scenario: Arrange visual Inspectors at a scaled UI
+
+- **WHEN** a user chooses Columns for two visible Inspectors on a wide desktop with increased UI scale
+- **THEN** both windows fit within the visual stage with balanced top and bottom spacing and reachable controls
 
 #### Scenario: Three-window and four-window Grid
 
@@ -77,7 +97,7 @@ At the first arrangement of an eligible window set, World SHALL capture its prev
 #### Scenario: Diagonal Cascade
 
 - **WHEN** two or more eligible windows fit Cascade and the user chooses it
-- **THEN** each later window is offset diagonally above the earlier windows and every title region can be used to raise its window
+- **THEN** each window has the normal default floating size fitted to the stage, each later window is offset diagonally above the earlier windows, and every title region can be used to raise its window
 
 #### Scenario: Requested layout cannot fit
 
@@ -133,6 +153,11 @@ Pane placement, zoom and resize inside an Inspector SHALL follow Herdr's tab lay
 
 - **WHEN** pane A and pane B share an Inspector and the user focuses B inside its split Terminal while A's agent checkout Changes or History request is pending
 - **THEN** terminal input, the Inspector's selected-pane header and agent-specific applicability follow B, and A's late reply cannot replace B's agent-specific content
+
+#### Scenario: Select a pane from a mobile switcher or zoomed terminal
+
+- **WHEN** a user chooses a sibling with the mobile pane switcher or focuses the Herdr-zoomed pane while an earlier pane-focus read is pending
+- **THEN** the chosen pane remains selected, with no older pane-focus request from the same pointer action able to override it
 
 #### Scenario: Preserve workspace resources across sibling focus
 
@@ -328,3 +353,53 @@ tab window before a visual Inspector can attach that qualified pane.
 - **WHEN** five distinct conversations are open and the user requests a sixth
 - **THEN** World keeps the existing floating and docked Inspectors and reports the bounded limit
   visibly
+
+### Requirement: Visual-route Actions
+
+Office, Tree and Graph SHALL expose a common named Actions control for the explicitly selected
+space, agent or terminal. The control SHALL be reachable by pointer and keyboard on desktop and
+compact layouts, identify the captured host, space and pane as applicable, and offer the
+target's existing applicable Terminal, Files, Changes, Agent History and Go to Spaces actions.
+It SHALL also expose view-wide window arrangements independently of entity selection. The shell's
+right-side Roamgate-derived Actions command menu SHALL retain its original shell commands and add
+target actions, Pin, Unpin, Pinned only and arrangements in visual views, without a duplicate
+view-toolbar Actions control; the view toolbar SHALL keep search available.
+Target actions SHALL reuse the shared Inspector and selected-connection focus path; they SHALL NOT use
+hidden Spaces focus, create another terminal owner, send terminal input, assign tasks or control
+an agent lifecycle. A missing or unavailable target SHALL explain why no target action can run.
+
+Before dispatch, Actions SHALL validate the captured connection ID, runtime generation, entity
+identity and current selected entity against the selected-host projection. Changing selection,
+host or generation, or losing the current observation, SHALL invalidate the capture and prevent
+an action from falling through to a colliding entity or hidden Spaces state. Go to Spaces SHALL
+focus the exact validated target before changing the visible view and SHALL leave the visual view
+visible if that focus fails.
+
+#### Scenario: Open Actions for a selected agent
+
+- **WHEN** a user selects an actionable agent in Office, Tree or Graph and opens Actions
+- **THEN** the menu identifies that agent and offers its admitted Inspector resources and Go to
+  Spaces
+
+#### Scenario: No actionable selection exists
+
+- **WHEN** a user opens Actions without an actionable space or pane selected
+- **THEN** it asks the user to select a visual entity for target actions, keeps window arrangements available, and does not use the last focused Spaces pane
+
+#### Scenario: Choose an Inspector resource
+
+- **WHEN** a user chooses Terminal, Files, Changes or Agent History from Actions
+- **THEN** the shared Inspector opens or focuses that resource for the exact selected entity while
+  preserving the current visual view and terminal ownership
+
+#### Scenario: Go to Spaces
+
+- **WHEN** a user chooses Go to Spaces for a current space or pane
+- **THEN** World focuses that qualified target before Spaces becomes visible without changing the
+  selected host or creating a pane
+
+#### Scenario: The capture retires before dispatch
+
+- **WHEN** selection, selected host, runtime generation or observed entity changes while Actions
+  is open
+- **THEN** World invalidates the capture, reports that target actions are unavailable, and performs no target action

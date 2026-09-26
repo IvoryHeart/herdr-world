@@ -1103,7 +1103,7 @@ describe("stabilizeRefreshPatch", () => {
     ).toBeNull();
   });
 
-  test("keeps the store silent when an idle refresh changes nothing", async () => {
+  test("publishes a focused-list observation without replacing unchanged topology", async () => {
     const originalConnection = bridge.connection;
     const snapshot = partitionState();
     bridge.connection = (() => ({
@@ -1133,8 +1133,16 @@ describe("stabilizeRefreshPatch", () => {
       try {
         const before = store.get();
         await store.refresh();
-        expect(store.get()).toBe(before);
-        expect(emissions).toBe(0);
+        const after = store.get();
+        expect(after.workspaces).toBe(before.workspaces);
+        expect(after.tabs).toBe(before.tabs);
+        expect(after.panes).toBe(before.panes);
+        expect(after.layout).toBe(before.layout);
+        expect(after.lastRefresh).toBe(before.lastRefresh);
+        expect(after.lastTopologyObservationStartedAt).toBeGreaterThan(
+          before.lastTopologyObservationStartedAt,
+        );
+        expect(emissions).toBe(1);
       } finally {
         unsubscribe();
       }
