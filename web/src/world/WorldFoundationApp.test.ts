@@ -1076,6 +1076,12 @@ describe("World view preference", () => {
     ).toBe("terminal");
     expect(
       reconcileWorldInspectorConversation(
+        { ...first, focusedListAdmissionAt: 123 },
+        sibling,
+      ).focusedListAdmissionAt,
+    ).toBe(123);
+    expect(
+      reconcileWorldInspectorConversation(
         { ...first, view: "files" },
         { ...sibling, view: "terminal" },
       ).view,

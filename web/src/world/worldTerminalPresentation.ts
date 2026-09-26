@@ -25,6 +25,8 @@ export type WorldInspectorConversation = {
   dock: InspectorDock;
   expanded: boolean;
   size: number;
+  /** A focused list must start after this admission before absence can retire it. */
+  focusedListAdmissionAt?: number;
 };
 
 export type WorldFloatingTerminal = {
@@ -140,6 +142,9 @@ export function reconcileWorldInspectorConversation(
     dock: current.dock,
     expanded: current.expanded,
     size: current.size,
+    ...(current.focusedListAdmissionAt !== undefined
+      ? { focusedListAdmissionAt: current.focusedListAdmissionAt }
+      : {}),
   };
   return inspectorConversationEqual(current, next) ? current : next;
 }
@@ -165,6 +170,7 @@ function inspectorConversationEqual(
     left.dock === right.dock &&
     left.expanded === right.expanded &&
     left.size === right.size &&
+    left.focusedListAdmissionAt === right.focusedListAdmissionAt &&
     left.availableViews.length === right.availableViews.length &&
     left.availableViews.every(
       (view, index) => view === right.availableViews[index],

@@ -136,7 +136,7 @@ retain their original Herdr Web lineage.
 ### Fixed
 
 - Kept open floating Inspectors visible through failed, stale or bounded World
-  observations while their tab remains in the focused Herdr list.
+  observations and through focused tab lists fetched before a new Inspector opens.
   [Herdr World PR #111](https://github.com/IvoryHeart/herdr-world/pull/111)
 - Reconciled Android terminal textarea replacements as tail edits so mobile
   autocorrection, deletion and revised text no longer resend accumulated input

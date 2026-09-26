@@ -817,7 +817,8 @@ function WorldControlPlane({
     (snapshot) => ({
       workspaces: snapshot.workspaces,
       tabs: snapshot.tabs,
-      lastRefresh: snapshot.lastRefresh,
+      lastTopologyObservationStartedAt:
+        snapshot.lastTopologyObservationStartedAt,
       status: snapshot.status,
       runtimeGeneration: snapshot.serverRuntimeGeneration,
     }),
@@ -1755,6 +1756,10 @@ function WorldControlPlane({
           null,
         );
       }
+      const admittedConversation = {
+        ...conversation,
+        focusedListAdmissionAt: performance.now(),
+      };
       const nextConversations = [
         ...currentConversations.filter(
           (candidate) =>
@@ -1765,14 +1770,15 @@ function WorldControlPlane({
             worldInspectorWindowId(candidate) !==
               worldInspectorWindowId(conversation),
         ),
-        conversation,
+        admittedConversation,
       ];
       inspectorConversationsRef.current = nextConversations;
       onInspectorConversationsChange(nextConversations);
-      dockedInspectorIdRef.current = worldInspectorWindowId(conversation);
-      onDockedInspectorIdChange(worldInspectorWindowId(conversation));
-      if (conversation.view === "terminal") {
-        focusInspectorTerminal(worldInspectorWindowId(conversation));
+      dockedInspectorIdRef.current =
+        worldInspectorWindowId(admittedConversation);
+      onDockedInspectorIdChange(worldInspectorWindowId(admittedConversation));
+      if (admittedConversation.view === "terminal") {
+        focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
       }
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
@@ -1912,7 +1918,8 @@ function WorldControlPlane({
       // focused Herdr list can confirm that its tab or workspace is gone.
       const focusedListIsCurrent =
         focusedTopology.status === "connected" &&
-        focusedTopology.lastRefresh > 0 &&
+        focusedTopology.lastTopologyObservationStartedAt >
+          (conversation.focusedListAdmissionAt ?? 0) &&
         focusedTopology.runtimeGeneration === conversation.runtimeGeneration;
       const stillOpen = conversation.tabId
         ? focusedTopology.tabs.some(
@@ -2064,11 +2071,15 @@ function WorldControlPlane({
         throw new Error("Inspector activation was superseded");
       }
       setSelection(node);
+      const admittedConversation = {
+        ...conversation,
+        focusedListAdmissionAt: performance.now(),
+      };
       onInspectorConversationsChange([
         ...inspectorConversationsRef.current,
-        conversation,
+        admittedConversation,
       ]);
-      focusInspectorTerminal(worldInspectorWindowId(conversation));
+      focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
     } finally {
       if (intentRequestRef.current === requestId) setIntentOpening(false);
     }

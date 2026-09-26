@@ -78,6 +78,8 @@ export interface ServerSessionState {
   pendingFocusWorkspaceSettledAt: number | null;
   terminalAttachEpoch: number;
   lastRefresh: number;
+  /** Start time of the latest successfully observed focused topology list. */
+  lastTopologyObservationStartedAt: number;
 }
 
 export type PopupInfo = NonNullable<PopupStatePush["popup"]>;
@@ -199,6 +201,7 @@ export function emptyServerSessionState(
     pendingFocusWorkspaceSettledAt: null,
     terminalAttachEpoch: 0,
     lastRefresh: 0,
+    lastTopologyObservationStartedAt: 0,
   };
 }
 
@@ -413,6 +416,7 @@ const SERVER_SESSION_KEYS: Array<keyof ServerSessionState> = [
   "pendingFocusWorkspaceSettledAt",
   "terminalAttachEpoch",
   "lastRefresh",
+  "lastTopologyObservationStartedAt",
 ];
 
 function serverSessionFromState(snapshot: State): ServerSessionState {
@@ -434,6 +438,7 @@ function serverSessionFromState(snapshot: State): ServerSessionState {
     pendingFocusWorkspaceSettledAt: snapshot.pendingFocusWorkspaceSettledAt,
     terminalAttachEpoch: snapshot.terminalAttachEpoch,
     lastRefresh: snapshot.lastRefresh,
+    lastTopologyObservationStartedAt: snapshot.lastTopologyObservationStartedAt,
   };
 }
 
@@ -1303,6 +1308,7 @@ async function refreshNow(lease = captureConnectionLease()) {
     return;
   }
   refreshingConnectionKeys.add(refreshKey);
+  const observationStartedAt = performance.now();
   // Snapshot the pending-focus marker when the fetch actually starts. Only a
   // refresh that began after the focus action settled may declare the focus
   // lost, and only while the marker still belongs to that same attempt.
@@ -1467,9 +1473,12 @@ async function refreshNow(lease = captureConnectionLease()) {
       queuedConnectionKeys.add(refreshKey);
     }
     const patch = stabilizeRefreshPatch(state, next);
-    if (patch) {
-      if (!setForConnection(lease, patch)) return;
-    } else if (!leaseIsCurrent(lease)) {
+    if (
+      !setForConnection(lease, {
+        ...(patch ?? {}),
+        lastTopologyObservationStartedAt: observationStartedAt,
+      })
+    ) {
       return;
     }
     notifyCompletedTasks(lease, completedPanes, workspaces, tabs);

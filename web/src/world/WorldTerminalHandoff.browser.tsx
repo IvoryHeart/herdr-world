@@ -109,6 +109,7 @@ let omitNextWorldTopology = false;
 let navigationMode: "shared" | "browser-local" = "shared";
 let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
+let delayedTabList: { promise: Promise<void>; tabs: Tab[] } | null = null;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
 let agents: Record<string, unknown>[] = [
@@ -283,7 +284,12 @@ const client: ConnectionClient = {
         workspaces: [currentWorkspace()],
       };
     }
-    if (method === "tab.list") return { tabs: currentTabs() };
+    if (method === "tab.list") {
+      const delayed = delayedTabList;
+      const listed = delayed?.tabs ?? currentTabs();
+      if (delayed) await delayed.promise;
+      return { tabs: listed };
+    }
     if (method === "pane.list") return { panes: currentPanes() };
     if (method === "tab.create") {
       const number = tabs.length + 1;
@@ -3244,12 +3250,44 @@ async function run() {
       '.world-semantic-target[data-kind="desk"][data-target-key*="created-tab-3"]:not(:disabled)',
     );
   await until(laterDesk, "later terminal desk in Office");
+  // World can expose a new tab while the focused list still predates it.
+  const staleFocusedTabs = store
+    .get()
+    .tabs.filter((tab) => tab.tab_id !== "created-tab-3");
+  __storeTesting.replaceState({ ...store.get(), tabs: staleFocusedTabs });
+  const delayedOpeningList = Promise.withResolvers<void>();
+  delayedTabList = {
+    promise: delayedOpeningList.promise,
+    tabs: staleFocusedTabs,
+  };
+  const tabListsBeforeOpening = calls.filter(
+    ({ method }) => method === "tab.list",
+  ).length;
   laterDesk()!.click();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "tab.list").length >
+      tabListsBeforeOpening,
+    "focused tab list delayed during Inspector opening",
+  );
   await until(
     () =>
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 3,
     "later floating Inspector outside the arranged set",
+  );
+  await settle();
+  check(
+    document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+      .length === 3,
+    "pre-admission focused list retired a newly opened Inspector",
+  );
+  delayedTabList = null;
+  delayedOpeningList.resolve();
+  await store.refresh();
+  await until(
+    () => store.get().tabs.some((tab) => tab.tab_id === "created-tab-3"),
+    "focused tab list caught up after opening",
   );
   const laterInspector = [
     ...document.querySelectorAll<HTMLElement>(
