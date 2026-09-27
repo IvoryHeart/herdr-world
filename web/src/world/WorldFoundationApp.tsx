@@ -1338,6 +1338,8 @@ function WorldControlPlane({
   ];
   const visualScrollContextRef = useRef({
     active: visualScrollActive,
+    leaseKey: visualLeaseKey,
+    preset: arrangementScope?.preset,
     horizontal: visualScrollX,
     placements: visualPlacementMap,
     max: visualScrollMax,
@@ -1348,6 +1350,8 @@ function WorldControlPlane({
   });
   visualScrollContextRef.current = {
     active: visualScrollActive,
+    leaseKey: visualLeaseKey,
+    preset: arrangementScope?.preset,
     horizontal: visualScrollX,
     placements: visualPlacementMap,
     max: visualScrollMax,
@@ -1356,12 +1360,18 @@ function WorldControlPlane({
     contentHeight: visualContentHeight,
     stage: visualArrangementStage,
   };
-  const raiseInspector = useCallback((id: string) => {
+  const raiseInspector = useCallback((id: string, pointer = false) => {
     setRaisedInspectorIds((current) =>
       current[current.length - 1] === id
         ? current
         : [...current.filter((candidate) => candidate !== id), id],
     );
+    if (pointer && visualScrollContextRef.current.active) {
+      const scroll = visualScrollContextRef.current;
+      visualGridAutoFocusKeyRef.current = `${scroll.leaseKey}:${scroll.preset}:${id}`;
+    }
+  }, []);
+  const revealInspector = useCallback((id: string) => {
     const scroll = visualScrollContextRef.current;
     const geometry = scroll.placements.get(id);
     if (!scroll.active || !geometry) return;
@@ -1420,9 +1430,18 @@ function WorldControlPlane({
         : contextRailInspectorPortal;
   useEffect(() => {
     if (!dockedInspectorPortal || !dockedInspectorId) return;
-    const raise = () => raiseInspector(dockedInspectorId);
-    return listenForInspectorWindowRaise(dockedInspectorPortal, raise);
-  }, [dockedInspectorId, dockedInspectorPortal, raiseInspector]);
+    const raise = () => raiseInspector(dockedInspectorId, true);
+    const reveal = () => {
+      raiseInspector(dockedInspectorId);
+      revealInspector(dockedInspectorId);
+    };
+    return listenForInspectorWindowRaise(dockedInspectorPortal, raise, reveal);
+  }, [
+    dockedInspectorId,
+    dockedInspectorPortal,
+    raiseInspector,
+    revealInspector,
+  ]);
   const dockedInspectorPortalRef = useRef<Element | null>(null);
   dockedInspectorPortalRef.current = dockedInspectorPortal;
   const dockedInspectorNodeId = contextRailInspector?.nodeId ?? null;
@@ -2664,6 +2683,7 @@ function WorldControlPlane({
     requestedView?: InspectorView,
     selectedNode?: WorldObjectNode,
     signal?: AbortSignal,
+    reveal = true,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
     const target = selectedNode ?? world.nodeById.get(conversation.nodeId);
@@ -2724,6 +2744,9 @@ function WorldControlPlane({
       setSelection(target);
       setInlineReturnNodeId(null);
       raiseInspector(worldInspectorWindowId(conversation));
+      if (focusTarget && reveal) {
+        revealInspector(worldInspectorWindowId(conversation));
+      }
       if (currentConversation.view === "terminal") {
         focusInspectorTerminal(worldInspectorWindowId(conversation));
       }
@@ -3349,7 +3372,14 @@ function WorldControlPlane({
             }}
             onFocus={() => {
               raiseInspector(worldInspectorWindowId(conversation));
-              void focusFloatingInspector(conversation).catch(() => undefined);
+              void focusFloatingInspector(
+                conversation,
+                true,
+                undefined,
+                undefined,
+                undefined,
+                false,
+              ).catch(() => undefined);
             }}
             onRaise={() => {
               raiseInspector(worldInspectorWindowId(conversation));
@@ -3357,7 +3387,11 @@ function WorldControlPlane({
                 () => undefined,
               );
             }}
-            onStack={() => raiseInspector(worldInspectorWindowId(conversation))}
+            onStack={(reveal) => {
+              const id = worldInspectorWindowId(conversation);
+              raiseInspector(id, !reveal);
+              if (reveal) revealInspector(id);
+            }}
             onAnchorChange={(anchor) =>
               setFloatingWindowAnchors((current) => {
                 const id = worldInspectorWindowId(conversation);

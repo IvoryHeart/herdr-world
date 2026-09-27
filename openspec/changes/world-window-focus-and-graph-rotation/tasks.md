@@ -55,3 +55,8 @@
 - [x] 10.1 Reveal a focused or reopened Inspector even when its ID is already selected; cover keyboard focus on an overscanned window.
 - [x] 10.2 Detach an arranged docked Inspector terminal outside overscan while preserving the normal docked presentation.
 - [x] 10.3 Use the same Grid width reserve for availability, placement, Open all, and clipping; cover four-window nonoverlap.
+
+## 11. Stable pointer interaction during visual scrolling
+
+- [x] 11.1 Raise a pointer-pressed Inspector without changing its scroll offset; reveal it on keyboard focus or explicit reopen.
+- [x] 11.2 Cover pointer focus on a partly clipped resize handle and keyboard focus on an overscanned Inspector in the browser regression.

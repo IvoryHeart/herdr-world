@@ -3883,6 +3883,37 @@ async function run() {
         narrowedVisualStage.getBoundingClientRect().left + 8,
     "keyboard focus reveals an overscanned Inspector",
   );
+  narrowColumnRight.click();
+  await until(
+    () => Number(narrowColumnRange.value) > 0,
+    "Columns are scrolled before pointer interaction",
+  );
+  const pointerScrollPosition = Number(narrowColumnRange.value);
+  const partlyClippedInspector = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ].find((inspector) => {
+    const bounds = inspector.getBoundingClientRect();
+    const left = narrowedVisualStage.getBoundingClientRect().left + 8;
+    return bounds.left < left && bounds.right > left;
+  });
+  check(Boolean(partlyClippedInspector), "partly clipped Inspector is mounted");
+  const resizeHandle = partlyClippedInspector!.querySelector<HTMLButtonElement>(
+    '[aria-label="Resize Inspector window"]',
+  )!;
+  resizeHandle.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerId: 23 }),
+  );
+  resizeHandle.focus();
+  window.dispatchEvent(
+    new PointerEvent("pointerup", { bubbles: true, pointerId: 23 }),
+  );
+  await settle();
+  check(
+    Number(narrowColumnRange.value) === pointerScrollPosition,
+    "pointer focus keeps a partly clipped Inspector stationary",
+  );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
   narrowedVisualStage.style.maxHeight = "420px";

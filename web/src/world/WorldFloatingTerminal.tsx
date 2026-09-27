@@ -61,7 +61,7 @@ export default function WorldFloatingInspectorWindow({
   compactActive: boolean;
   onFocus(): void;
   onRaise(): void;
-  onStack(): void;
+  onStack(reveal: boolean): void;
   onAnchorChange(anchor: WorldConnectorTargetBounds | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
   arrangedGeometry?: FloatingTerminalGeometry | null;
@@ -149,7 +149,8 @@ export default function WorldFloatingInspectorWindow({
   useEffect(() => {
     const element = windowRef.current;
     if (!element) return;
-    const raiseWindow = () => onStackRef.current();
+    const raiseWindow = () => onStackRef.current(false);
+    const revealWindow = () => onStackRef.current(true);
     const focusFromPointer = (event: PointerEvent) => {
       const clickedPaneId =
         event.target instanceof Element
@@ -176,7 +177,11 @@ export default function WorldFloatingInspectorWindow({
     // Inspector content is rendered through a portal owned by a sibling.
     // React events follow that logical tree, not this window's DOM ancestry,
     // so native listeners are required for its controls and resources.
-    const stopRaising = listenForInspectorWindowRaise(element, raiseWindow);
+    const stopRaising = listenForInspectorWindowRaise(
+      element,
+      raiseWindow,
+      revealWindow,
+    );
     element.addEventListener("pointerdown", focusFromPointer, true);
     return () => {
       stopRaising();
