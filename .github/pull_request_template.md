@@ -2,6 +2,7 @@
 
 - What changed and why:
 - Parent PR or branch, if stacked:
+- Knowledge map impact: <updated, or unchanged — explain why navigation did not change>
 
 ## Verification
 
