@@ -1195,16 +1195,27 @@ async function run() {
     "full World projection recovered",
   );
   const arrangeWindows = async (label: string) => {
-    document
-      .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
-      .click();
+    const trigger = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Arrange windows"]',
+    )!;
+    trigger.click();
     const getChoice = () =>
       [
         ...document.querySelectorAll<HTMLButtonElement>(
           '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
         ),
       ].find((button) => button.querySelector("strong")?.textContent === label);
-    await until(getChoice, `${label} arrangement choice`);
+    await settle();
+    await until(() => {
+      const choice = getChoice();
+      if (choice) return choice;
+      if (
+        !document.querySelector('[role="menu"][aria-label="Arrange windows"]')
+      ) {
+        trigger.click();
+      }
+      return null;
+    }, `${label} arrangement choice`);
     const choice = getChoice();
     check(
       Boolean(choice) && choice?.getAttribute("aria-disabled") !== "true",
@@ -1327,6 +1338,79 @@ async function run() {
       }))
       .sort((a, b) => a.label!.localeCompare(b.label!));
   const beforeCompact = desktopInspectorBounds();
+  const builderArrangedWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Builder Inspector"]',
+  )!;
+  const builderBeforeMaximize = builderArrangedWindow.getBoundingClientRect();
+  const sessionCallsBeforeMaximize = calls.filter(({ method }) =>
+    ["terminal.attach", "terminal.detach", "tab.close", "pane.close"].includes(
+      method,
+    ),
+  ).length;
+  const arrangedMaximize =
+    builderArrangedWindow.querySelector<HTMLButtonElement>(
+      '[aria-label="Maximize Inspector window"]',
+    );
+  if (!arrangedMaximize)
+    throw new Error("arranged Inspector maximize control missing");
+  arrangedMaximize.click();
+  await until(() => {
+    const bounds = builderArrangedWindow.getBoundingClientRect();
+    const stage = document
+      .querySelector(".world-view-layout")!
+      .getBoundingClientRect();
+    return (
+      bounds.width >= stage.width - 18 && bounds.height >= stage.height - 18
+    );
+  }, "arranged Inspector maximized over the visual stage");
+  const arrangedRestore =
+    builderArrangedWindow.querySelector<HTMLButtonElement>(
+      '[aria-label="Restore Inspector window"]',
+    );
+  if (!arrangedRestore)
+    throw new Error("arranged Inspector restore control missing");
+  arrangedRestore.click();
+  await until(() => {
+    const bounds = builderArrangedWindow.getBoundingClientRect();
+    return (
+      Math.abs(bounds.left - builderBeforeMaximize.left) < 2 &&
+      Math.abs(bounds.top - builderBeforeMaximize.top) < 2 &&
+      Math.abs(bounds.width - builderBeforeMaximize.width) < 2 &&
+      Math.abs(bounds.height - builderBeforeMaximize.height) < 2
+    );
+  }, "arranged Inspector restored its tile");
+  check(
+    calls.filter(({ method }) =>
+      [
+        "terminal.attach",
+        "terminal.detach",
+        "tab.close",
+        "pane.close",
+      ].includes(method),
+    ).length === sessionCallsBeforeMaximize,
+    "maximizing an Inspector changed terminal ownership",
+  );
+  const reviewerArrangedWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Reviewer Inspector"]',
+  )!;
+  builderArrangedWindow
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(builderArrangedWindow.style.zIndex) >
+      Number(reviewerArrangedWindow.style.zIndex),
+    "focused arranged Inspector raised above the other window",
+  );
+  reviewerArrangedWindow
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(reviewerArrangedWindow.style.zIndex) >
+      Number(builderArrangedWindow.style.zIndex),
+    "later focus changed the top window",
+  );
   const compactVisualStage =
     document.querySelector<HTMLElement>(".world-view-layout")!;
   compactVisualStage.style.width = "660px";
@@ -1479,6 +1563,81 @@ async function run() {
         '[role="dialog"][aria-label="Reviewer Inspector"]',
       ) !== null,
     "occupied Builder dock with floating Reviewer Inspector",
+  );
+  const dockBeforeMaximize = document
+    .querySelector<HTMLElement>(".world-context-rail")!
+    .getBoundingClientRect();
+  const dockMaximize = document.querySelector<HTMLButtonElement>(
+    '.world-context-rail button[aria-label="Maximize Inspector window"]',
+  );
+  if (!dockMaximize)
+    throw new Error("docked Inspector maximize control missing");
+  dockMaximize.click();
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Restore Inspector window"]',
+      ),
+    "docked Inspector maximized",
+  );
+  const dockRestore = document.querySelector<HTMLButtonElement>(
+    '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Restore Inspector window"]',
+  );
+  if (!dockRestore) throw new Error("docked Inspector restore control missing");
+  dockRestore.click();
+  await until(() => {
+    const rail = document.querySelector<HTMLElement>(".world-context-rail")!;
+    const bounds = rail.getBoundingClientRect();
+    return (
+      rail.classList.contains("has-inspector") &&
+      Math.abs(bounds.left - dockBeforeMaximize.left) < 2 &&
+      Math.abs(bounds.width - dockBeforeMaximize.width) < 2
+    );
+  }, "docked Inspector restored its placement");
+  const dockResize = document.querySelector<HTMLButtonElement>(
+    '.world-context-rail button[aria-label="Resize Inspector window"]',
+  );
+  check(
+    Boolean(dockResize),
+    "docked Office Inspector has no accessible resize control",
+  );
+  const dockWidthBeforeResize = document
+    .querySelector<HTMLElement>(".world-context-rail")!
+    .getBoundingClientRect().width;
+  dockResize?.focus();
+  dockResize?.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await until(
+    () =>
+      document
+        .querySelector<HTMLElement>(".world-context-rail")!
+        .getBoundingClientRect().width <
+      dockWidthBeforeResize - 8,
+    "keyboard resized the docked Inspector",
+  );
+  const focusedDock = document.querySelector<HTMLElement>(
+    ".world-context-rail",
+  )!;
+  const floatingReviewer = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Reviewer Inspector"]',
+  )!;
+  await until(
+    () =>
+      Number(focusedDock.style.zIndex) > Number(floatingReviewer.style.zIndex),
+    "docked Inspector focus raised it above a floating window",
+  );
+  floatingReviewer
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(floatingReviewer.style.zIndex) > Number(focusedDock.style.zIndex),
+    "floating Inspector focus raised it above the dock",
   );
 
   const paneGetsBeforeClosedTargetFocus = calls.filter(
@@ -3639,25 +3798,186 @@ async function run() {
     clippedVisualControls().length === 0,
     `narrow Columns clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
   );
-  narrowedVisualStage.style.height = "512px";
-  narrowedVisualStage.style.maxHeight = "512px";
+  narrowedVisualStage.style.width = "520px";
+  await arrangeWindows("Columns");
+  await until(() => {
+    const scrollbar = document.querySelector<HTMLInputElement>(
+      ".world-arrangement-scroll-control.is-horizontal input",
+    );
+    return Boolean(scrollbar && Number(scrollbar.max) > 0);
+  }, "narrow Columns expose horizontal scrolling");
+  const horizontalScrollbar = document.querySelector<HTMLInputElement>(
+    ".world-arrangement-scroll-control.is-horizontal input",
+  )!;
+  const columnScrollControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-horizontal",
+  )!;
+  check(Boolean(columnScrollControl), "Columns have a visible scroll control");
+  const columnScrollBounds = columnScrollControl.getBoundingClientRect();
+  check(
+    columnScrollBounds.left <
+      narrowedVisualStage.getBoundingClientRect().left + 500 &&
+      columnScrollBounds.width >= 200,
+    "Columns scroll control remains near the arranged windows",
+  );
+  columnScrollControl
+    .querySelector<HTMLButtonElement>('[aria-label="Scroll windows right"]')!
+    .click();
+  await until(
+    () => Number(horizontalScrollbar.value) > 0,
+    "Columns scroll control moves the arranged windows",
+  );
   await until(
     () =>
-      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 512) < 2,
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"]',
+        ),
+      ].some((inspector) => {
+        const bounds = inspector.getBoundingClientRect();
+        const stageLeft = narrowedVisualStage.getBoundingClientRect().left + 8;
+        return (
+          bounds.left < stageLeft &&
+          bounds.right > stageLeft &&
+          Number(inspector.style.clipPath.match(/([\d.]+)px\)$/)?.[1]) > 0 &&
+          !inspector.contains(
+            document.elementFromPoint(stageLeft - 2, bounds.top + 24),
+          )
+        );
+      }),
+    "horizontal scrolling clips Inspectors outside the visual stage",
+  );
+  narrowedVisualStage.style.width = "340px";
+  await arrangeWindows("Columns");
+  const narrowColumnControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-horizontal",
+  )!;
+  const narrowColumnRight =
+    narrowColumnControl.querySelector<HTMLButtonElement>(
+      '[aria-label="Scroll windows right"]',
+    )!;
+  for (let index = 0; index < 4 && !narrowColumnRight.disabled; index++) {
+    narrowColumnRight.click();
+    await settle();
+  }
+  const narrowColumnRange =
+    narrowColumnControl.querySelector<HTMLInputElement>("input")!;
+  const beforeFocusScroll = Number(narrowColumnRange.value);
+  const offscreenInspector = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ].find(
+    (inspector) =>
+      inspector.getBoundingClientRect().right <=
+      narrowedVisualStage.getBoundingClientRect().left + 8,
+  );
+  check(Boolean(offscreenInspector), "overscanned Inspector stays mounted");
+  offscreenInspector!
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(narrowColumnRange.value) < beforeFocusScroll &&
+      offscreenInspector!.getBoundingClientRect().right >
+        narrowedVisualStage.getBoundingClientRect().left + 8,
+    "keyboard focus reveals an overscanned Inspector",
+  );
+  narrowColumnRight.click();
+  await until(
+    () => Number(narrowColumnRange.value) > 0,
+    "Columns are scrolled before pointer interaction",
+  );
+  const pointerScrollPosition = Number(narrowColumnRange.value);
+  const partlyClippedInspector = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ].find((inspector) => {
+    const bounds = inspector.getBoundingClientRect();
+    const left = narrowedVisualStage.getBoundingClientRect().left + 8;
+    return bounds.left < left && bounds.right > left;
+  });
+  check(Boolean(partlyClippedInspector), "partly clipped Inspector is mounted");
+  const resizeHandle = partlyClippedInspector!.querySelector<HTMLButtonElement>(
+    '[aria-label="Resize Inspector window"]',
+  )!;
+  resizeHandle.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerId: 23 }),
+  );
+  resizeHandle.focus();
+  window.dispatchEvent(
+    new PointerEvent("pointerup", { bubbles: true, pointerId: 23 }),
+  );
+  await settle();
+  check(
+    Number(narrowColumnRange.value) === pointerScrollPosition,
+    "pointer focus keeps a partly clipped Inspector stationary",
+  );
+  narrowedVisualStage.style.width = "700px";
+  narrowedVisualStage.style.height = "420px";
+  narrowedVisualStage.style.maxHeight = "420px";
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 420) < 2,
     "short visual arrangement stage",
   );
+  await until(
+    () =>
+      !document.querySelector(
+        ".world-arrangement-scroll-control.is-horizontal",
+      ),
+    "horizontal scrollbar retired before Rows",
+  );
+  await settle();
   await arrangeWindows("Rows");
+  await until(() => {
+    const scrollbar = document.querySelector<HTMLInputElement>(
+      ".world-arrangement-scroll-control.is-vertical input",
+    );
+    return Boolean(scrollbar && Number(scrollbar.max) > 0);
+  }, "narrow Rows expose vertical scrolling");
+  const verticalScrollbar = document.querySelector<HTMLInputElement>(
+    ".world-arrangement-scroll-control.is-vertical input",
+  )!;
+  const rowScrollControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-vertical",
+  )!;
+  check(Boolean(rowScrollControl), "Rows have a visible scroll control");
+  rowScrollControl
+    .querySelector<HTMLButtonElement>('[aria-label="Scroll windows down"]')!
+    .click();
+  await until(
+    () => Number(verticalScrollbar.value) > 0,
+    "Rows scroll control moves the arranged windows",
+  );
+  await until(
+    () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"]',
+        ),
+      ].some((inspector) => {
+        const bounds = inspector.getBoundingClientRect();
+        const stageTop = narrowedVisualStage.getBoundingClientRect().top + 8;
+        return (
+          bounds.top < stageTop &&
+          bounds.bottom > stageTop &&
+          Number(inspector.style.clipPath.match(/^inset\(([\d.]+)px/)?.[1]) >
+            0 &&
+          !inspector.contains(
+            document.elementFromPoint(bounds.left + 24, stageTop - 2),
+          )
+        );
+      }),
+    "vertical scrolling clips Inspectors above the visual stage",
+  );
   await until(
     () => {
       const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
       return (
         bounds.length === 3 &&
         bounds.every((item) => item.height >= 160) &&
-        [
-          ...document.querySelectorAll<HTMLElement>(
-            '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
-          ),
-        ].every((inspector) => inspector.classList.contains("is-compact")) &&
         bounds.every(
           (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
         )
@@ -3669,6 +3989,62 @@ async function run() {
     clippedVisualControls().length === 0,
     `narrow Rows clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
   );
+  narrowedVisualStage.style.height = "340px";
+  narrowedVisualStage.style.maxHeight = "340px";
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 340) < 2,
+    "compact height before scrollable Cascade",
+  );
+  await arrangeWindows("Cascade");
+  await until(() => {
+    const scrollbar = document.querySelector<HTMLInputElement>(
+      ".world-arrangement-scroll-control.is-vertical input",
+    );
+    return Boolean(scrollbar && Number(scrollbar.max) > 0);
+  }, "narrow Cascade repeats scrollable groups");
+  const cascadeScrollControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-vertical",
+  )!;
+  check(
+    Boolean(cascadeScrollControl) &&
+      Math.abs(
+        cascadeScrollControl.getBoundingClientRect().right -
+          (narrowedVisualStage.getBoundingClientRect().right - 8),
+      ) < 4,
+    "Cascade scroll control stays at the stage edge",
+  );
+  const cascadeScrollDown =
+    cascadeScrollControl.querySelector<HTMLButtonElement>(
+      '[aria-label="Scroll windows down"]',
+    )!;
+  for (let index = 0; index < 8 && !cascadeScrollDown.disabled; index++) {
+    cascadeScrollDown.click();
+    await settle();
+  }
+  await until(
+    () =>
+      Number(
+        cascadeScrollControl.querySelector<HTMLInputElement>("input")!.value,
+      ) ===
+      Number(
+        cascadeScrollControl.querySelector<HTMLInputElement>("input")!.max,
+      ),
+    "Cascade scroll control reaches the last window group",
+  );
+  narrowedVisualStage.style.width = "520px";
+  await arrangeWindows("Columns");
+  await until(() => {
+    const stage = narrowedVisualStage.getBoundingClientRect();
+    return visualWindowBounds().some(
+      (bounds) =>
+        Math.abs(bounds.top - (stage.top + 8)) < 10 &&
+        bounds.right > stage.left + 8 &&
+        bounds.left < stage.right - 8 &&
+        bounds.bottom > stage.top + 8 &&
+        bounds.top < stage.bottom - 8,
+    );
+  }, "switching from scrolled Cascade to Columns keeps terminals visible");
   narrowedVisualStage.style.width = "1000px";
   narrowedVisualStage.style.height = "740px";
   narrowedVisualStage.style.removeProperty("max-height");
@@ -3689,6 +4065,34 @@ async function run() {
       ),
     "Cascade kept the default floating window size",
   );
+  const maximizedBeforeRestore = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label$=" Inspector"]',
+  )!;
+  const cascadeMaximize =
+    maximizedBeforeRestore.querySelector<HTMLButtonElement>(
+      '[aria-label="Maximize Inspector window"]',
+    );
+  if (!cascadeMaximize)
+    throw new Error("Cascade Inspector maximize control missing");
+  cascadeMaximize.click();
+  await until(
+    () =>
+      Boolean(
+        maximizedBeforeRestore.querySelector(
+          '[aria-label="Restore Inspector window"]',
+        ),
+      ),
+    "Cascade participant maximized",
+  );
+  await arrangeWindows("Restore positions");
+  await until(
+    () =>
+      !maximizedBeforeRestore.querySelector(
+        '[aria-label="Restore Inspector window"]',
+      ),
+    "Restore positions cleared the superseded maximize snapshot",
+  );
+  await arrangeWindows("Cascade");
   narrowedVisualStage.style.removeProperty("width");
   narrowedVisualStage.style.removeProperty("height");
 
@@ -3710,6 +4114,65 @@ async function run() {
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 2,
     "focused Herdr tab closure retired its Inspector",
+  );
+  const closeRpcBefore = calls.filter(({ method }) =>
+    ["tab.close", "pane.close", "terminal.kill"].includes(method),
+  ).length;
+  await arrangeWindows("Single");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 1,
+    "Single retained one visible Inspector before Close all",
+  );
+  await arrangeWindows("Close all terminal windows");
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "arrangement Close all dismissed visual Inspectors",
+  );
+  check(
+    calls.filter(({ method }) =>
+      ["tab.close", "pane.close", "terminal.kill"].includes(method),
+    ).length === closeRpcBefore,
+    "Close all terminated a Herdr tab, pane, or session",
+  );
+  window.dispatchEvent(new Event("resize"));
+  await settle();
+  check(
+    !document.querySelector(".workspace-inspector"),
+    "closed Inspector reappeared through an arrangement",
+  );
+  flushSync(() => agentTarget("Builder")!.click());
+  await until(
+    () => Boolean(document.querySelector(".workspace-inspector")),
+    "visual Inspector reopened after Close all",
+  );
+  await setShellActionsOpen(true);
+  const closeAllAction = [
+    ...document.querySelectorAll<HTMLElement>(".command-popover [cmdk-item]"),
+  ].find(
+    (item) =>
+      item.querySelector(".command-item-title")?.textContent ===
+      "Close all terminal windows",
+  );
+  check(Boolean(closeAllAction), "Actions omitted Close all terminal windows");
+  closeAllAction?.click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "Actions Close all dismissed reopened Inspector",
+  );
+  await arrangeWindows("Open all terminal windows");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === tabs.length,
+    "Open all presented every terminal tab on the selected host",
+  );
+  check(
+    calls.filter(({ method }) =>
+      ["tab.close", "pane.close", "terminal.kill"].includes(method),
+    ).length === closeRpcBefore,
+    "Open all changed a Herdr tab, pane, or session",
   );
 
   runtimeGeneration += 1;

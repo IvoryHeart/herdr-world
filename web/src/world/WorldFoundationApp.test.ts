@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   appShouldHandleGlobalShortcut,
+  focusExplicitSpacesTab,
   terminalPresentationTarget,
 } from "../App";
+import { adjacentTabId } from "../tabShortcuts";
 import {
   activateWorldNodeHost,
   chooseWorldSelectedConnection,
@@ -13,6 +15,7 @@ import {
   moveDockedInspectorGeometry,
   parseWorldView,
   selectedHostStatusLabel,
+  shouldRecordVisualInspectorGeometry,
   retainWorldFloatingTerminals,
   shouldCloseWorldInspector,
   upsertWorldFloatingTerminal,
@@ -26,7 +29,10 @@ import {
   worldSnapshotPriorityForNode,
   worldViewFromPath,
   visualInspectorArrangementStage,
+  visualGridArrangementStage,
+  visualInspectorTerminalActive,
 } from "./WorldFoundationApp";
+import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import { buildWorldObject } from "./worldObject";
 import {
   reconcileWorldInspectorConversation,
@@ -66,6 +72,36 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("World view preference", () => {
+  test("resumes Spaces before a next-tab shortcut focuses its target", () => {
+    const events: string[] = [];
+    const target = adjacentTabId(
+      [
+        { tab_id: "one", number: 1 },
+        { tab_id: "two", number: 2 },
+      ],
+      "one",
+      "next",
+    );
+    expect(target).toBe("two");
+    focusExplicitSpacesTab(
+      target!,
+      (id) => events.push(`resume:${id}`),
+      (id) => {
+        events.push(`focus:${id}`);
+      },
+    );
+    expect(events).toEqual(["resume:two", "focus:two"]);
+  });
+  test("rejects arrangement geometry writes during a temporary maximize", () => {
+    expect(shouldRecordVisualInspectorGeometry("tile", "tile", false)).toBe(
+      false,
+    );
+    expect(shouldRecordVisualInspectorGeometry("other", "tile", false)).toBe(
+      true,
+    );
+    expect(shouldRecordVisualInspectorGeometry("tile", null, true)).toBe(false);
+    expect(shouldRecordVisualInspectorGeometry("tile", null, false)).toBe(true);
+  });
   test("keeps arranged Inspector title controls in the measured visual stage", () => {
     const stage = visualInspectorArrangementStage({
       left: 16,
@@ -85,6 +121,56 @@ describe("World view preference", () => {
         stage,
       ),
     ).toEqual({ left: 508, top: 696, width: 500, height: 684 });
+  });
+  test("Grid tiles fit the same width reserved for visual scrolling", () => {
+    const stage = { left: 0, top: 0, width: 1000, height: 300 };
+    const gridStage = visualGridArrangementStage(stage);
+    expect(gridStage.width).toBe(968);
+    const result = resolveTerminalWindowArrangement(
+      "grid",
+      gridStage,
+      [0, 1, 2, 3].map((index) => ({
+        id: `window-${index}`,
+        minWidth: 220,
+        minHeight: 160,
+      })),
+      null,
+    );
+    expect(result.available).toBe(true);
+    if (!result.available) return;
+    const tiles = result.placements.map(({ geometry }) =>
+      fitVisualInspectorArrangementGeometry(geometry, gridStage),
+    );
+    expect(tiles[0]!.left + tiles[0]!.width).toBeLessThanOrEqual(
+      tiles[1]!.left,
+    );
+    expect(tiles[2]!.left + tiles[2]!.width).toBeLessThanOrEqual(
+      tiles[3]!.left,
+    );
+  });
+  test("detaches an arranged docked Inspector beyond visual overscan", () => {
+    const docked = "docked";
+    expect(
+      visualInspectorTerminalActive(
+        docked,
+        docked,
+        false,
+        true,
+        new Set(["other"]),
+      ),
+    ).toBe(false);
+    expect(
+      visualInspectorTerminalActive(
+        docked,
+        docked,
+        false,
+        true,
+        new Set([docked]),
+      ),
+    ).toBe(true);
+    expect(
+      visualInspectorTerminalActive(docked, docked, false, false, new Set()),
+    ).toBe(true);
   });
   test("moves a docked Inspector without allowing it to leave the World stage", () => {
     const geometry = { left: 600, top: 40, width: 320, height: 420 };
@@ -915,7 +1001,7 @@ describe("World view preference", () => {
     ).toBe("spaces");
   });
 
-  test("bounds floating terminals while focusing an existing conversation", () => {
+  test("admits additional floating terminals while focusing an existing conversation", () => {
     const terminals = Array.from({ length: 5 }, (_, index) => ({
       nodeId: `node-${index}`,
       connectionId: "local",
@@ -945,7 +1031,18 @@ describe("World view preference", () => {
         paneId: "pane-new",
         terminalId: "terminal-new",
       }),
-    ).toEqual({ terminals, admitted: false });
+    ).toEqual({
+      terminals: [
+        ...terminals,
+        {
+          ...terminals[0]!,
+          nodeId: "node-new",
+          paneId: "pane-new",
+          terminalId: "terminal-new",
+        },
+      ],
+      admitted: true,
+    });
   });
 
   test("keys conversations by connection, runtime generation, and terminal identity", () => {
@@ -1024,7 +1121,7 @@ describe("World view preference", () => {
     expect(retainWorldFloatingTerminals(conversations, null)).toEqual([]);
   });
 
-  test("bounds independently stateful floating Inspector conversations", () => {
+  test("admits more than five independently stateful floating Inspector conversations", () => {
     const conversations = Array.from({ length: 5 }, (_, index) =>
       inspectorConversation(index),
     );
@@ -1042,7 +1139,10 @@ describe("World view preference", () => {
     });
     expect(
       upsertWorldInspectorConversation(conversations, inspectorConversation(6)),
-    ).toEqual({ conversations, admitted: false });
+    ).toEqual({
+      conversations: [...conversations, inspectorConversation(6)],
+      admitted: true,
+    });
   });
 
   test("uses one generation-qualified tab window while sibling pane context changes", () => {

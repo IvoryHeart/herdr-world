@@ -23,10 +23,12 @@ export function MobileTabSheet({
   open,
   onClose,
   onShowSession,
+  onSelectTab,
 }: {
   open: boolean;
   onClose: () => void;
   onShowSession: () => void;
+  onSelectTab?: (tabId: string) => void | Promise<unknown>;
 }) {
   const s = useStoreSelector(
     (state) => ({
@@ -134,7 +136,13 @@ export function MobileTabSheet({
                   className="mobile-tab-sheet-focus"
                   disabled={transitionPending}
                   onClick={() =>
-                    void runTabTransition(() => store.focusTab(t.tab_id))
+                    void runTabTransition(() =>
+                      Promise.resolve(
+                        onSelectTab
+                          ? onSelectTab(t.tab_id)
+                          : store.focusTab(t.tab_id),
+                      ),
+                    )
                   }
                 >
                   {agentSummary ? (

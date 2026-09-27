@@ -55,6 +55,7 @@ function Fixture() {
       >
         <div
           id="stage"
+          className="spaces-window-layer"
           ref={arrangement.onSpacesWindowLayerReady}
           style={{ position: "relative", width: 1000, height: 800 }}
         />
@@ -63,9 +64,9 @@ function Fixture() {
           className="workspace-inspector-slot is-closed"
           style={{
             position: "absolute",
-            left: 340,
+            left: 180,
             top: 0,
-            width: 660,
+            width: 820,
             height: 800,
             display: "none",
           }}
@@ -107,6 +108,48 @@ async function run() {
     "Columns must portal both existing tabs",
   );
   const firstWidth = windows()[0]?.style.width;
+  const openTabsBeforeCloseAll = mock.snapshot().tabs.length;
+  hook().arrangementControl.onSelect("close-all");
+  check(
+    await until(() => hook().suspended && windows().length === 0),
+    "Close all must suspend the Spaces workspace",
+  );
+  check(
+    mock.snapshot().tabs.length === openTabsBeforeCloseAll &&
+      mock.calls.closeTab.length === 0 &&
+      mock.calls.requestCloseTab.length === 0,
+    "Close all must preserve Herdr tabs",
+  );
+  const blockedStageInspector = document.getElementById("inspector")!;
+  blockedStageInspector.classList.remove("is-closed");
+  blockedStageInspector.style.display = "block";
+  check(
+    await until(() =>
+      Boolean(hook().arrangementControl.disabledReasons.columns),
+    ),
+    "narrow stage must disable Columns",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    hook().suspended && windows().length === 0,
+    "unavailable placement must preserve Close all suspension",
+  );
+  blockedStageInspector.classList.add("is-closed");
+  blockedStageInspector.style.display = "none";
+  hook().resumeTab("one");
+  check(
+    await until(
+      () =>
+        !hook().suspended &&
+        hook().arrangementControl.activePreset === "single",
+    ),
+    "explicit tab selection must reopen only Single",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    await until(() => windows().length === 2),
+    "an explicit arrangement must reopen eligible tabs",
+  );
 
   const inspector = document.getElementById("inspector")!;
   inspector.classList.remove("is-closed");
@@ -179,31 +222,34 @@ async function run() {
       `${count} open tabs must each have a window`,
     );
     hook().arrangementControl.onSelect("grid");
+    const expectedColumns = Math.ceil(Math.sqrt(count));
+    const expectedRows = Math.ceil(count / expectedColumns);
     check(
-      await until(
-        () =>
-          windows().length === count &&
-          hook().arrangementControl.activePreset === "grid",
-      ),
+      await until(() => {
+        const positions = windows().map((window) => ({
+          left: Number.parseFloat(window.style.left),
+          top: Number.parseFloat(window.style.top),
+        }));
+        return (
+          positions.length === count &&
+          hook().arrangementControl.activePreset === "grid" &&
+          new Set(positions.map(({ left }) => left)).size === expectedColumns &&
+          new Set(positions.map(({ top }) => top)).size === expectedRows
+        );
+      }),
       `${count} tabs must accept Grid`,
     );
   }
   const gridWindows = windows();
-  const [topLeft, topRight, bottomLeft, bottomRight] = gridWindows.map(
-    (window) => ({
-      left: Number.parseFloat(window.style.left),
-      top: Number.parseFloat(window.style.top),
-    }),
-  );
+  const gridPositions = gridWindows.map((window) => ({
+    left: Number.parseFloat(window.style.left),
+    top: Number.parseFloat(window.style.top),
+  }));
   check(
-    topLeft?.left === bottomLeft?.left &&
-      topRight?.left === bottomRight?.left &&
-      topLeft?.top === topRight?.top &&
-      bottomLeft?.top === bottomRight?.top &&
-      topRight.left > topLeft.left &&
-      bottomLeft.top > topLeft.top &&
-      gridWindows.slice(4).every((window) => window.style.width !== ""),
-    "Grid must tile four corners and keep fifth and sixth windows floating",
+    new Set(gridPositions.map(({ left }) => left)).size === 3 &&
+      new Set(gridPositions.map(({ top }) => top)).size === 2 &&
+      gridWindows.every((window) => window.style.width !== ""),
+    `Grid must tile six windows in three columns and two rows: ${JSON.stringify(gridPositions)}`,
   );
   hook().arrangementControl.onSelect("single");
   check(
@@ -280,6 +326,29 @@ async function run() {
     await until(() => windows().length === 3),
     "returning to a workspace must recover its windows",
   );
+  hook().arrangementControl.onSelect("close-all");
+  check(
+    await until(() => hook().suspended && windows().length === 0),
+    "Close all must clear a returned workspace stage",
+  );
+  const suspendedSnapshot = mock.snapshot();
+  mock.set({
+    workspaces: suspendedSnapshot.workspaces.map((workspace) => ({
+      ...workspace,
+      focused: workspace.workspace_id === "beta",
+    })),
+  });
+  await settle();
+  mock.set({ workspaces: suspendedSnapshot.workspaces });
+  check(
+    await until(() => hook().suspended && windows().length === 0),
+    "navigation must retain Spaces suspension",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    await until(() => windows().length === 3),
+    "an arrangement must resume all eligible tabs after navigation",
+  );
 
   document
     .querySelector<HTMLButtonElement>('button[aria-label="Close Third tab"]')
@@ -304,6 +373,94 @@ async function run() {
   check(
     await until(() => windows().length === 2),
     "Columns must remain reusable after Restore",
+  );
+  const many = mock.snapshot();
+  mock.set({
+    tabs: [
+      ...many.tabs,
+      ...Array.from({ length: 62 }, (_, index) => ({
+        tab_id: `bulk-${index}`,
+        workspace_id: "alpha",
+        label: `Bulk ${index}`,
+        focused: false,
+      })),
+    ],
+  });
+  check(
+    await until(() => windows().length === 64),
+    "new tabs must reach the Spaces window registry before Grid",
+  );
+  hook().arrangementControl.onSelect("grid");
+  const gridLayer = document.querySelector<HTMLElement>("#stage");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-vertical-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
+        windows().length < 64,
+    ),
+    `large Grid must scroll and mount only nearby tab windows: preset=${hook().arrangementControl.activePreset}, reason=${hook().arrangementControl.disabledReasons.grid}, class=${gridLayer?.className}, size=${gridLayer?.scrollHeight}/${gridLayer?.clientHeight}, mounted=${windows().length}`,
+  );
+  if (gridLayer) gridLayer.scrollTop = gridLayer.scrollHeight;
+  check(
+    await until(() =>
+      Boolean(document.querySelector('[data-tab-id="bulk-61"]')),
+    ),
+    "scrolling Grid must mount the last tab window",
+  );
+  mock.set({
+    workspaces: mock
+      .snapshot()
+      .workspaces.map((workspace) =>
+        workspace.workspace_id === "alpha"
+          ? { ...workspace, active_tab_id: "bulk-0" }
+          : workspace,
+      ),
+  });
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer && gridLayer.scrollTop < 500) &&
+        Boolean(document.querySelector('[data-tab-id="bulk-0"]')),
+    ),
+    "focusing an offscreen Grid tab must scroll it into view",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-horizontal-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollWidth > gridLayer.clientWidth) &&
+        windows().length < 64,
+    ),
+    "large Columns must scroll horizontally and mount only nearby windows",
+  );
+  if (gridLayer) gridLayer.scrollLeft = gridLayer.scrollWidth;
+  check(
+    await until(() =>
+      Boolean(document.querySelector('[data-tab-id="bulk-61"]')),
+    ),
+    "scrolling Columns must mount the last tab window",
+  );
+  hook().arrangementControl.onSelect("rows");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-vertical-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
+        windows().length < 64,
+    ),
+    "large Rows must scroll vertically and mount only nearby windows",
+  );
+  hook().arrangementControl.onSelect("cascade");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-vertical-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
+        windows().length < 64,
+    ),
+    "large Cascade must repeat scrollable groups and mount only nearby windows",
   );
   mock.set({ serverRuntimeGeneration: 8 });
   check(

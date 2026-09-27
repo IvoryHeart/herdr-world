@@ -73,11 +73,15 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Use focused tests and type checks while developing, after coherent changes or to
-investigate a failure; do not rerun them after every edit. The tracked pre-push hook
-runs `bun run check` on a branch push. It covers notices, formatting, lint, types,
-tests, builds and OpenSpec. CI repeats it on the PR head. Browser tests require
-Chrome/Chromium or `CHROME_BIN`:
+Use focused tests and type checks while developing when they answer a specific
+question; do not rerun them after every edit. The tracked pre-push hook is the
+final full gate for a branch push: it runs `bun run check`, covering notices,
+formatting, lint, types, tests, builds and OpenSpec. Count that invocation as the
+required full check; do not also run it manually before the same push. If there
+is no push or the hook is unavailable, run `bun run check` once explicitly.
+After a failed gate, investigate the failing stage with focused checks and let
+the next push rerun the full gate. CI repeats it on the PR head. Browser tests
+require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
@@ -100,8 +104,9 @@ tutorial changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full matrix.
   must check, check once after a reasonable delay.
 - **One review, one fix pass.** Do not create re-review branches. Fix findings
   in place and move on. If a PR has too many findings, split the PR first.
-- **Functional commits only.** Every commit should change behaviour or docs. Fold
-  metadata (PR links, verification records) into the commit it relates to.
+- **Functional commits only.** Every commit should change behaviour or docs. Put
+  verification records in the PR; do not create a commit or amend and push only
+  to add metadata.
 - **Read once, then act.** Do not re-read files already in context unless they
   were modified by another process.
 
@@ -130,8 +135,10 @@ Large outputs are the primary driver of context bloat and token cost.
 
 ## Changelog and releases
 
-- Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading.
-- After opening a PR and before merge, add its number/link to the relevant entries.
+- Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading
+  in the implementation commit, before the first push. PR numbers and links are
+  optional in changelog entries; the PR and merge history provide traceability.
+  Do not make a second push solely to add a PR link. Keep existing linked entries.
 - Record the exact Roamgate source synchronization in `UPSTREAM.md`; say "derived
   from" for source and "compatible with" for the external Herdr runtime.
 - Release preparation happens on a clean branch from `origin/main` and is delivered

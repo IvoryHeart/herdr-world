@@ -41,7 +41,18 @@ async function run() {
   const items = [
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
   ];
-  check(!!menu && items.length === 6, "menu must expose six labelled choices");
+  check(
+    !!menu && items.length === 8,
+    "menu must expose eight labelled choices",
+  );
+  check(
+    items[6]?.textContent?.includes("Close all terminal windows") === true,
+    "Close all must be a labelled arrangement command",
+  );
+  check(
+    items[7]?.textContent?.includes("Open all terminal windows") === true,
+    "Open all must be a labelled arrangement command",
+  );
   check(
     document.activeElement === items[0],
     "opening must focus the first enabled choice",
@@ -146,6 +157,15 @@ async function run() {
         Math.abs(zoomedMenuBounds.right - zoomedTriggerBounds.right) <= 20,
     ),
     `scaled menu was not visible beside its trigger: ${JSON.stringify({ menu: zoomedMenuBounds?.toJSON(), trigger: zoomedTriggerBounds.toJSON(), viewport: window.innerWidth })}`,
+  );
+  const closeAll = [
+    ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+  ].find((item) => item.textContent?.includes("Close all terminal windows"));
+  closeAll?.click();
+  await settle();
+  check(
+    calls.join(",") === "cascade,close-all",
+    "Close all must dispatch through the shared arrangement control",
   );
 
   await fetch("/result", {

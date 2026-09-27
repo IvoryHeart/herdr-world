@@ -62,7 +62,9 @@ repeat them after every edit. Push a complete candidate through the tracked
 pre-push hook: it runs `bun run check` once for that push, covering notices,
 formatting, lint, types, tests, builds and OpenSpec. CI repeats it on the PR head.
 After a repair, run the relevant focused check before pushing; the hook runs the
-full gate. Use `bun run test:browser` for browser-heavy changes and
+full gate. The hook invocation satisfies a request for the final `bun run check`;
+run it separately only if there is no push or the hook is unavailable. Use
+`bun run test:browser` when the browser suite answers a specific question, and
 `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
@@ -80,7 +82,9 @@ not repeat a successful full gate on the same commit. Avoid polling while checks
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
 [PR template](../.github/pull_request_template.md). Reuse earlier results only
-when their relevant inputs are unchanged. Open a ready PR and stop before merge.
+when their relevant inputs are unchanged. Include the Unreleased changelog entry
+before the first push; the PR number need not be added to that entry. Open a ready
+PR and stop before merge.
 
 For Codex token usage, run `bun run agent:usage -- --pr <number> --session
 <session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat
