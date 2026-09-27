@@ -13,9 +13,11 @@ export type SavedGraphPosition = {
   y: number;
   pinned: boolean;
 };
+export type GraphRotation = 0 | 90 | 180 | 270;
 export type GraphPreferences = {
   camera: GraphCamera;
   cameraMode: GraphCameraMode;
+  rotation: GraphRotation;
   collapsedIds: string[];
   positions: Record<string, SavedGraphPosition>;
 };
@@ -89,13 +91,23 @@ export function parseGraphPreferences(value: unknown): GraphPreferences {
       }
     }
   }
-  return { camera, cameraMode, collapsedIds, positions };
+  const rotation = validRotation(value.rotation) ? value.rotation : 0;
+  return { camera, cameraMode, rotation, collapsedIds, positions };
+}
+
+export function rotateGraph(
+  current: GraphRotation,
+  direction: "left" | "right",
+): GraphRotation {
+  const step = direction === "left" ? 270 : 90;
+  return ((current + step) % 360) as GraphRotation;
 }
 
 function defaults(): GraphPreferences {
   return {
     camera: { x: 0, y: 0, zoom: 1 },
     cameraMode: "fit",
+    rotation: 0,
     collapsedIds: [],
     positions: {},
   };
@@ -115,6 +127,10 @@ function validCoordinate(value: unknown): value is number {
     Number.isFinite(value) &&
     Math.abs(value) <= MAX_COORDINATE
   );
+}
+
+function validRotation(value: unknown): value is GraphRotation {
+  return value === 0 || value === 90 || value === 180 || value === 270;
 }
 
 function validZoom(value: unknown): value is number {

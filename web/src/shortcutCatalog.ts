@@ -34,6 +34,7 @@ const descriptions: [ShortcutId, string, string][] = [
   ["arrangement.rows", "Arrange windows: Rows", "Window arrangements"],
   ["arrangement.grid", "Arrange windows: Grid", "Window arrangements"],
   ["arrangement.restore", "Restore window positions", "Window arrangements"],
+  ["arrangement.closeAll", "Close all terminal windows", "Window arrangements"],
   ...SHORTCUT_NUMBERS.map((n): [ShortcutId, string, string] => [
     `tab.${n}`,
     `Switch to tab ${n}`,

@@ -23,6 +23,7 @@ import {
 } from "./terminalWindowArrangement";
 import {
   applyTerminalWindowArrangement,
+  closeAllTerminalWindows,
   createTerminalWindowArrangementState,
   restoreTerminalWindowArrangement,
   retainTerminalWindowArrangementWindows,
@@ -338,6 +339,15 @@ export function useSpacesTabWindowArrangement(active: boolean): {
             scopeKey: context.scopeKey,
             openIds: context.tabs.map((tab) => tab.tab_id),
           }).state,
+      );
+      return;
+    }
+    if (command === "close-all") {
+      setArrangements((current) =>
+        closeAllTerminalWindows(current, {
+          leaseKey: context.leaseKey,
+          scopeKey: context.scopeKey,
+        }),
       );
       return;
     }

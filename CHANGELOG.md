@@ -21,6 +21,20 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added maximize and resize controls to every Office terminal window, including
+  floating, docked, and arranged presentations. Maximize temporarily fills the
+  available stage while capturing the window's prior presentation and geometry
+  for restore. Restore positions while maximized clears the maximize snapshot
+  and returns all participants to the arrangement baseline.
+- Added focus-based stacking order for terminal windows: the most recently
+  focused window is raised above all other visible windows, regardless of
+  presentation or arrangement.
+- Added "Close all terminal windows" to the arrangement menu and Actions menu.
+  The action dismisses all terminal presentations without closing Herdr tabs,
+  panes, processes or sessions and without changing the selected host.
+- Added Rotate left and Rotate right controls beside Fit and Arrange in Graph
+  view. Each activation turns the graph arrangement by 90 degrees with labels
+  remaining upright; four turns return to the original orientation.
 - Added an Arrange graph control beside Fit in Graph view. Arrange spreads visible
   nodes into a readable hierarchy, wraps multiple hosts, and recenters the camera
   after manual pan while preserving zoom when possible. Arranged positions stay

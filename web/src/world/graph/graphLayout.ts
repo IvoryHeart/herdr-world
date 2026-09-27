@@ -1,4 +1,4 @@
-import type { SavedGraphPosition } from "./graphPreferences";
+import type { GraphRotation, SavedGraphPosition } from "./graphPreferences";
 import type {
   WorldGraphEdge,
   WorldGraphNode,
@@ -290,6 +290,27 @@ export function savedGraphPositions(state: GraphLayoutState | null) {
     positions[node.id] = { x: node.x, y: node.y, pinned: node.pinned };
   }
   return positions;
+}
+
+export function rotateGraphLayout(
+  state: GraphLayoutState,
+  rotation: GraphRotation,
+) {
+  if (rotation === 0) return;
+  const bounds = graphBounds(state.nodes.values());
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.round(Math.cos(rad));
+  const sin = Math.round(Math.sin(rad));
+  for (const node of state.nodes.values()) {
+    const dx = node.x - cx;
+    const dy = node.y - cy;
+    node.x = cx + dx * cos - dy * sin;
+    node.y = cy + dx * sin + dy * cos;
+    node.vx = 0;
+    node.vy = 0;
+  }
 }
 
 export function graphNodeRadius(kind: WorldGraphNode["kind"]) {

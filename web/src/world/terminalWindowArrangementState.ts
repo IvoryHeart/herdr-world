@@ -19,6 +19,11 @@ export type TerminalWindowArrangementBaseline<TPresentation> = {
   presentation: TPresentation;
 };
 
+export type TerminalWindowMaximizeSnapshot<TPresentation> = {
+  geometry: FloatingTerminalGeometry;
+  presentation: TPresentation;
+};
+
 export type TerminalWindowArrangementScope<TPresentation> = {
   preset: TerminalWindowArrangementPreset | null;
   restorePreset: TerminalWindowArrangementPreset | null;
@@ -27,6 +32,12 @@ export type TerminalWindowArrangementScope<TPresentation> = {
   >;
   /** Only windows participating in the most recent explicit preset have placements. */
   placements: readonly TerminalWindowArrangementPlacement[];
+  maximizedId: string | null;
+  maximizeSnapshots: Readonly<
+    Record<string, TerminalWindowMaximizeSnapshot<TPresentation>>
+  >;
+  /** Window IDs from back to front. Updated on focus. */
+  focusOrder: readonly string[];
 };
 
 export type TerminalWindowArrangementState<TPresentation> = {
@@ -106,6 +117,9 @@ export function applyTerminalWindowArrangement<TPresentation>(
       id: placement.id,
       geometry: { ...placement.geometry },
     })),
+    maximizedId: null,
+    maximizeSnapshots: {},
+    focusOrder: existing?.focusOrder ?? [],
   };
   return {
     state: {
@@ -239,11 +253,134 @@ export function restoreTerminalWindowArrangement<TPresentation>(
       restorePreset: null,
       baselines: {},
       placements: [],
+      maximizedId: null,
+      maximizeSnapshots: {},
+      focusOrder: scope.focusOrder,
     };
   }
   return {
     state: { ...current, scopes },
     targets,
     preset: scope.restorePreset,
+  };
+}
+
+export function maximizeTerminalWindow<TPresentation>(
+  state: TerminalWindowArrangementState<TPresentation>,
+  input: {
+    leaseKey: string;
+    scopeKey: string;
+    id: string;
+    stage: TerminalWindowArrangementStage;
+    currentGeometry: FloatingTerminalGeometry;
+    currentPresentation: TPresentation;
+  },
+): TerminalWindowArrangementState<TPresentation> {
+  const current = terminalWindowArrangementForLease(state, input.leaseKey);
+  const scope = current.scopes[input.scopeKey];
+  const snapshots = { ...(scope?.maximizeSnapshots ?? {}) };
+  snapshots[input.id] = {
+    geometry: { ...input.currentGeometry },
+    presentation: input.currentPresentation,
+  };
+  const nextScope: TerminalWindowArrangementScope<TPresentation> = {
+    ...(scope ?? emptyScope<TPresentation>()),
+    maximizedId: input.id,
+    maximizeSnapshots: snapshots,
+  };
+  return {
+    ...current,
+    scopes: { ...current.scopes, [input.scopeKey]: nextScope },
+  };
+}
+
+export function restoreMaximizedTerminalWindow<TPresentation>(
+  state: TerminalWindowArrangementState<TPresentation>,
+  input: { leaseKey: string; scopeKey: string; id: string },
+): {
+  state: TerminalWindowArrangementState<TPresentation>;
+  snapshot: TerminalWindowMaximizeSnapshot<TPresentation> | null;
+} {
+  const current = terminalWindowArrangementForLease(state, input.leaseKey);
+  const scope = current.scopes[input.scopeKey];
+  if (!scope || scope.maximizedId !== input.id) {
+    return { state: current, snapshot: null };
+  }
+  const snapshot = scope.maximizeSnapshots[input.id] ?? null;
+  const snapshots = { ...scope.maximizeSnapshots };
+  delete snapshots[input.id];
+  return {
+    state: {
+      ...current,
+      scopes: {
+        ...current.scopes,
+        [input.scopeKey]: {
+          ...scope,
+          maximizedId: null,
+          maximizeSnapshots: snapshots,
+        },
+      },
+    },
+    snapshot,
+  };
+}
+
+export function focusTerminalWindow<TPresentation>(
+  state: TerminalWindowArrangementState<TPresentation>,
+  input: { leaseKey: string; scopeKey: string; id: string },
+): TerminalWindowArrangementState<TPresentation> {
+  const current = terminalWindowArrangementForLease(state, input.leaseKey);
+  const scope = current.scopes[input.scopeKey];
+  const order = scope?.focusOrder ?? [];
+  if (order[order.length - 1] === input.id) return current;
+  const next = order.filter((windowId) => windowId !== input.id);
+  next.push(input.id);
+  const nextScope: TerminalWindowArrangementScope<TPresentation> = {
+    ...(scope ?? emptyScope<TPresentation>()),
+    focusOrder: next,
+  };
+  return {
+    ...current,
+    scopes: { ...current.scopes, [input.scopeKey]: nextScope },
+  };
+}
+
+export function terminalWindowFocusOrder<TPresentation>(
+  state: TerminalWindowArrangementState<TPresentation>,
+  input: { leaseKey: string; scopeKey: string },
+): readonly string[] {
+  if (state.leaseKey !== input.leaseKey) return [];
+  return state.scopes[input.scopeKey]?.focusOrder ?? [];
+}
+
+export function terminalWindowMaximizedId<TPresentation>(
+  state: TerminalWindowArrangementState<TPresentation>,
+  input: { leaseKey: string; scopeKey: string },
+): string | null {
+  if (state.leaseKey !== input.leaseKey) return null;
+  return state.scopes[input.scopeKey]?.maximizedId ?? null;
+}
+
+export function closeAllTerminalWindows<TPresentation>(
+  state: TerminalWindowArrangementState<TPresentation>,
+  input: { leaseKey: string; scopeKey: string },
+): TerminalWindowArrangementState<TPresentation> {
+  const current = terminalWindowArrangementForLease(state, input.leaseKey);
+  const scopes = { ...current.scopes };
+  delete scopes[input.scopeKey];
+  return { ...current, scopes };
+}
+
+function emptyScope<
+  TPresentation,
+>(): TerminalWindowArrangementScope<TPresentation> {
+  return {
+    preset: null,
+    restorePreset: null,
+    baselines: {},
+    placements: [],
+    maximizedId: null,
+    maximizeSnapshots: {},
+    focusOrder: [],
   };
 }

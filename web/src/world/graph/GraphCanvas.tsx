@@ -11,6 +11,7 @@ import {
   graphBounds,
   graphNodeRadius,
   reconcileGraphLayout,
+  rotateGraphLayout,
   savedGraphPositions,
   stepGraphLayout,
 } from "./graphLayout";
@@ -19,6 +20,7 @@ import type {
   GraphCamera,
   GraphCameraMode,
   GraphPreferences,
+  GraphRotation,
   SavedGraphPosition,
 } from "./graphPreferences";
 import type { WorldGraphNode, WorldGraphProjection } from "./graphProjection";
@@ -59,6 +61,7 @@ export type GraphCanvasHandle = {
   fit(): void;
   zoomIn(): void;
   zoomOut(): void;
+  rotate(rotation: GraphRotation): void;
 };
 
 type GraphCanvasProps = {
@@ -150,6 +153,8 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
         fit: () => rendererRef.current?.fit(),
         zoomIn: () => rendererRef.current?.zoomIn(),
         zoomOut: () => rendererRef.current?.zoomOut(),
+        rotate: (rotation: GraphRotation) =>
+          rendererRef.current?.rotate(rotation),
       }),
       [],
     );
@@ -385,6 +390,17 @@ class GraphRenderer {
 
   zoomOut() {
     this.#zoomAt(this.#camera.zoom / ZOOM_STEP, 0, 0);
+  }
+
+  rotate(rotation: GraphRotation) {
+    if (!this.#layout) return;
+    rotateGraphLayout(this.#layout, rotation);
+    const bounds = graphBounds(this.#layout.nodes.values());
+    this.#camera = this.#centeredCamera(bounds, this.#camera.zoom);
+    this.#fitWhenSettled = false;
+    this.#emitViewChange();
+    this.#anchorSignature = "";
+    this.#requestFrame();
   }
 
   dispose() {

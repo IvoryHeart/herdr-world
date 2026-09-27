@@ -43,6 +43,9 @@ const scope: TerminalWindowArrangementScope<"native-single" | "floating"> = {
   preset: "columns",
   restorePreset: "single",
   baselines: {},
+  maximizedId: null,
+  maximizeSnapshots: {},
+  focusOrder: [],
   placements: [
     {
       id: "one",

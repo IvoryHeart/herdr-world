@@ -41,7 +41,10 @@ async function run() {
   const items = [
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
   ];
-  check(!!menu && items.length === 6, "menu must expose six labelled choices");
+  check(
+    !!menu && items.length === 7,
+    "menu must expose seven labelled choices",
+  );
   check(
     document.activeElement === items[0],
     "opening must focus the first enabled choice",

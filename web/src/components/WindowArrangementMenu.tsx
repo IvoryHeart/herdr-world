@@ -1,4 +1,4 @@
-import { LayoutGrid, RotateCcw } from "lucide-react";
+import { LayoutGrid, RotateCcw, XCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { measuredFixedPositionScale } from "../fixedPositionScale";
@@ -9,7 +9,8 @@ import "./WindowArrangementMenu.css";
 
 export type WindowArrangementCommand =
   | TerminalWindowArrangementPreset
-  | "restore";
+  | "restore"
+  | "close-all";
 
 export type WindowArrangementControl = {
   activePreset: TerminalWindowArrangementPreset | null;
@@ -58,6 +59,12 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
     label: "Restore positions",
     description: "Return still-open windows to their previous positions",
     shortcutId: "arrangement.restore",
+  },
+  {
+    command: "close-all",
+    label: "Close all terminal windows",
+    description: "Dismiss all terminal windows without closing sessions",
+    shortcutId: "arrangement.closeAll",
   },
 ];
 
@@ -203,6 +210,8 @@ export function WindowArrangementMenu({
                     >
                       {command === "restore" ? (
                         <RotateCcw size={19} aria-hidden="true" />
+                      ) : command === "close-all" ? (
+                        <XCircle size={19} aria-hidden="true" />
                       ) : (
                         <span
                           className={`window-arrangement-preview is-${command}`}

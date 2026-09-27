@@ -23,6 +23,7 @@ import { bridge, type ConnectionSummary } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import {
   WINDOW_ARRANGEMENT_CHOICES,
+  type WindowArrangementCommand,
   type WindowArrangementControl,
 } from "../components/WindowArrangementMenu";
 import type { CommandExtension } from "../components/CommandCombobox";
@@ -88,6 +89,7 @@ import {
 } from "./terminalWindowArrangement";
 import {
   applyTerminalWindowArrangement,
+  closeAllTerminalWindows,
   createTerminalWindowArrangementState,
   restoreTerminalWindowArrangement,
   retainTerminalWindowArrangementWindows,
@@ -1292,10 +1294,19 @@ function WorldControlPlane({
   }, [inspectorConversations, visualLeaseKey]);
 
   const selectVisualArrangement = useCallback(
-    (command: TerminalWindowArrangementPreset | "restore") => {
-      // Compact presentation is derived from the desktop placement snapshot.
-      // A stale menu or a direct command must not replace that snapshot.
+    (command: WindowArrangementCommand) => {
       if (compactArrangement) return;
+      if (command === "close-all") {
+        setVisualArrangementState((current) =>
+          closeAllTerminalWindows(current, {
+            leaseKey: visualLeaseKey,
+            scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+          }),
+        );
+        setExcludedArrangementIds(new Set());
+        setSingleManualGeometry({});
+        return;
+      }
       const openIds = visualWindows.map(({ id }) => id);
       if (command === "restore") {
         const restored = restoreTerminalWindowArrangement(

@@ -1,6 +1,8 @@
 import {
   ChevronRight,
   Maximize2,
+  RotateCcw,
+  RotateCw,
   Server,
   SquareTerminal,
   Waypoints,
@@ -23,12 +25,14 @@ import { GraphCanvas } from "./graph/GraphCanvas";
 import type { GraphCanvasHandle } from "./graph/GraphCanvas";
 import {
   readGraphPreferences,
+  rotateGraph,
   writeGraphPreferences,
 } from "./graph/graphPreferences";
 import type {
   GraphCamera,
   GraphCameraMode,
   GraphPreferences,
+  GraphRotation,
   SavedGraphPosition,
 } from "./graph/graphPreferences";
 import {
@@ -191,6 +195,22 @@ export default function SpatialGraphView({
     [schedulePrefsWrite, searchActive],
   );
 
+  const rotationRef = useRef<GraphRotation>(initialPrefs.rotation);
+
+  const handleRotate = useCallback(
+    (direction: "left" | "right") => {
+      const next = rotateGraph(rotationRef.current, direction);
+      rotationRef.current = next;
+      canvasRef.current?.rotate(direction === "left" ? 270 : 90);
+      schedulePrefsWrite({
+        ...prefsRef.current,
+        rotation: next,
+        collapsedIds: [...collapsedIdsRef.current],
+      });
+    },
+    [schedulePrefsWrite],
+  );
+
   const updateView = useCallback(
     (
       camera: GraphCamera,
@@ -200,6 +220,7 @@ export default function SpatialGraphView({
       schedulePrefsWrite({
         camera,
         cameraMode,
+        rotation: rotationRef.current,
         positions,
         collapsedIds: [...collapsedIdsRef.current],
       });
@@ -295,6 +316,22 @@ export default function SpatialGraphView({
           onClick={() => canvasRef.current?.arrange()}
         >
           <Waypoints size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Rotate left"
+          title="Rotate left"
+          onClick={() => handleRotate("left")}
+        >
+          <RotateCcw size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Rotate right"
+          title="Rotate right"
+          onClick={() => handleRotate("right")}
+        >
+          <RotateCw size={16} aria-hidden="true" />
         </button>
       </div>
     </WorldViewToolbar>

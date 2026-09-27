@@ -3,6 +3,7 @@ import {
   arrangeGraphLayout,
   graphBounds,
   reconcileGraphLayout,
+  rotateGraphLayout,
   savedGraphPositions,
   stepGraphLayout,
 } from "./graphLayout";
@@ -203,6 +204,67 @@ function projection(): WorldGraphProjection {
     presentationBounds: { hosts: 128, spaces: 128, childrenPerSpace: 16 },
   };
 }
+
+describe("Graph rotation", () => {
+  test("90-degree rotation moves positions around center", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    const before = new Map(
+      [...state.nodes].map(([id, n]) => [id, { x: n.x, y: n.y }]),
+    );
+    rotateGraphLayout(state, 90);
+    const bounds = graphBounds(state.nodes.values());
+    expect(Number.isFinite(bounds.minX)).toBe(true);
+    for (const [id, n] of state.nodes) {
+      const b = before.get(id)!;
+      expect(n.x !== b.x || n.y !== b.y).toBe(true);
+      expect(n.vx).toBe(0);
+      expect(n.vy).toBe(0);
+    }
+  });
+
+  test("four quarter-turns return to the original orientation", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    const before = new Map(
+      [...state.nodes].map(([id, n]) => [id, { x: n.x, y: n.y }]),
+    );
+    rotateGraphLayout(state, 90);
+    rotateGraphLayout(state, 90);
+    rotateGraphLayout(state, 90);
+    rotateGraphLayout(state, 90);
+    for (const [id, n] of state.nodes) {
+      const b = before.get(id)!;
+      expect(Math.abs(n.x - b.x)).toBeLessThan(0.001);
+      expect(Math.abs(n.y - b.y)).toBeLessThan(0.001);
+    }
+  });
+
+  test("rotation 0 leaves positions unchanged", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    const before = new Map(
+      [...state.nodes].map(([id, n]) => [id, { x: n.x, y: n.y }]),
+    );
+    rotateGraphLayout(state, 0);
+    for (const [id, n] of state.nodes) {
+      const b = before.get(id)!;
+      expect(n.x).toBe(b.x);
+      expect(n.y).toBe(b.y);
+    }
+  });
+
+  test("reverse rotation undoes a prior quarter-turn", () => {
+    const state = reconcileGraphLayout(null, projection(), new Set()).state;
+    const before = new Map(
+      [...state.nodes].map(([id, n]) => [id, { x: n.x, y: n.y }]),
+    );
+    rotateGraphLayout(state, 90);
+    rotateGraphLayout(state, 270);
+    for (const [id, n] of state.nodes) {
+      const b = before.get(id)!;
+      expect(Math.abs(n.x - b.x)).toBeLessThan(0.001);
+      expect(Math.abs(n.y - b.y)).toBeLessThan(0.001);
+    }
+  });
+});
 
 function node(
   id: string,
