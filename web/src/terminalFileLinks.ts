@@ -1,5 +1,7 @@
+// Windows hosts print drive paths and backslash separators; match them too.
 const FILE_PATH_CANDIDATE_RE =
-  /(?:\/[A-Za-z0-9._~:@%+=,/-]+|\.\/[A-Za-z0-9._~:@%+=,-]+(?:\/[A-Za-z0-9._~:@%+=,-]+)*|[A-Za-z0-9._~@%+=,-]+(?:\/[A-Za-z0-9._~:@%+=,-]+)+)/g;
+  /(?:[A-Za-z]:[\\/][A-Za-z0-9._~:@%+=,-]+(?:[\\/][A-Za-z0-9._~:@%+=,-]+)*|\/[A-Za-z0-9._~:@%+=,/-]+|\.[\\/][A-Za-z0-9._~:@%+=,-]+(?:[\\/][A-Za-z0-9._~:@%+=,-]+)*|[A-Za-z0-9._~@%+=,-]+(?:[\\/][A-Za-z0-9._~:@%+=,-]+)+)/g;
+const ABSOLUTE_PATH_RE = /^(?:\/|[A-Za-z]:[\\/])/;
 const TRAILING_PROSE_RE = /[.,;:!?]+$/;
 const TRAILING_LOCATION_RE = /:\d+(?::\d+)?$/;
 const PATH_BOUNDARY_RE = /[\s"'`([{<]/;
@@ -25,7 +27,8 @@ function overlapsRange(start: number, end: number, ranges: TextRange[]) {
   return ranges.some((range) => start < range.end && end > range.start);
 }
 
-function isSafePath(path: string) {
+function isSafePath(value: string) {
+  const path = value.replace(/\\/g, "/").replace(/^[A-Za-z]:(?=\/)/, "");
   if (path.startsWith("~/")) return false;
   const absolute = path.startsWith("/");
   const explicitlyRelative = path.startsWith("./");
@@ -37,7 +40,8 @@ function isSafePath(path: string) {
   const parts = relative.split("/");
   return (
     parts.length >= (absolute || explicitlyRelative ? 1 : 2) &&
-    parts.every((part) => part && part !== "." && part !== "..")
+    // Dot-only parts cover ".", "..", and elided "..." display paths.
+    parts.every((part) => part && !/^\.+$/.test(part))
   );
 }
 
@@ -57,7 +61,12 @@ export function findTerminalFileLinkCandidates(
     if (!isSafePath(path)) continue;
     const end = start + path.length;
     if (overlapsRange(start, end, excludedRanges)) continue;
-    candidates.push({ path, start, end, absolute: path.startsWith("/") });
+    candidates.push({
+      path,
+      start,
+      end,
+      absolute: ABSOLUTE_PATH_RE.test(path),
+    });
     if (candidates.length >= MAX_CANDIDATES_PER_LINE) break;
   }
   return candidates;
