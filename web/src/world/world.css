@@ -593,6 +593,60 @@
   overflow-y: hidden;
 }
 
+.world-arrangement-scroll-control {
+  position: fixed;
+  z-index: 2000001;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--shell-panel);
+  box-shadow: 0 2px 12px #0009;
+}
+
+.world-arrangement-scroll-control.is-horizontal {
+  height: 32px;
+}
+
+.world-arrangement-scroll-control.is-vertical {
+  flex-direction: column;
+  width: 32px;
+}
+
+.world-arrangement-scroll-control button {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--shell-panel);
+  cursor: pointer;
+}
+
+.world-arrangement-scroll-control button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.world-arrangement-scroll-control input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.world-arrangement-scroll-control.is-vertical input[type="range"] {
+  width: 20px;
+  min-height: 0;
+  writing-mode: vertical-lr;
+  direction: rtl;
+}
+
 .world-floating-terminal[data-interaction="moving"],
 .world-floating-terminal[data-interaction="resizing"] {
   user-select: none;

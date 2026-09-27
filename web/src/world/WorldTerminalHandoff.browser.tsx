@@ -3809,6 +3809,24 @@ async function run() {
   const horizontalScrollbar = document.querySelector<HTMLElement>(
     ".world-grid-scrollbar.is-horizontal",
   )!;
+  const columnScrollControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-horizontal",
+  )!;
+  check(Boolean(columnScrollControl), "Columns have a visible scroll control");
+  const columnScrollBounds = columnScrollControl.getBoundingClientRect();
+  check(
+    columnScrollBounds.left <
+      narrowedVisualStage.getBoundingClientRect().left + 500 &&
+      columnScrollBounds.width >= 200,
+    "Columns scroll control remains near the arranged windows",
+  );
+  columnScrollControl
+    .querySelector<HTMLButtonElement>('[aria-label="Scroll windows right"]')!
+    .click();
+  await until(
+    () => horizontalScrollbar.scrollLeft > 0,
+    "Columns scroll control moves the arranged windows",
+  );
   horizontalScrollbar.scrollLeft = 100;
   await until(
     () =>
@@ -3855,6 +3873,17 @@ async function run() {
   const verticalScrollbar = document.querySelector<HTMLElement>(
     ".world-grid-scrollbar:not(.is-horizontal)",
   )!;
+  const rowScrollControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-vertical",
+  )!;
+  check(Boolean(rowScrollControl), "Rows have a visible scroll control");
+  rowScrollControl
+    .querySelector<HTMLButtonElement>('[aria-label="Scroll windows down"]')!
+    .click();
+  await until(
+    () => verticalScrollbar.scrollTop > 0,
+    "Rows scroll control moves the arranged windows",
+  );
   verticalScrollbar.scrollTop = 100;
   await until(
     () =>
@@ -3910,6 +3939,15 @@ async function run() {
       scrollbar && scrollbar.scrollHeight > scrollbar.clientHeight,
     );
   }, "narrow Cascade repeats scrollable groups");
+  const cascadeScrollControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-vertical",
+  )!;
+  check(
+    Boolean(cascadeScrollControl) &&
+      cascadeScrollControl.getBoundingClientRect().left <=
+        Math.max(...visualWindowBounds().map((bounds) => bounds.right)) + 34,
+    "Cascade scroll control sits beside the window group",
+  );
   narrowedVisualStage.style.width = "1000px";
   narrowedVisualStage.style.height = "740px";
   narrowedVisualStage.style.removeProperty("max-height");

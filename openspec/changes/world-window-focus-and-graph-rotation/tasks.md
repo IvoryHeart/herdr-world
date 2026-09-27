@@ -39,3 +39,8 @@
 
 - [x] 7.1 Clip scrolled visual Inspector windows to their measured stage and make overflow scrollbars visible, without clipping maximized or normally floating windows.
 - [x] 7.2 Add horizontal and vertical scroll hit-testing regressions, update current and delta contracts and changelog, and verify through the tracked push hook.
+
+## 8. Reachable visual arrangement scrolling
+
+- [x] 8.1 Place visible, accessible scroll controls near the arranged Inspector windows for horizontal Columns and vertical Rows, Grid and Cascade; keep them synchronized with focus scrolling and the existing stage clipping.
+- [x] 8.2 Cover direct scroll-control interaction and Cascade control placement in browser tests, and update the current and delta contracts and changelog.

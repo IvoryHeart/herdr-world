@@ -862,6 +862,11 @@ Maximize SHALL temporarily present a window over the available stage while prese
 - **WHEN** eligible windows exceed the stage width in Columns or stage height in Rows
 - **THEN** every window keeps at least the usable tiled minimum, the arrangement scrolls along its tile axis, only nearby terminal presentations mount, and focusing an offscreen window scrolls it into view
 
+#### Scenario: Reach scrolling controls on a wide visual canvas
+
+- **WHEN** an Office, Tree or Graph arrangement has more windows than fit on screen
+- **THEN** a visible, keyboard-accessible scroll control sits near the arranged windows, lets the user move in the arrangement's scroll direction, and follows the same scroll position as focus navigation
+
 #### Scenario: Arrange visual Inspectors at a scaled UI
 
 - **WHEN** a user chooses Columns for two visible Inspectors on a wide desktop with increased UI scale
