@@ -452,6 +452,16 @@ async function run() {
     ),
     "large Rows must scroll vertically and mount only nearby windows",
   );
+  hook().arrangementControl.onSelect("cascade");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-vertical-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
+        windows().length < 64,
+    ),
+    "large Cascade must repeat scrollable groups and mount only nearby windows",
+  );
   mock.set({ serverRuntimeGeneration: 8 });
   check(
     await until(() => windows().length === 0),

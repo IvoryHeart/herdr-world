@@ -10,6 +10,7 @@ Office terminal windows do not expose the same maximize and resize controls in e
 - Add a close-all window action to both the arrangement menu and Actions menu, closing the active view's arrangement set without closing or killing the underlying Herdr terminals, panes, or sessions.
 - Remove the five-floating-Inspector admission cap and tile every eligible Grid window in a count-based layout. Preserve usable tile sizes with vertical scrolling and mount only nearby terminal presentations for large sets.
 - Scroll Columns horizontally and Rows vertically after their tiles reach the usable minimum, with nearby-window mounting and focus scrolling.
+- Repeat Cascade diagonals in scrollable stages once a further offset would make windows too small.
 - Add Open all terminal windows for the selected host in the Arrange and Actions menus, admitting one Inspector per terminal tab without changing Herdr sessions.
 
 ## Capabilities

@@ -309,7 +309,10 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   );
   const scrollX = scope?.preset === "columns" && !mobile;
   const scrollY =
-    (scope?.preset === "grid" || scope?.preset === "rows") && !mobile;
+    (scope?.preset === "grid" ||
+      scope?.preset === "rows" ||
+      scope?.preset === "cascade") &&
+    !mobile;
   const scrollActive = scrollX || scrollY;
   const placements = entries.map(({ tab, geometry }) => ({
     id: tab.tab_id,

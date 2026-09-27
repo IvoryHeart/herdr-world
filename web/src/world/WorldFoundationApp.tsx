@@ -1173,7 +1173,8 @@ function WorldControlPlane({
     arrangementScope?.preset === "columns" && !compactArrangement;
   const visualScrollY =
     (arrangementScope?.preset === "grid" ||
-      arrangementScope?.preset === "rows") &&
+      arrangementScope?.preset === "rows" ||
+      arrangementScope?.preset === "cascade") &&
     !compactArrangement;
   const visualScrollActive = visualScrollX || visualScrollY;
   const visualContentWidth = visualScrollX
@@ -1662,7 +1663,12 @@ function WorldControlPlane({
       });
       if (!applied.result.available) return;
       setMaximizedInspectorId(null);
-      if (command === "grid" || command === "rows" || command === "columns") {
+      if (
+        command === "grid" ||
+        command === "rows" ||
+        command === "columns" ||
+        command === "cascade"
+      ) {
         setVisualGridScrollTop(0);
         setVisualScrollLeft(0);
         visualGridAutoFocusKeyRef.current = null;
@@ -3114,7 +3120,7 @@ function WorldControlPlane({
           ref={visualGridScrollbarRef}
           className={`world-grid-scrollbar ${visualScrollX ? "is-horizontal" : ""}`}
           role="region"
-          aria-label={`Scroll Inspector ${visualScrollX ? "columns" : visualScrollY && arrangementScope?.preset === "rows" ? "rows" : "grid"}`}
+          aria-label={`Scroll Inspector ${arrangementScope?.preset ?? "windows"}`}
           tabIndex={0}
           style={
             visualScrollX

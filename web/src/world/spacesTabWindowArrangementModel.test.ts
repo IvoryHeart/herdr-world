@@ -193,11 +193,11 @@ describe("Spaces tab window arrangement model", () => {
     ).toBeGreaterThan(stage.height);
   });
 
-  test("keeps distant Columns and Rows tiles in scrollable content", () => {
+  test("keeps distant Columns, Rows, and Cascade windows in scrollable content", () => {
     const manyTabs = Array.from({ length: 32 }, (_, index) =>
       tab(`tab-${index}`, "alpha"),
     );
-    for (const preset of ["columns", "rows"] as const) {
+    for (const preset of ["columns", "rows", "cascade"] as const) {
       const result = resolveTerminalWindowArrangement(
         preset,
         { left: 0, top: 0, ...stage },

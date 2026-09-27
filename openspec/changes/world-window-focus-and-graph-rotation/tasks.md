@@ -29,3 +29,8 @@
 - [x] 5.1 Scroll Columns horizontally and Rows vertically at the usable tiled minimum in Spaces and visual views; virtualize offscreen presentations and scroll focused windows into view.
 - [x] 5.2 Add Open all terminal windows to Arrange and Actions for every actionable terminal tab on the selected host, preserving existing Inspector conversations and Herdr sessions.
 - [x] 5.3 Cover large layouts and Open all in focused and browser tests, update current and delta contracts and changelog, and verify the branch through the tracked push hook.
+
+## 6. Repeating Cascade
+
+- [x] 6.1 Repeat the reachable Cascade diagonal in scrollable stages when another offset would violate window minimums, in Spaces and visual views.
+- [x] 6.2 Cover large Cascade geometry and browser scrolling, update current and delta contracts and changelog, and verify through the tracked push hook.

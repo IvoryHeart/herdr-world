@@ -263,36 +263,52 @@ function cascade(
   stage: TerminalWindowArrangementStage,
   windows: readonly TerminalWindowArrangementWindow[],
 ): TerminalWindowArrangementResult {
-  const yStep = Math.max(
+  const yStep = windows.reduce(
+    (step, window) =>
+      Math.max(step, (window.titleHeight ?? DEFAULT_TITLE_HEIGHT) + GAP),
     DEFAULT_TITLE_HEIGHT + GAP,
-    ...windows.map(
-      (window) => (window.titleHeight ?? DEFAULT_TITLE_HEIGHT) + GAP,
-    ),
+  );
+  const minimumWidth = windows.reduce(
+    (minimum, window) => Math.max(minimum, window.minWidth),
+    0,
+  );
+  const minimumHeight = windows.reduce(
+    (minimum, window) => Math.max(minimum, window.minHeight),
+    0,
+  );
+  if (stage.width < minimumWidth) {
+    return unavailable("Stage width is too small for this cascade.");
+  }
+  if (stage.height < minimumHeight) {
+    return unavailable("Stage height is too small for this cascade.");
+  }
+  const depth = Math.min(
+    windows.length,
+    Math.floor((stage.width - minimumWidth) / CASCADE_X_STEP) + 1,
+    Math.floor((stage.height - minimumHeight) / yStep) + 1,
   );
   const width = Math.min(
     FLOATING_TERMINAL_DEFAULT_SIZE.width,
-    stage.width - CASCADE_X_STEP * (windows.length - 1),
+    stage.width - CASCADE_X_STEP * (depth - 1),
   );
   const height = Math.min(
     FLOATING_TERMINAL_DEFAULT_SIZE.height,
-    stage.height - yStep * (windows.length - 1),
+    stage.height - yStep * (depth - 1),
   );
-  if (windows.some((window) => width < window.minWidth)) {
-    return unavailable("Stage width is too small for this cascade.");
-  }
-  if (windows.some((window) => height < window.minHeight)) {
-    return unavailable("Stage height is too small for this cascade.");
-  }
   return available(
-    windows.map((window, index) => ({
-      id: window.id,
-      geometry: {
-        left: stage.left + index * CASCADE_X_STEP,
-        top: stage.top + index * yStep,
-        width,
-        height,
-      },
-    })),
+    windows.map((window, index) => {
+      const page = Math.floor(index / depth);
+      const position = index % depth;
+      return {
+        id: window.id,
+        geometry: {
+          left: stage.left + position * CASCADE_X_STEP,
+          top: stage.top + page * (stage.height + GAP) + position * yStep,
+          width,
+          height,
+        },
+      };
+    }),
   );
 }
 

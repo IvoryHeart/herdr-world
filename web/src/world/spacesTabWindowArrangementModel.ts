@@ -161,6 +161,7 @@ export function spacesTabWindowEntries(input: {
           geometry.left + geometry.width > stage.width) ||
         (scope.preset !== "grid" &&
           scope.preset !== "rows" &&
+          scope.preset !== "cascade" &&
           geometry.top + geometry.height > stage.height),
     )
   ) {
@@ -189,7 +190,9 @@ export function spacesTabWindowEntries(input: {
         ? terminalArrangementContentWidth(placements, stage.width)
         : stage.width,
     height:
-      scope.preset === "grid" || scope.preset === "rows"
+      scope.preset === "grid" ||
+      scope.preset === "rows" ||
+      scope.preset === "cascade"
         ? terminalGridContentHeight(placements, stage.height)
         : stage.height,
   };

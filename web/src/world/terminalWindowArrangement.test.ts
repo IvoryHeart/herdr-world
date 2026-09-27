@@ -325,6 +325,45 @@ describe("terminal window arrangements", () => {
     expect(custom.available && custom.placements[1]?.geometry.top).toBe(138);
   });
 
+  test("Cascade repeats a reachable diagonal in scrollable stages for 1024 windows", () => {
+    const result = placements("cascade", 1024);
+    expect(result).toHaveLength(1024);
+    const firstPageEnd = result.findIndex(
+      ({ geometry }) => geometry.top >= stage.top + stage.height,
+    );
+    expect(firstPageEnd).toBeGreaterThan(4);
+    expect(result[firstPageEnd]!.geometry.left).toBe(stage.left);
+    expect(result[firstPageEnd]!.geometry.top).toBe(
+      stage.top + stage.height + 8,
+    );
+    expect(
+      result.every(
+        ({ geometry }) => geometry.width >= 420 && geometry.height >= 280,
+      ),
+    ).toBe(true);
+    expect(
+      result[firstPageEnd - 1]!.geometry.top +
+        result[firstPageEnd - 1]!.geometry.height,
+    ).toBeLessThanOrEqual(stage.top + stage.height);
+    const contentHeight = terminalGridContentHeight(
+      result,
+      stage.height,
+      stage.top,
+    );
+    const last = result[1023]!.geometry;
+    const scrollTop = terminalGridScrollTopForWindow(
+      last,
+      0,
+      stage.height,
+      contentHeight,
+      stage.top,
+    );
+    expect(scrollTop).toBeGreaterThan(0);
+    expect(
+      terminalGridWindowVisible(last, scrollTop, stage.height, stage.top),
+    ).toBe(true);
+  });
+
   test("unavailable presets return reasons and do not produce partial geometry", () => {
     expect(
       terminalWindowArrangementReason("rows", stage, windows(1), "tab-1"),
@@ -356,7 +395,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "cascade",
-        { ...stage, height: 400 },
+        { ...stage, height: 200 },
         windows(4),
         "tab-4",
       ),

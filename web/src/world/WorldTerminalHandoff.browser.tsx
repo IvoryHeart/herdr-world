@@ -3850,6 +3850,22 @@ async function run() {
     clippedVisualControls().length === 0,
     `narrow Rows clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
   );
+  narrowedVisualStage.style.height = "340px";
+  narrowedVisualStage.style.maxHeight = "340px";
+  await until(
+    () =>
+      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 340) < 2,
+    "compact height before scrollable Cascade",
+  );
+  await arrangeWindows("Cascade");
+  await until(() => {
+    const scrollbar = document.querySelector<HTMLElement>(
+      ".world-grid-scrollbar:not(.is-horizontal)",
+    );
+    return Boolean(
+      scrollbar && scrollbar.scrollHeight > scrollbar.clientHeight,
+    );
+  }, "narrow Cascade repeats scrollable groups");
   narrowedVisualStage.style.width = "1000px";
   narrowedVisualStage.style.height = "740px";
   narrowedVisualStage.style.removeProperty("max-height");
