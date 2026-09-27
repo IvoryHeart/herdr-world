@@ -64,9 +64,9 @@ function Fixture() {
           className="workspace-inspector-slot is-closed"
           style={{
             position: "absolute",
-            left: 340,
+            left: 180,
             top: 0,
-            width: 660,
+            width: 820,
             height: 800,
             display: "none",
           }}
@@ -395,7 +395,7 @@ async function run() {
   check(
     await until(
       () =>
-        Boolean(gridLayer?.classList.contains("is-grid-scroll")) &&
+        Boolean(gridLayer?.classList.contains("is-vertical-scroll")) &&
         Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
         windows().length < 64,
     ),
@@ -424,6 +424,33 @@ async function run() {
         Boolean(document.querySelector('[data-tab-id="bulk-0"]')),
     ),
     "focusing an offscreen Grid tab must scroll it into view",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-horizontal-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollWidth > gridLayer.clientWidth) &&
+        windows().length < 64,
+    ),
+    "large Columns must scroll horizontally and mount only nearby windows",
+  );
+  if (gridLayer) gridLayer.scrollLeft = gridLayer.scrollWidth;
+  check(
+    await until(() =>
+      Boolean(document.querySelector('[data-tab-id="bulk-61"]')),
+    ),
+    "scrolling Columns must mount the last tab window",
+  );
+  hook().arrangementControl.onSelect("rows");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-vertical-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
+        windows().length < 64,
+    ),
+    "large Rows must scroll vertically and mount only nearby windows",
   );
   mock.set({ serverRuntimeGeneration: 8 });
   check(

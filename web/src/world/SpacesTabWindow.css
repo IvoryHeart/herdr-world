@@ -10,8 +10,13 @@
   pointer-events: none;
 }
 
-.spaces-window-layer.is-grid-scroll {
+.spaces-window-layer.is-vertical-scroll {
   overflow-y: auto;
+  pointer-events: auto;
+}
+
+.spaces-window-layer.is-horizontal-scroll {
+  overflow-x: auto;
   pointer-events: auto;
 }
 

@@ -17,9 +17,11 @@ import { shallowEqual, store, useStoreSelector } from "../store";
 import { type FloatingTerminalGeometry } from "./floatingTerminalGeometry";
 import { SpacesTabWindow } from "./SpacesTabWindow";
 import {
+  terminalArrangementContentWidth,
+  terminalArrangementScrollLeftForWindow,
+  terminalArrangementWindowVisible,
   terminalGridContentHeight,
   terminalGridScrollTopForWindow,
-  terminalGridWindowVisible,
   terminalWindowArrangementReason,
   type TerminalWindowArrangementPreset,
   type TerminalWindowArrangementWindow,
@@ -108,6 +110,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const [stage, setStage] = useState({ width: 0, height: 0 });
   const [gridScrollTop, setGridScrollTop] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   const onSpacesWindowLayerReady = useCallback(
     (element: HTMLDivElement | null) =>
       setLayer((current) => (current === element ? current : element)),
@@ -304,57 +307,100 @@ export function useSpacesTabWindowArrangement(active: boolean): {
       suspended,
     ],
   );
-  const gridActive = scope?.preset === "grid" && !mobile;
-  const gridContentHeight = gridActive
-    ? terminalGridContentHeight(
-        entries.map(({ tab, geometry }) => ({ id: tab.tab_id, geometry })),
-        stage.height,
-      )
+  const scrollX = scope?.preset === "columns" && !mobile;
+  const scrollY =
+    (scope?.preset === "grid" || scope?.preset === "rows") && !mobile;
+  const scrollActive = scrollX || scrollY;
+  const placements = entries.map(({ tab, geometry }) => ({
+    id: tab.tab_id,
+    geometry,
+  }));
+  const contentWidth = scrollX
+    ? terminalArrangementContentWidth(placements, stage.width)
+    : stage.width;
+  const contentHeight = scrollY
+    ? terminalGridContentHeight(placements, stage.height)
     : stage.height;
-  const gridStage = { ...stage, height: gridContentHeight };
-  const viewportEntries = gridActive
+  const contentStage = { width: contentWidth, height: contentHeight };
+  const viewportEntries = scrollActive
     ? entries.filter(({ geometry }) =>
-        terminalGridWindowVisible(geometry, gridScrollTop, stage.height),
+        terminalArrangementWindowVisible(
+          geometry,
+          scrollLeft,
+          gridScrollTop,
+          stage.width,
+          stage.height,
+        ),
       )
     : entries;
 
   useEffect(() => {
     if (!layer) return;
-    const scrollable = gridActive && gridContentHeight > stage.height;
-    layer.classList.toggle("is-grid-scroll", scrollable);
-    if (!scrollable) {
+    const horizontal = scrollX && contentWidth > stage.width;
+    const vertical = scrollY && contentHeight > stage.height;
+    layer.classList.toggle("is-horizontal-scroll", horizontal);
+    layer.classList.toggle("is-vertical-scroll", vertical);
+    if (!horizontal && !vertical) {
       layer.scrollTop = 0;
+      layer.scrollLeft = 0;
       setGridScrollTop(0);
+      setScrollLeft(0);
       return;
     }
-    const onScroll = () => setGridScrollTop(layer.scrollTop);
+    const onScroll = () => {
+      setGridScrollTop(layer.scrollTop);
+      setScrollLeft(layer.scrollLeft);
+    };
     layer.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       layer.removeEventListener("scroll", onScroll);
-      layer.classList.remove("is-grid-scroll");
+      layer.classList.remove("is-horizontal-scroll", "is-vertical-scroll");
     };
-  }, [layer, gridActive, gridContentHeight, stage.height]);
+  }, [
+    layer,
+    scrollX,
+    scrollY,
+    contentWidth,
+    contentHeight,
+    stage.width,
+    stage.height,
+  ]);
 
   useEffect(() => {
-    if (!gridActive || !layer || !context) return;
+    if (!scrollActive || !layer || !context) return;
     const activeEntry = entries.find(
       ({ tab }) => tab.tab_id === context.activeTabId,
     );
     if (!activeEntry) return;
-    const next = terminalGridScrollTopForWindow(
-      activeEntry.geometry,
-      layer.scrollTop,
-      stage.height,
-      gridContentHeight,
-    );
-    if (next !== layer.scrollTop) layer.scrollTop = next;
+    if (scrollY) {
+      const next = terminalGridScrollTopForWindow(
+        activeEntry.geometry,
+        layer.scrollTop,
+        stage.height,
+        contentHeight,
+      );
+      if (next !== layer.scrollTop) layer.scrollTop = next;
+    }
+    if (scrollX) {
+      const next = terminalArrangementScrollLeftForWindow(
+        activeEntry.geometry,
+        layer.scrollLeft,
+        stage.width,
+        contentWidth,
+      );
+      if (next !== layer.scrollLeft) layer.scrollLeft = next;
+    }
   }, [
-    gridActive,
+    scrollActive,
+    scrollX,
+    scrollY,
     layer,
     context?.activeTabId,
     entries,
     stage.height,
-    gridContentHeight,
+    contentHeight,
+    contentWidth,
+    stage.width,
   ]);
 
   useEffect(() => {
@@ -433,6 +479,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   const onSelect = (command: WindowArrangementCommand) => {
     if (!active || !context || !layer || stage.width <= 0 || stage.height <= 0)
       return;
+    if (command === "open-all") return;
     if (command === "close-all") {
       setSuspendedScopes((current) => ({
         leaseKey: context.leaseKey,
@@ -542,6 +589,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   if (!context || suspended) {
     disabledReasons["close-all"] = "No terminal windows are presented.";
   }
+  disabledReasons["open-all"] = "Available in Office, Tree, and Graph views.";
 
   const onGeometryChange = (
     tabId: string,
@@ -550,7 +598,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     if (!context) return;
     const bounded = clampSpacesTabWindowGeometry(
       geometry,
-      gridActive ? gridStage : stage,
+      scrollActive ? contentStage : stage,
     );
     if (scope?.placements.some(({ id }) => id === tabId)) {
       setArrangements((current) =>
@@ -587,8 +635,12 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     active && layer && context
       ? createPortal(
           <div
-            className={gridActive ? "spaces-grid-content" : undefined}
-            style={gridActive ? { height: gridContentHeight } : undefined}
+            className={scrollActive ? "spaces-grid-content" : undefined}
+            style={
+              scrollActive
+                ? { width: contentWidth, height: contentHeight }
+                : undefined
+            }
           >
             {viewportEntries.map(({ tab, geometry, zIndex }) => (
               <SpacesTabWindow
@@ -597,7 +649,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                 label={tab.label}
                 active={tab.tab_id === context.activeTabId}
                 geometry={geometry}
-                stage={gridActive ? gridStage : stage}
+                stage={scrollActive ? contentStage : stage}
                 zIndex={zIndex}
                 onRaise={() => raiseSpacesTabWindow(tab.tab_id)}
                 onFocus={() => onFocusSpacesTabWindow(tab.tab_id, null)}

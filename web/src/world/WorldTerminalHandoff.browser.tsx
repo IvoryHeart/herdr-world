@@ -1195,16 +1195,27 @@ async function run() {
     "full World projection recovered",
   );
   const arrangeWindows = async (label: string) => {
-    document
-      .querySelector<HTMLButtonElement>('button[aria-label="Arrange windows"]')!
-      .click();
+    const trigger = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Arrange windows"]',
+    )!;
+    trigger.click();
     const getChoice = () =>
       [
         ...document.querySelectorAll<HTMLButtonElement>(
           '[role="menu"][aria-label="Arrange windows"] [role="menuitem"]',
         ),
       ].find((button) => button.querySelector("strong")?.textContent === label);
-    await until(getChoice, `${label} arrangement choice`);
+    await settle();
+    await until(() => {
+      const choice = getChoice();
+      if (choice) return choice;
+      if (
+        !document.querySelector('[role="menu"][aria-label="Arrange windows"]')
+      ) {
+        trigger.click();
+      }
+      return null;
+    }, `${label} arrangement choice`);
     const choice = getChoice();
     check(
       Boolean(choice) && choice?.getAttribute("aria-disabled") !== "true",
@@ -3787,14 +3798,36 @@ async function run() {
     clippedVisualControls().length === 0,
     `narrow Columns clipped Inspector controls: ${JSON.stringify(clippedVisualControls())}`,
   );
-  narrowedVisualStage.style.height = "512px";
-  narrowedVisualStage.style.maxHeight = "512px";
+  narrowedVisualStage.style.width = "520px";
+  await arrangeWindows("Columns");
+  await until(() => {
+    const scrollbar = document.querySelector<HTMLElement>(
+      ".world-grid-scrollbar.is-horizontal",
+    );
+    return Boolean(scrollbar && scrollbar.scrollWidth > scrollbar.clientWidth);
+  }, "narrow Columns expose horizontal scrolling");
+  narrowedVisualStage.style.width = "700px";
+  narrowedVisualStage.style.height = "420px";
+  narrowedVisualStage.style.maxHeight = "420px";
   await until(
     () =>
-      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 512) < 2,
+      Math.abs(narrowedVisualStage.getBoundingClientRect().height - 420) < 2,
     "short visual arrangement stage",
   );
+  await until(
+    () => !document.querySelector(".world-grid-scrollbar.is-horizontal"),
+    "horizontal scrollbar retired before Rows",
+  );
+  await settle();
   await arrangeWindows("Rows");
+  await until(() => {
+    const scrollbar = document.querySelector<HTMLElement>(
+      ".world-grid-scrollbar:not(.is-horizontal)",
+    );
+    return Boolean(
+      scrollbar && scrollbar.scrollHeight > scrollbar.clientHeight,
+    );
+  }, "narrow Rows expose vertical scrolling");
   await until(
     () => {
       const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
@@ -3932,6 +3965,19 @@ async function run() {
   await until(
     () => !document.querySelector(".workspace-inspector"),
     "Actions Close all dismissed reopened Inspector",
+  );
+  await arrangeWindows("Open all terminal windows");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === tabs.length,
+    "Open all presented every terminal tab on the selected host",
+  );
+  check(
+    calls.filter(({ method }) =>
+      ["tab.close", "pane.close", "terminal.kill"].includes(method),
+    ).length === closeRpcBefore,
+    "Open all changed a Herdr tab, pane, or session",
   );
 
   runtimeGeneration += 1;

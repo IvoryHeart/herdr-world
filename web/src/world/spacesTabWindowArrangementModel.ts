@@ -8,6 +8,7 @@ import {
 } from "./floatingTerminalGeometry";
 import {
   resolveTerminalWindowArrangement,
+  terminalArrangementContentWidth,
   terminalGridContentHeight,
 } from "./terminalWindowArrangement";
 import type { TerminalWindowArrangementScope } from "./terminalWindowArrangementState";
@@ -156,8 +157,10 @@ export function spacesTabWindowEntries(input: {
       ({ geometry }) =>
         geometry.left < 0 ||
         geometry.top < 0 ||
-        geometry.left + geometry.width > stage.width ||
+        (scope.preset !== "columns" &&
+          geometry.left + geometry.width > stage.width) ||
         (scope.preset !== "grid" &&
+          scope.preset !== "rows" &&
           geometry.top + geometry.height > stage.height),
     )
   ) {
@@ -178,16 +181,18 @@ export function spacesTabWindowEntries(input: {
       resized.placements.map(({ id, geometry }) => [id, geometry]),
     );
   }
-  const placementStage =
-    scope.preset === "grid"
-      ? {
-          ...stage,
-          height: terminalGridContentHeight(
-            [...arranged].map(([id, geometry]) => ({ id, geometry })),
-            stage.height,
-          ),
-        }
-      : stage;
+  const placements = [...arranged].map(([id, geometry]) => ({ id, geometry }));
+  const placementStage = {
+    ...stage,
+    width:
+      scope.preset === "columns"
+        ? terminalArrangementContentWidth(placements, stage.width)
+        : stage.width,
+    height:
+      scope.preset === "grid" || scope.preset === "rows"
+        ? terminalGridContentHeight(placements, stage.height)
+        : stage.height,
+  };
   return orderedSpacesTabs(input.tabs, input.raisedIds, input.activeTabId).map(
     (tab, zIndex) => {
       const geometry =

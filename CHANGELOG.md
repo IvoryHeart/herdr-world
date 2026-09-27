@@ -27,8 +27,10 @@ are optional because the merged PR history records their source.
   Actions. Close all preserves Herdr tabs and sessions; Spaces keeps each
   workspace suspended until explicit tab selection or arrangement. Graph can
   rotate left or right in quarter turns while keeping labels upright. Floating
-  Inspectors no longer stop at five, and Grid scrolls through large window sets
-  with usable tiles and nearby terminal views mounted.
+  Inspectors no longer stop at five. Grid and Rows scroll vertically, while
+  Columns scroll horizontally, keeping large window sets usable with nearby
+  terminal views mounted. Open all terminal windows in Arrange and Actions
+  presents every available terminal tab on the selected host.
   [Herdr World PR #123](https://github.com/IvoryHeart/herdr-world/pull/123)
 - Added an Arrange graph control beside Fit in Graph view. Arrange spreads visible
   nodes into a readable hierarchy, wraps multiple hosts, and recenters the camera

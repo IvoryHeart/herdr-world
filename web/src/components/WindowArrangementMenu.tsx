@@ -10,7 +10,8 @@ import "./WindowArrangementMenu.css";
 export type WindowArrangementCommand =
   | TerminalWindowArrangementPreset
   | "restore"
-  | "close-all";
+  | "close-all"
+  | "open-all";
 
 export type WindowArrangementControl = {
   activePreset: TerminalWindowArrangementPreset | null;
@@ -64,6 +65,11 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
     command: "close-all",
     label: "Close all terminal windows",
     description: "Dismiss windows without closing tabs or sessions",
+  },
+  {
+    command: "open-all",
+    label: "Open all terminal windows",
+    description: "Present every terminal on the selected host",
   },
 ];
 

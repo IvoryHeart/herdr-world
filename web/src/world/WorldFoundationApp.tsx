@@ -49,6 +49,7 @@ import {
 import {
   buildWorldObject,
   type WorldHostObject,
+  type WorldLeafObject,
   type WorldObject,
   type WorldObjectNode,
   worldObjectForConnection,
@@ -85,9 +86,11 @@ import {
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import {
+  terminalArrangementContentWidth,
+  terminalArrangementScrollLeftForWindow,
+  terminalArrangementWindowVisible,
   terminalGridContentHeight,
   terminalGridScrollTopForWindow,
-  terminalGridWindowVisible,
   terminalWindowArrangementReason,
   type TerminalWindowArrangementPreset,
   type TerminalWindowArrangementStage,
@@ -1005,6 +1008,7 @@ function WorldControlPlane({
       height: 0,
     });
   const [visualGridScrollTop, setVisualGridScrollTop] = useState(0);
+  const [visualScrollLeft, setVisualScrollLeft] = useState(0);
   const visualGridScrollbarRef = useRef<HTMLDivElement | null>(null);
   const visualGridAutoFocusKeyRef = useRef<string | null>(null);
   const [excludedArrangementIds, setExcludedArrangementIds] = useState<
@@ -1165,19 +1169,41 @@ function WorldControlPlane({
           compact: compactArrangement,
         })
       : null;
-  const visualGridActive =
-    arrangementScope?.preset === "grid" && !compactArrangement;
-  const visualGridContentHeight = visualGridActive
+  const visualScrollX =
+    arrangementScope?.preset === "columns" && !compactArrangement;
+  const visualScrollY =
+    (arrangementScope?.preset === "grid" ||
+      arrangementScope?.preset === "rows") &&
+    !compactArrangement;
+  const visualScrollActive = visualScrollX || visualScrollY;
+  const visualContentWidth = visualScrollX
+    ? terminalArrangementContentWidth(
+        visualPlacements ?? [],
+        visualArrangementStage.width,
+        visualArrangementStage.left,
+      )
+    : visualArrangementStage.width;
+  const visualContentHeight = visualScrollY
     ? terminalGridContentHeight(
         visualPlacements ?? [],
         visualArrangementStage.height,
         visualArrangementStage.top,
       )
     : visualArrangementStage.height;
-  const visualGridBounds = {
+  const visualNeedsHorizontalScroll =
+    visualScrollX && visualContentWidth > visualArrangementStage.width;
+  const visualNeedsVerticalScroll =
+    visualScrollY && visualContentHeight > visualArrangementStage.height;
+  const visualContentBounds = {
     ...visualArrangementStage,
-    width: Math.max(1, visualArrangementStage.width - 18),
-    height: visualGridContentHeight,
+    width: visualScrollX
+      ? visualContentWidth
+      : visualNeedsVerticalScroll
+        ? Math.max(1, visualArrangementStage.width - 18)
+        : visualArrangementStage.width,
+    height: visualNeedsHorizontalScroll
+      ? Math.max(1, visualArrangementStage.height - 18)
+      : visualContentHeight,
   };
   const visualPlacementMap = new Map(
     (visualPlacements ?? [])
@@ -1188,7 +1214,7 @@ function WorldControlPlane({
           !compactArrangement && arrangementScope?.preset === "single"
             ? (singleManualGeometry[id] ?? geometry)
             : geometry,
-          visualGridActive ? visualGridBounds : visualArrangementStage,
+          visualScrollActive ? visualContentBounds : visualArrangementStage,
         ),
       ]),
   );
@@ -1200,7 +1226,7 @@ function WorldControlPlane({
   }
   useEffect(() => {
     const scrollbar = visualGridScrollbarRef.current;
-    if (!visualGridActive || !scrollbar || !activeInspectorId) {
+    if (!visualScrollActive || !scrollbar || !activeInspectorId) {
       visualGridAutoFocusKeyRef.current = null;
       return;
     }
@@ -1209,18 +1235,33 @@ function WorldControlPlane({
     const key = `${visualLeaseKey}:${activeInspectorId}`;
     if (visualGridAutoFocusKeyRef.current === key) return;
     visualGridAutoFocusKeyRef.current = key;
-    const next = terminalGridScrollTopForWindow(
-      geometry,
-      scrollbar.scrollTop,
-      visualArrangementStage.height,
-      visualGridContentHeight,
-      visualArrangementStage.top,
-    );
-    if (next !== scrollbar.scrollTop) scrollbar.scrollTop = next;
+    if (visualScrollY) {
+      const next = terminalGridScrollTopForWindow(
+        geometry,
+        scrollbar.scrollTop,
+        visualArrangementStage.height,
+        visualContentHeight,
+        visualArrangementStage.top,
+      );
+      if (next !== scrollbar.scrollTop) scrollbar.scrollTop = next;
+    }
+    if (visualScrollX) {
+      const next = terminalArrangementScrollLeftForWindow(
+        geometry,
+        scrollbar.scrollLeft,
+        visualArrangementStage.width,
+        visualContentWidth,
+        visualArrangementStage.left,
+      );
+      if (next !== scrollbar.scrollLeft) scrollbar.scrollLeft = next;
+    }
   }, [
     activeInspectorId,
-    visualGridActive,
-    visualGridContentHeight,
+    visualScrollActive,
+    visualScrollX,
+    visualScrollY,
+    visualContentHeight,
+    visualContentWidth,
     visualLeaseKey,
     visualArrangementStage.height,
     visualArrangementStage.top,
@@ -1228,16 +1269,17 @@ function WorldControlPlane({
   ]);
   useEffect(() => {
     if (
-      !visualGridActive ||
-      visualGridContentHeight <= visualArrangementStage.height
+      !visualScrollY ||
+      visualContentHeight <= visualArrangementStage.height
     ) {
       setVisualGridScrollTop(0);
     }
-  }, [
-    visualGridActive,
-    visualGridContentHeight,
-    visualArrangementStage.height,
-  ]);
+  }, [visualScrollY, visualContentHeight, visualArrangementStage.height]);
+  useEffect(() => {
+    if (!visualScrollX || visualContentWidth <= visualArrangementStage.width) {
+      setVisualScrollLeft(0);
+    }
+  }, [visualScrollX, visualContentWidth, visualArrangementStage.width]);
   const openInspectorIds = visualWindows.map(({ id }) => id);
   const inspectorStack = [
     ...openInspectorIds.filter((id) => !raisedInspectorIds.includes(id)),
@@ -1296,16 +1338,19 @@ function WorldControlPlane({
   const visibleFloatingInspectors = inspectorConversations.filter(
     (conversation) => {
       const id = worldInspectorWindowId(conversation);
-      const gridGeometry = visualGridActive
+      const scrollGeometry = visualScrollActive
         ? visualPlacementMap.get(id)
         : undefined;
       if (
-        gridGeometry &&
+        scrollGeometry &&
         id !== maximizedInspectorId &&
-        !terminalGridWindowVisible(
-          gridGeometry,
+        !terminalArrangementWindowVisible(
+          scrollGeometry,
+          visualScrollLeft,
           visualGridScrollTop,
+          visualArrangementStage.width,
           visualArrangementStage.height,
+          visualArrangementStage.left,
           visualArrangementStage.top,
         )
       ) {
@@ -1417,7 +1462,112 @@ function WorldControlPlane({
   }, [inspectorConversations, visualLeaseKey]);
 
   const selectVisualArrangement = useCallback(
-    (command: TerminalWindowArrangementPreset | "restore" | "close-all") => {
+    (
+      command:
+        | TerminalWindowArrangementPreset
+        | "restore"
+        | "close-all"
+        | "open-all",
+    ) => {
+      if (command === "open-all") {
+        if (compactArrangement) return;
+        const selectedHostLeaves = world.leaves.filter(
+          (node) =>
+            node.selectedHost &&
+            node.actionable &&
+            node.connectionId === connectionSelection.activeConnectionId &&
+            node.generation === connectionSelection.runtimeGeneration &&
+            node.capabilities.openTerminal,
+        );
+        const uniqueTabs = new Map<string, WorldLeafObject>();
+        for (const node of selectedHostLeaves) {
+          const id = worldInspectorWindowIdForNode(node);
+          const previous = uniqueTabs.get(id);
+          if (!previous || node.focused) uniqueTabs.set(id, node);
+        }
+        const current = inspectorConversationsRef.current;
+        const openIds = new Set(current.map(worldInspectorWindowId));
+        const added: WorldInspectorConversation[] = [];
+        const workspaces = new Map(
+          world.spaces
+            .filter(
+              (space) =>
+                space.selectedHost &&
+                space.connectionId === connectionSelection.activeConnectionId &&
+                space.generation === connectionSelection.runtimeGeneration,
+            )
+            .map((space) => [space.nativeId, space.workspace]),
+        );
+        for (const [id, node] of uniqueTabs) {
+          if (openIds.has(id)) continue;
+          const workspace = workspaces.get(node.workspaceId);
+          const context = worldInspectorContext(node);
+          if (!workspace || !context) continue;
+          const preferences = readInspectorPreferences(
+            worldLocalStorage,
+            resourceScopeForWorkspace(node.connectionId, workspace),
+          );
+          const conversation = worldInspectorForNode(
+            node,
+            "terminal",
+            worldIntentViews(node),
+            context,
+            {
+              dock: preferences.dock,
+              expanded: preferences.expanded,
+              size:
+                preferences.dock === "right"
+                  ? preferences.rightSize
+                  : preferences.bottomSize,
+            },
+          );
+          if (conversation) added.push(conversation);
+        }
+        if (added.length === 0) return;
+        const next = [...current, ...added];
+        inspectorConversationsRef.current = next;
+        onInspectorConversationsChangeRef.current(next);
+        const viewport = {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        };
+        const newWindows: TerminalWindowArrangementParticipant<VisualInspectorPresentation>[] =
+          added.map((conversation, index) => ({
+            id: worldInspectorWindowId(conversation),
+            minWidth: FLOATING_TERMINAL_MIN_SIZE.width,
+            minHeight: FLOATING_TERMINAL_MIN_SIZE.height,
+            geometry: defaultFloatingTerminalGeometry(
+              current.length + index,
+              viewport,
+            ),
+            presentation: { kind: "floating" },
+          }));
+        const arranged = applyTerminalWindowArrangement(
+          visualArrangementState,
+          {
+            leaseKey: visualLeaseKey,
+            scopeKey: VISUAL_ARRANGEMENT_SCOPE,
+            preset: "grid",
+            stage: {
+              ...visualArrangementStage,
+              width: Math.max(1, visualArrangementStage.width - 18),
+            },
+            windows: [...visualWindows, ...newWindows],
+            activeId: activeInspectorId ?? newWindows[0]?.id ?? null,
+          },
+        );
+        if (arranged.result.available) {
+          setVisualArrangementState(arranged.state);
+          setVisualGridScrollTop(0);
+          setVisualScrollLeft(0);
+          visualGridAutoFocusKeyRef.current = null;
+        } else if (arrangementScope?.preset === "single") {
+          setVisualArrangementState(
+            createTerminalWindowArrangementState(visualLeaseKey),
+          );
+        }
+        return;
+      }
       if (command === "close-all") {
         if (inspectorConversationsRef.current.length === 0) return;
         intentRequestRef.current += 1;
@@ -1512,11 +1662,13 @@ function WorldControlPlane({
       });
       if (!applied.result.available) return;
       setMaximizedInspectorId(null);
-      if (command === "grid") {
+      if (command === "grid" || command === "rows" || command === "columns") {
         setVisualGridScrollTop(0);
+        setVisualScrollLeft(0);
         visualGridAutoFocusKeyRef.current = null;
         if (visualGridScrollbarRef.current) {
           visualGridScrollbarRef.current.scrollTop = 0;
+          visualGridScrollbarRef.current.scrollLeft = 0;
         }
       }
       setVisualArrangementState(applied.state);
@@ -1526,13 +1678,17 @@ function WorldControlPlane({
     },
     [
       activeInspectorId,
+      arrangementScope,
       compactArrangement,
+      connectionSelection.activeConnectionId,
+      connectionSelection.runtimeGeneration,
       dockedInspectorId,
       onDockedInspectorIdChange,
       visualArrangementStage,
       visualArrangementState,
       visualLeaseKey,
       visualWindows,
+      world,
     ],
   );
   const visualArrangementControl = useMemo<WindowArrangementControl>(() => {
@@ -1573,6 +1729,24 @@ function WorldControlPlane({
     if (visualWindows.length === 0) {
       disabledReasons["close-all"] = "No terminal windows are presented.";
     }
+    if (compactArrangement) {
+      disabledReasons["open-all"] = "Available in desktop layout.";
+    } else {
+      const openIds = new Set(visualWindows.map(({ id }) => id));
+      const unopened = world.leaves.some(
+        (node) =>
+          node.selectedHost &&
+          node.actionable &&
+          node.connectionId === connectionSelection.activeConnectionId &&
+          node.generation === connectionSelection.runtimeGeneration &&
+          node.capabilities.openTerminal &&
+          !openIds.has(worldInspectorWindowIdForNode(node)),
+      );
+      if (!unopened) {
+        disabledReasons["open-all"] =
+          "All available terminals on this host are already open.";
+      }
+    }
     return {
       activePreset: compactArrangement
         ? "single"
@@ -1584,9 +1758,12 @@ function WorldControlPlane({
     activeInspectorId,
     arrangementScope,
     compactArrangement,
+    connectionSelection.activeConnectionId,
+    connectionSelection.runtimeGeneration,
     selectVisualArrangement,
     visualArrangementStage,
     visualWindows,
+    world.leaves,
   ]);
   useLayoutEffect(() => {
     onVisualArrangementControlReady(visualArrangementControl);
@@ -2931,26 +3108,43 @@ function WorldControlPlane({
           </aside>
         </div>
       )}
-      {visualGridActive &&
-      visualGridContentHeight > visualArrangementStage.height ? (
+      {visualScrollActive &&
+      (visualNeedsVerticalScroll || visualNeedsHorizontalScroll) ? (
         <div
           ref={visualGridScrollbarRef}
-          className="world-grid-scrollbar"
+          className={`world-grid-scrollbar ${visualScrollX ? "is-horizontal" : ""}`}
           role="region"
-          aria-label="Scroll Inspector grid"
+          aria-label={`Scroll Inspector ${visualScrollX ? "columns" : visualScrollY && arrangementScope?.preset === "rows" ? "rows" : "grid"}`}
           tabIndex={0}
-          style={{
-            left:
-              visualArrangementStage.left + visualArrangementStage.width - 18,
-            top: visualArrangementStage.top,
-            width: 18,
-            height: visualArrangementStage.height,
-          }}
-          onScroll={(event) =>
-            setVisualGridScrollTop(event.currentTarget.scrollTop)
+          style={
+            visualScrollX
+              ? {
+                  left: visualArrangementStage.left,
+                  top:
+                    visualArrangementStage.top +
+                    visualArrangementStage.height -
+                    18,
+                  width: visualArrangementStage.width,
+                  height: 18,
+                }
+              : {
+                  left:
+                    visualArrangementStage.left +
+                    visualArrangementStage.width -
+                    18,
+                  top: visualArrangementStage.top,
+                  width: 18,
+                  height: visualArrangementStage.height,
+                }
           }
+          onScroll={(event) => {
+            setVisualGridScrollTop(event.currentTarget.scrollTop);
+            setVisualScrollLeft(event.currentTarget.scrollLeft);
+          }}
         >
-          <div style={{ height: visualGridContentHeight }} />
+          <div
+            style={{ width: visualContentWidth, height: visualContentHeight }}
+          />
         </div>
       ) : null}
       <Suspense fallback={null}>
@@ -2967,8 +3161,14 @@ function WorldControlPlane({
             arrangedGeometry={(() => {
               const id = worldInspectorWindowId(conversation);
               const geometry = visualPlacementMap.get(id);
-              return geometry && visualGridActive && id !== maximizedInspectorId
-                ? { ...geometry, top: geometry.top - visualGridScrollTop }
+              return geometry &&
+                visualScrollActive &&
+                id !== maximizedInspectorId
+                ? {
+                    ...geometry,
+                    left: geometry.left - visualScrollLeft,
+                    top: geometry.top - visualGridScrollTop,
+                  }
                 : (geometry ?? null);
             })()}
             zIndex={
@@ -3003,10 +3203,16 @@ function WorldControlPlane({
               )
                 return;
               const fitted = fitVisualInspectorArrangementGeometry(
-                visualGridActive
-                  ? { ...geometry, top: geometry.top + visualGridScrollTop }
+                visualScrollActive
+                  ? {
+                      ...geometry,
+                      left: geometry.left + visualScrollLeft,
+                      top: geometry.top + visualGridScrollTop,
+                    }
                   : geometry,
-                visualGridActive ? visualGridBounds : visualArrangementStage,
+                visualScrollActive
+                  ? visualContentBounds
+                  : visualArrangementStage,
               );
               if (arrangementScope?.preset === "single") {
                 setSingleManualGeometry((current) => ({

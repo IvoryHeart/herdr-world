@@ -575,6 +575,11 @@
   background: var(--bg, #0e1116);
 }
 
+.world-grid-scrollbar.is-horizontal {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
 .world-floating-terminal[data-interaction="moving"],
 .world-floating-terminal[data-interaction="resizing"] {
   user-select: none;

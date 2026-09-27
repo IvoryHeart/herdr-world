@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   resolveTerminalWindowArrangement,
+  terminalArrangementContentWidth,
+  terminalArrangementScrollLeftForWindow,
+  terminalArrangementWindowVisible,
   terminalGridContentHeight,
   terminalGridScrollTopForWindow,
   terminalGridWindowVisible,
@@ -200,6 +203,89 @@ describe("terminal window arrangements", () => {
     ).toBe(true);
   });
 
+  test("Columns and Rows keep usable tiles and scroll through 1024 windows", () => {
+    const columns = placements("columns", 1024);
+    const rows = placements("rows", 1024);
+    expect(columns[0]!.geometry.width).toBe(220);
+    expect(rows[0]!.geometry.height).toBe(160);
+    const contentWidth = terminalArrangementContentWidth(
+      columns,
+      stage.width,
+      stage.left,
+    );
+    const contentHeight = terminalGridContentHeight(
+      rows,
+      stage.height,
+      stage.top,
+    );
+    expect(contentWidth).toBeGreaterThan(stage.width);
+    expect(contentHeight).toBeGreaterThan(stage.height);
+    const left = terminalArrangementScrollLeftForWindow(
+      columns[1023]!.geometry,
+      0,
+      stage.width,
+      contentWidth,
+      stage.left,
+    );
+    const top = terminalGridScrollTopForWindow(
+      rows[1023]!.geometry,
+      0,
+      stage.height,
+      contentHeight,
+      stage.top,
+    );
+    expect(left).toBeGreaterThan(0);
+    expect(top).toBeGreaterThan(0);
+    expect(
+      terminalArrangementWindowVisible(
+        columns[1023]!.geometry,
+        left,
+        0,
+        stage.width,
+        stage.height,
+        stage.left,
+        stage.top,
+      ),
+    ).toBe(true);
+    expect(
+      terminalArrangementWindowVisible(
+        rows[1023]!.geometry,
+        0,
+        top,
+        stage.width,
+        stage.height,
+        stage.left,
+        stage.top,
+      ),
+    ).toBe(true);
+    expect(
+      columns.filter(({ geometry }) =>
+        terminalArrangementWindowVisible(
+          geometry,
+          0,
+          0,
+          stage.width,
+          stage.height,
+          stage.left,
+          stage.top,
+        ),
+      ).length,
+    ).toBeLessThan(20);
+    expect(
+      rows.filter(({ geometry }) =>
+        terminalArrangementWindowVisible(
+          geometry,
+          0,
+          0,
+          stage.width,
+          stage.height,
+          stage.left,
+          stage.top,
+        ),
+      ).length,
+    ).toBeLessThan(20);
+  });
+
   test("Grid explains when the stage cannot fit one usable column", () => {
     expect(
       terminalWindowArrangementReason(
@@ -246,7 +332,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "columns",
-        { ...stage, width: 400 },
+        { ...stage, width: 180 },
         windows(2),
         "tab-2",
       ),
@@ -254,7 +340,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "rows",
-        { ...stage, height: 440 },
+        { ...stage, height: 120 },
         windows(3),
         "tab-3",
       ),

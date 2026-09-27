@@ -42,12 +42,16 @@ async function run() {
     ...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
   ];
   check(
-    !!menu && items.length === 7,
-    "menu must expose seven labelled choices",
+    !!menu && items.length === 8,
+    "menu must expose eight labelled choices",
   );
   check(
     items[6]?.textContent?.includes("Close all terminal windows") === true,
     "Close all must be a labelled arrangement command",
+  );
+  check(
+    items[7]?.textContent?.includes("Open all terminal windows") === true,
+    "Open all must be a labelled arrangement command",
   );
   check(
     document.activeElement === items[0],

@@ -944,9 +944,11 @@ export function CommandCombobox({
             title:
               command === "close-all"
                 ? "Close all terminal windows"
-                : command === "restore"
-                  ? "Restore window positions"
-                  : `Arrange windows: ${label}`,
+                : command === "open-all"
+                  ? "Open all terminal windows"
+                  : command === "restore"
+                    ? "Restore window positions"
+                    : `Arrange windows: ${label}`,
             detail: description,
             shortcut: shortcut === "Unassigned" ? undefined : shortcut,
             keywords: ["layout", "tile", "windows", label],

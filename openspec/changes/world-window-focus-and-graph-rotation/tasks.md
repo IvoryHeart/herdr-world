@@ -23,3 +23,9 @@
 - [x] 4.2 Tile all eligible Grid windows in count-based rows and columns, including six as 3×2 and sixteen as 4×4; scroll additional rows at a usable minimum and keep unavailable layouts from changing current geometry.
 - [x] 4.3 Mount only nearby Grid windows and terminal portals, and scroll an offscreen focused window into view; verify large-count behavior in focused and browser coverage.
 - [x] 4.4 Update the World contract and changelog for the revised count and Grid behavior; verify focused tests and OpenSpec validation.
+
+## 5. Scrollable Columns and Rows and host-wide Open all
+
+- [x] 5.1 Scroll Columns horizontally and Rows vertically at the usable tiled minimum in Spaces and visual views; virtualize offscreen presentations and scroll focused windows into view.
+- [x] 5.2 Add Open all terminal windows to Arrange and Actions for every actionable terminal tab on the selected host, preserving existing Inspector conversations and Herdr sessions.
+- [x] 5.3 Cover large layouts and Open all in focused and browser tests, update current and delta contracts and changelog, and verify the branch through the tracked push hook.

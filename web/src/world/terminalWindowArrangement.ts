@@ -51,6 +51,55 @@ export function terminalGridContentHeight(
   );
 }
 
+export function terminalArrangementContentWidth(
+  placements: readonly TerminalWindowArrangementPlacement[],
+  viewportWidth: number,
+  stageLeft = 0,
+): number {
+  return Math.max(
+    viewportWidth,
+    placements.reduce(
+      (right, { geometry }) =>
+        Math.max(right, geometry.left + geometry.width - stageLeft),
+      0,
+    ),
+  );
+}
+
+export function terminalArrangementWindowVisible(
+  geometry: FloatingTerminalGeometry,
+  scrollLeft: number,
+  scrollTop: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  stageLeft = 0,
+  stageTop = 0,
+): boolean {
+  const left = geometry.left - stageLeft;
+  return (
+    left + geometry.width >= scrollLeft - viewportWidth &&
+    left <= scrollLeft + viewportWidth * 2 &&
+    terminalGridWindowVisible(geometry, scrollTop, viewportHeight, stageTop)
+  );
+}
+
+export function terminalArrangementScrollLeftForWindow(
+  geometry: FloatingTerminalGeometry,
+  scrollLeft: number,
+  viewportWidth: number,
+  contentWidth: number,
+  stageLeft = 0,
+): number {
+  const left = geometry.left - stageLeft;
+  const next =
+    left < scrollLeft
+      ? left
+      : left + geometry.width > scrollLeft + viewportWidth
+        ? left + geometry.width - viewportWidth
+        : scrollLeft;
+  return Math.max(0, Math.min(contentWidth - viewportWidth, next));
+}
+
 export function terminalGridWindowVisible(
   geometry: FloatingTerminalGeometry,
   scrollTop: number,
@@ -144,18 +193,24 @@ function columns(
   stage: TerminalWindowArrangementStage,
   windows: readonly TerminalWindowArrangementWindow[],
 ): TerminalWindowArrangementResult {
-  const width = (stage.width - GAP * (windows.length - 1)) / windows.length;
-  if (
-    windows.some(
-      (window) =>
-        width < Math.min(window.minWidth, TILED_TERMINAL_MIN_SIZE.width),
-    )
-  ) {
+  const minimumWidth = windows.reduce(
+    (minimum, window) =>
+      Math.max(
+        minimum,
+        Math.min(window.minWidth, TILED_TERMINAL_MIN_SIZE.width),
+      ),
+    0,
+  );
+  if (stage.width < minimumWidth) {
     return unavailable("Stage width is too small for these columns.");
   }
   if (windows.some((window) => stage.height < window.minHeight)) {
     return unavailable("Stage height is too small for these columns.");
   }
+  const width = Math.max(
+    minimumWidth,
+    (stage.width - GAP * (windows.length - 1)) / windows.length,
+  );
   return available(
     windows.map((window, index) => ({
       id: window.id,
@@ -173,18 +228,24 @@ function rows(
   stage: TerminalWindowArrangementStage,
   windows: readonly TerminalWindowArrangementWindow[],
 ): TerminalWindowArrangementResult {
-  const height = (stage.height - GAP * (windows.length - 1)) / windows.length;
-  if (
-    windows.some(
-      (window) =>
-        height < Math.min(window.minHeight, TILED_TERMINAL_MIN_SIZE.height),
-    )
-  ) {
+  const minimumHeight = windows.reduce(
+    (minimum, window) =>
+      Math.max(
+        minimum,
+        Math.min(window.minHeight, TILED_TERMINAL_MIN_SIZE.height),
+      ),
+    0,
+  );
+  if (stage.height < minimumHeight) {
     return unavailable("Stage height is too small for these rows.");
   }
   if (windows.some((window) => stage.width < window.minWidth)) {
     return unavailable("Stage width is too small for these rows.");
   }
+  const height = Math.max(
+    minimumHeight,
+    (stage.height - GAP * (windows.length - 1)) / windows.length,
+  );
   return available(
     windows.map((window, index) => ({
       id: window.id,

@@ -193,6 +193,42 @@ describe("Spaces tab window arrangement model", () => {
     ).toBeGreaterThan(stage.height);
   });
 
+  test("keeps distant Columns and Rows tiles in scrollable content", () => {
+    const manyTabs = Array.from({ length: 32 }, (_, index) =>
+      tab(`tab-${index}`, "alpha"),
+    );
+    for (const preset of ["columns", "rows"] as const) {
+      const result = resolveTerminalWindowArrangement(
+        preset,
+        { left: 0, top: 0, ...stage },
+        manyTabs.map(({ tab_id }) => ({
+          id: tab_id,
+          minWidth: 420,
+          minHeight: 280,
+        })),
+        "tab-0",
+      );
+      expect(result.available).toBe(true);
+      if (!result.available) continue;
+      const entries = spacesTabWindowEntries({
+        scope: { ...scope, preset, placements: result.placements },
+        tabs: manyTabs,
+        activeTabId: "tab-0",
+        raisedIds: [],
+        freeGeometry: {},
+        stage,
+        compact: false,
+      });
+      expect(entries).toHaveLength(32);
+      const last = entries.find(
+        ({ tab: item }) => item.tab_id === "tab-31",
+      )!.geometry;
+      expect(preset === "columns" ? last.left : last.top).toBeGreaterThan(
+        preset === "columns" ? stage.width : stage.height,
+      );
+    }
+  });
+
   test("keeps new tabs floating alongside one-shot tiled participants", () => {
     const entries = spacesTabWindowEntries({
       scope,
