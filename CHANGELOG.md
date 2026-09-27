@@ -88,6 +88,8 @@ retain their original Herdr Web lineage.
 
 ### Changed
 
+- Tightened Codex delivery guidance around blocking waits, one staged formatter
+  pass per candidate, and the existing commit, push, and CI verification gates.
 - Bounded aggregate World observation to 20 seconds, prioritizing the selected
   host while retaining stale, non-actionable topology for unfinished hosts and
   admitting current-generation late results on a later refresh.

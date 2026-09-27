@@ -74,9 +74,16 @@ bun install --frozen-lockfile
 ```
 
 Use focused tests and type checks while developing, after coherent changes or to
-investigate a failure; do not rerun them after every edit. The tracked pre-push hook
-runs `bun run check` on a branch push. It covers notices, formatting, lint, types,
-tests, builds and OpenSpec. CI repeats it on the PR head. Browser tests require
+investigate a failure; do not rerun them after every edit or run mutating formatting
+after each patch. When the candidate and focused regressions are complete, stage only
+intended files, run `bun run format:staged` once, restage its changes, and inspect the
+final diff. A docs-only candidate is a safe no-op for the formatter. Do not format
+the whole repository for a scoped change. Commit with the read-only pre-commit
+format/lint guard. Push a complete PR candidate once: the tracked pre-push hook runs
+`bun run check`, covering notices, formatting, lint, types, tests, builds and OpenSpec;
+CI repeats it on the PR head. Do not run a separate final full check immediately
+before that push. For an explicitly local-only handoff, run one explicit full check.
+If a repair changes code, begin a new candidate cycle. Browser tests require
 Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
@@ -95,9 +102,12 @@ tutorial changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full matrix.
 
 ## Agentic efficiency
 
-- **Do not poll.** Tools, sub-agents, and CI runs complete, error, or timeout on
-  their own. Fire and wait for the result — do not loop on status checks. If you
-  must check, check once after a reasonable delay.
+- **Block on running commands.** When a command returns a running session, call
+  `write_stdin` on that session with empty `chars` and `yield_time_ms: 300000`;
+  wait again only if it actually times out and remains running. Apply the same
+  rule to `gh run watch`. Do not issue 30-second status loops or separate
+  `ps`/`gh pr checks` probes while the blocking command is running. A Codex
+  lifecycle hook cannot intercept `write_stdin`, so do not add one for polling.
 - **One review, one fix pass.** Do not create re-review branches. Fix findings
   in place and move on. If a PR has too many findings, split the PR first.
 - **Functional commits only.** Every commit should change behaviour or docs. Fold
@@ -131,7 +141,8 @@ Large outputs are the primary driver of context bloat and token cost.
 ## Changelog and releases
 
 - Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading.
-- After opening a PR and before merge, add its number/link to the relevant entries.
+- Keep the changelog entry in the candidate; put the new PR link in the PR
+  description. Do not amend the branch solely to add that number to the changelog.
 - Record the exact Roamgate source synchronization in `UPSTREAM.md`; say "derived
   from" for source and "compatible with" for the external Herdr runtime.
 - Release preparation happens on a clean branch from `origin/main` and is delivered

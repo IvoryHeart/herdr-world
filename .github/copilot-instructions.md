@@ -49,12 +49,9 @@ When reviewing pull requests, focus on:
 Install all workspace dependencies once with `bun install --frozen-lockfile`
 from the repo root. The root `bun.lock` is authoritative.
 
-Changes are expected to pass, from the repo root:
-
-- `bun run format:check`
-- `bun run lint`
-- `bun run test`
-- `bun run typecheck`
-- For frontend-facing changes: `bun run build:web`
-
-Call out missing verification when a PR touches these areas without it.
+During editing, run focused checks for specific questions. Stage the completed
+candidate, run `bun run format:staged` once, restage, and inspect the diff. The
+read-only pre-commit hook checks format and lint. For a PR, push once through
+the pre-push full `bun run check` gate; CI repeats it on the PR head. For an
+explicitly local-only handoff, run one full check. Add applicable browser or
+site checks for changes in those areas and call out missing verification.

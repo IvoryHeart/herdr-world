@@ -57,13 +57,19 @@ quality and correction rate alongside tokens and time.
 ## Verify and hand off
 
 Add focused regression tests for behavior changes. During implementation, use
-focused tests or quick type checks when they answer a specific question; do not
-repeat them after every edit. Push a complete candidate through the tracked
-pre-push hook: it runs `bun run check` once for that push, covering notices,
-formatting, lint, types, tests, builds and OpenSpec. CI repeats it on the PR head.
-After a repair, run the relevant focused check before pushing; the hook runs the
-full gate. Use `bun run test:browser` for browser-heavy changes and
-`bun run build:site` for site changes.
+focused tests or quick type checks only when they answer a specific question. Do
+not run mutating formatting after each patch. Once the candidate and its focused
+regressions are complete, stage only intended files, run `bun run format:staged`
+once, restage its changes, and inspect the final diff. The command safely does
+nothing for a docs-only candidate. Do not format the whole repository for a
+scoped change. Commit with the existing read-only pre-commit format/lint guard.
+For a PR, push the complete candidate once through the tracked pre-push hook:
+it runs `bun run check` once for that push, covering notices, formatting, lint,
+types, tests, builds and OpenSpec. CI repeats it on the PR head. Do not run a
+separate final full check immediately before that push. For an explicitly
+local-only handoff, run one explicit full check instead. If a later repair
+changes code, begin a new candidate cycle. Use `bun run test:browser` for
+browser-heavy changes and `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
 lint, and the pre-push hook checks the full candidate. Worktrees share the same Git
@@ -75,7 +81,13 @@ outside the prompt; report a short status on success and the relevant diagnostic
 on failure. Preserve the check's exit status. The hook is silent on success and
 prints failure output. For review-only work, inspect exact-head CI evidence first.
 Run a local check only to investigate a specific gap or reproduce a finding; do
-not repeat a successful full gate on the same commit. Avoid polling while checks run.
+not repeat a successful full gate on the same commit. When a command returns a
+running session, call `write_stdin` on that session with empty `chars` and
+`yield_time_ms: 300000`; wait again only if it actually times out and remains
+running. Apply the same rule to `gh run watch`. Do not issue 30-second status
+loops or separate `ps`/`gh pr checks` probes while the blocking command is
+running. A Codex lifecycle hook cannot intercept `write_stdin`; do not add one
+for polling. The reusable [task prompt](agent-task-prompt.md) repeats this rule.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Record exact verification and agent execution in the pull request using the
@@ -104,6 +116,12 @@ dynamic or opaque shell scripts may be missed. The report never prints command
 text or tool output.
 
 ## Revisit the process
+
+For the next comparable task, measure wait-only model turns per six-minute
+gate, formatter writes per candidate, full checks per pushed candidate, check
+wall time, and review outcomes. The first target is at most two blocking waits
+per six-minute gate and one formatter write per candidate. Record the actual
+values in the PR; these targets do not replace the verification gates.
 
 After a batch of roughly five agent-assisted PRs, and during release preparation,
 the agent closing the batch compares usage boundaries, model responses,
