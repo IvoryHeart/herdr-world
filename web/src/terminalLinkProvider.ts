@@ -14,7 +14,7 @@ import {
 
 const MAX_CONTEXT_CELLS = 16_384;
 const MAX_INFERRED_JOINS = 8;
-const PATH_EDGE = /^[A-Za-z0-9._~:@%+=,/-]$/;
+const PATH_EDGE = /^[A-Za-z0-9._~:@%+=,/-\\]$/;
 type Position = { x: number; y: number };
 type CellSpan = { start: Position; end: Position };
 
@@ -174,25 +174,29 @@ export function registerTerminalLinkProvider(
     }
     const snapshot = JSON.stringify(context);
     const { text, cells, segments } = context;
-    const isCurrent = () =>
+    // TUI timers repaint the frame without touching this row. Links detected
+    // from the row's text stay valid while that same text is still displayed.
+    const isStillDisplayed = () =>
       !disposed &&
-      requestCurrent() &&
       term.buffer.active === activeBuffer &&
       term.cols === columnCount &&
       term.rows === rowCount &&
       activeBuffer.viewportY === viewport &&
-      upstream?.state() === state &&
       inferContinuations() === infer &&
       JSON.stringify(readLinkContext(term, bufferLineNumber, infer)) ===
         snapshot;
-    const hover = () => {
-      // Inactive row caches survive repaint. Reject their actions and ask
-      // xterm to reread now that this stale link is active again.
-      if (!isCurrent())
+    const textCurrent = () => requestCurrent() && isStillDisplayed();
+    const isCurrent = () => textCurrent() && upstream?.state() === state;
+    // Inactive row caches survive repaint. Reject their actions and ask
+    // xterm to reread now that this stale link is active again.
+    const hoverWhile = (current: () => boolean) => () => {
+      if (!current())
         queueMicrotask(() => {
           if (!disposed) term.refresh(0, term.rows - 1);
         });
     };
+    const hover = hoverWhile(isCurrent);
+    const textHover = hoverWhile(textCurrent);
     const rangeFor = (span: TextRange) => {
       const start = cells[span.start]?.start;
       const end = cells[span.end - 1]?.end;
@@ -216,12 +220,13 @@ export function registerTerminalLinkProvider(
         if (!range || (infer && range.end.x >= columnCount - 1)) continue;
         links.push({
           range,
-          hover,
+          hover: textHover,
           text: match.url,
           target: { kind: "url", value: match.url },
           activate(event, raw) {
             event.preventDefault();
-            if (!isCurrent() || !terminalLinkModifierMatches(event)) return;
+            if (!isStillDisplayed() || !terminalLinkModifierMatches(event))
+              return;
             const url = sanitizeTerminalHttpUrl(raw);
             if (url) {
               term.clearSelection?.();
@@ -297,26 +302,28 @@ export function registerTerminalLinkProvider(
         if (touch) callback(undefined);
         return;
       }
-      if (!isCurrent()) {
+      if (!textCurrent()) {
         callback(undefined);
         return;
       }
       const accepted: TextRange[] = [];
       for (const candidate of candidates) {
+        // Resolved paths come back with "/" separators; match that for
+        // unresolved Windows drive paths too.
         const path = needsResolution(candidate)
           ? resolved.get(candidate.path)
-          : candidate.path;
+          : candidate.path.replace(/\\/g, "/");
         if (!path || accepted.some((span) => overlaps(candidate, span)))
           continue;
         accepted.push(candidate);
         links.push({
           range: rangeFor(candidate)!,
-          hover,
+          hover: textHover,
           text: candidate.path,
           target: { kind: "file", value: path },
           activate(event) {
             event.preventDefault();
-            if (isCurrent() && terminalLinkModifierMatches(event)) {
+            if (isStillDisplayed() && terminalLinkModifierMatches(event)) {
               term.clearSelection?.();
               onPreviewPath?.(path, event);
             }
@@ -335,6 +342,7 @@ export function registerTerminalLinkProvider(
         : null;
       const first = rowText?.text.search(/\S/) ?? -1;
       const columns = new Set<number>();
+      const completeUrlColumns = new Set<number>();
       const rowUrls = findTerminalHttpLinks(rowText?.text ?? "");
       // A complete visible URL is already authoritative. Probe the endpoint
       // only for wraps or clipped edges, which need information outside the row.
@@ -364,16 +372,28 @@ export function registerTerminalLinkProvider(
               link.start > first,
           );
         if (!complete) columns.add(col);
+        else completeUrlColumns.add(col);
       }
       if (touch) {
         columns.clear();
         columns.add(touch.col);
       }
+      // Preserve files and independently complete URLs across repaints, not
+      // provisional URL fragments whose boundaries still need an upstream answer.
+      const publishTextLinks = () => {
+        const stable = links.filter(
+          (link) =>
+            link.target.kind === "file" ||
+            (link.range.start.y === bufferLineNumber &&
+              completeUrlColumns.has(link.range.start.x - 1)),
+        );
+        callback(textCurrent() && stable.length ? stable : undefined);
+      };
       const resolve = async () => {
         const resolved: TerminalResolvedLink[] = [];
         for (const col of [...columns].slice(0, MAX_CANDIDATES_PER_LINE)) {
           if (!isCurrent()) {
-            callback(undefined);
+            publishTextLinks();
             return;
           }
           if (
@@ -426,7 +446,7 @@ export function registerTerminalLinkProvider(
           }
         }
         if (!isCurrent()) {
-          callback(undefined);
+          publishTextLinks();
           return;
         }
         const regions = resolved.flatMap((link) => link.regions);
@@ -487,7 +507,7 @@ export function registerTerminalLinkProvider(
       const resolved = new Map<string, string>();
       // Contexts can exceed the per-line cache and server batch limit.
       for (let i = 0; i < paths.length; i += MAX_CANDIDATES_PER_LINE) {
-        if (!isCurrent()) break;
+        if (!textCurrent()) break;
         const batch = await resolvePaths(
           paths.slice(i, i + MAX_CANDIDATES_PER_LINE),
         );

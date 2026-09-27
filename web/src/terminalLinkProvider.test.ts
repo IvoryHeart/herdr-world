@@ -135,6 +135,24 @@ describe("terminal link provider", () => {
     expect(f.requests.flat()).toContain("/tmp/long/guide.md");
   });
 
+  test("joins backslash-split Windows paths in an endpoint repaint", async () => {
+    const path = "C:\\repo\\file.md";
+    const f = fixture(["See C:\\repo\\", "file.md     "], 12);
+    f.existing.add(path);
+    registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      f.resolve,
+      () => true,
+    );
+
+    for (const row of [1, 2]) {
+      const links = await f.links(row);
+      expect(links.map((link) => link.text)).toEqual([path]);
+    }
+    expect(f.requests.flat()).toContain(path);
+  });
+
   test("keeps unrelated endpoint rows separate when the combined path does not exist", async () => {
     const f = fixture(["/tmp/a.md", "/tmp/b.md"], 9);
     f.existing.add("/tmp/a.md");
@@ -536,6 +554,63 @@ describe("endpoint terminal link provider", () => {
     },
   );
 
+  test.each([
+    "part/http://x.test",
+    "part/(http://x.test)",
+    "  https://example.com/part",
+  ])("does not publish an unverified URL after a repaint: %s", async (text) => {
+    const f = fixture(["", text, "  continuation"], 60);
+    Object.assign(f.term.buffer.active, { viewportY: 0 });
+    let state = 1;
+    let finish!: (value: typeof resolved) => void;
+    registerTerminalLinkProvider(f.term, undefined, undefined, () => true, {
+      state: () => state,
+      resolve: () =>
+        new Promise((done) => {
+          finish = done;
+        }),
+    });
+    const links = f.links(2);
+    state++;
+    finish({
+      url: text.trimStart() + "continuation",
+      regions: [
+        { row: 1, start_col: 0, end_col: text.length - 1 },
+        { row: 2, start_col: 2, end_col: 13 },
+      ],
+    });
+    expect(await links).toEqual([]);
+  });
+
+  test("keeps complete URLs and Windows file links when a pending probe is invalidated", async () => {
+    const f = fixture(
+      ["part/http://bad.test See http://x.test C:\\repo\\a.md"],
+      80,
+    );
+    let state = 1;
+    let finish!: (value: null) => void;
+    registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      undefined,
+      () => true,
+      {
+        state: () => state,
+        resolve: () =>
+          new Promise((done) => {
+            finish = done;
+          }),
+      },
+    );
+    const links = f.links(1);
+    state++;
+    finish(null);
+    expect((await links).map((link) => link.text)).toEqual([
+      "http://x.test",
+      "C:\\repo\\a.md",
+    ]);
+  });
+
   test("keeps a wrapped continuation before a complete URL on the same row", async () => {
     const head = "https://example.com/aaaa";
     const tail = "part";
@@ -714,6 +789,32 @@ describe("endpoint terminal link provider", () => {
     expect((await f.links(1))[0]?.text).toBe("/tmp/new.md");
   });
 
+  test("opens a Windows drive path with forward-slash separators", async () => {
+    const f = fixture(["Read C:\\repo\\AGENTS.md now"], 30);
+    const opened: string[] = [];
+    registerTerminalLinkProvider(f.term, (path) => opened.push(path));
+    const previous = getShortcutSnapshot().preferences.active;
+    try {
+      selectShortcutPreset("windows");
+      const [link] = await f.links(1);
+      expect(link?.text).toBe("C:\\repo\\AGENTS.md");
+      link!.activate(
+        {
+          ctrlKey: true,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+          preventDefault() {},
+        } as MouseEvent,
+        link!.text,
+      );
+      expect(opened).toEqual(["C:/repo/AGENTS.md"]);
+      expect(f.requests).toEqual([]);
+    } finally {
+      selectShortcutPreset(previous);
+    }
+  });
+
   test("rechecks file actions at click time and forwards the menu position", async () => {
     const f = fixture(["/tmp/docs/guide.md"], 30);
     let state = 1;
@@ -743,9 +844,14 @@ describe("endpoint terminal link provider", () => {
       const [link] = await f.links(1);
       link!.activate(event, link!.text);
       expect(opened).toEqual([["/tmp/docs/guide.md", event]]);
+      // A repaint elsewhere in the frame keeps the visible path clickable.
       state++;
       link!.activate(event, link!.text);
-      expect(opened).toHaveLength(1);
+      expect(opened).toHaveLength(2);
+      // Once the row shows different text, the old link is inert.
+      f.lines[0]!.text = "/tmp/docs/other.md";
+      link!.activate(event, link!.text);
+      expect(opened).toHaveLength(2);
     } finally {
       selectShortcutPreset(previous);
     }
