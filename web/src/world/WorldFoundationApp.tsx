@@ -1195,6 +1195,17 @@ function WorldControlPlane({
     visualScrollX && visualContentWidth > visualArrangementStage.width;
   const visualNeedsVerticalScroll =
     visualScrollY && visualContentHeight > visualArrangementStage.height;
+  const visualScrollViewport = {
+    ...visualArrangementStage,
+    width: Math.max(
+      1,
+      visualArrangementStage.width - (visualNeedsVerticalScroll ? 18 : 0),
+    ),
+    height: Math.max(
+      1,
+      visualArrangementStage.height - (visualNeedsHorizontalScroll ? 18 : 0),
+    ),
+  };
   const visualContentBounds = {
     ...visualArrangementStage,
     width: visualScrollX
@@ -1240,7 +1251,7 @@ function WorldControlPlane({
       const next = terminalGridScrollTopForWindow(
         geometry,
         scrollbar.scrollTop,
-        visualArrangementStage.height,
+        visualScrollViewport.height,
         visualContentHeight,
         visualArrangementStage.top,
       );
@@ -1250,7 +1261,7 @@ function WorldControlPlane({
       const next = terminalArrangementScrollLeftForWindow(
         geometry,
         scrollbar.scrollLeft,
-        visualArrangementStage.width,
+        visualScrollViewport.width,
         visualContentWidth,
         visualArrangementStage.left,
       );
@@ -1266,6 +1277,8 @@ function WorldControlPlane({
     visualLeaseKey,
     visualArrangementStage.height,
     visualArrangementStage.top,
+    visualScrollViewport.height,
+    visualScrollViewport.width,
     visualPlacementMap,
   ]);
   useEffect(() => {
@@ -1349,8 +1362,8 @@ function WorldControlPlane({
           scrollGeometry,
           visualScrollLeft,
           visualGridScrollTop,
-          visualArrangementStage.width,
-          visualArrangementStage.height,
+          visualScrollViewport.width,
+          visualScrollViewport.height,
           visualArrangementStage.left,
           visualArrangementStage.top,
         )
@@ -3177,6 +3190,13 @@ function WorldControlPlane({
                   }
                 : (geometry ?? null);
             })()}
+            clipBounds={
+              visualScrollActive &&
+              visualPlacementMap.has(worldInspectorWindowId(conversation)) &&
+              worldInspectorWindowId(conversation) !== maximizedInspectorId
+                ? visualScrollViewport
+                : null
+            }
             zIndex={
               50 + inspectorStack.indexOf(worldInspectorWindowId(conversation))
             }

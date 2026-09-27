@@ -50,6 +50,7 @@ export default function WorldFloatingInspectorWindow({
   onAnchorChange,
   onPortalChange,
   arrangedGeometry = null,
+  clipBounds = null,
   onArrangedGeometryChange,
   onGeometryObserved,
   persistGeometry = true,
@@ -64,6 +65,7 @@ export default function WorldFloatingInspectorWindow({
   onAnchorChange(anchor: WorldConnectorTargetBounds | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
   arrangedGeometry?: FloatingTerminalGeometry | null;
+  clipBounds?: FloatingTerminalGeometry | null;
   onArrangedGeometryChange?(geometry: FloatingTerminalGeometry): void;
   onGeometryObserved?(geometry: FloatingTerminalGeometry): void;
   persistGeometry?: boolean;
@@ -391,6 +393,9 @@ export default function WorldFloatingInspectorWindow({
           right: "auto",
           bottom: "auto",
           zIndex,
+          clipPath: clipBounds
+            ? floatingTerminalClipPath(effectiveGeometry, clipBounds)
+            : undefined,
         } satisfies CSSProperties
       }
     >
@@ -405,6 +410,23 @@ export default function WorldFloatingInspectorWindow({
       ></button>
     </section>
   );
+}
+
+export function floatingTerminalClipPath(
+  geometry: FloatingTerminalGeometry,
+  bounds: FloatingTerminalGeometry,
+): string {
+  const top = Math.max(0, bounds.top - geometry.top);
+  const right = Math.max(
+    0,
+    geometry.left + geometry.width - bounds.left - bounds.width,
+  );
+  const bottom = Math.max(
+    0,
+    geometry.top + geometry.height - bounds.top - bounds.height,
+  );
+  const left = Math.max(0, bounds.left - geometry.left);
+  return `inset(${top}px ${right}px ${bottom}px ${left}px)`;
 }
 
 function viewportSize(

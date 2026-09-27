@@ -3806,6 +3806,30 @@ async function run() {
     );
     return Boolean(scrollbar && scrollbar.scrollWidth > scrollbar.clientWidth);
   }, "narrow Columns expose horizontal scrolling");
+  const horizontalScrollbar = document.querySelector<HTMLElement>(
+    ".world-grid-scrollbar.is-horizontal",
+  )!;
+  horizontalScrollbar.scrollLeft = 100;
+  await until(
+    () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"]',
+        ),
+      ].some((inspector) => {
+        const bounds = inspector.getBoundingClientRect();
+        const stageLeft = narrowedVisualStage.getBoundingClientRect().left + 8;
+        return (
+          bounds.left < stageLeft &&
+          bounds.right > stageLeft &&
+          Number(inspector.style.clipPath.match(/([\d.]+)px\)$/)?.[1]) > 0 &&
+          !inspector.contains(
+            document.elementFromPoint(stageLeft - 2, bounds.top + 24),
+          )
+        );
+      }),
+    "horizontal scrolling clips Inspectors outside the visual stage",
+  );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
   narrowedVisualStage.style.maxHeight = "420px";
@@ -3828,17 +3852,37 @@ async function run() {
       scrollbar && scrollbar.scrollHeight > scrollbar.clientHeight,
     );
   }, "narrow Rows expose vertical scrolling");
+  const verticalScrollbar = document.querySelector<HTMLElement>(
+    ".world-grid-scrollbar:not(.is-horizontal)",
+  )!;
+  verticalScrollbar.scrollTop = 100;
+  await until(
+    () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[role="dialog"][aria-label$=" Inspector"]',
+        ),
+      ].some((inspector) => {
+        const bounds = inspector.getBoundingClientRect();
+        const stageTop = narrowedVisualStage.getBoundingClientRect().top + 8;
+        return (
+          bounds.top < stageTop &&
+          bounds.bottom > stageTop &&
+          Number(inspector.style.clipPath.match(/^inset\(([\d.]+)px/)?.[1]) >
+            0 &&
+          !inspector.contains(
+            document.elementFromPoint(bounds.left + 24, stageTop - 2),
+          )
+        );
+      }),
+    "vertical scrolling clips Inspectors above the visual stage",
+  );
   await until(
     () => {
       const bounds = visualWindowBounds().sort((a, b) => a.top - b.top);
       return (
         bounds.length === 3 &&
         bounds.every((item) => item.height >= 160) &&
-        [
-          ...document.querySelectorAll<HTMLElement>(
-            '[role="dialog"][aria-label$=" Inspector"] .workspace-inspector',
-          ),
-        ].every((inspector) => inspector.classList.contains("is-compact")) &&
         bounds.every(
           (item, index) => index === 0 || bounds[index - 1]!.bottom <= item.top,
         )

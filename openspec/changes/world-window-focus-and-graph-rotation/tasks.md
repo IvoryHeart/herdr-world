@@ -34,3 +34,8 @@
 
 - [x] 6.1 Repeat the reachable Cascade diagonal in scrollable stages when another offset would violate window minimums, in Spaces and visual views.
 - [x] 6.2 Cover large Cascade geometry and browser scrolling, update current and delta contracts and changelog, and verify through the tracked push hook.
+
+## 7. Stage clipping for visual scrolling
+
+- [x] 7.1 Clip scrolled visual Inspector windows to their measured stage and make overflow scrollbars visible, without clipping maximized or normally floating windows.
+- [x] 7.2 Add horizontal and vertical scroll hit-testing regressions, update current and delta contracts and changelog, and verify through the tracked push hook.
