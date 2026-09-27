@@ -3801,13 +3801,13 @@ async function run() {
   narrowedVisualStage.style.width = "520px";
   await arrangeWindows("Columns");
   await until(() => {
-    const scrollbar = document.querySelector<HTMLElement>(
-      ".world-grid-scrollbar.is-horizontal",
+    const scrollbar = document.querySelector<HTMLInputElement>(
+      ".world-arrangement-scroll-control.is-horizontal input",
     );
-    return Boolean(scrollbar && scrollbar.scrollWidth > scrollbar.clientWidth);
+    return Boolean(scrollbar && Number(scrollbar.max) > 0);
   }, "narrow Columns expose horizontal scrolling");
-  const horizontalScrollbar = document.querySelector<HTMLElement>(
-    ".world-grid-scrollbar.is-horizontal",
+  const horizontalScrollbar = document.querySelector<HTMLInputElement>(
+    ".world-arrangement-scroll-control.is-horizontal input",
   )!;
   const columnScrollControl = document.querySelector<HTMLElement>(
     ".world-arrangement-scroll-control.is-horizontal",
@@ -3824,10 +3824,9 @@ async function run() {
     .querySelector<HTMLButtonElement>('[aria-label="Scroll windows right"]')!
     .click();
   await until(
-    () => horizontalScrollbar.scrollLeft > 0,
+    () => Number(horizontalScrollbar.value) > 0,
     "Columns scroll control moves the arranged windows",
   );
-  horizontalScrollbar.scrollLeft = 100;
   await until(
     () =>
       [
@@ -3857,21 +3856,22 @@ async function run() {
     "short visual arrangement stage",
   );
   await until(
-    () => !document.querySelector(".world-grid-scrollbar.is-horizontal"),
+    () =>
+      !document.querySelector(
+        ".world-arrangement-scroll-control.is-horizontal",
+      ),
     "horizontal scrollbar retired before Rows",
   );
   await settle();
   await arrangeWindows("Rows");
   await until(() => {
-    const scrollbar = document.querySelector<HTMLElement>(
-      ".world-grid-scrollbar:not(.is-horizontal)",
+    const scrollbar = document.querySelector<HTMLInputElement>(
+      ".world-arrangement-scroll-control.is-vertical input",
     );
-    return Boolean(
-      scrollbar && scrollbar.scrollHeight > scrollbar.clientHeight,
-    );
+    return Boolean(scrollbar && Number(scrollbar.max) > 0);
   }, "narrow Rows expose vertical scrolling");
-  const verticalScrollbar = document.querySelector<HTMLElement>(
-    ".world-grid-scrollbar:not(.is-horizontal)",
+  const verticalScrollbar = document.querySelector<HTMLInputElement>(
+    ".world-arrangement-scroll-control.is-vertical input",
   )!;
   const rowScrollControl = document.querySelector<HTMLElement>(
     ".world-arrangement-scroll-control.is-vertical",
@@ -3881,10 +3881,9 @@ async function run() {
     .querySelector<HTMLButtonElement>('[aria-label="Scroll windows down"]')!
     .click();
   await until(
-    () => verticalScrollbar.scrollTop > 0,
+    () => Number(verticalScrollbar.value) > 0,
     "Rows scroll control moves the arranged windows",
   );
-  verticalScrollbar.scrollTop = 100;
   await until(
     () =>
       [
@@ -3932,22 +3931,53 @@ async function run() {
   );
   await arrangeWindows("Cascade");
   await until(() => {
-    const scrollbar = document.querySelector<HTMLElement>(
-      ".world-grid-scrollbar:not(.is-horizontal)",
+    const scrollbar = document.querySelector<HTMLInputElement>(
+      ".world-arrangement-scroll-control.is-vertical input",
     );
-    return Boolean(
-      scrollbar && scrollbar.scrollHeight > scrollbar.clientHeight,
-    );
+    return Boolean(scrollbar && Number(scrollbar.max) > 0);
   }, "narrow Cascade repeats scrollable groups");
   const cascadeScrollControl = document.querySelector<HTMLElement>(
     ".world-arrangement-scroll-control.is-vertical",
   )!;
   check(
     Boolean(cascadeScrollControl) &&
-      cascadeScrollControl.getBoundingClientRect().left <=
-        Math.max(...visualWindowBounds().map((bounds) => bounds.right)) + 34,
-    "Cascade scroll control sits beside the window group",
+      Math.abs(
+        cascadeScrollControl.getBoundingClientRect().right -
+          (narrowedVisualStage.getBoundingClientRect().right - 8),
+      ) < 4,
+    "Cascade scroll control stays at the stage edge",
   );
+  const cascadeScrollDown =
+    cascadeScrollControl.querySelector<HTMLButtonElement>(
+      '[aria-label="Scroll windows down"]',
+    )!;
+  for (let index = 0; index < 8 && !cascadeScrollDown.disabled; index++) {
+    cascadeScrollDown.click();
+    await settle();
+  }
+  await until(
+    () =>
+      Number(
+        cascadeScrollControl.querySelector<HTMLInputElement>("input")!.value,
+      ) ===
+      Number(
+        cascadeScrollControl.querySelector<HTMLInputElement>("input")!.max,
+      ),
+    "Cascade scroll control reaches the last window group",
+  );
+  narrowedVisualStage.style.width = "520px";
+  await arrangeWindows("Columns");
+  await until(() => {
+    const stage = narrowedVisualStage.getBoundingClientRect();
+    return visualWindowBounds().some(
+      (bounds) =>
+        Math.abs(bounds.top - (stage.top + 8)) < 10 &&
+        bounds.right > stage.left + 8 &&
+        bounds.left < stage.right - 8 &&
+        bounds.bottom > stage.top + 8 &&
+        bounds.top < stage.bottom - 8,
+    );
+  }, "switching from scrolled Cascade to Columns keeps terminals visible");
   narrowedVisualStage.style.width = "1000px";
   narrowedVisualStage.style.height = "740px";
   narrowedVisualStage.style.removeProperty("max-height");

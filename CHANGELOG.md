@@ -32,8 +32,9 @@ are optional because the merged PR history records their source.
   terminal views mounted. Cascade repeats its overlapping pattern in scrollable
   stages when another offset would make windows too small. Open all terminal
   windows in Arrange and Actions presents every available terminal tab on the
-  selected host. Arranged Inspectors now have prominent scroll controls close
-  to the window group; scrolled windows stay clipped inside the stage.
+  selected host. Arranged Inspectors have prominent scroll controls at fixed
+  stage edges, and switching layouts keeps windows visible; scrolled windows
+  stay clipped inside the stage.
   [Herdr World PR #123](https://github.com/IvoryHeart/herdr-world/pull/123)
 - Added an Arrange graph control beside Fit in Graph view. Arrange spreads visible
   nodes into a readable hierarchy, wraps multiple hosts, and recenters the camera

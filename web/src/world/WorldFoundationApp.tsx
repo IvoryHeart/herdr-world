@@ -1007,9 +1007,7 @@ function WorldControlPlane({
       width: 0,
       height: 0,
     });
-  const [visualGridScrollTop, setVisualGridScrollTop] = useState(0);
-  const [visualScrollLeft, setVisualScrollLeft] = useState(0);
-  const visualGridScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const [visualScrollOffset, setVisualScrollOffset] = useState(0);
   const visualGridAutoFocusKeyRef = useRef<string | null>(null);
   const [excludedArrangementIds, setExcludedArrangementIds] = useState<
     ReadonlySet<string>
@@ -1242,76 +1240,55 @@ function WorldControlPlane({
       ? visualContentWidth - visualScrollViewport.width
       : visualContentHeight - visualScrollViewport.height,
   );
-  const visualScrollPosition = Math.min(
-    visualScrollMax,
-    visualScrollX ? visualScrollLeft : visualGridScrollTop,
-  );
+  const visualScrollPosition = Math.min(visualScrollMax, visualScrollOffset);
+  const visualScrollLeft = visualScrollX ? visualScrollPosition : 0;
+  const visualGridScrollTop = visualScrollY ? visualScrollPosition : 0;
   const visualScrollControlPosition = visualScrollX
     ? {
         left: visualArrangementStage.left + 8,
-        top: Math.min(
-          visualArrangementStage.top + visualArrangementStage.height - 36,
-          Math.max(
-            visualArrangementStage.top + 8,
-            ...[...visualPlacementMap.values()].map(
-              (geometry) => geometry.top + geometry.height + 8,
-            ),
-          ),
-        ),
+        top: visualArrangementStage.top + visualArrangementStage.height - 36,
         width: Math.min(480, visualArrangementStage.width - 16),
       }
     : {
-        left: Math.min(
-          visualArrangementStage.left + visualArrangementStage.width - 32,
-          Math.max(
-            visualArrangementStage.left + 8,
-            ...[...visualPlacementMap.values()].map(
-              (geometry) => geometry.left + geometry.width + 8,
-            ),
-          ),
-        ),
+        left: visualArrangementStage.left + visualArrangementStage.width - 32,
         top: visualArrangementStage.top + 48,
         height: Math.min(480, visualArrangementStage.height - 56),
       };
-  const scrollVisualArrangement = (position: number) => {
-    const scrollbar = visualGridScrollbarRef.current;
-    if (!scrollbar) return;
-    if (visualScrollX) scrollbar.scrollLeft = position;
-    else scrollbar.scrollTop = position;
-  };
+  const scrollVisualArrangement = (position: number) =>
+    setVisualScrollOffset(Math.max(0, Math.min(visualScrollMax, position)));
   useEffect(() => {
-    const scrollbar = visualGridScrollbarRef.current;
-    if (!visualScrollActive || !scrollbar || !activeInspectorId) {
+    if (!visualScrollActive || !activeInspectorId) {
       visualGridAutoFocusKeyRef.current = null;
       return;
     }
     const geometry = visualPlacementMap.get(activeInspectorId);
     if (!geometry) return;
-    const key = `${visualLeaseKey}:${activeInspectorId}`;
+    const key = `${visualLeaseKey}:${arrangementScope?.preset}:${activeInspectorId}`;
     if (visualGridAutoFocusKeyRef.current === key) return;
     visualGridAutoFocusKeyRef.current = key;
     if (visualScrollY) {
       const next = terminalGridScrollTopForWindow(
         geometry,
-        scrollbar.scrollTop,
+        visualScrollPosition,
         visualScrollViewport.height,
         visualContentHeight,
         visualArrangementStage.top,
       );
-      if (next !== scrollbar.scrollTop) scrollbar.scrollTop = next;
+      if (next !== visualScrollPosition) setVisualScrollOffset(next);
     }
     if (visualScrollX) {
       const next = terminalArrangementScrollLeftForWindow(
         geometry,
-        scrollbar.scrollLeft,
+        visualScrollPosition,
         visualScrollViewport.width,
         visualContentWidth,
         visualArrangementStage.left,
       );
-      if (next !== scrollbar.scrollLeft) scrollbar.scrollLeft = next;
+      if (next !== visualScrollPosition) setVisualScrollOffset(next);
     }
   }, [
     activeInspectorId,
+    arrangementScope?.preset,
     visualScrollActive,
     visualScrollX,
     visualScrollY,
@@ -1323,20 +1300,8 @@ function WorldControlPlane({
     visualScrollViewport.height,
     visualScrollViewport.width,
     visualPlacementMap,
+    visualScrollPosition,
   ]);
-  useEffect(() => {
-    if (
-      !visualScrollY ||
-      visualContentHeight <= visualArrangementStage.height
-    ) {
-      setVisualGridScrollTop(0);
-    }
-  }, [visualScrollY, visualContentHeight, visualArrangementStage.height]);
-  useEffect(() => {
-    if (!visualScrollX || visualContentWidth <= visualArrangementStage.width) {
-      setVisualScrollLeft(0);
-    }
-  }, [visualScrollX, visualContentWidth, visualArrangementStage.width]);
   const openInspectorIds = visualWindows.map(({ id }) => id);
   const inspectorStack = [
     ...openInspectorIds.filter((id) => !raisedInspectorIds.includes(id)),
@@ -1615,8 +1580,7 @@ function WorldControlPlane({
         );
         if (arranged.result.available) {
           setVisualArrangementState(arranged.state);
-          setVisualGridScrollTop(0);
-          setVisualScrollLeft(0);
+          setVisualScrollOffset(0);
           visualGridAutoFocusKeyRef.current = null;
         } else if (arrangementScope?.preset === "single") {
           setVisualArrangementState(
@@ -1725,13 +1689,8 @@ function WorldControlPlane({
         command === "columns" ||
         command === "cascade"
       ) {
-        setVisualGridScrollTop(0);
-        setVisualScrollLeft(0);
+        setVisualScrollOffset(0);
         visualGridAutoFocusKeyRef.current = null;
-        if (visualGridScrollbarRef.current) {
-          visualGridScrollbarRef.current.scrollTop = 0;
-          visualGridScrollbarRef.current.scrollLeft = 0;
-        }
       }
       setVisualArrangementState(applied.state);
       setExcludedArrangementIds(new Set());
@@ -3172,107 +3131,69 @@ function WorldControlPlane({
       )}
       {visualScrollActive &&
       (visualNeedsVerticalScroll || visualNeedsHorizontalScroll) ? (
-        <>
-          <div
-            ref={visualGridScrollbarRef}
-            className={`world-grid-scrollbar ${visualScrollX ? "is-horizontal" : ""}`}
-            role="region"
-            aria-label={`Scroll Inspector ${arrangementScope?.preset ?? "windows"}`}
-            tabIndex={0}
-            style={
-              visualScrollX
-                ? {
-                    left: visualArrangementStage.left,
-                    top:
-                      visualArrangementStage.top +
-                      visualArrangementStage.height -
-                      18,
-                    width: visualArrangementStage.width,
-                    height: 18,
-                  }
-                : {
-                    left:
-                      visualArrangementStage.left +
-                      visualArrangementStage.width -
-                      18,
-                    top: visualArrangementStage.top,
-                    width: 18,
-                    height: visualArrangementStage.height,
-                  }
+        <div
+          className={`world-arrangement-scroll-control ${visualScrollX ? "is-horizontal" : "is-vertical"}`}
+          role="group"
+          aria-label={`Scroll ${arrangementScope?.preset ?? "Inspector windows"} windows`}
+          style={visualScrollControlPosition}
+        >
+          <button
+            type="button"
+            aria-label={
+              visualScrollX ? "Scroll windows left" : "Scroll windows up"
             }
-            onScroll={(event) => {
-              setVisualGridScrollTop(event.currentTarget.scrollTop);
-              setVisualScrollLeft(event.currentTarget.scrollLeft);
-            }}
+            disabled={visualScrollPosition <= 0}
+            onClick={() =>
+              scrollVisualArrangement(
+                Math.max(
+                  0,
+                  visualScrollPosition -
+                    (visualScrollX
+                      ? visualScrollViewport.width
+                      : visualScrollViewport.height) *
+                      0.8,
+                ),
+              )
+            }
           >
-            <div
-              style={{ width: visualContentWidth, height: visualContentHeight }}
-            />
-          </div>
-          <div
-            className={`world-arrangement-scroll-control ${visualScrollX ? "is-horizontal" : "is-vertical"}`}
-            role="group"
-            aria-label={`Scroll ${arrangementScope?.preset ?? "Inspector windows"} windows`}
-            style={visualScrollControlPosition}
+            {visualScrollX ? "◀" : "▲"}
+          </button>
+          <input
+            type="range"
+            aria-label={
+              visualScrollX
+                ? "Scroll columns"
+                : `Scroll ${arrangementScope?.preset ?? "windows"}`
+            }
+            min={0}
+            max={visualScrollMax}
+            value={visualScrollPosition}
+            onChange={(event) =>
+              scrollVisualArrangement(Number(event.currentTarget.value))
+            }
+          />
+          <button
+            type="button"
+            aria-label={
+              visualScrollX ? "Scroll windows right" : "Scroll windows down"
+            }
+            disabled={visualScrollPosition >= visualScrollMax}
+            onClick={() =>
+              scrollVisualArrangement(
+                Math.min(
+                  visualScrollMax,
+                  visualScrollPosition +
+                    (visualScrollX
+                      ? visualScrollViewport.width
+                      : visualScrollViewport.height) *
+                      0.8,
+                ),
+              )
+            }
           >
-            <button
-              type="button"
-              aria-label={
-                visualScrollX ? "Scroll windows left" : "Scroll windows up"
-              }
-              disabled={visualScrollPosition <= 0}
-              onClick={() =>
-                scrollVisualArrangement(
-                  Math.max(
-                    0,
-                    visualScrollPosition -
-                      (visualScrollX
-                        ? visualScrollViewport.width
-                        : visualScrollViewport.height) *
-                        0.8,
-                  ),
-                )
-              }
-            >
-              {visualScrollX ? "◀" : "▲"}
-            </button>
-            <input
-              type="range"
-              aria-label={
-                visualScrollX
-                  ? "Scroll columns"
-                  : `Scroll ${arrangementScope?.preset ?? "windows"}`
-              }
-              min={0}
-              max={visualScrollMax}
-              value={visualScrollPosition}
-              onChange={(event) =>
-                scrollVisualArrangement(Number(event.currentTarget.value))
-              }
-            />
-            <button
-              type="button"
-              aria-label={
-                visualScrollX ? "Scroll windows right" : "Scroll windows down"
-              }
-              disabled={visualScrollPosition >= visualScrollMax}
-              onClick={() =>
-                scrollVisualArrangement(
-                  Math.min(
-                    visualScrollMax,
-                    visualScrollPosition +
-                      (visualScrollX
-                        ? visualScrollViewport.width
-                        : visualScrollViewport.height) *
-                        0.8,
-                  ),
-                )
-              }
-            >
-              {visualScrollX ? "▶" : "▼"}
-            </button>
-          </div>
-        </>
+            {visualScrollX ? "▶" : "▼"}
+          </button>
+        </div>
       ) : null}
       <Suspense fallback={null}>
         {visibleFloatingInspectors.map((conversation, index) => (

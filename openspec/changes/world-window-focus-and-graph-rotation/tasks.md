@@ -42,5 +42,10 @@
 
 ## 8. Reachable visual arrangement scrolling
 
-- [x] 8.1 Place visible, accessible scroll controls near the arranged Inspector windows for horizontal Columns and vertical Rows, Grid and Cascade; keep them synchronized with focus scrolling and the existing stage clipping.
+- [x] 8.1 Place visible, accessible scroll controls at predictable stage edges for horizontal Columns and vertical Rows, Grid and Cascade; keep them synchronized with focus scrolling and the existing stage clipping.
 - [x] 8.2 Cover direct scroll-control interaction and Cascade control placement in browser tests, and update the current and delta contracts and changelog.
+
+## 9. Stable scrolling across arrangement changes
+
+- [x] 9.1 Use one scroll offset for the active visual arrangement so a hidden cross-axis offset cannot displace or virtualize windows after switching layouts.
+- [x] 9.2 Cover scrolling to the end of Cascade and switching to Columns in browser tests; keep scroll controls anchored consistently across viewport sizes.

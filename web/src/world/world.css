@@ -567,32 +567,6 @@
   box-shadow: none;
 }
 
-.world-grid-scrollbar {
-  position: fixed;
-  z-index: 2000000;
-  overflow-x: hidden;
-  overflow-y: auto;
-  border: 1px solid var(--shell-border);
-  background: var(--shell-panel);
-  scrollbar-color: var(--accent) var(--shell-panel);
-}
-
-.world-grid-scrollbar::-webkit-scrollbar {
-  width: 16px;
-  height: 16px;
-}
-
-.world-grid-scrollbar::-webkit-scrollbar-thumb {
-  border: 3px solid var(--shell-panel);
-  border-radius: 8px;
-  background: var(--accent);
-}
-
-.world-grid-scrollbar.is-horizontal {
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-
 .world-arrangement-scroll-control {
   position: fixed;
   z-index: 2000001;

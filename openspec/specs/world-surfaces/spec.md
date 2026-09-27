@@ -865,7 +865,12 @@ Maximize SHALL temporarily present a window over the available stage while prese
 #### Scenario: Reach scrolling controls on a wide visual canvas
 
 - **WHEN** an Office, Tree or Graph arrangement has more windows than fit on screen
-- **THEN** a visible, keyboard-accessible scroll control sits near the arranged windows, lets the user move in the arrangement's scroll direction, and follows the same scroll position as focus navigation
+- **THEN** a visible, keyboard-accessible scroll control sits at the arrangement stage's right or bottom edge, lets the user move in the arrangement's scroll direction, and follows the same scroll position as focus navigation
+
+#### Scenario: Switch from a scrolled arrangement
+
+- **WHEN** a user scrolls to the end of Cascade and then chooses Columns or Rows
+- **THEN** the new arrangement shows its windows in the stage without an offset retained from the previous scroll direction
 
 #### Scenario: Arrange visual Inspectors at a scaled UI
 
