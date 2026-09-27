@@ -14,7 +14,7 @@ import {
 
 const MAX_CONTEXT_CELLS = 16_384;
 const MAX_INFERRED_JOINS = 8;
-const PATH_EDGE = /^[A-Za-z0-9._~:@%+=,/-]$/;
+const PATH_EDGE = /^[A-Za-z0-9._~:@%+=,/-\\]$/;
 type Position = { x: number; y: number };
 type CellSpan = { start: Position; end: Position };
 

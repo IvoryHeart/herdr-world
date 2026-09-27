@@ -135,6 +135,24 @@ describe("terminal link provider", () => {
     expect(f.requests.flat()).toContain("/tmp/long/guide.md");
   });
 
+  test("joins backslash-split Windows paths in an endpoint repaint", async () => {
+    const path = "C:\\repo\\file.md";
+    const f = fixture(["See C:\\repo\\", "file.md     "], 12);
+    f.existing.add(path);
+    registerTerminalLinkProvider(
+      f.term,
+      () => {},
+      f.resolve,
+      () => true,
+    );
+
+    for (const row of [1, 2]) {
+      const links = await f.links(row);
+      expect(links.map((link) => link.text)).toEqual([path]);
+    }
+    expect(f.requests.flat()).toContain(path);
+  });
+
   test("keeps unrelated endpoint rows separate when the combined path does not exist", async () => {
     const f = fixture(["/tmp/a.md", "/tmp/b.md"], 9);
     f.existing.add("/tmp/a.md");
