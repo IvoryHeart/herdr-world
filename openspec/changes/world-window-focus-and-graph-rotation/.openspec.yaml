@@ -1,0 +1,5 @@
+schema: spec-driven
+created: 2026-09-27
+goal: Make every visible terminal window consistently controllable and keep the
+  most recently focused window in front; let Graph users rotate its arrangement
+  in quarter turns.
