@@ -33,6 +33,9 @@ Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook runs formatting and lint, and its
 `pre-push` hook runs the full check.
 Use focused checks while developing; avoid rerunning them after every small edit.
+For a branch push, the hook's `bun run check` is the final full check. Run it
+separately only when there is no push or the hook is unavailable. After a failed
+push check, use the failing stage and focused checks to diagnose the issue.
 
 Workspace checks: `bun run --filter herdr-world-web typecheck` and
 `bun run --filter herdr-world-server typecheck` (builds/embeds web assets first).
@@ -99,6 +102,8 @@ behavior, verification, and compatibility impact. For UI changes, upload
 screenshots as GitHub attachments and embed them in the PR description. Do not
 commit screenshot files to the repository solely for PR review. Do not commit
 generated assets (`dist/`, `server/public/`) or binaries.
+Add user-facing Unreleased changelog entries before the first push. PR links in
+those entries are optional; do not push again solely to add one after the PR opens.
 
 Unlabeled PRs get `documentation` (docs-only), `dependencies` (dependency updates),
 `bug` (fix titles), or `enhancement` (other code). Release preparation gets
