@@ -4,6 +4,8 @@ type WorkflowStep = {
   name?: string;
   run?: string;
   uses?: string;
+  if?: string;
+  with?: { "fetch-depth"?: number };
 };
 
 type WorkflowJob = {
@@ -22,16 +24,33 @@ const workflow = Bun.YAML.parse(
     new URL("../.github/workflows/ci.yml", import.meta.url),
   ).text(),
 ) as {
+  on: { pull_request: { types: string[] } };
   jobs: Record<string, WorkflowJob>;
 };
 
 test("CI exposes the protected delivery gate and runs the complete repository check", () => {
+  expect(workflow.on.pull_request.types).toEqual([
+    "opened",
+    "synchronize",
+    "reopened",
+    "edited",
+  ]);
   const delivery = workflow.jobs.delivery;
 
   expect(delivery?.name).toBe("Delivery checks");
   expect(delivery?.steps.some((step) => step.run === "bun run check")).toBe(
     true,
   );
+  expect(
+    delivery?.steps.find((step) => step.name === "Check knowledge-map impact"),
+  ).toMatchObject({
+    if: "github.event_name == 'pull_request'",
+    run: 'bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"',
+  });
+  expect(
+    delivery?.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
+      ?.with?.["fetch-depth"],
+  ).toBe(0);
   expect(workflow.jobs.validate).toBeUndefined();
 });
 

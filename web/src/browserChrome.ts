@@ -26,8 +26,14 @@ export async function stopChrome(
   child: Pick<ReturnType<typeof Bun.spawn>, "kill" | "exited"> | undefined,
 ): Promise<void> {
   if (!child) return;
-  child.kill("SIGKILL");
-  await withBrowserDeadline(child.exited, "Chrome exit", 2_000);
+  // Let Chrome release its renderer resources before the next browser case.
+  child.kill("SIGTERM");
+  try {
+    await withBrowserDeadline(child.exited, "Chrome exit", 2_000);
+  } catch {
+    child.kill("SIGKILL");
+    await withBrowserDeadline(child.exited, "Chrome forced exit", 2_000);
+  }
 }
 
 export async function waitForChromePort(

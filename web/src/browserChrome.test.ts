@@ -41,17 +41,34 @@ test("a missing CDP reply fails within its deadline", async () => {
   }
 });
 
-test("Chrome teardown force-stops its disposable process and bounds exit waits", async () => {
+test("Chrome teardown exits cleanly and force-stops a stuck process", async () => {
   jest.useFakeTimers();
   const kill = mock(() => {});
   try {
     await stopChrome(undefined);
     await stopChrome({ kill, exited: Promise.resolve(0) });
-    expect(kill).toHaveBeenCalledWith("SIGKILL");
+    expect(kill).toHaveBeenCalledWith("SIGTERM");
+    expect(kill).toHaveBeenCalledTimes(1);
     expect(jest.getTimerCount()).toBe(0);
-    const result = stopChrome({ kill, exited: new Promise(() => {}) });
+
+    const exit = Promise.withResolvers<number>();
+    const result = stopChrome({ kill, exited: exit.promise });
     jest.advanceTimersByTime(2_000);
-    await expect(result).rejects.toThrow("Chrome exit timed out after 2000ms");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(kill).toHaveBeenLastCalledWith("SIGKILL");
+    exit.resolve(0);
+    await result;
+    expect(jest.getTimerCount()).toBe(0);
+
+    const stuck = stopChrome({ kill, exited: new Promise(() => {}) });
+    jest.advanceTimersByTime(2_000);
+    await Promise.resolve();
+    await Promise.resolve();
+    jest.advanceTimersByTime(2_000);
+    await expect(stuck).rejects.toThrow(
+      "Chrome forced exit timed out after 2000ms",
+    );
     expect(jest.getTimerCount()).toBe(0);
   } finally {
     jest.useRealTimers();

@@ -74,22 +74,20 @@ bun install --frozen-lockfile
 ```
 
 Use focused tests and type checks while developing, after coherent changes or to
-investigate a failure; do not rerun them after every edit. Once the candidate is
-complete, run `bun run check` locally before opening a ready PR. It covers notices,
-formatting, lint, types, tests, builds and OpenSpec. CI repeats it on the PR head.
-Browser tests require Chrome/Chromium or `CHROME_BIN`:
+investigate a failure; do not rerun them after every edit. The tracked pre-push hook
+runs `bun run check` on a branch push. It covers notices, formatting, lint, types,
+tests, builds and OpenSpec. CI repeats it on the PR head. Browser tests require
+Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
 bun test <path>
 bun run test:browser
-bun run check
 ```
 
-Let the tracked pre-commit hook check formatting and lint at commit time. In an
-agent worktree without installed hooks, commit with
-`git -c core.hooksPath=.githooks commit` so those checks run without changing shared
-Git configuration.
+Run `bun run install-hooks` once per clone so the tracked pre-commit hook checks
+formatting and lint at commit time and the pre-push hook runs the full check. All
+worktrees in that clone share the hook configuration.
 
 Run `bun run notices:generate` whenever the resolved dependency graph changes and
 commit the byte-stable `DEPENDENCY_NOTICES.md`. Use `bun run build:site` after site or
