@@ -8,6 +8,7 @@ Office terminal windows do not expose the same maximize and resize controls in e
 - Raise the latest focused terminal window above every other window, regardless of whether it is floating, docked, or arranged.
 - Add left and right 90-degree Graph rotation controls beside Fit and Arrange; repeated turns accumulate, labels stay readable, and controls remain grouped.
 - Add a close-all window action to both the arrangement menu and Actions menu, closing the active view's arrangement set without closing or killing the underlying Herdr terminals, panes, or sessions.
+- Remove the five-floating-Inspector admission cap and tile every eligible Grid window in a count-based layout. Preserve usable tile sizes with vertical scrolling and mount only nearby terminal presentations for large sets.
 
 ## Capabilities
 

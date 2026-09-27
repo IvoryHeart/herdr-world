@@ -567,6 +567,14 @@
   box-shadow: none;
 }
 
+.world-grid-scrollbar {
+  position: fixed;
+  z-index: 2000000;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--bg, #0e1116);
+}
+
 .world-floating-terminal[data-interaction="moving"],
 .world-floating-terminal[data-interaction="resizing"] {
   user-select: none;

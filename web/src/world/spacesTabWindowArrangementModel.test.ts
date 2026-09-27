@@ -7,6 +7,7 @@ import {
   spacesTabWindowContext,
   spacesTabWindowEntries,
 } from "./spacesTabWindowArrangementModel";
+import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
 import type { TerminalWindowArrangementScope } from "./terminalWindowArrangementState";
 
 const workspace = (
@@ -159,6 +160,37 @@ describe("Spaces tab window arrangement model", () => {
       "one",
       "two",
     ]);
+  });
+
+  test("keeps distant Grid rows in scrollable content instead of clamping them to the viewport", () => {
+    const manyTabs = Array.from({ length: 64 }, (_, index) =>
+      tab(`tab-${index}`, "alpha"),
+    );
+    const result = resolveTerminalWindowArrangement(
+      "grid",
+      { left: 0, top: 0, ...stage },
+      manyTabs.map(({ tab_id }) => ({
+        id: tab_id,
+        minWidth: 420,
+        minHeight: 280,
+      })),
+      "tab-0",
+    );
+    expect(result.available).toBe(true);
+    if (!result.available) return;
+    const entries = spacesTabWindowEntries({
+      scope: { ...scope, preset: "grid", placements: result.placements },
+      tabs: manyTabs,
+      activeTabId: "tab-0",
+      raisedIds: [],
+      freeGeometry: {},
+      stage,
+      compact: false,
+    });
+    expect(entries).toHaveLength(64);
+    expect(
+      entries.find(({ tab: item }) => item.tab_id === "tab-63")!.geometry.top,
+    ).toBeGreaterThan(stage.height);
   });
 
   test("keeps new tabs floating alongside one-shot tiled participants", () => {

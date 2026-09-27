@@ -269,7 +269,7 @@ overflow on the application page.
 ### Requirement: Shared entity detail drawer
 
 Office, Tree and Graph SHALL provide one consistent shell-owned Inspector surface that can appear as
-the one docked overlay or as one of up to five movable desktop windows. Every Inspector SHALL
+the one docked overlay or as a movable desktop window. Every Inspector SHALL
 identify its qualified entity with a compact icon, name and bounded status or read-only-host cue and
 SHALL give its primary area to immediately visible applicable Terminal, Files, Changes and Agent
 History tabs. Identity and resources SHALL share one lifecycle, header and close control rather than
@@ -478,8 +478,8 @@ room at eight desks SHALL retain a disabled Room Full affordance rather than hid
 Office SHALL expose a persisted Inspector opening preference with Docked and Floating modes through
 the common settings menu, with Floating as the default when no valid preference has been saved. In
 Docked mode, a newly opened Office entity SHALL use the single docked Inspector and remain available
-for explicit Dock out. In Floating mode, each newly opened Office entity SHALL use its own bounded,
-cascaded floating Inspector until the conversation limit is reached. Changing the preference SHALL
+for explicit Dock out. In Floating mode, each newly opened Office entity SHALL use its own
+cascaded floating Inspector without a fixed presentation-count cap. Changing the preference SHALL
 govern subsequent opens and SHALL NOT rearrange an Inspector that is already presented; selecting an
 existing entity SHALL focus its current presentation.
 
@@ -590,7 +590,7 @@ presentation SHALL close only that qualified Inspector and SHALL NOT silently op
 The Inspector SHALL NOT expose a second Open in Spaces shortcut; Spaces remains available through
 the primary view selector without changing terminal identity or attaching another session.
 
-Desktop SHALL support up to five floating Inspector conversations alongside the one docked
+Desktop SHALL support independently managed floating Inspector conversations alongside the one docked
 Inspector, with independent bounded position, size, z-order, selected tab, resource selection and
 close/focus behavior. Terminal tabs SHALL keep text at configured metrics, refit to real dimensions
 and retain usable input, selection, scrolling, uploads and mobile controls. Compact layouts SHALL
@@ -705,11 +705,10 @@ the browser lost it.
 - **THEN** World retains the conversation until current admitted state confirms the qualified pane
   no longer exists
 
-#### Scenario: Desktop conversation limit is reached
+#### Scenario: Open more than five desktop conversations
 
 - **WHEN** five distinct conversations are open and the user requests a sixth
-- **THEN** World keeps the existing floating and docked Inspectors and reports the bounded limit
-  visibly
+- **THEN** World admits the sixth Inspector with its own identity and presentation without closing an existing Inspector
 
 ### Requirement: Connected Tree presentation
 

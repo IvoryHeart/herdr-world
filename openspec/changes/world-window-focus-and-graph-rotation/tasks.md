@@ -16,3 +16,10 @@
 
 - [x] 3.1 Add focused and browser coverage for maximize restoration, focus stacking, close-all and reopen transitions, and Graph rotation; verify all four requested behaviors and terminal-session preservation.
 - [x] 3.2 Update the current `world-surfaces` specification and the appropriate Unreleased changelog entry; verify OpenSpec validation and inspect the final diff.
+
+## 4. Inspector count and scalable Grid
+
+- [x] 4.1 Remove the five-floating-Inspector admission limit across opening and Dock out; verify a sixth Inspector retains independent identity and close behavior.
+- [x] 4.2 Tile all eligible Grid windows in count-based rows and columns, including six as 3×2 and sixteen as 4×4; scroll additional rows at a usable minimum and keep unavailable layouts from changing current geometry.
+- [x] 4.3 Mount only nearby Grid windows and terminal portals, and scroll an offscreen focused window into view; verify large-count behavior in focused and browser coverage.
+- [x] 4.4 Update the World contract and changelog for the revised count and Grid behavior; verify focused tests and OpenSpec validation.

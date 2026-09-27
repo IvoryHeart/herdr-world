@@ -85,6 +85,9 @@ import {
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import {
+  terminalGridContentHeight,
+  terminalGridScrollTopForWindow,
+  terminalGridWindowVisible,
   terminalWindowArrangementReason,
   type TerminalWindowArrangementPreset,
   type TerminalWindowArrangementStage,
@@ -1001,6 +1004,9 @@ function WorldControlPlane({
       width: 0,
       height: 0,
     });
+  const [visualGridScrollTop, setVisualGridScrollTop] = useState(0);
+  const visualGridScrollbarRef = useRef<HTMLDivElement | null>(null);
+  const visualGridAutoFocusKeyRef = useRef<string | null>(null);
   const [excludedArrangementIds, setExcludedArrangementIds] = useState<
     ReadonlySet<string>
   >(new Set());
@@ -1159,6 +1165,20 @@ function WorldControlPlane({
           compact: compactArrangement,
         })
       : null;
+  const visualGridActive =
+    arrangementScope?.preset === "grid" && !compactArrangement;
+  const visualGridContentHeight = visualGridActive
+    ? terminalGridContentHeight(
+        visualPlacements ?? [],
+        visualArrangementStage.height,
+        visualArrangementStage.top,
+      )
+    : visualArrangementStage.height;
+  const visualGridBounds = {
+    ...visualArrangementStage,
+    width: Math.max(1, visualArrangementStage.width - 18),
+    height: visualGridContentHeight,
+  };
   const visualPlacementMap = new Map(
     (visualPlacements ?? [])
       .filter(({ id }) => !excludedArrangementIds.has(id))
@@ -1168,7 +1188,7 @@ function WorldControlPlane({
           !compactArrangement && arrangementScope?.preset === "single"
             ? (singleManualGeometry[id] ?? geometry)
             : geometry,
-          visualArrangementStage,
+          visualGridActive ? visualGridBounds : visualArrangementStage,
         ),
       ]),
   );
@@ -1178,6 +1198,46 @@ function WorldControlPlane({
   ) {
     visualPlacementMap.set(maximizedInspectorId, { ...visualArrangementStage });
   }
+  useEffect(() => {
+    const scrollbar = visualGridScrollbarRef.current;
+    if (!visualGridActive || !scrollbar || !activeInspectorId) {
+      visualGridAutoFocusKeyRef.current = null;
+      return;
+    }
+    const geometry = visualPlacementMap.get(activeInspectorId);
+    if (!geometry) return;
+    const key = `${visualLeaseKey}:${activeInspectorId}`;
+    if (visualGridAutoFocusKeyRef.current === key) return;
+    visualGridAutoFocusKeyRef.current = key;
+    const next = terminalGridScrollTopForWindow(
+      geometry,
+      scrollbar.scrollTop,
+      visualArrangementStage.height,
+      visualGridContentHeight,
+      visualArrangementStage.top,
+    );
+    if (next !== scrollbar.scrollTop) scrollbar.scrollTop = next;
+  }, [
+    activeInspectorId,
+    visualGridActive,
+    visualGridContentHeight,
+    visualLeaseKey,
+    visualArrangementStage.height,
+    visualArrangementStage.top,
+    visualPlacementMap,
+  ]);
+  useEffect(() => {
+    if (
+      !visualGridActive ||
+      visualGridContentHeight <= visualArrangementStage.height
+    ) {
+      setVisualGridScrollTop(0);
+    }
+  }, [
+    visualGridActive,
+    visualGridContentHeight,
+    visualArrangementStage.height,
+  ]);
   const openInspectorIds = visualWindows.map(({ id }) => id);
   const inspectorStack = [
     ...openInspectorIds.filter((id) => !raisedInspectorIds.includes(id)),
@@ -1236,6 +1296,21 @@ function WorldControlPlane({
   const visibleFloatingInspectors = inspectorConversations.filter(
     (conversation) => {
       const id = worldInspectorWindowId(conversation);
+      const gridGeometry = visualGridActive
+        ? visualPlacementMap.get(id)
+        : undefined;
+      if (
+        gridGeometry &&
+        id !== maximizedInspectorId &&
+        !terminalGridWindowVisible(
+          gridGeometry,
+          visualGridScrollTop,
+          visualArrangementStage.height,
+          visualArrangementStage.top,
+        )
+      ) {
+        return false;
+      }
       if (
         arrangementScope?.preset === "single" ||
         (arrangementScope?.preset && compactArrangement)
@@ -1428,12 +1503,22 @@ function WorldControlPlane({
         leaseKey: visualLeaseKey,
         scopeKey: VISUAL_ARRANGEMENT_SCOPE,
         preset: command,
-        stage,
+        stage:
+          command === "grid"
+            ? { ...stage, width: Math.max(1, stage.width - 18) }
+            : stage,
         windows: visualWindows,
         activeId: activeInspectorId,
       });
       if (!applied.result.available) return;
       setMaximizedInspectorId(null);
+      if (command === "grid") {
+        setVisualGridScrollTop(0);
+        visualGridAutoFocusKeyRef.current = null;
+        if (visualGridScrollbarRef.current) {
+          visualGridScrollbarRef.current.scrollTop = 0;
+        }
+      }
       setVisualArrangementState(applied.state);
       setExcludedArrangementIds(new Set());
       setSingleManualGeometry({});
@@ -1466,7 +1551,12 @@ function WorldControlPlane({
       }
       const reason = terminalWindowArrangementReason(
         preset,
-        visualArrangementStage,
+        preset === "grid"
+          ? {
+              ...visualArrangementStage,
+              width: Math.max(1, visualArrangementStage.width - 18),
+            }
+          : visualArrangementStage,
         visualWindows,
         activeInspectorId,
       );
@@ -2163,11 +2253,6 @@ function WorldControlPlane({
         ? "terminal"
         : undefined;
       if (worldInspectorWindowId(existing) === dockedInspectorId) {
-        if (floatingInspectors.length >= 5) {
-          throw new Error(
-            "Five Inspectors are already floating. Close one before floating another.",
-          );
-        }
         if (
           !(await focusFloatingInspector(
             existing,
@@ -2198,11 +2283,6 @@ function WorldControlPlane({
       }
       focusInspectorTerminal(worldInspectorWindowId(existing));
       return;
-    }
-    if (floatingInspectors.length >= 5) {
-      throw new Error(
-        "Five Inspectors are already floating. Close one before opening another.",
-      );
     }
     const conversation = conversationFor(node, "terminal");
     if (!conversation) throw new Error("This Inspector is no longer available");
@@ -2851,6 +2931,28 @@ function WorldControlPlane({
           </aside>
         </div>
       )}
+      {visualGridActive &&
+      visualGridContentHeight > visualArrangementStage.height ? (
+        <div
+          ref={visualGridScrollbarRef}
+          className="world-grid-scrollbar"
+          role="region"
+          aria-label="Scroll Inspector grid"
+          tabIndex={0}
+          style={{
+            left:
+              visualArrangementStage.left + visualArrangementStage.width - 18,
+            top: visualArrangementStage.top,
+            width: 18,
+            height: visualArrangementStage.height,
+          }}
+          onScroll={(event) =>
+            setVisualGridScrollTop(event.currentTarget.scrollTop)
+          }
+        >
+          <div style={{ height: visualGridContentHeight }} />
+        </div>
+      ) : null}
       <Suspense fallback={null}>
         {visibleFloatingInspectors.map((conversation, index) => (
           <WorldFloatingTerminalWindow
@@ -2862,10 +2964,13 @@ function WorldControlPlane({
                 ? worldInspectorWindowId(conversation) === activeInspectorId
                 : !dockedInspector && index === floatingInspectors.length - 1
             }
-            arrangedGeometry={
-              visualPlacementMap.get(worldInspectorWindowId(conversation)) ??
-              null
-            }
+            arrangedGeometry={(() => {
+              const id = worldInspectorWindowId(conversation);
+              const geometry = visualPlacementMap.get(id);
+              return geometry && visualGridActive && id !== maximizedInspectorId
+                ? { ...geometry, top: geometry.top - visualGridScrollTop }
+                : (geometry ?? null);
+            })()}
             zIndex={
               50 + inspectorStack.indexOf(worldInspectorWindowId(conversation))
             }
@@ -2898,8 +3003,10 @@ function WorldControlPlane({
               )
                 return;
               const fitted = fitVisualInspectorArrangementGeometry(
-                geometry,
-                visualArrangementStage,
+                visualGridActive
+                  ? { ...geometry, top: geometry.top + visualGridScrollTop }
+                  : geometry,
+                visualGridActive ? visualGridBounds : visualArrangementStage,
               );
               if (arrangementScope?.preset === "single") {
                 setSingleManualGeometry((current) => ({
@@ -3025,12 +3132,6 @@ function WorldControlPlane({
               });
             }}
             onDockOut={() => {
-              if (floatingInspectors.length >= 5) {
-                setIntentError(
-                  "Five Inspectors are already floating. Close one before floating another.",
-                );
-                return;
-              }
               setDockedInspectorGeometry(null);
               dockedInspectorIdRef.current = null;
               onDockedInspectorIdChange(null);

@@ -55,6 +55,7 @@ function Fixture() {
       >
         <div
           id="stage"
+          className="spaces-window-layer"
           ref={arrangement.onSpacesWindowLayerReady}
           style={{ position: "relative", width: 1000, height: 800 }}
         />
@@ -221,31 +222,34 @@ async function run() {
       `${count} open tabs must each have a window`,
     );
     hook().arrangementControl.onSelect("grid");
+    const expectedColumns = Math.ceil(Math.sqrt(count));
+    const expectedRows = Math.ceil(count / expectedColumns);
     check(
-      await until(
-        () =>
-          windows().length === count &&
-          hook().arrangementControl.activePreset === "grid",
-      ),
+      await until(() => {
+        const positions = windows().map((window) => ({
+          left: Number.parseFloat(window.style.left),
+          top: Number.parseFloat(window.style.top),
+        }));
+        return (
+          positions.length === count &&
+          hook().arrangementControl.activePreset === "grid" &&
+          new Set(positions.map(({ left }) => left)).size === expectedColumns &&
+          new Set(positions.map(({ top }) => top)).size === expectedRows
+        );
+      }),
       `${count} tabs must accept Grid`,
     );
   }
   const gridWindows = windows();
-  const [topLeft, topRight, bottomLeft, bottomRight] = gridWindows.map(
-    (window) => ({
-      left: Number.parseFloat(window.style.left),
-      top: Number.parseFloat(window.style.top),
-    }),
-  );
+  const gridPositions = gridWindows.map((window) => ({
+    left: Number.parseFloat(window.style.left),
+    top: Number.parseFloat(window.style.top),
+  }));
   check(
-    topLeft?.left === bottomLeft?.left &&
-      topRight?.left === bottomRight?.left &&
-      topLeft?.top === topRight?.top &&
-      bottomLeft?.top === bottomRight?.top &&
-      topRight.left > topLeft.left &&
-      bottomLeft.top > topLeft.top &&
-      gridWindows.slice(4).every((window) => window.style.width !== ""),
-    "Grid must tile four corners and keep fifth and sixth windows floating",
+    new Set(gridPositions.map(({ left }) => left)).size === 3 &&
+      new Set(gridPositions.map(({ top }) => top)).size === 2 &&
+      gridWindows.every((window) => window.style.width !== ""),
+    `Grid must tile six windows in three columns and two rows: ${JSON.stringify(gridPositions)}`,
   );
   hook().arrangementControl.onSelect("single");
   check(
@@ -369,6 +373,57 @@ async function run() {
   check(
     await until(() => windows().length === 2),
     "Columns must remain reusable after Restore",
+  );
+  const many = mock.snapshot();
+  mock.set({
+    tabs: [
+      ...many.tabs,
+      ...Array.from({ length: 62 }, (_, index) => ({
+        tab_id: `bulk-${index}`,
+        workspace_id: "alpha",
+        label: `Bulk ${index}`,
+        focused: false,
+      })),
+    ],
+  });
+  check(
+    await until(() => windows().length === 64),
+    "new tabs must reach the Spaces window registry before Grid",
+  );
+  hook().arrangementControl.onSelect("grid");
+  const gridLayer = document.querySelector<HTMLElement>("#stage");
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer?.classList.contains("is-grid-scroll")) &&
+        Boolean(gridLayer && gridLayer.scrollHeight > gridLayer.clientHeight) &&
+        windows().length < 64,
+    ),
+    `large Grid must scroll and mount only nearby tab windows: preset=${hook().arrangementControl.activePreset}, reason=${hook().arrangementControl.disabledReasons.grid}, class=${gridLayer?.className}, size=${gridLayer?.scrollHeight}/${gridLayer?.clientHeight}, mounted=${windows().length}`,
+  );
+  if (gridLayer) gridLayer.scrollTop = gridLayer.scrollHeight;
+  check(
+    await until(() =>
+      Boolean(document.querySelector('[data-tab-id="bulk-61"]')),
+    ),
+    "scrolling Grid must mount the last tab window",
+  );
+  mock.set({
+    workspaces: mock
+      .snapshot()
+      .workspaces.map((workspace) =>
+        workspace.workspace_id === "alpha"
+          ? { ...workspace, active_tab_id: "bulk-0" }
+          : workspace,
+      ),
+  });
+  check(
+    await until(
+      () =>
+        Boolean(gridLayer && gridLayer.scrollTop < 500) &&
+        Boolean(document.querySelector('[data-tab-id="bulk-0"]')),
+    ),
+    "focusing an offscreen Grid tab must scroll it into view",
   );
   mock.set({ serverRuntimeGeneration: 8 });
   check(

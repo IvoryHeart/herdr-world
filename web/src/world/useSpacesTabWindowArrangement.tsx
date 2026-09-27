@@ -17,6 +17,9 @@ import { shallowEqual, store, useStoreSelector } from "../store";
 import { type FloatingTerminalGeometry } from "./floatingTerminalGeometry";
 import { SpacesTabWindow } from "./SpacesTabWindow";
 import {
+  terminalGridContentHeight,
+  terminalGridScrollTopForWindow,
+  terminalGridWindowVisible,
   terminalWindowArrangementReason,
   type TerminalWindowArrangementPreset,
   type TerminalWindowArrangementWindow,
@@ -104,6 +107,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   );
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const [stage, setStage] = useState({ width: 0, height: 0 });
+  const [gridScrollTop, setGridScrollTop] = useState(0);
   const onSpacesWindowLayerReady = useCallback(
     (element: HTMLDivElement | null) =>
       setLayer((current) => (current === element ? current : element)),
@@ -300,6 +304,58 @@ export function useSpacesTabWindowArrangement(active: boolean): {
       suspended,
     ],
   );
+  const gridActive = scope?.preset === "grid" && !mobile;
+  const gridContentHeight = gridActive
+    ? terminalGridContentHeight(
+        entries.map(({ tab, geometry }) => ({ id: tab.tab_id, geometry })),
+        stage.height,
+      )
+    : stage.height;
+  const gridStage = { ...stage, height: gridContentHeight };
+  const viewportEntries = gridActive
+    ? entries.filter(({ geometry }) =>
+        terminalGridWindowVisible(geometry, gridScrollTop, stage.height),
+      )
+    : entries;
+
+  useEffect(() => {
+    if (!layer) return;
+    const scrollable = gridActive && gridContentHeight > stage.height;
+    layer.classList.toggle("is-grid-scroll", scrollable);
+    if (!scrollable) {
+      layer.scrollTop = 0;
+      setGridScrollTop(0);
+      return;
+    }
+    const onScroll = () => setGridScrollTop(layer.scrollTop);
+    layer.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      layer.removeEventListener("scroll", onScroll);
+      layer.classList.remove("is-grid-scroll");
+    };
+  }, [layer, gridActive, gridContentHeight, stage.height]);
+
+  useEffect(() => {
+    if (!gridActive || !layer || !context) return;
+    const activeEntry = entries.find(
+      ({ tab }) => tab.tab_id === context.activeTabId,
+    );
+    if (!activeEntry) return;
+    const next = terminalGridScrollTopForWindow(
+      activeEntry.geometry,
+      layer.scrollTop,
+      stage.height,
+      gridContentHeight,
+    );
+    if (next !== layer.scrollTop) layer.scrollTop = next;
+  }, [
+    gridActive,
+    layer,
+    context?.activeTabId,
+    entries,
+    stage.height,
+    gridContentHeight,
+  ]);
 
   useEffect(() => {
     if (!context || entries.length === 0) return;
@@ -492,7 +548,10 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     geometry: FloatingTerminalGeometry,
   ) => {
     if (!context) return;
-    const bounded = clampSpacesTabWindowGeometry(geometry, stage);
+    const bounded = clampSpacesTabWindowGeometry(
+      geometry,
+      gridActive ? gridStage : stage,
+    );
     if (scope?.placements.some(({ id }) => id === tabId)) {
       setArrangements((current) =>
         updateTerminalWindowArrangementGeometry(current, {
@@ -520,38 +579,43 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   };
   const portalKey = (tabId: string) =>
     JSON.stringify([leaseKey, context?.scopeKey, tabId]);
-  const spacesTabWindows = entries.map(({ tab }) => ({
+  const spacesTabWindows = viewportEntries.map(({ tab }) => ({
     tabId: tab.tab_id,
     portal: portals[portalKey(tab.tab_id)] ?? null,
   }));
   const renderWindows =
     active && layer && context
       ? createPortal(
-          entries.map(({ tab, geometry, zIndex }) => (
-            <SpacesTabWindow
-              key={tab.tab_id}
-              tabId={tab.tab_id}
-              label={tab.label}
-              active={tab.tab_id === context.activeTabId}
-              geometry={geometry}
-              stage={stage}
-              zIndex={zIndex}
-              onRaise={() => raiseSpacesTabWindow(tab.tab_id)}
-              onFocus={() => onFocusSpacesTabWindow(tab.tab_id, null)}
-              onClose={() => requestCloseTab(tab.tab_id)}
-              onGeometryChange={(next) => onGeometryChange(tab.tab_id, next)}
-              onPortalChange={(element) => {
-                const key = portalKey(tab.tab_id);
-                setPortals((current) => {
-                  if (current[key] === element) return current;
-                  if (element) return { ...current, [key]: element };
-                  const next = { ...current };
-                  delete next[key];
-                  return next;
-                });
-              }}
-            />
-          )),
+          <div
+            className={gridActive ? "spaces-grid-content" : undefined}
+            style={gridActive ? { height: gridContentHeight } : undefined}
+          >
+            {viewportEntries.map(({ tab, geometry, zIndex }) => (
+              <SpacesTabWindow
+                key={tab.tab_id}
+                tabId={tab.tab_id}
+                label={tab.label}
+                active={tab.tab_id === context.activeTabId}
+                geometry={geometry}
+                stage={gridActive ? gridStage : stage}
+                zIndex={zIndex}
+                onRaise={() => raiseSpacesTabWindow(tab.tab_id)}
+                onFocus={() => onFocusSpacesTabWindow(tab.tab_id, null)}
+                onClose={() => requestCloseTab(tab.tab_id)}
+                onGeometryChange={(next) => onGeometryChange(tab.tab_id, next)}
+                onPortalChange={(element) => {
+                  const key = portalKey(tab.tab_id);
+                  setPortals((current) => {
+                    if (current[key] === element) return current;
+                    if (element) return { ...current, [key]: element };
+                    const next = { ...current };
+                    delete next[key];
+                    return next;
+                  });
+                }}
+              />
+            ))}
+          </div>,
           layer,
           context.scopeKey,
         )

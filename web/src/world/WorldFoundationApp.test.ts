@@ -948,7 +948,7 @@ describe("World view preference", () => {
     ).toBe("spaces");
   });
 
-  test("bounds floating terminals while focusing an existing conversation", () => {
+  test("admits additional floating terminals while focusing an existing conversation", () => {
     const terminals = Array.from({ length: 5 }, (_, index) => ({
       nodeId: `node-${index}`,
       connectionId: "local",
@@ -978,7 +978,18 @@ describe("World view preference", () => {
         paneId: "pane-new",
         terminalId: "terminal-new",
       }),
-    ).toEqual({ terminals, admitted: false });
+    ).toEqual({
+      terminals: [
+        ...terminals,
+        {
+          ...terminals[0]!,
+          nodeId: "node-new",
+          paneId: "pane-new",
+          terminalId: "terminal-new",
+        },
+      ],
+      admitted: true,
+    });
   });
 
   test("keys conversations by connection, runtime generation, and terminal identity", () => {
@@ -1057,7 +1068,7 @@ describe("World view preference", () => {
     expect(retainWorldFloatingTerminals(conversations, null)).toEqual([]);
   });
 
-  test("bounds independently stateful floating Inspector conversations", () => {
+  test("admits more than five independently stateful floating Inspector conversations", () => {
     const conversations = Array.from({ length: 5 }, (_, index) =>
       inspectorConversation(index),
     );
@@ -1075,7 +1086,10 @@ describe("World view preference", () => {
     });
     expect(
       upsertWorldInspectorConversation(conversations, inspectorConversation(6)),
-    ).toEqual({ conversations, admitted: false });
+    ).toEqual({
+      conversations: [...conversations, inspectorConversation(6)],
+      admitted: true,
+    });
   });
 
   test("uses one generation-qualified tab window while sibling pane context changes", () => {

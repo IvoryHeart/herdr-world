@@ -6,7 +6,10 @@ import {
   TILED_TERMINAL_MIN_SIZE,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
-import { resolveTerminalWindowArrangement } from "./terminalWindowArrangement";
+import {
+  resolveTerminalWindowArrangement,
+  terminalGridContentHeight,
+} from "./terminalWindowArrangement";
 import type { TerminalWindowArrangementScope } from "./terminalWindowArrangementState";
 
 export const SPACES_WINDOW_MIN_WIDTH = SPACES_TAB_WINDOW_MIN_SIZE.width;
@@ -154,7 +157,8 @@ export function spacesTabWindowEntries(input: {
         geometry.left < 0 ||
         geometry.top < 0 ||
         geometry.left + geometry.width > stage.width ||
-        geometry.top + geometry.height > stage.height,
+        (scope.preset !== "grid" &&
+          geometry.top + geometry.height > stage.height),
     )
   ) {
     const resized = resolveTerminalWindowArrangement(
@@ -174,15 +178,25 @@ export function spacesTabWindowEntries(input: {
       resized.placements.map(({ id, geometry }) => [id, geometry]),
     );
   }
+  const placementStage =
+    scope.preset === "grid"
+      ? {
+          ...stage,
+          height: terminalGridContentHeight(
+            [...arranged].map(([id, geometry]) => ({ id, geometry })),
+            stage.height,
+          ),
+        }
+      : stage;
   return orderedSpacesTabs(input.tabs, input.raisedIds, input.activeTabId).map(
     (tab, zIndex) => {
       const geometry =
         arranged.get(tab.tab_id) ??
         input.freeGeometry[tab.tab_id] ??
-        defaultFloatingTerminalGeometry(zIndex, stage);
+        defaultFloatingTerminalGeometry(zIndex, placementStage);
       return {
         tab,
-        geometry: clampSpacesTabWindowGeometry(geometry, stage),
+        geometry: clampSpacesTabWindowGeometry(geometry, placementStage),
         zIndex: zIndex + 1,
       };
     },

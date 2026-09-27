@@ -60,8 +60,6 @@ export type WorldTerminalPresentation = Pick<
   onFocusPane?: (paneId: string) => void;
 };
 
-export const MAX_WORLD_FLOATING_INSPECTORS = 5;
-
 export function worldInspectorWindowId(
   inspector: Pick<
     WorldInspectorConversation,
@@ -91,14 +89,10 @@ export function worldInspectorWindowIdForNode(node: WorldObjectNode) {
 export function upsertWorldInspectorConversation(
   current: readonly WorldInspectorConversation[],
   next: WorldInspectorConversation,
-  limit = MAX_WORLD_FLOATING_INSPECTORS,
 ) {
   const retained = current.filter(
     (conversation) => !sameWorldInspector(conversation, next),
   );
-  if (retained.length === current.length && retained.length >= limit) {
-    return { conversations: current, admitted: false } as const;
-  }
   return {
     conversations: [...retained, next],
     admitted: true,
@@ -235,13 +229,9 @@ export function worldInspectorForNode(
   };
 }
 
-// Temporary compatibility exports for focused tests and terminal portal code.
-export const MAX_WORLD_FLOATING_TERMINALS = MAX_WORLD_FLOATING_INSPECTORS;
-
 export function upsertWorldFloatingTerminal(
   current: readonly WorldFloatingTerminal[],
   next: WorldFloatingTerminal,
-  limit = MAX_WORLD_FLOATING_INSPECTORS,
 ) {
   const retained = current.filter(
     (terminal) =>
@@ -249,9 +239,6 @@ export function upsertWorldFloatingTerminal(
       terminal.runtimeGeneration !== next.runtimeGeneration ||
       terminal.terminalId !== next.terminalId,
   );
-  if (retained.length === current.length && retained.length >= limit) {
-    return { terminals: current, admitted: false } as const;
-  }
   return { terminals: [...retained, next], admitted: true } as const;
 }
 

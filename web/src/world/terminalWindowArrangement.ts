@@ -18,7 +18,6 @@ export type TerminalWindowArrangementWindow = {
   id: string;
   minWidth: number;
   minHeight: number;
-  /** Existing floating geometry is a size/left preference for Grid overflow. */
   geometry?: FloatingTerminalGeometry;
   /** Reachable title and window controls; defaults to 40 CSS pixels. */
   titleHeight?: number;
@@ -36,6 +35,52 @@ export type TerminalWindowArrangementResult =
 const GAP = 8;
 const CASCADE_X_STEP = 32;
 const DEFAULT_TITLE_HEIGHT = 40;
+
+export function terminalGridContentHeight(
+  placements: readonly TerminalWindowArrangementPlacement[],
+  viewportHeight: number,
+  stageTop = 0,
+): number {
+  return Math.max(
+    viewportHeight,
+    placements.reduce(
+      (bottom, { geometry }) =>
+        Math.max(bottom, geometry.top + geometry.height - stageTop),
+      0,
+    ),
+  );
+}
+
+export function terminalGridWindowVisible(
+  geometry: FloatingTerminalGeometry,
+  scrollTop: number,
+  viewportHeight: number,
+  stageTop = 0,
+): boolean {
+  const overscan = viewportHeight;
+  const top = geometry.top - stageTop;
+  return (
+    top + geometry.height >= scrollTop - overscan &&
+    top <= scrollTop + viewportHeight + overscan
+  );
+}
+
+export function terminalGridScrollTopForWindow(
+  geometry: FloatingTerminalGeometry,
+  scrollTop: number,
+  viewportHeight: number,
+  contentHeight: number,
+  stageTop = 0,
+): number {
+  const top = geometry.top - stageTop;
+  const next =
+    top < scrollTop
+      ? top
+      : top + geometry.height > scrollTop + viewportHeight
+        ? top + geometry.height - viewportHeight
+        : scrollTop;
+  return Math.max(0, Math.min(contentHeight - viewportHeight, next));
+}
 
 /** Purely resolves browser presentation geometry; Restore belongs to the window registry. */
 export function resolveTerminalWindowArrangement(
@@ -195,137 +240,80 @@ function grid(
   windows: readonly TerminalWindowArrangementWindow[],
 ): TerminalWindowArrangementResult {
   if (windows.length === 2) return columns(stage, windows);
-
-  const width = (stage.width - GAP) / 2;
-  const height = (stage.height - GAP) / 2;
-  const firstFour = windows.slice(0, 4);
-  if (firstFour.some((window) => width < window.minWidth)) {
+  if (windows.length === 3) {
+    const width = (stage.width - GAP) / 2;
+    const height = (stage.height - GAP) / 2;
+    if (windows.some((window) => width < window.minWidth)) {
+      return unavailable("Stage width is too small for this grid.");
+    }
+    if (
+      stage.height < windows[0]!.minHeight ||
+      height < windows[1]!.minHeight ||
+      height < windows[2]!.minHeight
+    ) {
+      return unavailable("Stage height is too small for this grid.");
+    }
+    return available([
+      {
+        id: windows[0]!.id,
+        geometry: rect(stage.left, stage.top, width, stage.height),
+      },
+      {
+        id: windows[1]!.id,
+        geometry: rect(stage.left + width + GAP, stage.top, width, height),
+      },
+      {
+        id: windows[2]!.id,
+        geometry: rect(
+          stage.left + width + GAP,
+          stage.top + height + GAP,
+          width,
+          height,
+        ),
+      },
+    ]);
+  }
+  const minimumWidth = windows.reduce(
+    (minimum, window) =>
+      Math.max(
+        minimum,
+        Math.min(window.minWidth, TILED_TERMINAL_MIN_SIZE.width),
+      ),
+    0,
+  );
+  const minimumHeight = windows.reduce(
+    (minimum, window) =>
+      Math.max(
+        minimum,
+        Math.min(window.minHeight, TILED_TERMINAL_MIN_SIZE.height),
+      ),
+    0,
+  );
+  const maximumColumns = Math.floor((stage.width + GAP) / (minimumWidth + GAP));
+  if (maximumColumns < 1) {
     return unavailable("Stage width is too small for this grid.");
   }
-  if (
-    (windows.length === 3 &&
-      (stage.height < windows[0]!.minHeight ||
-        height < windows[1]!.minHeight ||
-        height < windows[2]!.minHeight)) ||
-    (windows.length >= 4 &&
-      firstFour.some((window) => height < window.minHeight))
-  ) {
-    return unavailable("Stage height is too small for this grid.");
-  }
-
-  const right = stage.left + width + GAP;
-  const bottom = stage.top + height + GAP;
-  const tiles =
-    windows.length === 3
-      ? [
-          rect(stage.left, stage.top, width, stage.height),
-          rect(right, stage.top, width, height),
-          rect(right, bottom, width, height),
-        ]
-      : [
-          rect(stage.left, stage.top, width, height),
-          rect(right, stage.top, width, height),
-          rect(stage.left, bottom, width, height),
-          rect(right, bottom, width, height),
-        ];
-  const placements = firstFour.map((window, index) => ({
-    id: window.id,
-    geometry: tiles[index]!,
-  }));
-  if (windows.length <= 4) return available(placements);
-
-  // Keep both tiled title rows clear. Overflow windows occupy the content bands
-  // below those titles, each shifted enough to expose the older floating title.
-  const titleStep = Math.max(
-    DEFAULT_TITLE_HEIGHT + GAP,
-    ...windows.map(
-      (window) => (window.titleHeight ?? DEFAULT_TITLE_HEIGHT) + GAP,
-    ),
+  const columnCount = Math.min(
+    Math.ceil(Math.sqrt(windows.length)),
+    maximumColumns,
   );
-  const shelves = [
-    { top: stage.top + titleStep, bottom: bottom - GAP },
-    { top: bottom + titleStep, bottom: stage.top + stage.height },
-  ];
-  const floating = windows.slice(4);
-  if (floating.some((window) => stage.width < window.minWidth)) {
-    return unavailable("Stage width is too small for a floating grid window.");
-  }
-  const assignment = assignGridShelves(floating, shelves, titleStep);
-  if (!assignment) {
-    return unavailable(
-      "The stage cannot keep every floating grid window header reachable.",
-    );
-  }
-  const shelfCounts = [0, 0];
-  for (const [index, window] of floating.entries()) {
-    const shelfIndex = assignment[index]!;
-    const shelf = shelves[shelfIndex]!;
-    const nextTop = shelf.top + titleStep * shelfCounts[shelfIndex]!;
-    shelfCounts[shelfIndex]! += 1;
-    const prior = validStage(window.geometry) ? window.geometry : null;
-    const floatingWidth = clamp(
-      prior?.width ?? FLOATING_TERMINAL_DEFAULT_SIZE.width,
-      window.minWidth,
-      stage.width,
-    );
-    const floatingHeight = clamp(
-      prior?.height ?? FLOATING_TERMINAL_DEFAULT_SIZE.height,
-      window.minHeight,
-      shelf.bottom - nextTop,
-    );
-    placements.push({
+  const rowCount = Math.ceil(windows.length / columnCount);
+  const width = (stage.width - GAP * (columnCount - 1)) / columnCount;
+  const height = Math.max(
+    minimumHeight,
+    (stage.height - GAP * (rowCount - 1)) / rowCount,
+  );
+  return available(
+    windows.map((window, index) => ({
       id: window.id,
       geometry: rect(
-        clamp(
-          prior?.left ?? stage.left + (stage.width - floatingWidth) / 2,
-          stage.left,
-          stage.left + stage.width - floatingWidth,
-        ),
-        nextTop,
-        floatingWidth,
-        floatingHeight,
+        stage.left + (index % columnCount) * (width + GAP),
+        stage.top + Math.floor(index / columnCount) * (height + GAP),
+        width,
+        height,
       ),
-    });
-  }
-  return available(placements);
-}
-
-function assignGridShelves(
-  windows: readonly TerminalWindowArrangementWindow[],
-  shelves: readonly { top: number; bottom: number }[],
-  step: number,
-): number[] | null {
-  const memo = new Map<string, boolean>();
-  const fits = (shelfIndex: number, used: number, minHeight: number) => {
-    const shelf = shelves[shelfIndex]!;
-    return shelf.top + step * used + minHeight <= shelf.bottom;
-  };
-  const canPlace = (index: number, upperCount: number): boolean => {
-    if (index === windows.length) return true;
-    const key = `${index}:${upperCount}`;
-    const cached = memo.get(key);
-    if (cached !== undefined) return cached;
-    const window = windows[index]!;
-    const possible =
-      (fits(0, upperCount, window.minHeight) &&
-        canPlace(index + 1, upperCount + 1)) ||
-      (fits(1, index - upperCount, window.minHeight) &&
-        canPlace(index + 1, upperCount));
-    memo.set(key, possible);
-    return possible;
-  };
-  if (!canPlace(0, 0)) return null;
-
-  const assignment: number[] = [];
-  let upperCount = 0;
-  for (const [index, window] of windows.entries()) {
-    const useUpper =
-      fits(0, upperCount, window.minHeight) &&
-      canPlace(index + 1, upperCount + 1);
-    assignment.push(useUpper ? 0 : 1);
-    if (useUpper) upperCount += 1;
-  }
-  return assignment;
+    })),
+  );
 }
 
 function validStage(
@@ -371,10 +359,6 @@ function rect(
   height: number,
 ): FloatingTerminalGeometry {
   return { left, top, width, height };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
 }
 
 function unavailable(reason: string): TerminalWindowArrangementResult {
