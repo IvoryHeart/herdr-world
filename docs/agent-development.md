@@ -58,15 +58,16 @@ quality and correction rate alongside tokens and time.
 
 Add focused regression tests for behavior changes. During implementation, use
 focused tests or quick type checks when they answer a specific question; do not
-repeat them after every edit. Once the candidate is complete, run `bun run check`
-locally before opening a ready PR. It covers notices, formatting, lint, types,
-tests, builds and OpenSpec. CI repeats it on the PR head. After a repair, run the
-relevant focused check and the full gate on the final candidate before pushing.
-Use `bun run test:browser` for browser-heavy changes and `bun run build:site` for
-site changes.
+repeat them after every edit. Push a complete candidate through the tracked
+pre-push hook: it runs `bun run check` once for that push, covering notices,
+formatting, lint, types, tests, builds and OpenSpec. CI repeats it on the PR head.
+After a repair, run the relevant focused check before pushing; the hook runs the
+full gate. Use `bun run test:browser` for browser-heavy changes and
+`bun run build:site` for site changes.
 
-The pre-commit hook checks format and lint. In an agent worktree without installed
-hooks, use `git -c core.hooksPath=.githooks commit` for that commit.
+Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
+lint, and the pre-push hook checks the full candidate. Worktrees share the same Git
+hook configuration.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
 source excerpts bounded, then read more only when needed. Keep complete check logs

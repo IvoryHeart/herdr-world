@@ -27,10 +27,11 @@ assets required by server typechecks and process tests.
 | Lint | `bun run lint` runs Oxlint across the repository. |
 | Related tests | `bun test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
-| Before a ready PR | Run `bun run check` locally once the change is complete; CI repeats it on the PR head. |
+| Branch push | The installed pre-push hook runs `bun run check`; CI repeats it on the PR head. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
-`.githooks/` directory; its `pre-commit` hook runs formatting and lint only.
+`.githooks/` directory. Its `pre-commit` hook runs formatting and lint, and its
+`pre-push` hook runs the full check.
 Use focused checks while developing; avoid rerunning them after every small edit.
 
 Workspace checks: `bun run --filter herdr-world-web typecheck` and

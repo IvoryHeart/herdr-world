@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+set -eu
+
+# Git exports repository-local variables to hooks, but the check creates test repos.
+for name in $(git rev-parse --local-env-vars); do
+  unset "$name"
+done
+
+if output=$(bun run check 2>&1); then
+  exit 0
+else
+  status=$?
+  printf '%s\n' "$output" | tail -80 >&2
+  exit "$status"
+fi
