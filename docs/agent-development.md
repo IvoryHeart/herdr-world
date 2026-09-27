@@ -1,15 +1,17 @@
 # Agent development
 
 Herdr World uses native coding-agent conversations, repository instructions, current
-OpenSpec contracts and ordinary project checks. There is no repository-owned agent
-supervisor, model scheduler, skill installer or evaluation harness. The local
-`agent:usage` script reports recorded usage without scheduling agent work.
+OpenSpec contracts and ordinary project checks. The local `agent:usage` script
+reports recorded usage without scheduling agent work.
 
 ## Start work
 
 Read `AGENTS.md`, then use [the knowledge map](knowledge-map.md) to find the relevant
-contract, source, tests and runbook. Locate relevant headings in large contracts
-before reading full sections, and widen the read when the change crosses them.
+contract, source, tests and runbook. Use the [foundation source guide](foundation-guide.md)
+when work crosses service, browser or distribution modules. For visual tasks, start
+with the [World component routes](../web/src/world/README.md). Locate relevant
+headings in large contracts before reading full sections, and widen the read when
+the change crosses them.
 Resolve any requested parent pull request to its actual branch and commit before
 creating a worktree:
 
@@ -38,7 +40,8 @@ bun run spec:check
 ```
 
 When implementation changes a current contract, source map or operational procedure,
-update the affected spec, knowledge-map row or runbook in the same PR. Leave
+update the affected spec, knowledge-map row, foundation guide or runbook in the same PR.
+New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
 ## Keep agent work bounded
