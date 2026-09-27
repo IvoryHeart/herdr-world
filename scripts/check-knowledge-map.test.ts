@@ -65,3 +65,40 @@ test("a file moved out of World still counts as a World change", () => {
   expect(changed).toContain("web/src/world/view.ts");
   expect(assessKnowledgeMapImpact(changed, null).ok).toBe(false);
 });
+
+test("base-only World changes do not count as pull-request changes", () => {
+  const root = mkdtempSync(join(tmpdir(), "knowledge-map-check-"));
+  temporaryRepos.push(root);
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  git("init", "-q");
+  git("config", "user.name", "Synthetic Tester");
+  git("config", "user.email", "tester@example.invalid");
+  mkdirSync(join(root, "web/src/world"), { recursive: true });
+  writeFileSync(
+    join(root, "web/src/world/view.ts"),
+    "export const view = 1;\n",
+  );
+  git("add", ".");
+  git("commit", "-qm", "Shared ancestor");
+  const baseBranch = git("branch", "--show-current");
+
+  git("switch", "-qc", "feature");
+  writeFileSync(join(root, "README.md"), "Feature documentation\n");
+  git("add", ".");
+  git("commit", "-qm", "Feature change");
+  const head = git("rev-parse", "HEAD");
+
+  git("switch", "-q", baseBranch);
+  writeFileSync(
+    join(root, "web/src/world/view.ts"),
+    "export const view = 2;\n",
+  );
+  git("add", ".");
+  git("commit", "-qm", "Base-only World change");
+  const base = git("rev-parse", "HEAD");
+
+  const changed = changedPathsBetween(root, base, head);
+  expect(changed).toEqual(["README.md"]);
+  expect(assessKnowledgeMapImpact(changed, null).ok).toBe(true);
+});

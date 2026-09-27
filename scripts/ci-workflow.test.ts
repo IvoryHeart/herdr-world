@@ -24,10 +24,17 @@ const workflow = Bun.YAML.parse(
     new URL("../.github/workflows/ci.yml", import.meta.url),
   ).text(),
 ) as {
+  on: { pull_request: { types: string[] } };
   jobs: Record<string, WorkflowJob>;
 };
 
 test("CI exposes the protected delivery gate and runs the complete repository check", () => {
+  expect(workflow.on.pull_request.types).toEqual([
+    "opened",
+    "synchronize",
+    "reopened",
+    "edited",
+  ]);
   const delivery = workflow.jobs.delivery;
 
   expect(delivery?.name).toBe("Delivery checks");
