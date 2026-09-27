@@ -255,7 +255,7 @@ describe("terminal window arrangement state", () => {
       leaseKey: "connection:generation-1",
       scopeKey: "visual",
       preset: "rows",
-      stage: { ...stage, height: 480 },
+      stage: { ...stage, height: 120 },
       windows: [first, second, later],
       activeId: "later",
     });

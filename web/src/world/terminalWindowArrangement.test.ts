@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   resolveTerminalWindowArrangement,
+  terminalArrangementContentWidth,
+  terminalArrangementScrollLeftForWindow,
+  terminalArrangementWindowVisible,
+  terminalGridContentHeight,
+  terminalGridScrollTopForWindow,
+  terminalGridWindowVisible,
   terminalWindowArrangementReason,
   type TerminalWindowArrangementWindow,
 } from "./terminalWindowArrangement";
@@ -133,62 +139,162 @@ describe("terminal window arrangements", () => {
     ]);
   });
 
-  test("Grid keeps fifth and later windows floating above tiles with reachable headers", () => {
-    const result = placements("grid", 6);
-    const [topLeft, , bottomLeft, , firstFloat, secondFloat] = result;
-    expect(firstFloat?.geometry.top).toBeGreaterThanOrEqual(
-      topLeft!.geometry.top + 40,
-    );
-    expect(secondFloat!.geometry.top).toBeGreaterThanOrEqual(
-      firstFloat!.geometry.top + 40,
-    );
-    expect(firstFloat!.geometry.top + firstFloat!.geometry.height).toBeLessThan(
-      bottomLeft!.geometry.top,
-    );
-    expect(
-      secondFloat!.geometry.top + secondFloat!.geometry.height,
-    ).toBeLessThan(bottomLeft!.geometry.top);
-    for (const item of result) {
-      expect(item.geometry.left).toBeGreaterThanOrEqual(stage.left);
-      expect(item.geometry.top).toBeGreaterThanOrEqual(stage.top);
-      expect(item.geometry.left + item.geometry.width).toBeLessThanOrEqual(
-        stage.left + stage.width,
+  test("Grid tiles six in three columns and sixteen in four rows and columns", () => {
+    for (const [count, columns, rows] of [
+      [6, 3, 2],
+      [16, 4, 4],
+    ]) {
+      const result = placements("grid", count!);
+      expect(result).toHaveLength(count!);
+      expect(result.map(({ id }) => id)).toEqual(
+        windows(count!).map(({ id }) => id),
       );
-      expect(item.geometry.top + item.geometry.height).toBeLessThanOrEqual(
-        stage.top + stage.height,
+      expect(new Set(result.map(({ geometry }) => geometry.left)).size).toBe(
+        columns,
       );
+      expect(new Set(result.map(({ geometry }) => geometry.top)).size).toBe(
+        rows,
+      );
+      for (const item of result) {
+        expect(item.geometry.width).toBeGreaterThanOrEqual(220);
+        expect(item.geometry.height).toBeGreaterThanOrEqual(160);
+        expect(item.geometry.left + item.geometry.width).toBeLessThanOrEqual(
+          stage.left + stage.width,
+        );
+        expect(item.geometry.top + item.geometry.height).toBeLessThanOrEqual(
+          stage.top + stage.height,
+        );
+      }
     }
   });
 
-  test("Grid uses both free content bands and rejects overflow that cannot expose every title", () => {
-    const ten = placements("grid", 10);
-    expect(ten).toHaveLength(10);
-    expect(ten[7]!.geometry.top).toBeGreaterThan(ten[2]!.geometry.top + 40);
+  test("Grid keeps a usable tile size and adds scrollable rows for 1024 windows", () => {
+    const result = placements("grid", 1024);
+    expect(result).toHaveLength(1024);
+    expect(new Set(result.map(({ geometry }) => geometry.left)).size).toBe(5);
+    expect(result[1023]!.geometry.top).toBeGreaterThan(stage.height);
     expect(
-      terminalWindowArrangementReason("grid", stage, windows(11), "tab-11"),
-    ).toContain("header reachable");
+      result.every(
+        ({ geometry }) => geometry.width >= 220 && geometry.height >= 160,
+      ),
+    ).toBe(true);
+    const contentHeight = terminalGridContentHeight(
+      result,
+      stage.height,
+      stage.top,
+    );
+    expect(contentHeight).toBeGreaterThan(stage.height);
+    expect(
+      result.filter(({ geometry }) =>
+        terminalGridWindowVisible(geometry, 0, stage.height, stage.top),
+      ).length,
+    ).toBeLessThan(70);
+    const last = result[1023]!.geometry;
+    const scrolled = terminalGridScrollTopForWindow(
+      last,
+      0,
+      stage.height,
+      contentHeight,
+      stage.top,
+    );
+    expect(scrolled).toBeGreaterThan(0);
+    expect(
+      terminalGridWindowVisible(last, scrolled, stage.height, stage.top),
+    ).toBe(true);
   });
 
-  test("Grid fits mixed floating minimum heights without losing focus order", () => {
-    const input = windows(8);
-    for (const [index, minHeight] of [280, 390, 340, 340].entries()) {
-      input[index + 4] = { ...input[index + 4]!, minHeight };
-    }
-    const result = resolveTerminalWindowArrangement(
-      "grid",
-      stage,
-      input,
-      "tab-8",
+  test("Columns and Rows keep usable tiles and scroll through 1024 windows", () => {
+    const columns = placements("columns", 1024);
+    const rows = placements("rows", 1024);
+    expect(columns[0]!.geometry.width).toBe(220);
+    expect(rows[0]!.geometry.height).toBe(160);
+    const contentWidth = terminalArrangementContentWidth(
+      columns,
+      stage.width,
+      stage.left,
     );
-    expect(result.available).toBe(true);
-    if (!result.available) return;
-    expect(result.placements.map(({ id }) => id)).toEqual(
-      input.map(({ id }) => id),
+    const contentHeight = terminalGridContentHeight(
+      rows,
+      stage.height,
+      stage.top,
     );
-    expect(result.placements[4]!.geometry.top).toBeLessThan(514);
-    expect(result.placements[5]!.geometry.top).toBeGreaterThan(514);
-    expect(result.placements[6]!.geometry.top).toBeLessThan(514);
-    expect(result.placements[7]!.geometry.top).toBeGreaterThan(514);
+    expect(contentWidth).toBeGreaterThan(stage.width);
+    expect(contentHeight).toBeGreaterThan(stage.height);
+    const left = terminalArrangementScrollLeftForWindow(
+      columns[1023]!.geometry,
+      0,
+      stage.width,
+      contentWidth,
+      stage.left,
+    );
+    const top = terminalGridScrollTopForWindow(
+      rows[1023]!.geometry,
+      0,
+      stage.height,
+      contentHeight,
+      stage.top,
+    );
+    expect(left).toBeGreaterThan(0);
+    expect(top).toBeGreaterThan(0);
+    expect(
+      terminalArrangementWindowVisible(
+        columns[1023]!.geometry,
+        left,
+        0,
+        stage.width,
+        stage.height,
+        stage.left,
+        stage.top,
+      ),
+    ).toBe(true);
+    expect(
+      terminalArrangementWindowVisible(
+        rows[1023]!.geometry,
+        0,
+        top,
+        stage.width,
+        stage.height,
+        stage.left,
+        stage.top,
+      ),
+    ).toBe(true);
+    expect(
+      columns.filter(({ geometry }) =>
+        terminalArrangementWindowVisible(
+          geometry,
+          0,
+          0,
+          stage.width,
+          stage.height,
+          stage.left,
+          stage.top,
+        ),
+      ).length,
+    ).toBeLessThan(20);
+    expect(
+      rows.filter(({ geometry }) =>
+        terminalArrangementWindowVisible(
+          geometry,
+          0,
+          0,
+          stage.width,
+          stage.height,
+          stage.left,
+          stage.top,
+        ),
+      ).length,
+    ).toBeLessThan(20);
+  });
+
+  test("Grid explains when the stage cannot fit one usable column", () => {
+    expect(
+      terminalWindowArrangementReason(
+        "grid",
+        { ...stage, width: 180 },
+        windows(36),
+        "tab-36",
+      ),
+    ).toContain("width");
   });
 
   test("Cascade exposes older titles and preserves back-to-front focus order", () => {
@@ -219,6 +325,45 @@ describe("terminal window arrangements", () => {
     expect(custom.available && custom.placements[1]?.geometry.top).toBe(138);
   });
 
+  test("Cascade repeats a reachable diagonal in scrollable stages for 1024 windows", () => {
+    const result = placements("cascade", 1024);
+    expect(result).toHaveLength(1024);
+    const firstPageEnd = result.findIndex(
+      ({ geometry }) => geometry.top >= stage.top + stage.height,
+    );
+    expect(firstPageEnd).toBeGreaterThan(4);
+    expect(result[firstPageEnd]!.geometry.left).toBe(stage.left);
+    expect(result[firstPageEnd]!.geometry.top).toBe(
+      stage.top + stage.height + 8,
+    );
+    expect(
+      result.every(
+        ({ geometry }) => geometry.width >= 420 && geometry.height >= 280,
+      ),
+    ).toBe(true);
+    expect(
+      result[firstPageEnd - 1]!.geometry.top +
+        result[firstPageEnd - 1]!.geometry.height,
+    ).toBeLessThanOrEqual(stage.top + stage.height);
+    const contentHeight = terminalGridContentHeight(
+      result,
+      stage.height,
+      stage.top,
+    );
+    const last = result[1023]!.geometry;
+    const scrollTop = terminalGridScrollTopForWindow(
+      last,
+      0,
+      stage.height,
+      contentHeight,
+      stage.top,
+    );
+    expect(scrollTop).toBeGreaterThan(0);
+    expect(
+      terminalGridWindowVisible(last, scrollTop, stage.height, stage.top),
+    ).toBe(true);
+  });
+
   test("unavailable presets return reasons and do not produce partial geometry", () => {
     expect(
       terminalWindowArrangementReason("rows", stage, windows(1), "tab-1"),
@@ -226,7 +371,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "columns",
-        { ...stage, width: 400 },
+        { ...stage, width: 180 },
         windows(2),
         "tab-2",
       ),
@@ -234,7 +379,7 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "rows",
-        { ...stage, height: 440 },
+        { ...stage, height: 120 },
         windows(3),
         "tab-3",
       ),
@@ -242,15 +387,15 @@ describe("terminal window arrangements", () => {
     expect(
       terminalWindowArrangementReason(
         "grid",
-        { ...stage, height: 600 },
+        { ...stage, width: 180 },
         windows(5),
         "tab-5",
       ),
-    ).toContain("floating");
+    ).toContain("width");
     expect(
       terminalWindowArrangementReason(
         "cascade",
-        { ...stage, height: 400 },
+        { ...stage, height: 200 },
         windows(4),
         "tab-4",
       ),

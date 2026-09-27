@@ -73,19 +73,21 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Use focused tests and type checks while developing, after coherent changes or to
-investigate a failure; do not rerun them after every edit or run mutating formatting
-after each patch. When the candidate and focused regressions are complete, stage only
-intended files, run `bun run format:staged` once, restage its changes, and inspect the
-final diff. The formatter rejects staged files that also have unstaged edits; separate
-those edits first. A docs-only candidate is a safe no-op for the formatter. Do not
-format the whole repository for a scoped change. Commit with the read-only pre-commit
-format/lint guard. Push a complete PR candidate once: the tracked pre-push hook runs
-`bun run check`, covering notices, formatting, lint, types, tests, builds and OpenSpec;
-CI repeats it on the PR head. Do not run a separate final full check immediately
-before that push. For an explicitly local-only handoff, run one explicit full check.
-If a repair changes code, begin a new candidate cycle. Browser tests require
-Chrome/Chromium or `CHROME_BIN`:
+Use focused tests and type checks while developing when they answer a specific
+question; do not rerun them after every edit or run mutating formatting after
+each patch. When the candidate and focused regressions are complete, stage only
+intended files, run `bun run format:staged` once, restage its changes, and inspect
+the final diff. The formatter rejects staged files with unstaged edits; separate
+those edits first. A docs-only candidate is a safe no-op. Do not format the whole
+repository for a scoped change. Commit with the read-only pre-commit format/lint
+guard. The tracked pre-push hook is the final full gate for a branch push: it
+runs `bun run check`, covering notices, formatting, lint, types, tests, builds
+and OpenSpec. Count that invocation as the required full check; do not also run
+it manually before the same push. If there is no push or the hook is unavailable,
+run `bun run check` once explicitly. After a failed gate, investigate the failing
+stage with focused checks and let the next push rerun the full gate. If a repair
+changes code, begin a new candidate cycle. CI repeats the check on the PR head.
+Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
@@ -111,8 +113,9 @@ tutorial changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full matrix.
   lifecycle hook cannot intercept `write_stdin`, so do not add one for polling.
 - **One review, one fix pass.** Do not create re-review branches. Fix findings
   in place and move on. If a PR has too many findings, split the PR first.
-- **Functional commits only.** Every commit should change behaviour or docs. Fold
-  metadata (PR links, verification records) into the commit it relates to.
+- **Functional commits only.** Every commit should change behaviour or docs. Put
+  verification records in the PR; do not create a commit or amend and push only
+  to add metadata.
 - **Read once, then act.** Do not re-read files already in context unless they
   were modified by another process.
 
@@ -141,11 +144,13 @@ Large outputs are the primary driver of context bloat and token cost.
 
 ## Changelog and releases
 
-- Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading.
-- Keep the changelog entry in the candidate. Prepare the final PR description
-  before creation; it does not need to link to itself. Do not amend the branch
-  solely to add the new PR number to the changelog, or edit the PR body solely
-  for later usage accounting; retain later usage in the workflow output.
+- Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading
+  in the implementation commit, before the first push. PR numbers and links are
+  optional in changelog entries; the PR and merge history provide traceability.
+  Keep existing linked entries. Prepare the final PR description before creation;
+  it does not need to link to itself. Do not amend or push solely to add a new PR
+  number to the changelog, or edit the PR body solely for later usage accounting;
+  retain later usage in the workflow output.
 - Record the exact Roamgate source synchronization in `UPSTREAM.md`; say "derived
   from" for source and "compatible with" for the external Herdr runtime.
 - Release preparation happens on a clean branch from `origin/main` and is delivered

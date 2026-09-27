@@ -11,6 +11,7 @@ describe("Graph preferences", () => {
       parseGraphPreferences({
         camera: { x: 24, y: -7, zoom: 2 },
         cameraMode: "manual",
+        rotation: 3,
         collapsedIds: ["host", "host", 2],
         positions: {
           agent: { x: 40, y: -30, pinned: true },
@@ -22,7 +23,14 @@ describe("Graph preferences", () => {
       cameraMode: "manual",
       collapsedIds: ["host"],
       positions: { agent: { x: 40, y: -30, pinned: true } },
+      rotation: 3,
     });
+  });
+
+  test("rejects invalid rotation and accepts legacy saved preferences", () => {
+    expect(parseGraphPreferences({ rotation: 5 }).rotation).toBe(0);
+    expect(parseGraphPreferences({ cameraMode: "fit" }).rotation).toBe(0);
+    expect(parseGraphPreferences({ rotation: 2 }).rotation).toBe(2);
   });
 
   test("fails to defaults and persists only admitted values", () => {
@@ -34,6 +42,7 @@ describe("Graph preferences", () => {
       cameraMode: "fit",
       collapsedIds: [],
       positions: {},
+      rotation: 0,
     });
   });
 });

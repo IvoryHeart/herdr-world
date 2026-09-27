@@ -57,21 +57,22 @@ quality and correction rate alongside tokens and time.
 ## Verify and hand off
 
 Add focused regression tests for behavior changes. During implementation, use
-focused tests or quick type checks only when they answer a specific question. Do
-not run mutating formatting after each patch. Once the candidate and its focused
-regressions are complete, stage only intended files, run `bun run format:staged`
-once, restage its changes, and inspect the final diff. The command safely does
-nothing for a docs-only candidate and rejects staged files that also have
-unstaged edits. Separate those edits before formatting. Do not format the whole
-repository for a scoped change. Commit with the existing read-only pre-commit
-format/lint guard.
-For a PR, push the complete candidate once through the tracked pre-push hook:
-it runs `bun run check` once for that push, covering notices, formatting, lint,
-types, tests, builds and OpenSpec. CI repeats it on the PR head. Do not run a
-separate final full check immediately before that push. For an explicitly
-local-only handoff, run one explicit full check instead. If a later repair
-changes code, begin a new candidate cycle. Use `bun run test:browser` for
-browser-heavy changes and `bun run build:site` for site changes.
+focused tests or quick type checks only when they answer a specific question;
+do not repeat them or run mutating formatting after every edit. Once the candidate
+and its focused regressions are complete, stage only intended files, run
+`bun run format:staged` once, restage its changes, and inspect the final diff.
+The command safely does nothing for a docs-only candidate and rejects staged
+files that also have unstaged edits. Separate those edits before formatting.
+Do not format the whole repository for a scoped change. Commit with the existing
+read-only pre-commit format/lint guard. For a PR, push the complete candidate
+once through the tracked pre-push hook: it runs `bun run check` once for that
+push, covering notices, formatting, lint, types, tests, builds and OpenSpec.
+The hook invocation satisfies the final full check; do not run it separately
+before the same push. If there is no push or the hook is unavailable, run one
+explicit full check. After a failed gate, investigate the failing stage with
+focused checks; if a later repair changes code, begin a new candidate cycle.
+CI repeats the check on the PR head. Use `bun run test:browser` when the browser
+suite answers a specific question, and `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
 lint, and the pre-push hook checks the full candidate. Worktrees share the same Git
@@ -94,11 +95,12 @@ for polling. The reusable [task prompt](agent-task-prompt.md) repeats this rule.
 Inspect the final diff and history for unrelated edits, generated output and sensitive
 data. Prepare the PR body with available verification and agent execution using the
 [PR template](../.github/pull_request_template.md) before creating the PR; use
-`unknown` for values not yet available. A PR does not need to link to itself.
-Keep later usage accounting in the workflow output and final handoff instead of
-editing the PR body solely for totals, because an edit starts another CI run.
-Reuse earlier results only when their relevant inputs are unchanged. Open a
-ready PR and stop before merge.
+`unknown` for values not yet available. Include the Unreleased changelog entry
+before the first push; the PR number need not be added to it or linked from the
+PR body. Keep later usage accounting in the workflow output and final handoff
+instead of editing the PR body solely for totals, because an edit starts another
+CI run. Reuse earlier results only when their relevant inputs are unchanged.
+Open a ready PR and stop before merge.
 
 For Codex token usage before PR creation, run `bun run agent:usage -- --session
 <session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat

@@ -9,7 +9,9 @@ import "./WindowArrangementMenu.css";
 
 export type WindowArrangementCommand =
   | TerminalWindowArrangementPreset
-  | "restore";
+  | "restore"
+  | "close-all"
+  | "open-all";
 
 export type WindowArrangementControl = {
   activePreset: TerminalWindowArrangementPreset | null;
@@ -21,7 +23,7 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
   command: WindowArrangementCommand;
   label: string;
   description: string;
-  shortcutId: ShortcutId;
+  shortcutId?: ShortcutId;
 }[] = [
   {
     command: "single",
@@ -58,6 +60,16 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
     label: "Restore positions",
     description: "Return still-open windows to their previous positions",
     shortcutId: "arrangement.restore",
+  },
+  {
+    command: "close-all",
+    label: "Close all terminal windows",
+    description: "Dismiss windows without closing tabs or sessions",
+  },
+  {
+    command: "open-all",
+    label: "Open all terminal windows",
+    description: "Present every terminal on the selected host",
   },
 ];
 
@@ -185,7 +197,9 @@ export function WindowArrangementMenu({
               {WINDOW_ARRANGEMENT_CHOICES.map(
                 ({ command, label, description, shortcutId }) => {
                   const reason = control.disabledReasons[command];
-                  const shortcut = shortcutLabel(shortcutId);
+                  const shortcut = shortcutId
+                    ? shortcutLabel(shortcutId)
+                    : "Unassigned";
                   return (
                     <button
                       key={command}
@@ -201,7 +215,7 @@ export function WindowArrangementMenu({
                         queueMicrotask(() => triggerRef.current?.focus());
                       }}
                     >
-                      {command === "restore" ? (
+                      {command === "restore" || command === "close-all" ? (
                         <RotateCcw size={19} aria-hidden="true" />
                       ) : (
                         <span
