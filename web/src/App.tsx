@@ -876,6 +876,8 @@ export default function App({
   spacesTabWindows,
   arrangementControl,
   onFocusSpacesTabWindow,
+  spacesWindowsSuspended = false,
+  onSelectSpacesTab,
   onSpacesWindowLayerReady,
   onInspectorVisibilityChange,
   onInspectorViewChange,
@@ -898,6 +900,8 @@ export default function App({
   spacesTabWindows?: readonly SpacesTabWindow[];
   arrangementControl?: WindowArrangementControl;
   onFocusSpacesTabWindow?: (tabId: string, paneId: string | null) => void;
+  spacesWindowsSuspended?: boolean;
+  onSelectSpacesTab?: (tabId: string) => void;
   onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
   onInspectorVisibilityChange?: (open: boolean) => void;
   onInspectorViewChange?: (view: InspectorView) => void;
@@ -3905,6 +3909,9 @@ export default function App({
             onToggleInspector={toggleWorkspaceInspector}
             onToggleAnnotations={toggleAnnotations}
             onFocusSurface={onWorkspaceSurfaceSelect}
+            onSelectTab={
+              operationalShortcutsEnabled ? onSelectSpacesTab : undefined
+            }
             arrangementControl={arrangementControl}
           />
           <div
@@ -3960,6 +3967,7 @@ export default function App({
                 {!hasWorkspaceSurface &&
                 terminalPresentation === "spaces" &&
                 visibleSpacesTabWindows.length === 0 &&
+                !spacesWindowsSuspended &&
                 focusedWorkspace &&
                 activeSpacesTabId ? (
                   <SpacesTabTerminal

@@ -1,6 +1,8 @@
 import {
   ChevronRight,
   Maximize2,
+  RotateCcw,
+  RotateCw,
   Server,
   SquareTerminal,
   Waypoints,
@@ -196,11 +198,13 @@ export default function SpatialGraphView({
       camera: GraphCamera,
       positions: Record<string, SavedGraphPosition>,
       cameraMode: GraphCameraMode,
+      rotation: number,
     ) => {
       schedulePrefsWrite({
         camera,
         cameraMode,
         positions,
+        rotation,
         collapsedIds: [...collapsedIdsRef.current],
       });
     },
@@ -295,6 +299,22 @@ export default function SpatialGraphView({
           onClick={() => canvasRef.current?.arrange()}
         >
           <Waypoints size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Rotate graph left"
+          title="Rotate graph left"
+          onClick={() => canvasRef.current?.rotate(-1)}
+        >
+          <RotateCcw size={16} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Rotate graph right"
+          title="Rotate graph right"
+          onClick={() => canvasRef.current?.rotate(1)}
+        >
+          <RotateCw size={16} aria-hidden="true" />
         </button>
       </div>
     </WorldViewToolbar>

@@ -21,6 +21,12 @@ retain their original Herdr Web lineage.
 
 ### Added
 
+- Added accessible maximize and resize controls across Office Inspector windows,
+  focus-based window stacking, and Close all terminal windows in Arrange and
+  Actions. Close all preserves Herdr tabs and sessions; Spaces keeps each
+  workspace suspended until explicit tab selection or arrangement. Graph can
+  rotate left or right in quarter turns while keeping labels upright.
+  [Herdr World PR #123](https://github.com/IvoryHeart/herdr-world/pull/123)
 - Added an Arrange graph control beside Fit in Graph view. Arrange spreads visible
   nodes into a readable hierarchy, wraps multiple hosts, and recenters the camera
   after manual pan while preserving zoom when possible. Arranged positions stay

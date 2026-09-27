@@ -1327,6 +1327,79 @@ async function run() {
       }))
       .sort((a, b) => a.label!.localeCompare(b.label!));
   const beforeCompact = desktopInspectorBounds();
+  const builderArrangedWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Builder Inspector"]',
+  )!;
+  const builderBeforeMaximize = builderArrangedWindow.getBoundingClientRect();
+  const sessionCallsBeforeMaximize = calls.filter(({ method }) =>
+    ["terminal.attach", "terminal.detach", "tab.close", "pane.close"].includes(
+      method,
+    ),
+  ).length;
+  const arrangedMaximize =
+    builderArrangedWindow.querySelector<HTMLButtonElement>(
+      '[aria-label="Maximize Inspector window"]',
+    );
+  if (!arrangedMaximize)
+    throw new Error("arranged Inspector maximize control missing");
+  arrangedMaximize.click();
+  await until(() => {
+    const bounds = builderArrangedWindow.getBoundingClientRect();
+    const stage = document
+      .querySelector(".world-view-layout")!
+      .getBoundingClientRect();
+    return (
+      bounds.width >= stage.width - 18 && bounds.height >= stage.height - 18
+    );
+  }, "arranged Inspector maximized over the visual stage");
+  const arrangedRestore =
+    builderArrangedWindow.querySelector<HTMLButtonElement>(
+      '[aria-label="Restore Inspector window"]',
+    );
+  if (!arrangedRestore)
+    throw new Error("arranged Inspector restore control missing");
+  arrangedRestore.click();
+  await until(() => {
+    const bounds = builderArrangedWindow.getBoundingClientRect();
+    return (
+      Math.abs(bounds.left - builderBeforeMaximize.left) < 2 &&
+      Math.abs(bounds.top - builderBeforeMaximize.top) < 2 &&
+      Math.abs(bounds.width - builderBeforeMaximize.width) < 2 &&
+      Math.abs(bounds.height - builderBeforeMaximize.height) < 2
+    );
+  }, "arranged Inspector restored its tile");
+  check(
+    calls.filter(({ method }) =>
+      [
+        "terminal.attach",
+        "terminal.detach",
+        "tab.close",
+        "pane.close",
+      ].includes(method),
+    ).length === sessionCallsBeforeMaximize,
+    "maximizing an Inspector changed terminal ownership",
+  );
+  const reviewerArrangedWindow = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Reviewer Inspector"]',
+  )!;
+  builderArrangedWindow
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(builderArrangedWindow.style.zIndex) >
+      Number(reviewerArrangedWindow.style.zIndex),
+    "focused arranged Inspector raised above the other window",
+  );
+  reviewerArrangedWindow
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(reviewerArrangedWindow.style.zIndex) >
+      Number(builderArrangedWindow.style.zIndex),
+    "later focus changed the top window",
+  );
   const compactVisualStage =
     document.querySelector<HTMLElement>(".world-view-layout")!;
   compactVisualStage.style.width = "660px";
@@ -1479,6 +1552,81 @@ async function run() {
         '[role="dialog"][aria-label="Reviewer Inspector"]',
       ) !== null,
     "occupied Builder dock with floating Reviewer Inspector",
+  );
+  const dockBeforeMaximize = document
+    .querySelector<HTMLElement>(".world-context-rail")!
+    .getBoundingClientRect();
+  const dockMaximize = document.querySelector<HTMLButtonElement>(
+    '.world-context-rail button[aria-label="Maximize Inspector window"]',
+  );
+  if (!dockMaximize)
+    throw new Error("docked Inspector maximize control missing");
+  dockMaximize.click();
+  await until(
+    () =>
+      document.querySelector(
+        '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Restore Inspector window"]',
+      ),
+    "docked Inspector maximized",
+  );
+  const dockRestore = document.querySelector<HTMLButtonElement>(
+    '[role="dialog"][aria-label="Builder Inspector"] button[aria-label="Restore Inspector window"]',
+  );
+  if (!dockRestore) throw new Error("docked Inspector restore control missing");
+  dockRestore.click();
+  await until(() => {
+    const rail = document.querySelector<HTMLElement>(".world-context-rail")!;
+    const bounds = rail.getBoundingClientRect();
+    return (
+      rail.classList.contains("has-inspector") &&
+      Math.abs(bounds.left - dockBeforeMaximize.left) < 2 &&
+      Math.abs(bounds.width - dockBeforeMaximize.width) < 2
+    );
+  }, "docked Inspector restored its placement");
+  const dockResize = document.querySelector<HTMLButtonElement>(
+    '.world-context-rail button[aria-label="Resize Inspector window"]',
+  );
+  check(
+    Boolean(dockResize),
+    "docked Office Inspector has no accessible resize control",
+  );
+  const dockWidthBeforeResize = document
+    .querySelector<HTMLElement>(".world-context-rail")!
+    .getBoundingClientRect().width;
+  dockResize?.focus();
+  dockResize?.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await until(
+    () =>
+      document
+        .querySelector<HTMLElement>(".world-context-rail")!
+        .getBoundingClientRect().width <
+      dockWidthBeforeResize - 8,
+    "keyboard resized the docked Inspector",
+  );
+  const focusedDock = document.querySelector<HTMLElement>(
+    ".world-context-rail",
+  )!;
+  const floatingReviewer = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label="Reviewer Inspector"]',
+  )!;
+  await until(
+    () =>
+      Number(focusedDock.style.zIndex) > Number(floatingReviewer.style.zIndex),
+    "docked Inspector focus raised it above a floating window",
+  );
+  floatingReviewer
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(floatingReviewer.style.zIndex) > Number(focusedDock.style.zIndex),
+    "floating Inspector focus raised it above the dock",
   );
 
   const paneGetsBeforeClosedTargetFocus = calls.filter(
@@ -3689,6 +3837,34 @@ async function run() {
       ),
     "Cascade kept the default floating window size",
   );
+  const maximizedBeforeRestore = document.querySelector<HTMLElement>(
+    '[role="dialog"][aria-label$=" Inspector"]',
+  )!;
+  const cascadeMaximize =
+    maximizedBeforeRestore.querySelector<HTMLButtonElement>(
+      '[aria-label="Maximize Inspector window"]',
+    );
+  if (!cascadeMaximize)
+    throw new Error("Cascade Inspector maximize control missing");
+  cascadeMaximize.click();
+  await until(
+    () =>
+      Boolean(
+        maximizedBeforeRestore.querySelector(
+          '[aria-label="Restore Inspector window"]',
+        ),
+      ),
+    "Cascade participant maximized",
+  );
+  await arrangeWindows("Restore positions");
+  await until(
+    () =>
+      !maximizedBeforeRestore.querySelector(
+        '[aria-label="Restore Inspector window"]',
+      ),
+    "Restore positions cleared the superseded maximize snapshot",
+  );
+  await arrangeWindows("Cascade");
   narrowedVisualStage.style.removeProperty("width");
   narrowedVisualStage.style.removeProperty("height");
 
@@ -3710,6 +3886,52 @@ async function run() {
       document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
         .length === 2,
     "focused Herdr tab closure retired its Inspector",
+  );
+  const closeRpcBefore = calls.filter(({ method }) =>
+    ["tab.close", "pane.close", "terminal.kill"].includes(method),
+  ).length;
+  await arrangeWindows("Single");
+  await until(
+    () =>
+      document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]')
+        .length === 1,
+    "Single retained one visible Inspector before Close all",
+  );
+  await arrangeWindows("Close all terminal windows");
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "arrangement Close all dismissed visual Inspectors",
+  );
+  check(
+    calls.filter(({ method }) =>
+      ["tab.close", "pane.close", "terminal.kill"].includes(method),
+    ).length === closeRpcBefore,
+    "Close all terminated a Herdr tab, pane, or session",
+  );
+  window.dispatchEvent(new Event("resize"));
+  await settle();
+  check(
+    !document.querySelector(".workspace-inspector"),
+    "closed Inspector reappeared through an arrangement",
+  );
+  flushSync(() => agentTarget("Builder")!.click());
+  await until(
+    () => Boolean(document.querySelector(".workspace-inspector")),
+    "visual Inspector reopened after Close all",
+  );
+  await setShellActionsOpen(true);
+  const closeAllAction = [
+    ...document.querySelectorAll<HTMLElement>(".command-popover [cmdk-item]"),
+  ].find(
+    (item) =>
+      item.querySelector(".command-item-title")?.textContent ===
+      "Close all terminal windows",
+  );
+  check(Boolean(closeAllAction), "Actions omitted Close all terminal windows");
+  closeAllAction?.click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "Actions Close all dismissed reopened Inspector",
   );
 
   runtimeGeneration += 1;

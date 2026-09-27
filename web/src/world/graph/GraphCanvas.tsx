@@ -22,6 +22,7 @@ import type {
   SavedGraphPosition,
 } from "./graphPreferences";
 import type { WorldGraphNode, WorldGraphProjection } from "./graphProjection";
+import { graphQuarterTurns, rotateGraphPoint } from "./graphRotation";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
@@ -59,6 +60,7 @@ export type GraphCanvasHandle = {
   fit(): void;
   zoomIn(): void;
   zoomOut(): void;
+  rotate(direction: -1 | 1): void;
 };
 
 type GraphCanvasProps = {
@@ -76,6 +78,7 @@ type GraphCanvasProps = {
     camera: GraphCamera,
     positions: Record<string, SavedGraphPosition>,
     cameraMode: GraphCameraMode,
+    rotation: number,
   ): void;
   onAnchorsChange(anchors: Record<string, OfficeCanvasAnchor> | null): void;
 };
@@ -150,6 +153,7 @@ export const GraphCanvas = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
         fit: () => rendererRef.current?.fit(),
         zoomIn: () => rendererRef.current?.zoomIn(),
         zoomOut: () => rendererRef.current?.zoomOut(),
+        rotate: (direction) => rendererRef.current?.rotate(direction),
       }),
       [],
     );
@@ -211,6 +215,7 @@ class GraphRenderer {
   #matchedIds: ReadonlySet<string> | null = null;
   #camera: GraphCamera;
   #cameraMode: GraphCameraMode;
+  #rotation: number;
   #fitWhenSettled: boolean;
   #width = 1;
   #height = 1;
@@ -236,6 +241,7 @@ class GraphRenderer {
     this.#context = canvas.getContext("2d");
     this.#camera = { ...prefs.camera };
     this.#cameraMode = prefs.cameraMode;
+    this.#rotation = prefs.rotation;
     this.#fitWhenSettled = fitOnMount;
     this.#savedPositions = { ...prefs.positions };
     this.#diagnostics = graphRendererDiagnostics();
@@ -336,7 +342,7 @@ class GraphRenderer {
     if (!this.#layout) return;
     this.#fitWhenSettled = false;
     this.#cameraMode = "fit";
-    const bounds = graphBounds(this.#layout.nodes.values());
+    const bounds = this.#rotatedBounds();
     this.#camera = this.#centeredCamera(bounds, this.#fitZoom(bounds));
     this.#emitViewChange();
     this.#anchorSignature = "";
@@ -367,7 +373,7 @@ class GraphRenderer {
   arrange() {
     if (!this.#layout) return;
     arrangeGraphLayout(this.#layout);
-    const bounds = graphBounds(this.#layout.nodes.values());
+    const bounds = this.#rotatedBounds();
     this.#camera = this.#centeredCamera(
       bounds,
       Math.min(this.#camera.zoom, this.#fitZoom(bounds)),
@@ -385,6 +391,46 @@ class GraphRenderer {
 
   zoomOut() {
     this.#zoomAt(this.#camera.zoom / ZOOM_STEP, 0, 0);
+  }
+
+  rotate(direction: -1 | 1) {
+    if (!this.#layout) return;
+    this.#rotation = graphQuarterTurns(this.#rotation, direction);
+    const bounds = this.#rotatedBounds();
+    this.#camera = this.#centeredCamera(
+      bounds,
+      Math.min(this.#camera.zoom, this.#fitZoom(bounds)),
+    );
+    this.#fitWhenSettled = false;
+    this.#emitViewChange();
+    this.#anchorSignature = "";
+    this.#requestFrame();
+  }
+
+  #graphCenter() {
+    const bounds = graphBounds(this.#layout!.nodes.values());
+    return {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
+  }
+
+  #rotatedBounds() {
+    const bounds = graphBounds(this.#layout!.nodes.values());
+    if (this.#rotation % 2 === 0) return bounds;
+    const center = this.#graphCenter();
+    const halfWidth = (bounds.maxY - bounds.minY) / 2;
+    const halfHeight = (bounds.maxX - bounds.minX) / 2;
+    return {
+      minX: center.x - halfWidth,
+      maxX: center.x + halfWidth,
+      minY: center.y - halfHeight,
+      maxY: center.y + halfHeight,
+    };
+  }
+
+  #rotatedPoint(x: number, y: number) {
+    return rotateGraphPoint({ x, y }, this.#graphCenter(), this.#rotation);
   }
 
   dispose() {
@@ -482,6 +528,10 @@ class GraphRenderer {
       this.#height / 2 + this.#camera.y,
     );
     context.scale(this.#camera.zoom, this.#camera.zoom);
+    const center = this.#graphCenter();
+    context.translate(center.x, center.y);
+    context.rotate((this.#rotation * Math.PI) / 2);
+    context.translate(-center.x, -center.y);
     for (const edge of layout.edges) {
       const source = layout.nodes.get(edge.sourceId);
       const target = layout.nodes.get(edge.targetId);
@@ -509,6 +559,7 @@ class GraphRenderer {
     context.save();
     context.globalAlpha = matched ? 1 : 0.18;
     context.translate(node.x, node.y);
+    context.rotate((-this.#rotation * Math.PI) / 2);
     context.beginPath();
     context.arc(0, 0, radius, 0, Math.PI * 2);
     context.fillStyle =
@@ -600,24 +651,51 @@ class GraphRenderer {
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = rect.width / this.#width;
     const scaleY = rect.height / this.#height;
-    return {
-      worldX:
+    const rotated = {
+      x:
         ((event.clientX - rect.left) / scaleX -
           this.#width / 2 -
           this.#camera.x) /
         this.#camera.zoom,
-      worldY:
+      y:
         ((event.clientY - rect.top) / scaleY -
           this.#height / 2 -
           this.#camera.y) /
         this.#camera.zoom,
     };
+    const original = this.#layout
+      ? rotateGraphPoint(rotated, this.#graphCenter(), -this.#rotation)
+      : rotated;
+    return { worldX: original.x, worldY: original.y };
   }
 
   #hitNode(worldX: number, worldY: number) {
-    return this.#layout
-      ? hitGraphNode(this.#layout.nodes, worldX, worldY)
-      : null;
+    if (!this.#layout) return null;
+    if (this.#rotation === 0)
+      return hitGraphNode(this.#layout.nodes, worldX, worldY);
+    const nodes = [...this.#layout.nodes.values()]
+      .sort((left, right) => nodeRank(left.kind) - nodeRank(right.kind))
+      .reverse();
+    for (const node of nodes) {
+      if (node.kind === "host" || node.kind === "space") {
+        const offset = collapseBadgeOffset(node.kind);
+        const badge = rotateGraphPoint(
+          { x: offset, y: -offset },
+          { x: 0, y: 0 },
+          -this.#rotation,
+        );
+        if (
+          Math.hypot(worldX - node.x - badge.x, worldY - node.y - badge.y) <= 14
+        )
+          return node;
+      }
+      if (
+        Math.hypot(worldX - node.x, worldY - node.y) <=
+        graphNodeRadius(node.kind) + 3
+      )
+        return node;
+    }
+    return null;
   }
 
   #onPointerDown = (event: PointerEvent) => {
@@ -627,8 +705,26 @@ class GraphRenderer {
     const collapse = Boolean(
       (node?.kind === "host" || node?.kind === "space") &&
         Math.hypot(
-          point.worldX - (node.x + collapseBadgeOffset(node.kind)),
-          point.worldY - (node.y - collapseBadgeOffset(node.kind)),
+          point.worldX -
+            (node.x +
+              rotateGraphPoint(
+                {
+                  x: collapseBadgeOffset(node.kind),
+                  y: -collapseBadgeOffset(node.kind),
+                },
+                { x: 0, y: 0 },
+                -this.#rotation,
+              ).x),
+          point.worldY -
+            (node.y +
+              rotateGraphPoint(
+                {
+                  x: collapseBadgeOffset(node.kind),
+                  y: -collapseBadgeOffset(node.kind),
+                },
+                { x: 0, y: 0 },
+                -this.#rotation,
+              ).y),
         ) <= 14,
     );
     this.#pointer = {
@@ -674,8 +770,13 @@ class GraphRenderer {
     } else if (pointer.nodeId && this.#layout) {
       const node = this.#layout.nodes.get(pointer.nodeId);
       if (node) {
-        node.x += dx / this.#camera.zoom;
-        node.y += dy / this.#camera.zoom;
+        const delta = rotateGraphPoint(
+          { x: dx / this.#camera.zoom, y: dy / this.#camera.zoom },
+          { x: 0, y: 0 },
+          -this.#rotation,
+        );
+        node.x += delta.x;
+        node.y += delta.y;
         node.pinned = true;
         this.#alpha = Math.max(this.#alpha, 0.24);
       }
@@ -759,11 +860,14 @@ class GraphRenderer {
   #publishNodes(layout: GraphLayoutState) {
     const published: GraphRendererDiagnostics["publishedNodes"] = {};
     for (const node of layout.nodes.values()) {
+      const rotated = this.#rotatedPoint(node.x, node.y);
       published[node.id] = {
         x: node.x,
         y: node.y,
-        screenX: this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom,
-        screenY: this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom,
+        screenX:
+          this.#width / 2 + this.#camera.x + rotated.x * this.#camera.zoom,
+        screenY:
+          this.#height / 2 + this.#camera.y + rotated.y * this.#camera.zoom,
         pinned: node.pinned,
       };
     }
@@ -781,13 +885,14 @@ class GraphRenderer {
         layout.nodes.get(requestedId) ??
         this.#visibleAncestor(layout, requestedId);
       if (!node) continue;
+      const rotated = this.#rotatedPoint(node.x, node.y);
       const rawX =
         rect.left +
-        (this.#width / 2 + this.#camera.x + node.x * this.#camera.zoom) *
+        (this.#width / 2 + this.#camera.x + rotated.x * this.#camera.zoom) *
           scaleX;
       const rawY =
         rect.top +
-        (this.#height / 2 + this.#camera.y + node.y * this.#camera.zoom) *
+        (this.#height / 2 + this.#camera.y + rotated.y * this.#camera.zoom) *
           scaleY;
       const visible =
         rawX >= rect.left &&
@@ -843,6 +948,7 @@ class GraphRenderer {
       { ...this.#camera },
       this.#savedPositions,
       this.#cameraMode,
+      this.#rotation,
     );
   }
 }

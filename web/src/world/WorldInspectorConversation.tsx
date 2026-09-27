@@ -73,6 +73,8 @@ export default function WorldInspectorConversationView({
   onDockOut,
   onDockIn,
   onFocus,
+  onWindowMaximize,
+  windowMaximized = false,
   onTerminalPortalChange,
 }: {
   conversation: WorldInspectorConversation;
@@ -85,6 +87,8 @@ export default function WorldInspectorConversationView({
   onDockOut?(): void;
   onDockIn?(): void;
   onFocus?(): void;
+  onWindowMaximize?(): void;
+  windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
 }) {
   const connectionClient = useConnectionClient();
@@ -396,6 +400,8 @@ export default function WorldInspectorConversationView({
             onViewChange={changeView}
             onDockChange={changeDock}
             onExpandedChange={changeExpanded}
+            onWindowMaximize={onWindowMaximize}
+            windowMaximized={windowMaximized}
             onDockOut={floating ? undefined : onDockOut}
             onDockIn={floating ? onDockIn : undefined}
             controlMode={floating ? "floating" : "docked"}

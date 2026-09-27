@@ -98,6 +98,7 @@ function graphPrefs() {
     cameraMode?: string;
     collapsedIds?: string[];
     positions?: Record<string, { x: number; y: number; pinned: boolean }>;
+    rotation?: number;
   };
 }
 
@@ -150,7 +151,7 @@ async function run() {
   let terminalOpens = 0;
   let selectedAnchor = false;
   let conversationAnchor = false;
-  let lastSelectedId: string | null = agent.id;
+  let lastSelectedId: string | null = null;
   let setAgentStatus: (status: Pane["agent_status"]) => void = () => {};
 
   function Fixture() {
@@ -221,6 +222,16 @@ async function run() {
     const arrangeButton = host.querySelector<HTMLButtonElement>(
       '[aria-label="Arrange graph"]',
     )!;
+    const rotateLeft = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Rotate graph left"]',
+    )!;
+    const rotateRight = host.querySelector<HTMLButtonElement>(
+      '[aria-label="Rotate graph right"]',
+    )!;
+    check(
+      Boolean(rotateLeft && rotateRight),
+      "Graph rotation controls are missing",
+    );
     if (!compact) {
       check(
         fitButton.textContent?.trim() === "Fit" &&
@@ -233,7 +244,11 @@ async function run() {
         arrangeButton?.title === "Arrange graph" &&
           arrangeButton.tagName === "BUTTON" &&
           fitButton.getBoundingClientRect().right <=
-            arrangeButton.getBoundingClientRect().left,
+            arrangeButton.getBoundingClientRect().left &&
+          arrangeButton.getBoundingClientRect().right <=
+            rotateLeft.getBoundingClientRect().left &&
+          rotateLeft.getBoundingClientRect().right <=
+            rotateRight.getBoundingClientRect().left,
         "Graph Arrange is missing or overlaps Fit",
       );
     }
@@ -335,6 +350,52 @@ async function run() {
       const canvas = host.querySelector<HTMLCanvasElement>(
         "canvas[data-graph-canvas=true]",
       )!;
+      const originalRotation =
+        window.__HERDR_GRAPH_RENDERER__!.publishedNodes[agent.id]!;
+      rotateRight.click();
+      await waitFor(
+        () => graphPrefs().rotation === 1,
+        "Graph right rotation was not persisted",
+      );
+      const turned = window.__HERDR_GRAPH_RENDERER__!.publishedNodes[agent.id]!;
+      check(
+        Math.hypot(
+          turned.screenX - originalRotation.screenX,
+          turned.screenY - originalRotation.screenY,
+        ) > 1,
+        "Graph node did not move on quarter turn",
+      );
+      const rotatedCanvas = host.querySelector<HTMLCanvasElement>(
+        "canvas[data-graph-canvas=true]",
+      )!;
+      const rotatedBounds = rotatedCanvas.getBoundingClientRect();
+      await pointer(
+        rotatedCanvas,
+        "pointerdown",
+        rotatedBounds.left + turned.screenX,
+        rotatedBounds.top + turned.screenY,
+      );
+      await pointer(
+        rotatedCanvas,
+        "pointerup",
+        rotatedBounds.left + turned.screenX,
+        rotatedBounds.top + turned.screenY,
+      );
+      check(
+        lastSelectedId === agent.id,
+        "rotated Graph node lost its pointer hit target",
+      );
+      rotateLeft.focus();
+      rotateLeft.click();
+      await waitFor(
+        () => graphPrefs().rotation === 0,
+        "Graph left rotation did not reverse",
+      );
+      for (let index = 0; index < 4; index += 1) rotateRight.click();
+      await waitFor(
+        () => graphPrefs().rotation === 0,
+        "Four right rotations did not return to zero",
+      );
       const rect = canvas.getBoundingClientRect();
       const before = window.__HERDR_GRAPH_RENDERER__!.publishedNodes[agent.id]!;
       await pointer(

@@ -932,14 +932,18 @@ export function CommandCombobox({
   const arrangementActions: ActionDefinition[] = arrangementControl
     ? WINDOW_ARRANGEMENT_CHOICES.map(
         ({ command, label, description, shortcutId }) => {
-          const shortcut = shortcutLabel(shortcutId);
+          const shortcut = shortcutId
+            ? shortcutLabel(shortcutId)
+            : "Unassigned";
           return {
             key: `arrangement-${command}`,
             icon: <LayoutGrid size={15} />,
             title:
-              command === "restore"
-                ? "Restore window positions"
-                : `Arrange windows: ${label}`,
+              command === "close-all"
+                ? "Close all terminal windows"
+                : command === "restore"
+                  ? "Restore window positions"
+                  : `Arrange windows: ${label}`,
             detail: description,
             shortcut: shortcut === "Unassigned" ? undefined : shortcut,
             keywords: ["layout", "tile", "windows", label],

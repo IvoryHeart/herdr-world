@@ -18,6 +18,7 @@ export type GraphPreferences = {
   cameraMode: GraphCameraMode;
   collapsedIds: string[];
   positions: Record<string, SavedGraphPosition>;
+  rotation: number;
 };
 
 export function readGraphPreferences(storage: GraphPreferenceStorage): {
@@ -89,7 +90,13 @@ export function parseGraphPreferences(value: unknown): GraphPreferences {
       }
     }
   }
-  return { camera, cameraMode, collapsedIds, positions };
+  const rotation =
+    Number.isInteger(value.rotation) &&
+    (value.rotation as number) >= 0 &&
+    (value.rotation as number) < 4
+      ? (value.rotation as number)
+      : 0;
+  return { camera, cameraMode, collapsedIds, positions, rotation };
 }
 
 function defaults(): GraphPreferences {
@@ -98,6 +105,7 @@ function defaults(): GraphPreferences {
     cameraMode: "fit",
     collapsedIds: [],
     positions: {},
+    rotation: 0,
   };
 }
 

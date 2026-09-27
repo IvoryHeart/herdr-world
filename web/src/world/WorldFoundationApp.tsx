@@ -79,6 +79,8 @@ import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
 import {
   defaultFloatingTerminalGeometry,
   FLOATING_TERMINAL_MIN_SIZE,
+  resizeFloatingTerminalGeometry,
+  resizeMinimumForGeometry,
   type FloatingTerminalGeometry,
 } from "./floatingTerminalGeometry";
 import {
@@ -165,6 +167,7 @@ type DockedInspectorGeometry = {
 };
 
 type DockedInspectorMove = {
+  mode: "moving" | "resizing";
   pointerId: number;
   startX: number;
   startY: number;
@@ -599,7 +602,7 @@ export default function WorldFoundationApp() {
       )
         return;
       const choice = WINDOW_ARRANGEMENT_CHOICES.find(({ shortcutId }) =>
-        shortcutMatches(event, shortcutId),
+        shortcutId ? shortcutMatches(event, shortcutId) : false,
       );
       if (!choice) return;
       event.preventDefault();
@@ -686,6 +689,8 @@ export default function WorldFoundationApp() {
           arrangementControl={activeArrangementControl}
           spacesTabWindows={spaces.spacesTabWindows}
           onFocusSpacesTabWindow={spaces.onFocusSpacesTabWindow}
+          spacesWindowsSuspended={spaces.suspended}
+          onSelectSpacesTab={spaces.resumeTab}
           onSpacesWindowLayerReady={spaces.onSpacesWindowLayerReady}
           workspaceSurfaceInspector={
             view !== "spaces" && workspaceSurfaceInspectorConversation
@@ -1001,6 +1006,10 @@ function WorldControlPlane({
   const [singleManualGeometry, setSingleManualGeometry] = useState<
     Record<string, FloatingTerminalGeometry>
   >({});
+  const [maximizedInspectorId, setMaximizedInspectorId] = useState<
+    string | null
+  >(null);
+  const [raisedInspectorIds, setRaisedInspectorIds] = useState<string[]>([]);
   const [inlineReturnNodeId, setInlineReturnNodeId] = useState<string | null>(
     null,
   );
@@ -1008,9 +1017,15 @@ function WorldControlPlane({
   const [intentOverlayAnchor, setIntentOverlayAnchor] =
     useState<WorldConnectorTargetBounds | null>(null);
   const inspectorConversationsRef = useRef(inspectorConversations);
+  const onInspectorConversationsChangeRef = useRef(
+    onInspectorConversationsChange,
+  );
+  const onInspectorTerminalPortalRef = useRef(onInspectorTerminalPortal);
   const dockedInspectorIdRef = useRef(dockedInspectorId);
   const floatingInspectorPortalsRef = useRef(floatingInspectorPortals);
   inspectorConversationsRef.current = inspectorConversations;
+  onInspectorConversationsChangeRef.current = onInspectorConversationsChange;
+  onInspectorTerminalPortalRef.current = onInspectorTerminalPortal;
   dockedInspectorIdRef.current = dockedInspectorId;
   floatingInspectorPortalsRef.current = floatingInspectorPortals;
   const currentSelection = selection
@@ -1156,6 +1171,24 @@ function WorldControlPlane({
         ),
       ]),
   );
+  if (
+    maximizedInspectorId &&
+    visualWindows.some(({ id }) => id === maximizedInspectorId)
+  ) {
+    visualPlacementMap.set(maximizedInspectorId, { ...visualArrangementStage });
+  }
+  const openInspectorIds = visualWindows.map(({ id }) => id);
+  const inspectorStack = [
+    ...openInspectorIds.filter((id) => !raisedInspectorIds.includes(id)),
+    ...raisedInspectorIds.filter((id) => openInspectorIds.includes(id)),
+  ];
+  const raiseInspector = (id: string) => {
+    setRaisedInspectorIds((current) =>
+      current[current.length - 1] === id
+        ? current
+        : [...current.filter((candidate) => candidate !== id), id],
+    );
+  };
   const arrangedDocked =
     dockedInspectorId !== null && visualPlacementMap.has(dockedInspectorId);
   const dockedSuppressed =
@@ -1275,10 +1308,21 @@ function WorldControlPlane({
     setVisualArrangementState((current) =>
       terminalWindowArrangementForLease(current, visualLeaseKey),
     );
+    setMaximizedInspectorId(null);
+    setRaisedInspectorIds([]);
     setExcludedArrangementIds(new Set());
     setSingleManualGeometry({});
     setInlineReturnNodeId(null);
   }, [visualLeaseKey]);
+
+  useEffect(() => {
+    if (
+      maximizedInspectorId &&
+      !visualWindows.some(({ id }) => id === maximizedInspectorId)
+    ) {
+      setMaximizedInspectorId(null);
+    }
+  }, [maximizedInspectorId, visualWindows]);
 
   useEffect(() => {
     const openIds = inspectorConversations.map(worldInspectorWindowId);
@@ -1292,12 +1336,36 @@ function WorldControlPlane({
   }, [inspectorConversations, visualLeaseKey]);
 
   const selectVisualArrangement = useCallback(
-    (command: TerminalWindowArrangementPreset | "restore") => {
+    (command: TerminalWindowArrangementPreset | "restore" | "close-all") => {
+      if (command === "close-all") {
+        if (inspectorConversationsRef.current.length === 0) return;
+        intentRequestRef.current += 1;
+        for (const conversation of inspectorConversationsRef.current) {
+          onInspectorTerminalPortalRef.current(
+            worldInspectorWindowId(conversation),
+            null,
+          );
+        }
+        inspectorConversationsRef.current = [];
+        onInspectorConversationsChangeRef.current([]);
+        dockedInspectorIdRef.current = null;
+        onDockedInspectorIdChange(null);
+        setVisualArrangementState(
+          createTerminalWindowArrangementState(visualLeaseKey),
+        );
+        setExcludedArrangementIds(new Set());
+        setSingleManualGeometry({});
+        setMaximizedInspectorId(null);
+        setRaisedInspectorIds([]);
+        setSelection(null);
+        return;
+      }
       // Compact presentation is derived from the desktop placement snapshot.
       // A stale menu or a direct command must not replace that snapshot.
       if (compactArrangement) return;
       const openIds = visualWindows.map(({ id }) => id);
       if (command === "restore") {
+        setMaximizedInspectorId(null);
         const restored = restoreTerminalWindowArrangement(
           visualArrangementState,
           {
@@ -1359,6 +1427,7 @@ function WorldControlPlane({
         activeId: activeInspectorId,
       });
       if (!applied.result.available) return;
+      setMaximizedInspectorId(null);
       setVisualArrangementState(applied.state);
       setExcludedArrangementIds(new Set());
       setSingleManualGeometry({});
@@ -1404,6 +1473,9 @@ function WorldControlPlane({
       Object.keys(arrangementScope.baselines).length === 0
     ) {
       disabledReasons.restore = "No arranged positions to restore.";
+    }
+    if (visualWindows.length === 0) {
+      disabledReasons["close-all"] = "No terminal windows are presented.";
     }
     return {
       activePreset: compactArrangement
@@ -1461,10 +1533,14 @@ function WorldControlPlane({
       "button, a, input, textarea, select, [role='tab'], [role='separator']";
     const begin = (event: PointerEvent) => {
       if (event.button !== 0 || !(event.target instanceof Element)) return;
+      const resizing = Boolean(
+        event.target.closest(".world-context-rail-resize"),
+      );
       const handle = event.target.closest(
         ".workspace-inspector-head.is-docked-window-drag-handle",
       );
-      if (!handle || event.target.closest(interactiveSelector)) return;
+      if (!resizing && (!handle || event.target.closest(interactiveSelector)))
+        return;
       event.preventDefault();
       const railBounds = rail.getBoundingClientRect();
       const geometry = {
@@ -1474,6 +1550,7 @@ function WorldControlPlane({
         height: railBounds.height,
       };
       dockedInspectorMoveRef.current = {
+        mode: resizing ? "resizing" : "moving",
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
@@ -1490,13 +1567,25 @@ function WorldControlPlane({
       const current = dockedInspectorMoveRef.current;
       if (!current || current.pointerId !== event.pointerId) return;
       event.preventDefault();
+      const viewport = inspectorViewportBounds();
       setDockedInspectorGeometry(
-        moveDockedInspectorGeometry(
-          current.geometry,
-          event.clientX - current.startX,
-          event.clientY - current.startY,
-          inspectorViewportBounds(),
-        ),
+        current.mode === "resizing"
+          ? resizeFloatingTerminalGeometry(
+              current.geometry,
+              event.clientX - current.startX,
+              event.clientY - current.startY,
+              viewport,
+              resizeMinimumForGeometry(
+                current.geometry,
+                FLOATING_TERMINAL_MIN_SIZE,
+              ),
+            )
+          : moveDockedInspectorGeometry(
+              current.geometry,
+              event.clientX - current.startX,
+              event.clientY - current.startY,
+              viewport,
+            ),
       );
     };
     const end = (event: PointerEvent) => {
@@ -1509,8 +1598,10 @@ function WorldControlPlane({
       }
     };
     const moveByKeyboard = (event: KeyboardEvent) => {
+      if (!(event.target instanceof Element)) return;
+      const resizing = event.target.matches(".world-context-rail-resize");
       if (
-        !(event.target instanceof Element) ||
+        !resizing &&
         !event.target.matches(
           ".workspace-inspector-head.is-docked-window-drag-handle",
         )
@@ -1537,13 +1628,17 @@ function WorldControlPlane({
         width: railBounds.width,
         height: railBounds.height,
       };
+      const viewport = inspectorViewportBounds();
       setDockedInspectorGeometry(
-        moveDockedInspectorGeometry(
-          geometry,
-          delta.x,
-          delta.y,
-          inspectorViewportBounds(),
-        ),
+        resizing
+          ? resizeFloatingTerminalGeometry(
+              geometry,
+              delta.x,
+              delta.y,
+              viewport,
+              resizeMinimumForGeometry(geometry, FLOATING_TERMINAL_MIN_SIZE),
+            )
+          : moveDockedInspectorGeometry(geometry, delta.x, delta.y, viewport),
       );
     };
     rail.addEventListener("pointerdown", begin, true);
@@ -2689,11 +2784,21 @@ function WorldControlPlane({
                     height: dockedInspectorGeometry.height,
                     maxHeight: "none",
                     "--world-inspector-dock-size": `${contextRailInspector?.size ?? 520}px`,
+                    zIndex:
+                      50 + inspectorStack.indexOf(dockedInspectorId ?? ""),
                   } as CSSProperties)
                 : ({
                     "--world-inspector-dock-size": `${contextRailInspector?.size ?? 520}px`,
+                    zIndex:
+                      50 + inspectorStack.indexOf(dockedInspectorId ?? ""),
                   } as CSSProperties)
             }
+            onPointerDownCapture={() => {
+              if (dockedInspectorId) raiseInspector(dockedInspectorId);
+            }}
+            onFocusCapture={() => {
+              if (dockedInspectorId) raiseInspector(dockedInspectorId);
+            }}
           >
             {selected && showSelectionProfile ? (
               <Suspense
@@ -2729,6 +2834,14 @@ function WorldControlPlane({
               className="world-inspector-portal"
               ref={setContextRailInspectorPortal}
             />
+            {contextRailInspector && view === "office" ? (
+              <button
+                type="button"
+                className="world-context-rail-resize"
+                aria-label="Resize Inspector window"
+                title="Drag to resize Inspector; use arrow keys for precise sizing"
+              />
+            ) : null}
           </aside>
         </div>
       )}
@@ -2746,6 +2859,9 @@ function WorldControlPlane({
             arrangedGeometry={
               visualPlacementMap.get(worldInspectorWindowId(conversation)) ??
               null
+            }
+            zIndex={
+              50 + inspectorStack.indexOf(worldInspectorWindowId(conversation))
             }
             persistGeometry={
               worldInspectorWindowId(conversation) !== dockedInspectorId
@@ -2788,10 +2904,14 @@ function WorldControlPlane({
               }
             }}
             onFocus={() => {
+              raiseInspector(worldInspectorWindowId(conversation));
               void focusFloatingInspector(conversation).catch(() => undefined);
             }}
             onRaise={() => {
-              void focusFloatingInspector(conversation, false);
+              raiseInspector(worldInspectorWindowId(conversation));
+              void focusFloatingInspector(conversation, false).catch(
+                () => undefined,
+              );
             }}
             onAnchorChange={(anchor) =>
               setFloatingWindowAnchors((current) => {
@@ -2870,6 +2990,16 @@ function WorldControlPlane({
               );
             }}
             onClose={() => closeInspector(conversation)}
+            onWindowMaximize={() => {
+              const id = worldInspectorWindowId(conversation);
+              setMaximizedInspectorId((current) =>
+                current === id ? null : id,
+              );
+              raiseInspector(id);
+            }}
+            windowMaximized={
+              maximizedInspectorId === worldInspectorWindowId(conversation)
+            }
             onDockIn={() => {
               void dockFloatingInspector(conversation).then((docked) => {
                 if (docked && arrangementScope?.preset) {

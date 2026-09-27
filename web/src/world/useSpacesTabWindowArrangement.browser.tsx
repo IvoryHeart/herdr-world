@@ -107,6 +107,48 @@ async function run() {
     "Columns must portal both existing tabs",
   );
   const firstWidth = windows()[0]?.style.width;
+  const openTabsBeforeCloseAll = mock.snapshot().tabs.length;
+  hook().arrangementControl.onSelect("close-all");
+  check(
+    await until(() => hook().suspended && windows().length === 0),
+    "Close all must suspend the Spaces workspace",
+  );
+  check(
+    mock.snapshot().tabs.length === openTabsBeforeCloseAll &&
+      mock.calls.closeTab.length === 0 &&
+      mock.calls.requestCloseTab.length === 0,
+    "Close all must preserve Herdr tabs",
+  );
+  const blockedStageInspector = document.getElementById("inspector")!;
+  blockedStageInspector.classList.remove("is-closed");
+  blockedStageInspector.style.display = "block";
+  check(
+    await until(() =>
+      Boolean(hook().arrangementControl.disabledReasons.columns),
+    ),
+    "narrow stage must disable Columns",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    hook().suspended && windows().length === 0,
+    "unavailable placement must preserve Close all suspension",
+  );
+  blockedStageInspector.classList.add("is-closed");
+  blockedStageInspector.style.display = "none";
+  hook().resumeTab("one");
+  check(
+    await until(
+      () =>
+        !hook().suspended &&
+        hook().arrangementControl.activePreset === "single",
+    ),
+    "explicit tab selection must reopen only Single",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    await until(() => windows().length === 2),
+    "an explicit arrangement must reopen eligible tabs",
+  );
 
   const inspector = document.getElementById("inspector")!;
   inspector.classList.remove("is-closed");
@@ -279,6 +321,29 @@ async function run() {
   check(
     await until(() => windows().length === 3),
     "returning to a workspace must recover its windows",
+  );
+  hook().arrangementControl.onSelect("close-all");
+  check(
+    await until(() => hook().suspended && windows().length === 0),
+    "Close all must clear a returned workspace stage",
+  );
+  const suspendedSnapshot = mock.snapshot();
+  mock.set({
+    workspaces: suspendedSnapshot.workspaces.map((workspace) => ({
+      ...workspace,
+      focused: workspace.workspace_id === "beta",
+    })),
+  });
+  await settle();
+  mock.set({ workspaces: suspendedSnapshot.workspaces });
+  check(
+    await until(() => hook().suspended && windows().length === 0),
+    "navigation must retain Spaces suspension",
+  );
+  hook().arrangementControl.onSelect("columns");
+  check(
+    await until(() => windows().length === 3),
+    "an arrangement must resume all eligible tabs after navigation",
   );
 
   document

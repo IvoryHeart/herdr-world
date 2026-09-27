@@ -74,6 +74,7 @@ export function TabBar({
   onToggleInspector,
   onToggleAnnotations,
   onFocusSurface,
+  onSelectTab,
   arrangementControl,
 }: {
   mobile?: boolean;
@@ -90,6 +91,7 @@ export function TabBar({
     workspaceId: string;
     paneId?: string;
   }) => void | Promise<unknown>;
+  onSelectTab?: (tabId: string) => void;
 }) {
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -151,6 +153,7 @@ export function TabBar({
     : 0;
 
   const focusTab = async (tab: Tab) => {
+    onSelectTab?.(tab.tab_id);
     const pane =
       s.panes.find(
         (candidate) => candidate.tab_id === tab.tab_id && candidate.focused,

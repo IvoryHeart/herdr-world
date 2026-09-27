@@ -60,6 +60,8 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   spacesTabWindows: { tabId: string; portal: Element | null }[];
   renderWindows: ReactNode;
   onFocusSpacesTabWindow: (tabId: string, paneId: string | null) => void;
+  suspended: boolean;
+  resumeTab: (tabId: string) => void;
   onSpacesWindowLayerReady: (element: HTMLDivElement | null) => void;
 } {
   const snapshot = useStoreSelector(
@@ -91,6 +93,12 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     leaseKey,
     scopes: {},
   }));
+  const [suspendedScopes, setSuspendedScopes] = useState<LeaseScoped<string[]>>(
+    () => ({
+      leaseKey,
+      scopes: [],
+    }),
+  );
   const [portals, setPortals] = useState<Record<string, HTMLDivElement | null>>(
     {},
   );
@@ -177,6 +185,9 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     setRaised((current) =>
       current.leaseKey === leaseKey ? current : { leaseKey, scopes: {} },
     );
+    setSuspendedScopes((current) =>
+      current.leaseKey === leaseKey ? current : { leaseKey, scopes: [] },
+    );
     setPortals({});
   }, [leaseKey]);
 
@@ -236,6 +247,11 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   const scope = context
     ? (currentArrangements.scopes[context.scopeKey] ?? null)
     : null;
+  const suspended = Boolean(
+    context &&
+      suspendedScopes.leaseKey === leaseKey &&
+      suspendedScopes.scopes.includes(context.scopeKey),
+  );
   const currentFree =
     free.leaseKey === leaseKey && context
       ? (free.scopes[context.scopeKey] ?? EMPTY_GEOMETRY)
@@ -261,7 +277,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   );
   const entries = useMemo(
     () =>
-      active && context && layer
+      active && context && layer && !suspended
         ? spacesTabWindowEntries({
             scope,
             tabs: context.tabs,
@@ -272,7 +288,17 @@ export function useSpacesTabWindowArrangement(active: boolean): {
             compact: mobile,
           })
         : [],
-    [active, context, layer, scope, currentRaised, currentFree, stage, mobile],
+    [
+      active,
+      context,
+      layer,
+      scope,
+      currentRaised,
+      currentFree,
+      stage,
+      mobile,
+      suspended,
+    ],
   );
 
   useEffect(() => {
@@ -327,9 +353,54 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     }
   };
 
+  const resumeTab = (tabId: string) => {
+    if (!context?.tabs.some((tab) => tab.tab_id === tabId)) return;
+    if (!suspended) return;
+    setSuspendedScopes((current) => ({
+      leaseKey: context.leaseKey,
+      scopes: current.scopes.filter((key) => key !== context.scopeKey),
+    }));
+    setArrangements((current) => ({
+      ...current,
+      scopes: {
+        ...current.scopes,
+        [context.scopeKey]: {
+          preset: "single",
+          restorePreset: null,
+          baselines: {},
+          placements: [],
+        },
+      },
+    }));
+  };
+
   const onSelect = (command: WindowArrangementCommand) => {
     if (!active || !context || !layer || stage.width <= 0 || stage.height <= 0)
       return;
+    if (command === "close-all") {
+      setSuspendedScopes((current) => ({
+        leaseKey: context.leaseKey,
+        scopes: [
+          ...new Set([
+            ...(current.leaseKey === context.leaseKey ? current.scopes : []),
+            context.scopeKey,
+          ]),
+        ],
+      }));
+      setArrangements((current) => ({
+        ...current,
+        scopes: {
+          ...current.scopes,
+          [context.scopeKey]: {
+            preset: "single",
+            restorePreset: null,
+            baselines: {},
+            placements: [],
+          },
+        },
+      }));
+      return;
+    }
     if (command === "restore") {
       setArrangements(
         (current) =>
@@ -355,6 +426,19 @@ export function useSpacesTabWindowArrangement(active: boolean): {
       presentation: (currentFree[window.id]
         ? "floating"
         : "native-single") as SpacesPresentation,
+    }));
+    if (
+      terminalWindowArrangementReason(
+        command,
+        stageRect,
+        windows,
+        context.activeTabId,
+      )
+    )
+      return;
+    setSuspendedScopes((current) => ({
+      leaseKey: context.leaseKey,
+      scopes: current.scopes.filter((key) => key !== context.scopeKey),
     }));
     setArrangements(
       (current) =>
@@ -398,6 +482,9 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   }
   if (!scope || Object.keys(scope.baselines).length === 0) {
     disabledReasons.restore = "No saved window positions.";
+  }
+  if (!context || suspended) {
+    disabledReasons["close-all"] = "No terminal windows are presented.";
   }
 
   const onGeometryChange = (
@@ -480,5 +567,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     renderWindows,
     onFocusSpacesTabWindow,
     onSpacesWindowLayerReady,
+    suspended,
+    resumeTab,
   };
 }

@@ -365,6 +365,27 @@
   flex: 1 1 auto;
   overflow: hidden;
 }
+.world-context-rail-resize {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  width: 24px;
+  height: 24px;
+  cursor: nwse-resize;
+  border: 0;
+  background: transparent;
+}
+.world-context-rail-resize::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
 .world-inspector-transfer-owner {
   display: contents;
 }

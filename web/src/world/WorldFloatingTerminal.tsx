@@ -51,6 +51,7 @@ export default function WorldFloatingInspectorWindow({
   onArrangedGeometryChange,
   onGeometryObserved,
   persistGeometry = true,
+  zIndex,
 }: {
   conversation: WorldInspectorConversation | WorldFloatingTerminal;
   cascadeIndex: number;
@@ -63,6 +64,7 @@ export default function WorldFloatingInspectorWindow({
   onArrangedGeometryChange?(geometry: FloatingTerminalGeometry): void;
   onGeometryObserved?(geometry: FloatingTerminalGeometry): void;
   persistGeometry?: boolean;
+  zIndex?: number;
 }) {
   const windowRef = useRef<HTMLElement | null>(null);
   const interactionRef = useRef<Interaction | null>(null);
@@ -371,6 +373,7 @@ export default function WorldFloatingInspectorWindow({
       aria-label={`${conversation.label} Inspector`}
       data-compact-active={compactActive}
       data-interaction={interaction ?? undefined}
+      onFocusCapture={onRaise}
       style={
         {
           left: effectiveGeometry.left,
@@ -379,6 +382,7 @@ export default function WorldFloatingInspectorWindow({
           height: effectiveGeometry.height,
           right: "auto",
           bottom: "auto",
+          zIndex,
         } satisfies CSSProperties
       }
     >

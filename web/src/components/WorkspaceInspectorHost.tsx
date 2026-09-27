@@ -229,6 +229,8 @@ export function WorkspaceInspectorHost({
   onViewChange,
   onDockChange,
   onExpandedChange,
+  onWindowMaximize,
+  windowMaximized = false,
   onClose,
   onBack,
   context,
@@ -271,6 +273,8 @@ export function WorkspaceInspectorHost({
   onViewChange: (view: InspectorView) => void;
   onDockChange: (dock: InspectorDock) => void;
   onExpandedChange: (expanded: boolean) => void;
+  onWindowMaximize?: () => void;
+  windowMaximized?: boolean;
   onClose: () => void;
   onBack: () => void;
   context?: WorkspaceInspectorContext | null;
@@ -633,6 +637,28 @@ export function WorkspaceInspectorHost({
           ) : null}
         </div>
         <div className="workspace-inspector-actions">
+          {onWindowMaximize ? (
+            <button
+              type="button"
+              title={
+                windowMaximized
+                  ? "Restore Inspector window"
+                  : "Maximize Inspector window"
+              }
+              aria-label={
+                windowMaximized
+                  ? "Restore Inspector window"
+                  : "Maximize Inspector window"
+              }
+              onClick={onWindowMaximize}
+            >
+              {windowMaximized ? (
+                <Minimize2 size={15} />
+              ) : (
+                <Maximize2 size={15} />
+              )}
+            </button>
+          ) : null}
           {controlMode === "docked" && onDockOut ? (
             <button
               type="button"
