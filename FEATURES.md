@@ -158,7 +158,10 @@ macOS preset; see [other platform bindings](#keyboard-shortcuts).
   [clipboard compatibility](docs/DEPLOYMENT.md#herdr-compatibility).
 - `Cmd/Ctrl`-click HTTP(S) links to open safely in a new tab, or workspace-relative
   / absolute paths to preview text, Markdown, or images. Wrapped paths remain
-  one link, including indented continuations in agent output.
+  one link, including indented continuations in agent output. Windows drive and
+  backslash paths are recognized too. On Herdr 0.9.1, wrapped terminal links
+  resolve against visible rows; OSC 8 links retain their explicit destinations.
+  Older Herdr versions keep local URL/path detection.
 
 ## Workspace Inspector
 

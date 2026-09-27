@@ -29,6 +29,26 @@ describe("terminal file links", () => {
     ]);
   });
 
+  test("finds Windows drive and backslash paths", () => {
+    expect(
+      findTerminalFileLinkCandidates(
+        "See C:\\Users\\me\\repo\\AGENTS.md, C:/repo/docs/guide.md:12 and docs\\TUTORIAL.md or .\\README.md.",
+      ).map(({ path, absolute }) => ({ path, absolute })),
+    ).toEqual([
+      { path: "C:\\Users\\me\\repo\\AGENTS.md", absolute: true },
+      { path: "C:/repo/docs/guide.md", absolute: true },
+      { path: "docs\\TUTORIAL.md", absolute: false },
+      { path: ".\\README.md", absolute: false },
+    ]);
+    expect(findTerminalFileLinkCandidates("C:\\repo\\..\\secret.txt")).toEqual(
+      [],
+    );
+    expect(findTerminalFileLinkCandidates("prefixC:\\repo\\a.md")).toEqual([]);
+    expect(
+      findTerminalFileLinkCandidates("C:/Users/me/.../AGENTS.md /tmp/.../x.md"),
+    ).toEqual([]);
+  });
+
   test("handles quoted paths without extracting paths from identifiers or URLs", () => {
     expect(
       findTerminalFileLinkCandidates(

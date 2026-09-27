@@ -846,9 +846,11 @@ export function TerminalView({
         return null;
       return `${linkRevisionRef.current}:${desiredTerminalRef.current}:${term.cols}:${term.rows}:${term.buffer.active.viewportY}`;
     };
+    // Callers verify the link first: text links against the displayed row,
+    // OSC 8 links against the hovered frame.
     const showFileLinkMenu = (path: string, event: MouseEvent) => {
       const workspaceId = previewWorkspaceIdRef.current;
-      if (workspaceId && linkState())
+      if (workspaceId)
         setFileLinkMenu({
           path,
           workspaceId,
