@@ -1,9 +1,11 @@
 ## 1. Terminal window controls and focus order
 
-- [ ] 1.1 Add maximize and restore behavior to floating Office terminal windows and verify prior geometry is restored.
+- [ ] 1.1 Add maximize and restore behavior to Office terminal windows and verify floating, docked, and arranged presentation contexts are restored.
 - [ ] 1.2 Ensure resize and maximize controls are available and accessible on each Office window presentation; verify geometry changes preserve terminal ownership.
 - [ ] 1.3 Raise the latest focused window across floating, docked, and arranged windows; verify focus changes do not alter geometry.
-- [ ] 1.4 Add the same close-all terminal-window action to the arrangement and Actions menus; verify it dismisses focused-workspace tabs in Spaces and visible Inspectors in Office, Tree, and Graph without closing Herdr tabs, panes, or sessions.
+- [ ] 1.4 Add the same close-all terminal-window action to the arrangement and Actions menus; verify Spaces suspension, tab/arrangement reopen behavior, and persistence across navigation without closing Herdr tabs, panes, or sessions.
+- [ ] 1.5 Close every visual Inspector conversation, including retained conversations hidden by Single or compact layout; verify none reappear after changing arrangement or returning to desktop.
+- [ ] 1.6 Verify Restore positions cancels a maximized window snapshot and restores the captured arrangement baseline.
 
 ## 2. Graph rotation
 
@@ -12,5 +14,5 @@
 
 ## 3. Integration and documentation
 
-- [ ] 3.1 Add focused and browser coverage for window controls, stacking, close-all actions, and Graph rotation; verify all four requested behaviors.
+- [ ] 3.1 Add focused and browser coverage for maximize restoration, focus stacking, close-all and reopen transitions, and Graph rotation; verify all four requested behaviors and terminal-session preservation.
 - [ ] 3.2 Update the current `world-surfaces` specification and the appropriate Unreleased changelog entry; verify OpenSpec validation and inspect the final diff.
