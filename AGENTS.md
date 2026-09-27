@@ -77,8 +77,9 @@ Use focused tests and type checks while developing, after coherent changes or to
 investigate a failure; do not rerun them after every edit or run mutating formatting
 after each patch. When the candidate and focused regressions are complete, stage only
 intended files, run `bun run format:staged` once, restage its changes, and inspect the
-final diff. A docs-only candidate is a safe no-op for the formatter. Do not format
-the whole repository for a scoped change. Commit with the read-only pre-commit
+final diff. The formatter rejects staged files that also have unstaged edits; separate
+those edits first. A docs-only candidate is a safe no-op for the formatter. Do not
+format the whole repository for a scoped change. Commit with the read-only pre-commit
 format/lint guard. Push a complete PR candidate once: the tracked pre-push hook runs
 `bun run check`, covering notices, formatting, lint, types, tests, builds and OpenSpec;
 CI repeats it on the PR head. Do not run a separate final full check immediately
@@ -141,8 +142,10 @@ Large outputs are the primary driver of context bloat and token cost.
 ## Changelog and releases
 
 - Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading.
-- Keep the changelog entry in the candidate; put the new PR link in the PR
-  description. Do not amend the branch solely to add that number to the changelog.
+- Keep the changelog entry in the candidate. Prepare the final PR description
+  before creation; it does not need to link to itself. Do not amend the branch
+  solely to add the new PR number to the changelog, or edit the PR body solely
+  for later usage accounting; retain later usage in the workflow output.
 - Record the exact Roamgate source synchronization in `UPSTREAM.md`; say "derived
   from" for source and "compatible with" for the external Herdr runtime.
 - Release preparation happens on a clean branch from `origin/main` and is delivered

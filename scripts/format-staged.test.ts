@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -23,6 +24,11 @@ function withFixture(run: (root: string) => void) {
   try {
     execFileSync("git", ["init", "-q"], { cwd: root });
     copyFileSync(join(projectRoot, "biome.json"), join(root, "biome.json"));
+    mkdirSync(join(root, "scripts"));
+    copyFileSync(
+      join(projectRoot, "scripts", "format-staged.ts"),
+      join(root, "scripts", "format-staged.ts"),
+    );
     writeFileSync(
       join(root, "package.json"),
       JSON.stringify({ scripts: { "format:staged": script } }),
@@ -70,5 +76,24 @@ test("format:staged succeeds without writes for a docs-only candidate", () => {
 
     expect(readFileSync(guide, "utf8")).toBe("# Guide\n");
     expect(readFileSync(unstaged, "utf8")).toBe("const  other=2\n");
+  });
+});
+
+test("format:staged rejects unstaged edits in a staged file", () => {
+  withFixture((root) => {
+    const candidate = join(root, "candidate.ts");
+    writeFileSync(candidate, "const  staged=1\n");
+    execFileSync("git", ["add", "candidate.ts"], { cwd: root });
+    const mixed = "const  staged=1\nconst  unstaged=2\n";
+    writeFileSync(candidate, mixed);
+
+    expect(() => formatStaged(root)).toThrow();
+    expect(readFileSync(candidate, "utf8")).toBe(mixed);
+    expect(
+      execFileSync("git", ["show", ":candidate.ts"], {
+        cwd: root,
+        encoding: "utf8",
+      }),
+    ).toBe("const  staged=1\n");
   });
 });

@@ -49,9 +49,9 @@ When reviewing pull requests, focus on:
 Install all workspace dependencies once with `bun install --frozen-lockfile`
 from the repo root. The root `bun.lock` is authoritative.
 
-During editing, run focused checks for specific questions. Stage the completed
-candidate, run `bun run format:staged` once, restage, and inspect the diff. The
-read-only pre-commit hook checks format and lint. For a PR, push once through
-the pre-push full `bun run check` gate; CI repeats it on the PR head. For an
-explicitly local-only handoff, run one full check. Add applicable browser or
-site checks for changes in those areas and call out missing verification.
+Follow `AGENTS.md` and `docs/agent-development.md` for the worktree, candidate,
+formatting, verification and PR workflow. Use the general
+`docs/agent-task-prompt.md` when starting a task. The tracked pre-commit hook
+checks format and lint without writing files; the pre-push hook runs the full
+`bun run check` gate. Add applicable browser or site checks for changes in
+those areas and call out missing verification.

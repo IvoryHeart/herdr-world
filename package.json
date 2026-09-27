@@ -53,7 +53,7 @@
     "notices:generate": "bun scripts/dependency-notices.ts",
     "notices:check": "bun scripts/dependency-notices.ts --check",
     "format": "biome format --write .",
-    "format:staged": "biome format --write --staged --no-errors-on-unmatched",
+    "format:staged": "bun scripts/format-staged.ts",
     "format:check": "biome format .",
     "lint": "oxlint .",
     "test": "bun test",

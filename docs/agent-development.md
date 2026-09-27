@@ -61,8 +61,10 @@ focused tests or quick type checks only when they answer a specific question. Do
 not run mutating formatting after each patch. Once the candidate and its focused
 regressions are complete, stage only intended files, run `bun run format:staged`
 once, restage its changes, and inspect the final diff. The command safely does
-nothing for a docs-only candidate. Do not format the whole repository for a
-scoped change. Commit with the existing read-only pre-commit format/lint guard.
+nothing for a docs-only candidate and rejects staged files that also have
+unstaged edits. Separate those edits before formatting. Do not format the whole
+repository for a scoped change. Commit with the existing read-only pre-commit
+format/lint guard.
 For a PR, push the complete candidate once through the tracked pre-push hook:
 it runs `bun run check` once for that push, covering notices, formatting, lint,
 types, tests, builds and OpenSpec. CI repeats it on the PR head. Do not run a
@@ -90,11 +92,15 @@ running. A Codex lifecycle hook cannot intercept `write_stdin`; do not add one
 for polling. The reusable [task prompt](agent-task-prompt.md) repeats this rule.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
-data. Record exact verification and agent execution in the pull request using the
-[PR template](../.github/pull_request_template.md). Reuse earlier results only
-when their relevant inputs are unchanged. Open a ready PR and stop before merge.
+data. Prepare the PR body with available verification and agent execution using the
+[PR template](../.github/pull_request_template.md) before creating the PR; use
+`unknown` for values not yet available. A PR does not need to link to itself.
+Keep later usage accounting in the workflow output and final handoff instead of
+editing the PR body solely for totals, because an edit starts another CI run.
+Reuse earlier results only when their relevant inputs are unchanged. Open a
+ready PR and stop before merge.
 
-For Codex token usage, run `bun run agent:usage -- --pr <number> --session
+For Codex token usage before PR creation, run `bun run agent:usage -- --session
 <session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat
 `--session` for contributing agents, or omit it to use the current
 `CODEX_SESSION_ID` for a root agent. Pass each subagent's rollout UUID explicitly:
@@ -105,8 +111,10 @@ to the PR. The script reads local Codex rollout files under
 `token_usage_record` entries including compaction, and prints only aggregate
 counts and the chosen boundary. Its `--pr` value labels the report; it cannot
 infer which turns belong to a PR. Record the explicit session/time boundary in
-the PR and rerun near handoff. Cached input is included in input, and reasoning
-is included in output. These counts are not billed cost. The local Prometheus
+the initial PR body; a later rerun can use `--pr <number>` for its output label,
+with its new totals retained in workflow output. Cached input is included in
+input, and reasoning is included in output. These counts are not billed cost.
+The local Prometheus
 `codex_turn_token_usage` series aggregates by model and token type without a
 session label, so it cannot substitute for the PR-specific rollout count.
 Add `--tooling` to report aggregate tool calls, recognized check commands, and

@@ -27,7 +27,7 @@ assets required by server typechecks and process tests.
 | Lint | `bun run lint` runs Oxlint across the repository. |
 | Related tests | `bun test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
-| Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. Docs-only candidates are a safe no-op. |
+| Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
 | Branch push | The installed pre-push hook runs `bun run check`; CI repeats it on the PR head. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
