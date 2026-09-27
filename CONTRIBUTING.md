@@ -37,7 +37,9 @@ only for a specific question while developing. For a branch push, the hook's
 `bun run check` is the final full check. Run it separately only when there is no
 push or the hook is unavailable. After a failed push check, use the failing stage
 and focused checks to diagnose the issue. Do not run `bun run format` for a scoped
-change.
+change. The pre-push hook records each gate's status and elapsed seconds in the
+ignored `.agents/delivery/pre-push.tsv` file. A failed gate keeps its complete
+log in the same directory and prints its path.
 
 Workspace checks: `bun run --filter herdr-world-web typecheck` and
 `bun run --filter herdr-world-server typecheck` (builds/embeds web assets first).

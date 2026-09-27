@@ -2,8 +2,9 @@
 
 Use this for implementation or documentation tasks with a concrete outcome and
 acceptance criteria. Replace the placeholders and follow `AGENTS.md` and
-`docs/agent-development.md` in the repository worktree. The Codex wait rule
-below applies when the agent has a `write_stdin` tool.
+`docs/agent-development.md` in the repository worktree. The repo-local
+`candidate-delivery` skill gives a detailed handoff procedure when needed. The
+Codex wait rule below applies when the agent has a `write_stdin` tool.
 
 > Deliver [outcome] on a branch worktree from [parent ref]. Read the relevant
 > guidance and source first. During editing, run focused tests or quick type
@@ -34,8 +35,3 @@ below applies when the agent has a `write_stdin` tool.
 > For PR delivery, open one ready PR and report commands tested, check wall
 > time, and review focus. For explicitly local-only delivery, stop after the
 > full local check and report. Preserve independent review and CI for PRs.
-> For the next comparable task, measure wait-only model turns per six-minute
-> gate, formatter writes per
-> candidate, full checks per pushed candidate, check wall time, and review
-> outcomes. Target at most two blocking waits per six-minute gate and one
-> formatter write per candidate.

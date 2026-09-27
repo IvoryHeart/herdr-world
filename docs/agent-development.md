@@ -56,33 +56,24 @@ quality and correction rate alongside tokens and time.
 
 ## Verify and hand off
 
-Add focused regression tests for behavior changes. During implementation, use
-focused tests or quick type checks only when they answer a specific question;
-do not repeat them or run mutating formatting after every edit. Once the candidate
-and its focused regressions are complete, stage only intended files, run
-`bun run format:staged` once, restage its changes, and inspect the final diff.
-The command safely does nothing for a docs-only candidate and rejects staged
-files that also have unstaged edits. Separate those edits before formatting.
-Do not format the whole repository for a scoped change. Commit with the existing
-read-only pre-commit format/lint guard. For a PR, push the complete candidate
-once through the tracked pre-push hook: it runs `bun run check` once for that
-push, covering notices, formatting, lint, types, tests, builds and OpenSpec.
-The hook invocation satisfies the final full check; do not run it separately
-before the same push. If there is no push or the hook is unavailable, run one
-explicit full check. After a failed gate, investigate the failing stage with
-focused checks; if a later repair changes code, begin a new candidate cycle.
-CI repeats the check on the PR head. Use `bun run test:browser` when the browser
-suite answers a specific question, and `bun run build:site` for site changes.
+Add focused regression tests for behavior changes. The repo-local
+[candidate-delivery skill](../.agents/skills/candidate-delivery/SKILL.md) gives
+the detailed staged formatter, commit, push and local-only gate procedure for
+multi-step handoffs and review repairs. Use
+`bun run test:browser` when the browser suite answers a specific question, and
+`bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
 lint, and the pre-push hook checks the full candidate. Worktrees share the same Git
 hook configuration.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
-source excerpts bounded, then read more only when needed. Keep complete check logs
-outside the prompt; report a short status on success and the relevant diagnostics
-on failure. Preserve the check's exit status. The hook is silent on success and
-prints failure output. For review-only work, inspect exact-head CI evidence first.
+source excerpts bounded, then read more only when needed. The pre-push hook writes
+one ignored `.agents/delivery/pre-push.tsv` row per full gate with UTC timestamp,
+head SHA, exit code and elapsed seconds. It prints a short success status; on
+failure it prints a concise summary and the path to the complete retained log.
+Inspect that log only when needed, preserving the check's exit status. For
+review-only work, inspect exact-head CI evidence first.
 Run a local check only to investigate a specific gap or reproduce a finding; do
 not repeat a successful full gate on the same commit. When a command returns a
 running session, call `write_stdin` on that session with empty `chars` and
@@ -127,11 +118,15 @@ text or tool output.
 
 ## Revisit the process
 
-For the next comparable task, measure wait-only model turns per six-minute
-gate, formatter writes per candidate, full checks per pushed candidate, check
-wall time, and review outcomes. The first target is at most two blocking waits
-per six-minute gate and one formatter write per candidate. Record the actual
-values in the PR; these targets do not replace the verification gates.
+For the next comparable task, the process review measures wait-only model turns
+per six-minute gate from the Codex rollout; formatter writes per candidate from
+`format:staged` output and the rollout; full checks per pushed candidate and
+check wall time from the local hook report and CI run metadata; and review
+outcomes from the PR timeline. `agent:usage --tooling` cannot count a check
+executed inside the pre-push hook as a literal agent command. The first targets
+are at most two blocking waits per six-minute gate and one formatter write per
+candidate. Keep measurements in workflow artifacts and the process review; do
+not edit a PR body later solely for these totals. Targets do not replace gates.
 
 After a batch of roughly five agent-assisted PRs, and during release preparation,
 the agent closing the batch compares usage boundaries, model responses,

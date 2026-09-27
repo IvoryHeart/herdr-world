@@ -23,6 +23,8 @@ Read [docs/agent-development.md](docs/agent-development.md) for the working loop
 [docs/knowledge-map.md](docs/knowledge-map.md) to find contracts, source, tests and
 runbooks. Current contracts are in `openspec/specs/`; active changes are in
 `openspec/changes/`; numbered documents under `docs/specs/` are historical context.
+The repo-local [candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md)
+contains the detailed procedure for multi-step handoffs and review repairs.
 
 ## Product shape
 
@@ -73,20 +75,13 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Use focused tests and type checks while developing when they answer a specific
-question; do not rerun them after every edit or run mutating formatting after
-each patch. When the candidate and focused regressions are complete, stage only
-intended files, run `bun run format:staged` once, restage its changes, and inspect
-the final diff. The formatter rejects staged files with unstaged edits; separate
-those edits first. A docs-only candidate is a safe no-op. Do not format the whole
-repository for a scoped change. Commit with the read-only pre-commit format/lint
-guard. The tracked pre-push hook is the final full gate for a branch push: it
-runs `bun run check`, covering notices, formatting, lint, types, tests, builds
-and OpenSpec. Count that invocation as the required full check; do not also run
-it manually before the same push. If there is no push or the hook is unavailable,
-run `bun run check` once explicitly. After a failed gate, investigate the failing
-stage with focused checks and let the next push rerun the full gate. If a repair
-changes code, begin a new candidate cycle. CI repeats the check on the PR head.
+Use focused tests and type checks when they answer a specific question. Before
+commit, stage intended files, run `bun run format:staged` once, restage and
+inspect the diff. A docs-only candidate is a safe no-op. The pre-commit hook
+checks formatting and lint without writing files. On a branch push, the
+pre-push hook runs the full `bun run check`; CI repeats it on the PR head. Do
+not run a duplicate final full check before that push. For a local-only
+handoff, run one explicit full check. A code repair starts a new candidate cycle.
 Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
