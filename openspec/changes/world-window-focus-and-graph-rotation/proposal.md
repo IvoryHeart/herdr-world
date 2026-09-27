@@ -1,0 +1,24 @@
+## Why
+
+Office terminal windows do not expose the same maximize and resize controls in every presentation, and a recently focused window can remain behind another window. Graph users can fit or rearrange the layout but cannot turn it to suit their workspace.
+
+## What Changes
+
+- Provide maximize and resize controls consistently on all Office terminal windows, including floating windows.
+- Raise the latest focused terminal window above every other window, regardless of whether it is floating, docked, or arranged.
+- Add left and right 90-degree Graph rotation controls beside Fit and Arrange; repeated turns accumulate, labels stay readable, and controls remain grouped.
+- Add a close-all window action to both the arrangement menu and Actions menu, closing the active view's arrangement set without closing or killing the underlying Herdr terminals, panes, or sessions.
+
+## Capabilities
+
+### New Capabilities
+
+None.
+
+### Modified Capabilities
+
+- `world-surfaces`: define consistent terminal window controls, focus-based stacking, view-menu close-all behavior, and quarter-turn Graph rotation.
+
+## Impact
+
+Browser presentation in Office and the Graph toolbar/layout; the existing `world-surfaces` contract and its focused and browser-level UI coverage. No service API or Herdr runtime behavior changes.
