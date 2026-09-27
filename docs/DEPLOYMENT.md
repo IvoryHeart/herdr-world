@@ -34,6 +34,19 @@ The process prints the application URL. The default is <http://127.0.0.1:8787>.
 Open it directly or install it as a PWA. PWA mode removes browser chrome; it is not
 offline mode and the World process must remain reachable.
 
+Alternatively, install the same release through Homebrew on macOS or Linux, or npm
+on any supported desktop platform:
+
+```bash
+brew install IvoryHeart/tap/herdr-world
+npm install --global @ivoryheart/herdr-world
+```
+
+Choose one channel. Homebrew uses the published platform archive; npm installs a
+small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
+and optional dependencies enabled. Neither channel installs or starts Herdr. For
+an existing installation, stop the old World process before upgrading the channel.
+
 This foundation starts with fresh World state. It uses
 `~/.config/herdr-world` (or `%APPDATA%\herdr-world`) and browser keys under
 `herdr-world:foundation-v2:`. It does not read old Herdr World bridge profiles,
@@ -42,13 +55,19 @@ rollback.
 
 ### Replacing Herdr World 0.1.1 or earlier
 
-Stop the old World service before installing this foundation so it does not retain
-port 8787. Use the removal path for the channel you previously installed:
+Stop the old World process before upgrading so it does not retain port 8787. If
+continuing with npm or Homebrew, upgrade the existing channel:
 
 ```bash
-# For a foreground or operator-managed standalone installation, stop that process
-# first. Herdr World 0.1.1 did not provide a `service` subcommand. Then choose only
-# the package-manager command that applies.
+# Choose only the package-manager command that applies.
+npm install --global @ivoryheart/herdr-world@latest
+brew upgrade herdr-world
+```
+
+If switching from one of those channels to the standalone installer, remove its
+old launcher first:
+
+```bash
 npm uninstall --global @ivoryheart/herdr-world
 brew uninstall herdr-world
 ```
@@ -90,9 +109,8 @@ for rollback. A custom or unrelated symlink is rejected; move it aside explicitl
 rerun the installer. The obsolete `herdr-world-installer` command and old versioned
 bundle can be removed manually after the new application and profiles are verified.
 
-Install the new release using the command above, start it, and recreate local or SSH
-profiles in Spaces. Old profile files and browser preferences are deliberately neither
-read nor deleted.
+Start the new release and recreate local or SSH profiles in Spaces. Old profile
+files and browser preferences are deliberately neither read nor deleted.
 
 ## Managed Herdr setup
 

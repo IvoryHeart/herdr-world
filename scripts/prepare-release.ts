@@ -20,7 +20,8 @@ const PACKAGE_FILES = [
   "server/package.json",
 ];
 const PLUGIN_MANIFEST_FILE = "herdr-plugin.toml";
-const RELEASE_FILES = [...PACKAGE_FILES, PLUGIN_MANIFEST_FILE];
+const CHANGELOG_FILE = "CHANGELOG.md";
+const RELEASE_FILES = [...PACKAGE_FILES, PLUGIN_MANIFEST_FILE, CHANGELOG_FILE];
 
 const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
@@ -115,24 +116,47 @@ export function resolveNextVersion(current: string, input: string): string {
   );
 }
 
+export function promoteChangelog(
+  changelog: string,
+  version: string,
+  date: string,
+): string {
+  const heading = "## [Unreleased]\n";
+  const start = changelog.indexOf(heading);
+  if (start < 0) throw new Error("CHANGELOG.md has no Unreleased section");
+  const next = changelog.indexOf("\n## [", start + heading.length);
+  if (next < 0) throw new Error("CHANGELOG.md has no previous release section");
+  const notes = changelog.slice(start + heading.length, next).trim();
+  if (!notes.includes("- ")) {
+    throw new Error("CHANGELOG.md has no Unreleased changes to publish");
+  }
+  return (
+    changelog.slice(0, start) +
+    `${heading}\n## [${version}] - ${date}\n\n` +
+    changelog.slice(start + heading.length).replace(/^\n+/u, "")
+  );
+}
+
 function git(...args: string[]): string {
   return execFileSync("git", args, { cwd: REPO_ROOT, encoding: "utf8" }).trim();
 }
 
-function gitTagExists(tag: string): boolean {
+function originTagExists(tag: string): boolean {
   const result = spawnSync(
     "git",
-    ["rev-parse", "--verify", "--quiet", `refs/tags/${tag}`],
+    ["ls-remote", "--exit-code", "--refs", "origin", `refs/tags/${tag}`],
     { cwd: REPO_ROOT, encoding: "utf8" },
   );
   if (result.error) {
     throw new Error(
-      `could not run git while inspecting tag ${tag}: ${result.error.message}`,
+      `could not run git while inspecting origin tag ${tag}: ${result.error.message}`,
     );
   }
   if (result.status === 0) return true;
-  if (result.status === 1) return false;
-  throw new Error(result.stderr.trim() || `could not inspect tag ${tag}`);
+  if (result.status === 2) return false;
+  throw new Error(
+    result.stderr.trim() || `could not inspect origin tag ${tag}`,
+  );
 }
 
 function abort(message: string): never {
@@ -181,17 +205,30 @@ function main() {
   const manifestPath = join(REPO_ROOT, PLUGIN_MANIFEST_FILE);
   const manifestText = readFileSync(manifestPath, "utf8");
   const current = parseManifestVersion(manifestText);
+  const changelogPath = join(REPO_ROOT, CHANGELOG_FILE);
+  const changelogText = readFileSync(changelogPath, "utf8");
 
   const version = resolveNextVersion(current, input);
   const tag = `v${version}`;
-  if (gitTagExists(tag)) {
-    abort(`tag ${tag} already exists; fetch tags before preparing a release`);
+  if (originTagExists(tag)) {
+    abort(`tag ${tag} already exists on origin`);
   }
+  const releaseNotes = readFileSync(
+    join(REPO_ROOT, "docs", "releases", `${tag}.md`),
+    "utf8",
+  );
+  if (!releaseNotes.trim()) abort(`release notes for ${tag} are empty`);
 
   // Compute every output before writing anything so a validation failure
   // leaves the worktree untouched.
   const manifestWrite = replaceManifestVersion(manifestText, current, version);
+  const changelogWrite = promoteChangelog(
+    changelogText,
+    version,
+    new Date().toISOString().slice(0, 10),
+  );
   writeFileSync(manifestPath, manifestWrite);
+  writeFileSync(changelogPath, changelogWrite);
 
   console.log(
     `Prepared release ${version}. Review the changes and submit them as a release PR.`,

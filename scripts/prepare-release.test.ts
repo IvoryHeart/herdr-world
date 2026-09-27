@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   parseManifestVersion,
   parsePackageVersion,
+  promoteChangelog,
   replaceManifestVersion,
   replacePackageVersion,
   resolveNextVersion,
@@ -109,5 +110,26 @@ describe("resolveNextVersion", () => {
     expect(() => resolveNextVersion("0.4.1", "next")).toThrow("X.Y.Z");
     expect(() => resolveNextVersion("0.4.1", "")).toThrow("X.Y.Z");
     expect(() => resolveNextVersion("0.4", "patch")).toThrow("X.Y.Z");
+  });
+});
+
+describe("promoteChangelog", () => {
+  const changelog =
+    "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- A new view.\n\n## [0.1.1] - 2026-09-01\n";
+
+  test("moves reviewed notes into the dated version and opens a fresh section", () => {
+    expect(promoteChangelog(changelog, "0.2.0", "2026-09-28")).toBe(
+      "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-09-28\n\n### Added\n\n- A new view.\n\n## [0.1.1] - 2026-09-01\n",
+    );
+  });
+
+  test("rejects an empty release", () => {
+    expect(() =>
+      promoteChangelog(
+        "# Changelog\n\n## [Unreleased]\n\n## [0.1.1] - 2026-09-01\n",
+        "0.2.0",
+        "2026-09-28",
+      ),
+    ).toThrow("no Unreleased changes");
   });
 });

@@ -41,6 +41,8 @@ jobs:
           test "$server_version" = "0.0.0"
           test "$GITHUB_REF_NAME" = "v$plugin_version"
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          test -s "docs/releases/$GITHUB_REF_NAME.md"
+          grep -q "^## \[$plugin_version\] - " CHANGELOG.md
       - run: bun run precommit
 
   package:
@@ -142,9 +144,84 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  npm-stage:
+    name: Stage npm packages
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.1"
+          no-cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: dist
+          pattern: herdr-world-*
+          merge-multiple: true
+      - name: Stage and pack the verified binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+            npm view "@ivoryheart/herdr-world-$platform@0.0.0-seed.0" version --json >/dev/null || {
+              echo "Bootstrap @ivoryheart/herdr-world-$platform and configure its trusted publisher before release" >&2
+              exit 1
+            }
+          done
+          bun scripts/stage-npm-release.ts "$version"
+          mkdir -p dist/npm-tarballs
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+            npm pack "dist/npm/$platform" --pack-destination dist/npm-tarballs --silent
+          done
+          npm pack dist/npm/launcher --pack-destination dist/npm-tarballs --silent
+          test "$(find dist/npm-tarballs -name '*.tgz' | wc -l)" -eq 7
+          npm install --ignore-scripts --offline --prefix dist/npm-smoke \
+            "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
+            "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
+          test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-packages
+          path: dist/npm-tarballs/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  homebrew-formula:
+    name: Generate Homebrew Formula
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.1"
+          no-cache: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: dist
+          pattern: herdr-world-*
+          merge-multiple: true
+      - run: bun scripts/generate-homebrew-formula.ts "${GITHUB_REF_NAME#v}" dist dist/herdr-world.rb
+      - run: ruby -c dist/herdr-world.rb
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7
+        with:
+          name: homebrew-formula
+          path: dist/herdr-world.rb
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Publish GitHub Release
-    needs: package
+    needs: [package, npm-stage, homebrew-formula]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -162,13 +239,77 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >-
-          gh release create "$GITHUB_REF_NAME"
-          dist/herdr-world-*.tar.xz
-          dist/herdr-world-*.tar.xz.sha256
-          dist/herdr-world-*.update.json
-          scripts/install-herdr-world.sh
-          --verify-tag
-          --latest
-          --generate-notes
-          --title "Herdr World $GITHUB_REF_NAME"
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub release $GITHUB_REF_NAME already exists"
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            dist/herdr-world-*.tar.xz \
+            dist/herdr-world-*.tar.xz.sha256 \
+            dist/herdr-world-*.update.json \
+            scripts/install-herdr-world.sh \
+            --verify-tag \
+            --latest \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
+            --title "Herdr World $GITHUB_REF_NAME"
+
+  npm-publish:
+    name: Publish npm packages
+    needs: [publish, npm-stage]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: npm-packages
+          path: npm-packages
+      - name: Publish platform packages, then the launcher
+        run: node scripts/publish-npm-release.mjs "${GITHUB_REF_NAME#v}" npm-packages
+
+  homebrew-pr:
+    name: Propose Homebrew Formula update
+    needs: [homebrew-smoke, homebrew-formula]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: homebrew-formula
+          path: formula
+      - name: Open tap pull request
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: bash scripts/open-homebrew-pr.sh "${GITHUB_REF_NAME#v}" formula/herdr-world.rb
+
+  homebrew-smoke:
+    name: Homebrew install (${{ matrix.runner }})
+    needs: [publish, homebrew-formula]
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: homebrew-formula
+          path: formula
+      - name: Install the published archive through Homebrew
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install --formula ./formula/herdr-world.rb
+          test "$("$(brew --prefix herdr-world)/bin/herdr-world" --version)" = "herdr-world ${GITHUB_REF_NAME#v}"
+          brew test ./formula/herdr-world.rb

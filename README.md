@@ -103,7 +103,7 @@ Click any screenshot to open the full-resolution image.
 
 1. Install and start [Herdr](https://herdr.dev), or let Herdr World install and
    start it later with `herdr-world herdr setup`.
-2. On Linux or macOS, install Herdr World:
+2. On Linux or macOS, install Herdr World with the standalone installer:
 
    ```bash
    # Empty selects latest; use X.Y.Z (no v prefix) to pin a Herdr World version.
@@ -112,10 +112,14 @@ Click any screenshot to open the full-resolution image.
      | HERDR_WORLD_VERSION= sh
    ```
 
-   On Windows, download the matching x64 or ARM64 archive from the
-   [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).
-3. On Linux/macOS, add `~/.local/bin` to `PATH` and run `herdr-world`.
-   On Windows, extract the archive and run `herdr-world.exe`. Open the printed URL.
+   Homebrew (`brew install IvoryHeart/tap/herdr-world`) and npm
+   (`npm install --global @ivoryheart/herdr-world`) are alternative channels.
+   npm requires Node.js 22.14.0 or newer and downloads only the binary for the
+   current platform. On Windows, use npm or download the matching x64 or ARM64
+   archive from the [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).
+3. On Linux/macOS standalone installs, add `~/.local/bin` to `PATH`. Run
+   `herdr-world` (or `herdr-world.exe` from an extracted Windows archive) and open
+   the printed URL.
 
 Use the connection selector to add local sockets or an SSH destination. One World
 service owns every connection; each browser selects one operational host and stays

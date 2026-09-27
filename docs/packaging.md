@@ -28,5 +28,13 @@ archives, extracted package directories or compiled binaries. GitHub's Release
 workflow builds every supported target and validates the executable format; the native
 Linux x64 binary is also executed to verify its version.
 
+The same verified archives feed six public npm platform packages and the
+`@ivoryheart/herdr-world` launcher. npm selects one binary through optional
+dependencies and runs no install script; Node.js 22.14.0 or newer is required for
+the launcher. The Release workflow also generates a checksum-pinned Homebrew
+Formula for macOS and Linux and opens a reviewable PR in
+`IvoryHeart/homebrew-tap` after the GitHub assets are published. Windows uses npm
+or the standalone archive; Homebrew does not manage Windows.
+
 The responsive Web/PWA is the supported mobile artifact. This foundation does not
 produce the former Capacitor Android package.

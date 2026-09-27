@@ -5,10 +5,12 @@ upstream revision in [UPSTREAM.md](UPSTREAM.md) provide the version record.
 
 ## Roamgate
 
-The application foundation is derived from
+The application foundation was initially derived from
 [`powerfooI/roamgate`](https://github.com/powerfooI/roamgate) at commit
-`81c506e6135f5f3b47f7042252ffdac0ec2bf679`, licensed under the MIT License,
-Copyright (c) 2026 Arthur. The retained MIT terms are in [LICENSE](LICENSE).
+`81c506e6135f5f3b47f7042252ffdac0ec2bf679` and subsequently synchronized
+through the revision recorded in [UPSTREAM.md](UPSTREAM.md). Roamgate is licensed
+under the MIT License, Copyright (c) 2026 Arthur. The retained MIT terms are in
+[LICENSE](LICENSE).
 Roamgate is source lineage, not a separately installed World dependency.
 
 ## Claw-Empire character assets

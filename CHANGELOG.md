@@ -14,14 +14,17 @@ are optional because the merged PR history records their source.
   profiles, browser preferences and Roamgate state are not imported; native Android
   packaging is not part of this foundation.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
-- The replacement foundation does not carry forward the former `herdr-world task-summary`
-  producer. Existing Herdr-admitted summary metadata can still be presented; deliberate restoration
-  of that workflow is tracked in
-  [issue #95](https://github.com/IvoryHeart/herdr-world/issues/95).
-  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- `herdr-world task-summary` now binds each report to the current pane session,
+  limits it to 80 Unicode characters, and lets Herdr expire it. The former
+  `--clear` operation is unavailable; harnesses using it must update their hooks.
+  [Herdr World PR #105](https://github.com/IvoryHeart/herdr-world/pull/105)
 
 ### Added
 
+- Restored the npm and Homebrew installation channels for the new foundation.
+  npm now installs one platform binary through optional dependencies; Homebrew
+  installs the same checksum-pinned release archive. Both serve the one World
+  service and require Herdr as a separate runtime.
 - Added accessible maximize and resize controls across Office Inspector windows,
   focus-based window stacking, and Close all terminal windows in Arrange and
   Actions. Close all preserves Herdr tabs and sessions; Spaces keeps each

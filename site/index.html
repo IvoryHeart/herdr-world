@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Herdr World observes local and SSH Herdr hosts in the background and projects one selected host into visual agent views, terminals, and review tools."
+      content="Visualize Herdr agent work in Office and Graph. Connect local and SSH hosts, then open terminals, files, and history for the selected host."
     />
     <meta property="og:type" content="website" />
     <meta
       property="og:title"
-      content="Herdr World - A visual control plane for Herdr agents"
+      content="Herdr World - View agent work in Office and Graph"
     />
     <meta
       property="og:description"
-      content="Observe local and SSH Herdr hosts in the background, then explore and operate one selected host in World."
+      content="Visualize Herdr agent work in Office and Graph across local and SSH hosts."
     />
     <meta
       property="og:url"
@@ -29,16 +29,16 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Herdr World - A visual control plane for Herdr agents"
+      content="Herdr World - View agent work in Office and Graph"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Herdr World - A visual control plane for Herdr agents"
+      content="Herdr World - View agent work in Office and Graph"
     />
     <meta
       name="twitter:description"
-      content="Observe every Herdr host and explore one selected host at a time."
+      content="Visualize agent work in Office and Graph across local and SSH Herdr hosts."
     />
     <meta
       name="twitter:image"
@@ -49,7 +49,7 @@
     <link rel="icon" type="image/png" sizes="48x48" href="./assets/herdr-world-icon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/herdr-world-icon-180.png" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Herdr World - A visual control plane for Herdr agents</title>
+    <title>Herdr World - View agent work in Office and Graph</title>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -57,7 +57,7 @@
         "name": "Herdr World",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
-        "description": "An open-source visual control plane that observes local and SSH Herdr hosts and projects one selected host at a time.",
+        "description": "Visualize Herdr agent work in Office and Graph across local and SSH hosts.",
         "url": "https://ivoryheart.github.io/herdr-world/",
         "downloadUrl": "https://github.com/IvoryHeart/herdr-world/releases/latest",
         "license": "https://opensource.org/license/mit"
@@ -513,7 +513,7 @@
             <h2>Running in three steps.</h2>
           </div>
           <p>
-            Herdr World is a thin bridge around the runtime you already use.
+            Herdr World connects your browser to the Herdr runtime you already use.
             Your agents still live in real terminal sessions owned by Herdr.
           </p>
         </div>
@@ -541,9 +541,9 @@
             </div>
             <h3>Herdr World connects locally or over SSH</h3>
             <p>
-              Run one standalone binary beside Herdr. It bridges the local
-              socket API, terminal stream, files, Git operations, and session
-              records.
+              Run one World service on your computer. It connects to local or
+              SSH Herdr hosts and serves the browser UI, terminals, files,
+              Git operations, and session records from one origin.
             </p>
           </li>
           <li class="workflow-step reveal reveal-delay-two">
@@ -695,8 +695,9 @@
             <h2>Give your agents a window.</h2>
             <p>
               Install the standalone binary on macOS or Linux, start
-              Herdr World, and open the URL it prints. Windows x64 and ARM64 archives
-              are available from GitHub Releases.
+              Herdr World, and open the URL it prints. Homebrew and npm are also
+              available; npm supports Windows x64 and ARM64. All six platform
+              archives are available from GitHub Releases.
             </p>
             <div class="install-actions">
               <a
