@@ -1190,12 +1190,6 @@ function WorldControlPlane({
         : [...current.filter((candidate) => candidate !== id), id],
     );
   }, []);
-  useEffect(() => {
-    const rail = contextRailRef.current;
-    if (!rail || !dockedInspectorId) return;
-    const raise = () => raiseInspector(dockedInspectorId);
-    return listenForInspectorWindowRaise(rail, raise);
-  }, [dockedInspectorId, raiseInspector]);
   const arrangedDocked =
     dockedInspectorId !== null && visualPlacementMap.has(dockedInspectorId);
   const dockedSuppressed =
@@ -1230,6 +1224,11 @@ function WorldControlPlane({
       : treeInlineInspectorNodeId && treeInlineInspectorPortal
         ? treeInlineInspectorPortal
         : contextRailInspectorPortal;
+  useEffect(() => {
+    if (!dockedInspectorPortal || !dockedInspectorId) return;
+    const raise = () => raiseInspector(dockedInspectorId);
+    return listenForInspectorWindowRaise(dockedInspectorPortal, raise);
+  }, [dockedInspectorId, dockedInspectorPortal, raiseInspector]);
   const dockedInspectorPortalRef = useRef<Element | null>(null);
   dockedInspectorPortalRef.current = dockedInspectorPortal;
   const dockedInspectorNodeId = contextRailInspector?.nodeId ?? null;
@@ -2841,6 +2840,12 @@ function WorldControlPlane({
                 className="world-context-rail-resize"
                 aria-label="Resize Inspector window"
                 title="Drag to resize Inspector; use arrow keys for precise sizing"
+                onPointerDown={() => {
+                  if (dockedInspectorId) raiseInspector(dockedInspectorId);
+                }}
+                onFocus={() => {
+                  if (dockedInspectorId) raiseInspector(dockedInspectorId);
+                }}
               />
             ) : null}
           </aside>

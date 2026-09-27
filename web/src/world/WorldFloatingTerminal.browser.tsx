@@ -53,7 +53,7 @@ worldLocalStorage.setItem(
 );
 
 function Fixture() {
-  const dockedRef = useRef<HTMLElement | null>(null);
+  const dockedRef = useRef<HTMLDivElement | null>(null);
   const [dockedPortal, setDockedPortal] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
     const docked = dockedRef.current;
@@ -74,8 +74,13 @@ function Fixture() {
   );
   return (
     <>
-      <aside ref={dockedRef}>
-        <div ref={setDockedPortal} />
+      <aside>
+        <button type="button" data-testid="profile-control">
+          Profile control
+        </button>
+        <div ref={dockedRef}>
+          <div ref={setDockedPortal} />
+        </div>
       </aside>
       {dockedPortal
         ? createPortal(
@@ -192,6 +197,18 @@ setTimeout(() => {
       }),
     );
     const dockedControlRaises = dockedRaises >= 2;
+    const profileControl = host.querySelector<HTMLButtonElement>(
+      '[data-testid="profile-control"]',
+    )!;
+    profileControl.focus();
+    profileControl.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 9,
+      }),
+    );
+    const profileDoesNotRaiseDocked = dockedRaises === 2;
     inspectorControl.focus();
     inspectorControl.dispatchEvent(
       new PointerEvent("pointerdown", {
@@ -292,6 +309,7 @@ setTimeout(() => {
       portaledControlRaises,
       portaledControlDoesNotActivate,
       dockedControlRaises,
+      profileDoesNotRaiseDocked,
       stableDrag:
         firstMoveLeft >= startLeft + 140 &&
         secondMoveLeft >= firstMoveLeft + 140,

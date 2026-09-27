@@ -85,6 +85,7 @@ test.skipIf(!chrome)(
         portaledControlRaises: true,
         portaledControlDoesNotActivate: true,
         dockedControlRaises: true,
+        profileDoesNotRaiseDocked: true,
         stableDrag: true,
         arrangementRestoresGeometry: true,
       });
