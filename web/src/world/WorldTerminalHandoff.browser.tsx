@@ -3847,6 +3847,42 @@ async function run() {
       }),
     "horizontal scrolling clips Inspectors outside the visual stage",
   );
+  narrowedVisualStage.style.width = "340px";
+  await arrangeWindows("Columns");
+  const narrowColumnControl = document.querySelector<HTMLElement>(
+    ".world-arrangement-scroll-control.is-horizontal",
+  )!;
+  const narrowColumnRight =
+    narrowColumnControl.querySelector<HTMLButtonElement>(
+      '[aria-label="Scroll windows right"]',
+    )!;
+  for (let index = 0; index < 4 && !narrowColumnRight.disabled; index++) {
+    narrowColumnRight.click();
+    await settle();
+  }
+  const narrowColumnRange =
+    narrowColumnControl.querySelector<HTMLInputElement>("input")!;
+  const beforeFocusScroll = Number(narrowColumnRange.value);
+  const offscreenInspector = [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="dialog"][aria-label$=" Inspector"]',
+    ),
+  ].find(
+    (inspector) =>
+      inspector.getBoundingClientRect().right <=
+      narrowedVisualStage.getBoundingClientRect().left + 8,
+  );
+  check(Boolean(offscreenInspector), "overscanned Inspector stays mounted");
+  offscreenInspector!
+    .querySelector<HTMLButtonElement>('[aria-label="Resize Inspector window"]')!
+    .focus();
+  await until(
+    () =>
+      Number(narrowColumnRange.value) < beforeFocusScroll &&
+      offscreenInspector!.getBoundingClientRect().right >
+        narrowedVisualStage.getBoundingClientRect().left + 8,
+    "keyboard focus reveals an overscanned Inspector",
+  );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
   narrowedVisualStage.style.maxHeight = "420px";

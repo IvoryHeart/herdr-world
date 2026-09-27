@@ -49,3 +49,9 @@
 
 - [x] 9.1 Use one scroll offset for the active visual arrangement so a hidden cross-axis offset cannot displace or virtualize windows after switching layouts.
 - [x] 9.2 Cover scrolling to the end of Cascade and switching to Columns in browser tests; keep scroll controls anchored consistently across viewport sizes.
+
+## 10. Review fixes for visual arrangements
+
+- [x] 10.1 Reveal a focused or reopened Inspector even when its ID is already selected; cover keyboard focus on an overscanned window.
+- [x] 10.2 Detach an arranged docked Inspector terminal outside overscan while preserving the normal docked presentation.
+- [x] 10.3 Use the same Grid width reserve for availability, placement, Open all, and clipping; cover four-window nonoverlap.

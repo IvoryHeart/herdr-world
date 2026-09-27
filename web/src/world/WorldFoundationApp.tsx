@@ -187,6 +187,28 @@ type VisualInspectorPresentation =
   | { kind: "inline"; leafId: string };
 
 const VISUAL_ARRANGEMENT_SCOPE = "visual";
+const VISUAL_SCROLL_CONTROL_WIDTH = 32;
+
+export function visualGridArrangementStage(
+  stage: TerminalWindowArrangementStage,
+): TerminalWindowArrangementStage {
+  return {
+    ...stage,
+    width: Math.max(1, stage.width - VISUAL_SCROLL_CONTROL_WIDTH),
+  };
+}
+
+export function visualInspectorTerminalActive(
+  id: string,
+  dockedId: string | null,
+  dockedSuppressed: boolean,
+  arrangedDocked: boolean,
+  visibleFloatingIds: ReadonlySet<string>,
+): boolean {
+  return id === dockedId
+    ? !dockedSuppressed && (!arrangedDocked || visibleFloatingIds.has(id))
+    : visibleFloatingIds.has(id);
+}
 
 export function visualInspectorArrangementStage(
   bounds: Pick<DOMRect, "left" | "top" | "width" | "height">,
@@ -1197,7 +1219,8 @@ function WorldControlPlane({
     ...visualArrangementStage,
     width: Math.max(
       1,
-      visualArrangementStage.width - (visualNeedsVerticalScroll ? 32 : 0),
+      visualArrangementStage.width -
+        (visualNeedsVerticalScroll ? VISUAL_SCROLL_CONTROL_WIDTH : 0),
     ),
     height: Math.max(
       1,
@@ -1209,7 +1232,10 @@ function WorldControlPlane({
     width: visualScrollX
       ? visualContentWidth
       : visualNeedsVerticalScroll
-        ? Math.max(1, visualArrangementStage.width - 32)
+        ? Math.max(
+            1,
+            visualArrangementStage.width - VISUAL_SCROLL_CONTROL_WIDTH,
+          )
         : visualArrangementStage.width,
     height: visualNeedsHorizontalScroll
       ? Math.max(1, visualArrangementStage.height - 36)
@@ -1250,7 +1276,10 @@ function WorldControlPlane({
         width: Math.min(480, visualArrangementStage.width - 16),
       }
     : {
-        left: visualArrangementStage.left + visualArrangementStage.width - 32,
+        left:
+          visualArrangementStage.left +
+          visualArrangementStage.width -
+          VISUAL_SCROLL_CONTROL_WIDTH,
         top: visualArrangementStage.top + 48,
         height: Math.min(480, visualArrangementStage.height - 56),
       };
@@ -1307,19 +1336,60 @@ function WorldControlPlane({
     ...openInspectorIds.filter((id) => !raisedInspectorIds.includes(id)),
     ...raisedInspectorIds.filter((id) => openInspectorIds.includes(id)),
   ];
+  const visualScrollContextRef = useRef({
+    active: visualScrollActive,
+    horizontal: visualScrollX,
+    placements: visualPlacementMap,
+    max: visualScrollMax,
+    viewport: visualScrollViewport,
+    contentWidth: visualContentWidth,
+    contentHeight: visualContentHeight,
+    stage: visualArrangementStage,
+  });
+  visualScrollContextRef.current = {
+    active: visualScrollActive,
+    horizontal: visualScrollX,
+    placements: visualPlacementMap,
+    max: visualScrollMax,
+    viewport: visualScrollViewport,
+    contentWidth: visualContentWidth,
+    contentHeight: visualContentHeight,
+    stage: visualArrangementStage,
+  };
   const raiseInspector = useCallback((id: string) => {
     setRaisedInspectorIds((current) =>
       current[current.length - 1] === id
         ? current
         : [...current.filter((candidate) => candidate !== id), id],
     );
+    const scroll = visualScrollContextRef.current;
+    const geometry = scroll.placements.get(id);
+    if (!scroll.active || !geometry) return;
+    setVisualScrollOffset((current) => {
+      const position = Math.min(scroll.max, current);
+      return scroll.horizontal
+        ? terminalArrangementScrollLeftForWindow(
+            geometry,
+            position,
+            scroll.viewport.width,
+            scroll.contentWidth,
+            scroll.stage.left,
+          )
+        : terminalGridScrollTopForWindow(
+            geometry,
+            position,
+            scroll.viewport.height,
+            scroll.contentHeight,
+            scroll.stage.top,
+          );
+    });
   }, []);
   const arrangedDocked =
     dockedInspectorId !== null && visualPlacementMap.has(dockedInspectorId);
   const dockedSuppressed =
     dockedInspectorId !== null &&
     (arrangementScope?.preset === "single" ||
-      (arrangementScope?.preset && compactArrangement)) &&
+      (Boolean(arrangementScope?.preset) && compactArrangement)) &&
     !arrangedDocked;
   const requestedInlineNodeId =
     inlineReturnNodeId ?? naturalTreeInlineInspectorNodeId;
@@ -1570,10 +1640,7 @@ function WorldControlPlane({
             leaseKey: visualLeaseKey,
             scopeKey: VISUAL_ARRANGEMENT_SCOPE,
             preset: "grid",
-            stage: {
-              ...visualArrangementStage,
-              width: Math.max(1, visualArrangementStage.width - 18),
-            },
+            stage: visualGridArrangementStage(visualArrangementStage),
             windows: [...visualWindows, ...newWindows],
             activeId: activeInspectorId ?? newWindows[0]?.id ?? null,
           },
@@ -1674,10 +1741,7 @@ function WorldControlPlane({
         leaseKey: visualLeaseKey,
         scopeKey: VISUAL_ARRANGEMENT_SCOPE,
         preset: command,
-        stage:
-          command === "grid"
-            ? { ...stage, width: Math.max(1, stage.width - 18) }
-            : stage,
+        stage: command === "grid" ? visualGridArrangementStage(stage) : stage,
         windows: visualWindows,
         activeId: activeInspectorId,
       });
@@ -1729,10 +1793,7 @@ function WorldControlPlane({
       const reason = terminalWindowArrangementReason(
         preset,
         preset === "grid"
-          ? {
-              ...visualArrangementStage,
-              width: Math.max(1, visualArrangementStage.width - 18),
-            }
+          ? visualGridArrangementStage(visualArrangementStage)
           : visualArrangementStage,
         visualWindows,
         activeInspectorId,
@@ -2662,6 +2723,7 @@ function WorldControlPlane({
       }
       setSelection(target);
       setInlineReturnNodeId(null);
+      raiseInspector(worldInspectorWindowId(conversation));
       if (currentConversation.view === "terminal") {
         focusInspectorTerminal(worldInspectorWindowId(conversation));
       }
@@ -3342,13 +3404,13 @@ function WorldControlPlane({
               worldInspectorWindowId(conversation) !== dockedInspectorId ||
               arrangedDocked
             }
-            terminalActive={
-              worldInspectorWindowId(conversation) === dockedInspectorId
-                ? !dockedSuppressed
-                : visibleFloatingInspectorIds.has(
-                    worldInspectorWindowId(conversation),
-                  )
-            }
+            terminalActive={visualInspectorTerminalActive(
+              worldInspectorWindowId(conversation),
+              dockedInspectorId,
+              dockedSuppressed,
+              arrangedDocked,
+              visibleFloatingInspectorIds,
+            )}
             embedded={
               worldInspectorWindowId(conversation) === dockedInspectorId &&
               !arrangedDocked &&
