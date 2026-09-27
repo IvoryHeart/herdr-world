@@ -29,6 +29,7 @@ import {
   readFloatingTerminalGeometry,
   writeFloatingTerminalGeometry,
 } from "./floatingTerminalPreferences";
+import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 
 type Interaction = {
   mode: "moving" | "resizing";
@@ -45,6 +46,7 @@ export default function WorldFloatingInspectorWindow({
   compactActive,
   onFocus,
   onRaise,
+  onStack,
   onAnchorChange,
   onPortalChange,
   arrangedGeometry = null,
@@ -58,6 +60,7 @@ export default function WorldFloatingInspectorWindow({
   compactActive: boolean;
   onFocus(): void;
   onRaise(): void;
+  onStack(): void;
   onAnchorChange(anchor: WorldConnectorTargetBounds | null): void;
   onPortalChange(element: HTMLDivElement | null): void;
   arrangedGeometry?: FloatingTerminalGeometry | null;
@@ -71,10 +74,12 @@ export default function WorldFloatingInspectorWindow({
   const onAnchorChangeRef = useRef(onAnchorChange);
   const onFocusRef = useRef(onFocus);
   const onRaiseRef = useRef(onRaise);
+  const onStackRef = useRef(onStack);
   const onPortalChangeRef = useRef(onPortalChange);
   onAnchorChangeRef.current = onAnchorChange;
   onFocusRef.current = onFocus;
   onRaiseRef.current = onRaise;
+  onStackRef.current = onStack;
   onPortalChangeRef.current = onPortalChange;
   const setPortalRef = useCallback((element: HTMLDivElement | null) => {
     onPortalChangeRef.current(element);
@@ -142,6 +147,7 @@ export default function WorldFloatingInspectorWindow({
   useEffect(() => {
     const element = windowRef.current;
     if (!element) return;
+    const raiseWindow = () => onStackRef.current();
     const focusFromPointer = (event: PointerEvent) => {
       const clickedPaneId =
         event.target instanceof Element
@@ -167,10 +173,13 @@ export default function WorldFloatingInspectorWindow({
     };
     // Inspector content is rendered through a portal owned by a sibling.
     // React events follow that logical tree, not this window's DOM ancestry,
-    // so a native capture listener is required for clicks in its resources.
+    // so native listeners are required for its controls and resources.
+    const stopRaising = listenForInspectorWindowRaise(element, raiseWindow);
     element.addEventListener("pointerdown", focusFromPointer, true);
-    return () =>
+    return () => {
+      stopRaising();
       element.removeEventListener("pointerdown", focusFromPointer, true);
+    };
   }, [conversation.paneId]);
 
   useEffect(() => {
@@ -373,7 +382,6 @@ export default function WorldFloatingInspectorWindow({
       aria-label={`${conversation.label} Inspector`}
       data-compact-active={compactActive}
       data-interaction={interaction ?? undefined}
-      onFocusCapture={onRaise}
       style={
         {
           left: effectiveGeometry.left,

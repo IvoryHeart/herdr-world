@@ -12,11 +12,11 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "Inspector controls raise portaled windows without activating a terminal",
+  "the one-tab mobile sheet resumes Spaces before focusing its tab",
   async () => {
-    const dir = await mkdtemp(join(tmpdir(), "world-floating-terminal-"));
+    const dir = await mkdtemp(join(tmpdir(), "mobile-tab-sheet-test-"));
     const assets = new Map<string, Blob>();
-    const result = Promise.withResolvers<Record<string, unknown>>();
+    const result = Promise.withResolvers<unknown>();
     const server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -29,7 +29,7 @@ test.skipIf(!chrome)(
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         return new Response(
-          '<head><link rel="stylesheet" href="/WorldFloatingTerminal.browser.css"></head><body><script type="module" src="/WorldFloatingTerminal.browser.js"></script></body>',
+          '<head><script type="module" src="/MobileTabSheet.browser.js"></script></head><body></body>',
           { headers: { "Content-Type": "text/html" } },
         );
       },
@@ -37,11 +37,27 @@ test.skipIf(!chrome)(
     let browser: ReturnType<typeof Bun.spawn> | undefined;
     try {
       const build = await Bun.build({
-        entrypoints: [
-          join(import.meta.dir, "WorldFloatingTerminal.browser.tsx"),
-        ],
+        entrypoints: [join(import.meta.dir, "MobileTabSheet.browser.tsx")],
         outdir: dir,
         target: "browser",
+        plugins: [
+          {
+            name: "vite-raw-test-assets",
+            setup(builder) {
+              builder.onResolve({ filter: /\?raw$/ }, (args) => ({
+                path: Bun.resolveSync(args.path.slice(0, -4), args.resolveDir),
+                namespace: "raw-text",
+              }));
+              builder.onLoad(
+                { filter: /.*/, namespace: "raw-text" },
+                async (args) => ({
+                  contents: await readFile(args.path, "utf8"),
+                  loader: "text",
+                }),
+              );
+            },
+          },
+        ],
       });
       expect(build.success).toBe(true);
       for (const output of build.outputs) {
@@ -52,7 +68,6 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
-          "--window-size=1280,900",
           "--disable-gpu",
           "--disable-background-networking",
           "--no-first-run",
@@ -71,22 +86,14 @@ test.skipIf(!chrome)(
         }),
         new Promise<never>((_, reject) =>
           setTimeout(
-            () =>
-              reject(new Error("Floating Inspector browser check timed out")),
+            () => reject(new Error("Mobile tab sheet timed out")),
             10_000,
           ),
         ),
       ]);
       expect(observed).toEqual({
-        failures: [],
-        portal: "ready",
-        inspectorLabel: "Reviewer Inspector",
-        windows: 1,
-        portaledControlRaises: true,
-        portaledControlDoesNotActivate: true,
-        dockedControlRaises: true,
-        stableDrag: true,
-        arrangementRestoresGeometry: true,
+        button: true,
+        events: ["resume:one", "focus:one", "close", "show"],
       });
     } finally {
       browser?.kill();

@@ -75,6 +75,7 @@ import {
 } from "./visualRouteActions";
 import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
+import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
 import {
   defaultFloatingTerminalGeometry,
@@ -1182,13 +1183,19 @@ function WorldControlPlane({
     ...openInspectorIds.filter((id) => !raisedInspectorIds.includes(id)),
     ...raisedInspectorIds.filter((id) => openInspectorIds.includes(id)),
   ];
-  const raiseInspector = (id: string) => {
+  const raiseInspector = useCallback((id: string) => {
     setRaisedInspectorIds((current) =>
       current[current.length - 1] === id
         ? current
         : [...current.filter((candidate) => candidate !== id), id],
     );
-  };
+  }, []);
+  useEffect(() => {
+    const rail = contextRailRef.current;
+    if (!rail || !dockedInspectorId) return;
+    const raise = () => raiseInspector(dockedInspectorId);
+    return listenForInspectorWindowRaise(rail, raise);
+  }, [dockedInspectorId, raiseInspector]);
   const arrangedDocked =
     dockedInspectorId !== null && visualPlacementMap.has(dockedInspectorId);
   const dockedSuppressed =
@@ -2793,12 +2800,6 @@ function WorldControlPlane({
                       50 + inspectorStack.indexOf(dockedInspectorId ?? ""),
                   } as CSSProperties)
             }
-            onPointerDownCapture={() => {
-              if (dockedInspectorId) raiseInspector(dockedInspectorId);
-            }}
-            onFocusCapture={() => {
-              if (dockedInspectorId) raiseInspector(dockedInspectorId);
-            }}
           >
             {selected && showSelectionProfile ? (
               <Suspense
@@ -2880,9 +2881,17 @@ function WorldControlPlane({
             }}
             onArrangedGeometryChange={(geometry) => {
               // Compact Single is a viewport presentation of the desktop tiles.
-              // Its move and resize gestures must not replace their saved geometry.
-              if (compactArrangement) return;
+              // Maximize is also temporary; neither presentation may replace
+              // the saved geometry used by Restore.
               const id = worldInspectorWindowId(conversation);
+              if (
+                !shouldRecordVisualInspectorGeometry(
+                  id,
+                  maximizedInspectorId,
+                  compactArrangement,
+                )
+              )
+                return;
               const fitted = fitVisualInspectorArrangementGeometry(
                 geometry,
                 visualArrangementStage,
@@ -2913,6 +2922,7 @@ function WorldControlPlane({
                 () => undefined,
               );
             }}
+            onStack={() => raiseInspector(worldInspectorWindowId(conversation))}
             onAnchorChange={(anchor) =>
               setFloatingWindowAnchors((current) => {
                 const id = worldInspectorWindowId(conversation);
@@ -3052,6 +3062,14 @@ export function hasValidSelectedConnection(
   connections: readonly Pick<ConnectionSummary, "id">[],
 ) {
   return connections.some(({ id }) => id === activeConnectionId);
+}
+
+export function shouldRecordVisualInspectorGeometry(
+  id: string,
+  maximizedInspectorId: string | null,
+  compactArrangement: boolean,
+) {
+  return !compactArrangement && id !== maximizedInspectorId;
 }
 
 export function chooseWorldSelectedConnection({

@@ -785,6 +785,15 @@ export function terminalPresentationTarget(
   return null;
 }
 
+export function focusExplicitSpacesTab(
+  tabId: string,
+  resume: ((tabId: string) => void) | undefined,
+  focus: (tabId: string) => void | Promise<unknown>,
+) {
+  resume?.(tabId);
+  return focus(tabId);
+}
+
 export type SpacesTabWindow = { tabId: string; portal: Element | null };
 
 function SpacesTabTerminal({
@@ -910,6 +919,13 @@ export default function App({
 } = {}) {
   const hasWorkspaceSurface =
     workspaceSurface !== null && workspaceSurfaceVisible;
+  const focusExplicitTab = useCallback(
+    (tabId: string) =>
+      focusExplicitSpacesTab(tabId, onSelectSpacesTab, (id) =>
+        store.focusTab(id),
+      ),
+    [onSelectSpacesTab],
+  );
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
@@ -2772,7 +2788,7 @@ export default function App({
 
         const targetTabId = adjacentTabId(tabs, activeTabId, tabAction);
         if (!targetTabId || targetTabId === activeTabId) return;
-        store.focusTab(targetTabId);
+        void focusExplicitTab(targetTabId);
         return;
       }
       const pluginAction = pluginActionShortcut(e);
@@ -2857,7 +2873,7 @@ export default function App({
         if (!targetTab) return;
         e.preventDefault();
         e.stopPropagation();
-        store.focusTab(targetTab.tab_id);
+        void focusExplicitTab(targetTab.tab_id);
         return;
       }
       if (isWorkspaceInspectorShortcut(e)) {
@@ -2944,6 +2960,7 @@ export default function App({
     closePaneJump,
     commitPaneJump,
     defaultPaneJumpIndex,
+    focusExplicitTab,
     movePaneJumpSelection,
     mobile,
     openPaneJumpSearch,
@@ -3417,6 +3434,7 @@ export default function App({
             key={`${resourceUiKey}:commands`}
             operationalShortcutsEnabled={shellActionsEnabled}
             arrangementControl={arrangementControl}
+            onSelectTab={focusExplicitTab}
             extension={
               operationalShortcutsEnabled ? undefined : visualActionExtension
             }
@@ -3601,6 +3619,7 @@ export default function App({
         open={mobile && mobileTabSheetOpen}
         onClose={() => setMobileTabSheetOpen(false)}
         onShowSession={activateTerminalSurface}
+        onSelectTab={focusExplicitTab}
       />
       <button
         type="button"

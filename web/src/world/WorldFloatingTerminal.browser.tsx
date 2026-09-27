@@ -1,13 +1,17 @@
-import { StrictMode, useState } from "react";
+import { StrictMode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { worldLocalStorage } from "../browserStorage";
 import WorldFloatingTerminalWindow from "./WorldFloatingTerminal";
+import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { FLOATING_TERMINAL_GEOMETRY_KEY } from "./floatingTerminalPreferences";
 import type { WorldInspectorConversation } from "./worldTerminalPresentation";
 import "./world.css";
 
 const failures: string[] = [];
+let raises = 0;
+let dockedRaises = 0;
+let activations = 0;
 window.addEventListener("error", (event) => {
   failures.push(
     event.error instanceof Error ? event.error.message : event.message,
@@ -49,6 +53,15 @@ worldLocalStorage.setItem(
 );
 
 function Fixture() {
+  const dockedRef = useRef<HTMLElement | null>(null);
+  const [dockedPortal, setDockedPortal] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const docked = dockedRef.current;
+    if (!docked) return;
+    return listenForInspectorWindowRaise(docked, () => {
+      dockedRaises += 1;
+    });
+  }, []);
   const [conversation, setConversation] = useState(first);
   const [arrangedGeometry, setArrangedGeometry] = useState<{
     left: number;
@@ -61,6 +74,17 @@ function Fixture() {
   );
   return (
     <>
+      <aside ref={dockedRef}>
+        <div ref={setDockedPortal} />
+      </aside>
+      {dockedPortal
+        ? createPortal(
+            <button type="button" data-testid="docked-inspector-control">
+              Docked Inspector control
+            </button>,
+            dockedPortal,
+          )
+        : null}
       <button
         type="button"
         data-testid="select-another"
@@ -99,7 +123,12 @@ function Fixture() {
         arrangedGeometry={arrangedGeometry}
         onArrangedGeometryChange={setArrangedGeometry}
         onFocus={() => {}}
-        onRaise={() => {}}
+        onRaise={() => {
+          activations += 1;
+        }}
+        onStack={() => {
+          raises += 1;
+        }}
         onAnchorChange={() => {}}
         onPortalChange={(element) =>
           setPortals((current) => ({
@@ -110,12 +139,17 @@ function Fixture() {
       />
       {portals[first.nodeId]
         ? createPortal(
-            <header
-              className="workspace-inspector-head is-window-drag-handle"
-              data-testid="move-handle"
-            >
-              Move Inspector
-            </header>,
+            <>
+              <header
+                className="workspace-inspector-head is-window-drag-handle"
+                data-testid="move-handle"
+              >
+                Move Inspector
+              </header>
+              <button type="button" data-testid="inspector-control">
+                Inspector control
+              </button>
+            </>,
             portals[first.nodeId]!,
           )
         : null}
@@ -143,6 +177,31 @@ setTimeout(() => {
     const moveHandle = floatingWindow.querySelector<HTMLElement>(
       '[data-testid="move-handle"]',
     )!;
+    const inspectorControl = floatingWindow.querySelector<HTMLButtonElement>(
+      '[data-testid="inspector-control"]',
+    )!;
+    const dockedControl = host.querySelector<HTMLButtonElement>(
+      '[data-testid="docked-inspector-control"]',
+    )!;
+    dockedControl.focus();
+    dockedControl.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 10,
+      }),
+    );
+    const dockedControlRaises = dockedRaises >= 2;
+    inspectorControl.focus();
+    inspectorControl.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        button: 0,
+        pointerId: 11,
+      }),
+    );
+    const portaledControlRaises = raises >= 2;
+    const portaledControlDoesNotActivate = activations === 0;
     const startLeft = floatingWindow.getBoundingClientRect().left;
     moveHandle.dispatchEvent(
       new PointerEvent("pointerdown", {
@@ -230,6 +289,9 @@ setTimeout(() => {
         .querySelector(".world-floating-terminal")
         ?.getAttribute("aria-label"),
       windows: host.querySelectorAll(".world-floating-terminal").length,
+      portaledControlRaises,
+      portaledControlDoesNotActivate,
+      dockedControlRaises,
       stableDrag:
         firstMoveLeft >= startLeft + 140 &&
         secondMoveLeft >= firstMoveLeft + 140,

@@ -246,6 +246,7 @@ export function CommandCombobox({
   onOpenFileExplorer,
   onOpenFile,
   onOpenDiffViewer,
+  onSelectTab,
   arrangementControl,
   extension = EMPTY_COMMAND_EXTENSION,
 }: {
@@ -253,6 +254,7 @@ export function CommandCombobox({
   onOpenFileExplorer?: (workspaceId?: string) => void;
   onOpenFile?: (workspaceId: string, entry: FileExplorerEntry) => void;
   onOpenDiffViewer?: (workspaceId?: string) => void;
+  onSelectTab?: (tabId: string) => void | Promise<unknown>;
   arrangementControl?: WindowArrangementControl;
   extension?: CommandExtension;
 }) {
@@ -805,7 +807,8 @@ export function CommandCombobox({
       title: `Focus tab: ${tabName(tab)}`,
       detail: tab.tab_id,
       keywords: ["switch tab", "open tab", "go tab", tabName(tab)],
-      run: () => store.focusTab(tab.tab_id),
+      run: () =>
+        onSelectTab ? onSelectTab(tab.tab_id) : store.focusTab(tab.tab_id),
     });
   }
   for (const tab of focusedWorkspaceTabs.filter(

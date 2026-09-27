@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
   appShouldHandleGlobalShortcut,
+  focusExplicitSpacesTab,
   terminalPresentationTarget,
 } from "../App";
+import { adjacentTabId } from "../tabShortcuts";
 import {
   activateWorldNodeHost,
   chooseWorldSelectedConnection,
@@ -13,6 +15,7 @@ import {
   moveDockedInspectorGeometry,
   parseWorldView,
   selectedHostStatusLabel,
+  shouldRecordVisualInspectorGeometry,
   retainWorldFloatingTerminals,
   shouldCloseWorldInspector,
   upsertWorldFloatingTerminal,
@@ -66,6 +69,36 @@ function inspectorConversation(index: number): WorldInspectorConversation {
 }
 
 describe("World view preference", () => {
+  test("resumes Spaces before a next-tab shortcut focuses its target", () => {
+    const events: string[] = [];
+    const target = adjacentTabId(
+      [
+        { tab_id: "one", number: 1 },
+        { tab_id: "two", number: 2 },
+      ],
+      "one",
+      "next",
+    );
+    expect(target).toBe("two");
+    focusExplicitSpacesTab(
+      target!,
+      (id) => events.push(`resume:${id}`),
+      (id) => {
+        events.push(`focus:${id}`);
+      },
+    );
+    expect(events).toEqual(["resume:two", "focus:two"]);
+  });
+  test("rejects arrangement geometry writes during a temporary maximize", () => {
+    expect(shouldRecordVisualInspectorGeometry("tile", "tile", false)).toBe(
+      false,
+    );
+    expect(shouldRecordVisualInspectorGeometry("other", "tile", false)).toBe(
+      true,
+    );
+    expect(shouldRecordVisualInspectorGeometry("tile", null, true)).toBe(false);
+    expect(shouldRecordVisualInspectorGeometry("tile", null, false)).toBe(true);
+  });
   test("keeps arranged Inspector title controls in the measured visual stage", () => {
     const stage = visualInspectorArrangementStage({
       left: 16,

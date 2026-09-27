@@ -418,7 +418,10 @@ class GraphRenderer {
   #rotatedBounds() {
     const bounds = graphBounds(this.#layout!.nodes.values());
     if (this.#rotation % 2 === 0) return bounds;
-    const center = this.#graphCenter();
+    const center = {
+      x: (bounds.minX + bounds.maxX) / 2,
+      y: (bounds.minY + bounds.maxY) / 2,
+    };
     const halfWidth = (bounds.maxY - bounds.minY) / 2;
     const halfHeight = (bounds.maxX - bounds.minX) / 2;
     return {
@@ -429,8 +432,8 @@ class GraphRenderer {
     };
   }
 
-  #rotatedPoint(x: number, y: number) {
-    return rotateGraphPoint({ x, y }, this.#graphCenter(), this.#rotation);
+  #rotatedPoint(x: number, y: number, center: { x: number; y: number }) {
+    return rotateGraphPoint({ x, y }, center, this.#rotation);
   }
 
   dispose() {
@@ -548,8 +551,8 @@ class GraphRenderer {
     );
     for (const node of nodes) this.#drawNode(context, node);
     context.restore();
-    this.#publishNodes(layout);
-    this.#emitAnchors(layout);
+    this.#publishNodes(layout, center);
+    this.#emitAnchors(layout, center);
   }
 
   #drawNode(context: CanvasRenderingContext2D, node: GraphLayoutNode) {
@@ -857,10 +860,10 @@ class GraphRenderer {
     this.#onActivate(node.source);
   };
 
-  #publishNodes(layout: GraphLayoutState) {
+  #publishNodes(layout: GraphLayoutState, center: { x: number; y: number }) {
     const published: GraphRendererDiagnostics["publishedNodes"] = {};
     for (const node of layout.nodes.values()) {
-      const rotated = this.#rotatedPoint(node.x, node.y);
+      const rotated = this.#rotatedPoint(node.x, node.y, center);
       published[node.id] = {
         x: node.x,
         y: node.y,
@@ -874,7 +877,7 @@ class GraphRenderer {
     this.#diagnostics.publishedNodes = published;
   }
 
-  #emitAnchors(layout: GraphLayoutState) {
+  #emitAnchors(layout: GraphLayoutState, center: { x: number; y: number }) {
     if (!this.#onAnchorsChange) return;
     const rect = this.canvas.getBoundingClientRect();
     const scaleX = rect.width / this.#width;
@@ -885,7 +888,7 @@ class GraphRenderer {
         layout.nodes.get(requestedId) ??
         this.#visibleAncestor(layout, requestedId);
       if (!node) continue;
-      const rotated = this.#rotatedPoint(node.x, node.y);
+      const rotated = this.#rotatedPoint(node.x, node.y, center);
       const rawX =
         rect.left +
         (this.#width / 2 + this.#camera.x + rotated.x * this.#camera.zoom) *
