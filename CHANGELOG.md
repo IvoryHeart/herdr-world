@@ -2,7 +2,8 @@
 
 This changelog records Herdr World releases and downstream changes. Current releases identify the
 exact Roamgate source synchronization in [UPSTREAM.md](UPSTREAM.md); historical release entries
-retain their original Herdr Web lineage.
+retain their original Herdr Web lineage. Unreleased entries describe user-facing changes; PR links
+are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
