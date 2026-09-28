@@ -8,7 +8,9 @@ release change directly to `main`.
 Add the `release-preview` label to a release preparation PR. Its CI run first
 checks the branch, then builds six downloadable `preview-<platform>` artifacts
 and a `preview-npm` artifact assembled from those same archives.
-Each artifact contains a `.tar.xz` archive and `.sha256` file for that exact PR
+For a pre-merge Homebrew installation on macOS, CI also bundles both Mac archives,
+checksums and a local Formula installer as `preview-homebrew`.
+Each native artifact contains a `.tar.xz` archive and `.sha256` file for that exact PR
 head. Download artifacts from the successful CI run's **Artifacts** section and
 verify the checksum before extracting. The binary identifies itself as
 `0.0.0-rc.<CI run number>` so it cannot be mistaken for a published release.
@@ -43,7 +45,14 @@ npm install --offline --ignore-scripts --prefix ./world-preview \
 
 Use Node.js 22.14.0 or newer and substitute the CI run number for `N`.
 On Windows, run `world-preview\\node_modules\\.bin\\herdr-world.cmd`.
-Homebrew installation is checked from published URLs during the RC release workflow.
+To test Homebrew on macOS before merge, download `preview-homebrew` from the same
+CI run, extract it into an empty directory and run `bash install-homebrew-preview.sh`
+there. The script verifies both Mac checksums, writes `herdr-world-preview.rb` with
+a local archive URL for the current architecture, installs the separate
+`herdr-world-preview` Formula and runs `brew test`. Remove it afterward with
+`brew uninstall herdr-world-preview`. It conflicts with installed stable or RC
+Formulae because they provide the same command. The published URL and tap flow
+are checked again during the RC release workflow.
 
 ## Publishing a candidate or stable release
 

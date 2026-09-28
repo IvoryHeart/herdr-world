@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+asset_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+platform="${HERDR_WORLD_PREVIEW_PLATFORM:-}"
+if [[ -z "$platform" ]]; then
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    echo "Run this preview installer on macOS" >&2
+    exit 2
+  fi
+  case "$(uname -m)" in
+    arm64) platform="darwin-arm64" ;;
+    x86_64) platform="darwin-x64" ;;
+    *) echo "Unsupported macOS architecture" >&2; exit 2 ;;
+  esac
+fi
+case "$platform" in
+  darwin-arm64|darwin-x64) ;;
+  *) echo "Invalid preview platform: $platform" >&2; exit 2 ;;
+esac
+
+archives=("$asset_dir"/herdr-world-v0.0.0-rc.*-"$platform".tar.xz)
+if [[ ${#archives[@]} -ne 1 || ! -f "${archives[0]}" ]]; then
+  echo "Expected exactly one $platform preview archive beside this script" >&2
+  exit 1
+fi
+archive="${archives[0]}"
+name="$(basename "$archive")"
+version="${name#herdr-world-v}"
+version="${version%-$platform.tar.xz}"
+if [[ ! "$version" =~ ^0\.0\.0-rc\.[1-9][0-9]*$ ]]; then
+  echo "Invalid preview version: $version" >&2
+  exit 1
+fi
+
+for target in darwin-arm64 darwin-x64; do
+  expected="$asset_dir/herdr-world-v$version-$target.tar.xz"
+  if [[ ! -f "$expected" || ! -f "$expected.sha256" ]]; then
+    echo "Missing $target preview archive or checksum" >&2
+    exit 1
+  fi
+  (cd "$asset_dir" && shasum -a 256 -c "$(basename "$expected.sha256")")
+done
+
+archive_url="$(ruby -ruri -e 'print URI::DEFAULT_PARSER.escape("file://" + ARGV.fetch(0))' "$archive")"
+digest="$(shasum -a 256 "$archive" | awk '{ print $1 }')"
+formula="$asset_dir/herdr-world-preview.rb"
+cat > "$formula" <<EOF
+class HerdrWorldPreview < Formula
+  desc "Visualize and control your agents in Office and Graph across multiple hosts"
+  homepage "https://ivoryheart.github.io/herdr-world/"
+  version "$version"
+  url "$archive_url"
+  sha256 "$digest"
+
+  conflicts_with "herdr-world", because: "both provide the herdr-world command"
+  conflicts_with "herdr-world-rc", because: "both provide the herdr-world command"
+
+  def install
+    package = Dir["herdr-world-*"].find { |path| File.directory?(path) }
+    raise "missing Herdr World archive directory" unless package
+
+    libexec.install "#{package}/herdr-world", "#{package}/VERSION",
+      "#{package}/LICENSE", "#{package}/THIRD_PARTY_NOTICES.md",
+      "#{package}/DEPENDENCY_NOTICES.md", "#{package}/DEPENDENCY_LICENSES.md",
+      "#{package}/UPSTREAM.md", "#{package}/LICENSES"
+    bin.install_symlink libexec/"herdr-world"
+  end
+
+  test do
+    assert_match "herdr-world $version", shell_output("#{bin}/herdr-world --version")
+  end
+end
+EOF
+
+if [[ "${1:-}" == "--prepare-only" ]]; then
+  echo "Prepared $formula"
+  exit 0
+fi
+command -v brew >/dev/null || { echo "Homebrew is required" >&2; exit 1; }
+brew install --formula "$formula"
+brew test "$formula"
+brew list --versions herdr-world-preview

@@ -149,7 +149,7 @@ jobs:
             - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
               with:
                   path: dist
-                  pattern: preview-*
+                  pattern: preview-*-*
                   merge-multiple: true
             - name: Stage and smoke npm packages from preview archives
               shell: bash
@@ -170,5 +170,40 @@ jobs:
               with:
                   name: preview-npm
                   path: dist/npm-tarballs/*.tgz
+                  if-no-files-found: error
+                  retention-days: 14
+
+    homebrew-preview:
+        name: Downloadable Homebrew preview
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        needs: [delivery, release-preview]
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  persist-credentials: false
+            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  path: dist
+                  pattern: preview-darwin-*
+                  merge-multiple: true
+            - name: Prepare and check the local Homebrew Formula
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  cp scripts/install-homebrew-preview.sh dist/
+                  for platform in darwin-arm64 darwin-x64; do
+                    HERDR_WORLD_PREVIEW_PLATFORM="$platform" bash dist/install-homebrew-preview.sh --prepare-only
+                    ruby -c dist/herdr-world-preview.rb
+                  done
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: preview-homebrew
+                  path: |
+                      dist/herdr-world-v*.tar.xz
+                      dist/herdr-world-v*.tar.xz.sha256
+                      dist/install-homebrew-preview.sh
                   if-no-files-found: error
                   retention-days: 14

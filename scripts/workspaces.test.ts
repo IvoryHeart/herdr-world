@@ -71,14 +71,15 @@ test("CI and release jobs install once from the workspace root", () => {
         step.run?.includes("bun install"),
       );
       const noBunInstall =
-        file === "release.yml" &&
-        [
-          "publish",
-          "published-archives",
-          "npm-publish",
-          "homebrew-pr",
-          "homebrew-smoke",
-        ].includes(name);
+        (file === "ci.yml" && name === "homebrew-preview") ||
+        (file === "release.yml" &&
+          [
+            "publish",
+            "published-archives",
+            "npm-publish",
+            "homebrew-pr",
+            "homebrew-smoke",
+          ].includes(name));
       expect(installs).toEqual(
         noBunInstall ? [] : [{ run: "bun install --frozen-lockfile" }],
       );
