@@ -163,6 +163,8 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Kept a dragged or resized Inspector from moving focus to its Terminal input
+  and scrolling a partly clipped arranged window into view.
 - Kept browser-local Office creation ready without first visiting Spaces or
   opening an Inspector, unified seat, room and tab-strip availability feedback,
   and preserved the prior Inspector while bounded exact focus reports failures.

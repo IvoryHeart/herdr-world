@@ -3914,6 +3914,10 @@ async function run() {
     Number(narrowColumnRange.value) === pointerScrollPosition,
     "pointer focus keeps a partly clipped Inspector stationary",
   );
+  check(
+    document.activeElement === resizeHandle,
+    "pointer resize handle keeps focus instead of switching to Terminal input",
+  );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
   narrowedVisualStage.style.maxHeight = "420px";
