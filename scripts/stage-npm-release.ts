@@ -17,6 +17,10 @@ const root = resolve(import.meta.dir, "..");
 const version = process.argv[2];
 const distDir = resolve(process.argv[3] ?? join(root, "dist"));
 const outputDir = join(distDir, "npm");
+const repository = {
+  type: "git",
+  url: "git+https://github.com/IvoryHeart/herdr-world.git",
+};
 if (!version || !RELEASE_VERSION_RE.test(version)) {
   throw new Error(
     "usage: bun scripts/stage-npm-release.ts X.Y.Z[-rc.N] [dist-dir]",
@@ -70,7 +74,7 @@ for (const { platform, archive } of archives) {
         license: "MIT",
         os: [platform.os],
         cpu: [platform.cpu],
-        repository: "https://github.com/IvoryHeart/herdr-world",
+        repository,
         files: ["bin", ...notices],
         publishConfig: { access: "public" },
       },
@@ -100,7 +104,7 @@ writeFileSync(
       description:
         "Visualize Herdr agent work in Office and Graph across local and SSH hosts",
       license: "MIT",
-      repository: "https://github.com/IvoryHeart/herdr-world",
+      repository,
       engines: { node: ">=22.14.0" },
       bin: { "herdr-world": "bin/herdr-world.mjs" },
       optionalDependencies,

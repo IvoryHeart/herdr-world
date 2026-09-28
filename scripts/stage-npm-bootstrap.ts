@@ -18,6 +18,10 @@ for (const platform of RELEASE_PLATFORMS) {
         license: "MIT",
         os: [platform.os],
         cpu: [platform.cpu],
+        repository: {
+          type: "git",
+          url: "git+https://github.com/IvoryHeart/herdr-world.git",
+        },
         publishConfig: { access: "public" },
       },
       null,
