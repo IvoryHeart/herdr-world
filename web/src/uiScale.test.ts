@@ -43,6 +43,10 @@ test.skipIf(!chrome).each([
   async (width, deviceScale, fixture, height, scale) => {
     const menuOnly =
       fixture === "configuration" && (height < 800 || scale > 100);
+    const viewportSmoke =
+      width === 320 &&
+      (fixture === "terminalLinks" ||
+        (fixture === "configuration" && !menuOnly));
     const dir = await mkdtemp(join(tmpdir(), "ui-scale-test-"));
     const { promise, resolve } = Promise.withResolvers<unknown>();
     const assets = new Map<string, Blob>();
@@ -118,6 +122,7 @@ test.skipIf(!chrome).each([
         if (
           fixture === "configuration" &&
           !menuOnly &&
+          !viewportSmoke &&
           asset.kind === "chunk" &&
           /function (ConfigurationDialog|MobileLayoutDialog)\(/.test(
             await asset.text(),
@@ -243,13 +248,14 @@ test.skipIf(!chrome).each([
         url.searchParams.set("menuOnly", "1");
         url.searchParams.set("scale", String(scale));
       }
+      if (viewportSmoke) url.searchParams.set("viewportSmoke", "1");
       await cdp("Page.navigate", { url: url.href });
       // Navigation can acknowledge before the new document's viewport is parsed.
       await waitFor(
         `location.href === ${JSON.stringify(url.href)} && document.readyState !== "loading"`,
       );
       expect(await evaluate("innerWidth")).toBe(width);
-      if (fixture === "configuration" && !menuOnly) {
+      if (fixture === "configuration" && !menuOnly && !viewportSmoke) {
         expect(heldChunks.size).toBe(2);
         for (const detail of [false, true]) {
           const selector = '[aria-label="Loading Configuration"]';

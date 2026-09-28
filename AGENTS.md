@@ -19,12 +19,13 @@ invent abstractions or process without a concrete need.
   needs a decision. Update one coherent change when direction changes rather than
   creating a document per implementation tranche.
 
-Read [docs/agent-development.md](docs/agent-development.md) for the working loop and
-[docs/knowledge-map.md](docs/knowledge-map.md) to find contracts, source, tests and
-runbooks. Current contracts are in `openspec/specs/`; active changes are in
-`openspec/changes/`; numbered documents under `docs/specs/` are historical context.
-The repo-local [candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md)
-contains the detailed procedure for multi-step handoffs and review repairs.
+Use [the knowledge map](docs/knowledge-map.md) when locating contracts, source,
+tests or runbooks. Read [agent development](docs/agent-development.md) for
+agent-workflow changes or process investigations. Current contracts are in
+`openspec/specs/`; active changes are in `openspec/changes/`; numbered
+documents under `docs/specs/` are historical context. For multi-step handoffs
+and review repairs, invoke the repo-local
+[candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md).
 
 ## Product shape
 
@@ -75,9 +76,7 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Use focused tests and type checks when they answer a specific question. For
-delivery, follow the repo-local
-[candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md). The
+Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
 hook runs `bun run check`, and CI repeats it on the PR head. Browser tests
 require Chrome/Chromium or `CHROME_BIN`:

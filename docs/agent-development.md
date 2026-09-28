@@ -94,28 +94,10 @@ instead of editing the PR body solely for totals, because an edit starts another
 CI run. Reuse earlier results only when their relevant inputs are unchanged.
 Open a ready PR and stop before merge.
 
-For Codex token usage before PR creation, run `bun run agent:usage -- --session
-<session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat
-`--session` for contributing agents, or omit it to use the current
-`CODEX_SESSION_ID` for a root agent. Pass each subagent's rollout UUID explicitly:
-its environment may inherit the parent's `CODEX_SESSION_ID` and misattribute usage.
-Omit either time bound only when the whole session belongs
-to the PR. The script reads local Codex rollout files under
-`$CODEX_HOME/sessions` (or `~/.codex/sessions`), sums per-response
-`token_usage_record` entries including compaction, and prints only aggregate
-counts and the chosen boundary. Its `--pr` value labels the report; it cannot
-infer which turns belong to a PR. Record the explicit session/time boundary in
-the initial PR body; a later rerun can use `--pr <number>` for its output label,
-with its new totals retained in workflow output. Cached input is included in
-input, and reasoning is included in output. These counts are not billed cost.
-The local Prometheus
-`codex_turn_token_usage` series aggregates by model and token type without a
-session label, so it cannot substitute for the PR-specific rollout count.
-Add `--tooling` to report aggregate tool calls, recognized check commands, and
-output size for the same boundary. Command counts recognize executable positions
-in literal shell commands, excluding comments, quoted data and heredoc bodies;
-dynamic or opaque shell scripts may be missed. The report never prints command
-text or tool output.
+`agent:usage` remains available for [optional Codex usage audits](agent-usage-audit.md).
+Do not make agent-run token accounting a routine pre-PR step. The measurement
+follow-up owns durable task/session/PR-linked usage collection; local rollout
+records are interim evidence.
 
 ## Revisit the process
 
@@ -131,6 +113,12 @@ executed inside the pre-push hook as a literal agent command. The first targets
 are at most two blocking waits per six-minute gate and one formatter write per
 candidate. Keep measurements in workflow artifacts and the process review; do
 not edit a PR body later solely for these totals. Targets do not replace gates.
+
+CI currently reruns the full delivery check for `pull_request.edited`, including
+description-only changes on an unchanged head. A separate workflow follow-up
+should run knowledge-map/body validation for that event without rebuilding or
+retesting unchanged code, while retaining the required check's behavior for
+code-bearing PR events and verified heads.
 
 After a batch of roughly five agent-assisted PRs, and during release preparation,
 the agent closing the batch compares usage boundaries, model responses,
