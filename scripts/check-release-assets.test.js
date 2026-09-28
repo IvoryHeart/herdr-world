@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { YAML } from "bun";
 import { readFile } from "node:fs/promises";
 import { URL } from "node:url";
 import {
@@ -61,6 +62,31 @@ describe("Herdr World release boundary", () => {
     expect(publish).toContain("scripts/install-herdr-world.sh");
     expect(publish).not.toContain("herdr-gui");
     expect(publish).toContain("--latest");
+  });
+
+  test("downstream channels consume the published release assets on retries", async () => {
+    const workflow = YAML.parse(
+      await readFile(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+        "utf8",
+      ),
+    );
+    const jobs = workflow.jobs;
+    expect(jobs["published-archives"].needs).toBe("publish");
+    expect(jobs["npm-stage"].needs).toBe("published-archives");
+    expect(jobs["homebrew-formula"].needs).toBe("published-archives");
+    const published = jobs["published-archives"].steps
+      .map((step) => step.run ?? "")
+      .join("\n");
+    expect(published).toContain("gh release download");
+    expect(published).toContain("sha256sum -c");
+    expect(published).toContain('cmp "$versioned" "$latest"');
+    for (const name of ["npm-stage", "homebrew-formula"]) {
+      const download = jobs[name].steps.find((step) =>
+        step.uses?.includes("actions/download-artifact"),
+      );
+      expect(download.with.name).toBe("published-archives");
+    }
   });
 
   test("release packages carry World lineage and complete notice inputs", async () => {

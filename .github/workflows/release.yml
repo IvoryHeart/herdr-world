@@ -28,6 +28,9 @@ jobs:
           bun-version: "1.4.1"
           no-cache: true
       - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
       - name: Verify release metadata
         shell: bash
         run: |
@@ -45,6 +48,16 @@ jobs:
           if [[ "$plugin_version" != *-rc.* ]]; then
             grep -q "^## \[$plugin_version\] - " CHANGELOG.md
           fi
+      - name: Verify npm package bootstrap before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+            npm view "@ivoryheart/herdr-world-$platform@0.0.0-seed.0" version --json >/dev/null || {
+              echo "Bootstrap @ivoryheart/herdr-world-$platform and configure its trusted publisher before release" >&2
+              exit 1
+            }
+          done
       - run: bun run precommit
 
   package:
@@ -146,92 +159,9 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  npm-stage:
-    name: Stage npm packages
-    needs: package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.1"
-          no-cache: true
-      - run: bun install --frozen-lockfile
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: "24"
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          path: dist
-          pattern: herdr-world-*
-          merge-multiple: true
-      - name: Stage and pack the verified binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
-            npm view "@ivoryheart/herdr-world-$platform@0.0.0-seed.0" version --json >/dev/null || {
-              echo "Bootstrap @ivoryheart/herdr-world-$platform and configure its trusted publisher before release" >&2
-              exit 1
-            }
-          done
-          bun scripts/stage-npm-release.ts "$version"
-          mkdir -p dist/npm-tarballs
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
-            npm pack "dist/npm/$platform" --pack-destination dist/npm-tarballs --silent
-          done
-          npm pack dist/npm/launcher --pack-destination dist/npm-tarballs --silent
-          test "$(find dist/npm-tarballs -name '*.tgz' | wc -l)" -eq 7
-          npm install --ignore-scripts --offline --prefix dist/npm-smoke \
-            "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
-            "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
-          test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: npm-packages
-          path: dist/npm-tarballs/*.tgz
-          if-no-files-found: error
-          retention-days: 7
-
-  homebrew-formula:
-    name: Generate Homebrew Formula
-    needs: package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.4.1"
-          no-cache: true
-      - run: bun install --frozen-lockfile
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          path: dist
-          pattern: herdr-world-*
-          merge-multiple: true
-      - name: Generate Formula for the release channel
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          formula="herdr-world.rb"
-          if [[ "$version" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
-          bun scripts/generate-homebrew-formula.ts "$version" dist "dist/$formula"
-          ruby -c "dist/$formula"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7
-        with:
-          name: homebrew-formula
-          path: dist/herdr-world*.rb
-          if-no-files-found: error
-          retention-days: 7
-
   publish:
     name: Publish GitHub Release
-    needs: [package, npm-stage, homebrew-formula]
+    needs: package
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -267,6 +197,117 @@ jobs:
             "${release_channel[@]}" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
             --title "Herdr World $GITHUB_REF_NAME"
+
+  published-archives:
+    name: Verify published archives
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Download and verify the assets served by GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$GITHUB_REF_NAME" --dir dist --pattern 'herdr-world-*'
+          node scripts/check-release-assets.mjs "${GITHUB_REF_NAME#v}"
+          for checksum in dist/*.tar.xz.sha256; do
+            (cd dist && sha256sum -c "$(basename "$checksum")")
+          done
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+            versioned="dist/herdr-world-v${GITHUB_REF_NAME#v}-$platform.tar.xz"
+            latest="dist/herdr-world-$platform.tar.xz"
+            cmp "$versioned" "$latest"
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: published-archives
+          path: |
+            dist/herdr-world-v*.tar.xz
+            dist/herdr-world-v*.tar.xz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  npm-stage:
+    name: Stage npm packages
+    needs: published-archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.1"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: published-archives
+          path: dist
+      - name: Stage and pack the verified binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          bun scripts/stage-npm-release.ts "$version"
+          mkdir -p dist/npm-tarballs
+          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+            npm pack "dist/npm/$platform" --pack-destination dist/npm-tarballs --silent
+          done
+          npm pack dist/npm/launcher --pack-destination dist/npm-tarballs --silent
+          test "$(find dist/npm-tarballs -name '*.tgz' | wc -l)" -eq 7
+          npm install --ignore-scripts --offline --prefix dist/npm-smoke \
+            "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
+            "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
+          test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: npm-packages
+          path: dist/npm-tarballs/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  homebrew-formula:
+    name: Generate Homebrew Formula
+    needs: published-archives
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: "1.4.1"
+          no-cache: true
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: published-archives
+          path: dist
+      - name: Generate Formula for the release channel
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          formula="herdr-world.rb"
+          if [[ "$version" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
+          bun scripts/generate-homebrew-formula.ts "$version" dist "dist/$formula"
+          ruby -c "dist/$formula"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7
+        with:
+          name: homebrew-formula
+          path: dist/herdr-world*.rb
+          if-no-files-found: error
+          retention-days: 7
 
   npm-publish:
     name: Publish npm packages

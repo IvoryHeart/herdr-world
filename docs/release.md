@@ -3,6 +3,50 @@
 Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
+## Pre-merge platform previews
+
+Add the `release-preview` label to a release preparation PR. Its CI run first
+checks the branch, then builds six downloadable `preview-<platform>` artifacts
+and a `preview-npm` artifact assembled from those same archives.
+Each artifact contains a `.tar.xz` archive and `.sha256` file for that exact PR
+head. Download artifacts from the successful CI run's **Artifacts** section and
+verify the checksum before extracting. The binary identifies itself as
+`0.0.0-rc.<CI run number>` so it cannot be mistaken for a published release.
+With GitHub CLI, use `gh run download RUN_ID -n preview-linux-x64` (substitute
+the desired platform).
+These previews have no GitHub release, npm version, Homebrew Formula, or update
+channel. Run the binary on its target OS and architecture with a test Herdr
+server, then exercise local/SSH connection selection, Office, Tree, Graph,
+Spaces, terminal and file flows, and the PWA where reachable. Retest the final
+RC from its published tag after its reviewed PR merges.
+
+On Linux or macOS, check and extract the archive with:
+
+```bash
+sha256sum -c herdr-world-v0.0.0-rc.N-PLATFORM.tar.xz.sha256
+tar -xJf herdr-world-v0.0.0-rc.N-PLATFORM.tar.xz
+./herdr-world-PLATFORM/herdr-world --version
+```
+
+On macOS, use `shasum -a 256 -c` if `sha256sum` is unavailable. On Windows,
+compare the digest with `Get-FileHash -Algorithm SHA256`, extract the archive
+with `tar -xJf`, and run `herdr-world.exe --version` from its extracted folder.
+To test the npm launcher locally, extract `preview-npm` and install its launcher
+tarball plus the one matching platform tarball into an isolated directory:
+
+```bash
+npm install --offline --ignore-scripts --prefix ./world-preview \
+  ./ivoryheart-herdr-world-PLATFORM-0.0.0-rc.N.tgz \
+  ./ivoryheart-herdr-world-0.0.0-rc.N.tgz
+./world-preview/node_modules/.bin/herdr-world --version
+```
+
+Use Node.js 22.14.0 or newer and substitute the CI run number for `N`.
+On Windows, run `world-preview\\node_modules\\.bin\\herdr-world.cmd`.
+Homebrew installation is checked from published URLs during the RC release workflow.
+
+## Publishing a candidate or stable release
+
 1. Create a clean release branch from current `origin/main` and ensure the Unreleased
    changelog accurately describes user-visible changes and the current source lineage.
    Prepare a concise, reviewed `docs/releases/vX.Y.Z.md` or
@@ -25,10 +69,11 @@ release change directly to `main`.
    `X.Y.Z[-rc.N]`. The workflow locates the merged release commit, creates an annotated tag
    if needed and starts **Release** on that immutable tag.
 5. The Release workflow revalidates metadata/tests, builds all six platform archives,
-   checks their contents and formats, and stages npm packages and a Homebrew Formula
-   from those exact archives. It publishes archives, checksums, update manifests and
-   `install-herdr-world.sh` as a GitHub release, then publishes the six npm platform
-   packages followed by `@ivoryheart/herdr-world`. RCs use GitHub prerelease status,
+   checks their contents and formats, then publishes archives, checksums, update
+   manifests and `install-herdr-world.sh` as a GitHub release. It downloads and
+   verifies those published bytes before staging npm packages and a Homebrew
+   Formula, including on retries. It then publishes the six npm platform packages
+   followed by `@ivoryheart/herdr-world`. RCs use GitHub prerelease status,
    npm's `next` tag and the `herdr-world-rc` Formula. Stable releases become GitHub
    Latest, use npm's `latest` tag and update the `herdr-world` Formula. The workflow
    opens a ready PR in `IvoryHeart/homebrew-tap`; merge it after independent review.
