@@ -70,8 +70,9 @@ Homebrew installation is checked from published URLs during the RC release workf
    if needed and starts **Release** on that immutable tag.
 5. The Release workflow revalidates metadata/tests, builds all six platform archives,
    checks their contents and formats, then publishes archives, checksums, update
-   manifests and `install-herdr-world.sh` as a GitHub release. It downloads and
-   verifies those published bytes before staging npm packages and a Homebrew
+   manifests and `install-herdr-world.sh` as a GitHub release. It downloads the
+   complete published asset set and verifies the installer, archive bytes, checksums
+   and update metadata before staging npm packages and a Homebrew
    Formula, including on retries. It then publishes the six npm platform packages
    followed by `@ivoryheart/herdr-world`. RCs use GitHub prerelease status,
    npm's `next` tag and the `herdr-world-rc` Formula. Stable releases become GitHub

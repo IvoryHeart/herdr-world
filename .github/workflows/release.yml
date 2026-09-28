@@ -215,16 +215,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          gh release download "$GITHUB_REF_NAME" --dir dist --pattern 'herdr-world-*'
-          node scripts/check-release-assets.mjs "${GITHUB_REF_NAME#v}"
-          for checksum in dist/*.tar.xz.sha256; do
-            (cd dist && sha256sum -c "$(basename "$checksum")")
-          done
-          for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
-            versioned="dist/herdr-world-v${GITHUB_REF_NAME#v}-$platform.tar.xz"
-            latest="dist/herdr-world-$platform.tar.xz"
-            cmp "$versioned" "$latest"
-          done
+          gh release download "$GITHUB_REF_NAME" --dir dist
+          node scripts/check-release-assets.mjs "${GITHUB_REF_NAME#v}" dist --published
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: published-archives
