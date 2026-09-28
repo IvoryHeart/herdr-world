@@ -40,6 +40,15 @@ describe("Herdr World release boundary", () => {
     );
   });
 
+  test("accepts candidate assets under their exact prerelease version", () => {
+    const candidate = releaseAssetNames("0.2.0-rc.1");
+    expect(candidate).toContain("herdr-world-v0.2.0-rc.1-windows-arm64.tar.xz");
+    expect(() =>
+      verifyReleaseAssetNames(candidate, "0.2.0-rc.1"),
+    ).not.toThrow();
+    expect(() => releaseAssetNames("0.2.0-rc.0")).toThrow();
+  });
+
   test("the publish workflow enforces the boundary and installs only Herdr World", async () => {
     const workflow = await readFile(
       new URL("../.github/workflows/release.yml", import.meta.url),

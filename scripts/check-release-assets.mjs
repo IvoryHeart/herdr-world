@@ -4,7 +4,11 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export function releaseAssetNames(version) {
-  if (!/^\d+\.\d+\.\d+$/.test(version))
+  if (
+    !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.[1-9]\d*)?$/.test(
+      version,
+    )
+  )
     throw new Error("Invalid release version");
   return [
     "darwin-arm64",

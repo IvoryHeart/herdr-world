@@ -24,7 +24,8 @@ are optional because the merged PR history records their source.
 - Restored the npm and Homebrew installation channels for the new foundation.
   npm now installs one platform binary through optional dependencies; Homebrew
   installs the same checksum-pinned release archive. Both serve the one World
-  service and require Herdr as a separate runtime.
+  service and require Herdr as a separate runtime. Release candidates use all six
+  platform archives, npm's `next` tag and a separate Homebrew RC Formula.
 - Added accessible maximize and resize controls across Office Inspector windows,
   focus-based window stacking, and Close all terminal windows in Arrange and
   Actions. Close all preserves Herdr tabs and sessions; Spaces keeps each

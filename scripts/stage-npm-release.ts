@@ -11,13 +11,16 @@ import {
 import { join, resolve } from "node:path";
 import { readReleaseArchive } from "./release-archive";
 import { npmPlatformName, RELEASE_PLATFORMS } from "./release-platforms";
+import { RELEASE_VERSION_RE } from "./release-version";
 
 const root = resolve(import.meta.dir, "..");
 const version = process.argv[2];
 const distDir = resolve(process.argv[3] ?? join(root, "dist"));
 const outputDir = join(distDir, "npm");
-if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
-  throw new Error("usage: bun scripts/stage-npm-release.ts X.Y.Z [dist-dir]");
+if (!version || !RELEASE_VERSION_RE.test(version)) {
+  throw new Error(
+    "usage: bun scripts/stage-npm-release.ts X.Y.Z[-rc.N] [dist-dir]",
+  );
 }
 
 const notices = [

@@ -2,6 +2,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { readReleaseArchive } from "./release-archive";
+import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 export function renderHomebrewFormula(
   version: string,
@@ -10,7 +11,10 @@ export function renderHomebrewFormula(
   const source = (platform: string) => `
       url "https://github.com/IvoryHeart/herdr-world/releases/download/v${version}/herdr-world-v${version}-${platform}.tar.xz"
       sha256 "${digests[platform]}"`;
-  return `class HerdrWorld < Formula
+  const candidate = isReleaseCandidate(version);
+  const formulaClass = candidate ? "HerdrWorldRc" : "HerdrWorld";
+  const conflict = candidate ? "herdr-world" : "herdr-world-rc";
+  return `class ${formulaClass} < Formula
   desc "Visualize Herdr agent work in Office and Graph across local and SSH hosts"
   homepage "https://ivoryheart.github.io/herdr-world/"
   version "${version}"
@@ -29,7 +33,7 @@ export function renderHomebrewFormula(
     end
   end
 
-  conflicts_with "herdr-world-rc", because: "both Formulae provide the herdr-world command"
+  conflicts_with "${conflict}", because: "both Formulae provide the herdr-world command"
 
   def install
     package = Dir["herdr-world-*"].find { |path| File.directory?(path) }
@@ -51,16 +55,20 @@ end
 
 if (import.meta.main) {
   const version = process.argv[2];
-  if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
+  if (!version || !RELEASE_VERSION_RE.test(version)) {
     throw new Error(
-      "usage: bun scripts/generate-homebrew-formula.ts X.Y.Z [dist-dir] [output-file]",
+      "usage: bun scripts/generate-homebrew-formula.ts X.Y.Z[-rc.N] [dist-dir] [output-file]",
     );
   }
   const distDir = resolve(
     process.argv[3] ?? join(import.meta.dir, "..", "dist"),
   );
   const outputFile = resolve(
-    process.argv[4] ?? join(distDir, "herdr-world.rb"),
+    process.argv[4] ??
+      join(
+        distDir,
+        isReleaseCandidate(version) ? "herdr-world-rc.rb" : "herdr-world.rb",
+      ),
   );
   const digests = Object.fromEntries(
     ["darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64"].map(

@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-publication
   cancel-in-progress: false
 
 jobs:
@@ -42,7 +42,9 @@ jobs:
           test "$GITHUB_REF_NAME" = "v$plugin_version"
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
           test -s "docs/releases/$GITHUB_REF_NAME.md"
-          grep -q "^## \[$plugin_version\] - " CHANGELOG.md
+          if [[ "$plugin_version" != *-rc.* ]]; then
+            grep -q "^## \[$plugin_version\] - " CHANGELOG.md
+          fi
       - run: bun run precommit
 
   package:
@@ -156,6 +158,7 @@ jobs:
         with:
           bun-version: "1.4.1"
           no-cache: true
+      - run: bun install --frozen-lockfile
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "24"
@@ -205,17 +208,24 @@ jobs:
         with:
           bun-version: "1.4.1"
           no-cache: true
+      - run: bun install --frozen-lockfile
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: dist
           pattern: herdr-world-*
           merge-multiple: true
-      - run: bun scripts/generate-homebrew-formula.ts "${GITHUB_REF_NAME#v}" dist dist/herdr-world.rb
-      - run: ruby -c dist/herdr-world.rb
+      - name: Generate Formula for the release channel
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          formula="herdr-world.rb"
+          if [[ "$version" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
+          bun scripts/generate-homebrew-formula.ts "$version" dist "dist/$formula"
+          ruby -c "dist/$formula"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7
         with:
           name: homebrew-formula
-          path: dist/herdr-world.rb
+          path: dist/herdr-world*.rb
           if-no-files-found: error
           retention-days: 7
 
@@ -244,13 +254,17 @@ jobs:
             echo "GitHub release $GITHUB_REF_NAME already exists"
             exit 0
           fi
+          release_channel=(--latest)
+          if [[ "$GITHUB_REF_NAME" == *-rc.* ]]; then
+            release_channel=(--prerelease)
+          fi
           gh release create "$GITHUB_REF_NAME" \
             dist/herdr-world-*.tar.xz \
             dist/herdr-world-*.tar.xz.sha256 \
             dist/herdr-world-*.update.json \
             scripts/install-herdr-world.sh \
             --verify-tag \
-            --latest \
+            "${release_channel[@]}" \
             --notes-file "docs/releases/$GITHUB_REF_NAME.md" \
             --title "Herdr World $GITHUB_REF_NAME"
 
@@ -291,7 +305,12 @@ jobs:
       - name: Open tap pull request
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: bash scripts/open-homebrew-pr.sh "${GITHUB_REF_NAME#v}" formula/herdr-world.rb
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          formula="herdr-world.rb"
+          if [[ "$version" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
+          bash scripts/open-homebrew-pr.sh "$version" "formula/$formula"
 
   homebrew-smoke:
     name: Homebrew install (${{ matrix.runner }})
@@ -310,6 +329,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          brew install --formula ./formula/herdr-world.rb
-          test "$("$(brew --prefix herdr-world)/bin/herdr-world" --version)" = "herdr-world ${GITHUB_REF_NAME#v}"
-          brew test ./formula/herdr-world.rb
+          version="${GITHUB_REF_NAME#v}"
+          formula="herdr-world.rb"
+          package="herdr-world"
+          if [[ "$version" == *-rc.* ]]; then
+            formula="herdr-world-rc.rb"
+            package="herdr-world-rc"
+          fi
+          brew install --formula "./formula/$formula"
+          test "$("$(brew --prefix "$package")/bin/herdr-world" --version)" = "herdr-world $version"
+          brew test "./formula/$formula"

@@ -15,6 +15,8 @@ Available targets are `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`,
 `windows-x64` and `windows-arm64`. Bun cross-compiles the executable; package output
 is written to ignored `dist/` as a versioned archive, a latest-channel archive,
 checksums and an update manifest.
+`HERDR_WORLD_BUILD_VERSION` accepts `X.Y.Z` and `X.Y.Z-rc.N`; candidates use the
+same six targets and archive layout.
 
 Each archive must contain:
 
@@ -35,6 +37,7 @@ the launcher. The Release workflow also generates a checksum-pinned Homebrew
 Formula for macOS and Linux and opens a reviewable PR in
 `IvoryHeart/homebrew-tap` after the GitHub assets are published. Windows uses npm
 or the standalone archive; Homebrew does not manage Windows.
+Candidates publish to npm's `next` tag and the separate `herdr-world-rc` Formula.
 
 The responsive Web/PWA is the supported mobile artifact. This foundation does not
 produce the former Capacitor Android package.

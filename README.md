@@ -112,8 +112,8 @@ Click any screenshot to open the full-resolution image.
      | HERDR_WORLD_VERSION= sh
    ```
 
-   Homebrew (`brew install IvoryHeart/tap/herdr-world`) and npm
-   (`npm install --global @ivoryheart/herdr-world`) are alternative channels.
+   For 0.2.0 and newer releases, Homebrew (`brew install IvoryHeart/tap/herdr-world`)
+   and npm (`npm install --global @ivoryheart/herdr-world`) are alternative channels.
    npm requires Node.js 22.14.0 or newer and downloads only the binary for the
    current platform. On Windows, use npm or download the matching x64 or ARM64
    archive from the [latest release](https://github.com/IvoryHeart/herdr-world/releases/latest).

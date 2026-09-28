@@ -34,8 +34,8 @@ The process prints the application URL. The default is <http://127.0.0.1:8787>.
 Open it directly or install it as a PWA. PWA mode removes browser chrome; it is not
 offline mode and the World process must remain reachable.
 
-Alternatively, install the same release through Homebrew on macOS or Linux, or npm
-on any supported desktop platform:
+For 0.2.0 and newer releases, install the same version through Homebrew on macOS
+or Linux, or npm on any supported desktop platform:
 
 ```bash
 brew install IvoryHeart/tap/herdr-world
@@ -46,6 +46,14 @@ Choose one channel. Homebrew uses the published platform archive; npm installs a
 small launcher and the matching platform binary. npm needs Node.js 22.14.0 or newer
 and optional dependencies enabled. Neither channel installs or starts Herdr. For
 an existing installation, stop the old World process before upgrading the channel.
+
+For a release candidate, request its exact version. The standalone installer
+accepts `HERDR_WORLD_VERSION=X.Y.Z-rc.N`, npm accepts
+`@ivoryheart/herdr-world@X.Y.Z-rc.N`, and Homebrew uses
+`IvoryHeart/tap/herdr-world-rc` after the reviewed RC Formula PR merges.
+Homebrew's RC and stable Formulae conflict, so uninstall the stable Formula before
+installing the RC. Candidates do not replace the stable GitHub Latest release or
+npm `latest` tag.
 
 This foundation starts with fresh World state. It uses
 `~/.config/herdr-world` (or `%APPDATA%\herdr-world`) and browser keys under

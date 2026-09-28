@@ -6,11 +6,15 @@ import { join, resolve } from "node:path";
 
 const version = process.argv[2];
 const packageDir = resolve(process.argv[3] ?? "npm-packages");
-if (!version || !/^\d+\.\d+\.\d+$/.test(version)) {
+if (
+  !version ||
+  !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-rc\.[1-9]\d*)?$/.test(version)
+) {
   throw new Error(
-    "usage: node scripts/publish-npm-release.mjs X.Y.Z [package-dir]",
+    "usage: node scripts/publish-npm-release.mjs X.Y.Z[-rc.N] [package-dir]",
   );
 }
+const distTag = version.includes("-rc.") ? "next" : "latest";
 
 const packages = [
   "linux-x64",
@@ -53,9 +57,13 @@ for (const platform of packages) {
       `could not inspect ${name}@${version}: ${lookup.stderr.trim()}`,
     );
   }
-  const publish = spawnSync("npm", ["publish", archive, "--access", "public"], {
-    stdio: "inherit",
-  });
+  const publish = spawnSync(
+    "npm",
+    ["publish", archive, "--access", "public", "--tag", distTag],
+    {
+      stdio: "inherit",
+    },
+  );
   if (publish.error) throw publish.error;
   if (publish.status !== 0) {
     throw new Error(`npm publish failed for ${name}@${version}`);

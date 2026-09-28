@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to release (X.Y.Z, or patch/minor/major)
+        description: Version to release (X.Y.Z, X.Y.Z-rc.N, or patch/minor/major)
         required: true
         type: string
 
@@ -53,7 +53,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
-          git add herdr-plugin.toml CHANGELOG.md
+          git add herdr-plugin.toml CHANGELOG.md docs/releases/
           git commit -m "Release $VERSION"
           gh auth setup-git
           git push origin "$branch"
@@ -62,5 +62,5 @@ jobs:
             --base main \
             --head "$branch" \
             --title "Release $VERSION" \
-            --body "Prepare $TAG by updating the public plugin version and promoting the reviewed changelog. Private development package manifests remain at 0.0.0; release builds derive their version from this reviewed tag. Review and merge this PR after its explicitly dispatched CI check passes, then run the Publish Release workflow for $VERSION."
+            --body "Prepare $TAG by updating the public plugin version and referencing its reviewed release notes. Stable versions also promote the changelog. Private development package manifests remain at 0.0.0; release builds derive their version from this reviewed tag. Review and merge this PR after its explicitly dispatched CI check passes, then run the Publish Release workflow for $VERSION."
           gh workflow run "CI" --ref "$branch"

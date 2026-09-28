@@ -4,14 +4,21 @@
 // plugin/tag version into the standalone binary and archive metadata.
 //
 // Usage:
-//   bun scripts/prepare-release.ts <X.Y.Z | patch | minor | major>
+//   bun scripts/prepare-release.ts <X.Y.Z | X.Y.Z-rc.N | patch | minor | major>
 //   bun scripts/prepare-release.ts 0.4.6
+//   bun scripts/prepare-release.ts 0.4.6-rc.1
 //   bun scripts/prepare-release.ts patch
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isReleaseCandidate, RELEASE_VERSION_RE } from "./release-version";
 
 const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PACKAGE_FILES = [
@@ -22,8 +29,6 @@ const PACKAGE_FILES = [
 const PLUGIN_MANIFEST_FILE = "herdr-plugin.toml";
 const CHANGELOG_FILE = "CHANGELOG.md";
 const RELEASE_FILES = [...PACKAGE_FILES, PLUGIN_MANIFEST_FILE, CHANGELOG_FILE];
-
-const SEMVER_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 
 export function parsePackageVersion(packageJsonText: string): string {
   const match = /^(\s*)"version": "([^"]+)"/m.exec(packageJsonText);
@@ -80,9 +85,11 @@ export function replaceManifestVersion(
 }
 
 export function resolveNextVersion(current: string, input: string): string {
-  const currentMatch = SEMVER_RE.exec(current);
+  const currentMatch = RELEASE_VERSION_RE.exec(current);
   if (!currentMatch) {
-    throw new Error(`Current version "${current}" is not in X.Y.Z form`);
+    throw new Error(
+      `Current version "${current}" is not in X.Y.Z or X.Y.Z-rc.N form`,
+    );
   }
   const currentTuple = [
     Number(currentMatch[1]),
@@ -98,9 +105,11 @@ export function resolveNextVersion(current: string, input: string): string {
   if (input === "major") {
     return `${currentTuple[0] + 1}.0.0`;
   }
-  const nextMatch = SEMVER_RE.exec(input);
+  const nextMatch = RELEASE_VERSION_RE.exec(input);
   if (!nextMatch) {
-    throw new Error(`Version "${input}" must be X.Y.Z or patch|minor|major`);
+    throw new Error(
+      `Version "${input}" must be X.Y.Z, X.Y.Z-rc.N, or patch|minor|major`,
+    );
   }
   const candidate = [
     Number(nextMatch[1]),
@@ -109,7 +118,19 @@ export function resolveNextVersion(current: string, input: string): string {
   ];
   for (let index = 0; index < 3; index += 1) {
     if (candidate[index] > currentTuple[index]) return input;
-    if (candidate[index] < currentTuple[index]) break;
+    if (candidate[index] < currentTuple[index]) {
+      throw new Error(
+        `Version ${input} must be greater than the current ${current}`,
+      );
+    }
+  }
+  if (currentMatch[4] !== undefined) {
+    if (
+      nextMatch[4] === undefined ||
+      Number(nextMatch[4]) > Number(currentMatch[4])
+    ) {
+      return input;
+    }
   }
   throw new Error(
     `Version ${input} must be greater than the current ${current}`,
@@ -135,6 +156,15 @@ export function promoteChangelog(
     `${heading}\n## [${version}] - ${date}\n\n` +
     changelog.slice(start + heading.length).replace(/^\n+/u, "")
   );
+}
+
+export function draftCandidateNotes(version: string, stableNotes: string) {
+  if (!isReleaseCandidate(version)) {
+    throw new Error(`not a release candidate: ${version}`);
+  }
+  const body = stableNotes.replace(/^# [^\n]+\n/u, "").trim();
+  if (!body) throw new Error("stable release notes are empty");
+  return `# Herdr World ${version} release candidate\n\nThis candidate needs cross-platform validation before the stable release. Install this exact version; report defects against tag \`v${version}\`. A correction receives the next RC number.\n\n${body}\n`;
 }
 
 function git(...args: string[]): string {
@@ -168,7 +198,7 @@ function main() {
   const input = process.argv[2];
   if (!input || input === "--help") {
     console.log(
-      "Usage: bun scripts/prepare-release.ts <X.Y.Z | patch | minor | major>",
+      "Usage: bun scripts/prepare-release.ts <X.Y.Z | X.Y.Z-rc.N | patch | minor | major>",
     );
     process.exit(input ? 0 : 1);
   }
@@ -213,22 +243,42 @@ function main() {
   if (originTagExists(tag)) {
     abort(`tag ${tag} already exists on origin`);
   }
-  const releaseNotes = readFileSync(
-    join(REPO_ROOT, "docs", "releases", `${tag}.md`),
-    "utf8",
-  );
+  const notesPath = join(REPO_ROOT, "docs", "releases", `${tag}.md`);
+  const candidate = isReleaseCandidate(version);
+  const notesExist = existsSync(notesPath);
+  const releaseNotes = notesExist
+    ? readFileSync(notesPath, "utf8")
+    : candidate
+      ? draftCandidateNotes(
+          version,
+          readFileSync(
+            join(
+              REPO_ROOT,
+              "docs",
+              "releases",
+              `v${version.replace(/-rc\.[1-9]\d*$/u, "")}.md`,
+            ),
+            "utf8",
+          ),
+        )
+      : "";
   if (!releaseNotes.trim()) abort(`release notes for ${tag} are empty`);
 
   // Compute every output before writing anything so a validation failure
   // leaves the worktree untouched.
   const manifestWrite = replaceManifestVersion(manifestText, current, version);
-  const changelogWrite = promoteChangelog(
-    changelogText,
-    version,
-    new Date().toISOString().slice(0, 10),
-  );
+  const changelogWrite = candidate
+    ? changelogText
+    : promoteChangelog(
+        changelogText,
+        version,
+        new Date().toISOString().slice(0, 10),
+      );
   writeFileSync(manifestPath, manifestWrite);
-  writeFileSync(changelogPath, changelogWrite);
+  if (!notesExist) writeFileSync(notesPath, releaseNotes);
+  if (changelogWrite !== changelogText) {
+    writeFileSync(changelogPath, changelogWrite);
+  }
 
   console.log(
     `Prepared release ${version}. Review the changes and submit them as a release PR.`,

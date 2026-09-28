@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  draftCandidateNotes,
   parseManifestVersion,
   parsePackageVersion,
   promoteChangelog,
@@ -99,6 +100,16 @@ describe("resolveNextVersion", () => {
     expect(resolveNextVersion("0.4.1", "0.5.0")).toBe("0.5.0");
   });
 
+  test("orders release candidates before their stable version", () => {
+    expect(resolveNextVersion("0.1.1", "0.2.0-rc.1")).toBe("0.2.0-rc.1");
+    expect(resolveNextVersion("0.2.0-rc.1", "0.2.0-rc.2")).toBe("0.2.0-rc.2");
+    expect(resolveNextVersion("0.2.0-rc.2", "0.2.0")).toBe("0.2.0");
+    expect(() => resolveNextVersion("0.2.0", "0.2.0-rc.3")).toThrow("greater");
+    expect(() => resolveNextVersion("0.2.0-rc.2", "0.2.0-rc.1")).toThrow(
+      "greater",
+    );
+  });
+
   test("rejects versions that are not greater than the current one", () => {
     expect(() => resolveNextVersion("0.4.1", "0.4.1")).toThrow("greater");
     expect(() => resolveNextVersion("0.4.1", "0.3.9")).toThrow("greater");
@@ -132,4 +143,14 @@ describe("promoteChangelog", () => {
       ),
     ).toThrow("no Unreleased changes");
   });
+});
+
+test("draftCandidateNotes creates reviewed notes for a later RC", () => {
+  const notes = draftCandidateNotes(
+    "0.2.0-rc.2",
+    "# Herdr World 0.2.0\n\nCheck Office and Graph.\n",
+  );
+  expect(notes).toContain("# Herdr World 0.2.0-rc.2 release candidate");
+  expect(notes).toContain("Check Office and Graph.");
+  expect(() => draftCandidateNotes("0.2.0", "body")).toThrow();
 });
