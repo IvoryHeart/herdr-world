@@ -165,6 +165,8 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Kept a partly clipped Inspector stationary when pointer focus raises it during
+  Columns arrangement, while keyboard focus still scrolls it into view.
 - Kept browser-local Office creation ready without first visiting Spaces or
   opening an Inspector, unified seat, room and tab-strip availability feedback,
   and preserved the prior Inspector while bounded exact focus reports failures.
