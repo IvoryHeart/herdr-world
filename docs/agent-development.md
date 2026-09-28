@@ -70,7 +70,8 @@ hook configuration.
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
 source excerpts bounded, then read more only when needed. The pre-push hook writes
 one ignored `.agents/delivery/pre-push.tsv` row per full gate with UTC timestamp,
-head SHA, exit code and elapsed seconds. It prints a short success status; on
+head SHA, exit code and elapsed seconds. This worktree-scoped file is a local
+diagnostic, not durable PR accounting. The hook prints a short success status; on
 failure it prints a concise summary and the path to the complete retained log.
 Inspect that log only when needed, preserving the check's exit status. For
 review-only work, inspect exact-head CI evidence first.
@@ -121,8 +122,11 @@ text or tool output.
 For the next comparable task, the process review measures wait-only model turns
 per six-minute gate from the Codex rollout; formatter writes per candidate from
 `format:staged` output and the rollout; full checks per pushed candidate and
-check wall time from the local hook report and CI run metadata; and review
-outcomes from the PR timeline. `agent:usage --tooling` cannot count a check
+check wall time from the pre-push hook and CI run metadata; and review
+outcomes from the PR timeline. A durable workflow artifact must join these
+records to the task, session, PR and candidate head before the worktree is removed.
+Add ingestion or upload for the local hook report in that measurement follow-up;
+the ignored TSV alone is insufficient. `agent:usage --tooling` cannot count a check
 executed inside the pre-push hook as a literal agent command. The first targets
 are at most two blocking waits per six-minute gate and one formatter write per
 candidate. Keep measurements in workflow artifacts and the process review; do
@@ -135,3 +139,8 @@ workflow change at a time and keep it only if it saves work without increasing
 defects. Update this short guide when a practice is supported; keep detailed
 evidence in the relevant PRs, separate from routine startup reading. This
 review is not a gate for individual PRs.
+
+The [UI scale browser test timing analysis](ui-scale-test-performance.md) records
+the current slow-case measurements and a proposed test-design experiment.
+The [World handoff browser test timing analysis](world-handoff-test-performance.md)
+records its deadline shortcut, measured saving and scroll-race diagnosis.

@@ -26,7 +26,8 @@ server/herdr-world-*
 server/*.bun-build
 
 # Local agent worktrees, browser fixtures, and generated release/build output
-.agents/
+.agents/*
+!.agents/skills/
 .scratch/
 _site/
 bridge/target/

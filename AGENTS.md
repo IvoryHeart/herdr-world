@@ -75,14 +75,12 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Use focused tests and type checks when they answer a specific question. Before
-commit, stage intended files, run `bun run format:staged` once, restage and
-inspect the diff. A docs-only candidate is a safe no-op. The pre-commit hook
-checks formatting and lint without writing files. On a branch push, the
-pre-push hook runs the full `bun run check`; CI repeats it on the PR head. Do
-not run a duplicate final full check before that push. For a local-only
-handoff, run one explicit full check. A code repair starts a new candidate cycle.
-Browser tests require Chrome/Chromium or `CHROME_BIN`:
+Use focused tests and type checks when they answer a specific question. For
+delivery, follow the repo-local
+[candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md). The
+pre-commit hook checks formatting and lint without writing files; the pre-push
+hook runs `bun run check`, and CI repeats it on the PR head. Browser tests
+require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
