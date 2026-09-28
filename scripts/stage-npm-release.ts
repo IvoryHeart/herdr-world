@@ -102,7 +102,7 @@ writeFileSync(
       name: "@ivoryheart/herdr-world",
       version,
       description:
-        "Visualize Herdr agent work in Office and Graph across local and SSH hosts",
+        "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts.",
       license: "MIT",
       repository,
       engines: { node: ">=22.14.0" },
