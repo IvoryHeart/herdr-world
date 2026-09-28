@@ -78,8 +78,10 @@ bun install --frozen-lockfile
 
 Use focused tests and type checks when they answer a specific question. The
 pre-commit hook checks formatting and lint without writing files; the pre-push
-hook runs `bun run check`, and CI repeats it on the PR head. Browser tests
-require Chrome/Chromium or `CHROME_BIN`:
+hook runs `bun run check` for code changes. A Markdown-only follow-up uses
+`bun run check:docs` only when a successful full gate already covers its code.
+CI runs documentation checks for Markdown-only PR diffs and full checks for code
+changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
@@ -88,7 +90,7 @@ bun run test:browser
 ```
 
 Run `bun run install-hooks` once per clone so the tracked pre-commit hook checks
-formatting and lint at commit time and the pre-push hook runs the full check. All
+formatting and lint at commit time and the pre-push hook runs the applicable check. All
 worktrees in that clone share the hook configuration.
 
 Run `bun run notices:generate` whenever the resolved dependency graph changes and

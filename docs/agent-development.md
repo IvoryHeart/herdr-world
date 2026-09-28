@@ -64,17 +64,24 @@ multi-step handoffs and review repairs. Use
 `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
-lint, and the pre-push hook checks the full candidate. Worktrees share the same Git
-hook configuration.
+lint, and the pre-push hook checks the candidate. Code changes get the full
+`bun run check`; a Markdown-only follow-up may use `bun run check:docs` after
+this worktree has a successful full gate on an ancestor. Worktrees share the
+same Git hook configuration.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
 source excerpts bounded, then read more only when needed. The pre-push hook writes
-one ignored `.agents/delivery/pre-push.tsv` row per full gate with UTC timestamp,
-head SHA, exit code and elapsed seconds. This worktree-scoped file is a local
-diagnostic, not durable PR accounting. The hook prints a short success status; on
+one ignored `.agents/delivery/pre-push.tsv` row per gate with UTC timestamp,
+head SHA, exit code, elapsed seconds and gate name. This worktree-scoped file
+is a local diagnostic, not durable PR accounting. The hook prints a short
+success status; on
 failure it prints a concise summary and the path to the complete retained log.
 Inspect that log only when needed, preserving the check's exit status. For
-review-only work, inspect exact-head CI evidence first.
+review-only work, inspect exact-head CI evidence first. CI uses
+`bun run check:docs` for Markdown-only PR diffs and skips the macOS lifecycle
+on those diffs. On PR-description edits, a code PR can reuse successful full jobs on
+the exact base and head; if that proof is missing or failed, CI runs the full
+gate. The existing three required status names stay in place.
 Run a local check only to investigate a specific gap or reproduce a finding; do
 not repeat a successful full gate on the same commit. When a command returns a
 running session, call `write_stdin` on that session with empty `chars` and

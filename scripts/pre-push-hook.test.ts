@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -47,7 +48,7 @@ test("pre-push runs the full check and blocks a failed check", () => {
     expect(success.stdout).toBe("");
     expect(success.stderr).toMatch(/pre-push: bun run check passed in \d+s/);
     expect(readdirSync(deliveryDir)).toEqual(["pre-push.tsv"]);
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t0\t\d+\n$/);
+    expect(readFileSync(reportPath, "utf8")).toMatch(/\t0\t\d+\tfull\n$/);
     expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
     expect(readFileSync(envPath, "utf8")).toBe("||\n");
 
@@ -62,7 +63,60 @@ test("pre-push runs the full check and blocks a failed check", () => {
     expect(readFileSync(logPath!, "utf8")).toContain(
       "synthetic early diagnostic and stack",
     );
-    expect(readFileSync(reportPath, "utf8")).toMatch(/\t37\t\d+\n$/);
+    expect(readFileSync(reportPath, "utf8")).toMatch(/\t37\t\d+\tfull\n$/);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("pre-push uses the docs gate only after a successful full gate covers all code", () => {
+  const root = mkdtempSync(join(tmpdir(), "pre-push-docs-"));
+  const hook = fileURLToPath(new URL("../.githooks/pre-push", import.meta.url));
+  const argsPath = join(root, "bun-args");
+  const git = (...args: string[]) =>
+    execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
+  try {
+    git("init", "-q");
+    git("config", "user.email", "example@example.invalid");
+    git("config", "user.name", "Example");
+    writeFileSync(join(root, "README.md"), "base\n");
+    git("add", ".");
+    git("commit", "-qm", "base");
+    const base = git("rev-parse", "HEAD");
+    writeFileSync(
+      join(root, "bun"),
+      '#!/bin/sh\nprintf "%s\\n" "$*" > "$HOOK_ARGS_FILE"\nexit "$HOOK_EXIT_CODE"\n',
+      { mode: 0o755 },
+    );
+    const run = (local: string, remote: string, exitCode = 0) =>
+      spawnSync("sh", [hook], {
+        cwd: root,
+        input: `refs/heads/example ${local} refs/heads/example ${remote}\n`,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${root}:${process.env.PATH ?? ""}`,
+          HOOK_ARGS_FILE: argsPath,
+          HOOK_EXIT_CODE: String(exitCode),
+        },
+      });
+
+    expect(run(base, "0".repeat(40)).status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
+    mkdirSync(join(root, "docs"));
+    writeFileSync(join(root, "docs", "guide.md"), "updated\n");
+    git("add", "docs/guide.md");
+    git("commit", "-qm", "docs");
+    const docs = git("rev-parse", "HEAD");
+    expect(run(docs, base, 37).status).toBe(37);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
+    expect(run(docs, base).status).toBe(0);
+    expect(readFileSync(argsPath, "utf8")).toBe("run check:docs\n");
+    writeFileSync(join(root, "code.ts"), "export const value = 1;\n");
+    git("add", "code.ts");
+    git("commit", "-qm", "code");
+    expect(run(git("rev-parse", "HEAD"), docs).status).toBe(0);
     expect(readFileSync(argsPath, "utf8")).toBe("run check\n");
   } finally {
     rmSync(root, { recursive: true, force: true });

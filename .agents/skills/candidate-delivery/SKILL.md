@@ -17,7 +17,10 @@ the whole repository for a scoped change.
 
 Commit with the existing read-only pre-commit format/lint guard. For a PR, push
 the complete candidate once and let the pre-push hook run the full
-`bun run check`; CI checks the PR head. Do not run a separate final full check
+`bun run check` for code. A Markdown-only follow-up may use
+`bun run check:docs` when this worktree has a successful full gate on an ancestor. CI
+runs the applicable gate on the PR head, and reuses exact-head full results for
+description edits. Do not run a separate final full check
 immediately before that push. For an explicitly local-only handoff, run one
 explicit full check instead. If a later repair changes code, begin a new
 candidate cycle.

@@ -28,18 +28,24 @@ assets required by server typechecks and process tests.
 | Related tests | `bun test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
-| Branch push | The installed pre-push hook runs `bun run check`; CI repeats it on the PR head. |
+| Branch push | The installed pre-push hook runs `bun run check` for code; a Markdown-only follow-up to a successful full gate runs `bun run check:docs`. CI checks the PR head with the applicable gate. |
 
 Run `bun run install-hooks` once per clone to point Git at the tracked
 `.githooks/` directory. Its `pre-commit` hook checks formatting and lint without
-writing files, and its `pre-push` hook runs the full check. Use focused checks
+writing files, and its `pre-push` hook runs the applicable check. Use focused checks
 only for a specific question while developing. For a branch push, the hook's
-`bun run check` is the final full check. Run it separately only when there is no
-push or the hook is unavailable. After a failed push check, use the failing stage
-and focused checks to diagnose the issue. Do not run `bun run format` for a scoped
-change. The pre-push hook records each gate's status and elapsed seconds in the
-ignored `.agents/delivery/pre-push.tsv` file. A failed gate keeps its complete
-log in the same directory and prints its path.
+`bun run check` is the final full check for code changes. The hook uses
+`bun run check:docs` only if its local report proves a successful full gate on
+an ancestor and every change since then is Markdown. CI runs documentation
+checks for Markdown-only PR diffs, and reuses an exact-head successful full
+result for PR-description edits; missing proof falls back to the full check.
+The three required CI job names remain the same. Run a full check separately
+only when there is no push or the hook is unavailable. After a failed push check,
+use the failing stage and focused checks to diagnose the issue. Do not run
+`bun run format` for a scoped change. The pre-push hook records each gate's
+status, elapsed seconds and gate name in the ignored
+`.agents/delivery/pre-push.tsv` file. A failed gate keeps its complete log in
+the same directory and prints its path.
 
 Workspace checks: `bun run --filter herdr-world-web typecheck` and
 `bun run --filter herdr-world-server typecheck` (builds/embeds web assets first).

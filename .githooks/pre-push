@@ -13,20 +13,45 @@ report_file="$artifact_dir/pre-push.tsv"
 head_sha=$(git rev-parse --verify HEAD 2>/dev/null || printf 'unborn')
 recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 started_at=$(date +%s)
+gate=full
 
-if bun run check >"$log_file" 2>&1; then
+# A Markdown-only follow-up can use the docs gate if this worktree already
+# passed the full gate on an ancestor. Uncertain or multi-ref pushes run in full.
+if read -r local_ref local_sha remote_ref remote_sha && ! read -r extra_line; then
+  case "$local_ref" in
+    refs/heads/*)
+      if [ "$local_sha" = "$head_sha" ] && [ -f "$report_file" ]; then
+        full_sha=$(awk -F '\t' '$3 == "0" && ($5 == "" || $5 == "full") { sha=$2 } END { print sha }' "$report_file")
+        if [ -n "$full_sha" ] &&
+          git merge-base --is-ancestor "$remote_sha" "$head_sha" 2>/dev/null &&
+          git merge-base --is-ancestor "$full_sha" "$head_sha" 2>/dev/null &&
+          git diff --quiet --no-renames "$full_sha" "$head_sha" -- . ':(exclude,glob)**/*.md' ':(exclude,glob)*.md'; then
+          gate=docs
+        fi
+      fi
+      ;;
+  esac
+fi
+
+if [ "$gate" = docs ]; then
+  check_command=check:docs
+else
+  check_command=check
+fi
+
+if bun run "$check_command" >"$log_file" 2>&1; then
   ended_at=$(date +%s)
   elapsed=$((ended_at - started_at))
-  printf '%s\t%s\t0\t%s\n' "$recorded_at" "$head_sha" "$elapsed" >> "$report_file"
+  printf '%s\t%s\t0\t%s\t%s\n' "$recorded_at" "$head_sha" "$elapsed" "$gate" >> "$report_file"
   rm -f "$log_file"
-  printf 'pre-push: bun run check passed in %ss\n' "$elapsed" >&2
+  printf 'pre-push: bun run %s passed in %ss\n' "$check_command" "$elapsed" >&2
   exit 0
 else
   status=$?
   ended_at=$(date +%s)
   elapsed=$((ended_at - started_at))
-  printf '%s\t%s\t%s\t%s\n' "$recorded_at" "$head_sha" "$status" "$elapsed" >> "$report_file"
-  printf 'pre-push: bun run check failed (exit %s, %ss)\n' "$status" "$elapsed" >&2
+  printf '%s\t%s\t%s\t%s\t%s\n' "$recorded_at" "$head_sha" "$status" "$elapsed" "$gate" >> "$report_file"
+  printf 'pre-push: bun run %s failed (exit %s, %ss)\n' "$check_command" "$status" "$elapsed" >&2
   awk '/^\(fail\)/ { print; if (++count == 10) exit }' "$log_file" >&2
   tail -20 "$log_file" >&2
   printf 'Full log: %s\n' "$log_file" >&2
