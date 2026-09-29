@@ -17,6 +17,7 @@ permissions:
 
 concurrency:
   group: prepare-release
+  queue: max
   cancel-in-progress: false
 
 jobs:
