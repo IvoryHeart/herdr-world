@@ -21,11 +21,6 @@ if [[ "$(basename "$formula_source")" != "$formula_name" ]]; then
   exit 2
 fi
 branch="release/herdr-world-v$version"
-if [[ "$(gh pr list --repo "$tap_repo" --head "$branch" --state open --json number --jq 'length')" != "0" ]]; then
-  echo "Homebrew Formula pull request already open for $version"
-  exit 0
-fi
-
 temp_root="$(mktemp -d "${RUNNER_TEMP:-/tmp}/herdr-world-tap.XXXXXX")"
 trap 'rm -rf "$temp_root"' EXIT
 gh auth setup-git
@@ -53,6 +48,19 @@ else
   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
   git commit -m "Update Herdr World to $version"
   git push -u origin "$branch"
+fi
+
+# A fork PR can use the same branch name. Only reuse a PR from this tap whose
+# exact head commit was checked against the generated Formula above.
+existing_pr_sha="$(gh api "repos/$tap_repo/pulls?state=open&head=IvoryHeart:$branch&base=main" \
+  --jq "map(select(.head.repo.full_name == \"$tap_repo\" and .head.ref == \"$branch\" and .base.repo.full_name == \"$tap_repo\" and .base.ref == \"main\")) | .[0].head.sha // \"\"")"
+if [[ -n "$existing_pr_sha" ]]; then
+  if [[ "$existing_pr_sha" != "$(git rev-parse HEAD)" ]]; then
+    echo "existing Homebrew PR head changed while checking its Formula" >&2
+    exit 1
+  fi
+  echo "Homebrew Formula pull request already open for $version"
+  exit 0
 fi
 
 body_file="$temp_root/pr-body.md"
