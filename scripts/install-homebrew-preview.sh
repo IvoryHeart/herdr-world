@@ -78,6 +78,17 @@ if [[ "${1:-}" == "--prepare-only" ]]; then
   exit 0
 fi
 command -v brew >/dev/null || { echo "Homebrew is required" >&2; exit 1; }
-brew install --formula "$formula"
-brew test "$formula"
+tap="herdrworld/preview"
+formula_name="$tap/herdr-world-preview"
+if ! brew tap | grep -Fxq "$tap"; then
+  brew tap-new --no-git "$tap"
+fi
+tap_directory="$(brew --repository "$tap")"
+install -m 0644 "$formula" "$tap_directory/Formula/herdr-world-preview.rb"
+if brew list --versions herdr-world-preview | grep -q .; then
+  brew reinstall --formula "$formula_name"
+else
+  brew install --formula "$formula_name"
+fi
+brew test "$formula_name"
 brew list --versions herdr-world-preview

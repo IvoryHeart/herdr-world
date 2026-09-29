@@ -48,9 +48,10 @@ On Windows, run `world-preview\\node_modules\\.bin\\herdr-world.cmd`.
 To test Homebrew on macOS before merge, download `preview-homebrew` from the same
 CI run, extract it into an empty directory and run `bash install-homebrew-preview.sh`
 there. The script verifies both Mac checksums, writes `herdr-world-preview.rb` with
-a local archive URL for the current architecture, installs the separate
-`herdr-world-preview` Formula and runs `brew test`. Remove it afterward with
-`brew uninstall herdr-world-preview`. It conflicts with installed stable or RC
+a local archive URL for the current architecture, creates a local
+`herdrworld/preview` tap, installs its `herdr-world-preview` Formula and runs
+`brew test`. Remove it afterward with `brew uninstall herdr-world-preview`
+and `brew untap herdrworld/preview`. It conflicts with installed stable or RC
 Formulae because they provide the same command. The published URL and tap flow
 are checked again during the RC release workflow.
 

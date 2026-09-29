@@ -3888,6 +3888,7 @@ async function run() {
     () => Number(narrowColumnRange.value) > 0,
     "Columns are scrolled before pointer interaction",
   );
+  await settle();
   const pointerScrollPosition = Number(narrowColumnRange.value);
   const partlyClippedInspector = [
     ...document.querySelectorAll<HTMLElement>(
@@ -3905,14 +3906,17 @@ async function run() {
   resizeHandle.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, pointerId: 23 }),
   );
-  resizeHandle.focus();
+  const afterPointerDown = Number(narrowColumnRange.value);
+  resizeHandle.focus({ preventScroll: true });
+  const afterPointerFocus = Number(narrowColumnRange.value);
   window.dispatchEvent(
     new PointerEvent("pointerup", { bubbles: true, pointerId: 23 }),
   );
+  const afterPointerUp = Number(narrowColumnRange.value);
   await settle();
   check(
     Number(narrowColumnRange.value) === pointerScrollPosition,
-    "pointer focus keeps a partly clipped Inspector stationary",
+    `pointer focus keeps a partly clipped Inspector stationary (${pointerScrollPosition} -> ${afterPointerDown} -> ${afterPointerFocus} -> ${afterPointerUp} -> ${narrowColumnRange.value})`,
   );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
