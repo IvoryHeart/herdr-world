@@ -294,6 +294,10 @@ jobs:
           if [[ "$version" == *-rc.* ]]; then formula="herdr-world-rc.rb"; fi
           bun scripts/generate-homebrew-formula.ts "$version" dist "dist/$formula"
           ruby -c "dist/$formula"
+          formula_class="HerdrWorld"
+          if [[ "$version" == *-rc.* ]]; then formula_class="HerdrWorldRc"; fi
+          ruby scripts/check-homebrew-formula-stage.rb "dist/$formula" \
+            "dist/herdr-world-v$version-darwin-arm64.tar.xz" "$formula_class"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0 # v7
         with:
           name: homebrew-formula
@@ -369,6 +373,11 @@ jobs:
             formula="herdr-world-rc.rb"
             package="herdr-world-rc"
           fi
-          brew install --formula "./formula/$formula"
-          test "$("$(brew --prefix "$package")/bin/herdr-world" --version)" = "herdr-world $version"
-          brew test "./formula/$formula"
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_NO_INSTALL_CLEANUP=1
+          tap="herdrworld/release-smoke"
+          brew tap-new --no-git "$tap"
+          install -m 0644 "./formula/$formula" "$(brew --repository "$tap")/Formula/$formula"
+          brew install --formula "$tap/$package"
+          test "$("$(brew --prefix "$tap/$package")/bin/herdr-world" --version)" = "herdr-world $version"
+          brew test "$tap/$package"

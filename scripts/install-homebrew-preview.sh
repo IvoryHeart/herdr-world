@@ -53,17 +53,11 @@ class HerdrWorldPreview < Formula
   url "$archive_url"
   sha256 "$digest"
 
-  conflicts_with "herdr-world", because: "both provide the herdr-world command"
-  conflicts_with "herdr-world-rc", because: "both provide the herdr-world command"
-
   def install
-    package = Dir["herdr-world-*"].find { |path| File.directory?(path) }
-    raise "missing Herdr World archive directory" unless package
-
-    libexec.install "#{package}/herdr-world", "#{package}/VERSION",
-      "#{package}/LICENSE", "#{package}/THIRD_PARTY_NOTICES.md",
-      "#{package}/DEPENDENCY_NOTICES.md", "#{package}/DEPENDENCY_LICENSES.md",
-      "#{package}/UPSTREAM.md", "#{package}/LICENSES"
+    libexec.install "herdr-world", "VERSION",
+      "LICENSE", "THIRD_PARTY_NOTICES.md",
+      "DEPENDENCY_NOTICES.md", "DEPENDENCY_LICENSES.md",
+      "UPSTREAM.md", "LICENSES"
     bin.install_symlink libexec/"herdr-world"
   end
 
@@ -78,6 +72,8 @@ if [[ "${1:-}" == "--prepare-only" ]]; then
   exit 0
 fi
 command -v brew >/dev/null || { echo "Homebrew is required" >&2; exit 1; }
+export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_INSTALL_CLEANUP=1
 tap="herdrworld/preview"
 formula_name="$tap/herdr-world-preview"
 if ! brew tap | grep -Fxq "$tap"; then

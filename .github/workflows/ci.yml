@@ -197,6 +197,8 @@ jobs:
                   for platform in darwin-arm64 darwin-x64; do
                     HERDR_WORLD_PREVIEW_PLATFORM="$platform" bash dist/install-homebrew-preview.sh --prepare-only
                     ruby -c dist/herdr-world-preview.rb
+                    archive="$(find dist -maxdepth 1 -name "herdr-world-v*-$platform.tar.xz" -print -quit)"
+                    ruby scripts/check-homebrew-formula-stage.rb dist/herdr-world-preview.rb "$archive" HerdrWorldPreview
                   done
             - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
               with:

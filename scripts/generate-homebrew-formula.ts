@@ -36,13 +36,10 @@ export function renderHomebrewFormula(
   conflicts_with "${conflict}", because: "both Formulae provide the herdr-world command"
 
   def install
-    package = Dir["herdr-world-*"].find { |path| File.directory?(path) }
-    raise "missing Herdr World archive directory" unless package
-
-    libexec.install "#{package}/herdr-world", "#{package}/VERSION",
-      "#{package}/LICENSE", "#{package}/THIRD_PARTY_NOTICES.md",
-      "#{package}/DEPENDENCY_NOTICES.md", "#{package}/DEPENDENCY_LICENSES.md",
-      "#{package}/UPSTREAM.md", "#{package}/LICENSES"
+    libexec.install "herdr-world", "VERSION",
+      "LICENSE", "THIRD_PARTY_NOTICES.md",
+      "DEPENDENCY_NOTICES.md", "DEPENDENCY_LICENSES.md",
+      "UPSTREAM.md", "LICENSES"
     bin.install_symlink libexec/"herdr-world"
   end
 
