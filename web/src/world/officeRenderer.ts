@@ -23,12 +23,14 @@ import type {
   OfficeAgent,
   OfficeDesk,
   OfficeHost,
+  OfficePaneDevice,
   OfficeReception,
   OfficeRoom,
 } from "./herdrOfficeProjection";
 import {
   agentBarSlot,
   deskAnchor,
+  paneDeviceAnchor,
   OFFICE_GEOMETRY,
   receptionAgentAnchor,
   receptionTableRect,
@@ -65,6 +67,8 @@ import {
   officeModelUsageTotal,
   formatOfficeUsage,
 } from "./officeObservability";
+
+import { officeStandingAgentAnchors } from "./officeSemanticTargets";
 
 const CHARACTER_URLS = Array.from(
   { length: 12 },
@@ -534,9 +538,33 @@ export async function createOfficeRenderer(
             room.desks.length < OFFICE_GEOMETRY.desksPerRoom
               ? 1
               : 0),
-          standingCount: room.roomAgents.filter(
-            ({ placement }) => placement === "standing",
-          ).length,
+          deskFootprintWidth: room.desks.some(
+            ({ paneDevices }) => paneDevices.length,
+          )
+            ? OFFICE_GEOMETRY.paneDeskWidth
+            : undefined,
+          deskFootprintHeight: room.desks.some(
+            ({ paneDevices }) => paneDevices.length,
+          )
+            ? OFFICE_GEOMETRY.paneDeskRowHeight
+            : undefined,
+          standingCount:
+            room.roomAgents.filter(({ placement }) => placement === "standing")
+              .length -
+            room.desks.reduce(
+              (total, desk) =>
+                total +
+                (desk.paneDevices.length
+                  ? Math.min(
+                      2,
+                      room.roomAgents.filter(
+                        ({ placement, deskKey }) =>
+                          placement === "standing" && deskKey === desk.key,
+                      ).length,
+                    )
+                  : 0),
+              0,
+            ),
           actions: {
             rename: true,
             close: true,
@@ -788,6 +816,14 @@ function resolveOfficeAnchors(
   const agentEntry = selectedKey
     ? (projection.roster.find(({ agent }) => agent.key === selectedKey) ?? null)
     : null;
+  const pane = projection.paneRoster.find(
+    ({ device }) =>
+      device.key === conversationTargetKey || device.key === selectedKey,
+  )?.device;
+  const paneDesk = pane
+    ? (projection.deskRoster.find(({ desk }) => desk.key === pane.deskKey)
+        ?.desk ?? null)
+    : null;
   const directDesk = conversationTargetKey
     ? (projection.deskRoster.find(
         ({ desk }) => desk.key === conversationTargetKey,
@@ -810,7 +846,7 @@ function resolveOfficeAnchors(
     workbench: resolveOfficeDeskAnchor(
       projection,
       layout,
-      directDesk ?? agentDesk ?? selectedDesk,
+      directDesk ?? paneDesk ?? agentDesk ?? selectedDesk,
     ),
   };
 }
@@ -894,13 +930,11 @@ function resolveOfficeAgentAnchor(
       return { x: anchor.x, y: anchor.characterFeetY - 42 };
     }
   }
-  const standingIndex = room.roomAgents
-    .filter(({ placement }) => placement === "standing")
-    .findIndex(({ key: agentKey }) => agentKey === key);
-  if (standingIndex >= 0) {
-    const anchor = standingAnchor(rect, standingIndex);
-    return { x: anchor.x, y: anchor.characterFeetY - 42 };
-  }
+  const standing = officeStandingAgentAnchors(room, rect).find(
+    ({ agent }) => agent.key === key,
+  );
+  if (standing)
+    return { x: standing.anchor.x, y: standing.anchor.characterFeetY - 42 };
   return null;
 }
 
@@ -1343,7 +1377,8 @@ function drawReceptionDesk(
     drawChairArms(parent, x, chairY, accent);
   });
   agents.forEach((agent, index) => {
-    const { anchor, chairY } = receptionChairs[index];
+    const anchor = receptionAgentAnchor(rect, index);
+    const chairY = receptionChairs[index]?.chairY;
     const name = label(shortLabel(agent.displayLabel, 12), {
       size: 8,
       color: 0xf2edf1,
@@ -1366,7 +1401,15 @@ function drawReceptionDesk(
       onActivateAgent,
     );
     character.alpha = agent.stale ? 0.56 : 1;
-    drawChairArms(parent, anchor.x, chairY, accent);
+    if (chairY !== undefined) drawChairArms(parent, anchor.x, chairY, accent);
+    drawReceptionStatusBadge(
+      parent,
+      agent,
+      anchor.x + 15,
+      anchor.nameY + 17,
+      onSelect,
+      onActivateAgent,
+    );
   });
   receptionChairs.slice(agents.length).forEach(({ anchor, chairY }) => {
     drawChairArms(parent, anchor.x, chairY, accent);
@@ -1785,6 +1828,7 @@ function drawRoom(
       parent,
       desk,
       occupant,
+      room.roomAgents,
       rect,
       index,
       theme.accent,
@@ -1796,21 +1840,18 @@ function drawRoom(
       onActivateAgent,
     );
   });
-  room.roomAgents
-    .filter(({ placement }) => placement === "standing")
-    .forEach((agent, index) => {
-      drawStandingAgent(
-        parent,
-        agent,
-        rect,
-        index,
-        selectedKey,
-        textures,
-        animated,
-        onSelect,
-        onActivateAgent,
-      );
-    });
+  officeStandingAgentAnchors(room, rect).forEach(({ agent, anchor }) => {
+    drawStandingAgent(
+      parent,
+      agent,
+      anchor,
+      selectedKey,
+      textures,
+      animated,
+      onSelect,
+      onActivateAgent,
+    );
+  });
   if (seatCreationState.visible) {
     if (room.desks.length < OFFICE_GEOMETRY.desksPerRoom) {
       drawNewSeatAction(
@@ -1951,6 +1992,7 @@ function drawTabDesk(
   parent: Container,
   desk: OfficeDesk,
   occupant: OfficeAgent | undefined,
+  roomAgents: OfficeAgent[],
   rect: OfficeRoomRect,
   index: number,
   accent: number,
@@ -2060,6 +2102,29 @@ function drawTabDesk(
     deskSelected,
   );
   makeInteractive(deskNode, desk.key, onSelect, onActivateAgent);
+  desk.paneDevices.forEach((device, paneIndex) => {
+    const point = paneDeviceAnchor(rect, index, paneIndex);
+    drawPaneDevice(
+      parent,
+      device,
+      roomAgents.some(({ key }) => key === device.agentKey),
+      point.x,
+      point.y,
+      selectedKey,
+      onSelect,
+      onActivateAgent,
+    );
+  });
+  if (desk.observedPaneCount > 1) {
+    const count = label(
+      desk.omittedPaneCount > 0
+        ? `${desk.observedPaneCount} panes · +${desk.omittedPaneCount} in chooser`
+        : `${desk.observedPaneCount} panes`,
+      { size: 8, color: 0xdce6f3, anchor: 0.5 },
+    );
+    count.position.set(anchor.x, anchor.deskY + 18);
+    parent.addChild(count);
+  }
   if (desk.completionAgentKeys.some((key) => !completionSeenKeys.has(key))) {
     drawCompletionMarker(
       parent,
@@ -2123,15 +2188,15 @@ function drawCompletionMarker(
 function drawStandingAgent(
   parent: Container,
   agent: OfficeAgent,
-  rect: OfficeRoomRect,
-  index: number,
+  anchor:
+    | ReturnType<typeof standingAnchor>
+    | ReturnType<typeof import("./officeGeometry").deskStandingAnchor>,
   selectedKey: string | null,
   textures: readonly Texture[],
   animated: AnimatedItem[],
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
 ) {
-  const anchor = standingAnchor(rect, index);
   const cue = agent.stale
     ? { label: "STALE", color: 0x79869a }
     : STATUS_CUES[agent.semanticStatus];
@@ -2429,18 +2494,18 @@ function drawCharacter(
   // stable rectangular hit region so the tooltip follows ordinary pointer
   // movement over the character, not only opaque texture pixels.
   container.hitArea = new Rectangle(
-    -30,
+    -24,
     -OFFICE_GEOMETRY.characterHeight - 8,
-    60,
+    48,
     OFFICE_GEOMETRY.characterHeight + 18,
   );
   addCharacterSprite(container, texture);
   const hitTarget = new Graphics();
   hitTarget
     .rect(
-      -30,
+      -24,
       -OFFICE_GEOMETRY.characterHeight - 8,
-      60,
+      48,
       OFFICE_GEOMETRY.characterHeight + 18,
     )
     .fill({ color: 0xffffff, alpha: 0.0001 });
@@ -2887,4 +2952,80 @@ function destroyTextures(textures: readonly Texture[]) {
       texture.destroy(true);
     }
   }
+}
+
+function drawPaneDevice(
+  parent: Container,
+  device: OfficePaneDevice,
+  occupied: boolean,
+  x: number,
+  y: number,
+  selectedKey: string | null,
+  onSelect: (key: string) => void,
+  onActivate: (key: string) => void,
+) {
+  const laptop = new Container();
+  laptop.position.set(x, y);
+  laptop.hitArea = new Rectangle(-24, -24, 48, 48);
+  const associated = occupied;
+  const color = device.stale ? 0x79869a : associated ? 0x67d6c0 : 0x8d9aae;
+  const art = new Graphics();
+  art
+    .roundRect(-19, -18, 38, 27, 3)
+    .fill(0x243247)
+    .stroke({
+      width: selectedKey === device.key ? 2 : 1,
+      color: selectedKey === device.key ? 0xffffff : color,
+    });
+  art
+    .roundRect(-15, -14, 30, 18, 1)
+    .fill({ color, alpha: associated ? 0.72 : 0.3 });
+  art.poly([-19, 9, 19, 9, 23, 17, -23, 17]).fill(0x52647a);
+  art.rect(-10, 11, 20, 2).fill(0x263244);
+  laptop.addChild(art);
+  const number = label(String(device.order + 1), {
+    size: 9,
+    color: 0xeff7ff,
+    anchor: 0.5,
+  });
+  number.position.set(0, -5);
+  laptop.addChild(number);
+  laptop.alpha = device.stale ? 0.56 : 1;
+  makeInteractive(laptop, device.key, onSelect, onActivate);
+  parent.addChild(laptop);
+}
+
+function drawReceptionStatusBadge(
+  parent: Container,
+  agent: OfficeAgent,
+  x: number,
+  y: number,
+  onSelect: (key: string) => void,
+  onActivate: (key: string) => void,
+) {
+  const badge = new Container();
+  badge.position.set(x, y);
+  const color = agent.semanticStatus === "done" ? 0xf0c878 : 0xec8799;
+  const plate = new Graphics();
+  plate.circle(0, 0, 10).fill(color).stroke({ width: 1, color: 0x182031 });
+  badge.addChild(plate);
+  if (agent.semanticStatus === "done") {
+    const check = new Graphics();
+    check
+      .moveTo(-5, 0)
+      .lineTo(-1, 4)
+      .lineTo(6, -5)
+      .stroke({ width: 2.6, color: 0x182031 });
+    badge.addChild(check);
+  } else {
+    const question = label("?", {
+      size: 15,
+      color: 0x182031,
+      anchor: 0.5,
+      weight: "700",
+    });
+    badge.addChild(question);
+  }
+  makeInteractive(badge, agent.key, onSelect, onActivate);
+  parent.addChild(badge);
 }

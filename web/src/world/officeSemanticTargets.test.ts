@@ -52,6 +52,78 @@ describe("Office semantic targets", () => {
     ).toBe(true);
   });
 
+  it("keeps pane devices, occupied desks and nearby agents distinct", () => {
+    const projection = fixtureProjection();
+    const room = projection.rooms[0]!;
+    const desk = room.desks[0]!;
+    desk.observedPaneCount = 4;
+    desk.omittedPaneCount = 1;
+    desk.paneDevices = [0, 1, 2].map((order) => ({
+      key: `pane-device-${order}`,
+      nodeId: `pane-${order}`,
+      deskKey: desk.key,
+      hostKey: desk.hostKey,
+      roomKey: room.key,
+      displayLabel: `Shell ${order + 1}`,
+      order,
+      stale: false,
+      canOpenInSpaces: true,
+      paneRef: { nativeId: `pane-${order}` } as never,
+      terminalRef: {} as never,
+    }));
+    const standing = room.roomAgents[1]!;
+    standing.deskKey = desk.key;
+    standing.currentPaneRef = { nativeId: "pane-1" } as never;
+    const geometry = resolveOfficeGeometry({
+      availableViewportWidth: 1000,
+      titleMode: "expand",
+      roomAlignment: "left",
+      rooms: [
+        {
+          id: room.key,
+          deskCount: 2,
+          standingCount: 0,
+          deskFootprintWidth: 176,
+          deskFootprintHeight: 300,
+        },
+      ],
+    });
+    const layout = new OfficeLayoutPublisher().publish(
+      { canonicalDigest: geometry.inputDigest },
+      geometry,
+    );
+    const targets = officeSemanticTargets(projection, layout);
+    expect(
+      targets.filter(({ kind }) => kind === "pane").map(({ key }) => key),
+    ).toEqual(["pane-device-0", "pane-device-1", "pane-device-2"]);
+    expect(targets.find(({ key }) => key === desk.key)?.kind).toBe("desk");
+    expect(targets.find(({ key }) => key === "agent-seated")?.kind).toBe(
+      "agent",
+    );
+    expect(targets.find(({ key }) => key === "pane-device-0")?.label).toContain(
+      "4 panes",
+    );
+    const local = targets.filter(
+      ({ key }) =>
+        key === desk.key ||
+        key === "agent-seated" ||
+        key === standing.key ||
+        key.startsWith("pane-device"),
+    );
+    for (const left of local)
+      for (const right of local) {
+        if (left.key === right.key) continue;
+        const a = left.rect,
+          b = right.rect;
+        expect(
+          a.x < b.x + b.width &&
+            a.x + a.width > b.x &&
+            a.y < b.y + b.height &&
+            a.y + a.height > b.y,
+        ).toBe(false);
+      }
+  });
+
   function fixtureProjection() {
     const seated = {
       key: "agent-seated",

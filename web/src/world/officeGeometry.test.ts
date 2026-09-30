@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 const it = test;
 import {
   deskAnchor,
+  paneDeviceAnchor,
+  deskStandingAnchor,
   agentBarSlot,
   minimumOfficeWidthForReceptions,
   OFFICE_GEOMETRY,
@@ -270,6 +272,72 @@ describe("Pixel Office geometry", () => {
     ]);
     expect(Math.min(...standing.map(({ nameY }) => nameY))).toBeGreaterThan(
       Math.max(...desks.map(({ deskY }) => deskY)),
+    );
+  });
+
+  it("reserves disjoint pane targets and nearby agent footprints across dense desk rows", () => {
+    const layout = resolveOfficeLayout(1000, [
+      {
+        deskCount: 8,
+        standingCount: 0,
+        deskFootprintWidth: OFFICE_GEOMETRY.paneDeskWidth,
+        deskFootprintHeight: OFFICE_GEOMETRY.paneDeskRowHeight,
+      },
+    ]);
+    const room = layout.rooms[0];
+    const devices = Array.from({ length: 8 }, (_, desk) =>
+      Array.from({ length: 3 }, (_, pane) =>
+        paneDeviceAnchor(room, desk, pane),
+      ),
+    ).flat();
+    for (const [index, device] of devices.entries()) {
+      expect(device.x - 24).toBeGreaterThanOrEqual(room.contentSafeRect.x);
+      expect(device.x + 24).toBeLessThanOrEqual(
+        room.contentSafeRect.x + room.contentSafeRect.width,
+      );
+      expect(device.y + 24).toBeLessThanOrEqual(
+        room.contentSafeRect.y + room.contentSafeRect.height,
+      );
+      for (const other of devices.slice(index + 1)) {
+        expect(
+          Math.abs(device.x - other.x) >= 48 ||
+            Math.abs(device.y - other.y) >= 48,
+        ).toBe(true);
+      }
+    }
+    for (let desk = 0; desk < 8; desk += 1) {
+      const agents = [
+        deskStandingAnchor(room, desk, 0),
+        deskStandingAnchor(room, desk, 1),
+      ];
+      expect(agents[1].x - agents[0].x).toBeGreaterThanOrEqual(48);
+      expect(agents[0].characterFeetY).toBeLessThanOrEqual(
+        room.contentSafeRect.y + room.contentSafeRect.height,
+      );
+      expect(agents[0].characterFeetY - 68).toBeGreaterThan(
+        paneDeviceAnchor(room, desk, 0).y + 24,
+      );
+    }
+  });
+
+  it("gives four reception seats and four standing agents distinct bounded positions", () => {
+    const reception = resolveCeoBlockLayout(1000, 1).receptions[0];
+    const anchors = Array.from({ length: 8 }, (_, index) =>
+      receptionAgentAnchor(reception, index),
+    );
+    expect(
+      new Set(anchors.map(({ x, characterFeetY }) => `${x}:${characterFeetY}`))
+        .size,
+    ).toBe(8);
+    expect(anchors.every(({ stationSpan }) => stationSpan >= 48)).toBe(true);
+    expect(
+      anchors.every(
+        ({ characterFeetY }) =>
+          characterFeetY <= reception.y + reception.height,
+      ),
+    ).toBe(true);
+    expect(anchors[4].characterFeetY - 68).toBeGreaterThan(
+      receptionTableRect(reception).y + OFFICE_GEOMETRY.receptionTableHeight,
     );
   });
 

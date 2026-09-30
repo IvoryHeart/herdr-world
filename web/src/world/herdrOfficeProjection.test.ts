@@ -43,10 +43,93 @@ describe("Pixel Office projection", () => {
       office.receptions[0].waitingAgents.map(
         ({ semanticStatus }) => semanticStatus,
       ),
-    ).toEqual(["blocked"]);
+    ).toEqual(["blocked", "done"]);
     expect(
       office.barAgents.map(({ semanticStatus }) => semanticStatus),
-    ).toEqual(["idle", "done"]);
+    ).toEqual(["idle"]);
+  });
+
+  test("keeps exact pane devices stable when agents leave desks and exposes omitted panes", () => {
+    const panes = Array.from({ length: 5 }, (_, index) =>
+      pane("shared", "working", `agent-${index}`, index),
+    );
+    const source = connection(
+      "local",
+      [{ ...tab("shared", 1), pane_count: 5 }],
+      panes,
+    );
+    const before = projectWorldOffice(buildWorldObject([source], "local"), 1);
+    const desk = before.rooms[0].desks[0];
+    expect(desk.paneDevices).toHaveLength(3);
+    expect(desk.omittedPaneCount).toBe(2);
+    expect(before.paneRoster).toHaveLength(5);
+    expect(before.paneRoster.filter(({ presented }) => presented)).toHaveLength(
+      3,
+    );
+    expect(
+      new Set(before.paneRoster.map(({ device }) => device.paneRef.nativeId))
+        .size,
+    ).toBe(5);
+    const deviceKeys = desk.paneDevices.map(({ key }) => key);
+    panes[0].agent_status = "blocked";
+    panes[1].agent_status = "done";
+    panes[2].agent_status = "idle";
+    const after = projectWorldOffice(buildWorldObject([source], "local"), 2);
+    expect(after.rooms[0].desks[0].paneDevices.map(({ key }) => key)).toEqual(
+      deviceKeys,
+    );
+    expect(
+      after.receptions[0].waitingAgents
+        .map(({ semanticStatus }) => semanticStatus)
+        .sort(),
+    ).toEqual(["blocked", "done"]);
+    expect(after.barAgents.map(({ semanticStatus }) => semanticStatus)).toEqual(
+      ["idle"],
+    );
+    expect(after.rooms[0].desks[0].completionAgentKeys).toHaveLength(1);
+    source.snapshot!.panes = panes.slice(1);
+    source.snapshot!.tabs[0].pane_count = 4;
+    const closed = projectWorldOffice(buildWorldObject([source], "local"), 3);
+    expect(
+      closed.paneRoster.some(({ device }) => device.key === deviceKeys[0]),
+    ).toBe(false);
+    expect(closed.rooms[0].desks[0].omittedPaneCount).toBe(1);
+    const newGeneration = { ...source, generation: 8, snapshotGeneration: 8 };
+    const retired = projectWorldOffice(
+      buildWorldObject([newGeneration], "local"),
+      4,
+    );
+    expect(
+      retired.paneRoster.every(({ device }) => device.paneRef.generation === 8),
+    ).toBe(true);
+    expect(
+      retired.paneRoster.some(({ device }) => device.key === deviceKeys[1]),
+    ).toBe(false);
+  });
+
+  test("pane targets distinguish hosts even with colliding native IDs", () => {
+    const office = projectWorldOffice(
+      buildWorldObject(
+        ["local", "other"].map((id) =>
+          connection(
+            id,
+            [tab("shared", 1)],
+            [pane("shared", "working", "Agent")],
+          ),
+        ),
+        "local",
+      ),
+      1,
+    );
+    expect(
+      new Set(office.paneRoster.map(({ device }) => device.key)).size,
+    ).toBe(2);
+    expect(
+      office.paneRoster.map(({ device }) => device.paneRef.connectionId),
+    ).toEqual(["local", "other"]);
+    expect(
+      office.paneRoster.map(({ device }) => device.canOpenInSpaces),
+    ).toEqual([true, false]);
   });
 
   test("qualifies colliding native identifiers and disables inactive host operations", () => {
@@ -201,7 +284,10 @@ describe("Pixel Office projection", () => {
     });
     expect(
       office.roster.find(({ agent }) => agent.key === outsideAgent?.key),
-    ).toMatchObject({ roomPresented: true, deskPresented: false });
+    ).toMatchObject({
+      roomPresented: true,
+      deskPresented: false,
+    });
   });
 
   test("retains stale topology without admitting Office operations", () => {
@@ -278,24 +364,24 @@ describe("Pixel Office projection", () => {
       totalRoomAgents: 18,
       renderedWaitingAgents:
         OFFICE_PRESENTATION_BOUNDS.waitingAgentsPerReception,
-      totalWaitingAgents: 6,
-      renderedBarAgents: OFFICE_PRESENTATION_BOUNDS.barAgents,
-      totalBarAgents: 20,
+      totalWaitingAgents: 16,
+      renderedBarAgents: 10,
+      totalBarAgents: 10,
     });
     expect(office.rooms).toHaveLength(128);
     expect(office.roomRoster).toHaveLength(129);
     expect(office.rooms[0].desks).toHaveLength(8);
     expect(office.rooms[0].roomAgents).toHaveLength(16);
-    expect(office.receptions[0].waitingAgents).toHaveLength(4);
-    expect(office.barAgents).toHaveLength(16);
+    expect(office.receptions[0].waitingAgents).toHaveLength(8);
+    expect(office.barAgents).toHaveLength(10);
     expect(office.roster).toHaveLength(44);
     expect(office.coverage).toMatchObject({
       omittedRooms: 1,
       omittedDesks: 4,
       omittedRoomAgents: 2,
       omittedReceptionDesks: 1,
-      omittedWaitingAgents: 2,
-      omittedBarAgents: 4,
+      omittedWaitingAgents: 8,
+      omittedBarAgents: 0,
     });
   });
 

@@ -52,11 +52,21 @@ Office SHALL present a distinct device for each pane admitted to a presented tab
 - **WHEN** a pane closes or more panes are admitted than Office can present around a desk
 - **THEN** closed-pane devices disappear, presented devices do not overlap or claim another pane's target, and omitted panes remain discoverable through a bounded count or chooser
 
+### Requirement: Office reception capacity
+
+Office SHALL add bounded standing positions around each host's shared reception table when seats
+fill and SHALL expose an exact overflow count and roster targets for agents beyond its visual bound.
+
+#### Scenario: Reception fills
+
+- **WHEN** blocked and done agents together exceed the host reception's seats and then its bounded standing positions
+- **THEN** they share the reception table and nearby standing area up to the visual bound, and an exact overflow count and roster preserve access to the remaining qualified agents
+
 ## MODIFIED Requirements
 
 ### Requirement: Office state and room operations
 
-Office SHALL place working and unknown agents with their owning work room, blocked and done agents at their qualified host reception, and idle agents in the Agent Bar. Reception SHALL use one shared table per host for blocked and done agents, mark blocked agents with `?` and done agents with `✔`, and keep the status available in text and accessible names rather than symbol or color alone. A done agent's originating desk SHALL retain a bounded generic completion marker until that qualified completion is inspected; this browser-local seen state SHALL NOT represent approval, mutate Herdr or move a still-done agent to the bar. Reception SHALL add bounded standing positions around the table when seats fill and SHALL expose an exact overflow count and roster targets for agents beyond its visual bound.
+Office SHALL place working and unknown agents with their owning work room, blocked and done agents at their qualified host reception, and idle agents in the Agent Bar. Reception SHALL use one shared table per host for blocked and done agents, mark blocked agents with `?` and done agents with `✔`, and keep the status available in text and accessible names rather than symbol or color alone. A done agent's originating desk SHALL retain a bounded generic completion marker until that qualified completion is inspected; this browser-local seen state SHALL NOT represent approval, mutate Herdr or move a still-done agent to the bar.
 
 Office SHALL retain bounded hover callouts, task summaries, state cues, at least 48 by 48 CSS-pixel
 semantic targets and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
@@ -85,11 +95,6 @@ distinct, nonduplicated semantic targets.
 
 - **WHEN** an admitted agent changes from working to blocked, then done, and later idle
 - **THEN** the same qualified agent moves from its room to reception with `?`, stays at reception with `✔` while done, and moves to the Agent Bar only when idle, while its ancestry, selection and terminal identity remain stable
-
-#### Scenario: Reception fills
-
-- **WHEN** blocked and done agents together exceed the host reception's seats and then its bounded standing positions
-- **THEN** they share the reception table and nearby standing area up to the visual bound, and an exact overflow count and roster preserve access to the remaining qualified agents
 
 #### Scenario: Choose the default Office Inspector presentation
 

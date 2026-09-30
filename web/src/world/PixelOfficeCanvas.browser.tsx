@@ -161,19 +161,21 @@ async function run() {
     actionable: false,
   };
   const aggregateWorld = buildWorldObject([local, remote, stale], "local");
-  const world = worldObjectForConnection(aggregateWorld, "local");
+  let world = worldObjectForConnection(aggregateWorld, "local");
 
   try {
     let selectedAnchor = false;
     let terminalActivationAllowed = false;
     let terminalActivations = 0;
+    const terminalTargets: string[] = [];
     function OfficeHarness() {
       return (
         <PixelOfficeView
           world={world}
           selectedId={world.leaves[0]?.id ?? null}
           onSelect={() => {}}
-          onOpenTerminal={async () => {
+          onOpenTerminal={async (id) => {
+            terminalTargets.push(id);
             terminalActivations += 1;
             if (!terminalActivationAllowed) {
               throw new Error("synthetic activation failure");
@@ -287,6 +289,35 @@ async function run() {
       terminalActivations === 2,
       "Completion inspection did not preserve explicit activation attempts",
     );
+    const devices = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="pane"]',
+      ),
+    ];
+    check(
+      devices.length === 4,
+      "Office did not present all four admitted pane devices",
+    );
+    check(
+      host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+        .length === 2,
+      "Occupied desks lost their distinct tab targets",
+    );
+    devices[1]?.click();
+    await settle();
+    check(
+      terminalTargets[terminalTargets.length - 1] === world.leaves[1]?.id,
+      "Pane device did not open its own qualified terminal",
+    );
+    const doneTarget = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].find((button) => button.getAttribute("aria-label")?.includes(", done,"));
+    check(
+      doneTarget !== undefined,
+      "Done agent disappeared after its completion was inspected",
+    );
     check(
       host.querySelectorAll(".world-new-seat-canvas-action").length === 1,
       "The active host room is missing its new-seat control",
@@ -316,6 +347,49 @@ async function run() {
     check(
       selectedAnchor,
       "The selected Office entity did not publish an anchor",
+    );
+    // Exercise the second reception row with both statuses; it must render
+    // without indexing past the four physical chairs.
+    const crowded = connection("local", "Local", "alpha", [
+      "working",
+      "unknown",
+      "blocked",
+      "done",
+    ]);
+    for (let index = 2; index < 8; index += 1) {
+      crowded.snapshot!.panes.push(
+        pane(
+          "alpha",
+          "review",
+          index,
+          index % 2 ? "done" : "blocked",
+          `Reception agent ${index}`,
+        ),
+      );
+    }
+    world = worldObjectForConnection(
+      buildWorldObject([crowded], "local"),
+      "local",
+    );
+    const priorRenders = diagnostics.sceneRenders;
+    root.render(
+      <StrictMode>
+        <OfficeHarness />
+      </StrictMode>,
+    );
+    await waitFor(
+      () => diagnostics.sceneRenders > priorRenders,
+      "Crowded reception did not render",
+    );
+    await waitFor(
+      () =>
+        host.querySelectorAll('.world-semantic-target[data-kind="agent"]')
+          .length === 10,
+      "Crowded reception lost agent targets",
+    );
+    check(
+      diagnostics.lastError === null,
+      "Eight mixed reception agents crashed the renderer",
     );
     const inactiveAgent = [
       ...host.querySelectorAll<HTMLButtonElement>(

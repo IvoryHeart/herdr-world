@@ -20,7 +20,10 @@ export const OFFICE_GEOMETRY = Object.freeze({
   agentBarPreferredWidth: 560,
   agentBarGap: 28,
   agentBarCounterBottomClearance: 64,
-  receptionStationMinWidth: 176,
+  receptionStationMinWidth: 208,
+  receptionStationHeight: 256,
+  paneDeskWidth: 176,
+  paneDeskRowHeight: 300,
   receptionTableWidth: 160,
   receptionTableHeight: 42,
   receptionTableNudgeX: -4,
@@ -66,6 +69,8 @@ export type OfficeRoomPresentation = {
   sourceIndex?: number;
   deskCount: number;
   standingCount: number;
+  deskFootprintWidth?: number;
+  deskFootprintHeight?: number;
   contentMinWidth?: number;
   headerMinWidth?: number;
   headerMinTitleBoxWidth?: number;
@@ -152,6 +157,7 @@ export type OfficeRoomRect = {
   deskColumns: number;
   standingColumns: number;
   deskRows: number;
+  deskRowHeight: number;
   standingRows: number;
   outerRect: OfficeRect;
   wallRect: OfficeRect;
@@ -205,7 +211,10 @@ export function resolveOfficeLayout(
     typeof requestedRooms === "number"
       ? Array.from(
           { length: boundedCount(requestedRooms, OFFICE_GEOMETRY.maxRooms) },
-          () => ({ deskCount: 0, standingCount: 0 }),
+          () => ({
+            deskCount: 0,
+            standingCount: 0,
+          }),
         )
       : requestedRooms
           .slice(0, OFFICE_GEOMETRY.maxRooms)
@@ -214,6 +223,8 @@ export function resolveOfficeLayout(
               sourceIndex,
               deskCount,
               standingCount,
+              deskFootprintWidth,
+              deskFootprintHeight,
               contentMinWidth,
               headerMinWidth,
               headerMinTitleBoxWidth,
@@ -229,6 +240,8 @@ export function resolveOfficeLayout(
                 standingCount,
                 OFFICE_GEOMETRY.standingColumns * 2,
               ),
+              deskFootprintWidth,
+              deskFootprintHeight,
               contentMinWidth,
               headerMinWidth,
               headerMinTitleBoxWidth,
@@ -289,6 +302,8 @@ export function resolveOfficeLayout(
     ({
       deskCount,
       standingCount,
+      deskFootprintWidth = 112,
+      deskFootprintHeight = OFFICE_GEOMETRY.deskRowHeight,
       sourceIndex,
       contentMinWidth = 0,
       headerMinWidth = 0,
@@ -299,13 +314,27 @@ export function resolveOfficeLayout(
       maximumWidth,
       maximumHeight,
     }) => {
+      const deskRowHeight = Math.max(
+        OFFICE_GEOMETRY.deskRowHeight,
+        Math.min(
+          OFFICE_GEOMETRY.paneDeskRowHeight,
+          Number(deskFootprintHeight) || 0,
+        ),
+      );
+      const deskWidth = Math.max(
+        112,
+        Math.min(
+          OFFICE_GEOMETRY.paneDeskWidth,
+          Number(deskFootprintWidth) || 0,
+        ),
+      );
       const deskColumns = roomDeskColumns(deskCount);
       const standingColumns = roomStandingColumns(standingCount);
       const deskRows = Math.ceil(deskCount / deskColumns);
       const standingRows = Math.ceil(standingCount / standingColumns);
       const contentHeight =
         42 +
-        deskRows * OFFICE_GEOMETRY.deskRowHeight +
+        deskRows * deskRowHeight +
         standingRows * OFFICE_GEOMETRY.standingRowHeight +
         18;
       const intrinsicWidth = Math.max(
@@ -316,7 +345,7 @@ export function resolveOfficeLayout(
         preferredWidth ?? 0,
         OFFICE_GEOMETRY.roomPadding * 2 +
           Math.max(
-            deskColumns * 112,
+            deskColumns * deskWidth,
             standingCount > 0 ? standingColumns * 40 : 0,
           ),
       );
@@ -330,6 +359,7 @@ export function resolveOfficeLayout(
         deskColumns,
         standingColumns,
         deskRows,
+        deskRowHeight,
         standingRows,
         height: Math.min(
           maximumHeight ?? Number.POSITIVE_INFINITY,
@@ -454,6 +484,7 @@ export function resolveOfficeLayout(
         deskColumns: metric.deskColumns,
         standingColumns: metric.standingColumns,
         deskRows: metric.deskRows,
+        deskRowHeight: metric.deskRowHeight,
         standingRows: metric.standingRows,
         outerRect,
         wallRect,
@@ -655,9 +686,12 @@ export function resolveCeoBlockLayout(
         : column * (receptionWidth + blockGap),
       y: inlineFits
         ? 36
-        : receptionRowY + row * (160 + OFFICE_GEOMETRY.roomRowGap),
+        : receptionRowY +
+          row *
+            (OFFICE_GEOMETRY.receptionStationHeight +
+              OFFICE_GEOMETRY.roomRowGap),
       width: receptionWidth,
-      height: 160,
+      height: OFFICE_GEOMETRY.receptionStationHeight,
       gapBefore: blockGap,
     };
   });
@@ -738,14 +772,16 @@ export function receptionAgentAnchor(
   reception: OfficeReceptionRect,
   agentIndex: number,
 ) {
-  const index = boundedCount(agentIndex, 3);
+  const index = boundedCount(agentIndex, 7);
+  const row = Math.floor(index / 4);
+  const column = index % 4;
   const stationSpan = reception.width / 4;
   return {
     index,
     stationSpan,
-    x: reception.x + stationSpan * (index + 0.5),
-    nameY: reception.y + 35,
-    characterFeetY: reception.y + 112,
+    x: reception.x + stationSpan * (column + 0.5),
+    nameY: reception.y + 35 + row * 112,
+    characterFeetY: reception.y + 112 + row * 112,
   };
 }
 
@@ -773,10 +809,7 @@ export function deskAnchor(room: OfficeRoomRect, deskIndex: number) {
   const stationSpan = innerWidth / room.deskColumns;
   const x = room.x + OFFICE_GEOMETRY.roomPadding + stationSpan * (column + 0.5);
   const nameY =
-    room.y +
-    42 +
-    OFFICE_GEOMETRY.deskTopOffset +
-    row * OFFICE_GEOMETRY.deskRowHeight;
+    room.y + 42 + OFFICE_GEOMETRY.deskTopOffset + row * room.deskRowHeight;
   const characterFeetY = nameY + 37 + OFFICE_GEOMETRY.characterHeight;
   return {
     index,
@@ -787,6 +820,40 @@ export function deskAnchor(room: OfficeRoomRect, deskIndex: number) {
     nameY,
     characterFeetY,
     deskY: characterFeetY - 20,
+  };
+}
+
+/** Three separate 48px semantic targets below the tab desk. */
+export function paneDeviceAnchor(
+  room: OfficeRoomRect,
+  deskIndex: number,
+  paneIndex: number,
+) {
+  const desk = deskAnchor(room, deskIndex);
+  const index = boundedCount(paneIndex, 2);
+  return {
+    index,
+    x: desk.x + (index - 1) * 52,
+    y: desk.deskY + 48,
+    width: 48,
+    height: 48,
+  };
+}
+
+/** The first two extra room-local agents stand beside their owning pane devices. */
+export function deskStandingAnchor(
+  room: OfficeRoomRect,
+  deskIndex: number,
+  standingIndex: number,
+) {
+  const desk = deskAnchor(room, deskIndex);
+  const index = boundedCount(standingIndex, 1);
+  return {
+    index,
+    x: desk.x + (index === 0 ? -52 : 52),
+    nameY: desk.deskY + 80,
+    characterFeetY: desk.deskY + 176,
+    stationSpan: 52,
   };
 }
 
@@ -801,7 +868,7 @@ export function standingAnchor(room: OfficeRoomRect, standingIndex: number) {
     room.y +
     42 +
     OFFICE_GEOMETRY.deskTopOffset +
-    room.deskRows * OFFICE_GEOMETRY.deskRowHeight +
+    room.deskRows * room.deskRowHeight +
     row * OFFICE_GEOMETRY.standingRowHeight;
   return {
     index,

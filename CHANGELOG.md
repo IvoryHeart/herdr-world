@@ -22,6 +22,9 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Added clickable pane devices beside Office desks so split-pane agents keep an exact terminal
+  target after leaving their work room. Done agents now join input-needed agents at their host's
+  reception with distinct `✔` and `?` cues; extra agents stand nearby before entering the roster.
 - Added accessible maximize and resize controls across Office Inspector windows,
   focus-based window stacking, and Close all terminal windows in Arrange and
   Actions. Close all preserves Herdr tabs and sessions; Spaces keeps each
@@ -161,6 +164,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Opened terminal file links in the originating Office, Tree or Graph Inspector's Files tab,
+  focused the exact selected pane when activating a visual terminal window, and opened a newly
+  created Office desk's terminal as soon as its pane was admitted.
 - Kept browser-local Office creation ready without first visiting Spaces or
   opening an Inspector, unified seat, room and tab-strip availability feedback,
   and preserved the prior Inspector while bounded exact focus reports failures.

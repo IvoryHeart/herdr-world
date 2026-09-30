@@ -86,7 +86,7 @@ export default function PixelOfficeView({
   toolbarPortal?: Element | null;
   selectedId: string | null;
   onSelect(id: string, signal?: AbortSignal): void | Promise<boolean>;
-  onOpenTerminal(id: string): Promise<void>;
+  onOpenTerminal(id: string, signal?: AbortSignal): Promise<void>;
   onSelectedAnchorChange?: (anchor: OfficeCanvasAnchor | null) => void;
   floatingTerminals: readonly { nodeId: string }[];
   onConversationNodeAnchorsChange?(
@@ -111,7 +111,7 @@ export default function PixelOfficeView({
     readOfficePreferences(worldLocalStorage),
   );
   const preferencesRef = useRef(preferences);
-  const onSelectRef = useRef(onSelect);
+  const onOpenTerminalRef = useRef(onOpenTerminal);
   const worldRef = useRef(world);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
@@ -133,7 +133,7 @@ export default function PixelOfficeView({
     [query, world],
   );
   preferencesRef.current = preferences;
-  onSelectRef.current = onSelect;
+  onOpenTerminalRef.current = onOpenTerminal;
   worldRef.current = world;
   const pendingCreatedPaneLeaseCurrent =
     pendingCreatedPane === null ||
@@ -329,16 +329,12 @@ export default function PixelOfficeView({
     } else {
       try {
         void Promise.resolve(
-          onSelectRef.current(pane.id, focusAbort.signal),
+          onOpenTerminalRef.current(pane.id, focusAbort.signal),
         ).then(
-          (admitted) => {
+          () => {
             if (cancelled || finished) return;
-            if (admitted !== false) {
-              finished = true;
-              clearPending();
-              return;
-            }
-            retryFocus("The created terminal could not be focused.");
+            finished = true;
+            clearPending();
           },
           (cause: unknown) => {
             if (cancelled) return;
@@ -538,6 +534,13 @@ export default function PixelOfficeView({
     }
   };
   const selectOfficeKey = (key: string) => {
+    const device = office.paneRoster.find(
+      ({ device }) => device.key === key,
+    )?.device;
+    if (device) {
+      openOfficeTerminal(device.key);
+      return;
+    }
     const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
     if (agent) {
       onSelect(agent.nodeId);
@@ -566,6 +569,13 @@ export default function PixelOfficeView({
     });
   };
   const inspectOfficeTerminal = async (key: string) => {
+    const device = office.paneRoster.find(
+      ({ device }) => device.key === key,
+    )?.device;
+    if (device) {
+      await onOpenTerminal(device.nodeId);
+      return;
+    }
     const agent = office.roster.find(({ agent }) => agent.key === key)?.agent;
     if (agent) {
       await onOpenTerminal(agent.nodeId);

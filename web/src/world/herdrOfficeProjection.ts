@@ -12,7 +12,8 @@ export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   desksPerRoom: 8,
   roomAgentsPerRoom: 16,
   receptionDesks: 6,
-  waitingAgentsPerReception: 4,
+  waitingAgentsPerReception: 8,
+  paneDevicesPerDesk: 3,
   barAgents: 16,
   rosterPage: 50,
 });
@@ -64,6 +65,29 @@ export type OfficeAgent = {
   characterIndex: number;
 };
 
+export type OfficePaneDevice = {
+  key: string;
+  nodeId: string;
+  paneRef: OfficeQualifiedTarget;
+  terminalRef: OfficeQualifiedTarget;
+  deskKey: string;
+  hostKey: string;
+  roomKey: string;
+  displayLabel: string;
+  order: number;
+  stale: boolean;
+  canOpenInSpaces: boolean;
+  agentKey?: string;
+};
+
+export type OfficePaneRosterEntry = {
+  device: OfficePaneDevice;
+  roomLabel: string;
+  deskLabel: string;
+  hostLabel: string;
+  presented: boolean;
+};
+
 export type OfficeDesk = {
   key: string;
   hostKey: string;
@@ -77,6 +101,9 @@ export type OfficeDesk = {
   canOpenInSpaces: boolean;
   occupantAgentKey?: string;
   completionAgentKeys: string[];
+  paneDevices: OfficePaneDevice[];
+  observedPaneCount: number;
+  omittedPaneCount: number;
 };
 
 export type OfficeRoom = {
@@ -165,6 +192,7 @@ export type HerdrOfficeProjection = {
   barAgents: OfficeAgent[];
   roomRoster: OfficeRoomRosterEntry[];
   deskRoster: OfficeDeskRosterEntry[];
+  paneRoster: OfficePaneRosterEntry[];
   roster: OfficeRosterEntry[];
   unresolved: Array<{ kind: "room-bound"; count: number }>;
   coverage: OfficeCoverage;
@@ -283,9 +311,11 @@ export function projectWorldOffice(
           agent.hostKey === host.key && agent.destination === "reception",
       )
       .sort(compareAgents);
-    const observedWaitingAgentCount =
-      world.hosts.find(({ id }) => id === host.key)?.coverage.status.blocked ??
-      waitingAgents.length;
+    const observedWaitingAgentCount = (() => {
+      const status = world.hosts.find(({ id }) => id === host.key)?.coverage
+        .status;
+      return status ? status.blocked + status.done : waitingAgents.length;
+    })();
     return {
       key: `reception:${host.key}`,
       hostKey: host.key,
@@ -375,9 +405,9 @@ export function projectWorldOffice(
   );
   const totalRoomAgents =
     world.coverage.status.working + world.coverage.status.unknown;
-  const totalWaitingAgents = world.coverage.status.blocked;
-  const totalBarAgents =
-    world.coverage.status.idle + world.coverage.status.done;
+  const totalWaitingAgents =
+    world.coverage.status.blocked + world.coverage.status.done;
+  const totalBarAgents = world.coverage.status.idle;
   const renderedRoomAgents = rooms.reduce(
     (count, room) => count + room.roomAgents.length,
     0,
@@ -400,6 +430,22 @@ export function projectWorldOffice(
     barAgents,
     roomRoster,
     deskRoster,
+    paneRoster: allRooms.flatMap(({ host, room, desks, source }) =>
+      desks.flatMap((desk) =>
+        projectPaneDevices(source.children, desk).map((device) => ({
+          device,
+          roomLabel: room.displayLabel,
+          deskLabel: desk.displayLabel,
+          hostLabel: host.displayLabel,
+          presented:
+            roomByKey
+              .get(room.key)
+              ?.desks.some((presentedDesk) =>
+                presentedDesk.paneDevices.some(({ key }) => key === device.key),
+              ) === true,
+        })),
+      ),
+    ),
     roster,
     unresolved: omittedRooms
       ? [{ kind: "room-bound", count: omittedRooms }]
@@ -474,6 +520,12 @@ function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
         stale: space.stale,
         canOpenInSpaces: operational,
         completionAgentKeys: [],
+        paneDevices: [],
+        observedPaneCount: Math.max(
+          tab.pane_count,
+          space.children.filter(({ tabId }) => tabId === tab.tab_id).length,
+        ),
+        omittedPaneCount: 0,
       }),
     );
   const deskKeys = new Map(
@@ -486,6 +538,14 @@ function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
     .map((leaf) => projectAgent(leaf, roomKey, host.key, deskKeys))
     .sort(compareAgents);
   for (const desk of desks) {
+    desk.paneDevices = projectPaneDevices(space.children, desk).slice(
+      0,
+      OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
+    );
+    desk.omittedPaneCount = Math.max(
+      0,
+      desk.observedPaneCount - desk.paneDevices.length,
+    );
     const candidates = agents
       .filter(
         (agent) => agent.destination === "room" && agent.deskKey === desk.key,
@@ -517,6 +577,34 @@ function projectRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
     desks,
     agents,
   };
+}
+
+function projectPaneDevices(
+  leaves: readonly WorldLeafObject[],
+  desk: OfficeDesk,
+): OfficePaneDevice[] {
+  return leaves
+    .filter(({ tabId }) => tabId === desk.tabRef.nativeId)
+    .sort((left, right) => left.nativeId.localeCompare(right.nativeId))
+    .map((leaf, order) => ({
+      key: JSON.stringify([
+        leaf.connectionId,
+        leaf.generation,
+        "pane-device",
+        leaf.nativeId,
+      ]),
+      nodeId: leaf.id,
+      paneRef: target(leaf, "pane", leaf.nativeId),
+      terminalRef: target(leaf, "terminal", leaf.terminalId),
+      deskKey: desk.key,
+      hostKey: desk.hostKey,
+      roomKey: desk.roomKey,
+      displayLabel: `Pane ${order + 1}${leaf.agentLabel ? ` · ${leaf.agentLabel}` : ""}`,
+      order,
+      stale: leaf.stale,
+      canOpenInSpaces: leaf.capabilities.openSpaces,
+      ...(leaf.kind === "agent" ? { agentKey: leaf.id } : {}),
+    }));
 }
 
 function projectAgent(
@@ -574,7 +662,7 @@ function target(
 
 function statusDestination(status: WorldAgentStatus): OfficeAgentDestination {
   if (status === "working" || status === "unknown") return "room";
-  return status === "blocked" ? "reception" : "bar";
+  return status === "blocked" || status === "done" ? "reception" : "bar";
 }
 
 function compareRooms(left: ProjectedRoom, right: ProjectedRoom) {

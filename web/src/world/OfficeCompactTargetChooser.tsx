@@ -21,6 +21,7 @@ export function OfficeCompactTargetChooser({
   const pageSize = OFFICE_PRESENTATION_BOUNDS.rosterPage;
   const agents = projection.roster.slice(0, pageSize);
   const rooms = projection.roomRoster.slice(0, pageSize);
+  const panes = (projection.paneRoster ?? []).slice(0, pageSize);
   const desks = projection.deskRoster.slice(0, pageSize);
   const select = (key: string) => {
     onSelect(key);
@@ -106,6 +107,33 @@ export function OfficeCompactTargetChooser({
                   className="world-compact-target-open"
                   aria-label={`Open ${desk.displayLabel} terminal`}
                   onClick={() => activate(desk.key, onActivateDesk)}
+                >
+                  Terminal
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </TargetSection>
+        <TargetSection
+          title="Panes"
+          total={projection.paneRoster?.length ?? 0}
+          shown={panes.length}
+        >
+          {panes.map(({ device, deskLabel, roomLabel, hostLabel }) => (
+            <li key={device.key}>
+              <TargetButton
+                targetKey={device.key}
+                selectedKey={selectedKey}
+                title={device.displayLabel}
+                detail={`${deskLabel} · ${roomLabel} · ${hostLabel}${device.stale ? " · stale" : ""}`}
+                onSelect={select}
+              />
+              {device.canOpenInSpaces ? (
+                <button
+                  type="button"
+                  className="world-compact-target-open"
+                  aria-label={`Open ${device.displayLabel} terminal`}
+                  onClick={() => activate(device.key, onActivateDesk)}
                 >
                   Terminal
                 </button>

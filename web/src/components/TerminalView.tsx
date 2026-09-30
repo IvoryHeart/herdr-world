@@ -605,6 +605,8 @@ export function TerminalView({
         )
           return;
         const term = termRef.current;
+        const bounds = container?.getBoundingClientRect();
+        if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
         const active = document.activeElement;
         const activeElement = active instanceof HTMLElement ? active : null;
         const activeIsTerminalInput = !!activeElement?.closest(".xterm");
@@ -616,7 +618,7 @@ export function TerminalView({
         term.focus();
       }, 0);
     });
-  }, [connectionClient]);
+  }, [connectionClient, container]);
   const focusEndpoint = useCallback(() => {
     focusTerminalEndpoint(connectionClient, paneTerminalIdRef.current);
   }, [connectionClient]);

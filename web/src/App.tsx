@@ -4168,7 +4168,6 @@ export default function App({
             terminalFontScale={terminalFontScale}
             mobileShortcuts={mobileTerminalShortcuts}
             mobileSideShortcuts={mobileTerminalSideShortcuts}
-            onOpenWorkspaceFile={handleTerminalWorkspaceFile}
           />
         </Suspense>
       ) : null}
