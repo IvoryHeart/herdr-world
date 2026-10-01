@@ -88,7 +88,7 @@ changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
-bun test <path>
+bun run test <path>
 bun run test:browser
 ```
 
