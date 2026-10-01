@@ -63,22 +63,41 @@ are checked again during the RC release workflow.
    `docs/releases/vX.Y.Z-rc.N.md` covering upgrade steps,
    distribution changes and important limits; the Release workflow uses it as the
    public release body.
-2. Run `bun install --frozen-lockfile`, `bun run notices:generate` when needed and
-   `bun run check`.
-3. Run `bun run release:prepare -- X.Y.Z-rc.N` for each candidate, starting with
-   `0.2.0-rc.1`, or `bun run release:prepare -- X.Y.Z` (or `patch`, `minor`, `major`)
-   for stable. Review the public plugin version and release notes, then open a ready
-   release PR. RCs leave the Unreleased changelog open; stable preparation promotes
-   it into a dated release section. The helper drafts later RC notes from the stable
-   notes when no exact RC notes exist; review and edit that draft in the PR.
-   If stable publication moves to another UTC date, update and review the date in that PR.
-   Private root, web and
-   server manifests remain at `0.0.0`; tagged builds inject the reviewed release
-   version into binaries, archives and update metadata.
-4. After independent review and merge, dispatch **Publish Release** with the exact
-   `X.Y.Z[-rc.N]`. The workflow locates the merged release commit, creates an annotated tag
-   if needed and starts **Release** on that immutable tag.
-5. The Release workflow revalidates metadata/tests, builds all six platform archives,
+2. Run `bun install --frozen-lockfile` and `bun run notices:generate` when the
+   dependency graph changed. Run `bun run release:prepare -- X.Y.Z-rc.N` for each
+   candidate, starting with `0.2.0-rc.1`, or `bun run release:prepare -- X.Y.Z`
+   (or `patch`, `minor`, `major`) for stable. Review the public plugin version and
+   release notes, then open a ready release PR. RCs leave the Unreleased changelog
+   open; stable preparation promotes it into a dated release section. The helper
+   drafts later RC notes from the stable notes when no exact RC notes exist; review
+   and edit that draft in the PR. If stable publication moves to another UTC date,
+   update and review the date in that PR. Private root, web and server manifests
+   remain at `0.0.0`; tagged builds inject the reviewed release version into binaries,
+   archives and update metadata. Run the repository checks on the prepared branch;
+   the tracked pre-push hook runs the full gate when pushing it.
+3. After independent review and merge, identify the exact release PR merge commit
+   on `main`. With the current repository settings, create and push the annotated
+   `vX.Y.Z[-rc.N]` tag on that commit using a maintainer account authorized by the
+   release tag ruleset. Verify the tag does not exist and the commit has the expected
+   plugin version before pushing. For example:
+
+   ```bash
+   git fetch origin main
+   release_sha="$(gh pr view PR_NUMBER --json mergeCommit --jq .mergeCommit.oid)"
+   git merge-base --is-ancestor "$release_sha" origin/main
+   git show "$release_sha:herdr-plugin.toml" | rg '^version = "X.Y.Z-rc.N"$'
+   git ls-remote --tags origin "refs/tags/vX.Y.Z-rc.N" # must print nothing
+   git tag -a vX.Y.Z-rc.N -m "Herdr World X.Y.Z-rc.N" "$release_sha"
+   git push origin refs/tags/vX.Y.Z-rc.N
+   ```
+
+   The tag push starts **Release** automatically. Do not also dispatch **Publish
+   Release** for that tag. The **Prepare Release** and **Publish Release** workflows
+   require repository settings that currently block their GitHub token: Actions
+   cannot create pull requests, and the release tag ruleset permits only the
+   maintainer account to create `v*` tags. If those settings change, the automated
+   path can be used after confirming its token has the required access.
+4. The Release workflow revalidates metadata/tests, builds all six platform archives,
    checks their contents and formats, then publishes archives, checksums, update
    manifests and `install-herdr-world.sh` as a GitHub release. It downloads the
    complete published asset set and verifies the installer, archive bytes, checksums
@@ -88,12 +107,12 @@ are checked again during the RC release workflow.
    npm's `next` tag and the `herdr-world-rc` Formula. Stable releases become GitHub
    Latest, use npm's `latest` tag and update the `herdr-world` Formula. The workflow
    opens a ready PR in `IvoryHeart/homebrew-tap`; merge it after independent review.
-6. Verify the installer, npm installation with optional dependencies, Homebrew
+5. Verify the installer, npm installation with optional dependencies, Homebrew
    installation after the tap PR merges, and Herdr plugin download/start/status/url
    flow against the published assets. For stable releases, also verify the project-site
    Latest release probe.
 
-Before dispatching Publish Release, bootstrap the six new platform package names
+Before publishing the first release, bootstrap the six new platform package names
 once. npm requires a package to exist before its trusted publisher can be set.
 Run `bun scripts/stage-npm-bootstrap.ts`, review the six generated manifests under
 ignored `dist/npm-bootstrap/`, then publish each directory with `npm publish
