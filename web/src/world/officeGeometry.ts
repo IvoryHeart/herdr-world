@@ -20,10 +20,10 @@ export const OFFICE_GEOMETRY = Object.freeze({
   agentBarPreferredWidth: 560,
   agentBarGap: 28,
   agentBarCounterBottomClearance: 64,
-  receptionStationMinWidth: 208,
-  receptionStationHeight: 256,
-  paneDeskWidth: 176,
-  paneDeskRowHeight: 300,
+  receptionStationMinWidth: 176,
+  receptionStationHeight: 160,
+  paneDeskWidth: 112,
+  paneDeskRowHeight: 128,
   receptionTableWidth: 160,
   receptionTableHeight: 42,
   receptionTableNudgeX: -4,
@@ -780,8 +780,8 @@ export function receptionAgentAnchor(
     index,
     stationSpan,
     x: reception.x + stationSpan * (column + 0.5),
-    nameY: reception.y + 35 + row * 112,
-    characterFeetY: reception.y + 112 + row * 112,
+    nameY: reception.y + 35 + row * 91,
+    characterFeetY: reception.y + 112 + row * 46,
   };
 }
 
@@ -823,20 +823,20 @@ export function deskAnchor(room: OfficeRoomRect, deskIndex: number) {
   };
 }
 
-/** Three separate 48px semantic targets below the tab desk. */
+/** One central laptop and three companion screens fit in the existing desk cell. */
 export function paneDeviceAnchor(
   room: OfficeRoomRect,
   deskIndex: number,
   paneIndex: number,
 ) {
   const desk = deskAnchor(room, deskIndex);
-  const index = boundedCount(paneIndex, 2);
+  const index = boundedCount(paneIndex, 3);
   return {
     index,
-    x: desk.x + (index - 1) * 52,
-    y: desk.deskY + 48,
-    width: 48,
-    height: 48,
+    x: desk.x + (index === 1 ? -31 : index === 2 ? 31 : 0),
+    y: desk.deskY + (index === 3 ? -12 : 18),
+    width: 24,
+    height: 24,
   };
 }
 
@@ -850,10 +850,11 @@ export function deskStandingAnchor(
   const index = boundedCount(standingIndex, 1);
   return {
     index,
-    x: desk.x + (index === 0 ? -52 : 52),
-    nameY: desk.deskY + 80,
-    characterFeetY: desk.deskY + 176,
-    stationSpan: 52,
+    compact: true,
+    x: desk.x + (index === 0 ? -36 : 36),
+    nameY: desk.nameY + 20,
+    characterFeetY: desk.deskY - 3,
+    stationSpan: 35,
   };
 }
 

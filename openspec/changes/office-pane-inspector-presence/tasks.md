@@ -9,6 +9,8 @@
 - [x] 2.1 Open the newly admitted Office desk's Inspector on Terminal with its created pane selected and multi-pane state visible; verify successful creation and cancelled, failed or retired-lease behavior in focused tests.
 - [x] 2.2 Project bounded pane devices and nearby working-agent groups per tab desk with stable qualified identity and exact overflow counts; verify multi-pane, pane-close and agent-status transitions in projection/layout tests.
 - [x] 2.3 Render clickable pane devices and grouped agents in the current Office style with separate desk and pane semantic targets; verify exact pane activation, target size, overlap and dense-room behavior in focused and browser checks.
+- [x] 2.4 Match the earlier Office footprint after side-by-side Playwright screenshots: keep ordinary room and CEO band dimensions, shrink devices and companion agents into the existing desk cells, and verify compact targets remain distinct.
+- [x] 2.5 Replace the desk's old monitor with a pane-count laptop, surround it with at most three exact extra-pane monitors, and retain further panes in the chooser without adding furniture or room space.
 
 ## 3. Shared reception
 

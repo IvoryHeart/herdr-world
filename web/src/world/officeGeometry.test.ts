@@ -285,23 +285,30 @@ describe("Pixel Office geometry", () => {
       },
     ]);
     const room = layout.rooms[0];
+    const originalCell = resolveOfficeLayout(1000, [
+      { deskCount: 8, standingCount: 0 },
+    ]).rooms[0];
+    expect(room.width).toBe(originalCell.width);
+    expect(room.height).toBe(originalCell.height);
     const devices = Array.from({ length: 8 }, (_, desk) =>
-      Array.from({ length: 3 }, (_, pane) =>
+      Array.from({ length: 4 }, (_, pane) =>
         paneDeviceAnchor(room, desk, pane),
       ),
     ).flat();
     for (const [index, device] of devices.entries()) {
-      expect(device.x - 24).toBeGreaterThanOrEqual(room.contentSafeRect.x);
-      expect(device.x + 24).toBeLessThanOrEqual(
+      expect(device.x - device.width / 2).toBeGreaterThanOrEqual(
+        room.contentSafeRect.x,
+      );
+      expect(device.x + device.width / 2).toBeLessThanOrEqual(
         room.contentSafeRect.x + room.contentSafeRect.width,
       );
-      expect(device.y + 24).toBeLessThanOrEqual(
+      expect(device.y + device.height / 2).toBeLessThanOrEqual(
         room.contentSafeRect.y + room.contentSafeRect.height,
       );
       for (const other of devices.slice(index + 1)) {
         expect(
-          Math.abs(device.x - other.x) >= 48 ||
-            Math.abs(device.y - other.y) >= 48,
+          Math.abs(device.x - other.x) >= device.width ||
+            Math.abs(device.y - other.y) >= device.height,
         ).toBe(true);
       }
     }
@@ -314,14 +321,14 @@ describe("Pixel Office geometry", () => {
       expect(agents[0].characterFeetY).toBeLessThanOrEqual(
         room.contentSafeRect.y + room.contentSafeRect.height,
       );
-      expect(agents[0].characterFeetY - 68).toBeGreaterThan(
-        paneDeviceAnchor(room, desk, 0).y + 24,
-      );
+      expect(agents[0].characterFeetY).toBe(deskAnchor(room, desk).deskY - 3);
     }
   });
 
   it("gives four reception seats and four standing agents distinct bounded positions", () => {
-    const reception = resolveCeoBlockLayout(1000, 1).receptions[0];
+    const blocks = resolveCeoBlockLayout(1120, 1);
+    const reception = blocks.receptions[0];
+    expect(blocks.ceoBandHeight).toBe(OFFICE_GEOMETRY.ceoBandHeight);
     const anchors = Array.from({ length: 8 }, (_, index) =>
       receptionAgentAnchor(reception, index),
     );
@@ -329,14 +336,14 @@ describe("Pixel Office geometry", () => {
       new Set(anchors.map(({ x, characterFeetY }) => `${x}:${characterFeetY}`))
         .size,
     ).toBe(8);
-    expect(anchors.every(({ stationSpan }) => stationSpan >= 48)).toBe(true);
+    expect(anchors.every(({ stationSpan }) => stationSpan >= 44)).toBe(true);
     expect(
       anchors.every(
         ({ characterFeetY }) =>
           characterFeetY <= reception.y + reception.height,
       ),
     ).toBe(true);
-    expect(anchors[4].characterFeetY - 68).toBeGreaterThan(
+    expect(anchors[4].characterFeetY).toBeGreaterThan(
       receptionTableRect(reception).y + OFFICE_GEOMETRY.receptionTableHeight,
     );
   });

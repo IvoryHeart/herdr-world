@@ -1376,7 +1376,7 @@ function drawReceptionDesk(
     drawChair(parent, x, chairY, accent);
     drawChairArms(parent, x, chairY, accent);
   });
-  agents.forEach((agent, index) => {
+  agents.slice(0, 4).forEach((agent, index) => {
     const anchor = receptionAgentAnchor(rect, index);
     const chairY = receptionChairs[index]?.chairY;
     const name = label(shortLabel(agent.displayLabel, 12), {
@@ -1466,6 +1466,32 @@ function drawReceptionDesk(
     overflow.position.set(centerX, table.y + table.height - 7);
     parent.addChild(overflow);
   }
+  agents.slice(4).forEach((agent, index) => {
+    const anchor = receptionAgentAnchor(rect, index + 4);
+    const character = drawCharacter(
+      parent,
+      textures[agent.characterIndex] ?? Texture.EMPTY,
+      anchor.x,
+      anchor.characterFeetY,
+      false,
+      agent.stale,
+      animated,
+      agent.key,
+      onSelect,
+      selectedKey,
+      onActivateAgent,
+    );
+    character.scale.set(0.5);
+    character.alpha = agent.stale ? 0.56 : 1;
+    drawReceptionStatusBadge(
+      parent,
+      agent,
+      anchor.x + 12,
+      anchor.nameY + 12,
+      onSelect,
+      onActivateAgent,
+    );
+  });
 }
 
 function drawHallways(stage: Container, layout: OfficeLayout) {
@@ -2100,6 +2126,7 @@ function drawTabDesk(
     occupant?.semanticStatus === "working" && !occupant.stale,
     animated,
     deskSelected,
+    desk.paneDevices.length === 0,
   );
   makeInteractive(deskNode, desk.key, onSelect, onActivateAgent);
   desk.paneDevices.forEach((device, paneIndex) => {
@@ -2110,21 +2137,13 @@ function drawTabDesk(
       roomAgents.some(({ key }) => key === device.agentKey),
       point.x,
       point.y,
+      paneIndex === 0,
+      desk.observedPaneCount,
       selectedKey,
       onSelect,
       onActivateAgent,
     );
   });
-  if (desk.observedPaneCount > 1) {
-    const count = label(
-      desk.omittedPaneCount > 0
-        ? `${desk.observedPaneCount} panes · +${desk.omittedPaneCount} in chooser`
-        : `${desk.observedPaneCount} panes`,
-      { size: 8, color: 0xdce6f3, anchor: 0.5 },
-    );
-    count.position.set(anchor.x, anchor.deskY + 18);
-    parent.addChild(count);
-  }
   if (desk.completionAgentKeys.some((key) => !completionSeenKeys.has(key))) {
     drawCompletionMarker(
       parent,
@@ -2200,6 +2219,28 @@ function drawStandingAgent(
   const cue = agent.stale
     ? { label: "STALE", color: 0x79869a }
     : STATUS_CUES[agent.semanticStatus];
+  if ("compact" in anchor) {
+    const character = drawCharacter(
+      parent,
+      textures[agent.characterIndex] ?? Texture.EMPTY,
+      anchor.x,
+      anchor.characterFeetY,
+      agent.semanticStatus === "working",
+      agent.stale,
+      animated,
+      agent.key,
+      onSelect,
+      selectedKey,
+      onActivateAgent,
+    );
+    character.scale.set(0.62);
+    character.alpha = agent.stale ? 0.56 : 1;
+    const marker = new Graphics();
+    marker.circle(anchor.x + 11, anchor.characterFeetY - 31, 4).fill(cue.color);
+    makeInteractive(marker, agent.key, onSelect, onActivateAgent);
+    parent.addChild(marker);
+    return;
+  }
   const name = label(shortLabel(agent.displayLabel, 13), {
     size: 9,
     color: 0xf2f4f8,
@@ -2586,15 +2627,20 @@ function drawDesk(
   working: boolean,
   animated: AnimatedItem[],
   selected = false,
+  showMonitor = true,
 ) {
   const desk = new Graphics();
   desk.ellipse(x + 24, y + 30, 30, 6).fill({ color: 0x000000, alpha: 0.22 });
   desk.roundRect(x, y, 48, 26, 3).fill(0x765b38);
   desk.roundRect(x + 2, y + 2, 44, 22, 2).fill(0xae8b5d);
-  desk
-    .roundRect(x + 14, y + 10, 21, 13, 2)
-    .fill(blendColor(accent, 0x101722, 0.7));
-  desk.roundRect(x + 16, y + 12, 17, 8, 1).fill(working ? 0x347d86 : 0x172131);
+  if (showMonitor) {
+    desk
+      .roundRect(x + 14, y + 10, 21, 13, 2)
+      .fill(blendColor(accent, 0x101722, 0.7));
+    desk
+      .roundRect(x + 16, y + 12, 17, 8, 1)
+      .fill(working ? 0x347d86 : 0x172131);
+  }
   desk.rect(x + 1, y + 24, 46, 2).fill({ color: accent, alpha: 0.78 });
   if (selected) {
     desk
@@ -2602,7 +2648,7 @@ function drawDesk(
       .stroke({ width: 2, color: 0xffffff, alpha: 0.92 });
   }
   parent.addChild(desk);
-  if (working) {
+  if (working && showMonitor) {
     const glow = new Graphics();
     glow
       .roundRect(x + 16, y + 12, 17, 8, 1)
@@ -2960,36 +3006,51 @@ function drawPaneDevice(
   occupied: boolean,
   x: number,
   y: number,
+  primary: boolean,
+  paneCount: number,
   selectedKey: string | null,
   onSelect: (key: string) => void,
   onActivate: (key: string) => void,
 ) {
   const laptop = new Container();
   laptop.position.set(x, y);
-  laptop.hitArea = new Rectangle(-24, -24, 48, 48);
+  laptop.hitArea = new Rectangle(-12, -12, 24, 24);
   const associated = occupied;
   const color = device.stale ? 0x79869a : associated ? 0x67d6c0 : 0x8d9aae;
   const art = new Graphics();
-  art
-    .roundRect(-19, -18, 38, 27, 3)
-    .fill(0x243247)
-    .stroke({
-      width: selectedKey === device.key ? 2 : 1,
-      color: selectedKey === device.key ? 0xffffff : color,
-    });
-  art
-    .roundRect(-15, -14, 30, 18, 1)
-    .fill({ color, alpha: associated ? 0.72 : 0.3 });
-  art.poly([-19, 9, 19, 9, 23, 17, -23, 17]).fill(0x52647a);
-  art.rect(-10, 11, 20, 2).fill(0x263244);
+  if (primary) {
+    art
+      .roundRect(-10, -10, 20, 15, 2)
+      .fill(0x243247)
+      .stroke({
+        width: selectedKey === device.key ? 2 : 1,
+        color: selectedKey === device.key ? 0xffffff : color,
+      });
+    art
+      .roundRect(-8, -8, 16, 10, 1)
+      .fill({ color, alpha: associated ? 0.72 : 0.3 });
+    art.poly([-10, 5, 10, 5, 12, 9, -12, 9]).fill(0x52647a);
+    art.rect(-5, 6, 10, 1).fill(0x263244);
+  } else {
+    art
+      .roundRect(-10.5, -6.5, 21, 13, 2)
+      .fill(0x172131)
+      .stroke({
+        width: selectedKey === device.key ? 2 : 1,
+        color: selectedKey === device.key ? 0xffffff : color,
+      });
+    art.roundRect(-8.5, -4.5, 17, 8, 1).fill(associated ? 0x347d86 : 0x172131);
+  }
   laptop.addChild(art);
-  const number = label(String(device.order + 1), {
-    size: 9,
-    color: 0xeff7ff,
-    anchor: 0.5,
-  });
-  number.position.set(0, -5);
-  laptop.addChild(number);
+  if (primary) {
+    const number = label(String(paneCount), {
+      size: paneCount > 99 ? 5 : paneCount > 9 ? 6 : 7,
+      color: 0xeff7ff,
+      anchor: 0.5,
+    });
+    number.position.set(0, -3);
+    laptop.addChild(number);
+  }
   laptop.alpha = device.stale ? 0.56 : 1;
   makeInteractive(laptop, device.key, onSelect, onActivate);
   parent.addChild(laptop);

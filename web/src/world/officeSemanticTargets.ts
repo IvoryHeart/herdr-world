@@ -45,16 +45,15 @@ export function officeSemanticTargets(
     reception.waitingAgents.forEach((agent, agentIndex) => {
       const anchor = receptionAgentAnchor(rect, agentIndex);
       targets.push(
-        agentTarget(
-          projection,
-          agent,
-          touchRect(
-            anchor.x,
-            anchor.nameY - 5,
-            anchor.stationSpan - 4,
-            anchor.characterFeetY - anchor.nameY + 10,
-          ),
-        ),
+        agentTarget(projection, agent, {
+          x: anchor.x - (anchor.stationSpan - 2) / 2,
+          y: anchor.nameY - (agentIndex < 4 ? 5 : 3),
+          width: anchor.stationSpan - 2,
+          height:
+            anchor.characterFeetY +
+            10 -
+            (anchor.nameY - (agentIndex < 4 ? 5 : 3)),
+        }),
       );
     });
   });
@@ -121,12 +120,12 @@ export function officeSemanticTargets(
           key: desk.key,
           kind: "desk",
           label: deskTargetLabel(projection, desk),
-          rect: touchRect(
-            anchor.x,
-            anchor.deskY - 24,
-            OFFICE_GEOMETRY.deskWidth,
-            48,
-          ),
+          rect: {
+            x: anchor.x - OFFICE_GEOMETRY.deskWidth / 2,
+            y: anchor.nameY - 5,
+            width: OFFICE_GEOMETRY.deskWidth,
+            height: 24,
+          },
           canActivate: desk.canOpenInSpaces,
         });
         if (occupant)
@@ -134,12 +133,12 @@ export function officeSemanticTargets(
             agentTarget(
               projection,
               occupant,
-              touchRect(
-                anchor.x,
-                anchor.nameY - 5,
-                48,
-                anchor.deskY - anchor.nameY - 24,
-              ),
+              {
+                x: anchor.x - 24,
+                y: anchor.nameY + 22,
+                width: 48,
+                height: anchor.deskY - 28 - (anchor.nameY + 22),
+              },
               desk,
             ),
           );
@@ -149,7 +148,12 @@ export function officeSemanticTargets(
             key: device.key,
             kind: "pane",
             label: `${device.displayLabel}, desk ${desk.displayLabel}, ${desk.observedPaneCount} panes${device.stale ? ", stale" : ""}`,
-            rect: touchRect(point.x, point.y - 24, 48, 48),
+            rect: {
+              x: point.x - point.width / 2,
+              y: point.y - point.height / 2,
+              width: point.width,
+              height: point.height,
+            },
             canActivate: device.canOpenInSpaces,
           });
         });
@@ -173,12 +177,19 @@ export function officeSemanticTargets(
         agentTarget(
           projection,
           agent,
-          touchRect(
-            anchor.x,
-            anchor.nameY - 5,
-            48,
-            anchor.characterFeetY - anchor.nameY + 10,
-          ),
+          "compact" in anchor
+            ? {
+                x: anchor.x - 12,
+                y: anchor.characterFeetY - 42,
+                width: 24,
+                height: 28,
+              }
+            : touchRect(
+                anchor.x,
+                anchor.nameY - 5,
+                48,
+                anchor.characterFeetY - anchor.nameY + 10,
+              ),
         ),
       );
     });

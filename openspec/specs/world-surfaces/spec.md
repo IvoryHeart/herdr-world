@@ -646,6 +646,15 @@ exact connection, generation and pane. Devices, desks and agents SHALL have dist
 pointer-accessible targets and names; a device SHALL communicate when a desk has multiple panes
 without changing the meaning of the desk as a tab.
 
+Pane devices and nearby agents SHALL fit within the existing desk-cell width and row height without
+enlarging ordinary Office rooms. Their compact targets SHALL be at least 24 by 24 CSS pixels and
+SHALL NOT overlap each other or the tab desk target.
+
+The desk's existing screen SHALL be a laptop for the first presented pane and display the exact
+observed pane count. Office SHALL present up to three additional panes as small monitor screens to
+its left, right and above, each opening its own pane. Further panes SHALL remain available through
+the chooser without adding more desk art.
+
 #### Scenario: Two agents work in one tab
 
 - **WHEN** a tab contains two admitted panes with working agents
@@ -664,10 +673,18 @@ without changing the meaning of the desk as a tab.
 - **THEN** closed-pane devices disappear, presented devices do not overlap or claim another pane's
   target, and omitted panes remain discoverable through a bounded count or chooser
 
+#### Scenario: More than four panes share a desk
+
+- **WHEN** five or more panes are admitted to one tab
+- **THEN** the laptop shows the exact pane count, only the laptop and three surrounding monitors
+  are drawn, and the chooser lists the remaining exact pane targets
+
 ### Requirement: Office reception capacity
 
 Office SHALL add bounded standing positions around each host's shared reception table when seats
-fill and SHALL expose an exact overflow count and roster targets for agents beyond its visual bound.
+fill without expanding the CEO band solely for those agents and SHALL expose an exact overflow count and roster targets
+for agents beyond its visual bound. The compact standing agents SHALL retain separate targets of at
+least 24 by 24 CSS pixels.
 
 #### Scenario: Reception fills
 
@@ -687,7 +704,7 @@ completion is inspected; this browser-local seen state SHALL NOT represent appro
 or move a still-done agent to the bar.
 
 Office SHALL retain bounded hover callouts, task summaries, state cues, at least 48 by 48 CSS-pixel
-semantic targets and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
+semantic targets outside compact desk and reception groups, and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
 in the shared Inspector rather than a duplicate persistent scene badge. Capability-gated room creation,
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.

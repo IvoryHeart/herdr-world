@@ -80,7 +80,7 @@ function projection(): HerdrOfficeProjection {
       roomAgentsPerRoom: 16,
       receptionDesks: 6,
       waitingAgentsPerReception: 8,
-      paneDevicesPerDesk: 3,
+      paneDevicesPerDesk: 4,
       barAgents: 16,
       rosterPage: 50,
       totalRooms: 1,

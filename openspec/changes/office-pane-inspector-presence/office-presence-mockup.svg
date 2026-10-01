@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="650" viewBox="0 0 1080 650" role="img" aria-labelledby="title description">
   <title id="title">Office pane presence design sketch</title>
-  <desc id="description">A tab desk with its existing monitor and two nearby clickable pane devices, grouped working agents, a shared reception table for agents needing input or done, overflow standing positions, and an idle agent at the bar.</desc>
+  <desc id="description">A tab desk with a central laptop showing its pane count, three clickable monitors to the left, right and above, nearby working agents, a shared reception table for agents needing input or done, compact overflow positions, and an idle agent at the bar.</desc>
   <defs>
     <pattern id="floor" width="20" height="20" patternUnits="userSpaceOnUse">
       <rect width="20" height="20" fill="#151b28"/>
@@ -22,6 +22,10 @@
       <rect x="-14" y="-11" width="28" height="17" fill="#347d86"/>
       <path d="M-20 11H20L16 16H-16Z" fill="#9aacc1" stroke="#d4e7e6" stroke-width="2"/>
       <rect x="-3" y="12" width="6" height="2" fill="#4b6473"/>
+    </g>
+    <g id="monitor" shape-rendering="crispEdges">
+      <rect x="-10" y="-10" width="20" height="15" rx="2" fill="#182437" stroke="#85a5bd" stroke-width="1"/>
+      <rect x="-8" y="-8" width="16" height="10" fill="#347d86"/>
     </g>
     <style>
       text { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -48,27 +52,24 @@
   <ellipse cx="340" cy="395" rx="105" ry="12" fill="#080d15" opacity=".45"/>
   <rect x="243" y="351" width="194" height="45" rx="4" fill="#765b38" stroke="#d5a76b" stroke-width="3"/>
   <rect x="249" y="356" width="182" height="30" rx="3" fill="#ae8b5d"/>
-  <rect x="319" y="359" width="42" height="24" rx="2" fill="#101722" stroke="#8aabb0" stroke-width="2"/>
-  <rect x="324" y="363" width="32" height="15" fill="#347d86"/>
-  <path d="M337 383v6m-11 0h22" stroke="#253748" stroke-width="3"/>
-  <text x="340" y="420" class="small" text-anchor="middle">Existing tab monitor</text>
+  <use href="#laptop" transform="translate(340 373) scale(.55)"/>
+  <text x="340" y="374" font-size="8" font-weight="700" fill="#eff7ff" text-anchor="middle">4</text>
+  <text x="340" y="420" class="small" text-anchor="middle">Laptop shows 4 active panes</text>
 
-  <!-- Pane stations are tied to pane identity, not to the roaming avatar. -->
-  <rect x="94" y="302" width="115" height="79" rx="4" fill="#30283a" stroke="#5f8b9b" stroke-width="2"/>
-  <rect x="473" y="302" width="115" height="79" rx="4" fill="#30283a" stroke="#5f8b9b" stroke-width="2"/>
-  <use href="#laptop" x="151" y="335"/>
-  <use href="#laptop" x="530" y="335"/>
-  <text x="151" y="370" class="tiny" text-anchor="middle">PANE A · OPEN</text>
-  <text x="530" y="370" class="tiny" text-anchor="middle">PANE B · OPEN</text>
-  <use href="#agent" x="151" y="242"/>
+  <!-- Pane devices stay inside the existing desk footprint. -->
+  <use href="#monitor" x="279" y="373"/>
+  <use href="#monitor" x="401" y="373"/>
+  <use href="#monitor" x="340" y="332"/>
+  <text x="279" y="404" class="tiny" text-anchor="middle">PANE A</text>
+  <text x="401" y="404" class="tiny" text-anchor="middle">PANE B</text>
+  <text x="340" y="315" class="tiny" text-anchor="middle">PANE C</text>
+  <use href="#agent" transform="translate(290 242) scale(.7)"/>
   <use href="#agent" x="340" y="242"/>
-  <use href="#agent" x="530" y="242"/>
-  <text x="151" y="284" class="small" text-anchor="middle">Agent A</text>
-  <text x="340" y="284" class="small" text-anchor="middle">Main agent</text>
-  <text x="530" y="284" class="small" text-anchor="middle">Agent B</text>
-  <text x="151" y="298" class="tiny" text-anchor="middle">WORKING</text>
-  <text x="340" y="298" class="tiny" text-anchor="middle">WORKING</text>
-  <text x="530" y="298" class="tiny" text-anchor="middle">WORKING</text>
+  <use href="#agent" transform="translate(390 242) scale(.7)"/>
+  <text x="290" y="284" class="small" text-anchor="middle">A</text>
+  <text x="340" y="284" class="small" text-anchor="middle">Main</text>
+  <text x="390" y="284" class="small" text-anchor="middle">B</text>
+  <text x="340" y="298" class="tiny" text-anchor="middle">WORKING TOGETHER · ONE DESK CELL</text>
   <text x="52" y="459" class="callout">Pane devices stay by the desk when agents leave.</text>
   <text x="52" y="480" class="small">Select a device to inspect its exact pane; activate it to open that terminal.</text>
   <text x="52" y="501" class="tiny">Device targets and the tab desk remain distinct; labels carry pane identity.</text>

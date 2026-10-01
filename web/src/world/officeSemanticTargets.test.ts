@@ -56,9 +56,9 @@ describe("Office semantic targets", () => {
     const projection = fixtureProjection();
     const room = projection.rooms[0]!;
     const desk = room.desks[0]!;
-    desk.observedPaneCount = 4;
+    desk.observedPaneCount = 5;
     desk.omittedPaneCount = 1;
-    desk.paneDevices = [0, 1, 2].map((order) => ({
+    desk.paneDevices = [0, 1, 2, 3].map((order) => ({
       key: `pane-device-${order}`,
       nodeId: `pane-${order}`,
       deskKey: desk.key,
@@ -95,13 +95,18 @@ describe("Office semantic targets", () => {
     const targets = officeSemanticTargets(projection, layout);
     expect(
       targets.filter(({ kind }) => kind === "pane").map(({ key }) => key),
-    ).toEqual(["pane-device-0", "pane-device-1", "pane-device-2"]);
+    ).toEqual([
+      "pane-device-0",
+      "pane-device-1",
+      "pane-device-2",
+      "pane-device-3",
+    ]);
     expect(targets.find(({ key }) => key === desk.key)?.kind).toBe("desk");
     expect(targets.find(({ key }) => key === "agent-seated")?.kind).toBe(
       "agent",
     );
     expect(targets.find(({ key }) => key === "pane-device-0")?.label).toContain(
-      "4 panes",
+      "5 panes",
     );
     const local = targets.filter(
       ({ key }) =>
@@ -110,6 +115,9 @@ describe("Office semantic targets", () => {
         key === standing.key ||
         key.startsWith("pane-device"),
     );
+    expect(
+      local.every(({ rect }) => rect.width >= 24 && rect.height >= 24),
+    ).toBe(true);
     for (const left of local)
       for (const right of local) {
         if (left.key === right.key) continue;
@@ -122,6 +130,53 @@ describe("Office semantic targets", () => {
             a.y + a.height > b.y,
         ).toBe(false);
       }
+  });
+
+  it("keeps eight agents at one reception separately selectable", () => {
+    const projection = fixtureProjection();
+    const agent = projection.barAgents[0]!;
+    projection.barAgents = [];
+    projection.receptions = [
+      {
+        key: "reception-a",
+        hostKey: "host-a",
+        hostLabel: "Forge",
+        stale: false,
+        waitingAgents: Array.from({ length: 8 }, (_, index) => ({
+          ...agent,
+          key: `waiting-${index}`,
+        })),
+        observedWaitingAgentCount: 8,
+        overflowCount: 0,
+      },
+    ];
+    const geometry = resolveOfficeGeometry({
+      availableViewportWidth: 1120,
+      titleMode: "expand",
+      roomAlignment: "left",
+      ceoReceptionCount: 1,
+      rooms: [],
+    });
+    const layout = new OfficeLayoutPublisher().publish(
+      { canonicalDigest: geometry.inputDigest },
+      geometry,
+    );
+    const targets = officeSemanticTargets(projection, layout);
+    expect(targets).toHaveLength(8);
+    for (const [index, left] of targets.entries()) {
+      expect(left.rect.width).toBeGreaterThanOrEqual(24);
+      expect(left.rect.height).toBeGreaterThanOrEqual(24);
+      for (const right of targets.slice(index + 1)) {
+        const a = left.rect;
+        const b = right.rect;
+        expect(
+          a.x < b.x + b.width &&
+            a.x + a.width > b.x &&
+            a.y < b.y + b.height &&
+            a.y + a.height > b.y,
+        ).toBe(false);
+      }
+    }
   });
 
   function fixtureProjection() {

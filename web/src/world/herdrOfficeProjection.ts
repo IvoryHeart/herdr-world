@@ -13,7 +13,7 @@ export const OFFICE_PRESENTATION_BOUNDS = Object.freeze({
   roomAgentsPerRoom: 16,
   receptionDesks: 6,
   waitingAgentsPerReception: 8,
-  paneDevicesPerDesk: 3,
+  paneDevicesPerDesk: 4,
   barAgents: 16,
   rosterPage: 50,
 });

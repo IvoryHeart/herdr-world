@@ -37,6 +37,10 @@ In Office, Tree and Graph, activating an Inspector window whose selected resourc
 
 Office SHALL present a distinct device for each pane admitted to a presented tab's bounded visual display, grouped with the tab's desk. Working or unknown agents sharing that tab SHALL appear near their pane devices within the bounded room layout. Each device SHALL remain at its tab desk while its agent moves to reception or the Agent Bar, and SHALL disappear when its pane closes or its qualified runtime retires. Activating a device SHALL open or focus the Inspector Terminal for that exact connection, generation and pane. Devices, desks and agents SHALL have distinct keyboard- and pointer-accessible targets and names; a device SHALL communicate when a desk has multiple panes without changing the meaning of the desk as a tab.
 
+Pane devices and nearby agents SHALL fit within the existing desk-cell width and row height without enlarging ordinary Office rooms. Their compact targets SHALL be at least 24 by 24 CSS pixels and SHALL NOT overlap each other or the tab desk target.
+
+The desk's existing screen SHALL be a laptop for the first presented pane and display the exact observed pane count. Office SHALL present up to three additional panes as small monitor screens to its left, right and above, each opening its own pane. Further panes SHALL remain available through the chooser without adding more desk art.
+
 #### Scenario: Two agents work in one tab
 
 - **WHEN** a tab contains two admitted panes with working agents
@@ -52,10 +56,15 @@ Office SHALL present a distinct device for each pane admitted to a presented tab
 - **WHEN** a pane closes or more panes are admitted than Office can present around a desk
 - **THEN** closed-pane devices disappear, presented devices do not overlap or claim another pane's target, and omitted panes remain discoverable through a bounded count or chooser
 
+#### Scenario: More than four panes share a desk
+
+- **WHEN** five or more panes are admitted to one tab
+- **THEN** the laptop shows the exact pane count, only the laptop and three surrounding monitors are drawn, and the chooser lists the remaining exact pane targets
+
 ### Requirement: Office reception capacity
 
 Office SHALL add bounded standing positions around each host's shared reception table when seats
-fill and SHALL expose an exact overflow count and roster targets for agents beyond its visual bound.
+fill without expanding the CEO band solely for those agents and SHALL expose an exact overflow count and roster targets for agents beyond its visual bound. The compact standing agents SHALL retain separate targets of at least 24 by 24 CSS pixels.
 
 #### Scenario: Reception fills
 
@@ -69,7 +78,7 @@ fill and SHALL expose an exact overflow count and roster targets for agents beyo
 Office SHALL place working and unknown agents with their owning work room, blocked and done agents at their qualified host reception, and idle agents in the Agent Bar. Reception SHALL use one shared table per host for blocked and done agents, mark blocked agents with `?` and done agents with `✔`, and keep the status available in text and accessible names rather than symbol or color alone. A done agent's originating desk SHALL retain a bounded generic completion marker until that qualified completion is inspected; this browser-local seen state SHALL NOT represent approval, mutate Herdr or move a still-done agent to the bar.
 
 Office SHALL retain bounded hover callouts, task summaries, state cues, at least 48 by 48 CSS-pixel
-semantic targets and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
+semantic targets outside compact desk and reception groups, and a compact Agents/Rooms/Desks chooser. Selected identity and detail SHALL live
 in the shared Inspector rather than a duplicate persistent scene badge. Capability-gated room creation,
 rename and close actions and room-local seat creation SHALL operate on real workspaces and tabs. A
 room at eight desks SHALL retain a disabled Room Full affordance rather than hiding capacity.

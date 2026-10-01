@@ -60,11 +60,11 @@ describe("Pixel Office projection", () => {
     );
     const before = projectWorldOffice(buildWorldObject([source], "local"), 1);
     const desk = before.rooms[0].desks[0];
-    expect(desk.paneDevices).toHaveLength(3);
-    expect(desk.omittedPaneCount).toBe(2);
+    expect(desk.paneDevices).toHaveLength(4);
+    expect(desk.omittedPaneCount).toBe(1);
     expect(before.paneRoster).toHaveLength(5);
     expect(before.paneRoster.filter(({ presented }) => presented)).toHaveLength(
-      3,
+      4,
     );
     expect(
       new Set(before.paneRoster.map(({ device }) => device.paneRef.nativeId))
@@ -93,7 +93,7 @@ describe("Pixel Office projection", () => {
     expect(
       closed.paneRoster.some(({ device }) => device.key === deviceKeys[0]),
     ).toBe(false);
-    expect(closed.rooms[0].desks[0].omittedPaneCount).toBe(1);
+    expect(closed.rooms[0].desks[0].omittedPaneCount).toBe(0);
     const newGeneration = { ...source, generation: 8, snapshotGeneration: 8 };
     const retired = projectWorldOffice(
       buildWorldObject([newGeneration], "local"),
