@@ -113,6 +113,7 @@ import {
   worldInspectorWindowIdForNode,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
+import { inspectorPaneInput } from "./inspectorTerminalHandoff";
 
 export {
   retainWorldFloatingTerminals,
@@ -2058,6 +2059,11 @@ function WorldControlPlane({
   };
 
   const focusInspectorTerminal = (windowId: string) => {
+    const expected = inspectorConversationsRef.current.find(
+      (candidate) => worldInspectorWindowId(candidate) === windowId,
+    );
+    const connectionGeneration = store.get().connectionGeneration;
+    if (!expected?.paneId) return;
     if (
       document.documentElement.dataset.layout === "mobile" ||
       window.matchMedia?.("(any-pointer: coarse)").matches
@@ -2065,13 +2071,34 @@ function WorldControlPlane({
       return;
     }
     const attempt = (remaining: number) => {
+      const conversation = inspectorConversationsRef.current.find(
+        (candidate) => worldInspectorWindowId(candidate) === windowId,
+      );
+      const snapshot = store.get();
+      if (
+        !conversation ||
+        conversation.view !== "terminal" ||
+        !conversation.paneId ||
+        conversation.paneId !== expected.paneId ||
+        conversation.terminalId !== expected.terminalId ||
+        snapshot.connectionGeneration !== connectionGeneration ||
+        snapshot.activeConnectionId !== conversation.connectionId ||
+        snapshot.serverRuntimeGeneration !== conversation.runtimeGeneration ||
+        snapshot.selectedPaneId !== conversation.paneId ||
+        !snapshot.panes.some(
+          (pane) =>
+            pane.pane_id === conversation.paneId &&
+            pane.terminal_id === conversation.terminalId &&
+            pane.workspace_id === conversation.workspaceId &&
+            pane.tab_id === conversation.tabId,
+        )
+      )
+        return;
       const target =
         dockedInspectorIdRef.current === windowId
           ? dockedInspectorPortalRef.current
           : floatingInspectorPortalsRef.current[windowId];
-      const input = target?.querySelector<HTMLElement>(
-        ".xterm-helper-textarea",
-      );
+      const input = inspectorPaneInput(target, conversation.paneId);
       if (input) {
         input.focus({ preventScroll: true });
         return;
@@ -2579,10 +2606,12 @@ function WorldControlPlane({
         ...conversation,
         focusedListAdmissionAt: performance.now(),
       };
-      onInspectorConversationsChange([
+      const nextConversations = [
         ...inspectorConversationsRef.current,
         admittedConversation,
-      ]);
+      ];
+      inspectorConversationsRef.current = nextConversations;
+      onInspectorConversationsChange(nextConversations);
       focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
     } finally {
       unbindAbort();
@@ -2590,7 +2619,8 @@ function WorldControlPlane({
     }
   };
 
-  const openTerminalById = async (id: string) => {
+  const openTerminalById = async (id: string, signal?: AbortSignal) => {
+    if (signal?.aborted) throw new Error("Terminal activation was superseded");
     const node = world.nodeById.get(id);
     if (!node) throw new Error("This terminal is no longer available");
     try {
@@ -2605,14 +2635,15 @@ function WorldControlPlane({
           (existing &&
             worldInspectorWindowId(existing) === dockedInspectorIdRef.current))
       ) {
-        if (!(await applySelection(id, "terminal"))) {
+        if (!(await applySelection(id, "terminal", true, world, signal))) {
           throw new Error("This terminal could not be opened");
         }
         return;
       }
-      await openFloatingInspector(node);
+      await openFloatingInspector(node, signal);
     } catch (cause) {
-      setIntentError(cause instanceof Error ? cause.message : String(cause));
+      if (!signal?.aborted)
+        setIntentError(cause instanceof Error ? cause.message : String(cause));
       throw cause;
     }
   };
@@ -3459,14 +3490,14 @@ function WorldControlPlane({
                   );
                 }
               }
-              onInspectorConversationsChange(
-                inspectorConversations.map((candidate) =>
-                  worldInspectorWindowId(candidate) ===
-                  worldInspectorWindowId(conversation)
-                    ? { ...candidate, ...change }
-                    : candidate,
-                ),
+              const next = inspectorConversationsRef.current.map((candidate) =>
+                worldInspectorWindowId(candidate) ===
+                worldInspectorWindowId(conversation)
+                  ? { ...candidate, ...change }
+                  : candidate,
               );
+              inspectorConversationsRef.current = next;
+              onInspectorConversationsChange(next);
             }}
             onClose={() => closeInspector(conversation)}
             onWindowMaximize={() => {
@@ -3499,14 +3530,15 @@ function WorldControlPlane({
                     const target = world.nodeById.get(conversation.nodeId);
                     if (!target) return;
                     setSelection(target);
-                    void focusWorldNode(target).catch((cause) =>
-                      setIntentError(
-                        cause instanceof Error ? cause.message : String(cause),
-                      ),
-                    );
+                    void applySelection(target.id).catch(() => undefined);
                   }
                 : undefined
             }
+            onResourceFocus={() => {
+              const id = worldInspectorWindowId(conversation);
+              raiseInspector(id);
+              revealInspector(id);
+            }}
             onTerminalPortalChange={(portal) =>
               onInspectorTerminalPortal(
                 worldInspectorWindowId(conversation),

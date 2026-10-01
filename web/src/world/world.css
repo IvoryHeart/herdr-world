@@ -1159,10 +1159,25 @@
     flex: 0 0 auto;
     padding: 0 9px;
   }
-  .world-compact-target-section > p {
+  .world-compact-target-section nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     margin: 6px 2px 0;
     color: var(--muted, #9da7b4);
-    font-size: 9px;
+    font-size: 11px;
+  }
+  .world-compact-target-section nav button {
+    min-height: 48px;
+    padding: 0 10px;
+    border: 1px solid var(--border, #343942);
+    border-radius: 4px;
+    color: var(--text, #edf2f7);
+    background: color-mix(in srgb, var(--bg, #0e1116) 82%, #24324a);
+  }
+  .world-compact-target-section nav button:disabled {
+    opacity: 0.45;
   }
   .world-completion-notices {
     top: 58px;

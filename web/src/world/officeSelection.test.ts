@@ -54,6 +54,7 @@ function projection(): HerdrOfficeProjection {
       },
     ],
     deskRoster: [],
+    paneRoster: [],
     roster: [],
     unresolved: [],
     coverage: {
@@ -78,7 +79,8 @@ function projection(): HerdrOfficeProjection {
       desksPerRoom: 8,
       roomAgentsPerRoom: 16,
       receptionDesks: 6,
-      waitingAgentsPerReception: 4,
+      waitingAgentsPerReception: 8,
+      paneDevicesPerDesk: 4,
       barAgents: 16,
       rosterPage: 50,
       totalRooms: 1,

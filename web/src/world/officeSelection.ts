@@ -63,6 +63,16 @@ export function officeCalloutForKey(
   key: string,
 ): OfficeCallout | null {
   key = officePresentationKey(projection, key) ?? key;
+  const paneEntry = projection.paneRoster?.find(
+    ({ device }) => device.key === key,
+  );
+  if (paneEntry)
+    return {
+      kind: "desk",
+      title: paneEntry.device.displayLabel,
+      detail: `${paneEntry.deskLabel} · ${paneEntry.roomLabel} · ${paneEntry.hostLabel}`,
+      status: paneEntry.device.stale ? "stale" : null,
+    };
   const agentEntry = projection.roster.find(({ agent }) => agent.key === key);
   if (agentEntry) {
     const { agent } = agentEntry;
@@ -153,6 +163,7 @@ export function officePresentationKey(
     return null;
   }
   if (
+    projection.paneRoster?.some(({ device }) => device.key === selectedKey) ||
     projection.roster.some(({ agent }) => agent.key === selectedKey) ||
     projection.deskRoster.some(({ desk }) => desk.key === selectedKey) ||
     projection.roomRoster.some(({ key }) => key === selectedKey) ||
@@ -161,9 +172,12 @@ export function officePresentationKey(
     return selectedKey;
   }
   return (
+    projection.paneRoster?.find(({ device }) => device.nodeId === selectedKey)
+      ?.device.key ??
     projection.deskRoster.find(({ desk }) =>
       desk.terminalSelectionKeys.includes(selectedKey),
-    )?.desk.key ?? selectedKey
+    )?.desk.key ??
+    selectedKey
   );
 }
 

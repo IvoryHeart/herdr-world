@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
 import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
+import { projectWorldOffice } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
@@ -130,6 +132,18 @@ async function run() {
     "blocked",
     "done",
   ]);
+  if (local.snapshot) {
+    local.snapshot.panes.push(
+      pane("alpha", "working", 2, "working", "Local Researcher"),
+      pane("alpha", "working", 3, "working", "Local Tester"),
+      pane("alpha", "working", 4, "working", "Local Writer"),
+    );
+    local.snapshot.tabs[0] = { ...local.snapshot.tabs[0]!, pane_count: 5 };
+    local.snapshot.workspaces[0] = {
+      ...local.snapshot.workspaces[0]!,
+      pane_count: 7,
+    };
+  }
   const remote = connection("remote", "Remote", "beta", [
     "working",
     "unknown",
@@ -161,19 +175,21 @@ async function run() {
     actionable: false,
   };
   const aggregateWorld = buildWorldObject([local, remote, stale], "local");
-  const world = worldObjectForConnection(aggregateWorld, "local");
+  let world = worldObjectForConnection(aggregateWorld, "local");
 
   try {
     let selectedAnchor = false;
     let terminalActivationAllowed = false;
     let terminalActivations = 0;
+    const terminalTargets: string[] = [];
     function OfficeHarness() {
       return (
         <PixelOfficeView
           world={world}
           selectedId={world.leaves[0]?.id ?? null}
           onSelect={() => {}}
-          onOpenTerminal={async () => {
+          onOpenTerminal={async (id) => {
+            terminalTargets.push(id);
             terminalActivations += 1;
             if (!terminalActivationAllowed) {
               throw new Error("synthetic activation failure");
@@ -287,6 +303,85 @@ async function run() {
       terminalActivations === 2,
       "Completion inspection did not preserve explicit activation attempts",
     );
+    const devices = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="pane"]',
+      ),
+    ];
+    check(
+      devices.length === 6,
+      "Office did not present all six bounded pane devices",
+    );
+    const chooserHost = document.createElement("div");
+    chooserHost.style.cssText = "position:absolute;left:-10000px";
+    document.body.append(chooserHost);
+    const chooserRoot = createRoot(chooserHost);
+    const chooserProjection = projectWorldOffice(world, Date.now());
+    const paneTemplate = chooserProjection.paneRoster[0]!;
+    chooserProjection.paneRoster = Array.from({ length: 51 }, (_, index) => ({
+      ...paneTemplate,
+      device: {
+        ...paneTemplate.device,
+        key: `test-pane-${index}`,
+        displayLabel: `Pane ${index + 1}`,
+      },
+    }));
+    let openedPane: string | null = null;
+    chooserRoot.render(
+      <OfficeCompactTargetChooser
+        projection={chooserProjection}
+        selectedKey={null}
+        onSelect={() => {}}
+        onActivateAgent={() => {}}
+        onActivateDesk={(key) => {
+          openedPane = key;
+        }}
+      />,
+    );
+    await waitFor(
+      () => chooserHost.querySelector('nav[aria-label="Panes pages"]') !== null,
+      "Overflow pane navigation was not rendered",
+    );
+    check(
+      chooserHost.querySelector('[data-target-key="test-pane-50"]') === null,
+      "Overflow pane appeared on the first page",
+    );
+    chooserHost
+      .querySelector<HTMLButtonElement>(
+        'nav[aria-label="Panes pages"] button:last-child',
+      )
+      ?.click();
+    await waitFor(
+      () =>
+        chooserHost.querySelector('[data-target-key="test-pane-50"]') !== null,
+      "Pane 51 could not be reached through the chooser",
+    );
+    chooserHost
+      .querySelector<HTMLButtonElement>('[aria-label="Open Pane 51 terminal"]')
+      ?.click();
+    check(openedPane === "test-pane-50", "Pane 51 opened the wrong target");
+    chooserRoot.unmount();
+    chooserHost.remove();
+    check(
+      host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
+        .length === 2,
+      "Occupied desks lost their distinct tab targets",
+    );
+    devices[1]?.click();
+    await settle();
+    check(
+      terminalTargets[terminalTargets.length - 1] === world.leaves[1]?.id,
+      "Pane device did not open its own qualified terminal",
+    );
+    const doneTarget = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.world-semantic-target[data-kind="agent"]',
+      ),
+    ].find((button) => button.getAttribute("aria-label")?.includes(", done,"));
+    check(
+      doneTarget !== undefined,
+      "Done agent disappeared after its completion was inspected",
+    );
     check(
       host.querySelectorAll(".world-new-seat-canvas-action").length === 1,
       "The active host room is missing its new-seat control",
@@ -316,6 +411,49 @@ async function run() {
     check(
       selectedAnchor,
       "The selected Office entity did not publish an anchor",
+    );
+    // Exercise the second reception row with both statuses; it must render
+    // without indexing past the four physical chairs.
+    const crowded = connection("local", "Local", "alpha", [
+      "working",
+      "unknown",
+      "blocked",
+      "done",
+    ]);
+    for (let index = 2; index < 8; index += 1) {
+      crowded.snapshot!.panes.push(
+        pane(
+          "alpha",
+          "review",
+          index,
+          index % 2 ? "done" : "blocked",
+          `Reception agent ${index}`,
+        ),
+      );
+    }
+    world = worldObjectForConnection(
+      buildWorldObject([crowded], "local"),
+      "local",
+    );
+    const priorRenders = diagnostics.sceneRenders;
+    root.render(
+      <StrictMode>
+        <OfficeHarness />
+      </StrictMode>,
+    );
+    await waitFor(
+      () => diagnostics.sceneRenders > priorRenders,
+      "Crowded reception did not render",
+    );
+    await waitFor(
+      () =>
+        host.querySelectorAll('.world-semantic-target[data-kind="agent"]')
+          .length === 10,
+      "Crowded reception lost agent targets",
+    );
+    check(
+      diagnostics.lastError === null,
+      "Eight mixed reception agents crashed the renderer",
     );
     const inactiveAgent = [
       ...host.querySelectorAll<HTMLButtonElement>(

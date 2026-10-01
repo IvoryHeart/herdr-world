@@ -19,6 +19,7 @@ function projection(
     barAgents: [],
     roomRoster: [],
     deskRoster: [],
+    paneRoster: [],
     roster: [],
     unresolved: [],
     coverage: {

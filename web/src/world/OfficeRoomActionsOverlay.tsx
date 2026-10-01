@@ -52,7 +52,8 @@ export function OfficeSemanticTargetsOverlay({
           onDoubleClick={() => {
             if (!target.canActivate) return;
             if (target.kind === "agent") onActivateAgent(target.key);
-            if (target.kind === "desk") onActivateDesk(target.key);
+            if (target.kind === "desk" || target.kind === "pane")
+              onActivateDesk(target.key);
             if (target.kind === "room") onActivateRoom(target.key);
           }}
         />

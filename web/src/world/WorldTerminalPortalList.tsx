@@ -2,7 +2,6 @@ import type { ITheme } from "@xterm/xterm";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { TabTerminalPaneLayout } from "../TabTerminalPaneLayout";
-import type { TerminalWorkspaceFileRequest } from "../components/TerminalView";
 import type {
   MobileTerminalShortcutRows,
   MobileTerminalSideShortcuts,
@@ -11,6 +10,11 @@ import type { Pane } from "../types";
 import { useVisibleTabLayout } from "../visibleTabLayout";
 import type { WorldTerminalPresentation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
+import { store } from "../store";
+import {
+  INSPECTOR_TERMINAL_FILE_EVENT,
+  type InspectorTerminalFileRequest,
+} from "./inspectorTerminalHandoff";
 
 export default function WorldTerminalPortalList({
   presentations,
@@ -22,7 +26,6 @@ export default function WorldTerminalPortalList({
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
-  onOpenWorkspaceFile,
 }: {
   presentations: readonly WorldTerminalPresentation[];
   panes: readonly Pane[];
@@ -33,7 +36,6 @@ export default function WorldTerminalPortalList({
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
-  onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
 }) {
   const [parking, setParking] = useState<HTMLDivElement | null>(null);
   return (
@@ -73,7 +75,6 @@ export default function WorldTerminalPortalList({
               terminalFontScale={terminalFontScale}
               mobileShortcuts={mobileShortcuts}
               mobileSideShortcuts={mobileSideShortcuts}
-              onOpenWorkspaceFile={onOpenWorkspaceFile}
             />
           </WorldTerminalPortalOwner>
         ) : null;
@@ -90,7 +91,6 @@ function WorldInspectorTabTerminal({
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
-  onOpenWorkspaceFile,
 }: {
   presentation: WorldTerminalPresentation & { tabId: string };
   panes: readonly Pane[];
@@ -99,7 +99,6 @@ function WorldInspectorTabTerminal({
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
-  onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
 }) {
   const layout = useVisibleTabLayout(
     presentation.workspaceId,
@@ -127,7 +126,26 @@ function WorldInspectorTabTerminal({
       onComposerOpenChange={setComposerOpen}
       agentHistoryOpen={agentHistoryOpen}
       onAgentHistoryOpenChange={setAgentHistoryOpen}
-      onOpenWorkspaceFile={onOpenWorkspaceFile}
+      onOpenWorkspaceFile={(request) => {
+        const event = new CustomEvent<InspectorTerminalFileRequest>(
+          INSPECTOR_TERMINAL_FILE_EVENT,
+          {
+            cancelable: true,
+            detail: {
+              ...request,
+              windowId: worldInspectorWindowId(presentation),
+              runtimeGeneration: presentation.runtimeGeneration,
+            },
+          },
+        );
+        window.dispatchEvent(event);
+        if (!event.defaultPrevented)
+          store.notify({
+            kind: "error",
+            message: "Cannot browse file",
+            detail: "The originating Inspector or pane is no longer available.",
+          });
+      }}
     />
   );
 }
