@@ -3883,10 +3883,11 @@ async function run() {
         narrowedVisualStage.getBoundingClientRect().left + 8,
     "keyboard focus reveals an overscanned Inspector",
   );
+  const afterFocusScroll = Number(narrowColumnRange.value);
   narrowColumnRight.click();
   await until(
-    () => Number(narrowColumnRange.value) > 0,
-    "Columns are scrolled before pointer interaction",
+    () => Number(narrowColumnRange.value) > afterFocusScroll,
+    "Columns scroll right before pointer interaction",
   );
   const pointerScrollPosition = Number(narrowColumnRange.value);
   const partlyClippedInspector = [
@@ -3913,6 +3914,10 @@ async function run() {
   check(
     Number(narrowColumnRange.value) === pointerScrollPosition,
     "pointer focus keeps a partly clipped Inspector stationary",
+  );
+  check(
+    document.activeElement === resizeHandle,
+    "pointer resize handle keeps focus instead of switching to Terminal input",
   );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";

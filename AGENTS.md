@@ -6,8 +6,9 @@ invent abstractions or process without a concrete need.
 
 ## Delivery workflow
 
-- Never commit or push directly to `main`. Work on a branch and stop after opening a
-  ready pull request unless the repository owner explicitly asks you to merge it.
+- Never commit or push directly to `main`. Work on a branch. For PR delivery,
+  stop after opening a ready pull request unless the repository owner explicitly
+  asks you to merge it. A local-only handoff does not require a PR.
 - Pull requests require independent review unless the owner explicitly waives it.
 - Put worktrees below the primary checkout's `.agents/worktrees/` directory. Create
   one with `bun run agent:worktree -- create <slug> <parent-ref>` after resolving the
@@ -19,10 +20,15 @@ invent abstractions or process without a concrete need.
   needs a decision. Update one coherent change when direction changes rather than
   creating a document per implementation tranche.
 
-Read [docs/agent-development.md](docs/agent-development.md) for the working loop and
-[docs/knowledge-map.md](docs/knowledge-map.md) to find contracts, source, tests and
-runbooks. Current contracts are in `openspec/specs/`; active changes are in
-`openspec/changes/`; numbered documents under `docs/specs/` are historical context.
+Use [the knowledge map](docs/knowledge-map.md) when locating contracts, source,
+tests or runbooks. Read [agent development](docs/agent-development.md) for
+agent-workflow changes or process investigations. Current contracts are in
+`openspec/specs/`; active changes are in `openspec/changes/`; numbered
+documents under `docs/specs/` are historical context. For multi-step handoffs
+and review repairs, invoke the repo-local
+[candidate-delivery skill](.agents/skills/candidate-delivery/SKILL.md).
+For an optional visible two-agent run, use the
+[Herdr Workflows recipe](docs/agent-development.md#run-an-optional-visible-team).
 
 ## Product shape
 
@@ -73,15 +79,12 @@ Install the pinned toolchain dependencies with:
 bun install --frozen-lockfile
 ```
 
-Use focused tests and type checks while developing when they answer a specific
-question; do not rerun them after every edit. The tracked pre-push hook is the
-final full gate for a branch push: it runs `bun run check`, covering notices,
-formatting, lint, types, tests, builds and OpenSpec. Count that invocation as the
-required full check; do not also run it manually before the same push. If there
-is no push or the hook is unavailable, run `bun run check` once explicitly.
-After a failed gate, investigate the failing stage with focused checks and let
-the next push rerun the full gate. CI repeats it on the PR head. Browser tests
-require Chrome/Chromium or `CHROME_BIN`:
+Use focused tests and type checks when they answer a specific question. The
+pre-commit hook checks formatting and lint without writing files; the pre-push
+hook runs `bun run check` for code changes. A Markdown-only follow-up uses
+`bun run check:docs` only when a successful full gate already covers its code.
+CI runs documentation checks for Markdown-only PR diffs and full checks for code
+changes. Browser tests require Chrome/Chromium or `CHROME_BIN`:
 
 ```bash
 bun run typecheck:quick
@@ -90,7 +93,7 @@ bun run test:browser
 ```
 
 Run `bun run install-hooks` once per clone so the tracked pre-commit hook checks
-formatting and lint at commit time and the pre-push hook runs the full check. All
+formatting and lint at commit time and the pre-push hook runs the applicable check. All
 worktrees in that clone share the hook configuration.
 
 Run `bun run notices:generate` whenever the resolved dependency graph changes and
@@ -99,9 +102,12 @@ tutorial changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full matrix.
 
 ## Agentic efficiency
 
-- **Do not poll.** Tools, sub-agents, and CI runs complete, error, or timeout on
-  their own. Fire and wait for the result — do not loop on status checks. If you
-  must check, check once after a reasonable delay.
+- **Block on running commands.** When a command returns a running session, call
+  `write_stdin` on that session with empty `chars` and `yield_time_ms: 300000`;
+  wait again only if it actually times out and remains running. Apply the same
+  rule to `gh run watch`. Do not issue 30-second status loops or separate
+  `ps`/`gh pr checks` probes while the blocking command is running. A Codex
+  lifecycle hook cannot intercept `write_stdin`, so do not add one for polling.
 - **One review, one fix pass.** Do not create re-review branches. Fix findings
   in place and move on. If a PR has too many findings, split the PR first.
 - **Functional commits only.** Every commit should change behaviour or docs. Put
@@ -138,7 +144,10 @@ Large outputs are the primary driver of context bloat and token cost.
 - Add user-facing changes under the appropriate `CHANGELOG.md` Unreleased heading
   in the implementation commit, before the first push. PR numbers and links are
   optional in changelog entries; the PR and merge history provide traceability.
-  Do not make a second push solely to add a PR link. Keep existing linked entries.
+  Keep existing linked entries. Prepare the final PR description before creation;
+  it does not need to link to itself. Do not amend or push solely to add a new PR
+  number to the changelog, or edit the PR body solely for later usage accounting;
+  retain later usage in the workflow output.
 - Record the exact Roamgate source synchronization in `UPSTREAM.md`; say "derived
   from" for source and "compatible with" for the external Herdr runtime.
 - Release preparation happens on a clean branch from `origin/main` and is delivered
