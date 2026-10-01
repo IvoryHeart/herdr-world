@@ -55,7 +55,12 @@ for (const backend of ["chrome", "webkit"] as const) {
             backend === "chrome"
               ? { type: "chrome", path: chrome!, url: false }
               : "webkit",
-          dataStore: "ephemeral",
+          // Keep Chrome's profile inside the directory removed in finally.
+          // Bun's ephemeral store otherwise leaves a separate .bun-chrome cache.
+          dataStore:
+            backend === "chrome"
+              ? { directory: join(dir, "profile") }
+              : "ephemeral",
         });
         const failures = await withBrowserDeadline(
           view.navigate(server.url.href).then(() => promise),
