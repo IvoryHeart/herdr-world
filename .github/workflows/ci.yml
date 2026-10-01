@@ -2,7 +2,7 @@ name: CI
 
 on:
     pull_request:
-        types: [opened, synchronize, reopened, edited]
+        types: [opened, synchronize, reopened, edited, labeled]
     # Prepare Release uses this explicit dispatch because events created with its
     # GITHUB_TOKEN do not start other workflows automatically.
     workflow_dispatch:
@@ -124,3 +124,123 @@ jobs:
                   bun scripts/world-plugin.ts uninstall
                   test ! -e "$HOME/Library/LaunchAgents/dev.herdr-world.plist"
                   trap - EXIT
+
+    release-preview:
+        name: Downloadable preview (${{ matrix.platform }})
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        needs: delivery
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        strategy:
+            fail-fast: false
+            matrix:
+                platform:
+                    - linux-x64
+                    - linux-arm64
+                    - darwin-x64
+                    - darwin-arm64
+                    - windows-x64
+                    - windows-arm64
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.1"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - name: Build branch preview archive
+              shell: bash
+              run: |
+                  HERDR_WORLD_BUILD_VERSION="0.0.0-rc.$GITHUB_RUN_NUMBER" bun run package:${{ matrix.platform }}
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: preview-${{ matrix.platform }}
+                  path: dist/herdr-world-v0.0.0-rc.${{ github.run_number }}-${{ matrix.platform }}.tar.xz*
+                  if-no-files-found: error
+                  retention-days: 14
+
+    npm-preview:
+        name: Downloadable npm preview
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        needs: [delivery, release-preview]
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+              with:
+                  bun-version: "1.4.1"
+                  no-cache: true
+            - run: bun install --frozen-lockfile
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+              with:
+                  node-version: "24"
+            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  path: dist
+                  pattern: preview-*-*
+                  merge-multiple: true
+            - name: Stage and smoke npm packages from preview archives
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  version="0.0.0-rc.$GITHUB_RUN_NUMBER"
+                  bun scripts/stage-npm-release.ts "$version"
+                  mkdir -p dist/npm-tarballs
+                  for platform in linux-x64 linux-arm64 darwin-x64 darwin-arm64 windows-x64 windows-arm64; do
+                    npm pack "dist/npm/$platform" --pack-destination dist/npm-tarballs --silent
+                  done
+                  npm pack dist/npm/launcher --pack-destination dist/npm-tarballs --silent
+                  npm install --ignore-scripts --offline --prefix dist/npm-smoke \
+                    "./dist/npm-tarballs/ivoryheart-herdr-world-linux-x64-$version.tgz" \
+                    "./dist/npm-tarballs/ivoryheart-herdr-world-$version.tgz"
+                  test "$(dist/npm-smoke/node_modules/.bin/herdr-world --version)" = "herdr-world $version"
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: preview-npm
+                  path: dist/npm-tarballs/*.tgz
+                  if-no-files-found: error
+                  retention-days: 14
+
+    homebrew-preview:
+        name: Downloadable Homebrew preview
+        if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'release-preview')
+        needs: [delivery, release-preview]
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  persist-credentials: false
+            - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+              with:
+                  path: dist
+                  pattern: preview-darwin-*
+                  merge-multiple: true
+            - name: Prepare and check the local Homebrew Formula
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  cp scripts/install-homebrew-preview.sh dist/
+                  for platform in darwin-arm64 darwin-x64; do
+                    HERDR_WORLD_PREVIEW_PLATFORM="$platform" bash dist/install-homebrew-preview.sh --prepare-only
+                    ruby -c dist/herdr-world-preview.rb
+                    archive="$(find dist -maxdepth 1 -name "herdr-world-v*-$platform.tar.xz" -print -quit)"
+                    ruby scripts/check-homebrew-formula-stage.rb dist/herdr-world-preview.rb "$archive" HerdrWorldPreview
+                  done
+            - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+              with:
+                  name: preview-homebrew
+                  path: |
+                      dist/herdr-world-v*.tar.xz
+                      dist/herdr-world-v*.tar.xz.sha256
+                      dist/install-homebrew-preview.sh
+                  if-no-files-found: error
+                  retention-days: 14

@@ -1,29 +1,31 @@
+/** Keep pointer intent across listener reattachment while a window is raised. */
+const pointerActiveWindows = new WeakSet<HTMLElement>();
+
 /** Native listeners see portaled Inspector controls in their physical window. */
 export function listenForInspectorWindowRaise(
   element: HTMLElement,
   onPointer: () => void,
   onFocus: () => void = onPointer,
 ) {
-  let pointerActive = false;
+  const pointerEnd = () => {
+    pointerActiveWindows.delete(element);
+    window.removeEventListener("pointerup", pointerEnd, true);
+    window.removeEventListener("pointercancel", pointerEnd, true);
+  };
   const pointerDown = () => {
-    pointerActive = true;
+    pointerActiveWindows.add(element);
+    window.addEventListener("pointerup", pointerEnd, true);
+    window.addEventListener("pointercancel", pointerEnd, true);
     onPointer();
   };
-  const pointerEnd = () => {
-    pointerActive = false;
-  };
   const focusIn = () => {
-    if (pointerActive) onPointer();
+    if (pointerActiveWindows.has(element)) onPointer();
     else onFocus();
   };
   element.addEventListener("pointerdown", pointerDown, true);
   element.addEventListener("focusin", focusIn, true);
-  window.addEventListener("pointerup", pointerEnd, true);
-  window.addEventListener("pointercancel", pointerEnd, true);
   return () => {
     element.removeEventListener("pointerdown", pointerDown, true);
     element.removeEventListener("focusin", focusIn, true);
-    window.removeEventListener("pointerup", pointerEnd, true);
-    window.removeEventListener("pointercancel", pointerEnd, true);
   };
 }

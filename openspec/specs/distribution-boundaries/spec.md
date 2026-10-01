@@ -27,6 +27,13 @@ from the final reviewed immutable release tag.
 - **WHEN** the release helper prepares a version
 - **THEN** it produces a branch change without pushing main
 
+#### Scenario: Cross-platform release candidate
+- **WHEN** a reviewed `vX.Y.Z-rc.N` tag is published
+- **THEN** all six desktop archives and downstream packages use that exact version,
+  GitHub marks it as a prerelease, npm publishes it under `next`, a reviewed
+  Homebrew PR proposes the separate RC Formula, and the stable Latest channels
+  remain unchanged
+
 ### Requirement: Downstream lineage
 Each World release SHALL identify its exact Roamgate synchronization point and distinguish derived
 application source from compatibility with the external Herdr runtime.

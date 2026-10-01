@@ -2,7 +2,7 @@ id = "ivoryheart.herdr-world"
 name = "Herdr World"
 version = "0.1.1"
 min_herdr_version = "0.9.0"
-description = "Visual control plane for Herdr agents with managed local and SSH connections."
+description = "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts."
 platforms = ["linux", "macos", "windows"]
 
 # Thin launcher: every action delegates to scripts/world-plugin.ts, which

@@ -86,6 +86,9 @@ test.skipIf(!chrome)(
         portaledControlDoesNotActivate: true,
         dockedControlRaises: true,
         profileDoesNotRaiseDocked: true,
+        pointerFocusSurvivesListenerRebind: true,
+        keyboardFocusRevealsAfterPointer: true,
+        pointerEndWithoutListenerRestoresKeyboard: true,
         stableDrag: true,
         arrangementRestoresGeometry: true,
       });

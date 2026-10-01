@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish (X.Y.Z)
+        description: Version to publish (X.Y.Z or X.Y.Z-rc.N)
         required: true
         type: string
 
@@ -16,6 +16,7 @@ permissions:
 
 concurrency:
   group: publish-release
+  queue: max
   cancel-in-progress: false
 
 jobs:
@@ -41,8 +42,8 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "error: version must be in X.Y.Z form" >&2
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+            echo "error: version must be X.Y.Z or X.Y.Z-rc.N" >&2
             exit 1
           fi
 
@@ -93,8 +94,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "$TAG is already published; nothing to dispatch."
-            exit 0
-          fi
           gh workflow run "Release" --ref "$TAG"

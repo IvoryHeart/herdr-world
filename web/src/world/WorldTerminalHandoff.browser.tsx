@@ -4044,6 +4044,7 @@ async function run() {
     () => Number(narrowColumnRange.value) > afterFocusScroll,
     "Columns scroll right before pointer interaction",
   );
+  await settle();
   const pointerScrollPosition = Number(narrowColumnRange.value);
   const partlyClippedInspector = [
     ...document.querySelectorAll<HTMLElement>(
@@ -4061,14 +4062,17 @@ async function run() {
   resizeHandle.dispatchEvent(
     new PointerEvent("pointerdown", { bubbles: true, pointerId: 23 }),
   );
-  resizeHandle.focus();
+  const afterPointerDown = Number(narrowColumnRange.value);
+  resizeHandle.focus({ preventScroll: true });
+  const afterPointerFocus = Number(narrowColumnRange.value);
   window.dispatchEvent(
     new PointerEvent("pointerup", { bubbles: true, pointerId: 23 }),
   );
+  const afterPointerUp = Number(narrowColumnRange.value);
   await settle();
   check(
     Number(narrowColumnRange.value) === pointerScrollPosition,
-    "pointer focus keeps a partly clipped Inspector stationary",
+    `pointer focus keeps a partly clipped Inspector stationary (${pointerScrollPosition} -> ${afterPointerDown} -> ${afterPointerFocus} -> ${afterPointerUp} -> ${narrowColumnRange.value})`,
   );
   check(
     document.activeElement === resizeHandle,

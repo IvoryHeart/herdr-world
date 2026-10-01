@@ -219,6 +219,8 @@ describe("Muse Code session inspection", () => {
       expect(read).toHaveBeenCalledTimes(5);
       // Rewritten metadata invalidates the cached path even at the same size/mtime.
       const oldStat = await localAgentSessionFiles.statFile(other);
+      // The filesystem may report the same ctime for two writes in one tick.
+      await Bun.sleep(20);
       await writeSession(sessions, "other", "/work", timestamp + 1000);
       rewrittenToken = "rewritten-metadata";
       const newStat = await localAgentSessionFiles.statFile(other);

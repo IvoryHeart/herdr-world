@@ -2,7 +2,7 @@
   "name": "herdr-world",
   "private": true,
   "version": "0.0.0",
-  "description": "Herdr World: a visual control plane for Herdr agents.",
+  "description": "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts.",
   "license": "MIT",
   "author": "IvoryHeart",
   "homepage": "https://ivoryheart.github.io/herdr-world/",

@@ -64,8 +64,7 @@ independent of that provider.
 
 The delivered foundation covers the selected-host lifecycle and the focused local,
 SSH, desktop and responsive acceptance recorded by the current contract. Expanded
-simultaneous live local-plus-SSH acceptance and the task-summary producer are
-follow-up work tracked in
+simultaneous live local-plus-SSH acceptance remains follow-up work tracked in
 [#95](https://github.com/IvoryHeart/herdr-world/issues/95). Browser-federated bridge
 URLs, native Capacitor Android packaging and old visual preference keys are retired;
 the responsive installable PWA is the mobile client.

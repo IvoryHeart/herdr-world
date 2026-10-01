@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
+  draftCandidateNotes,
   parseManifestVersion,
   parsePackageVersion,
+  promoteChangelog,
   replaceManifestVersion,
   replacePackageVersion,
   resolveNextVersion,
@@ -98,6 +100,16 @@ describe("resolveNextVersion", () => {
     expect(resolveNextVersion("0.4.1", "0.5.0")).toBe("0.5.0");
   });
 
+  test("orders release candidates before their stable version", () => {
+    expect(resolveNextVersion("0.1.1", "0.2.0-rc.1")).toBe("0.2.0-rc.1");
+    expect(resolveNextVersion("0.2.0-rc.1", "0.2.0-rc.2")).toBe("0.2.0-rc.2");
+    expect(resolveNextVersion("0.2.0-rc.2", "0.2.0")).toBe("0.2.0");
+    expect(() => resolveNextVersion("0.2.0", "0.2.0-rc.3")).toThrow("greater");
+    expect(() => resolveNextVersion("0.2.0-rc.2", "0.2.0-rc.1")).toThrow(
+      "greater",
+    );
+  });
+
   test("rejects versions that are not greater than the current one", () => {
     expect(() => resolveNextVersion("0.4.1", "0.4.1")).toThrow("greater");
     expect(() => resolveNextVersion("0.4.1", "0.3.9")).toThrow("greater");
@@ -110,4 +122,35 @@ describe("resolveNextVersion", () => {
     expect(() => resolveNextVersion("0.4.1", "")).toThrow("X.Y.Z");
     expect(() => resolveNextVersion("0.4", "patch")).toThrow("X.Y.Z");
   });
+});
+
+describe("promoteChangelog", () => {
+  const changelog =
+    "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- A new view.\n\n## [0.1.1] - 2026-09-01\n";
+
+  test("moves reviewed notes into the dated version and opens a fresh section", () => {
+    expect(promoteChangelog(changelog, "0.2.0", "2026-09-28")).toBe(
+      "# Changelog\n\n## [Unreleased]\n\n## [0.2.0] - 2026-09-28\n\n### Added\n\n- A new view.\n\n## [0.1.1] - 2026-09-01\n",
+    );
+  });
+
+  test("rejects an empty release", () => {
+    expect(() =>
+      promoteChangelog(
+        "# Changelog\n\n## [Unreleased]\n\n## [0.1.1] - 2026-09-01\n",
+        "0.2.0",
+        "2026-09-28",
+      ),
+    ).toThrow("no Unreleased changes");
+  });
+});
+
+test("draftCandidateNotes creates reviewed notes for a later RC", () => {
+  const notes = draftCandidateNotes(
+    "0.2.0-rc.2",
+    "# Herdr World 0.2.0\n\nCheck Office and Graph.\n",
+  );
+  expect(notes).toContain("# Herdr World 0.2.0-rc.2 release candidate");
+  expect(notes).toContain("Check Office and Graph.");
+  expect(() => draftCandidateNotes("0.2.0", "body")).toThrow();
 });

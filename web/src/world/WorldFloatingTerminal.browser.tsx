@@ -299,6 +299,47 @@ setTimeout(() => {
     host.querySelector<HTMLButtonElement>('[data-testid="restore"]')?.click();
     await new Promise<void>((resolve) => setTimeout(resolve, 40));
     const restoredLeft = floatingWindow.getBoundingClientRect().left;
+    const focusHost = document.createElement("div");
+    const focusButton = document.createElement("button");
+    focusHost.append(focusButton);
+    document.body.append(focusHost);
+    let pointerRaisesAfterRebind = 0;
+    let keyboardRevealsAfterRebind = 0;
+    const listen = () =>
+      listenForInspectorWindowRaise(
+        focusHost,
+        () => {
+          pointerRaisesAfterRebind += 1;
+        },
+        () => {
+          keyboardRevealsAfterRebind += 1;
+        },
+      );
+    let stopFocusListener = listen();
+    focusButton.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 31 }),
+    );
+    stopFocusListener();
+    stopFocusListener = listen();
+    focusButton.focus();
+    const pointerFocusSurvivesListenerRebind =
+      pointerRaisesAfterRebind === 2 && keyboardRevealsAfterRebind === 0;
+    window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 31 }));
+    focusButton.blur();
+    focusButton.focus();
+    const keyboardFocusRevealsAfterPointer = keyboardRevealsAfterRebind === 1;
+    focusButton.blur();
+    focusButton.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true, pointerId: 32 }),
+    );
+    stopFocusListener();
+    window.dispatchEvent(new PointerEvent("pointerup", { pointerId: 32 }));
+    stopFocusListener = listen();
+    focusButton.focus();
+    const pointerEndWithoutListenerRestoresKeyboard =
+      keyboardRevealsAfterRebind === 2;
+    stopFocusListener();
+    focusHost.remove();
     const result = {
       failures,
       portal: host.querySelector('[data-testid="portal-state"]')?.textContent,
@@ -310,6 +351,9 @@ setTimeout(() => {
       portaledControlDoesNotActivate,
       dockedControlRaises,
       profileDoesNotRaiseDocked,
+      pointerFocusSurvivesListenerRebind,
+      keyboardFocusRevealsAfterPointer,
+      pointerEndWithoutListenerRestoresKeyboard,
       stableDrag:
         firstMoveLeft >= startLeft + 140 &&
         secondMoveLeft >= firstMoveLeft + 140,

@@ -7,8 +7,8 @@ version="${HERDR_WORLD_BUILD_VERSION:-$(
   cd "$root_dir"
   bun -e 'console.log(require("./package.json").version)'
 )}"
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "HERDR_WORLD_BUILD_VERSION must be an X.Y.Z release version" >&2
+if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$ ]]; then
+  echo "HERDR_WORLD_BUILD_VERSION must be X.Y.Z or X.Y.Z-rc.N" >&2
   exit 2
 fi
 

@@ -70,8 +70,18 @@ test("CI and release jobs install once from the workspace root", () => {
       const installs = job.steps.filter((step) =>
         step.run?.includes("bun install"),
       );
-      expect(installs).toHaveLength(name === "publish" ? 0 : 1);
-      if (name !== "publish") {
+      const noBunInstall =
+        (file === "ci.yml" && name === "homebrew-preview") ||
+        (file === "release.yml" &&
+          [
+            "publish",
+            "published-archives",
+            "npm-publish",
+            "homebrew-pr",
+            "homebrew-smoke",
+          ].includes(name));
+      expect(installs).toHaveLength(noBunInstall ? 0 : 1);
+      if (!noBunInstall) {
         expect(installs[0]?.run).toBe("bun install --frozen-lockfile");
         expect(installs[0]?.["working-directory"]).toBeUndefined();
       }

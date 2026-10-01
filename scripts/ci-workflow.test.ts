@@ -5,7 +5,7 @@ type WorkflowStep = {
   run?: string;
   uses?: string;
   if?: string;
-  with?: { "fetch-depth"?: number };
+  with?: { "fetch-depth"?: number; ref?: string };
 };
 
 type WorkflowJob = {
@@ -14,6 +14,7 @@ type WorkflowJob = {
   strategy?: {
     matrix?: {
       include?: Array<{ arch?: string; runner?: string }>;
+      platform?: string[];
     };
   };
   steps: WorkflowStep[];
@@ -36,6 +37,7 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "synchronize",
     "reopened",
     "edited",
+    "labeled",
   ]);
   expect(workflow.permissions.actions).toBe("read");
   expect(workflow.concurrency["cancel-in-progress"]).toContain(
@@ -71,6 +73,46 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
       ?.with?.["fetch-depth"],
   ).toBe(0);
   expect(workflow.jobs.validate).toBeUndefined();
+});
+
+test("labeled release PRs offer six downloadable previews without publishing", () => {
+  const preview = workflow.jobs["release-preview"];
+  expect(preview?.strategy?.matrix?.platform).toEqual([
+    "linux-x64",
+    "linux-arm64",
+    "darwin-x64",
+    "darwin-arm64",
+    "windows-x64",
+    "windows-arm64",
+  ]);
+  expect(
+    preview?.steps.find((step) => step.uses?.startsWith("actions/checkout@"))
+      ?.with?.ref,
+  ).toBe("${{ github.event.pull_request.head.sha }}");
+  expect(
+    preview?.steps.some((step) =>
+      step.run?.includes("package:${{ matrix.platform }}"),
+    ),
+  ).toBe(true);
+  expect(
+    preview?.steps.some((step) =>
+      step.uses?.includes("actions/upload-artifact"),
+    ),
+  ).toBe(true);
+  expect(preview?.steps.some((step) => step.run?.includes("gh release"))).toBe(
+    false,
+  );
+  const npmPreview = workflow.jobs["npm-preview"];
+  expect(
+    npmPreview?.steps.some((step) =>
+      step.run?.includes("scripts/stage-npm-release.ts"),
+    ),
+  ).toBe(true);
+  expect(
+    npmPreview?.steps.some((step) =>
+      step.uses?.includes("actions/upload-artifact"),
+    ),
+  ).toBe(true);
 });
 
 test("CI exercises the real plugin-managed launchd lifecycle on both protected architectures", () => {

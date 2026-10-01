@@ -121,6 +121,8 @@ for lease and cache retirement rules.
 
 [Vite](../web/vite.config.ts) builds the frontend; [server compile scripts](../server/package.json)
 embed those assets in a Bun executable. [Package tooling](../scripts/package-release.sh),
+[npm staging](../scripts/stage-npm-release.ts),
+[Homebrew Formula generation](../scripts/generate-homebrew-formula.ts),
 [installer](../scripts/install-herdr-world.sh), [plugin tooling](../scripts/world-plugin.ts)
 and [release preparation](../scripts/prepare-release.ts) form the distribution
 path. [Packaging](packaging.md), [release](release.md) and [UPSTREAM](../UPSTREAM.md)

@@ -14,14 +14,18 @@ are optional because the merged PR history records their source.
   profiles, browser preferences and Roamgate state are not imported; native Android
   packaging is not part of this foundation.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
-- The replacement foundation does not carry forward the former `herdr-world task-summary`
-  producer. Existing Herdr-admitted summary metadata can still be presented; deliberate restoration
-  of that workflow is tracked in
-  [issue #95](https://github.com/IvoryHeart/herdr-world/issues/95).
-  [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
+- `herdr-world task-summary` now binds each report to the current pane session,
+  limits it to 80 Unicode characters, and lets Herdr expire it. The former
+  `--clear` operation is unavailable; harnesses using it must update their hooks.
+  [Herdr World PR #105](https://github.com/IvoryHeart/herdr-world/pull/105)
 
 ### Added
 
+- Restored the npm and Homebrew installation channels for the new foundation.
+  npm now installs one platform binary through optional dependencies; Homebrew
+  installs the same checksum-pinned release archive. Both serve the one World
+  service and require Herdr as a separate runtime. Release candidates use all six
+  platform archives, npm's `next` tag and a separate Homebrew RC Formula.
 - Added a clickable pane-count laptop on each Office desk and up to three surrounding monitors so
   split-pane agents keep exact terminal targets after leaving their work room. Done agents now join
   input-needed agents at their host's reception with distinct `✔` and `?` cues; extra agents stand
@@ -171,6 +175,8 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Kept a partly clipped Inspector stationary when pointer focus raises it during
+  Columns arrangement, while keyboard focus still scrolls it into view.
 - Opened terminal file links in the originating Office, Tree or Graph Inspector's Files tab,
   focused the exact selected pane when activating a visual terminal window, and opened a newly
   created Office desk's terminal as soon as its pane was admitted.

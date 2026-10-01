@@ -15,6 +15,8 @@ Available targets are `linux-x64`, `linux-arm64`, `darwin-x64`, `darwin-arm64`,
 `windows-x64` and `windows-arm64`. Bun cross-compiles the executable; package output
 is written to ignored `dist/` as a versioned archive, a latest-channel archive,
 checksums and an update manifest.
+`HERDR_WORLD_BUILD_VERSION` accepts `X.Y.Z` and `X.Y.Z-rc.N`; candidates use the
+same six targets and archive layout.
 
 Each archive must contain:
 
@@ -27,6 +29,15 @@ Inspect the archive and validate its checksum before publication. Never commit
 archives, extracted package directories or compiled binaries. GitHub's Release
 workflow builds every supported target and validates the executable format; the native
 Linux x64 binary is also executed to verify its version.
+
+The same verified archives feed six public npm platform packages and the
+`@ivoryheart/herdr-world` launcher. npm selects one binary through optional
+dependencies and runs no install script; Node.js 22.14.0 or newer is required for
+the launcher. The Release workflow also generates a checksum-pinned Homebrew
+Formula for macOS and Linux and opens a reviewable PR in
+`IvoryHeart/homebrew-tap` after the GitHub assets are published. Windows uses npm
+or the standalone archive; Homebrew does not manage Windows.
+Candidates publish to npm's `next` tag and the separate `herdr-world-rc` Formula.
 
 The responsive Web/PWA is the supported mobile artifact. This foundation does not
 produce the former Capacitor Android package.
