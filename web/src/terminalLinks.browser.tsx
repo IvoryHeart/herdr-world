@@ -11,6 +11,7 @@ import {
 } from "./layoutPreferences";
 import { TerminalView } from "./components/TerminalView";
 import type { TerminalResolvedLink } from "./terminalLinkProvider";
+import { TERMINAL_LONG_PRESS_MS } from "./terminalTouchSelection";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/layout/app.css";
@@ -287,9 +288,35 @@ const tap = async (element: Element) => {
   await touch("touchEnd");
   await settle();
 };
+let realLongPresses = 0;
 const press = async (row: number, col: number) => {
-  await touch("touchStart", [point(row, col)]);
-  await new Promise((done) => setTimeout(done, 500));
+  if (realLongPresses++ === 0) {
+    await touch("touchStart", [point(row, col)]);
+    await new Promise((done) => setTimeout(done, TERMINAL_LONG_PRESS_MS + 50));
+  } else {
+    const originalSetTimeout = window.setTimeout;
+    const schedule = originalSetTimeout.bind(window);
+    let activate: (() => void) | null = null;
+    window.setTimeout = ((
+      handler: TimerHandler,
+      ms?: number,
+      ...args: unknown[]
+    ) => {
+      if (ms === TERMINAL_LONG_PRESS_MS && typeof handler === "function") {
+        activate = () => handler(...args);
+        return 0;
+      }
+      return schedule(handler, ms, ...args);
+    }) as typeof window.setTimeout;
+    try {
+      await touch("touchStart", [point(row, col)]);
+      await until(() => activate !== null, "long-press timer registered");
+      await settle();
+      activate!();
+    } finally {
+      window.setTimeout = originalSetTimeout;
+    }
+  }
   await touch("touchEnd");
   await settle();
 };
@@ -298,6 +325,9 @@ const done = async () => {
 };
 
 async function runTouch() {
+  const viewportSmoke = new URLSearchParams(location.search).has(
+    "viewportSmoke",
+  );
   check(
     matchMedia("(pointer: coarse)").matches,
     true,
@@ -328,6 +358,19 @@ async function runTouch() {
       2,
       "link selection keeps both handles",
     );
+    if (viewportSmoke)
+      check(
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            ".terminal-selection-handle",
+          ),
+        ].every((handle) => {
+          const rect = handle.getBoundingClientRect();
+          return rect.left >= 0 && rect.right <= innerWidth;
+        }),
+        true,
+        `selection handles fit the narrow viewport at ${scale}%`,
+      );
     const count = opened.length;
     await tap(action("Open link")!);
     check(opened.length, count + 1, "only explicit action opens URL");
@@ -359,6 +402,7 @@ async function runTouch() {
       "touch probes original cell only",
     );
   }
+  if (viewportSmoke) return;
   render(100);
   await settle();
   // Explicit frame targets work even without the optional plain-link resolver.

@@ -9,10 +9,11 @@ on:
 
 permissions:
     contents: read
+    actions: read
 
 concurrency:
     group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'edited' }}
 
 jobs:
     delivery:
@@ -31,8 +32,26 @@ jobs:
             - name: Check knowledge-map impact
               if: github.event_name == 'pull_request'
               run: bun scripts/check-knowledge-map.ts "$GITHUB_EVENT_PATH"
+            - name: Determine validation scope
+              if: github.event_name == 'pull_request'
+              id: scope
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  PR_ACTION: ${{ github.event.action }}
+                  REQUIRED_JOB_NAME: Delivery checks
+                  REQUIRED_FULL_STEP: Run full repository check
+              run: bun scripts/ci-reuse-full-check.ts
             - run: bun install --frozen-lockfile
-            - run: bun run check
+              if: steps.scope.outputs.mode != 'reuse'
+            - name: Run documentation checks
+              if: steps.scope.outputs.mode == 'docs'
+              run: bun run check:docs
+            - name: Run full repository check
+              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              run: bun run check
 
     launchd:
         name: macOS launchd plugin lifecycle (${{ matrix.arch }})
@@ -50,14 +69,30 @@ jobs:
             - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
               with:
                   persist-credentials: false
+                  fetch-depth: 0
             - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
               with:
                   bun-version: "1.4.1"
                   no-cache: true
+            - name: Determine validation scope
+              if: github.event_name == 'pull_request'
+              id: scope
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+                  PR_NUMBER: ${{ github.event.pull_request.number }}
+                  PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+                  PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+                  PR_ACTION: ${{ github.event.action }}
+                  REQUIRED_JOB_NAME: macOS launchd plugin lifecycle (${{ matrix.arch }})
+                  REQUIRED_FULL_STEP: Exercise the real plugin-managed launchd lifecycle
+              run: bun scripts/ci-reuse-full-check.ts
             - run: bun install --frozen-lockfile
+              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
             - name: Build the native World service
+              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
               run: bun run build
             - name: Exercise the real plugin-managed launchd lifecycle
+              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
               shell: bash
               run: |
                   set -euo pipefail

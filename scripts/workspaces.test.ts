@@ -70,9 +70,11 @@ test("CI and release jobs install once from the workspace root", () => {
       const installs = job.steps.filter((step) =>
         step.run?.includes("bun install"),
       );
-      expect(installs).toEqual(
-        name === "publish" ? [] : [{ run: "bun install --frozen-lockfile" }],
-      );
+      expect(installs).toHaveLength(name === "publish" ? 0 : 1);
+      if (name !== "publish") {
+        expect(installs[0]?.run).toBe("bun install --frozen-lockfile");
+        expect(installs[0]?.["working-directory"]).toBeUndefined();
+      }
     }
   }
 });

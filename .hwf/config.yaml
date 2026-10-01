@@ -1,0 +1,4 @@
+profiles:
+  codex:
+    kind: codex
+default_profile: codex

@@ -2778,7 +2778,7 @@ function WorldControlPlane({
       if (focusTarget && reveal) {
         revealInspector(worldInspectorWindowId(conversation));
       }
-      if (currentConversation.view === "terminal") {
+      if (focusTarget && currentConversation.view === "terminal") {
         focusInspectorTerminal(worldInspectorWindowId(conversation));
       }
       return true;

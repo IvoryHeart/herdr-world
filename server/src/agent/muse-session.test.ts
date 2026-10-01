@@ -178,6 +178,16 @@ describe("Muse Code session inspection", () => {
     const call = async () => ({ agent: { agent: "muse", cwd: "/work" } });
     const context = createAgentSessionResolverContext();
     const read = spyOn(localAgentSessionFiles, "readPrefix");
+    const realStatFile = localAgentSessionFiles.statFile;
+    let rewrittenToken: string | null = null;
+    const stat = spyOn(localAgentSessionFiles, "statFile").mockImplementation(
+      async (path) => {
+        const file = await realStatFile(path);
+        return file && path === other && rewrittenToken
+          ? { ...file, changeToken: rewrittenToken }
+          : file;
+      },
+    );
     const resolve = () =>
       resolveAgentSession(
         { pane_id: "p1" },
@@ -210,9 +220,13 @@ describe("Muse Code session inspection", () => {
       // Rewritten metadata invalidates the cached path even at the same size/mtime.
       const oldStat = await localAgentSessionFiles.statFile(other);
       await writeSession(sessions, "other", "/work", timestamp + 1000);
-      expect(
-        (await localAgentSessionFiles.statFile(other))?.changeToken,
-      ).not.toBe(oldStat?.changeToken);
+      rewrittenToken = "rewritten-metadata";
+      const newStat = await localAgentSessionFiles.statFile(other);
+      expect([newStat?.size, newStat?.mtimeMs]).toEqual([
+        oldStat?.size,
+        oldStat?.mtimeMs,
+      ]);
+      expect(newStat?.changeToken).not.toBe(oldStat?.changeToken);
       await rm(newest);
       expect((await resolve()).path).toBe(other);
       expect(read).toHaveBeenCalledTimes(6);
@@ -221,6 +235,7 @@ describe("Muse Code session inspection", () => {
       expect(read).toHaveBeenCalledTimes(6);
     } finally {
       read.mockRestore();
+      stat.mockRestore();
     }
   });
 

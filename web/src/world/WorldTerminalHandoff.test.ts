@@ -49,6 +49,33 @@ test.skipIf(!chrome)(
         target: "browser",
         plugins: [
           {
+            name: "short-created-pane-deadline",
+            setup(builder) {
+              builder.onLoad(
+                { filter: /officeRoomActions\.ts$/ },
+                async (args) => {
+                  const source = await Bun.file(args.path).text();
+                  const declaration =
+                    /export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 21_000;/;
+                  if (!declaration.test(source)) {
+                    throw new Error(
+                      "Created-pane deadline declaration changed",
+                    );
+                  }
+                  // The real 21-second policy is covered by officeRoomActions.test.ts.
+                  // This browser case verifies deadline cleanup without a real wait.
+                  return {
+                    contents: source.replace(
+                      declaration,
+                      "export const CREATED_PANE_ADMISSION_TIMEOUT_MS = 1_000;",
+                    ),
+                    loader: "ts",
+                  };
+                },
+              );
+            },
+          },
+          {
             name: "vite-raw-svg",
             setup(builder) {
               builder.onResolve({ filter: /\.svg\?raw$/ }, (args) => ({
