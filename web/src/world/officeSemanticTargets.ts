@@ -10,6 +10,7 @@ import {
   paneDeviceAnchor,
   deskStandingAnchor,
   OFFICE_GEOMETRY,
+  OFFICE_NEARBY_AGENT_LIMIT,
   receptionAgentAnchor,
   standingAnchor,
 } from "./officeGeometry";
@@ -283,7 +284,7 @@ export function officeStandingAgentAnchors(
         };
         return order(left) - order(right) || left.key.localeCompare(right.key);
       });
-    agents.slice(0, 2).forEach((agent, index) => {
+    agents.slice(0, OFFICE_NEARBY_AGENT_LIMIT).forEach((agent, index) => {
       grouped.add(agent.key);
       result.push({
         agent,

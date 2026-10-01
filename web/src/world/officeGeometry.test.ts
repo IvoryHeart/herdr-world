@@ -313,15 +313,20 @@ describe("Pixel Office geometry", () => {
       }
     }
     for (let desk = 0; desk < 8; desk += 1) {
-      const agents = [
-        deskStandingAnchor(room, desk, 0),
-        deskStandingAnchor(room, desk, 1),
-      ];
-      expect(agents[1].x - agents[0].x).toBeGreaterThanOrEqual(48);
-      expect(agents[0].characterFeetY).toBeLessThanOrEqual(
-        room.contentSafeRect.y + room.contentSafeRect.height,
+      const agents = Array.from({ length: 4 }, (_, index) =>
+        deskStandingAnchor(room, desk, index),
       );
-      expect(agents[0].characterFeetY).toBe(deskAnchor(room, desk).deskY - 3);
+      for (const agent of agents) {
+        expect(agent.x - 12).toBeGreaterThanOrEqual(room.contentSafeRect.x);
+        expect(agent.x + 12).toBeLessThanOrEqual(
+          room.contentSafeRect.x + room.contentSafeRect.width,
+        );
+        expect(agent.characterFeetY).toBeLessThanOrEqual(
+          room.contentSafeRect.y + room.contentSafeRect.height,
+        );
+      }
+      expect(agents[0].characterFeetY).toBe(deskAnchor(room, desk).deskY - 14);
+      expect(agents[2].characterFeetY).toBe(deskAnchor(room, desk).deskY + 20);
     }
   });
 

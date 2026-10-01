@@ -4,6 +4,7 @@ const it = test;
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import { OfficeLayoutPublisher, resolveOfficeGeometry } from "./officeLayout";
 import {
+  officeStandingAgentAnchors,
   officeSemanticTargets,
   MIN_OFFICE_TOUCH_TARGET,
 } from "./officeSemanticTargets";
@@ -74,6 +75,12 @@ describe("Office semantic targets", () => {
     const standing = room.roomAgents[1]!;
     standing.deskKey = desk.key;
     standing.currentPaneRef = { nativeId: "pane-1" } as never;
+    const companions = [2, 3, 4].map((index) => ({
+      ...standing,
+      key: `agent-standing-${index}`,
+      currentPaneRef: { nativeId: `pane-${index}` } as never,
+    }));
+    room.roomAgents.push(...companions);
     const geometry = resolveOfficeGeometry({
       availableViewportWidth: 1000,
       titleMode: "expand",
@@ -92,6 +99,12 @@ describe("Office semantic targets", () => {
       { canonicalDigest: geometry.inputDigest },
       geometry,
     );
+    const grouped = officeStandingAgentAnchors(room, layout.rooms[0]!);
+    expect(grouped.map(({ agent }) => agent.key)).toEqual([
+      standing.key,
+      ...companions.map(({ key }) => key),
+    ]);
+    expect(grouped.every(({ anchor }) => "compact" in anchor)).toBe(true);
     const targets = officeSemanticTargets(projection, layout);
     expect(
       targets.filter(({ kind }) => kind === "pane").map(({ key }) => key),
@@ -113,6 +126,7 @@ describe("Office semantic targets", () => {
         key === desk.key ||
         key === "agent-seated" ||
         key === standing.key ||
+        companions.some((agent) => agent.key === key) ||
         key.startsWith("pane-device"),
     );
     expect(

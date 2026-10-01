@@ -65,6 +65,8 @@ export const OFFICE_GEOMETRY = Object.freeze({
   maxContentItems: 128,
 });
 
+export const OFFICE_NEARBY_AGENT_LIMIT = 4;
+
 export type OfficeRoomPresentation = {
   sourceIndex?: number;
   deskCount: number;
@@ -833,27 +835,28 @@ export function paneDeviceAnchor(
   const index = boundedCount(paneIndex, 3);
   return {
     index,
-    x: desk.x + (index === 1 ? -31 : index === 2 ? 31 : 0),
+    x: desk.x + (index === 1 ? -25 : index === 2 ? 25 : 0),
     y: desk.deskY + (index === 3 ? -12 : 18),
     width: 24,
     height: 24,
   };
 }
 
-/** The first two extra room-local agents stand beside their owning pane devices. */
+/** Up to four extra agents share the desk row without taking standing-room space. */
 export function deskStandingAnchor(
   room: OfficeRoomRect,
   deskIndex: number,
   standingIndex: number,
 ) {
   const desk = deskAnchor(room, deskIndex);
-  const index = boundedCount(standingIndex, 1);
+  const index = boundedCount(standingIndex, OFFICE_NEARBY_AGENT_LIMIT - 1);
+  const offsets = [-40, 40, -44, 44];
   return {
     index,
     compact: true,
-    x: desk.x + (index === 0 ? -36 : 36),
+    x: desk.x + offsets[index]!,
     nameY: desk.nameY + 20,
-    characterFeetY: desk.deskY - 3,
+    characterFeetY: desk.deskY + (index < 2 ? -14 : 20),
     stationSpan: 35,
   };
 }

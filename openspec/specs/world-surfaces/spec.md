@@ -661,6 +661,13 @@ the chooser without adding more desk art.
 - **THEN** Office groups both agents and their distinct pane devices around the same desk, indicates
   multiple panes, and each device opens its own pane
 
+#### Scenario: Five agents work at one desk
+
+- **WHEN** a tab contains five working agents in five admitted panes
+- **THEN** Office shows the seated agent and four nearby agents around the same desk within its
+  existing cell, keeps their faces and pane screens visible, and presents the exact pane count on
+  the laptop while the fifth pane remains available through the chooser
+
 #### Scenario: Agent leaves a pane device
 
 - **WHEN** an agent becomes blocked, done or idle while its pane remains open

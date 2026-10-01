@@ -25,7 +25,8 @@ are optional because the merged PR history records their source.
 - Added a clickable pane-count laptop on each Office desk and up to three surrounding monitors so
   split-pane agents keep exact terminal targets after leaving their work room. Done agents now join
   input-needed agents at their host's reception with distinct `✔` and `?` cues; extra agents stand
-  nearby before entering the roster.
+  nearby before entering the roster. Up to four additional working agents can gather around the
+  same desk without covering each other's faces or its pane screens.
 - Added accessible maximize and resize controls across Office Inspector windows,
   focus-based window stacking, and Close all terminal windows in Arrange and
   Actions. Close all preserves Herdr tabs and sessions; Spaces keeps each

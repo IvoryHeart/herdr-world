@@ -32,6 +32,7 @@ import {
   deskAnchor,
   paneDeviceAnchor,
   OFFICE_GEOMETRY,
+  OFFICE_NEARBY_AGENT_LIMIT,
   receptionAgentAnchor,
   receptionTableRect,
   standingAnchor,
@@ -556,7 +557,7 @@ export async function createOfficeRenderer(
                 total +
                 (desk.paneDevices.length
                   ? Math.min(
-                      2,
+                      OFFICE_NEARBY_AGENT_LIMIT,
                       room.roomAgents.filter(
                         ({ placement, deskKey }) =>
                           placement === "standing" && deskKey === desk.key,

@@ -130,6 +130,18 @@ async function run() {
     "blocked",
     "done",
   ]);
+  if (local.snapshot) {
+    local.snapshot.panes.push(
+      pane("alpha", "working", 2, "working", "Local Researcher"),
+      pane("alpha", "working", 3, "working", "Local Tester"),
+      pane("alpha", "working", 4, "working", "Local Writer"),
+    );
+    local.snapshot.tabs[0] = { ...local.snapshot.tabs[0]!, pane_count: 5 };
+    local.snapshot.workspaces[0] = {
+      ...local.snapshot.workspaces[0]!,
+      pane_count: 7,
+    };
+  }
   const remote = connection("remote", "Remote", "beta", [
     "working",
     "unknown",
@@ -295,8 +307,8 @@ async function run() {
       ),
     ];
     check(
-      devices.length === 4,
-      "Office did not present all four admitted pane devices",
+      devices.length === 6,
+      "Office did not present all six bounded pane devices",
     );
     check(
       host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
