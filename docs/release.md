@@ -98,8 +98,12 @@ once. npm requires a package to exist before its trusted publisher can be set.
 Run `bun scripts/stage-npm-bootstrap.ts`, review the six generated manifests under
 ignored `dist/npm-bootstrap/`, then publish each directory with `npm publish
 dist/npm-bootstrap/<platform> --access public --tag bootstrap` using the npm
-maintainer account and interactive 2FA. The bootstrap versions contain no binary
-and never become the `latest` dist-tag. Configure `release.yml` as an npm trusted
+maintainer account and interactive 2FA. The bootstrap versions contain no binary.
+npm may assign `latest` to the first version of a new package even when it is
+published with `--tag bootstrap`; the registry does not allow removing that tag.
+Until the first stable release replaces it, install `@ivoryheart/herdr-world`
+instead of any platform package directly. RC platform packages use `next`.
+Configure `release.yml` as an npm trusted
 publisher with direct publish permission for all six names and the existing
 `@ivoryheart/herdr-world` package. The release workflow then uses GitHub Actions
 OIDC without an npm token. The platform names are
