@@ -25,7 +25,7 @@ assets required by server typechecks and process tests.
 | --- | --- |
 | Types | `bun run typecheck:quick` checks root scripts, web, and server without rebuilding assets or validating production bundles. |
 | Lint | `bun run lint` runs Oxlint across the repository. |
-| Related tests | `bun test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
+| Related tests | `bun run test <path>` or `bun run test:quick` (includes integration tests and excludes the dedicated browser suite). |
 | Browser regressions | `bun run test:browser`; requires Chrome/Chromium or `CHROME_BIN`, otherwise tests skip. |
 | Completed candidate | Stage intended files, run `bun run format:staged` once, restage and inspect the diff. The command rejects staged files with unstaged edits; docs-only candidates are a safe no-op. |
 | Branch push | The installed pre-push hook runs `bun run check` for code; a Markdown-only follow-up to a successful full gate runs `bun run check:docs`. CI checks the PR head with the applicable gate. |
@@ -91,7 +91,7 @@ Edit `site/` for the landing page; **only `docs/TUTORIAL.md`** for tutorial text
 screenshots/references, and checks built-site links/fragments.
 
 ```bash
-bun test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
+bun run test scripts/pages-content.test.ts scripts/pages-workflow.test.ts
 bun run build:site
 ```
 
