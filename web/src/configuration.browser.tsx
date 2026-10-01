@@ -317,6 +317,9 @@ const selectConnection = (id: string) => {
   flushSync(render);
 };
 async function run() {
+  const viewportSmoke = new URLSearchParams(location.search).has(
+    "viewportSmoke",
+  );
   document.documentElement.dataset.layout =
     innerWidth <= 600 ? "mobile" : "desktop";
   __storeTesting.replaceState({
@@ -401,7 +404,7 @@ async function run() {
     "preferences still live in Menu",
   );
   const mobile = document.documentElement.dataset.layout === "mobile";
-  if (mobile) {
+  if (mobile && !viewportSmoke) {
     for (const theme of ["dark", "light"]) {
       document.documentElement.dataset.theme = theme;
       const menu = document.querySelector<HTMLElement>(".config-dropdown")!;
@@ -568,7 +571,7 @@ async function run() {
         "keyboard collapse did not restore compact height",
       );
     }
-  } else {
+  } else if (!viewportSmoke) {
     check(
       !document
         .querySelector<HTMLElement>(".mobile-sheet-handle")!
@@ -667,6 +670,10 @@ async function run() {
       rect.left > 0 && rect.bottom < innerHeight,
       "desktop Configuration became a drawer",
     );
+  }
+  if (viewportSmoke) {
+    root.unmount();
+    return;
   }
   const firstControl = button(
     mobile ? "Dismiss Configuration" : "Close Configuration",

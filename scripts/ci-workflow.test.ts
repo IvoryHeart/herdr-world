@@ -25,6 +25,8 @@ const workflow = Bun.YAML.parse(
   ).text(),
 ) as {
   on: { pull_request: { types: string[] } };
+  permissions: { actions: string };
+  concurrency: { "cancel-in-progress": string };
   jobs: Record<string, WorkflowJob>;
 };
 
@@ -35,12 +37,29 @@ test("CI exposes the protected delivery gate and runs the complete repository ch
     "reopened",
     "edited",
   ]);
+  expect(workflow.permissions.actions).toBe("read");
+  expect(workflow.concurrency["cancel-in-progress"]).toContain(
+    "github.event.action != 'edited'",
+  );
   const delivery = workflow.jobs.delivery;
 
   expect(delivery?.name).toBe("Delivery checks");
   expect(delivery?.steps.some((step) => step.run === "bun run check")).toBe(
     true,
   );
+  expect(
+    delivery?.steps.find((step) => step.run === "bun run check"),
+  ).toMatchObject({
+    name: "Run full repository check",
+    if: "steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'",
+  });
+  expect(
+    delivery?.steps.find((step) => step.run === "bun run check:docs")?.if,
+  ).toBe("steps.scope.outputs.mode == 'docs'");
+  expect(
+    delivery?.steps.find((step) => step.name === "Determine validation scope")
+      ?.run,
+  ).toBe("bun scripts/ci-reuse-full-check.ts");
   expect(
     delivery?.steps.find((step) => step.name === "Check knowledge-map impact"),
   ).toMatchObject({
@@ -74,4 +93,16 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
   expect(lifecycle).toContain("bun scripts/world-plugin.ts uninstall");
   expect(lifecycle).toContain("http://127.0.0.1:8787/healthz");
   expect(lifecycle).toContain("trap cleanup EXIT");
+  expect(
+    launchd?.steps.find(
+      (step) =>
+        step.name === "Exercise the real plugin-managed launchd lifecycle",
+    )?.if,
+  ).toBe(
+    "steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'",
+  );
+  expect(
+    launchd?.steps.find((step) => step.name === "Determine validation scope")
+      ?.run,
+  ).toBe("bun scripts/ci-reuse-full-check.ts");
 });

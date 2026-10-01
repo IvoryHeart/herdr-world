@@ -108,6 +108,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Tightened Codex delivery guidance around blocking waits, one staged formatter
+  pass per candidate, and the existing commit, push, and CI verification gates.
+  Local-only work can finish without a PR, and successful visible-team delivery
+  closes its agent panes.
 - Merged Roamgate v0.7.11 source through
   `b60a1843579311d830e026fb89ab917052fbaee8`, including Windows terminal file
   links and Herdr 0.9.1 wrapped-link resolution. World retains its own plugin,
@@ -169,6 +173,8 @@ are optional because the merged PR history records their source.
 - Opened terminal file links in the originating Office, Tree or Graph Inspector's Files tab,
   focused the exact selected pane when activating a visual terminal window, and opened a newly
   created Office desk's terminal as soon as its pane was admitted.
+- Kept a dragged or resized Inspector from moving focus to its Terminal input
+  and scrolling a partly clipped arranged window into view.
 - Kept browser-local Office creation ready without first visiting Spaces or
   opening an Inspector, unified seat, room and tab-strip availability feedback,
   and preserved the prior Inspector while bounded exact focus reports failures.
