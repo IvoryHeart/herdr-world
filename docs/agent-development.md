@@ -44,6 +44,34 @@ update the affected spec, knowledge-map row, foundation guide or runbook in the 
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
+## Run an optional visible team
+
+The repository includes an opt-in
+[Herdr Workflows recipe](../.hwf/workflows/agent-delivery.yaml) for two visible
+Codex agents. It uses a startup handshake, one implementation pass, independent
+diff review, one correction pass, a final review verdict, and the existing
+candidate delivery gates. Herdr Workflows is an external operator tool; this
+repository does not install it or require it for ordinary development or CI.
+
+Create a clean branch worktree with `bun run agent:worktree -- create` first.
+From a Herdr pane in the primary checkout, supply that worktree's absolute path
+and a concrete task brief:
+
+```bash
+hwf run agent-delivery \
+  --input worktree_dir=/path/to/repo/.agents/worktrees/example \
+  --input agent_profile=codex \
+  --input task_brief='Deliver the requested change and its acceptance criteria'
+```
+
+The tracked `.hwf/config.yaml` supplies a generic Codex profile; put local
+overrides in ignored `.hwf/config.local.yaml`. The workflow rejects a dirty
+worktree or `main`, and its final review must approve before the implementor
+commits and pushes. A remaining review blocker stops the workflow for operator
+inspection; do not treat a stopped run as a delivered candidate. The PR still
+needs independent approval. OpenSpec is used only when the task meets the
+repository's contract criteria above.
+
 ## Keep agent work bounded
 
 For an independent PR or focused review repair, start a fresh agent session when
@@ -120,12 +148,6 @@ executed inside the pre-push hook as a literal agent command. The first targets
 are at most two blocking waits per six-minute gate and one formatter write per
 candidate. Keep measurements in workflow artifacts and the process review; do
 not edit a PR body later solely for these totals. Targets do not replace gates.
-
-CI currently reruns the full delivery check for `pull_request.edited`, including
-description-only changes on an unchanged head. A separate workflow follow-up
-should run knowledge-map/body validation for that event without rebuilding or
-retesting unchanged code, while retaining the required check's behavior for
-code-bearing PR events and verified heads.
 
 After a batch of roughly five agent-assisted PRs, and during release preparation,
 the agent closing the batch compares usage boundaries, model responses,

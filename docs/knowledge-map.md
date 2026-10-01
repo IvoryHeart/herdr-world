@@ -49,4 +49,5 @@ complete catalogue by its 20-second deadline with unfinished cached hosts stale.
 attachments continue through the focused connection store in `web/src/store.ts`.
 
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
-[agent development](agent-development.md). Use synthetic data in tracked evidence.
+[agent development](agent-development.md). The optional visible-team recipe is
+under [`.hwf/workflows/`](../.hwf/workflows/). Use synthetic data in tracked evidence.
