@@ -387,6 +387,10 @@ export default function WorldFloatingInspectorWindow({
       role="dialog"
       aria-modal="false"
       aria-label={`${conversation.label} Inspector`}
+      tabIndex={0}
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) onFocusRef.current();
+      }}
       data-compact-active={compactActive}
       data-interaction={interaction ?? undefined}
       style={

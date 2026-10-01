@@ -544,6 +544,8 @@ export function resolveOfficeGeometry(
     sourceIndex: room.sourceIndex,
     deskCount: room.deskCount,
     standingCount: room.standingCount,
+    deskFootprintWidth: room.deskFootprintWidth,
+    deskFootprintHeight: room.deskFootprintHeight,
     headerMinWidth: resolveOfficeRoomHeader(room, normalizedInput).width,
     headerMinTitleBoxWidth: room.headerMinTitleBoxWidth,
     headerMinHeight: room.headerMinHeight,
@@ -1162,6 +1164,7 @@ function contentRegionRoom(
     deskColumns: 0,
     standingColumns: 0,
     deskRows: 0,
+    deskRowHeight: OFFICE_GEOMETRY.deskRowHeight,
     standingRows: 0,
     outerRect: layout.ceoRect,
     wallRect: layout.ceoRect,
@@ -1359,6 +1362,16 @@ function normalizeRoomDescriptor(
       createSeat: Boolean(room.actions?.createSeat),
     },
     deskCount: normalizeMetric(room.deskCount, 0, OFFICE_GEOMETRY.desksPerRoom),
+    deskFootprintWidth: normalizeMetric(
+      room.deskFootprintWidth,
+      112,
+      OFFICE_GEOMETRY.paneDeskWidth,
+    ),
+    deskFootprintHeight: normalizeMetric(
+      room.deskFootprintHeight,
+      OFFICE_GEOMETRY.deskRowHeight,
+      OFFICE_GEOMETRY.paneDeskRowHeight,
+    ),
     standingCount: normalizeMetric(
       room.standingCount,
       0,

@@ -80,9 +80,11 @@ test("CI and release jobs install once from the workspace root", () => {
             "homebrew-pr",
             "homebrew-smoke",
           ].includes(name));
-      expect(installs).toEqual(
-        noBunInstall ? [] : [{ run: "bun install --frozen-lockfile" }],
-      );
+      expect(installs).toHaveLength(noBunInstall ? 0 : 1);
+      if (!noBunInstall) {
+        expect(installs[0]?.run).toBe("bun install --frozen-lockfile");
+        expect(installs[0]?.["working-directory"]).toBeUndefined();
+      }
     }
   }
 });

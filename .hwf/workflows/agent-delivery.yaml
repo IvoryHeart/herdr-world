@@ -1,0 +1,144 @@
+version: v1alpha1
+title: Herdr World agent delivery
+description: Implement, review, correct, and deliver one branch candidate with two visible agents
+inputs:
+  worktree_dir:
+    type: text
+    description: Absolute path to a clean Herdr World branch worktree
+  task_brief:
+    type: text
+    description: Requested outcome and acceptance criteria
+  agent_profile:
+    type: profile
+    description: Profile for both visible agents
+steps:
+  - id: preflight
+    run:
+      - sh
+      - -c
+      - |
+        set -eu
+        root=$(git rev-parse --show-toplevel)
+        case "$root" in
+          */.agents/worktrees/*) ;;
+          *) echo "Use a branch worktree below .agents/worktrees/" >&2; exit 1 ;;
+        esac
+        branch=$(git branch --show-current)
+        test -n "$branch" && test "$branch" != main
+        test -z "$(git status --porcelain)"
+    cwd: "{{inputs.worktree_dir}}"
+    timeout: 1m
+
+  - id: implementor_bootstrap
+    agent: Reply READY.
+    using: "{{inputs.agent_profile}}"
+    cwd: "{{inputs.worktree_dir}}"
+    timeout: 5m
+    pane:
+      open: beside
+      target: "{{context.pane}}"
+      size: 45
+      focus: false
+
+  - id: reviewer_bootstrap
+    agent: Reply READY.
+    using: "{{inputs.agent_profile}}"
+    cwd: "{{inputs.worktree_dir}}"
+    timeout: 5m
+    pane:
+      open: below
+      target: "{{steps.implementor_bootstrap.pane_id}}"
+      size: 45
+      focus: false
+
+  - id: implement
+    agent: |
+      ROLE=implementor PHASE=implement
+      Task: {{inputs.task_brief}}
+
+      Read AGENTS.md, docs/agent-development.md, and the repo-local
+      candidate-delivery skill. Work only in this branch worktree. Implement the
+      smallest complete change and focused regressions. Use OpenSpec only when
+      the repository instructions call for a product or API contract decision.
+      Run focused checks only to answer specific questions. Leave the change
+      uncommitted and unpushed for independent review. Summarize changed files,
+      checks, and any open issue.
+    target: "{{steps.implementor_bootstrap.pane_id}}"
+    timeout: 60m
+
+  - id: diff_check
+    run: [git, diff, --check]
+    cwd: "{{inputs.worktree_dir}}"
+    timeout: 1m
+
+  - id: review
+    agent: |
+      ROLE=reviewer PHASE=review
+      Task: {{inputs.task_brief}}
+
+      Read AGENTS.md, then inspect git status, tracked diffs, every new untracked
+      file, relevant tests, and task acceptance criteria independently. Run a
+      focused check only for a concrete gap. Do not edit files, commit, or push.
+      Report specific blockers with file references, or state that you found
+      none. Your review is distinct from the independent approval still required
+      on the pull request.
+    target: "{{steps.reviewer_bootstrap.pane_id}}"
+    timeout: 30m
+
+  - id: correct
+    agent: |
+      ROLE=implementor PHASE=correction
+      Task: {{inputs.task_brief}}
+
+      Review findings: {{steps.review.response}}
+
+      Fix substantiated blockers and run focused regressions. If the reviewer
+      found no blocker, leave the candidate unchanged. Do not commit or push yet.
+      Report exactly what changed and any unresolved finding.
+    target: "{{steps.implementor_bootstrap.pane_id}}"
+    timeout: 45m
+
+  - id: final_review
+    agent: |
+      ROLE=reviewer PHASE=final-review
+      Reinspect tracked diffs, new untracked files, and the acceptance criteria:
+      {{inputs.task_brief}}
+
+      Do not edit files. Explain any remaining blocker. Finish with exactly one
+      verdict token on the final line: APPROVE or BLOCK. APPROVE only when the
+      candidate is ready for the repository delivery gates. This verdict does
+      not replace independent pull-request approval.
+    target: "{{steps.reviewer_bootstrap.pane_id}}"
+    timeout: 25m
+    expect:
+      one_of: [APPROVE, BLOCK]
+      require: [APPROVE]
+
+  - id: deliver
+    agent: |
+      ROLE=implementor PHASE=deliver
+      The final candidate review passed. Follow the repo-local candidate-delivery
+      skill: stage intended files, run format:staged once, inspect the final
+      diff, commit with the read-only pre-commit guard, and push once through the
+      pre-push full gate. Do not run a duplicate full check before push. Open one
+      ready PR, or update the existing PR for this branch. Wait on exact-head CI
+      with the documented blocking-wait recipe, then report the PR, checks, and
+      remaining limits. Do not merge. If a gate finds a code defect, begin a new
+      candidate cycle before pushing a repair. Finish with exactly one verdict
+      token on the final line: DELIVERED or BLOCK. Use DELIVERED only when the
+      ready PR and exact-head CI checks succeeded; otherwise use BLOCK.
+    target: "{{steps.implementor_bootstrap.pane_id}}"
+    timeout: 60m
+    expect:
+      one_of: [DELIVERED, BLOCK]
+      require: [DELIVERED]
+
+  - id: close_reviewer
+    herdr: pane.close
+    params:
+      pane_id: "{{steps.reviewer_bootstrap.pane_id}}"
+
+  - id: close_implementor
+    herdr: pane.close
+    params:
+      pane_id: "{{steps.implementor_bootstrap.pane_id}}"

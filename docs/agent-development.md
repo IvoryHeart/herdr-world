@@ -44,6 +44,36 @@ update the affected spec, knowledge-map row, foundation guide or runbook in the 
 New foundation modules need an owner and focused evidence in the guide. Leave
 machine- and user-specific data untracked and use synthetic examples in tests.
 
+## Run an optional visible team
+
+The repository includes an opt-in
+[Herdr Workflows recipe](../.hwf/workflows/agent-delivery.yaml) for two visible
+Codex agents. It uses a startup handshake, one implementation pass, independent
+diff review, one correction pass, a final review verdict, and the existing
+candidate delivery gates. Herdr Workflows is an external operator tool; this
+repository does not install it or require it for ordinary development or CI.
+
+Create a clean branch worktree with `bun run agent:worktree -- create` first.
+From a Herdr pane in the primary checkout, supply that worktree's absolute path
+and a concrete task brief:
+
+```bash
+hwf run agent-delivery \
+  --input worktree_dir=/path/to/repo/.agents/worktrees/example \
+  --input agent_profile=codex \
+  --input task_brief='Deliver the requested change and its acceptance criteria'
+```
+
+The tracked `.hwf/config.yaml` supplies a generic Codex profile; put local
+overrides in ignored `.hwf/config.local.yaml`. The workflow rejects a dirty
+worktree or `main`, and its final review must approve before the implementor
+commits and pushes. A remaining review blocker stops the workflow for operator
+inspection; do not treat a stopped run as a delivered candidate. On successful
+delivery, it closes the two agent panes it created and leaves the caller's pane
+open. The PR still needs independent approval. This recipe is for PR delivery;
+other tasks can use a local-only handoff under the candidate-delivery skill.
+OpenSpec is used only when the task meets the repository's contract criteria above.
+
 ## Keep agent work bounded
 
 For an independent PR or focused review repair, start a fresh agent session when
@@ -56,58 +86,70 @@ quality and correction rate alongside tokens and time.
 
 ## Verify and hand off
 
-Add focused regression tests for behavior changes. During implementation, use
-focused tests or quick type checks when they answer a specific question; do not
-repeat them after every edit. Push a complete candidate through the tracked
-pre-push hook: it runs `bun run check` once for that push, covering notices,
-formatting, lint, types, tests, builds and OpenSpec. CI repeats it on the PR head.
-After a repair, run the relevant focused check before pushing; the hook runs the
-full gate. The hook invocation satisfies a request for the final `bun run check`;
-run it separately only if there is no push or the hook is unavailable. Use
+Add focused regression tests for behavior changes. The repo-local
+[candidate-delivery skill](../.agents/skills/candidate-delivery/SKILL.md) gives
+the detailed staged formatter, commit, push and local-only gate procedure for
+multi-step handoffs and review repairs. Use
 `bun run test:browser` when the browser suite answers a specific question, and
 `bun run build:site` for site changes.
 
 Run `bun run install-hooks` once per clone. The pre-commit hook checks format and
-lint, and the pre-push hook checks the full candidate. Worktrees share the same Git
-hook configuration.
+lint, and the pre-push hook checks the candidate. Code changes get the full
+`bun run check`; a Markdown-only follow-up may use `bun run check:docs` after
+this worktree has a successful full gate on an ancestor. Worktrees share the
+same Git hook configuration.
 
 Batch independent read-only inspections in one tool turn. Keep `rg` results and
-source excerpts bounded, then read more only when needed. Keep complete check logs
-outside the prompt; report a short status on success and the relevant diagnostics
-on failure. Preserve the check's exit status. The hook is silent on success and
-prints failure output. For review-only work, inspect exact-head CI evidence first.
+source excerpts bounded, then read more only when needed. The pre-push hook writes
+one ignored `.agents/delivery/pre-push.tsv` row per gate with UTC timestamp,
+head SHA, exit code, elapsed seconds and gate name. This worktree-scoped file
+is a local diagnostic, not durable PR accounting. The hook prints a short
+success status; on
+failure it prints a concise summary and the path to the complete retained log.
+Inspect that log only when needed, preserving the check's exit status. For
+review-only work, inspect exact-head CI evidence first. CI uses
+`bun run check:docs` for Markdown-only PR diffs and skips the macOS lifecycle
+on those diffs. On PR-description edits, a code PR can reuse successful full jobs on
+the exact base and head; if that proof is missing or failed, CI runs the full
+gate. The existing three required status names stay in place.
 Run a local check only to investigate a specific gap or reproduce a finding; do
-not repeat a successful full gate on the same commit. Avoid polling while checks run.
+not repeat a successful full gate on the same commit. When a command returns a
+running session, call `write_stdin` on that session with empty `chars` and
+`yield_time_ms: 300000`; wait again only if it actually times out and remains
+running. Apply the same rule to `gh run watch`. Do not issue 30-second status
+loops or separate `ps`/`gh pr checks` probes while the blocking command is
+running. A Codex lifecycle hook cannot intercept `write_stdin`; do not add one
+for polling. The reusable [task prompt](agent-task-prompt.md) repeats this rule.
 
 Inspect the final diff and history for unrelated edits, generated output and sensitive
-data. Record exact verification and agent execution in the pull request using the
-[PR template](../.github/pull_request_template.md). Reuse earlier results only
-when their relevant inputs are unchanged. Include the Unreleased changelog entry
-before the first push; the PR number need not be added to that entry. Open a ready
-PR and stop before merge.
+data. Prepare the PR body with available verification and agent execution using the
+[PR template](../.github/pull_request_template.md) before creating the PR; use
+`unknown` for values not yet available. Include the Unreleased changelog entry
+before the first push; the PR number need not be added to it or linked from the
+PR body. Keep later usage accounting in the workflow output and final handoff
+instead of editing the PR body solely for totals, because an edit starts another
+CI run. Reuse earlier results only when their relevant inputs are unchanged.
+Open a ready PR and stop before merge.
 
-For Codex token usage, run `bun run agent:usage -- --pr <number> --session
-<session-id> --from <ISO-UTC> --until <ISO-UTC>` in the checkout. Repeat
-`--session` for contributing agents, or omit it to use the current
-`CODEX_SESSION_ID` for a root agent. Pass each subagent's rollout UUID explicitly:
-its environment may inherit the parent's `CODEX_SESSION_ID` and misattribute usage.
-Omit either time bound only when the whole session belongs
-to the PR. The script reads local Codex rollout files under
-`$CODEX_HOME/sessions` (or `~/.codex/sessions`), sums per-response
-`token_usage_record` entries including compaction, and prints only aggregate
-counts and the chosen boundary. Its `--pr` value labels the report; it cannot
-infer which turns belong to a PR. Record the explicit session/time boundary in
-the PR and rerun near handoff. Cached input is included in input, and reasoning
-is included in output. These counts are not billed cost. The local Prometheus
-`codex_turn_token_usage` series aggregates by model and token type without a
-session label, so it cannot substitute for the PR-specific rollout count.
-Add `--tooling` to report aggregate tool calls, recognized check commands, and
-output size for the same boundary. Command counts recognize executable positions
-in literal shell commands, excluding comments, quoted data and heredoc bodies;
-dynamic or opaque shell scripts may be missed. The report never prints command
-text or tool output.
+`agent:usage` remains available for [optional Codex usage audits](agent-usage-audit.md).
+Do not make agent-run token accounting a routine pre-PR step. The measurement
+follow-up owns durable task/session/PR-linked usage collection; local rollout
+records are interim evidence.
 
 ## Revisit the process
+
+For the next comparable task, the process review measures wait-only model turns
+per six-minute gate from the Codex rollout; formatter writes per candidate from
+`format:staged` output and the rollout; full checks per pushed candidate and
+check wall time from the pre-push hook and CI run metadata; and review
+outcomes from the PR timeline. A durable workflow artifact must join these
+records to the task, session, PR and candidate head before the worktree is removed.
+Add ingestion or upload for the local hook report in that measurement follow-up;
+the ignored TSV alone is insufficient. `agent:usage --tooling` cannot count a check
+executed inside the pre-push hook as a literal agent command. The first targets
+are at most two blocking waits per six-minute gate and one formatter write per
+candidate. Keep measurements in workflow artifacts and the process review; do
+not edit a PR body later solely for these totals. Targets do not replace gates.
 
 After a batch of roughly five agent-assisted PRs, and during release preparation,
 the agent closing the batch compares usage boundaries, model responses,
@@ -116,3 +158,8 @@ workflow change at a time and keep it only if it saves work without increasing
 defects. Update this short guide when a practice is supported; keep detailed
 evidence in the relevant PRs, separate from routine startup reading. This
 review is not a gate for individual PRs.
+
+The [UI scale browser test timing analysis](ui-scale-test-performance.md) records
+the current slow-case measurements and a proposed test-design experiment.
+The [World handoff browser test timing analysis](world-handoff-test-performance.md)
+records its deadline shortcut, measured saving and scroll-race diagnosis.

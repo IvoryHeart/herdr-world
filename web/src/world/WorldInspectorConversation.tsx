@@ -20,7 +20,7 @@ import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
-import { shallowEqual, useStoreSelector } from "../store";
+import { shallowEqual, store, useStoreSelector } from "../store";
 import type { FileExplorerEntry, GitDiffEntry } from "../types";
 import {
   connectionClientScopeKey,
@@ -43,6 +43,11 @@ import {
   worldInspectorWindowId,
   type WorldInspectorConversation,
 } from "./worldTerminalPresentation";
+import {
+  INSPECTOR_TERMINAL_FILE_EVENT,
+  inspectorTerminalFileAdmitted,
+  type InspectorTerminalFileRequest,
+} from "./inspectorTerminalHandoff";
 
 const emptyDiff = (): ActiveDiffSelection => ({
   entry: null,
@@ -73,6 +78,7 @@ export default function WorldInspectorConversationView({
   onDockOut,
   onDockIn,
   onFocus,
+  onResourceFocus,
   onWindowMaximize,
   windowMaximized = false,
   onTerminalPortalChange,
@@ -87,6 +93,7 @@ export default function WorldInspectorConversationView({
   onDockOut?(): void;
   onDockIn?(): void;
   onFocus?(): void;
+  onResourceFocus(): void;
   onWindowMaximize?(): void;
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
@@ -151,6 +158,12 @@ export default function WorldInspectorConversationView({
   const [diffSelection, setDiffSelection] =
     useState<ActiveDiffSelection>(emptyDiff);
   const previewRequestRef = useRef(0);
+  useEffect(
+    () => () => {
+      previewRequestRef.current += 1;
+    },
+    [],
+  );
   const scopeKey = scope ? resourceStateKey(scope) : null;
   const scopeKeyRef = useRef(scopeKey);
   useLayoutEffect(() => {
@@ -253,6 +266,58 @@ export default function WorldInspectorConversationView({
   );
 
   useEffect(() => {
+    const openTerminalFile = (event: Event) => {
+      const request = (event as CustomEvent<InspectorTerminalFileRequest>)
+        .detail;
+      if (
+        !request ||
+        !target ||
+        !workspace ||
+        !conversation.availableViews.includes("files") ||
+        !store
+          .get()
+          .workspaces.some(
+            (candidate) => candidate.workspace_id === request.workspaceId,
+          ) ||
+        !inspectorTerminalFileAdmitted(
+          request,
+          conversation,
+          connectionClient,
+          store.get().panes,
+        )
+      )
+        return;
+      event.preventDefault();
+      onChange({ view: "files" });
+      onResourceFocus();
+      const name =
+        request.path.split("/").filter(Boolean).pop() ?? request.path;
+      loadFile({
+        name,
+        path: request.path,
+        type: "file",
+        size: 0,
+        mtime_ms: 0,
+        hidden: name.startsWith("."),
+      });
+    };
+    window.addEventListener(INSPECTOR_TERMINAL_FILE_EVENT, openTerminalFile);
+    return () =>
+      window.removeEventListener(
+        INSPECTOR_TERMINAL_FILE_EVENT,
+        openTerminalFile,
+      );
+  }, [
+    connectionClient,
+    conversation,
+    loadFile,
+    onChange,
+    onResourceFocus,
+    target,
+    workspace,
+  ]);
+
+  useEffect(() => {
     if (conversation.view !== "files" || !scope || fileSelection.entry) return;
     const path = readResourceFileSelection(worldLocalStorage, scope);
     if (!path) return;
@@ -343,6 +408,12 @@ export default function WorldInspectorConversationView({
 
   const content = (
     <div
+      tabIndex={
+        !floating && target && conversation.view === "terminal" ? 0 : undefined
+      }
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) focusRef.current?.();
+      }}
       className={
         floating
           ? "world-floating-inspector-content"

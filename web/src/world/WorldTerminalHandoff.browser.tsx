@@ -18,6 +18,11 @@ import "../styles/vendor.css";
 import WorldFoundationApp from "./WorldFoundationApp";
 import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
 import { worldRuntimeStore } from "./runtimeStore";
+import {
+  INSPECTOR_TERMINAL_FILE_EVENT,
+  type InspectorTerminalFileRequest,
+} from "./inspectorTerminalHandoff";
+import { worldInspectorWindowId } from "./worldTerminalPresentation";
 
 const failures: string[] = [];
 const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
@@ -2254,11 +2259,9 @@ async function run() {
       builderConnectorPoints[0].x -
         (builderAgentBounds.left + builderAgentBounds.right) / 2,
     ) <= 2 &&
-      Math.abs(
-        builderConnectorPoints[0].y -
-          (builderAgentBounds.top + builderAgentBounds.bottom) / 2,
-      ) <= 3,
-    "floating Inspector connector did not start at the agent centre",
+      builderConnectorPoints[0].y >= builderAgentBounds.top - 3 &&
+      builderConnectorPoints[0].y <= builderAgentBounds.bottom + 12,
+    "floating Inspector connector did not start at the represented agent",
   );
   check(
     Math.abs(builderConnectorPoints[1].x - initialBuilderWindowBounds.right) <=
@@ -2462,9 +2465,7 @@ async function run() {
       ) <= 2,
     `floating Inspector did not fill its single window surface: window=${JSON.stringify(
       builderWindow.getBoundingClientRect().toJSON(),
-    )} inspector=${JSON.stringify(
-      builderInspector.getBoundingClientRect().toJSON(),
-    )}`,
+    )} inspector=${JSON.stringify(builderInspector.getBoundingClientRect().toJSON())}`,
   );
   const builderXterm = builderWindow.querySelector<HTMLElement>(".xterm")!;
   builderXterm.dispatchEvent(
@@ -2521,6 +2522,72 @@ async function run() {
   const reviewerFloatingWindow = document.querySelector<HTMLElement>(
     '[role="dialog"][aria-label="Reviewer Inspector"]',
   )!;
+  const fileRequest: InspectorTerminalFileRequest = {
+    connectionId: client.connectionId,
+    connectionGeneration: client.generation,
+    runtimeGeneration,
+    workspaceId: "studio",
+    paneId: "reviewer-pane",
+    path: "src/review.ts",
+    windowId: worldInspectorWindowId({
+      connectionId: client.connectionId,
+      runtimeGeneration,
+      workspaceId: "studio",
+      tabId: "review",
+      nodeId: "reviewer",
+    }),
+  };
+  const terminalFileEvent = new CustomEvent(INSPECTOR_TERMINAL_FILE_EVENT, {
+    cancelable: true,
+    detail: fileRequest,
+  });
+  window.dispatchEvent(terminalFileEvent);
+  await until(
+    () =>
+      reviewerFloatingWindow.querySelector(
+        '.workspace-inspector[data-view="files"]',
+      ) &&
+      calls.some(
+        ({ method, params }) =>
+          method === "file.read" && params.path === "src/review.ts",
+      ),
+    "terminal file opened in originating Reviewer Inspector",
+  );
+  check(
+    terminalFileEvent.defaultPrevented &&
+      builderInspector.getAttribute("data-view") === "files",
+    "terminal file changed another Inspector's resource",
+  );
+  check(
+    Number(reviewerFloatingWindow.style.zIndex) >=
+      Number(builderWindow.style.zIndex),
+    "terminal file did not raise originating Inspector",
+  );
+  for (const stale of [
+    { runtimeGeneration: runtimeGeneration - 1 },
+    { paneId: "closed-pane" },
+    { windowId: "closed-window" },
+  ]) {
+    const staleEvent = new CustomEvent(INSPECTOR_TERMINAL_FILE_EVENT, {
+      cancelable: true,
+      detail: { ...fileRequest, ...stale, path: "src/stale.ts" },
+    });
+    window.dispatchEvent(staleEvent);
+    check(
+      !staleEvent.defaultPrevented,
+      "retired terminal file request was admitted",
+    );
+  }
+  reviewerFloatingWindow
+    .querySelector<HTMLButtonElement>('[role="tab"]:first-of-type')!
+    .click();
+  await until(
+    () =>
+      reviewerFloatingWindow.querySelector(
+        '.workspace-inspector[data-view="terminal"]',
+      ),
+    "Reviewer Terminal after file handoff",
+  );
   const builderTerminalTab = builderWindow.querySelector<HTMLButtonElement>(
     '[role="tab"]:first-of-type',
   )!;
@@ -3122,6 +3189,11 @@ async function run() {
     () => persistentReviewerInspector?.getAttribute("data-view") === "files",
     "compact World Inspector Files view",
   );
+  // A terminal link leaves a selected file; compact Files starts at that file.
+  persistentReviewerInspector
+    ?.querySelector<HTMLButtonElement>('button[aria-label="Files"]')
+    ?.click();
+  await settle();
   const compactFilesResource = persistentReviewerInspector?.querySelector(
     ".inspector-files-resource:not(.is-hidden)",
   );
@@ -3484,6 +3556,89 @@ async function run() {
     oldPaneGetsAfterSibling === oldPaneGetsBeforeSibling &&
       store.get().selectedPaneId === siblingPane.pane_id,
     "browser-local sibling click started an old-pane focus that could finish last",
+  );
+  const siblingInput = splitBuilderWindow.querySelector<HTMLTextAreaElement>(
+    '[data-pane-id="builder-sibling-pane"] .xterm-helper-textarea',
+  )!;
+  await until(
+    () => document.activeElement === siblingInput,
+    "split sibling acquired input without terminal click",
+  );
+  const originalInputsBefore = calls.filter(
+    ({ method, params }) =>
+      method === "terminal.input" && params.terminal_id === "builder-terminal",
+  ).length;
+  const siblingInputsBefore = calls.filter(
+    ({ method, params }) =>
+      method === "terminal.input" &&
+      params.terminal_id === "builder-sibling-terminal",
+  ).length;
+  sendKey(document.activeElement as HTMLTextAreaElement);
+  await until(
+    () =>
+      calls.filter(
+        ({ method, params }) =>
+          method === "terminal.input" &&
+          params.terminal_id === "builder-sibling-terminal",
+      ).length ===
+      siblingInputsBefore + 1,
+    "split selected sibling received input",
+  );
+  check(
+    calls.filter(
+      ({ method, params }) =>
+        method === "terminal.input" &&
+        params.terminal_id === "builder-terminal",
+    ).length === originalInputsBefore,
+    "split input reached original pane",
+  );
+  splitBuilderWindow.focus();
+  await until(
+    () => document.activeElement === siblingInput,
+    "keyboard activated window focused selected sibling",
+  );
+  viewSelect.value = "office";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => window.__HERDR_WORLD_RENDERER__?.ready === true,
+    "Office split-pane input check",
+  );
+  splitBuilderWindow.focus();
+  await until(
+    () =>
+      document.activeElement === siblingInput &&
+      store.get().selectedPaneId === siblingPane.pane_id,
+    "Office preserved selected sibling after visual view change",
+  );
+  const officeSiblingInputsBefore = calls.filter(
+    ({ method, params }) =>
+      method === "terminal.input" &&
+      params.terminal_id === "builder-sibling-terminal",
+  ).length;
+  sendKey(document.activeElement as HTMLTextAreaElement);
+  await until(
+    () =>
+      calls.filter(
+        ({ method, params }) =>
+          method === "terminal.input" &&
+          params.terminal_id === "builder-sibling-terminal",
+      ).length ===
+      officeSiblingInputsBefore + 1,
+    "Office selected sibling received input",
+  );
+  check(
+    calls.filter(
+      ({ method, params }) =>
+        method === "terminal.input" &&
+        params.terminal_id === "builder-terminal",
+    ).length === originalInputsBefore,
+    "Office sibling input reached original pane",
+  );
+  viewSelect.value = "graph";
+  viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(
+    () => document.querySelector(".world-spatial-graph-shell"),
+    "Graph after Office split-pane check",
   );
   updateLayoutPreferences({ mode: "mobile" });
   await until(
@@ -3883,10 +4038,11 @@ async function run() {
         narrowedVisualStage.getBoundingClientRect().left + 8,
     "keyboard focus reveals an overscanned Inspector",
   );
+  const afterFocusScroll = Number(narrowColumnRange.value);
   narrowColumnRight.click();
   await until(
-    () => Number(narrowColumnRange.value) > 0,
-    "Columns are scrolled before pointer interaction",
+    () => Number(narrowColumnRange.value) > afterFocusScroll,
+    "Columns scroll right before pointer interaction",
   );
   await settle();
   const pointerScrollPosition = Number(narrowColumnRange.value);
@@ -3917,6 +4073,10 @@ async function run() {
   check(
     Number(narrowColumnRange.value) === pointerScrollPosition,
     `pointer focus keeps a partly clipped Inspector stationary (${pointerScrollPosition} -> ${afterPointerDown} -> ${afterPointerFocus} -> ${afterPointerUp} -> ${narrowColumnRange.value})`,
+  );
+  check(
+    document.activeElement === resizeHandle,
+    "pointer resize handle keeps focus instead of switching to Terminal input",
   );
   narrowedVisualStage.style.width = "700px";
   narrowedVisualStage.style.height = "420px";
