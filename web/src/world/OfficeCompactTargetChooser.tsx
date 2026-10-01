@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import {
   OFFICE_PRESENTATION_BOUNDS,
   type HerdrOfficeProjection,
@@ -19,10 +19,19 @@ export function OfficeCompactTargetChooser({
 }) {
   const detailsRef = useRef<HTMLDetailsElement | null>(null);
   const pageSize = OFFICE_PRESENTATION_BOUNDS.rosterPage;
-  const agents = projection.roster.slice(0, pageSize);
-  const rooms = projection.roomRoster.slice(0, pageSize);
-  const panes = (projection.paneRoster ?? []).slice(0, pageSize);
-  const desks = projection.deskRoster.slice(0, pageSize);
+  const [pages, setPages] = useState({
+    agents: 0,
+    rooms: 0,
+    desks: 0,
+    panes: 0,
+  });
+  const agents = rosterPage(projection.roster, pages.agents, pageSize);
+  const rooms = rosterPage(projection.roomRoster, pages.rooms, pageSize);
+  const desks = rosterPage(projection.deskRoster, pages.desks, pageSize);
+  const panes = rosterPage(projection.paneRoster ?? [], pages.panes, pageSize);
+  const changePage = (section: keyof typeof pages, page: number) => {
+    setPages((current) => ({ ...current, [section]: page }));
+  };
   const select = (key: string) => {
     onSelect(key);
     detailsRef.current?.removeAttribute("open");
@@ -45,9 +54,10 @@ export function OfficeCompactTargetChooser({
         <TargetSection
           title="Agents"
           total={projection.roster.length}
-          shown={agents.length}
+          page={agents}
+          onPageChange={(page) => changePage("agents", page)}
         >
-          {agents.map(({ agent, roomLabel, hostLabel }) => (
+          {agents.items.map(({ agent, roomLabel, hostLabel }) => (
             <li key={agent.key}>
               <TargetButton
                 targetKey={agent.key}
@@ -73,9 +83,10 @@ export function OfficeCompactTargetChooser({
         <TargetSection
           title="Rooms"
           total={projection.roomRoster.length}
-          shown={rooms.length}
+          page={rooms}
+          onPageChange={(page) => changePage("rooms", page)}
         >
-          {rooms.map((room) => (
+          {rooms.items.map((room) => (
             <li key={room.key}>
               <TargetButton
                 targetKey={room.key}
@@ -90,9 +101,10 @@ export function OfficeCompactTargetChooser({
         <TargetSection
           title="Desks"
           total={projection.deskRoster.length}
-          shown={desks.length}
+          page={desks}
+          onPageChange={(page) => changePage("desks", page)}
         >
-          {desks.map(({ desk, roomLabel, hostLabel }) => (
+          {desks.items.map(({ desk, roomLabel, hostLabel }) => (
             <li key={desk.key}>
               <TargetButton
                 targetKey={desk.key}
@@ -117,9 +129,10 @@ export function OfficeCompactTargetChooser({
         <TargetSection
           title="Panes"
           total={projection.paneRoster?.length ?? 0}
-          shown={panes.length}
+          page={panes}
+          onPageChange={(page) => changePage("panes", page)}
         >
-          {panes.map(({ device, deskLabel, roomLabel, hostLabel }) => (
+          {panes.items.map(({ device, deskLabel, roomLabel, hostLabel }) => (
             <li key={device.key}>
               <TargetButton
                 targetKey={device.key}
@@ -144,6 +157,17 @@ export function OfficeCompactTargetChooser({
       </div>
     </details>
   );
+}
+
+function rosterPage<T>(
+  items: readonly T[],
+  requestedPage: number,
+  size: number,
+) {
+  const pageCount = Math.max(1, Math.ceil(items.length / size));
+  const index = Math.min(requestedPage, pageCount - 1);
+  const start = index * size;
+  return { items: items.slice(start, start + size), index, pageCount, start };
 }
 
 function TargetButton({
@@ -179,12 +203,14 @@ function TargetButton({
 function TargetSection({
   title,
   total,
-  shown,
+  page,
+  onPageChange,
   children,
 }: {
   title: string;
   total: number;
-  shown: number;
+  page: ReturnType<typeof rosterPage>;
+  onPageChange(page: number): void;
   children: ReactNode;
 }) {
   if (!total) return null;
@@ -193,10 +219,26 @@ function TargetSection({
     <section className="world-compact-target-section" aria-labelledby={id}>
       <h3 id={id}>{title}</h3>
       <ul>{children}</ul>
-      {total > shown ? (
-        <p>
-          Showing {shown} of {total} {title.toLowerCase()}.
-        </p>
+      {page.pageCount > 1 ? (
+        <nav aria-label={`${title} pages`}>
+          <button
+            type="button"
+            disabled={page.index === 0}
+            onClick={() => onPageChange(page.index - 1)}
+          >
+            Previous
+          </button>
+          <span>
+            {page.start + 1}–{page.start + page.items.length} of {total}
+          </span>
+          <button
+            type="button"
+            disabled={page.index === page.pageCount - 1}
+            onClick={() => onPageChange(page.index + 1)}
+          >
+            Next
+          </button>
+        </nav>
       ) : null}
     </section>
   );

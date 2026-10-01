@@ -668,6 +668,12 @@ the chooser without adding more desk art.
   existing cell, keeps their faces and pane screens visible, and presents the exact pane count on
   the laptop while the fifth pane remains available through the chooser
 
+#### Scenario: Pane roster exceeds one chooser page
+
+- **WHEN** more panes are admitted than fit on one compact chooser page
+- **THEN** Office offers bounded page navigation and every admitted pane remains individually
+  selectable and activatable from the chooser
+
 #### Scenario: Agent leaves a pane device
 
 - **WHEN** an agent becomes blocked, done or idle while its pane remains open

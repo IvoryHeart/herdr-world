@@ -51,6 +51,11 @@ The desk's existing screen SHALL be a laptop for the first presented pane and di
 - **WHEN** a tab contains five working agents in five admitted panes
 - **THEN** Office shows the seated agent and four nearby agents around the same desk within its existing cell, keeps their faces and pane screens visible, and presents the exact pane count on the laptop while the fifth pane remains available through the chooser
 
+#### Scenario: Pane roster exceeds one chooser page
+
+- **WHEN** more panes are admitted than fit on one compact chooser page
+- **THEN** Office offers bounded page navigation and every admitted pane remains individually selectable and activatable from the chooser
+
 #### Scenario: Agent leaves a pane device
 
 - **WHEN** an agent becomes blocked, done or idle while its pane remains open

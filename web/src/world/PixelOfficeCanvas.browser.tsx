@@ -3,7 +3,9 @@ import { createRoot } from "react-dom/client";
 import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
+import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
 import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
+import { projectWorldOffice } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import PixelOfficeView from "./PixelOfficeView";
@@ -310,6 +312,56 @@ async function run() {
       devices.length === 6,
       "Office did not present all six bounded pane devices",
     );
+    const chooserHost = document.createElement("div");
+    chooserHost.style.cssText = "position:absolute;left:-10000px";
+    document.body.append(chooserHost);
+    const chooserRoot = createRoot(chooserHost);
+    const chooserProjection = projectWorldOffice(world, Date.now());
+    const paneTemplate = chooserProjection.paneRoster[0]!;
+    chooserProjection.paneRoster = Array.from({ length: 51 }, (_, index) => ({
+      ...paneTemplate,
+      device: {
+        ...paneTemplate.device,
+        key: `test-pane-${index}`,
+        displayLabel: `Pane ${index + 1}`,
+      },
+    }));
+    let openedPane: string | null = null;
+    chooserRoot.render(
+      <OfficeCompactTargetChooser
+        projection={chooserProjection}
+        selectedKey={null}
+        onSelect={() => {}}
+        onActivateAgent={() => {}}
+        onActivateDesk={(key) => {
+          openedPane = key;
+        }}
+      />,
+    );
+    await waitFor(
+      () => chooserHost.querySelector('nav[aria-label="Panes pages"]') !== null,
+      "Overflow pane navigation was not rendered",
+    );
+    check(
+      chooserHost.querySelector('[data-target-key="test-pane-50"]') === null,
+      "Overflow pane appeared on the first page",
+    );
+    chooserHost
+      .querySelector<HTMLButtonElement>(
+        'nav[aria-label="Panes pages"] button:last-child',
+      )
+      ?.click();
+    await waitFor(
+      () =>
+        chooserHost.querySelector('[data-target-key="test-pane-50"]') !== null,
+      "Pane 51 could not be reached through the chooser",
+    );
+    chooserHost
+      .querySelector<HTMLButtonElement>('[aria-label="Open Pane 51 terminal"]')
+      ?.click();
+    check(openedPane === "test-pane-50", "Pane 51 opened the wrong target");
+    chooserRoot.unmount();
+    chooserHost.remove();
     check(
       host.querySelectorAll('.world-semantic-target[data-kind="desk"]')
         .length === 2,
