@@ -15,7 +15,8 @@ final diff. The command rejects staged files that also have unstaged edits;
 separate those edits first. A docs-only candidate is a safe no-op. Do not format
 the whole repository for a scoped change.
 
-Commit with the existing read-only pre-commit format/lint guard. For a PR, push
+Commit with the existing read-only pre-commit format/lint guard when committing
+is part of the requested handoff. For PR delivery, push
 the complete candidate once and let the pre-push hook run the full
 `bun run check` for code. A Markdown-only follow-up may use
 `bun run check:docs` when this worktree has a successful full gate on an ancestor. CI
@@ -32,9 +33,11 @@ Do not issue 30-second status loops or separate `ps`/`gh pr checks` probes while
 the blocking command is running. Do not add a Codex lifecycle hook for polling;
 it cannot intercept `write_stdin`.
 
-Keep the Unreleased changelog entry and mention it in the PR description. The
-PR URL supplies the link; do not amend the branch solely to add its new number
-to the changelog or require a self-link in the description. Prepare the PR body
-before opening one ready PR, then preserve independent review and CI. Keep
-later usage and process measurements in workflow output or artifacts instead
-of editing the PR body solely for totals.
+When delivering a PR, keep the Unreleased changelog entry and mention it in the
+PR description. The PR URL supplies the link; do not amend the branch solely to
+add its new number to the changelog or require a self-link in the description.
+Prepare the PR body before opening one ready PR, then preserve independent
+review and CI. For a local-only handoff, finish after the requested artifacts
+and one explicit full check; a PR is not required to count the work as delivered.
+Keep later usage and process measurements in workflow output or artifacts
+instead of editing the PR body solely for totals.

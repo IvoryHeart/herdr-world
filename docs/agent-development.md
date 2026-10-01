@@ -68,9 +68,11 @@ The tracked `.hwf/config.yaml` supplies a generic Codex profile; put local
 overrides in ignored `.hwf/config.local.yaml`. The workflow rejects a dirty
 worktree or `main`, and its final review must approve before the implementor
 commits and pushes. A remaining review blocker stops the workflow for operator
-inspection; do not treat a stopped run as a delivered candidate. The PR still
-needs independent approval. OpenSpec is used only when the task meets the
-repository's contract criteria above.
+inspection; do not treat a stopped run as a delivered candidate. On successful
+delivery, it closes the two agent panes it created and leaves the caller's pane
+open. The PR still needs independent approval. This recipe is for PR delivery;
+other tasks can use a local-only handoff under the candidate-delivery skill.
+OpenSpec is used only when the task meets the repository's contract criteria above.
 
 ## Keep agent work bounded
 

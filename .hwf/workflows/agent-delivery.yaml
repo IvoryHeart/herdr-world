@@ -124,6 +124,21 @@ steps:
       ready PR, or update the existing PR for this branch. Wait on exact-head CI
       with the documented blocking-wait recipe, then report the PR, checks, and
       remaining limits. Do not merge. If a gate finds a code defect, begin a new
-      candidate cycle before pushing a repair.
+      candidate cycle before pushing a repair. Finish with exactly one verdict
+      token on the final line: DELIVERED or BLOCK. Use DELIVERED only when the
+      ready PR and exact-head CI checks succeeded; otherwise use BLOCK.
     target: "{{steps.implementor_bootstrap.pane_id}}"
     timeout: 60m
+    expect:
+      one_of: [DELIVERED, BLOCK]
+      require: [DELIVERED]
+
+  - id: close_reviewer
+    herdr: pane.close
+    params:
+      pane_id: "{{steps.reviewer_bootstrap.pane_id}}"
+
+  - id: close_implementor
+    herdr: pane.close
+    params:
+      pane_id: "{{steps.implementor_bootstrap.pane_id}}"
