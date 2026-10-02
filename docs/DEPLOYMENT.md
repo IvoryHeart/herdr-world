@@ -271,6 +271,9 @@ the other process alone; it does not silently switch ports. On macOS, inspect th
 owner with `lsof -nP -iTCP:8787 -sTCP:LISTEN`; on Linux use
 `ss -ltnp '( sport = :8787 )'`. Stop an old World process before replacing it, or
 give World a free port, for example `herdr-world --port 8788`.
+On macOS, `herdr-world service install` checks its configured listener before
+registering the launchd job and reports a port conflict without claiming the
+service started. It leaves the preserved service config available for a port change.
 
 For a managed World service, set `PORT=8788` in the preserved
 `~/.config/herdr-world/herdr-world.env` (or `%APPDATA%\herdr-world\herdr-world.env`)
