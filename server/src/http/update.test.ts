@@ -73,8 +73,68 @@ function updateInstallRequest(headers: Record<string, string> = {}) {
 
 describe("update helpers", () => {
   test("keeps HTTP requests alive for the full update budget", () => {
-    expect(UPDATE_HTTP_IDLE_TIMEOUT_SECONDS * 1000).toBeGreaterThan(135000);
+    expect(UPDATE_HTTP_IDLE_TIMEOUT_SECONDS * 1000).toBeGreaterThan(210000);
     expect(UPDATE_HTTP_IDLE_TIMEOUT_SECONDS).toBeLessThanOrEqual(255);
+  });
+
+  test("HTTP install timeout covers every paginated RC lookup and replacement", async () => {
+    const budgets: number[] = [];
+    const assets = [
+      { name: "herdr-world-darwin-arm64.update.json" },
+      { name: "herdr-world-darwin-arm64.tar.xz" },
+    ];
+    const handlers = createUpdateHandlers({
+      appVersion: "0.2.0-rc.2",
+      runProcessWithCodeTimeout: async (argv, timeoutMs) => {
+        budgets.push(timeoutMs);
+        const command = argv.join(" ");
+        const page = Number(command.match(/&page=(\d+)/)?.[1]);
+        if (page > 0) {
+          return {
+            code: 0,
+            stdout: JSON.stringify(
+              Array.from({ length: 30 }, (_, index) => ({
+                tag_name:
+                  page === 4 && index === 29
+                    ? "v0.2.0-rc.3"
+                    : `v0.3.0-rc.${page * 30 + index}`,
+                draft: false,
+                prerelease: true,
+                assets,
+              })),
+            ),
+            stderr: "",
+          };
+        }
+        if (command.includes("/releases/tags/v0.2.0")) {
+          return { code: 22, stdout: "404", stderr: "" };
+        }
+        if (command.includes(".update.json")) {
+          return {
+            code: 0,
+            stdout: updateManifest("0.2.0-rc.3", "darwin-arm64"),
+            stderr: "",
+          };
+        }
+        return { code: 0, stdout: "", stderr: "" };
+      },
+      shQuote,
+      runtime: darwinRuntime,
+      environment: launchdEnvironment,
+      scheduleProcessExit: () => {},
+    });
+
+    const response = await handlers.handleUpdateInstall(updateInstallRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      installed: true,
+      installed_version: "0.2.0-rc.3",
+    });
+    expect(budgets).toEqual([15000, 15000, 15000, 15000, 15000, 15000, 120000]);
+    expect(
+      UPDATE_HTTP_IDLE_TIMEOUT_SECONDS * 1000 -
+        budgets.reduce((total, budget) => total + budget, 0),
+    ).toBeGreaterThanOrEqual(15000);
   });
 
   test("parses bounded Herdr World manifests and rejects legacy identities", () => {

@@ -54,7 +54,11 @@ function hasUpdateConfirmation(req: Request): boolean {
   return req.headers.get("x-herdr-world-update") === "1";
 }
 export const UPDATE_HTTP_IDLE_TIMEOUT_SECONDS =
-  Math.ceil((UPDATE_CHECK_TIMEOUT_MS + UPDATE_INSTALL_TIMEOUT_MS) / 1000) + 15;
+  Math.ceil(
+    ((RELEASE_INDEX_MAX_PAGES + 2) * UPDATE_CHECK_TIMEOUT_MS +
+      UPDATE_INSTALL_TIMEOUT_MS) /
+      1000,
+  ) + 15;
 
 export function resolveUpdateTarget(
   platform: string,
