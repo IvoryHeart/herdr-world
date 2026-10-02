@@ -227,10 +227,10 @@ herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
 The plugin downloads or uses the matching World binary and manages the same user
-service as the CLI. It does not install a second application. Plugin actions run
-through Bun in the Herdr server's environment; ensure `bun` is on that server
-process's `PATH`, then restart Herdr if its environment changed. A shell where
-`bun` works does not prove an already-running Herdr server can find it.
+service as the CLI. It does not install a second application. Bun is required
+during plugin installation or source building. The installed actions and panel
+use a standalone launcher, so the Herdr server does not need Bun on its `PATH`.
+Reinstall the plugin when upgrading from a version whose actions still invoke Bun.
 
 ```bash
 herdr plugin action invoke ivoryheart.herdr-world.start
