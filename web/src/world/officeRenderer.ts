@@ -55,6 +55,7 @@ import {
   officeHeaderLabels,
 } from "./officeLayout";
 import { officeDebug } from "../officeDebug";
+import { officeVisibleRooms } from "./officeVirtualization";
 import { officeSceneSignature } from "./officeSceneSignature";
 import {
   destroyOfficeSceneChildren,
@@ -114,8 +115,6 @@ const STATUS_CUES = Object.freeze({
   done: { label: "DONE", color: 0xf0c878 },
   unknown: { label: "UNKNOWN", color: 0xc29add },
 });
-
-const VIRTUAL_ROOM_ROW_OVERSCAN = 4;
 
 type AnimatedItem =
   | { kind: "character"; node: Container; baseY: number; phase: number }
@@ -417,18 +416,10 @@ export async function createOfficeRenderer(
       layout.totalHeight,
       Math.max(1, scrollElement?.clientHeight ?? layout.totalHeight),
     );
-    const largestRoomHeight = Math.max(
-      OFFICE_GEOMETRY.minRoomHeight,
-      ...layout.rooms.map(({ height }) => height),
-    );
-    const overscan =
-      (largestRoomHeight +
-        Math.max(OFFICE_GEOMETRY.roomGap, OFFICE_GEOMETRY.roomRowGap)) *
-      VIRTUAL_ROOM_ROW_OVERSCAN;
-    const visibleRooms = layout.rooms.filter(
-      (room) =>
-        room.y + room.height >= scrollTop - overscan &&
-        room.y <= scrollTop + viewportHeight + overscan,
+    const visibleRooms = officeVisibleRooms(
+      layout.rooms,
+      scrollTop,
+      viewportHeight,
     );
     const sceneSignature = officeSceneSignature({
       layout,

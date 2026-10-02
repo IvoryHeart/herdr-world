@@ -1,5 +1,6 @@
 import { ChevronRight, SquareTerminal } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -72,7 +73,7 @@ export default function ConnectedTreeView({
     limit: number;
   } | null>(null);
   const renderLimit =
-    renderProgress?.projection === projection ? renderProgress.limit : 8;
+    renderProgress?.projection === projection ? renderProgress.limit : 4;
   const roundRobinSpaces: WorldTreeSpace[] = [];
   for (
     let index = 0;
@@ -106,7 +107,7 @@ export default function ConnectedTreeView({
   useEffect(() => {
     if (!pendingSpaces) return;
     const frame = requestAnimationFrame(() =>
-      setRenderProgress({ projection, limit: renderLimit + 8 }),
+      setRenderProgress({ projection, limit: renderLimit + 4 }),
     );
     return () => cancelAnimationFrame(frame);
   }, [projection, renderLimit, pendingSpaces]);
@@ -361,7 +362,7 @@ function VisualHost({ host, ...props }: { host: WorldTreeHost } & BranchProps) {
       {expanded && (spaces.length > 0 || host.omittedSpaceCount > 0) ? (
         <div className="world-connected-tree-spaces" role="group">
           {spaces.map((space) => (
-            <VisualSpace key={space.source.id} space={space} {...props} />
+            <MemoVisualSpace key={space.source.id} space={space} {...props} />
           ))}
           {host.omittedSpaceCount ? (
             <p className="world-connected-tree-overflow">
@@ -504,7 +505,7 @@ function SemanticHost({
       {expanded ? (
         <ul>
           {shownSpaces(host, props.matches).map((space) => (
-            <SemanticSpace key={space.source.id} space={space} {...props} />
+            <MemoSemanticSpace key={space.source.id} space={space} {...props} />
           ))}
           {host.omittedSpaceCount ? (
             <li className="is-overflow">
@@ -761,3 +762,6 @@ function elementAnchor(
           : "right";
   return { x, y, visible, edge };
 }
+
+const MemoVisualSpace = memo(VisualSpace);
+const MemoSemanticSpace = memo(SemanticSpace);

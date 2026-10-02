@@ -3,6 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { InputDriver, denseSnapshot } from "./browserAcceptanceFixture";
+import { startIndependentInput } from "./independentInputSchedule";
 
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
@@ -74,12 +75,13 @@ test.skipIf(!chrome).each([1440, 390])(
           await driver.call("Runtime.evaluate", {
             expression: `document.querySelector('[data-host="beta"] .xterm-helper-textarea').focus()`,
           });
-          const began = Date.now();
           const pending: Promise<void>[] = [];
-          let index = 0;
-          const send = () => {
-            const dueAt = began + 5 + index++ * 75;
-            sentInputs.push({ phase, dueAt, sentAt: Date.now() });
+          const send = (input: {
+            sequence: number;
+            dueAt: number;
+            sentAt: number;
+          }) => {
+            sentInputs.push({ phase, ...input });
             pending.push(
               (async () => {
                 await driver!.call("Input.dispatchKeyEvent", {
@@ -98,17 +100,10 @@ test.skipIf(!chrome).each([1440, 390])(
               })(),
             );
           };
-          let interval: ReturnType<typeof setInterval> | undefined;
-          const first = setTimeout(() => {
-            send();
-            interval = setInterval(send, 75);
-          }, 5);
+          const stop = startIndependentInput(send);
           inputRuns.set(phase, {
             pending,
-            stop() {
-              clearTimeout(first);
-              clearInterval(interval);
-            },
+            stop,
           });
           return new Response("ready");
         }

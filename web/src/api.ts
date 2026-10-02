@@ -6,6 +6,7 @@ import {
   validateRemoteSocketPath,
   validateSshDestination,
 } from "./sshProfileValidation";
+import { decodeWorldSnapshot } from "./worldSnapshotDecode";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -264,6 +265,7 @@ type Pending = {
   runtimeLease: object | undefined;
   chunks?: { total: number; parts: string[] };
   acceptsChunks: boolean;
+  decodeAbort?: AbortController;
 };
 
 /** A dispatched operation may have completed; callers must re-observe before retrying. */
@@ -394,6 +396,10 @@ function isBridgeHello(value: unknown): value is BridgeHello {
  * Scoped replies and pushes carry a top-level connection_id.
  */
 export class Bridge {
+  /** Bridge-global transport identity; focus changes do not advance it. */
+  get connectionEpoch() {
+    return this.transportEpoch;
+  }
   private ws: WebSocket | null = null;
   private seq = 0;
   private pending = new Map<string, Pending>();
@@ -426,6 +432,7 @@ export class Bridge {
   constructor(
     private readonly connectTimeoutMs = CONNECT_TIMEOUT_MS,
     private readonly reconnectDelayMs = 1500,
+    private readonly decodeSnapshot = decodeWorldSnapshot,
   ) {}
 
   get status() {
@@ -738,6 +745,7 @@ export class Bridge {
     for (const [id, pending] of this.pending) {
       if (!predicate(pending)) continue;
       if (pending.timer !== null) clearTimeout(pending.timer);
+      pending.decodeAbort?.abort();
       pending.reject(
         pending.connectionId === null
           ? new Error(message)
@@ -843,6 +851,7 @@ export class Bridge {
       const chunk = msg.world_snapshot_chunk;
       if (
         !pending.acceptsChunks ||
+        pending.decodeAbort !== undefined ||
         pending.method !== "world.snapshot" ||
         pending.connectionId !== null ||
         owns("connection_id") ||
@@ -862,6 +871,7 @@ export class Bridge {
         (pending.chunks && pending.chunks.total !== chunk.total)
       ) {
         this.pending.delete(msg.id);
+        pending.decodeAbort?.abort();
         if (pending.timer !== null) clearTimeout(pending.timer);
         pending.reject(new Error("invalid World snapshot chunk"));
         return;
@@ -869,16 +879,33 @@ export class Bridge {
       pending.chunks ??= { total: chunk.total, parts: [] };
       pending.chunks.parts.push(chunk.data);
       if (pending.chunks.parts.length !== chunk.total) return;
-      try {
-        msg.result = JSON.parse(pending.chunks.parts.join(""));
-      } catch {
-        this.pending.delete(msg.id);
-        if (pending.timer !== null) clearTimeout(pending.timer);
-        pending.reject(new Error("invalid World snapshot response"));
-        return;
-      }
-      delete msg.world_snapshot_chunk;
+      const parts = pending.chunks.parts;
       pending.chunks = undefined;
+      pending.decodeAbort = new AbortController();
+      void this.decodeSnapshot(parts, pending.decodeAbort.signal).then(
+        (result) => {
+          if (
+            this.pending.get(msg.id) !== pending ||
+            pending.transportEpoch !== this.transportEpoch ||
+            pending.decodeAbort?.signal.aborted
+          )
+            return;
+          this.pending.delete(msg.id);
+          if (pending.timer !== null) clearTimeout(pending.timer);
+          pending.resolve(result);
+        },
+        (error) => {
+          if (this.pending.get(msg.id) !== pending) return;
+          this.pending.delete(msg.id);
+          if (pending.timer !== null) clearTimeout(pending.timer);
+          pending.reject(
+            error instanceof Error
+              ? error
+              : new Error("invalid World snapshot response"),
+          );
+        },
+      );
+      return;
     }
     if (hasReply) {
       const hasResult = owns("result");
@@ -893,6 +920,13 @@ export class Bridge {
       const pending = this.pending.get(msg.id)!;
       this.pending.delete(msg.id);
       if (pending.timer !== null) clearTimeout(pending.timer);
+      if (pending.decodeAbort) {
+        pending.decodeAbort.abort();
+        pending.reject(
+          new Error("duplicate World snapshot response during decoding"),
+        );
+        return;
+      }
       const requiresRuntimeGeneration =
         this._hello?.capabilities?.connection_runtime_generation === true;
       if (
@@ -1101,6 +1135,7 @@ export class Bridge {
         timeoutMs === null
           ? null
           : setTimeout(() => {
+              this.pending.get(id)?.decodeAbort?.abort();
               if (this.pending.delete(id)) {
                 reject(
                   connectionId === null

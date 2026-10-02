@@ -95,6 +95,8 @@ export interface State extends ServerSessionState {
   connectionPaused: boolean;
   bridgeStatus: BridgeStatus | null;
   connections: ConnectionSummary[];
+  /** A validated catalogue has been admitted on the current transport. */
+  catalogueReady: boolean;
   defaultConnectionId: string;
   activeConnectionId: string;
   connectionGeneration: number;
@@ -390,6 +392,7 @@ const initial: State = {
     worldLocalStorage.getItem("connectionPaused") === "true",
   bridgeStatus: null,
   connections: [],
+  catalogueReady: false,
   defaultConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
   activeConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
   connectionGeneration: 0,
@@ -1658,10 +1661,16 @@ function scheduleRefresh(lease = captureConnectionLease()) {
 async function refreshBridgeStatus() {
   if (state.connectionPaused || state.status !== "connected") return;
   const requestSeq = ++catalogRequestSeq;
+  const epoch = bridge.connectionEpoch;
   try {
     const r = await bridge.call("bridge.status");
-    if (state.connectionPaused || state.status !== "connected") return;
-    applyConnectionCatalog(r, requestSeq);
+    if (
+      state.connectionPaused ||
+      state.status !== "connected" ||
+      epoch !== bridge.connectionEpoch
+    )
+      return;
+    applyConnectionCatalog(r, requestSeq, epoch);
     if (rearmTerminalAttachmentsAfterCatalog(catalogReadyForConnection)) {
       scheduleRefresh();
     }
@@ -1859,6 +1868,7 @@ function resetActiveConnectionLease(
     connections,
     defaultConnectionId,
     connectionGeneration: generation,
+    catalogueReady: true,
     sessionsByConnectionId: {
       ...reconciliation.sessionsByConnectionId,
       [state.activeConnectionId]: activeSession,
@@ -1920,19 +1930,37 @@ export function mergeConnectionCatalog(
     });
 }
 
-function applyConnectionCatalog(result: unknown, requestSeq: number) {
+function applyConnectionCatalog(
+  result: unknown,
+  requestSeq: number,
+  epoch = bridge.connectionEpoch,
+) {
   if (
+    epoch !== bridge.connectionEpoch ||
+    state.status !== "connected" ||
+    state.connectionPaused ||
     requestSeq < appliedCatalogRequestSeq ||
     !result ||
     typeof result !== "object"
   ) {
-    return;
+    return false;
   }
-  appliedCatalogRequestSeq = requestSeq;
   const catalog = result as {
     default_connection_id?: unknown;
     connections?: unknown;
   };
+  if (
+    !Array.isArray(catalog.connections) ||
+    catalog.connections.some(
+      (value) => parseConnectionSummary(value) === null,
+    ) ||
+    new Set(
+      catalog.connections.map((value) => parseConnectionSummary(value)!.id),
+    ).size !== catalog.connections.length
+  )
+    return false;
+  appliedCatalogRequestSeq = requestSeq;
+  const readinessChanged = !state.catalogueReady;
   const defaultConnectionId =
     typeof catalog.default_connection_id === "string" &&
     catalog.default_connection_id.length > 0
@@ -1971,7 +1999,7 @@ function applyConnectionCatalog(result: unknown, requestSeq: number) {
       defaultConnectionId,
       reconciliation,
     );
-    return;
+    return true;
   }
 
   // Steady-state catalog polls rebuild identical DTOs every tick. Publish
@@ -2000,27 +2028,34 @@ function applyConnectionCatalog(result: unknown, requestSeq: number) {
     !sessionsChanged &&
     defaultConnectionId === state.defaultConnectionId
   ) {
+    if (readinessChanged) set({ catalogueReady: true });
     if (!nextActive) selectConnectionNow(defaultConnectionId);
-    return;
+    return true;
   }
 
   state = {
     ...state,
     ...(reconciliation.activeSession ?? {}),
     connections: stableConnections,
+    catalogueReady: true,
     defaultConnectionId,
     sessionsByConnectionId: stableSessions,
   };
   emit();
   if (!nextActive) selectConnectionNow(defaultConnectionId);
+  return true;
 }
 
 async function refreshConnectionCatalog(): Promise<boolean> {
   if (state.connectionPaused || state.status !== "connected") return false;
   const requestSeq = ++catalogRequestSeq;
+  const epoch = bridge.connectionEpoch;
   try {
-    applyConnectionCatalog(await bridge.call("connections.list"), requestSeq);
-    return catalogReadyForConnection && appliedCatalogRequestSeq >= requestSeq;
+    return applyConnectionCatalog(
+      await bridge.call("connections.list"),
+      requestSeq,
+      epoch,
+    );
   } catch {
     // The catalog is bridge-global and is retried on the next status poll.
     return false;
@@ -2566,6 +2601,10 @@ export const store = {
       }
     });
     bridge.onStatus((s) => {
+      if (s !== "connected") {
+        catalogReadyForConnection = false;
+        set({ catalogueReady: false });
+      }
       if (s === "disconnected") {
         for (const connection of state.connections) {
           disposeTerminalConnection(
@@ -2581,7 +2620,7 @@ export const store = {
             ),
           ),
         };
-        set({ endpointAvailability: {} });
+        set({ endpointAvailability: {}, catalogueReady: false });
         catalogReadyForConnection = false;
         terminalReattachPending = true;
         bridge.setConnectionRuntimeGenerations([]);
@@ -2720,6 +2759,7 @@ export const store = {
     bridge.disconnect();
     set({
       connectionPaused: true,
+      catalogueReady: false,
       status: "disconnected",
       connectionGeneration: bridge.clientGeneration,
       bridgeStatus: null,
@@ -4217,6 +4257,7 @@ export const __storeTesting = {
   markTerminalReattachPending() {
     terminalReattachPending = true;
     catalogReadyForConnection = false;
+    set({ catalogueReady: false });
     bridge.setConnectionRuntimeGenerations([]);
   },
   rearmTerminalAttachmentsAfterCatalog,
@@ -4226,7 +4267,13 @@ export const __storeTesting = {
     queuedConnectionKeys.clear();
 
     taskCompletionTracker.clear();
-    state = snapshot;
+    state = {
+      ...snapshot,
+      catalogueReady:
+        snapshot.status === "connected" &&
+        !snapshot.connectionPaused &&
+        (snapshot.catalogueReady ?? false),
+    };
     terminalReattachPending = false;
     connectionRecoveryIntent = null;
     catalogReadyForConnection = snapshot.connections.length > 0;

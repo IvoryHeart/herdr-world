@@ -33,6 +33,147 @@ import {
 import type { Pane } from "./types";
 import { registerTerminalConnectionDisposer } from "./terminalConnection";
 
+describe("current transport catalogue admission", () => {
+  test("a failed or duplicate-ID refresh preserves the admitted catalogue", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    try {
+      __storeTesting.replaceState(partitionState());
+      bridge.call = (async () => {
+        throw Error("synthetic unavailable list");
+      }) as typeof bridge.call;
+      expect(await store.refreshConnections()).toBe(false);
+      expect(store.get().catalogueReady).toBe(true);
+      bridge.call = (async () => ({
+        connections: [
+          partitionState().connections[0],
+          partitionState().connections[0],
+        ],
+      })) as typeof bridge.call;
+      expect(await store.refreshConnections()).toBe(false);
+      expect(
+        store.get().connections.map((connection) => connection.id),
+      ).toEqual(["alpha", "beta"]);
+      expect(store.get().catalogueReady).toBe(true);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("an old transport reply cannot admit or replace the new catalogue", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    let epoch = bridge.connectionEpoch;
+    Object.defineProperty(bridge, "connectionEpoch", {
+      configurable: true,
+      get: () => epoch,
+    });
+    const old = Promise.withResolvers<any>();
+    const current = Promise.withResolvers<any>();
+    let n = 0;
+    bridge.call = (() =>
+      ++n === 1 ? old.promise : current.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({
+        ...partitionState(),
+        connections: [],
+        catalogueReady: false,
+      });
+      const a = store.refreshConnections();
+      epoch++;
+      const b = store.refreshConnections();
+      old.resolve({ connections: partitionState().connections });
+      expect(await a).toBe(false);
+      expect(store.get().catalogueReady).toBe(false);
+      expect(store.get().connections).toEqual([]);
+      current.resolve({ connections: [] });
+      expect(await b).toBe(true);
+      expect(store.get().catalogueReady).toBe(true);
+      expect(store.get().connections).toEqual([]);
+    } finally {
+      delete (bridge as any).connectionEpoch;
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("reversed same-transport catalogues preserve the newest valid admission", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    const old = Promise.withResolvers<any>();
+    const current = Promise.withResolvers<any>();
+    let n = 0;
+    bridge.call = (() =>
+      ++n === 1 ? old.promise : current.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({
+        ...partitionState(),
+        catalogueReady: false,
+      });
+      const a = store.refreshConnections();
+      const b = store.refreshConnections();
+      current.resolve({ connections: partitionState().connections.slice(1) });
+      await b;
+      old.resolve({ connections: partitionState().connections });
+      await a;
+      expect(store.get().connections.map((c) => c.id)).toEqual(["beta"]);
+      expect(store.get().catalogueReady).toBe(true);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("a delayed initial catalogue stays unready until a successful empty admission", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    const held = Promise.withResolvers<any>();
+    bridge.call = (() => held.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({ ...partitionState(), connections: [] });
+      __storeTesting.markTerminalReattachPending();
+      const request = __storeTesting.refreshBridgeStatus();
+      expect((store.get() as any).catalogueReady).toBe(false);
+      let publications = 0;
+      const unsubscribe = store.subscribe(() => publications++);
+      held.resolve({ connections: [], clients: 0, terminals: [] });
+      await request;
+      unsubscribe();
+      expect((store.get() as any).catalogueReady).toBe(true);
+      expect(publications).toBeGreaterThan(0);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("malformed newer replies cannot suppress a valid earlier catalogue", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    const first = Promise.withResolvers<any>();
+    const second = Promise.withResolvers<any>();
+    let n = 0;
+    bridge.call = (() =>
+      ++n === 1 ? first.promise : second.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({ ...partitionState(), connections: [] });
+      __storeTesting.markTerminalReattachPending();
+      const a = __storeTesting.refreshBridgeStatus();
+      const b = __storeTesting.refreshBridgeStatus();
+      second.resolve({ connections: [{ id: "invalid" }] });
+      await b;
+      expect((store.get() as any).catalogueReady).toBe(false);
+      first.resolve({ connections: partitionState().connections });
+      await a;
+      expect(store.get().connections.map((c) => c.id)).toEqual([
+        "alpha",
+        "beta",
+      ]);
+      expect((store.get() as any).catalogueReady).toBe(true);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+});
+
 describe("automatic update check preference", () => {
   test("defaults to enabled and honors an explicit disabled value", () => {
     expect(automaticUpdateChecksEnabledFromStorage(undefined)).toBe(true);
@@ -314,6 +455,7 @@ function partitionState(): State {
   return {
     ...alpha,
     status: "connected",
+    catalogueReady: true,
     connectionPaused: false,
     bridgeStatus: null,
     connections: [

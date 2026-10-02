@@ -60,18 +60,35 @@ record caps, so payload size grows with actual topology across the 64-profile li
 Large aggregate replies negotiate bounded chunks on the same World WebSocket.
 Scoped acknowledgements can interleave between chunks; partial responses belong to
 the pending global request and are discarded on transport retirement. Older clients
-retain the ordinary reply format. Serialization and final JSON parsing still have
-atomic pauses; dense acceptance measures input through those intervals.
+retain the ordinary reply format. Large negotiated replies decode in isolated,
+bounded browser worker jobs; host-sized messages admit the complete decoded result
+across tasks. Sending the raw strings to the worker still incurs a measured
+main-thread clone. Transport retirement and timeout cancel the owning job.
+Server serialization remains atomic; dense acceptance measures
+input through receipt, decode, preparation and rendering.
+
+Persisted Hosts filters reconcile only after a validated catalogue is admitted on
+the current transport. Socket readiness alone is insufficient: a delayed initial
+list preserves saved IDs, while a successful empty list removes them. Old transport,
+malformed and superseded list replies cannot confer catalogue readiness.
 
 The production-transport browser fixture exercises all 64 profile roots with a
 40,629,895-byte dense snapshot, two qualified terminals and 320 full terminal
 repaints per second. Independently timed trusted input continues through receipt,
 parsing, preparation, rendering and a refresh with three stalled observations at
-the default 20-second response deadline. Tree, Graph and Office pass at 1440px and
-390px under the fixture's engineering budgets: p95 submission-to-acknowledgement
-below 200ms and maximum below 500ms. The measured maximum is 475ms; atomic work and
-perceptible tails remain. This is synthetic local transport and rendering
-acceptance, not a live network latency guarantee.
+the default 20-second response deadline. Tree, Graph and Office are checked at
+1440px and 390px against engineering budgets of p95 intended-input-to-acknowledgement
+below 200ms and maximum below 500ms. Intended-to-sent drift and sent-to-ACK delay are
+reported separately. Passing local samples do not replace the exact-head CI gate;
+prior CI exceeded these budgets. Atomic work and perceptible tails remain. This is
+synthetic transport and rendering acceptance, not a live network latency guarantee.
+
+Tree and Graph reuse unchanged semantic branches during progressive mounting.
+Graph caches draw order and conservatively culls offscreen nodes and edges while
+retaining full geometry and crossing links. Office paints the current and adjacent
+viewports, independently of distant room heights; complete rosters still support
+search and reveal. Identical terminal surfaces retire unqualified link actions
+without repainting unchanged rows unless a link decoration needs invalidation.
 
 Terminal input failures publish a bounded notice for the captured original owner,
 including after retirement. Ambiguous input is never replayed. The user must refresh

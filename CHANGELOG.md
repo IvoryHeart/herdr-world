@@ -27,6 +27,9 @@ are optional because the merged PR history records their source.
   uncertain outcome, with refresh-before-retry guidance and no replay.
 - Large aggregate updates share the World socket in bounded reply chunks, and
   dense scene controls render progressively to keep host input responsive.
+- Saved Hosts filters survive the initial connection handshake until a valid
+  catalogue arrives. Large snapshots decode off the browser's main thread;
+  unchanged terminal surfaces and offscreen scenes avoid redundant drawing.
 
 ### Breaking Changes
 

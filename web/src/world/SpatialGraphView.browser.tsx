@@ -10,6 +10,17 @@ import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import "./world.css";
 
 const failures: string[] = [];
+let graphPaintArcs = 0;
+const clearGraph = CanvasRenderingContext2D.prototype.clearRect;
+const arcGraph = CanvasRenderingContext2D.prototype.arc;
+CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+  if (this.canvas.dataset.graphCanvas === "true") graphPaintArcs = 0;
+  return clearGraph.apply(this, args);
+};
+CanvasRenderingContext2D.prototype.arc = function (...args) {
+  if (this.canvas.dataset.graphCanvas === "true") graphPaintArcs++;
+  return arcGraph.apply(this, args);
+};
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
@@ -449,23 +460,17 @@ async function run() {
       );
 
       await pointer(canvas, "pointerdown", rect.right - 12, rect.bottom - 12);
-      await pointer(
-        canvas,
-        "pointermove",
-        rect.right + rect.width,
-        rect.bottom - 12,
-      );
-      await pointer(
-        canvas,
-        "pointerup",
-        rect.right + rect.width,
-        rect.bottom - 12,
-      );
+      await pointer(canvas, "pointermove", rect.right + 5000, rect.bottom - 12);
+      await pointer(canvas, "pointerup", rect.right + 5000, rect.bottom - 12);
       await waitFor(
         () =>
           (window.__HERDR_GRAPH_RENDERER__?.publishedNodes[agent.id]?.screenX ??
             0) > canvas.width,
         "Graph pan did not move the old layout outside the viewport",
+      );
+      check(
+        graphPaintArcs === 0,
+        "Graph repaints wholly offscreen nodes after pan",
       );
 
       arrangeButton.click();

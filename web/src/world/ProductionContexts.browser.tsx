@@ -27,6 +27,10 @@ import "./world.css";
 
 const view = new URL(location.href).searchParams.get("view")!;
 const failures: string[] = [];
+document.addEventListener("securitypolicyviolation", (event) => {
+  if (event.violatedDirective.startsWith("worker-src"))
+    failures.push("production policy blocked snapshot decoder");
+});
 const check = (value: unknown, message: string) => {
   if (!value) failures.push(message);
 };
@@ -37,6 +41,15 @@ const acknowledgements: {
   host: string;
 }[] = [];
 const phases: Record<string, number> = {};
+new PerformanceObserver((list) => {
+  for (const entry of list.getEntries())
+    if (entry.name === "world-snapshot-worker-decoded" && phase)
+      phases["worker-parse-" + phase] = (
+        entry as PerformanceMark
+      ).detail.parseMs;
+    else if (entry.name === "world-snapshot-worker-posted" && phase)
+      phases["worker-post-" + phase] = (entry as PerformanceMark).detail.postMs;
+}).observe({ type: "mark" });
 const parse = JSON.parse;
 JSON.parse = function (
   text: string,

@@ -1051,6 +1051,7 @@ async function run() {
     ...store.get(),
     status: "connected",
     navigationMode: "shared",
+    catalogueReady: true,
     activeConnectionId: "alpha",
     defaultConnectionId: "alpha",
     connectionGeneration: 1,
@@ -1070,11 +1071,54 @@ async function run() {
     sessionsByConnectionId: { alpha: session(), beta: session() },
   });
   await worldRuntimeStore.refresh();
+  const admissionScenario =
+    operation === "delayed-catalogue" || operation === "empty-catalogue";
+  const admittedState = store.get();
+  if (admissionScenario) {
+    writeHostsFilter(["beta"]);
+    __storeTesting.replaceState({
+      ...admittedState,
+      connections: [],
+      catalogueReady: false,
+    });
+  }
   const host = document.createElement("div");
   document.body.append(host);
   let root = createRoot(host);
   flushSync(() => root.render(<WorldFoundationApp />));
   try {
+    if (admissionScenario) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      check(
+        worldLocalStorage.getItem("worldHostsFilter.v1") === '["beta"]',
+        "unadmitted empty catalogue erased saved beta",
+      );
+      const previousCall = bridge.call;
+      bridge.call = (async () => ({
+        connections:
+          operation === "empty-catalogue" ? [] : admittedState.connections,
+      })) as typeof bridge.call;
+      await store.refreshConnections();
+      bridge.call = previousCall;
+      await frame();
+      const expected = operation === "empty-catalogue" ? "null" : '["beta"]';
+      check(
+        worldLocalStorage.getItem("worldHostsFilter.v1") === expected,
+        "successful current catalogue did not reconcile saved filter",
+      );
+      check(
+        store.get().catalogueReady,
+        "successful empty/initial catalogue not published as ready",
+      );
+      check(
+        document.body.textContent!.includes(
+          "selected host profiles were removed",
+        ) ===
+          (operation === "empty-catalogue"),
+        "incorrect removed-profile explanation",
+      );
+      return;
+    }
     await waitFor(
       () =>
         !!document.querySelector('[aria-label="Connected World hierarchy"]'),

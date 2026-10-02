@@ -509,7 +509,7 @@ export default function WorldFoundationApp() {
     (snapshot) => snapshot.connections,
   );
   const catalogueReady = useStoreSelector(
-    (snapshot) => snapshot.status === "connected",
+    (snapshot) => snapshot.catalogueReady,
   );
   const hostsFilter = useHostsFilter(
     conversationConnections.map((connection) => connection.id),
@@ -890,13 +890,14 @@ function WorldControlPlane({
       defaultConnectionId: snapshot.defaultConnectionId,
       runtimeGeneration: snapshot.serverRuntimeGeneration,
       status: snapshot.status,
+      catalogueReady: snapshot.catalogueReady,
     }),
     shallowEqual,
   );
   const operationalSnapshot = useStoreSelector((snapshot) => snapshot);
   const hostsFilter = useHostsFilter(
     connectionSelection.connections.map((connection) => connection.id),
-    connectionSelection.status === "connected",
+    connectionSelection.catalogueReady,
   );
   const hasSelectedConnection = hasValidSelectedConnection(
     connectionSelection.activeConnectionId,

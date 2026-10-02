@@ -1,4 +1,6 @@
 import { createRoot } from "react-dom/client";
+import { Terminal } from "@xterm/xterm";
+import { decodeWorldSnapshot } from "../worldSnapshotDecode";
 import {
   bridge,
   type ConnectionClient,
@@ -37,6 +39,12 @@ import "../styles/vendor.css";
 import "./world.css";
 
 const failures: string[] = [];
+let alphaRefreshes = 0;
+const refreshTerminal = Terminal.prototype.refresh;
+Terminal.prototype.refresh = function (...args) {
+  if (this.element?.closest('[data-host="alpha"]')) alphaRefreshes++;
+  return refreshTerminal.apply(this, args);
+};
 const measurements = {
   outputFrames: 0,
   outputBytes: 0,
@@ -46,7 +54,7 @@ const measurements = {
   projectionMs: 0,
   renderMs: 0,
   longestTaskMs: 0,
-  jsonParseMs: 0,
+  decodeMs: 0,
   validationMs: 0,
   worldBuildMs: 0,
   treeProjectionMs: 0,
@@ -379,6 +387,30 @@ async function run() {
     () => document.querySelectorAll(".xterm-helper-textarea").length === 2,
   );
   const alphaMount = document.querySelector('[data-host="alpha"] .xterm');
+  const identicalFrame = () => {
+    for (const listener of frames)
+      listener({
+        connection_id: "alpha",
+        connection_generation: 7,
+        terminal_id: pane.terminal_id,
+        width: 1,
+        height: 1,
+        full: true,
+        mouse_reporting: false,
+        bytes: btoa("\x1b[H\x1b[2Jsynthetic unchanged surface"),
+      });
+  };
+  identicalFrame();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const stableRefreshes = alphaRefreshes;
+  for (let index = 0; index < 8; index++) {
+    identicalFrame();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  check(
+    alphaRefreshes === stableRefreshes,
+    "identical endpoint surfaces unnecessarily redraw the full terminal",
+  );
   const snapshotStart = performance.now();
   const dense = await new Promise<string>((resolve, reject) => {
     const socket = new WebSocket(
@@ -395,8 +427,11 @@ async function run() {
   measurements.snapshotBytes = new TextEncoder().encode(dense).length;
   await beginStress("projection");
   const projectionStart = performance.now();
-  const decoded = JSON.parse(dense);
-  measurements.jsonParseMs = performance.now() - projectionStart;
+  const decoded = await decodeWorldSnapshot(
+    [dense],
+    new AbortController().signal,
+  );
+  measurements.decodeMs = performance.now() - projectionStart;
   const validationStart = performance.now();
   const observed = parseWorldSnapshotResult(decoded);
   measurements.validationMs = performance.now() - validationStart;

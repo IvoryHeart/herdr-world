@@ -950,10 +950,13 @@ export function TerminalView({
         }
       });
     });
-    const invalidateLinks = () => {
+    const invalidateLinks = (redraw = true) => {
       retireTouchLink();
       linkRevisionRef.current++;
-      term.refresh(0, term.rows - 1);
+      // Missing native link identity still retires every action token. An
+      // identical self-contained surface needs no DOM repaint unless a visible
+      // link decoration must be invalidated.
+      if (redraw || oscHover !== null) term.refresh(0, term.rows - 1);
     };
     const fit = new FitAddon();
     const clipboardProvider = createTerminalClipboardProvider({
@@ -1169,7 +1172,8 @@ export function TerminalView({
       }
       const text = b64toText(t.bytes);
       if (text === null) return;
-      if (!t.link_frame || t.link_frame !== latestLinkFrame) invalidateLinks();
+      if (!t.link_frame || t.link_frame !== latestLinkFrame)
+        invalidateLinks(endpointPresentation.displayedFrame?.text !== text);
       linkReadyRef.current = true;
       latestEndpointText =
         typeof t.mouse_reporting === "boolean" ? text : undefined;

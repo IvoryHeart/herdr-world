@@ -11,6 +11,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -493,7 +494,7 @@ function SemanticHost({
       {expanded ? (
         <ul>
           {spaces.map((space) => (
-            <SemanticSpace key={space.node.id} space={space} {...props} />
+            <MemoSemanticSpace key={space.node.id} space={space} {...props} />
           ))}
           {spaces.length === 0 ? <li className="is-empty">No spaces</li> : null}
           {host.omittedSpaceCount ? (
@@ -745,3 +746,5 @@ function graphElementAnchor(
             : "right",
   };
 }
+
+const MemoSemanticSpace = memo(SemanticSpace);

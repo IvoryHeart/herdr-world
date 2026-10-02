@@ -1,16 +1,16 @@
 import { InputDriver } from "./browserAcceptanceFixture";
+import { startIndependentInput } from "./independentInputSchedule";
 
 let driver: InputDriver;
 const runs = new Map<
   string,
   {
-    first: ReturnType<typeof setTimeout>;
-    interval?: ReturnType<typeof setInterval>;
+    stop(): void;
     pending: Promise<unknown>[];
   }
 >();
 self.onmessage = async ({ data }) => {
-  const { id, action, phase, url } = data;
+  const { id, action, phase, url, profile, slowdown } = data;
   try {
     if (action === "start") {
       if (!driver) {
@@ -20,26 +20,32 @@ self.onmessage = async ({ data }) => {
           socket.onerror = () => reject(Error("CDP unavailable"));
         });
         driver = new InputDriver(socket);
+        if (slowdown > 1)
+          await driver.call("Emulation.setCPUThrottlingRate", {
+            rate: slowdown,
+          });
+      }
+      if (profile) {
+        await driver.call("Profiler.enable", {});
+        await driver.call("Profiler.start", {});
       }
       await driver.call("Runtime.evaluate", {
         expression:
           "document.querySelector('[data-host=beta] .xterm-helper-textarea').focus()",
       });
-      const began = Date.now();
-      let index = 0;
       const run = {
-        first: 0 as unknown as ReturnType<typeof setTimeout>,
-        interval: undefined as ReturnType<typeof setInterval> | undefined,
+        stop: () => {},
         pending: [] as Promise<unknown>[],
       };
-      const emit = () => {
-        const sequence = index++;
+      const emit = (input: {
+        sequence: number;
+        dueAt: number;
+        sentAt: number;
+      }) => {
         self.postMessage({
           input: {
             phase,
-            sequence,
-            dueAt: began + 5 + sequence * 75,
-            sentAt: Date.now(),
+            ...input,
           },
         });
         // Send the ordered key pair together; protocol acknowledgements do not
@@ -62,18 +68,40 @@ self.onmessage = async ({ data }) => {
           ]),
         );
       };
-      run.first = setTimeout(() => {
-        emit();
-        run.interval = setInterval(emit, 75);
-      }, 5);
+      run.stop = startIndependentInput(emit);
       runs.set(phase, run);
       self.postMessage({ id, result: "ready" });
     } else {
       const run = runs.get(phase)!;
-      clearTimeout(run.first);
-      clearInterval(run.interval);
+      run.stop();
       await Promise.all(run.pending);
-      self.postMessage({ id, result: { count: run.pending.length } });
+      let hotspots: unknown[] | undefined;
+      if (profile) {
+        const result = (await driver.call("Profiler.stop", {})) as {
+          profile: {
+            nodes: { id: number; callFrame: { functionName: string } }[];
+            samples: number[];
+            timeDeltas: number[];
+          };
+        };
+        const nodes = new Map(
+          result.profile.nodes.map((node) => [node.id, node]),
+        );
+        const time = new Map<string, number>();
+        result.profile.samples.forEach((sample: number, index: number) => {
+          const name =
+            nodes.get(sample)?.callFrame.functionName || "(anonymous)";
+          time.set(
+            name,
+            (time.get(name) ?? 0) + (result.profile.timeDeltas[index] ?? 0),
+          );
+        });
+        hotspots = [...time]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 12)
+          .map(([name, us]) => ({ name, ms: us / 1000 }));
+      }
+      self.postMessage({ id, result: { count: run.pending.length, hotspots } });
     }
   } catch (error) {
     self.postMessage({ id, error: String(error) });

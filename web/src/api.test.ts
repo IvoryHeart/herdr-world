@@ -16,7 +16,9 @@ const originalLocation = Object.getOwnPropertyDescriptor(
 const testBridges: Bridge[] = [];
 
 describe("simultaneous qualified runtime admission", () => {
-  function setup() {
+  function setup(
+    decode?: (parts: string[], signal: AbortSignal) => Promise<unknown>,
+  ) {
     class Socket extends HangingWebSocket {
       static instance: Socket;
       sent: Array<Record<string, any>> = [];
@@ -33,7 +35,10 @@ describe("simultaneous qualified runtime admission", () => {
       }
     }
     installBrowserGlobals(Socket as unknown as typeof WebSocket);
-    const bridge = createTestBridge(1000);
+    const bridge = decode
+      ? new Bridge(1000, 1000, decode)
+      : createTestBridge(1000);
+    if (decode) testBridges.push(bridge);
     bridge.connect();
     const socket = Socket.instance;
     socket.receive({
@@ -53,6 +58,128 @@ describe("simultaneous qualified runtime admission", () => {
     ]);
     return { bridge, socket, currentSocket: () => Socket.instance };
   }
+
+  test("deferred snapshot decoding admits sibling ACKs and retires before old publication", async () => {
+    const held = Promise.withResolvers<unknown>();
+    let signal: AbortSignal | undefined;
+    const { bridge, socket } = setup((_parts, captured) => {
+      signal = captured;
+      return held.promise;
+    });
+    let published = false;
+    const snapshot = bridge.call("world.snapshot", {}).then((value) => {
+      published = true;
+      return value;
+    });
+    void snapshot.catch(() => {});
+    socket.receive({
+      id: socket.sent[0]!.id,
+      world_snapshot_chunk: { index: 0, total: 1, data: '{"connections":[]}' },
+    });
+    const input = bridge
+      .connection("beta", 3)
+      .call("terminal.input", { terminal_id: "same", data: "eA==" });
+    socket.receive({
+      id: socket.sent[1]!.id,
+      connection_id: "beta",
+      connection_generation: 3,
+      result: { ok: true },
+    });
+    expect(await input).toEqual({ ok: true });
+    expect(published).toBe(false);
+    expect(signal?.aborted).toBe(false);
+    bridge.disconnect();
+    expect(signal?.aborted).toBe(true);
+    held.resolve({ connections: [] });
+    await expect(snapshot).rejects.toThrow();
+    await Promise.resolve();
+    expect(published).toBe(false);
+  });
+
+  test("decode failure rejects only its owning snapshot and leaves a sibling global request usable", async () => {
+    const held = Promise.withResolvers<unknown>();
+    const { bridge, socket } = setup(() => held.promise);
+    const snapshot = bridge.call("world.snapshot", {});
+    void snapshot.catch(() => {});
+    const ping = bridge.call("bridge.ping");
+    void ping.catch(() => {});
+    socket.receive({
+      id: socket.sent[0]!.id,
+      world_snapshot_chunk: { index: 0, total: 1, data: "{}" },
+    });
+    held.reject(Error("malformed decode"));
+    await expect(snapshot).rejects.toThrow("malformed decode");
+    socket.receive({ id: socket.sent[1]!.id, result: { ok: true } });
+    expect(await ping).toEqual({ ok: true });
+  });
+
+  test("snapshot timeout cancels decode without retiring a healthy sibling", async () => {
+    const held = Promise.withResolvers<unknown>();
+    let signal: AbortSignal | undefined;
+    const { bridge, socket } = setup((_parts, captured) => {
+      signal = captured;
+      return held.promise;
+    });
+    const snapshot = bridge.call("world.snapshot", {}, 5);
+    void snapshot.catch(() => {});
+    socket.receive({
+      id: socket.sent[0]!.id,
+      world_snapshot_chunk: { index: 0, total: 1, data: "{}" },
+    });
+    await expect(snapshot).rejects.toThrow("timeout");
+    expect(signal?.aborted).toBe(true);
+    held.resolve({ connections: [] });
+    const input = bridge
+      .connection("beta", 3)
+      .call("terminal.input", { terminal_id: "same", data: "eA==" });
+    socket.receive({
+      id: socket.sent[1]!.id,
+      connection_id: "beta",
+      connection_generation: 3,
+      result: { ok: true },
+    });
+    expect(await input).toEqual({ ok: true });
+  });
+
+  test.each([
+    { world_snapshot_chunk: { index: 0, total: 1, data: "{}" } },
+    { result: { connections: [] } },
+    { error: { message: "late failure" } },
+    { world_snapshot_chunk: null },
+  ])(
+    "a conflicting reply during decode retires the original job: %j",
+    async (conflict) => {
+      const held = Promise.withResolvers<unknown>();
+      let signal: AbortSignal | undefined;
+      let jobs = 0;
+      const { bridge, socket } = setup((_parts, captured) => {
+        signal = captured;
+        jobs++;
+        return held.promise;
+      });
+      let published = false;
+      const snapshot = bridge.call("world.snapshot", {}).then((value) => {
+        published = true;
+        return value;
+      });
+      void snapshot.catch(() => {});
+      const id = socket.sent[0]!.id;
+      socket.receive({
+        id,
+        world_snapshot_chunk: { index: 0, total: 1, data: "{}" },
+      });
+      socket.receive({ id, ...conflict });
+      await expect(snapshot).rejects.toThrow();
+      expect(jobs).toBe(1);
+      expect(signal?.aborted).toBe(true);
+      held.resolve({ connections: [] });
+      await Promise.resolve();
+      expect(published).toBe(false);
+      const ping = bridge.call("bridge.ping");
+      socket.receive({ id: socket.sent[1]!.id, result: { ok: true } });
+      expect(await ping).toEqual({ ok: true });
+    },
+  );
 
   test("bounded aggregate chunks allow sibling acknowledgements before admission", async () => {
     const { bridge, socket } = setup();

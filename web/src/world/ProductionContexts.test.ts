@@ -1,4 +1,5 @@
 import { sendWorldSnapshotReply } from "../../../server/src/bridge/world-snapshot-reply";
+import { serveStatic } from "../../../server/src/http/static-files";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,9 +28,24 @@ test.skipIf(!chrome).each(
   async ({ view, entry, width }) => {
     const dir = await mkdtemp(join(tmpdir(), "world-production-contexts-"));
     const fixture = view === "uncertain" ? null : createDenseSnapshotFixture();
-    const payload = fixture
-      ? JSON.stringify(await fixture.service.snapshot())
-      : "";
+    const initialSnapshot = fixture ? await fixture.service.snapshot() : null;
+    const payload = initialSnapshot ? JSON.stringify(initialSnapshot) : "";
+    const largestHostBytes = initialSnapshot
+      ? Math.max(
+          ...initialSnapshot.connections.map((connection) =>
+            Buffer.byteLength(JSON.stringify(connection), "utf8"),
+          ),
+        )
+      : 0;
+    const headerBytes = initialSnapshot
+      ? Buffer.byteLength(
+          JSON.stringify({
+            revision: initialSnapshot.revision,
+            observed_at: initialSnapshot.observed_at,
+          }),
+          "utf8",
+        )
+      : 0;
     let stalledResponseVerified = false;
     const stringify = JSON.stringify;
     let serializationMs = 0;
@@ -40,7 +56,6 @@ test.skipIf(!chrome).each(
         serializationMs = Math.max(serializationMs, performance.now() - began);
       return text;
     } as typeof JSON.stringify;
-    const assets = new Map<string, Blob>();
     const reserve = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -146,6 +161,8 @@ test.skipIf(!chrome).each(
           ).json()) as { type: string; webSocketDebuggerUrl: string }[];
           await command({
             action: "start",
+            profile: Bun.env.WORLD_PROFILE === "1",
+            slowdown: Number(Bun.env.WORLD_CPU_RATE ?? 1),
             phase,
             url: pages.find((page) => page.type === "page")!
               .webSocketDebuggerUrl,
@@ -153,12 +170,20 @@ test.skipIf(!chrome).each(
           return new Response("ready");
         }
         if (url.pathname === "/input-complete") {
-          return Response.json(
-            await command({
-              action: "stop",
-              phase: url.searchParams.get("phase")!,
-            }),
-          );
+          const observed = await command({
+            action: "stop",
+            phase: url.searchParams.get("phase")!,
+            profile: Bun.env.WORLD_PROFILE === "1",
+          });
+          if (observed.hotspots)
+            console.log(
+              "Production task profile",
+              view,
+              width,
+              url.searchParams.get("phase"),
+              JSON.stringify(observed.hotspots),
+            );
+          return Response.json(observed);
         }
         if (url.pathname === "/result") {
           result.resolve(await req.json());
@@ -170,12 +195,8 @@ test.skipIf(!chrome).each(
               join(import.meta.dir, "../../public", url.pathname.slice(1)),
             ),
           );
-        const asset = assets.get(url.pathname);
-        if (asset) return new Response(asset);
-        return new Response(
-          '<link rel="stylesheet" href="/ProductionContexts.browser.css"><script type="module" src="/ProductionContexts.browser.js"></script>',
-          { headers: { "content-type": "text/html" } },
-        );
+        // Use the production static responder and its actual security headers.
+        return serveStatic(req, dir);
       },
       websocket: {
         perMessageDeflate: WS_PER_MESSAGE_DEFLATE,
@@ -349,7 +370,12 @@ test.skipIf(!chrome).each(
       });
       if (!build.success) throw Error(build.logs.join("\n"));
       for (const output of build.outputs)
-        assets.set("/" + output.path.split("/").pop(), output);
+        if (!(await Bun.file(output.path).exists()))
+          await Bun.write(output.path, output);
+      await Bun.write(
+        join(dir, "index.html"),
+        '<link rel="stylesheet" href="/ProductionContexts.browser.css"><script type="module" src="/ProductionContexts.browser.js"></script>',
+      );
       browser = Bun.spawn(
         [
           chrome!,
@@ -447,6 +473,8 @@ test.skipIf(!chrome).each(
             "px: " +
             JSON.stringify({
               bytes: new TextEncoder().encode(payload).length,
+              largestHostBytes,
+              headerBytes,
               serializationMs,
               keys: sent.length,
               maxDispatchMs: Math.max(...dispatch),

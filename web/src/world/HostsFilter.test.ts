@@ -10,6 +10,8 @@ const cases = [
   ...[1440, 390].flatMap((width) =>
     [
       "filters",
+      "delayed-catalogue",
+      "empty-catalogue",
       "nonempty-filter",
       "actions",
       "watches",
