@@ -30,6 +30,9 @@ are optional because the merged PR history records their source.
 - Saved Hosts filters survive the initial connection handshake until a valid
   catalogue arrives. Large snapshots decode off the browser's main thread;
   unchanged terminal surfaces and offscreen scenes avoid redundant drawing.
+- Dense aggregate indexing yields between bounded batches and preserves complete
+  coverage totals. Office limits reception painting to the visible horizontal
+  region while retaining every host in its semantic overview.
 
 ### Breaking Changes
 

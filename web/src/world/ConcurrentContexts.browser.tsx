@@ -57,6 +57,9 @@ const measurements = {
   decodeMs: 0,
   validationMs: 0,
   worldBuildMs: 0,
+  worldBuildSliceCount: 0,
+  worldBuildMaxSliceNodes: 0,
+  worldBuildMaxSliceDurationMs: 0,
   treeProjectionMs: 0,
   graphProjectionMs: 0,
   officeProjectionMs: 0,
@@ -437,7 +440,24 @@ async function run() {
   measurements.validationMs = performance.now() - validationStart;
   if (!observed) throw new Error("dense snapshot admission failed");
   const buildStart = performance.now();
-  const prepared = await prepareWorldObject(observed.connections);
+  const recordWorldBuildSlice = (
+    _checkpoint: string,
+    count: number,
+    durationMs: number,
+  ) => {
+    measurements.worldBuildSliceCount += 1;
+    measurements.worldBuildMaxSliceNodes = Math.max(
+      measurements.worldBuildMaxSliceNodes,
+      count,
+    );
+    measurements.worldBuildMaxSliceDurationMs = Math.max(
+      measurements.worldBuildMaxSliceDurationMs,
+      durationMs,
+    );
+  };
+  const prepared = await prepareWorldObject(observed.connections, undefined, {
+    onWorkSlice: recordWorldBuildSlice,
+  });
   if (!prepared) throw new Error("dense world preparation retired");
   await prepareWorldOffice(prepared);
   const world = buildWorldObject(observed.connections);
@@ -500,7 +520,13 @@ async function run() {
       })),
     },
   }));
-  const refreshedWorld = await prepareWorldObject(refreshedConnections);
+  const refreshedWorld = await prepareWorldObject(
+    refreshedConnections,
+    undefined,
+    {
+      onWorkSlice: recordWorldBuildSlice,
+    },
+  );
   if (!refreshedWorld) throw new Error("dense refresh retired");
   await prepareWorldOffice(refreshedWorld);
   denseRoot.render(

@@ -55,7 +55,10 @@ import {
   officeHeaderLabels,
 } from "./officeLayout";
 import { officeDebug } from "../officeDebug";
-import { officeVisibleRooms } from "./officeVirtualization";
+import {
+  officeVisibleReceptions,
+  officeVisibleRooms,
+} from "./officeVirtualization";
 import { officeSceneSignature } from "./officeSceneSignature";
 import {
   destroyOfficeSceneChildren,
@@ -421,6 +424,12 @@ export async function createOfficeRenderer(
       scrollTop,
       viewportHeight,
     );
+    const visibleReceptions = officeVisibleReceptions(
+      currentProjection.receptions,
+      layout.ceoBlocks.receptions,
+      scrollElement?.scrollLeft ?? 0,
+      scrollElement?.clientWidth ?? layout.officeWidth,
+    );
     const sceneSignature = officeSceneSignature({
       layout,
       projection: currentProjection,
@@ -429,6 +438,7 @@ export async function createOfficeRenderer(
       observability: currentObservability,
       seatCreationStates: currentSeatCreationStates,
       visibleRoomIndices: visibleRooms.map(({ index }) => index),
+      visibleReceptionIndices: visibleReceptions.map(({ index }) => index),
     });
     if (sceneSignature === lastSceneSignature) {
       diagnostics.sceneSkips += 1;
@@ -449,6 +459,7 @@ export async function createOfficeRenderer(
       animated,
       select,
       activateAgent,
+      visibleReceptions,
     );
     drawHallways(app.stage, layout);
     visibleRooms.forEach((rect) => {
@@ -993,6 +1004,11 @@ function drawCeoReception(
   animated: AnimatedItem[],
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
+  visibleReceptions: readonly {
+    reception: HerdrOfficeProjection["receptions"][number];
+    index: number;
+    rect: OfficeReceptionRect;
+  }[],
 ) {
   const band = new Container();
   if (layout.fallbackMessage) {
@@ -1043,12 +1059,9 @@ function drawCeoReception(
   drawCeo(ceoContent, textures, ceoBlocks.localCeoX);
   drawOtelCostBoard(ceoContent, observability, ceoBlocks.localOtelBoardX);
   drawLiveStateBlackboard(ceoContent, projection, ceoBlocks.localBoardX);
-  const receptionRects = ceoBlocks.localReceptions;
-  projection.receptions.forEach((reception, index) => {
-    const rect = receptionRects[index];
-    if (!rect) {
-      return;
-    }
+  visibleReceptions.forEach(({ reception, index }) => {
+    const rect = ceoBlocks.localReceptions[index];
+    if (!rect) return;
     drawReceptionDesk(
       ceoContent,
       reception,

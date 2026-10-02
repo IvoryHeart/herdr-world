@@ -531,23 +531,116 @@ export function yieldWorldTask(): Promise<void> {
 export async function prepareWorldObject(
   connections: readonly WorldRuntimeConnection[],
   isCurrent: () => boolean = () => true,
+  options: {
+    yieldTask?: (
+      checkpoint: "host" | "node-batch" | "complete",
+      count: number,
+    ) => Promise<void>;
+    onWorkSlice?: (
+      checkpoint: "host" | "node-batch",
+      count: number,
+      durationMs: number,
+    ) => void;
+  } = {},
 ): Promise<WorldObject | null> {
+  const yieldTask = options.yieldTask ?? yieldWorldTask;
   // Admit already queued lifecycle and transport tasks before model allocation.
   await new Promise((resolve) => setTimeout(resolve, 0));
   for (const connection of connections) {
     if (!isCurrent()) return null;
+    const sliceStart = performance.now();
     const inactive = buildHost(connection, null);
+    options.onWorkSlice?.("host", 1, performance.now() - sliceStart);
     // Aggregate focus is independent of runtime authority. Prepare only the
     // aggregate variant; a legacy selected variant is built on demand instead
     // of duplicating every admitted leaf for every peer.
     preparedHosts.set(connection, [inactive, undefined]);
-    await yieldWorldTask();
+    await yieldTask("host", 1);
   }
   if (!isCurrent()) return null;
-  preparedWorlds.set(connections, new Map());
-  const world = buildWorldObject(connections);
-  await yieldWorldTask();
-  return isCurrent() ? world : null;
+  const hosts = [...connections]
+    .sort(
+      (left, right) =>
+        Number(right.isDefault) - Number(left.isDefault) ||
+        left.label.localeCompare(right.label) ||
+        left.connectionId.localeCompare(right.connectionId),
+    )
+    .map((connection) => buildHost(connection, null));
+  const spaces: WorldSpaceObject[] = [];
+  const leaves: WorldLeafObject[] = [];
+  const nodes: WorldObjectNode[] = [];
+  const nodeById = new Map<string, WorldObjectNode>();
+  let coverage: WorldObservedCoverage = {
+    spaces: 0,
+    tabs: 0,
+    leaves: 0,
+    agents: 0,
+    shells: 0,
+    status: emptyStatusCounts(),
+  };
+  let batch = 0;
+  let sliceCount = 0;
+  const indexNode = (node: WorldObjectNode) => {
+    nodes.push(node);
+    nodeById.set(node.id, node);
+    batch += 1;
+    sliceCount += 1;
+    return sliceCount === 256;
+  };
+  let indexSliceStart = performance.now();
+  for (const host of hosts) {
+    coverage = addCoverage(coverage, host.coverage);
+    if (indexNode(host)) {
+      const durationMs = performance.now() - indexSliceStart;
+      options.onWorkSlice?.("node-batch", sliceCount, durationMs);
+      await yieldTask("node-batch", sliceCount);
+      if (!isCurrent()) return null;
+      indexSliceStart = performance.now();
+      sliceCount = 0;
+    }
+    for (const space of host.spaces) {
+      spaces.push(space);
+      if (indexNode(space)) {
+        const durationMs = performance.now() - indexSliceStart;
+        options.onWorkSlice?.("node-batch", sliceCount, durationMs);
+        await yieldTask("node-batch", sliceCount);
+        if (!isCurrent()) return null;
+        indexSliceStart = performance.now();
+        sliceCount = 0;
+      }
+      for (const leaf of space.children) {
+        leaves.push(leaf);
+        if (indexNode(leaf)) {
+          const durationMs = performance.now() - indexSliceStart;
+          options.onWorkSlice?.("node-batch", sliceCount, durationMs);
+          await yieldTask("node-batch", sliceCount);
+          if (!isCurrent()) return null;
+          indexSliceStart = performance.now();
+          sliceCount = 0;
+        }
+      }
+    }
+  }
+  const world: WorldObject = {
+    version: 1,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById,
+    coverage,
+  };
+  if (sliceCount > 0) {
+    options.onWorkSlice?.(
+      "node-batch",
+      sliceCount,
+      performance.now() - indexSliceStart,
+    );
+  }
+  await yieldTask("complete", batch);
+  if (!isCurrent()) return null;
+  preparedWorlds.set(connections, new Map([[null, world]]));
+  return world;
 }
 
 function buildHost(

@@ -1,4 +1,5 @@
-import type { OfficeRoomRect } from "./officeGeometry";
+import type { OfficeReceptionRect, OfficeRoomRect } from "./officeGeometry";
+import type { OfficeReception } from "./herdrOfficeProjection";
 
 export function officeVisibleRooms(
   rooms: readonly OfficeRoomRect[],
@@ -13,4 +14,24 @@ export function officeVisibleRooms(
       room.y + room.height >= scrollTop - overscan &&
       room.y <= scrollTop + viewportHeight + overscan,
   );
+}
+
+export function officeVisibleReceptions(
+  receptions: readonly OfficeReception[],
+  rects: readonly OfficeReceptionRect[],
+  scrollLeft: number,
+  viewportWidth: number,
+) {
+  const overscan = Math.max(1, viewportWidth);
+  return receptions.flatMap((reception, index) => {
+    const rect = rects[index];
+    if (
+      !rect ||
+      rect.x + rect.width < scrollLeft - overscan ||
+      rect.x > scrollLeft + viewportWidth + overscan
+    ) {
+      return [];
+    }
+    return [{ reception, index, rect }];
+  });
 }

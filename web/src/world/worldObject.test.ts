@@ -2,12 +2,76 @@ import { describe, expect, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import {
   buildWorldObject,
+  prepareWorldObject,
   taskSummarySessionFingerprint,
   worldObjectForConnection,
   worldObjectForHosts,
   worldObjectForWatches,
   worldObjectId,
 } from "./worldObject";
+
+test("aggregate indexing yields and retires before indexing every dense leaf", async () => {
+  const owner = connection("alpha");
+  const pane = owner.snapshot!.panes[0]!;
+  owner.snapshot!.panes = Array.from({ length: 4096 }, (_, index) => ({
+    ...pane,
+    pane_id: `pane-${index}`,
+    terminal_id: `terminal-${index}`,
+  }));
+  const slices: { checkpoint: string; count: number }[] = [];
+  let current = true;
+  expect(
+    await prepareWorldObject([owner], () => current, {
+      yieldTask: async (checkpoint, count) => {
+        slices.push({ checkpoint, count });
+        if (checkpoint === "node-batch") current = false;
+      },
+    }),
+  ).toBeNull();
+  expect(slices).toEqual([
+    { checkpoint: "host", count: 1 },
+    { checkpoint: "node-batch", count: 256 },
+  ]);
+});
+
+test("chunked aggregate indexing preserves complete ordered topology and stale hosts", async () => {
+  const alpha = connection("alpha");
+  const beta = connection("beta", { stale: true, actionable: false });
+  const pane = alpha.snapshot!.panes[0]!;
+  alpha.snapshot!.panes = Array.from({ length: 1024 }, (_, index) => ({
+    ...pane,
+    pane_id: `dense-pane-${index}`,
+    terminal_id: `dense-terminal-${index}`,
+  }));
+  const prepared = await prepareWorldObject([beta, alpha], undefined, {
+    yieldTask: async () => {},
+  });
+  const expected = buildWorldObject([beta, alpha]);
+
+  expect(prepared).not.toBeNull();
+  expect(prepared!.hosts.map(({ id }) => id)).toEqual(
+    expected.hosts.map(({ id }) => id),
+  );
+  expect(prepared!.spaces.map(({ id }) => id)).toEqual(
+    expected.spaces.map(({ id }) => id),
+  );
+  expect(prepared!.leaves.map(({ id }) => id)).toEqual(
+    expected.leaves.map(({ id }) => id),
+  );
+  expect(prepared!.nodes.map(({ id }) => id)).toEqual(
+    expected.nodes.map(({ id }) => id),
+  );
+  expect(prepared!.coverage).toEqual(expected.coverage);
+  expect(
+    prepared!.hosts.find(({ connectionId }) => connectionId === "beta")?.stale,
+  ).toBe(true);
+  expect(prepared!.nodeById.size).toBe(expected.nodeById.size);
+  for (const node of expected.nodes) {
+    expect(prepared!.nodeById.get(node.id)).toBe(
+      prepared!.nodes.find((item) => item.id === node.id),
+    );
+  }
+});
 
 function connection(
   connectionId: string,
