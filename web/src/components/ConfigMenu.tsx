@@ -368,7 +368,7 @@ export function ConfigMenu({
                   {
                     label: "Tutorial",
                     description: "Learn local work and private remote access",
-                    url: "https://ivoryheart.github.io/herdr-world/tutorial/",
+                    url: "https://herdr.world/tutorial/",
                   },
                   {
                     label: "Features and shortcuts",

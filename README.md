@@ -142,8 +142,8 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Documentation
 
-- [Website](https://ivoryheart.github.io/herdr-world/) and
-  [hands-on tutorial](https://ivoryheart.github.io/herdr-world/tutorial/)
+- [Website](https://herdr.world/) and
+  [hands-on tutorial](https://herdr.world/tutorial/)
   ([Markdown](./docs/TUTORIAL.md)): local work, mobile, and private remote access.
 - [Features and shortcuts](./FEATURES.md)
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.

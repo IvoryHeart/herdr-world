@@ -48,7 +48,7 @@ formula="$asset_dir/herdr-world-preview.rb"
 cat > "$formula" <<EOF
 class HerdrWorldPreview < Formula
   desc "Visualize and control your agents in Office and Graph across multiple hosts"
-  homepage "https://ivoryheart.github.io/herdr-world/"
+  homepage "https://herdr.world/"
   version "$version"
   url "$archive_url"
   sha256 "$digest"

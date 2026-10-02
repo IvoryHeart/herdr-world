@@ -97,7 +97,7 @@ bun run build:site
 
 Serve `.pages-dist/` locally and check `/tutorial/`, narrow screens, keyboard
 navigation, and JavaScript-disabled reading. Production canonical URLs, social
-images, and the sitemap use <https://ivoryheart.github.io/herdr-world/>. Do not commit `.pages-dist/`.
+images, and the sitemap use <https://herdr.world/>. Do not commit `.pages-dist/`.
 
 **Deploy Pages** runs on pushes to `main` (including merged PRs); manual dispatch
 remains available for retries. Both require a published Herdr World release as GitHub

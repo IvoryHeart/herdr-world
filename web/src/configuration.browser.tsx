@@ -370,7 +370,7 @@ async function run() {
   };
   try {
     for (const [label, url] of [
-      ["Tutorial", "https://ivoryheart.github.io/herdr-world/tutorial/"],
+      ["Tutorial", "https://herdr.world/tutorial/"],
       [
         "Features and shortcuts",
         "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",

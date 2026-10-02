@@ -36,6 +36,9 @@ are optional because the merged PR history records their source.
 
 ### Added
 
+- Prepared the project website and tutorial for `herdr.world`, including search,
+  social preview and Homebrew homepage metadata.
+
 - Added Tutorial, Features and shortcuts, Troubleshooting, and Report an issue
   links to the application menu. Restored native HTTPS, Web Push, compatibility,
   logging, and Pane Search guidance; corrected inherited documentation links
