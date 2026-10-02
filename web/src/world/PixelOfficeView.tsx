@@ -215,24 +215,26 @@ export default function PixelOfficeView({
   const completionSeenKeys = useMemo(
     () =>
       new Set(
-        office.roster.flatMap(({ agent }) =>
-          completionSeen.has(officeCompletionIdentity(agent))
-            ? [agent.key]
-            : [],
-        ),
+        completionSeen.size === 0
+          ? []
+          : office.roster
+              .filter(({ agent }) =>
+                completionSeen.has(officeCompletionIdentity(agent)),
+              )
+              .map(({ agent }) => agent.key),
       ),
     [completionSeen, office],
   );
   const unseenCompletions = useMemo(
     () =>
       office.roster
-        .map(({ agent }) => agent)
         .filter(
-          (agent) =>
+          ({ agent }) =>
             agent.semanticStatus === "done" &&
             agent.deskKey !== null &&
             !completionSeenKeys.has(agent.key),
         )
+        .map(({ agent }) => agent)
         .sort(
           (left, right) =>
             Number(right.canOpenInSpaces) - Number(left.canOpenInSpaces) ||
