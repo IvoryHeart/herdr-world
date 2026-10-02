@@ -181,6 +181,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Release candidates now check for newer candidates in their own version line,
+  while package-managed installations avoid in-app binary replacement.
+
 - macOS service installation now reports an occupied port instead of claiming
   success while the new World service repeatedly fails to start.
 

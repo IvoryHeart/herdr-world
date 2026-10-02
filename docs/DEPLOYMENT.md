@@ -422,6 +422,11 @@ file), then restart to use a different port. The service identities are:
 Verify readiness with `curl -fsS http://127.0.0.1:8787/healthz`, substituting the
 configured port. Uninstall preserves configuration and tokens. The updater installs
 a checksum-verified replacement and leaves `herdr-world.previous` for recovery.
+The in-app checker follows newer release candidates on the same version line and
+then the stable release; stable builds follow GitHub Latest. Automatic installation
+is available only for supervised standalone binaries. Homebrew, npm, and Herdr
+plugin installations must be upgraded through their installation channel.
+Pre-merge previews have no update channel.
 
 ## Private remote access
 

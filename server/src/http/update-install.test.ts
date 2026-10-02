@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { runProcessWithCodeTimeout, shQuote } from "../utils/process-utils";
 import { createUpdateHandlers, resolveUpdateTarget } from "./update";
 
@@ -95,6 +95,66 @@ function installRequest() {
 }
 
 describe("automatic update installation", () => {
+  for (const [layout, marker] of [
+    ["Homebrew or unpacked archive", "VERSION"],
+    ["npm or plugin", "package.json"],
+  ] as const) {
+    test(`keeps a ${layout} executable under its installation channel`, async () => {
+      const fixture = createUpdateFixture();
+      let exitScheduled = false;
+      try {
+        const markerPath =
+          marker === "VERSION"
+            ? join(dirname(fixture.installPath), marker)
+            : join(fixture.root, marker);
+        writeFileSync(markerPath, "managed installation\n");
+        const handlers = createUpdateHandlers({
+          appVersion: "9.8.6",
+          runProcessWithCodeTimeout,
+          shQuote,
+          runtime: {
+            platform: process.platform,
+            arch: process.arch,
+            execPath: fixture.installPath,
+            argv: [fixture.installPath],
+          },
+          environment: {
+            HERDR_WORLD_UPDATE_BASE_URL: fixture.baseUrl,
+            HERDR_WORLD_RESTART_SUPERVISOR: "1",
+          },
+          scheduleProcessExit: () => {
+            exitScheduled = true;
+          },
+        });
+
+        const check = await handlers.handleUpdateCheck(
+          new Request("http://localhost/api/update/check", {
+            headers: { "x-herdr-world-update": "1" },
+          }),
+        );
+        expect(check.status).toBe(200);
+        expect(await check.json()).toMatchObject({
+          update_available: true,
+          can_auto_update: false,
+        });
+
+        const install = await handlers.handleUpdateInstall(installRequest());
+        expect(install.status).toBe(409);
+        expect(await install.json()).toMatchObject({
+          error:
+            "This installation is managed by a package or plugin. Update it through its installation channel.",
+        });
+        expect(readFileSync(fixture.installPath, "utf8")).toBe(
+          "old executable\n",
+        );
+        expect(existsSync(`${fixture.installPath}.previous`)).toBe(false);
+        expect(exitScheduled).toBe(false);
+      } finally {
+        fixture.cleanup();
+      }
+    });
+  }
+
   test("verifies, narrows, and atomically replaces the running executable", async () => {
     const fixture = createUpdateFixture();
     let exitScheduled = false;
