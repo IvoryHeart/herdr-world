@@ -916,6 +916,9 @@ export function TerminalView({
     };
     const term = new Terminal({
       cursorBlink: true,
+      // Composer and shortcut keys edit the prompt without ever focusing
+      // xterm, which otherwise hides the cursor until its first focus.
+      showCursorImmediately: true,
       disableStdin: composerEditingRef.current || shouldAvoidVirtualKeyboard(),
       fontFamily: terminalFontFamilyRef.current,
       ...terminalDensity(terminalFontScaleRef.current),
