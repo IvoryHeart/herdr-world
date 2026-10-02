@@ -3,54 +3,6 @@
 Releases are prepared and reviewed through pull requests. Never commit or push a
 release change directly to `main`.
 
-## Website domain and launch
-
-The public website is <https://herdr.world/> and the hands-on tutorial is
-<https://herdr.world/tutorial/>. GitHub Pages serves the static site from the
-Deploy Pages workflow; the installed World service and its PWA remain on the
-service URL printed by `herdr-world`. Package names, plugin identity and GitHub
-release download URLs are independent of the website domain.
-
-For the initial domain setup:
-
-1. In the repository owner account Settings → Pages, verify `herdr.world` using
-   GitHub’s generated DNS TXT record. Keep that record after verification.
-2. In repository Settings → Pages, keep GitHub Actions as the publishing source
-   and set the custom domain to `herdr.world` before pointing DNS at Pages.
-   Set the repository About website field to `https://herdr.world/`. An Actions
-   deployment does not require a tracked `CNAME` file.
-3. At the DNS provider, configure these records, replacing conflicting parking
-   records for the same names while preserving email and verification records:
-
-   | Type | Name | Value |
-   | --- | --- | --- |
-   | A | `@` | `185.199.108.153` |
-   | A | `@` | `185.199.109.153` |
-   | A | `@` | `185.199.110.153` |
-   | A | `@` | `185.199.111.153` |
-   | CNAME | `www` | `ivoryheart.github.io` |
-
-   Do not include a repository path in the CNAME target or use wildcard DNS.
-   Optional IPv6 records and current platform instructions are in
-   [GitHub’s custom-domain guide](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site).
-4. After DNS validation and certificate provisioning, enable Enforce HTTPS.
-   DNS propagation and certificate setup can take up to 24 hours.
-
-Website preparation can merge before stable 0.2.0 is published. Deploy Pages
-requires the standalone installer asset on GitHub Latest; an RC does not satisfy
-that requirement. A pre-release deployment can therefore fail at the installer
-probe without invalidating the site build. After publishing stable 0.2.0 and
-verifying its installer asset, confirm that the stable Release workflow’s
-automatic Deploy Pages dispatch on `main` succeeds. If dispatch or deployment
-fails, run Deploy Pages manually after resolving the failure.
-
-Before announcing the domain, verify HTTPS for the homepage and `/tutorial/`,
-images, styles, scripts, copy-install behavior, canonical/social URLs,
-`/robots.txt` and `/sitemap.xml`. Check that `www.herdr.world` redirects to the
-apex domain and that the former GitHub Pages homepage and tutorial URLs redirect
-to the corresponding new pages. Run the focused Pages tests and `bun run
-build:site` for repository changes; do not commit `.pages-dist/`.
-
 ## Pre-merge platform previews
 
 Add the `release-preview` label to a release preparation PR. Its CI run first
