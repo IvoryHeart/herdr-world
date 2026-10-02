@@ -360,6 +360,43 @@ async function run() {
   flushSync(render);
   click("Menu");
   await settle();
+  const originalOpen = window.open;
+  const openedLinks: Array<
+    [string | URL | undefined, string | undefined, string | undefined]
+  > = [];
+  window.open = (url, target, features) => {
+    openedLinks.push([url, target, features]);
+    return null;
+  };
+  try {
+    for (const [label, url] of [
+      ["Tutorial", "https://ivoryheart.github.io/herdr-world/tutorial/"],
+      [
+        "Features and shortcuts",
+        "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
+      ],
+      [
+        "Troubleshooting",
+        "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
+      ],
+      ["Report an issue", "https://github.com/IvoryHeart/herdr-world/issues"],
+    ]) {
+      click(label!);
+      check(
+        !document.getElementById("herdr-world-config-menu"),
+        `${label} left the menu open`,
+      );
+      check(
+        JSON.stringify(openedLinks[openedLinks.length - 1]) ===
+          JSON.stringify([url, "_blank", "noopener,noreferrer"]),
+        `${label} opened an incorrect or unsafe destination`,
+      );
+      click("Menu");
+      await settle();
+    }
+  } finally {
+    window.open = originalOpen;
+  }
   check(
     !Array.from(document.querySelectorAll("button")).some((element) =>
       element.textContent?.includes("Log out"),

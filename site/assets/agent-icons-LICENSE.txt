@@ -1,4 +1,4 @@
-Agent icons used on the Roamgate website
+Agent icons used on the Herdr World website (derived from Roamgate)
 
 pi.svg: adapted from https://pi.dev/logo-auto.svg
 Copyright (c) 2025 Mario Zechner
@@ -28,4 +28,4 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Names and logos remain trademarks of their respective owners. Their use
-identifies compatible tools and does not imply endorsement of Roamgate.
+identifies compatible tools and does not imply endorsement of Herdr World.

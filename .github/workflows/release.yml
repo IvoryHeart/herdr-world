@@ -382,3 +382,17 @@ jobs:
           brew install --formula "$tap/$package"
           test "$("$(brew --prefix "$tap/$package")/bin/herdr-world" --version)" = "herdr-world $version"
           brew test "$tap/$package"
+
+  deploy-pages:
+    name: Request stable Pages deployment
+    needs: [publish, npm-publish, homebrew-pr]
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Deploy the current main website
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run pages.yml --ref main

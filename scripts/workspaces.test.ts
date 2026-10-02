@@ -79,6 +79,7 @@ test("CI and release jobs install once from the workspace root", () => {
             "npm-publish",
             "homebrew-pr",
             "homebrew-smoke",
+            "deploy-pages",
           ].includes(name));
       expect(installs).toHaveLength(noBunInstall ? 0 : 1);
       if (!noBunInstall) {
