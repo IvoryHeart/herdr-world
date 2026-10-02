@@ -364,6 +364,40 @@ export function ConfigMenu({
               </div>
               <div className="config-section config-section-tiles-3">
                 <div className="config-title">Help & updates</div>
+                {[
+                  {
+                    label: "Tutorial",
+                    description: "Learn local work and private remote access",
+                    url: "https://ivoryheart.github.io/herdr-world/tutorial/",
+                  },
+                  {
+                    label: "Features and shortcuts",
+                    description: "Browse features and keyboard bindings",
+                    url: "https://github.com/IvoryHeart/herdr-world/blob/main/FEATURES.md",
+                  },
+                  {
+                    label: "Troubleshooting",
+                    description: "Resolve connection and deployment problems",
+                    url: "https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md#troubleshooting",
+                  },
+                  {
+                    label: "Report an issue",
+                    description:
+                      "Report bugs or request improvements on GitHub",
+                    url: "https://github.com/IvoryHeart/herdr-world/issues",
+                  },
+                ].map(({ label, description, url }) => (
+                  <ConfigMenuItem
+                    key={label}
+                    icon={<ExternalLink size={15} />}
+                    label={label}
+                    description={description}
+                    onClick={() => {
+                      setOpen(false);
+                      window.open(url, "_blank", "noopener,noreferrer");
+                    }}
+                  />
+                ))}
                 <ConfigMenuItem
                   icon={<ExternalLink size={15} />}
                   label="Changelog"

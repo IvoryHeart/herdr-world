@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   localPageReferences,
   renderTutorial,
@@ -262,5 +263,51 @@ describe("Pages references", () => {
       "index.html": '<a href="../private.txt">Outside</a>',
     });
     await rejects(verifySiteReferences(directory), /escapes output/);
+  });
+});
+
+describe("public documentation links", () => {
+  test("local documents and fragments referenced by release guidance exist", async () => {
+    const root = fileURLToPath(new URL("../", import.meta.url));
+    for (const source of [
+      "README.md",
+      "FEATURES.md",
+      "SECURITY.md",
+      "docs/DEPLOYMENT.md",
+      "docs/ARCHITECTURE.md",
+      "docs/TUTORIAL.md",
+      "docs/SCREENSHOTS.md",
+      "docs/release.md",
+    ]) {
+      const sourcePath = join(root, source);
+      const markdown = await Bun.file(sourcePath).text();
+      for (const match of markdown.matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)) {
+        const href = match[1]!;
+        if (/^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
+        const [path, fragment] = href.split("#");
+        const targetPath = resolve(dirname(sourcePath), path || sourcePath);
+        const target = Bun.file(targetPath);
+        expect(await target.exists(), `${source}: ${href}`).toBe(true);
+        if (!fragment) continue;
+        const text = await target.text();
+        const anchors = new Set(
+          [...text.matchAll(/(?:id|name)="([^"\s]+)"/g)].map(
+            (entry) => entry[1],
+          ),
+        );
+        for (const heading of text.matchAll(/^#{1,6} (.+)$/gm)) {
+          anchors.add(
+            heading[1]!
+              .toLowerCase()
+              .replace(/[^\p{L}\p{N}_ -]/gu, "")
+              .replace(/ /g, "-"),
+          );
+        }
+        expect(
+          anchors.has(decodeURIComponent(fragment)),
+          `${source}: ${href}`,
+        ).toBe(true);
+      }
+    }
   });
 });

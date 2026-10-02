@@ -129,6 +129,15 @@ macOS preset; see [other platform bindings](#keyboard-shortcuts).
 | Release `Ctrl` or press `Enter` | Switch |
 | `Esc` | Cancel |
 
+### Pane Search
+
+`Alt+K` opens search over every live pane on the selected connection, including
+panes absent from the recent switcher. Filter by workspace, tab, cwd, agent name,
+or status. Search terms can appear in any order and must all match; results
+retain their recent-first order. Use Up/Down or Tab/Shift+Tab to choose, Enter to
+switch, and `Alt+K` or Esc to close. Releasing the opening modifier does not
+commit a search selection. Press K in the recent switcher to convert it to search.
+
 ## Full Browser Terminal
 
 - Display Herdr's server-rendered terminal at browser rows/columns, with splits.
@@ -420,9 +429,11 @@ Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
 - Manage shared local/SSH profiles with independent browser selection. Disconnect
   does not stop Herdr/workspaces. Linux/macOS `--ssh-host` forwards control and
   render sockets; Windows supports native local profiles, not SSH forwarding.
-  See [connection setup](docs/DEPLOYMENT.md#multiple-and-remote-herdr-connections).
+  See [connection setup](docs/DEPLOYMENT.md#local-and-ssh-connections).
 - Remote file/image-paste/Git/hook operations run on the same host; session
   inspection has the metadata limits described above.
+- Enable local browser alerts and background Web Push in **Menu → Behavior &
+  automation → Task notifications**. See [push setup and troubleshooting](docs/DEPLOYMENT.md#web-push-notifications).
 - Multiple browsers receive pushed events. Pause/resume yours, see client counts,
   or pause others. Herdr semantic task alerts use the relevant pane when Herdr
   supplies one; pane-less alerts open World without guessing a target. Older
@@ -434,11 +445,12 @@ Mobile shortcuts and appearance stay in this browser, not Herdr configuration.
   per browser. **Text size** scales the UI from 80% to 150%, including mobile.
 - Manage a user service from the CLI; check releases and run checksum-verified
   one-click standalone updates under a supported supervisor. Probe `/health` or
-  `/healthz`. See [services](docs/DEPLOYMENT.md#run-as-a-user-service).
+  `/healthz`. See [services](docs/DEPLOYMENT.md#user-service).
 
 **Loopback bypasses login even with a password.** Non-loopback generates a token
-unless a fixed password is set. Authentication provides no TLS, rate limiting,
-multi-user authorization, or sandboxing; read [SECURITY.md](./SECURITY.md).
+unless a fixed password is set. Configure [native HTTPS](docs/DEPLOYMENT.md#native-https)
+or an authenticated HTTPS proxy for encrypted access. World supplies no rate
+limiting, multi-user authorization, or sandboxing; read [SECURITY.md](./SECURITY.md).
 
 ## Keyboard Shortcuts
 
@@ -470,6 +482,7 @@ Common defaults (Linux/Android overrides follow the table):
 | Annotations | `Cmd+Option+A` | `Ctrl+Alt+A` |
 | Zen mode (desktop) | `Cmd+Shift+Z` | `Ctrl+Alt+Z` |
 | Recent pane switcher | `Ctrl+Tab` | `Ctrl+Alt+J` |
+| Pane Search | `Alt+K` | `Alt+K` |
 | Create / close tab or pane | `Cmd+T` / `Cmd+W` | `Ctrl+Alt+T` / `Ctrl+Alt+W` |
 | Previous / next tab | `Cmd+Option+Left/Right` | `Alt+Shift+Left/Right` |
 | Focus neighboring pane | `Cmd+Ctrl+Arrow` | `Ctrl+Shift+Arrow` |

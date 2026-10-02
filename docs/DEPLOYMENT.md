@@ -14,6 +14,23 @@ OpenSSH. Users do not install Roamgate or a remote World bridge.
 Herdr remains an external runtime. World never bundles or stops a Herdr server when a
 profile is disconnected or removed.
 
+## Herdr compatibility
+
+The current release is compatible with Herdr 0.9.0 and terminal protocol 22.
+World also retains the verified legacy codecs for protocols 14-20. Protocol 21
+and future protocols are rejected; use a World release explicitly supporting
+the server rather than downgrading a running Herdr server.
+
+Herdr 0.9.0 provides **Local navigation** per browser and connection. Older
+connections use **Shared navigation**. Pane topology, terminal sizes, and
+same-tab pane focus remain shared even with Local navigation. Workspace/tab
+creation needs a connected source terminal, except that an empty session can
+create its first workspace.
+
+OSC 52 clipboard writes on Herdr 0.9.0 follow the foreground recipient, which
+cannot prove the originating pane. Browser clipboard permission and the active
+terminal context still apply; do not treat clipboard delivery as pane isolation.
+
 ## Install a release
 
 On Linux or macOS:
@@ -260,6 +277,9 @@ is authoritative.
 | `--session <name>` | `HERDR_SESSION` | Default session |
 | `--public-dir <path>` | `PUBLIC_DIR` | Embedded frontend |
 | `--public-origin <origin>` | `HERDR_WORLD_PUBLIC_ORIGIN` | Disabled |
+| `--tls-cert <path>` | `HERDR_WORLD_TLS_CERT` | Disabled; requires matching TLS key |
+| `--tls-key <path>` | `HERDR_WORLD_TLS_KEY` | Disabled; requires certificate chain |
+| `--notification-source <source>` | `HERDR_WORLD_NOTIFICATION_SOURCE` | `herdr`; `status` uses World agent-status alerts |
 | `--log-level <level>` | `HERDR_WORLD_LOG_LEVEL` | `info` |
 | `--open` | `OPEN_BROWSER=1` | Disabled |
 
@@ -297,8 +317,86 @@ in addition to its loopback authority. The listener, proxy authentication, firew
 and TLS remain the broader access boundary. Read [SECURITY.md](../SECURITY.md) before
 exposing the listener beyond loopback.
 
-World is a trusted single-user administration tool. It does not provide TLS,
-rate-limiting, multi-user roles, or a sandbox.
+World is a trusted single-user administration tool. It does not provide rate
+limiting, multi-user roles, or a sandbox.
+
+## Native HTTPS
+
+Supply a PEM certificate chain (leaf first) and a matching unencrypted private
+key, through flags or the environment settings above:
+
+```bash
+herdr-world --host 0.0.0.0 --port 8443 \
+  --tls-cert /path/to/cert-chain.pem --tls-key /path/to/private-key.pem
+```
+
+Missing, unreadable, malformed, or mismatched TLS files stop startup. World
+uses HTTP when neither TLS setting is supplied. HTTPS adds Secure cookies and
+HTTPS startup links; authentication still follows the listener policy.
+Loopback bypasses login, and non-loopback requires the configured password or
+generated token. Keep access private as described in [Security](../SECURITY.md).
+
+Use certificates whose Subject Alternative Names match every client hostname or
+IP address. Each device must trust the issuer; bypassing a certificate warning
+does not make service workers or notification APIs available. For a private
+LAN test, a local issuer such as [mkcert](https://github.com/FiloSottile/mkcert)
+can issue a certificate for `localhost`, loopback addresses, and the host's LAN
+address. Transfer only the issuer's public CA certificate to client devices,
+never its private key. iOS also requires enabling full trust for an installed
+CA profile in Certificate Trust Settings. Remove temporary trust after testing.
+
+Protect certificate keys, keep them out of Git, and use absolute paths readable
+by the service user. Issuance and renewal are external; restart World after
+replacing the files. An HTTPS reverse proxy is another option; preserve its
+public Host and configure `--public-origin` when proxying to loopback.
+
+## Web Push notifications
+
+1. Open World over trusted HTTPS. On iOS/iPadOS 16.4 or newer, open the installed
+   Home Screen PWA.
+2. Open **Menu → Behavior & automation → Task notifications**, enable alerts,
+   grant browser permission, and choose **Agent needs input** and/or
+   **Task completed**.
+3. Confirm **Background push** enrollment. If an existing browser only has local
+   alerts, toggle notifications off and on to enroll it again.
+
+Server delivery is enabled by default; each browser profile needs its own
+subscription. `HERDR_WORLD_WEB_PUSH_SUBJECT` optionally supplies a `mailto:` or
+HTTPS operator contact, not a delivery destination. The default is the World
+repository's issues URL. An explicitly empty value disables server push;
+unsetting it restores the default. Restart World after changing its environment.
+
+Private VAPID keys and subscriptions live in
+`~/.config/herdr-world/web-push.json` on Unix or
+`%APPDATA%\herdr-world\web-push.json` on Windows. Override the file with
+`HERDR_WORLD_WEB_PUSH_PATH`. Protect and back up this file, never share or commit
+it, and use one World process per file. Corrupt data is preserved and push is
+disabled rather than silently rotating keys. After intentional key replacement,
+reopen World and re-enroll each browser.
+
+Delivery requires outbound HTTPS to the browser's provider: Apple
+(`*.push.apple.com`), Google (`fcm.googleapis.com`), Mozilla
+(`*.push.services.mozilla.com`), or Windows (`*.notify.windows.com`). World
+rejects other provider destinations. No public inbound endpoint is needed.
+World and the relevant Herdr connection must remain running; the device must
+reach World when opening an alert. Logging out revokes that authenticated
+session's subscriptions. An alert with a pane target revalidates its connection
+and runtime generation; it never falls back to a different host.
+
+If alerts fail, check HTTPS trust, browser permission, Background push enrollment,
+provider connectivity, and the selected Herdr connection. Local browser alerts
+and background push are different delivery paths; an open-page alert alone does
+not prove background enrollment.
+
+## Logging
+
+Logs contain one line per event with a timestamp, severity, scope, and bounded
+context. The default `info` level covers lifecycle and failures. For a short
+investigation, run `herdr-world --log-level debug` or set
+`HERDR_WORLD_LOG_LEVEL=debug` in the service environment and restart it. Restore
+`info` afterwards. Debug output can contain paths and identifiers; review and
+redact diagnostic logs before sharing them. Authentication tokens are kept in
+protected files rather than logged startup URLs.
 
 ## User service
 
@@ -330,7 +428,7 @@ origin. To open the World UI from another trusted device, put an authenticated V
 HTTPS reverse proxy, or SSH port forward in front of the World listener. Do not expose
 World directly to the public internet.
 
-See the [tutorial](./TUTORIAL.md#remote-access-choose-the-right-connection) for
+See the [tutorial](./TUTORIAL.md#networking) for
 Tailscale and SSH examples.
 
 ## Source development and builds
@@ -375,7 +473,8 @@ failures.
 
 Check the printed URL, authentication, listener address, firewall, and outer VPN/proxy
 in that order. Binding `127.0.0.1` is intentionally local. Binding `0.0.0.0` requires
-the generated token or configured password but still provides no TLS.
+the generated token or configured password. For encryption, configure
+[native HTTPS](#native-https) or an authenticated HTTPS proxy.
 
 ### The port is occupied
 
