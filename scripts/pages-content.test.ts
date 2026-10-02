@@ -147,17 +147,17 @@ describe("Pages references", () => {
       const html = await Bun.file(
         new URL(`../site/${page}`, import.meta.url),
       ).text();
-      expect(html).toContain("https://ivoryheart.github.io/herdr-world/");
+      expect(html).toContain("https://herdr.world/");
       expect(html).toMatch(
-        /property="og:image"\s+content="https:\/\/ivoryheart\.github\.io\/herdr-world\/herdr-world-og\.png"/,
+        /property="og:image"\s+content="https:\/\/herdr\.world\/herdr-world-og\.png"/,
       );
       expect(html).toMatch(
-        /name="twitter:image"\s+content="https:\/\/ivoryheart\.github\.io\/herdr-world\/herdr-world-og\.png"/,
+        /name="twitter:image"\s+content="https:\/\/herdr\.world\/herdr-world-og\.png"/,
       );
       expect(html).toContain(
         'name="twitter:card" content="summary_large_image"',
       );
-      const url = `https://ivoryheart.github.io/herdr-world/${page.replace("index.html", "")}`;
+      const url = `https://herdr.world/${page.replace("index.html", "")}`;
       expect(html.replace(/\s+/g, " ")).toContain(
         `rel="canonical" href="${url}"`,
       );
@@ -171,7 +171,7 @@ describe("Pages references", () => {
       const content = await Bun.file(
         new URL(`../site/${file}`, import.meta.url),
       ).text();
-      expect(content).toContain("https://ivoryheart.github.io/herdr-world/");
+      expect(content).toContain("https://herdr.world/");
     }
   });
 
