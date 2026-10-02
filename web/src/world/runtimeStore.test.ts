@@ -1,5 +1,22 @@
 import { describe, expect, test } from "bun:test";
+import { WorldSnapshotService } from "../../../server/src/world/snapshot";
 import { parseWorldSnapshotResult, WorldRuntimeStore } from "./runtimeStore";
+
+function admittedRevision(runtime: WorldRuntimeStore, revision: number) {
+  if (runtime.get().revision === revision) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      off();
+      reject(new Error("aggregate admission deadline"));
+    }, 2000);
+    const off = runtime.subscribe(() => {
+      if (runtime.get().revision !== revision) return;
+      clearTimeout(timer);
+      off();
+      resolve();
+    });
+  });
+}
 
 function result(label: string, generation = 1) {
   return {
@@ -66,6 +83,219 @@ function result(label: string, generation = 1) {
 }
 
 describe("World aggregate runtime store", () => {
+  test("retirement during cooperative preparation makes only that owner stale", async () => {
+    const response = result("synthetic ownership");
+    response.connections.push({
+      ...response.connections[0],
+      connection_id: "host-b",
+    });
+    let retired = false;
+    const runtime = new WorldRuntimeStore({
+      call: async () => response,
+      connection: (id) => ({ isCurrent: () => id !== "host-a" || !retired }),
+      onControl: () => () => {},
+      onStatus: () => () => {},
+    });
+    const task = setTimeout(() => {
+      retired = true;
+    }, 0);
+    try {
+      await runtime.refresh();
+      const [alpha, beta] = runtime.get().connections;
+      expect(alpha?.stale).toBe(true);
+      expect(alpha?.actionable).toBe(false);
+      expect(beta?.stale).toBe(false);
+      expect(beta?.actionable).toBe(true);
+    } finally {
+      clearTimeout(task);
+      runtime.stop();
+    }
+  });
+  test("a healthy input task can run during aggregate preparation and disconnect retires its unfinished model", async () => {
+    let status: ((value: "connected" | "disconnected") => void) | undefined;
+    const response = result("synthetic dense preparation");
+    response.connections = Array.from({ length: 32 }, (_, index) => ({
+      ...response.connections[0],
+      connection_id: `synthetic-${index}`,
+    }));
+    let decodedSibling = false;
+    const siblingSnapshot = response.connections[1]!.snapshot;
+    Object.defineProperty(response.connections[1]!, "snapshot", {
+      get() {
+        decodedSibling = true;
+        return siblingSnapshot;
+      },
+    });
+    const runtime = new WorldRuntimeStore({
+      call: async () => response,
+      onControl: () => () => {},
+      onStatus: (listener) => {
+        status = listener;
+        return () => {};
+      },
+    });
+    runtime.start();
+    const input = Promise.withResolvers<boolean>();
+    const task = setTimeout(() => {
+      input.resolve(runtime.get().status === "loading" && !decodedSibling);
+      status?.("disconnected");
+    }, 0);
+    try {
+      await runtime.refresh();
+      expect(await input.promise).toBe(true);
+      expect(runtime.get().status).toBe("error");
+      expect(runtime.get().connections).toEqual([]);
+    } finally {
+      clearTimeout(task);
+      runtime.stop();
+    }
+  });
+
+  test("All hosts admits an open late owner before four stalled catalogue peers on the real scheduler", async () => {
+    const ids = Array.from({ length: 12 }, (_, index) => `host-${index}`);
+    const release = Promise.withResolvers<void>();
+    const started: string[] = [];
+    const service = new WorldSnapshotService({
+      list: () =>
+        ids.map((id) => ({
+          id,
+          label: id,
+          source: "test",
+          is_default: false,
+          state: "ready" as const,
+          generation: 1,
+        })),
+      readyRuntimeLease: (id: string) => ({
+        connectionId: id,
+        generation: 1,
+        isCurrent: () => true,
+        runtime: {
+          herdr: {
+            async call(method: string) {
+              if (method === "workspace.list") started.push(id);
+              if (id !== "host-11") await release.promise;
+              if (method === "workspace.list") return { workspaces: [] };
+              if (method === "tab.list") return { tabs: [] };
+              if (method === "pane.list") return { panes: [] };
+              return { agents: [] };
+            },
+          },
+        },
+      }),
+    });
+    const runtime = new WorldRuntimeStore({
+      call: (_method, params) => service.snapshot(params),
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    runtime.setVisibleConnectionIds(ids);
+    runtime.setPriorities([{ connectionId: "host-11", workspaceId: "shared" }]);
+    const pending = runtime.refresh();
+    try {
+      expect(started).toHaveLength(4);
+      expect(started[0]).toBe("host-11");
+      expect(started.filter((id) => id !== "host-11")).toHaveLength(3);
+    } finally {
+      release.resolve();
+      await pending;
+      runtime.stop();
+    }
+    expect(
+      runtime
+        .get()
+        .connections.find((connection) => connection.connectionId === "host-11")
+        ?.actionable,
+    ).toBe(true);
+  });
+  test("host scheduling retains independently open owners beyond the resource hint bound", async () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    const runtime = new WorldRuntimeStore({
+      call: async (_method, params) => {
+        calls.push(params);
+        return result("observed");
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    runtime.setVisibleConnectionIds(["visible", "host-0"]);
+    const priorities = Array.from({ length: 16 }, (_, index) => ({
+      connectionId: `host-${index}`,
+      workspaceId: "shared",
+    }));
+    await runtime.ensurePriorities(priorities);
+    expect(calls[0]?.priorities).toHaveLength(8);
+    expect(calls[0]?.priority_connection_ids).toEqual([
+      ...priorities.map((priority) => priority.connectionId),
+    ]);
+  });
+  test("All hosts does not promote stalled visible peers into the open owner's scheduling class", async () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    const runtime = new WorldRuntimeStore({
+      call: async (_method, params) => {
+        calls.push(params);
+        return result("valid");
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    runtime.setVisibleConnectionIds(
+      Array.from({ length: 12 }, (_, index) => `host-${index}`),
+    );
+    runtime.setPriorities([{ connectionId: "host-11", workspaceId: "shared" }]);
+    await runtime.refresh();
+    expect(calls[0]?.priority_connection_ids).toEqual(["host-11"]);
+    runtime.stop();
+  });
+  test("changing an observation hint does not discard an already completed valid aggregate", async () => {
+    const first = Promise.withResolvers<unknown>();
+    const second = Promise.withResolvers<unknown>();
+    let requests = 0;
+    const runtime = new WorldRuntimeStore({
+      call: () => (++requests === 1 ? first.promise : second.promise),
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    const pending = runtime.refresh();
+    runtime.setSelectedConnectionId("host-a");
+    first.resolve(result("valid while priorities changed"));
+    try {
+      await pending;
+      expect(runtime.get().status).toBe("ready");
+      expect(runtime.get().connections[0]?.snapshot?.workspaces[0]?.label).toBe(
+        "valid while priorities changed",
+      );
+    } finally {
+      runtime.stop();
+      second.resolve(result("cleanup"));
+    }
+  });
+
+  test("open resources on several owners supply deduplicated host scheduling hints over the one World transport", async () => {
+    const calls: Array<{ method: string; params?: Record<string, unknown> }> =
+      [];
+    const runtime = new WorldRuntimeStore({
+      call: async (method, params) => {
+        calls.push({ method, params });
+        return result("valid");
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    runtime.setPriorities([
+      { connectionId: "alpha", workspaceId: "shared", paneId: "pane" },
+      { connectionId: "beta", workspaceId: "shared", paneId: "pane" },
+      { connectionId: "alpha", workspaceId: "another" },
+    ]);
+    await runtime.refresh();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.method).toBe("world.snapshot");
+    expect(calls[0]?.params?.priority_connection_ids).toEqual([
+      "alpha",
+      "beta",
+    ]);
+    expect(calls[0]?.params?.priorities).toHaveLength(3);
+    runtime.stop();
+  });
   test("parses a bounded qualified snapshot and rejects malformed entries", () => {
     const parsed = parseWorldSnapshotResult({
       ...result("valid"),
@@ -125,11 +355,9 @@ describe("World aggregate runtime store", () => {
     resolvers[0](result("older", 1));
     await older;
     await Promise.resolve();
+    const admitted = admittedRevision(runtime, 2);
     resolvers[1](result("newer", 2));
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      if (runtime.get().revision === 2) break;
-      await Promise.resolve();
-    }
+    await admitted;
 
     expect(runtime.get().connections[0].generation).toBe(2);
     expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
@@ -199,6 +427,7 @@ describe("World aggregate runtime store", () => {
       {
         method: "world.snapshot",
         params: {
+          priority_connection_ids: ["host-a"],
           priorities: [
             {
               connection_id: "host-a",
@@ -212,7 +441,7 @@ describe("World aggregate runtime store", () => {
     ]);
   });
 
-  test("sends the selected-host hint and discards an earlier host's delayed response", async () => {
+  test("sends a changed selected-host scheduling hint without discarding a valid aggregate", async () => {
     const calls: Array<{
       params?: Record<string, unknown>;
       resolve(value: unknown): void;
@@ -236,19 +465,16 @@ describe("World aggregate runtime store", () => {
     calls[0].resolve(result("old selected host", 1));
     await first;
     await Promise.resolve();
-    expect(runtime.get().connections).toEqual([]);
+    expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
+      "old selected host",
+    );
     expect(calls).toHaveLength(2);
     expect(calls[1].params).toMatchObject({
       selected_connection_id: "host-b",
     });
+    const admitted = admittedRevision(runtime, 2);
     calls[1].resolve(result("new selected host", 2));
-    for (
-      let attempt = 0;
-      attempt < 10 && runtime.get().revision !== 2;
-      attempt++
-    ) {
-      await Promise.resolve();
-    }
+    await admitted;
     expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
       "new selected host",
     );
@@ -326,11 +552,9 @@ describe("World aggregate runtime store", () => {
     );
     expect(resolvers).toHaveLength(2);
 
+    const admitted = admittedRevision(runtime, 2);
     resolvers[1](result("second", 2));
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      if (runtime.get().revision === 2) break;
-      await Promise.resolve();
-    }
+    await admitted;
     expect(runtime.get().connections[0].snapshot?.workspaces[0].label).toBe(
       "second",
     );

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { bridge, type ConnectionClient } from "./api";
 import {
   __storeTesting,
+  operationalStore,
   activateConnectionState,
   automaticUpdateChecksEnabledFromStorage,
   bindTaskNotificationActivation,
@@ -30,6 +31,7 @@ import {
   worktreeRemovalCompletionNotice,
 } from "./store";
 import type { Pane } from "./types";
+import { registerTerminalConnectionDisposer } from "./terminalConnection";
 
 describe("automatic update check preference", () => {
   test("defaults to enabled and honors an explicit disabled value", () => {
@@ -153,6 +155,24 @@ describe("automatic update check preference", () => {
 });
 
 describe("task notification activation", () => {
+  test("notification creation and notice activation retain the original agent session", () => {
+    const source = {
+      ...pane("beta", "done"),
+      agent_session: { value: "synthetic-original" },
+    };
+    const target = taskNotificationTarget("beta", 1, source);
+    expect(target).toMatchObject({ agentSessionId: "synthetic-original" });
+    const notice = {
+      actionConnectionId: "beta",
+      actionRuntimeGeneration: 1,
+      actionWorkspaceId: source.workspace_id,
+      actionPaneId: source.pane_id,
+      actionAgentSessionId: "synthetic-original",
+    };
+    expect(taskNotificationTargetFromNotice(notice)).toMatchObject({
+      agentSessionId: "synthetic-original",
+    });
+  });
   test("closes the system notification, focuses the window, and dispatches its pane target", () => {
     const calls: string[] = [];
     const targets: Array<{
@@ -331,6 +351,492 @@ function partitionState(): State {
     dismissedUpdateVersion: null,
   };
 }
+
+describe("independent qualified operational sessions", () => {
+  async function withIndependentClients(
+    run: (
+      calls: Array<{ host: string; method: string }>,
+      held: ReturnType<typeof Promise.withResolvers<unknown>>,
+    ) => Promise<void>,
+  ) {
+    const previous = store.get();
+    const originalConnection = bridge.connection;
+    const calls: Array<{ host: string; method: string }> = [];
+    const held = Promise.withResolvers<unknown>();
+    const jobs: Promise<unknown>[] = [];
+    bridge.connection = ((connectionId = "alpha", runtimeGeneration = 1) => ({
+      connectionId,
+      generation: store.get().connectionGeneration,
+      serverRuntimeGeneration: runtimeGeneration,
+      isCurrent: () =>
+        store
+          .get()
+          .connections.some(
+            (entry) =>
+              entry.id === connectionId &&
+              entry.state === "ready" &&
+              entry.generation === runtimeGeneration,
+          ),
+      acceptsServerGeneration: (value: unknown) => value === runtimeGeneration,
+      call: async (method: string) => {
+        calls.push({ host: connectionId, method });
+        if (method === "workspace.focus") {
+          const job = held.promise;
+          jobs.push(job);
+          return job;
+        }
+        if (method === "pane.get") return { pane: pane(connectionId, "idle") };
+        if (method === "agent_session.get")
+          return {
+            status: "ok",
+            pane_id: "same-pane",
+            agent: connectionId,
+            session: { value: "synthetic-replacement-session" },
+            path: "/synthetic/session",
+          };
+        if (method === "workspace.list")
+          return { workspaces: session(connectionId).workspaces };
+        if (method === "tab.list") return { tabs: session(connectionId).tabs };
+        if (method === "pane.list")
+          return { panes: session(connectionId).panes };
+        return {};
+      },
+    })) as typeof bridge.connection;
+    try {
+      __storeTesting.replaceState(partitionState());
+      await run(calls, held);
+    } finally {
+      held.resolve({});
+      await Promise.allSettled(jobs);
+      bridge.connection = originalConnection;
+      __storeTesting.replaceState(previous);
+    }
+  }
+
+  test("a worktree reply from a retired owner cannot report successful completion or replay", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const connection = bridge.connection;
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, ...args: unknown[]) => {
+            const result = await client.call(
+              method,
+              ...(args as [Record<string, unknown>]),
+            );
+            return method === "worktree.open" ? held.promise : result;
+          },
+        };
+      }) as typeof bridge.connection;
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const pending = owned.openWorktree(
+        "same-workspace",
+        "/synthetic/checkout",
+      );
+      const snapshot = store.get();
+      __storeTesting.replaceState({
+        ...snapshot,
+        connections: snapshot.connections.map((owner) =>
+          owner.id === "beta" ? { ...owner, generation: 2 } : owner,
+        ),
+      });
+      held.resolve({ workspace_id: "same-workspace" });
+      await expect(pending).rejects.toThrow();
+      expect(calls.filter((call) => call.method === "worktree.open")).toEqual([
+        { host: "beta", method: "worktree.open" },
+      ]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  test("captured worktree and destructive commands stay on beta and reject its replacement without replay", async () => {
+    await withIndependentClients(async (calls) => {
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      await owned.openWorktree("same-workspace", "/synthetic/checkout");
+      await owned.renameWorkspace("same-workspace", "Synthetic renamed");
+      await owned.closeTab("same-tab");
+      expect(
+        calls
+          .filter((call) =>
+            ["worktree.open", "workspace.rename", "tab.close"].includes(
+              call.method,
+            ),
+          )
+          .map((call) => call.host),
+      ).toEqual(["beta", "beta", "beta"]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      const snapshot = store.get();
+      __storeTesting.replaceState({
+        ...snapshot,
+        connections: snapshot.connections.map((owner) =>
+          owner.id === "beta" ? { ...owner, generation: 2 } : owner,
+        ),
+      });
+      const count = calls.length;
+      await expect(
+        owned.openWorktree("same-workspace", "/synthetic/checkout"),
+      ).rejects.toThrow();
+      await expect(
+        owned.renameWorkspace("same-workspace", "Replacement must stay intact"),
+      ).rejects.toThrow();
+      await expect(owned.closeTab("same-tab")).rejects.toThrow();
+      expect(calls.length).toBe(count);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  test("focuses a ready sibling host's colliding pane without replacing another session", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const snapshot = partitionState();
+      const beta = {
+        ...snapshot.sessionsByConnectionId.beta,
+        navigationMode: "browser-local" as const,
+      };
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: { ...snapshot.sessionsByConnectionId, beta },
+      });
+      const alphaBefore = structuredClone(
+        store.get().sessionsByConnectionId.alpha,
+      );
+      held.resolve({});
+      expect(
+        await store.focusQualifiedTarget({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+          workspaceId: "same-workspace",
+          paneId: "same-pane",
+        }),
+      ).toBe(true);
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "pane.get",
+        ),
+      ).toBe(true);
+      expect(calls.some((call) => call.host === "alpha")).toBe(false);
+      expect(store.get().sessionsByConnectionId.alpha).toEqual(alphaBefore);
+      expect(store.get().sessionsByConnectionId.beta.selectedPaneId).toBe(
+        "same-pane",
+      );
+    });
+  });
+  test("notification navigation retains a sibling owner's context without activating it globally", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const before = structuredClone(store.get().sessionsByConnectionId.alpha);
+      const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+      await store.focusTaskNotificationTarget(target);
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "pane.get",
+        ),
+      ).toBe(true);
+      expect(calls.some((call) => call.host === "alpha")).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(store.get().sessionsByConnectionId.alpha).toEqual(before);
+    });
+  });
+  test("a queued notification cannot focus a replacement session after its original lookup was admitted", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const connection = bridge.connection;
+      const focusStarted = Promise.withResolvers<void>();
+      const sessionRead = Promise.withResolvers<void>();
+      let identity = "synthetic-original";
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) => {
+            if (method === "workspace.focus") focusStarted.resolve();
+            if (method === "agent_session.get") {
+              const captured = identity;
+              sessionRead.resolve();
+              return { session: { value: captured } };
+            }
+            const result = await client.call(method, params);
+            return method === "pane.get"
+              ? {
+                  ...result,
+                  pane: { ...result.pane, agent_session: { value: identity } },
+                }
+              : result;
+          },
+        };
+      }) as typeof bridge.connection;
+      const first = store.focusQualifiedTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      await focusStarted.promise;
+      const notification = store.focusTaskNotificationTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+        agentSessionId: identity,
+      });
+      await sessionRead.promise;
+      identity = "synthetic-replacement";
+      held.resolve({});
+      await first;
+      expect(await notification).toBe(false);
+      expect(calls.filter((call) => call.method === "workspace.focus")).toEqual(
+        [{ host: "beta", method: "workspace.focus" }],
+      );
+      expect(calls.some((call) => call.method === "tab.focus")).toBe(false);
+      expect(store.get().notice?.message).toBe(
+        "Notification target is unavailable",
+      );
+    });
+  });
+  test("browser-observed completion without an original session remains visible without a replacement target", async () => {
+    await withIndependentClients(async () => {
+      const connection = bridge.connection;
+      let status = "working";
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) =>
+            method === "pane.list"
+              ? { panes: [pane("alpha", status)] }
+              : client.call(method, params),
+        };
+      }) as typeof bridge.connection;
+      __storeTesting.replaceState({
+        ...store.get(),
+        taskNotificationsEnabled: true,
+        taskNotificationTransport: "push",
+      });
+      await store.refresh();
+      status = "done";
+      await store.refresh();
+      expect(store.get().notice?.message).toBe("Task completed");
+      expect(store.get().notice?.actionPaneId).toBeUndefined();
+      expect(store.get().notice?.detail).toContain(
+        "session identity is unavailable",
+      );
+    });
+  });
+  test("a missing creation capability on beta does not block an independently admitted alpha creation", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const before = store.get();
+      const beta = {
+        ...before.sessionsByConnectionId.beta,
+        navigationMode: "browser-local" as const,
+        browserNavigation: {
+          revision: 1,
+          workspaceId: "same-workspace",
+          tabIds: { "same-workspace": "same-tab" },
+          paneIds: { "same-tab": "same-pane" },
+        },
+        endpointAvailability: {
+          "same-terminal": { methods: ["pane.focus"], capabilities: [] },
+        },
+      };
+      __storeTesting.replaceState({
+        ...before,
+        sessionsByConnectionId: { ...before.sessionsByConnectionId, beta },
+      });
+      await expect(
+        store.createQualifiedTab(
+          { connectionId: "beta", runtimeGeneration: 1 },
+          "same-workspace",
+        ),
+      ).rejects.toThrow("tab.create");
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "tab.create",
+        ),
+      ).toBe(false);
+      await store.createQualifiedTab(
+        { connectionId: "alpha", runtimeGeneration: 1 },
+        "same-workspace",
+      );
+      expect(calls.filter((call) => call.method === "tab.create")).toEqual([
+        { host: "alpha", method: "tab.create" },
+      ]);
+    });
+  });
+  test("a notification cannot navigate to a reused pane in a different workspace", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const target = taskNotificationTarget("beta", 1, {
+        ...pane("beta", "done"),
+        workspace_id: "retired-workspace",
+      });
+      await store.focusTaskNotificationTarget(target);
+      expect(
+        calls.filter(
+          (call) =>
+            call.method === "workspace.focus" || call.method === "tab.focus",
+        ),
+      ).toEqual([]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(store.get().notice?.kind === "error" || !!store.get().error).toBe(
+        true,
+      );
+    });
+  });
+  test("a session-qualified notification cannot open a replacement agent session in the same pane", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      // Additive target identity; the wire spelling may evolve with the
+      // producer, but losing the captured session must never admit its successor.
+      const target = {
+        ...taskNotificationTarget("beta", 1, pane("beta", "done")),
+        agentSessionId: "synthetic-original-session",
+      };
+      await store.focusTaskNotificationTarget(target);
+      expect(
+        calls.some(
+          (call) =>
+            call.method === "workspace.focus" || call.method === "tab.focus",
+        ),
+      ).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(store.get().notice?.kind === "error" || !!store.get().error).toBe(
+        true,
+      );
+    });
+  });
+  test.each(["disconnected", "error"] as const)(
+    "notification admission rejects a %s owner even when its generation is unchanged",
+    (state) => {
+      const snapshot = partitionState();
+      const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+      expect(
+        taskNotificationTargetIsCurrent(
+          {
+            connections: snapshot.connections.map((connection) =>
+              connection.id === "beta" ? { ...connection, state } : connection,
+            ),
+          },
+          target,
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test("a stalled focus on alpha does not serialize independent beta focus behind it", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const alpha = store.focusQualifiedTarget({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      const beta = store.focusQualifiedTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      try {
+        // Flush the existing async focus dispatch chain, without a timeout or status loop.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(
+          calls
+            .filter((call) => call.method === "workspace.focus")
+            .map((call) => call.host)
+            .sort(),
+        ).toEqual(["alpha", "beta"]);
+      } finally {
+        held.resolve({});
+        await Promise.allSettled([alpha, beta]);
+      }
+    });
+  });
+
+  test("captured operational commands and endpoint publication stay on alpha after beta focus", async () => {
+    await withIndependentClients(async (calls) => {
+      const alpha = operationalStore({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+      });
+      __storeTesting.replaceState(
+        activateConnectionState(store.get(), "beta", 11),
+      );
+      await alpha.zoomPane("same-pane");
+      expect(calls.filter((call) => call.method === "pane.zoom")).toEqual([
+        { host: "alpha", method: "pane.zoom" },
+      ]);
+      const client = bridge.connection("alpha", 1);
+      store.setTerminalEndpoint(client, "same-terminal", {
+        methods: ["pane.focus"],
+        capabilities: [],
+      });
+      expect(
+        alpha.get().endpointAvailability["same-terminal"]?.methods,
+      ).toContain("pane.focus");
+      expect(store.get().endpointAvailability["same-terminal"]).toBeUndefined();
+      const current = store.get();
+      __storeTesting.replaceState({
+        ...current,
+        connections: current.connections.map((connection) =>
+          connection.id === "alpha"
+            ? { ...connection, generation: 2 }
+            : connection,
+        ),
+      });
+      const before = calls.length;
+      await expect(alpha.zoomPane("same-pane")).rejects.toThrow();
+      expect(calls).toHaveLength(before);
+    });
+  });
+
+  test.each(["replacement", "removal"] as const)(
+    "catalogue %s retires beta terminal presenters without detaching alpha",
+    async (transition) => {
+      const previous = store.get();
+      const disposals: Array<{ host: string; remote: boolean }> = [];
+      const releaseAlpha = registerTerminalConnectionDisposer(
+        { connectionId: "alpha", generation: 1 },
+        (remote) => disposals.push({ host: "alpha", remote }),
+      );
+      const releaseBeta = registerTerminalConnectionDisposer(
+        { connectionId: "beta", generation: 1 },
+        (remote) => disposals.push({ host: "beta", remote }),
+      );
+      try {
+        const snapshot = partitionState();
+        __storeTesting.replaceState(snapshot);
+        __storeTesting.applyCatalog(
+          transition === "removal"
+            ? snapshot.connections.filter((entry) => entry.id !== "beta")
+            : snapshot.connections.map((entry) =>
+                entry.id === "beta" ? { ...entry, generation: 2 } : entry,
+              ),
+          "alpha",
+        );
+        expect(disposals).toEqual([{ host: "beta", remote: false }]);
+        expect(store.get().sessionsByConnectionId.alpha.panes).toEqual(
+          snapshot.sessionsByConnectionId.alpha.panes,
+        );
+        if (transition === "removal")
+          expect(store.get().sessionsByConnectionId.beta).toBeUndefined();
+        else expect(store.get().sessionsByConnectionId.beta.panes).toEqual([]);
+      } finally {
+        releaseAlpha();
+        releaseBeta();
+        __storeTesting.replaceState(previous);
+      }
+    },
+  );
+});
 
 describe("Git folder actions", () => {
   test.each([
@@ -905,9 +1411,15 @@ describe("connection-partitioned store state", () => {
 
         const pending = mutation.run();
         await started.promise;
-        __storeTesting.replaceState(
-          activateConnectionState(partitionState(), "beta", 11),
-        );
+        const replaced = partitionState();
+        __storeTesting.replaceState({
+          ...replaced,
+          connections: replaced.connections.map((connection) =>
+            connection.id === "alpha"
+              ? { ...connection, generation: 2 }
+              : connection,
+          ),
+        });
         gate.resolve();
 
         await expect(pending).rejects.toThrow("selected host changed");
@@ -973,7 +1485,7 @@ describe("connection-partitioned store state", () => {
     );
   });
 
-  test("opens unchanged-generation notifications but rejects replaced targets", async () => {
+  test("rejects disconnected and replaced notification owners without selecting a host", async () => {
     const originalConnection = bridge.connection;
     const originalSetActiveConnection = bridge.setActiveConnection;
     let activeConnectionId = "beta";
@@ -1009,12 +1521,8 @@ describe("connection-partitioned store state", () => {
         status: "disconnected",
       });
       await store.focusTaskNotificationTarget(target);
-      expect(store.get().activeConnectionId).toBe("alpha");
-      expect(calls).toEqual([
-        "alpha:pane.get",
-        "alpha:workspace.focus",
-        "alpha:tab.focus",
-      ]);
+      expect(store.get().activeConnectionId).toBe("beta");
+      expect(calls).toEqual([]);
 
       calls.length = 0;
       activeConnectionId = "beta";
@@ -1840,6 +2348,34 @@ describe("agent activity refresh", () => {
 });
 
 describe("Herdr task notifications", () => {
+  test("browser completion observation does not invent a transition across reused workspace or session identities", () => {
+    const tracker = new TaskCompletionTracker();
+    const original = {
+      ...pane("beta", "working"),
+      agent_session: { value: "synthetic-original" },
+    };
+    expect(tracker.update("beta", [original])).toEqual([]);
+    expect(
+      tracker.update("beta", [
+        {
+          ...original,
+          workspace_id: "replacement-workspace",
+          agent_status: "done",
+        },
+      ]),
+    ).toEqual([]);
+    tracker.reset("beta");
+    tracker.update("beta", [original]);
+    expect(
+      tracker.update("beta", [
+        {
+          ...original,
+          agent_status: "done",
+          agent_session: { value: "synthetic-replacement" },
+        },
+      ]),
+    ).toEqual([]);
+  });
   const herdrEvent = (data: Record<string, unknown>, connection = "alpha") => ({
     connection_id: connection,
     connection_generation: 1,
@@ -1866,6 +2402,7 @@ describe("Herdr task notifications", () => {
         body: "",
         workspace_id: "w1",
         pane_id: "w1:p2",
+        agent_session_id: "synthetic-session-original",
       }),
     ).toEqual({
       kind: "blocked",
@@ -1874,6 +2411,7 @@ describe("Herdr task notifications", () => {
       body: null,
       workspaceId: "w1",
       paneId: "w1:p2",
+      agentSessionId: "synthetic-session-original",
     });
     expect(parseHerdrTaskNotification({ kind: "update", title: "x" })).toBe(
       null,
@@ -1891,6 +2429,27 @@ describe("Herdr task notifications", () => {
         capabilities: { herdr_task_notifications: true },
       }),
     ).toBe(true);
+  });
+  test("a relayed notification with unknown original session stays visible without a replacement action", () => {
+    try {
+      __storeTesting.replaceState(enabledState());
+      __storeTesting.handleHerdrEvent(
+        herdrEvent({
+          kind: "completed",
+          title: "Synthetic task finished",
+          workspace_id: "w1",
+          pane_id: "w1:p9",
+          session_identity_unavailable: true,
+        }),
+      );
+      expect(store.get().notice?.message).toBe("Synthetic task finished");
+      expect(store.get().notice?.actionPaneId).toBeUndefined();
+      expect(store.get().notice?.detail).toContain(
+        "session identity is unavailable",
+      );
+    } finally {
+      __storeTesting.replaceState(partitionState());
+    }
   });
 
   test("shows Herdr's text with a pane action, or none for pane-less alerts", () => {
@@ -1932,7 +2491,7 @@ describe("Herdr task notifications", () => {
     }
   });
 
-  test("respects the toggle, per-kind preferences and the active connection", () => {
+  test("respects preferences and retains a sibling notification's owning runtime", () => {
     const event = herdrEvent({
       kind: "blocked",
       title: "claude needs attention",
@@ -1952,7 +2511,10 @@ describe("Herdr task notifications", () => {
       }
       __storeTesting.replaceState(enabledState());
       __storeTesting.handleHerdrEvent({ ...event, connection_id: "beta" });
-      expect(store.get().notice).toBeNull();
+      expect(store.get().notice).toMatchObject({
+        actionConnectionId: "beta",
+        actionRuntimeGeneration: 1,
+      });
     } finally {
       __storeTesting.replaceState(partitionState());
     }

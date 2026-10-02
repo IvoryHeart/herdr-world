@@ -1,4 +1,8 @@
 import {
+  WORLD_SNAPSHOT_CHUNK_CHARACTERS,
+  WORLD_SNAPSHOT_MAX_CHUNKS,
+} from "../../shared/worldSnapshotChunks";
+import {
   validateRemoteSocketPath,
   validateSshDestination,
 } from "./sshProfileValidation";
@@ -158,6 +162,7 @@ export interface BridgeHello {
     connection_id?: boolean;
     connection_scoped_http?: boolean;
     connection_runtime_generation?: boolean;
+    world_snapshot_chunks?: boolean;
     /** Task notifications follow Herdr's semantic notifications, not pane status. */
     herdr_task_notifications?: boolean;
     [key: string]: unknown;
@@ -253,7 +258,28 @@ type Pending = {
   connectionId: string | null;
   clientGeneration: number;
   serverRuntimeGeneration: number | null;
+  transportEpoch: number;
+  legacyActiveLease: boolean;
+  method: string;
+  runtimeLease: object | undefined;
+  chunks?: { total: number; parts: string[] };
+  acceptsChunks: boolean;
 };
+
+/** A dispatched operation may have completed; callers must re-observe before retrying. */
+export class UncertainRequestError extends Error {
+  readonly outcome = "uncertain";
+
+  constructor(
+    readonly method: string,
+    reason: string,
+  ) {
+    super(
+      `${reason}; ${method} outcome is uncertain. Refresh the exact target before retrying.`,
+    );
+    this.name = "UncertainRequestError";
+  }
+}
 
 export interface ConnectionClient {
   readonly connectionId: string;
@@ -352,6 +378,7 @@ function isBridgeHello(value: unknown): value is BridgeHello {
     "connection_scoped_http",
     "connection_runtime_generation",
     "herdr_task_notifications",
+    "world_snapshot_chunks",
   ]) {
     const value = capabilities[capability];
     if (value !== undefined && typeof value !== "boolean") return false;
@@ -390,9 +417,11 @@ export class Bridge {
   private _status: ConnectionStatus = "disconnected";
   private _activeConnectionId = STARTUP_DEFAULT_CONNECTION_ID;
   private _clientGeneration = 0;
+  private transportEpoch = 0;
   private _hello: BridgeHello | null = null;
   private helloAcceptedForSocket = false;
   private readonly runtimeGenerations = new Map<string, number>();
+  private readonly runtimeLeases = new Map<string, object>();
 
   constructor(
     private readonly connectTimeoutMs = CONNECT_TIMEOUT_MS,
@@ -416,12 +445,37 @@ export class Bridge {
   }
 
   setConnectionRuntimeGenerations(
-    connections: Array<Pick<ConnectionSummary, "id" | "generation">>,
+    connections: Array<
+      Pick<ConnectionSummary, "id" | "generation"> &
+        Partial<Pick<ConnectionSummary, "state">>
+    >,
   ): void {
-    this.runtimeGenerations.clear();
+    const nextGenerations = new Map<string, number>();
     for (const connection of connections) {
-      this.runtimeGenerations.set(connection.id, connection.generation);
+      if (connection.state === undefined || connection.state === "ready") {
+        nextGenerations.set(connection.id, connection.generation);
+      }
     }
+    for (const [id, generation] of nextGenerations) {
+      if (this.runtimeGenerations.get(id) !== generation) {
+        this.runtimeLeases.set(id, {});
+      }
+    }
+    this.runtimeGenerations.clear();
+    for (const [id, generation] of nextGenerations) {
+      this.runtimeGenerations.set(id, generation);
+    }
+    for (const id of this.runtimeLeases.keys()) {
+      if (!nextGenerations.has(id)) this.runtimeLeases.delete(id);
+    }
+    this.rejectPending(
+      "connection runtime generation is unavailable",
+      (pending) =>
+        pending.connectionId !== null &&
+        pending.serverRuntimeGeneration !== null &&
+        this.runtimeGenerations.get(pending.connectionId) !==
+          pending.serverRuntimeGeneration,
+    );
   }
 
   private pushGenerationMatches(
@@ -439,8 +493,8 @@ export class Bridge {
   }
 
   /**
-   * Advance the browser-side routing lease. Scoped requests from the previous
-   * lease are rejected so their replies cannot publish into the new session.
+   * Select the compatibility routing target. Explicit runtime clients are
+   * independent of this legacy focus lease.
    */
   setActiveConnection(connectionId: string): number {
     if (!connectionId) throw new Error("invalid connection_id");
@@ -450,26 +504,44 @@ export class Bridge {
     return this.advanceActiveConnectionGeneration();
   }
 
-  /** Invalidate scoped clients after same-ID runtime replacement/reconnect. */
+  /** Invalidate the legacy active client; runtime retirement uses the catalogue. */
   advanceActiveConnectionGeneration(): number {
     this._clientGeneration += 1;
     this.rejectPending(
       "connection changed during request",
-      (pending) => pending.connectionId !== null,
+      (pending) => pending.connectionId !== null && pending.legacyActiveLease,
     );
     return this._clientGeneration;
   }
 
+  /** Explicit generation clients own a runtime lease; omission is legacy active-host admission only. */
   connection(
     connectionId = this._activeConnectionId,
     serverRuntimeGeneration: number | null = null,
   ): ConnectionClient {
     const generation = this._clientGeneration;
+    const transportEpoch = this.transportEpoch;
+    const runtimeLease = this.runtimeLeases.get(connectionId);
+    const legacyActiveLease = serverRuntimeGeneration === null;
     const requiresRuntimeGeneration = () =>
       this._hello?.capabilities?.connection_runtime_generation === true;
+    const isCurrent = () =>
+      this.helloAcceptedForSocket &&
+      transportEpoch === this.transportEpoch &&
+      (legacyActiveLease
+        ? generation === this._clientGeneration &&
+          connectionId === this._activeConnectionId &&
+          !requiresRuntimeGeneration()
+        : requiresRuntimeGeneration() &&
+          runtimeLease !== undefined &&
+          this.runtimeLeases.get(connectionId) === runtimeLease &&
+          this.runtimeGenerations.get(connectionId) ===
+            serverRuntimeGeneration);
     const acceptsServerGeneration = (value: unknown) =>
-      !requiresRuntimeGeneration() ||
-      (serverRuntimeGeneration !== null && value === serverRuntimeGeneration);
+      isCurrent() &&
+      (!requiresRuntimeGeneration() ||
+        (serverRuntimeGeneration !== null &&
+          value === serverRuntimeGeneration));
     return {
       connectionId,
       generation,
@@ -479,16 +551,22 @@ export class Bridge {
           return Promise.reject(new Error("bridge hello is unavailable"));
         }
         if (
-          generation !== this._clientGeneration ||
-          connectionId !== this._activeConnectionId
+          transportEpoch !== this.transportEpoch ||
+          (legacyActiveLease &&
+            (generation !== this._clientGeneration ||
+              connectionId !== this._activeConnectionId))
         ) {
           return Promise.reject(new Error("connection changed during request"));
         }
         if (
-          requiresRuntimeGeneration() &&
-          (serverRuntimeGeneration === null ||
-            this.runtimeGenerations.get(connectionId) !==
-              serverRuntimeGeneration)
+          (!legacyActiveLease &&
+            (!requiresRuntimeGeneration() ||
+              runtimeLease === undefined ||
+              this.runtimeLeases.get(connectionId) !== runtimeLease)) ||
+          (requiresRuntimeGeneration() &&
+            (serverRuntimeGeneration === null ||
+              this.runtimeGenerations.get(connectionId) !==
+                serverRuntimeGeneration))
         ) {
           return Promise.reject(
             new Error("connection runtime generation is unavailable"),
@@ -501,16 +579,10 @@ export class Bridge {
           method,
           params,
           timeoutMs,
+          legacyActiveLease,
         );
       },
-      isCurrent: () =>
-        this.helloAcceptedForSocket &&
-        generation === this._clientGeneration &&
-        connectionId === this._activeConnectionId &&
-        (!requiresRuntimeGeneration() ||
-          (serverRuntimeGeneration !== null &&
-            this.runtimeGenerations.get(connectionId) ===
-              serverRuntimeGeneration)),
+      isCurrent,
       acceptsServerGeneration,
     };
   }
@@ -586,6 +658,7 @@ export class Bridge {
     this.helloAcceptedForSocket = false;
     this.clearConnectTimer();
     this.stopHeartbeat();
+    this.transportEpoch += 1;
     this.advanceActiveConnectionGeneration();
     this.rejectPending(reason);
     if (ws) {
@@ -665,7 +738,11 @@ export class Bridge {
     for (const [id, pending] of this.pending) {
       if (!predicate(pending)) continue;
       if (pending.timer !== null) clearTimeout(pending.timer);
-      pending.reject(new Error(message));
+      pending.reject(
+        pending.connectionId === null
+          ? new Error(message)
+          : new UncertainRequestError(pending.method, message),
+      );
       this.pending.delete(id);
     }
   }
@@ -684,6 +761,7 @@ export class Bridge {
     this.helloAcceptedForSocket = false;
     this.clearConnectTimer();
     this.stopHeartbeat();
+    this.transportEpoch += 1;
     this.advanceActiveConnectionGeneration();
     this.setStatus("disconnected");
     this.rejectPending(reason);
@@ -759,6 +837,49 @@ export class Bridge {
 
     if (!this.helloAcceptedForSocket) return;
 
+    if (hasReply && owns("world_snapshot_chunk")) {
+      const pending = this.pending.get(msg.id);
+      if (!pending) return;
+      const chunk = msg.world_snapshot_chunk;
+      if (
+        !pending.acceptsChunks ||
+        pending.method !== "world.snapshot" ||
+        pending.connectionId !== null ||
+        owns("connection_id") ||
+        owns("connection_generation") ||
+        owns("result") ||
+        owns("error") ||
+        !chunk ||
+        typeof chunk !== "object" ||
+        !Number.isInteger(chunk.total) ||
+        chunk.total < 1 ||
+        chunk.total > WORLD_SNAPSHOT_MAX_CHUNKS ||
+        !Number.isInteger(chunk.index) ||
+        chunk.index !== (pending.chunks?.parts.length ?? 0) ||
+        chunk.index >= chunk.total ||
+        typeof chunk.data !== "string" ||
+        chunk.data.length > WORLD_SNAPSHOT_CHUNK_CHARACTERS ||
+        (pending.chunks && pending.chunks.total !== chunk.total)
+      ) {
+        this.pending.delete(msg.id);
+        if (pending.timer !== null) clearTimeout(pending.timer);
+        pending.reject(new Error("invalid World snapshot chunk"));
+        return;
+      }
+      pending.chunks ??= { total: chunk.total, parts: [] };
+      pending.chunks.parts.push(chunk.data);
+      if (pending.chunks.parts.length !== chunk.total) return;
+      try {
+        msg.result = JSON.parse(pending.chunks.parts.join(""));
+      } catch {
+        this.pending.delete(msg.id);
+        if (pending.timer !== null) clearTimeout(pending.timer);
+        pending.reject(new Error("invalid World snapshot response"));
+        return;
+      }
+      delete msg.world_snapshot_chunk;
+      pending.chunks = undefined;
+    }
     if (hasReply) {
       const hasResult = owns("result");
       const hasError = owns("error");
@@ -794,7 +915,14 @@ export class Bridge {
         pending.reject(new Error("response connection_generation mismatch"));
       } else if (
         pending.connectionId !== null &&
-        pending.clientGeneration !== this._clientGeneration
+        (pending.transportEpoch !== this.transportEpoch ||
+          (pending.legacyActiveLease &&
+            pending.clientGeneration !== this._clientGeneration) ||
+          (pending.serverRuntimeGeneration !== null &&
+            (this.runtimeGenerations.get(pending.connectionId) !==
+              pending.serverRuntimeGeneration ||
+              this.runtimeLeases.get(pending.connectionId) !==
+                pending.runtimeLease)))
       ) {
         pending.reject(new Error("connection changed during request"));
       } else if (
@@ -957,6 +1085,7 @@ export class Bridge {
     method: string,
     params: Record<string, unknown>,
     timeoutMs: number | null,
+    legacyActiveLease = false,
   ): Promise<any> {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
@@ -973,7 +1102,11 @@ export class Bridge {
           ? null
           : setTimeout(() => {
               if (this.pending.delete(id)) {
-                reject(new Error(`timeout: ${method}`));
+                reject(
+                  connectionId === null
+                    ? new Error(`timeout: ${method}`)
+                    : new UncertainRequestError(method, `timeout: ${method}`),
+                );
               }
             }, timeoutMs);
       this.pending.set(id, {
@@ -983,6 +1116,17 @@ export class Bridge {
         connectionId,
         clientGeneration,
         serverRuntimeGeneration,
+        transportEpoch: this.transportEpoch,
+        legacyActiveLease,
+        method,
+        acceptsChunks:
+          connectionId === null &&
+          method === "world.snapshot" &&
+          this._hello?.capabilities.world_snapshot_chunks === true,
+        runtimeLease:
+          connectionId === null
+            ? undefined
+            : this.runtimeLeases.get(connectionId),
       });
       try {
         ws.send(
@@ -990,6 +1134,11 @@ export class Bridge {
             id,
             method,
             params,
+            ...(connectionId === null &&
+            method === "world.snapshot" &&
+            this._hello?.capabilities.world_snapshot_chunks === true
+              ? { accept_world_snapshot_chunks: true }
+              : {}),
             ...(connectionId === null
               ? {}
               : {
@@ -1004,7 +1153,11 @@ export class Bridge {
         if (timer !== null) clearTimeout(timer);
         this.pending.delete(id);
         this.forceReconnect("bridge send failed");
-        reject(error as Error);
+        reject(
+          connectionId === null
+            ? (error as Error)
+            : new UncertainRequestError(method, "bridge send failed"),
+        );
       }
     });
   }
@@ -1016,6 +1169,7 @@ export class Bridge {
     method: string,
     params: Record<string, unknown>,
     timeoutMs: number | null,
+    legacyActiveLease = false,
   ): Promise<any> {
     if (isBridgeGlobalMethod(method)) {
       return Promise.reject(
@@ -1029,6 +1183,7 @@ export class Bridge {
       method,
       params,
       timeoutMs,
+      legacyActiveLease,
     );
   }
 
@@ -1073,6 +1228,7 @@ export class Bridge {
       method,
       params,
       timeoutMs,
+      true,
     );
   }
 
@@ -1082,31 +1238,64 @@ export class Bridge {
     return () => this.helloHandlers.delete(cb);
   }
 
-  onEvent(cb: (event: HerdrEventMsg) => void): () => void {
-    this.eventHandlers.add(cb);
-    return () => this.eventHandlers.delete(cb);
+  private scopedHandler<
+    T extends { connection_id: string; connection_generation?: number },
+  >(cb: (message: T) => void, client?: ConnectionClient): (message: T) => void {
+    return client
+      ? (message) => {
+          if (
+            client.isCurrent() &&
+            message.connection_id === client.connectionId &&
+            client.acceptsServerGeneration(message.connection_generation)
+          )
+            cb(message);
+        }
+      : cb;
   }
 
-  onTerminal(cb: (terminal: TerminalPush) => void): () => void {
-    this.terminalHandlers.add(cb);
-    return () => this.terminalHandlers.delete(cb);
+  onEvent(
+    cb: (event: HerdrEventMsg) => void,
+    client?: ConnectionClient,
+  ): () => void {
+    const handler = this.scopedHandler(cb, client);
+    this.eventHandlers.add(handler);
+    return () => this.eventHandlers.delete(handler);
+  }
+
+  onTerminal(
+    cb: (terminal: TerminalPush) => void,
+    client?: ConnectionClient,
+  ): () => void {
+    const handler = this.scopedHandler(cb, client);
+    this.terminalHandlers.add(handler);
+    return () => this.terminalHandlers.delete(handler);
   }
 
   onTerminalClipboard(
     cb: (clipboard: TerminalClipboardPush) => void,
+    client?: ConnectionClient,
   ): () => void {
-    this.terminalClipboardHandlers.add(cb);
-    return () => this.terminalClipboardHandlers.delete(cb);
+    const handler = this.scopedHandler(cb, client);
+    this.terminalClipboardHandlers.add(handler);
+    return () => this.terminalClipboardHandlers.delete(handler);
   }
 
-  onPopup(cb: (popup: PopupStatePush) => void): () => void {
-    this.popupHandlers.add(cb);
-    return () => this.popupHandlers.delete(cb);
+  onPopup(
+    cb: (popup: PopupStatePush) => void,
+    client?: ConnectionClient,
+  ): () => void {
+    const handler = this.scopedHandler(cb, client);
+    this.popupHandlers.add(handler);
+    return () => this.popupHandlers.delete(handler);
   }
 
-  onTerminalClosed(cb: (closed: TerminalClosedPush) => void): () => void {
-    this.terminalClosedHandlers.add(cb);
-    return () => this.terminalClosedHandlers.delete(cb);
+  onTerminalClosed(
+    cb: (closed: TerminalClosedPush) => void,
+    client?: ConnectionClient,
+  ): () => void {
+    const handler = this.scopedHandler(cb, client);
+    this.terminalClosedHandlers.add(handler);
+    return () => this.terminalClosedHandlers.delete(handler);
   }
 
   onStatus(cb: (status: ConnectionStatus) => void): () => void {

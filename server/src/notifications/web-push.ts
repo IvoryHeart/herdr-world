@@ -58,12 +58,15 @@ function clip(value: string, max = 80) {
 /** The JSON message the service worker renders for one device delivery. */
 export function taskPushPayload(task: PushTask) {
   const target =
-    task.workspaceId && task.paneId
+    task.workspaceId && task.paneId && task.agentSessionId
       ? {
           connectionId: task.connectionId,
           runtimeGeneration: task.runtimeGeneration,
           workspaceId: task.workspaceId,
           paneId: task.paneId,
+          ...(task.agentSessionId
+            ? { agentSessionId: task.agentSessionId }
+            : {}),
         }
       : null;
   // Status-derived tasks carry labels resolved by the runtime, with ID fallbacks.
@@ -82,7 +85,10 @@ export function taskPushPayload(task: PushTask) {
       (task.kind === "blocked"
         ? "Herdr World agent needs input"
         : "Herdr World task completed"),
-    body: task.body ?? fallbackBody,
+    body:
+      task.paneId && !task.agentSessionId
+        ? `${task.body ?? fallbackBody} · Original agent session identity is unavailable; open the app to inspect current work.`
+        : (task.body ?? fallbackBody),
     tag: JSON.stringify([
       "herdr-world-task",
       task.connectionId,

@@ -220,6 +220,7 @@ class GraphRenderer {
   #width = 1;
   #height = 1;
   #alpha = 0;
+  #frameDelay: number | null = null;
   #frame: number | null = null;
   #pointer: PointerInteraction | null = null;
   #disposed = false;
@@ -484,12 +485,27 @@ class GraphRenderer {
   }
 
   #requestFrame() {
-    if (this.#disposed || this.#hidden || this.#frame !== null) return;
-    this.#frame = window.requestAnimationFrame(this.#tick);
-    this.#diagnostics.activeAnimationFrames += 1;
+    if (
+      this.#disposed ||
+      this.#hidden ||
+      this.#frame !== null ||
+      this.#frameDelay !== null
+    )
+      return;
+    // A dense canvas must leave ordinary socket tasks a turn between paints.
+    this.#frameDelay = window.setTimeout(() => {
+      this.#frameDelay = null;
+      if (this.#disposed || this.#hidden) return;
+      this.#frame = window.requestAnimationFrame(this.#tick);
+      this.#diagnostics.activeAnimationFrames += 1;
+    }, 16);
   }
 
   #cancelFrame() {
+    if (this.#frameDelay !== null) {
+      window.clearTimeout(this.#frameDelay);
+      this.#frameDelay = null;
+    }
     if (this.#frame === null) return;
     window.cancelAnimationFrame(this.#frame);
     this.#frame = null;
@@ -1100,12 +1116,30 @@ function hostStateLabel(node: WorldGraphNode) {
         : "Offline · stale";
 }
 
+const measuredLabels = new WeakMap<
+  CanvasRenderingContext2D,
+  Map<string, string>
+>();
+
 function shortCanvasLabel(
   context: CanvasRenderingContext2D,
   label: string,
   maxWidth: number,
 ) {
-  if (context.measureText(label).width <= maxWidth) return label;
+  let cached = measuredLabels.get(context);
+  if (!cached) {
+    cached = new Map();
+    measuredLabels.set(context, cached);
+  }
+  const key = JSON.stringify([context.font, label, maxWidth]);
+  const previous = cached.get(key);
+  if (previous !== undefined) return previous;
+  const remember = (value: string) => {
+    if (cached.size >= 4096) cached.delete(cached.keys().next().value!);
+    cached.set(key, value);
+    return value;
+  };
+  if (context.measureText(label).width <= maxWidth) return remember(label);
   const points = [...label];
   while (
     points.length > 1 &&
@@ -1113,7 +1147,7 @@ function shortCanvasLabel(
   ) {
     points.pop();
   }
-  return `${points.join("")}…`;
+  return remember(`${points.join("")}…`);
 }
 
 function clamp(value: number, minimum: number, maximum: number) {

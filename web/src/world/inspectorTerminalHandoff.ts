@@ -25,7 +25,7 @@ export function inspectorTerminalFileAdmitted(
     request.windowId === worldInspectorWindowId(conversation) &&
     request.connectionId === client.connectionId &&
     request.connectionId === conversation.connectionId &&
-    request.connectionGeneration === client.generation &&
+    request.connectionGeneration === conversation.runtimeGeneration &&
     request.runtimeGeneration === client.serverRuntimeGeneration &&
     request.runtimeGeneration === conversation.runtimeGeneration &&
     request.workspaceId === conversation.workspaceId &&

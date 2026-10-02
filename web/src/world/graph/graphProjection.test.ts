@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { projectWorldGraph } from "./graphProjection";
+import { graphMatches } from "../SpatialGraphView";
 import type {
   WorldHostObject,
   WorldLeafObject,
@@ -9,6 +10,100 @@ import type {
 } from "../worldObject";
 
 describe("World Graph projection", () => {
+  test("search finds a fully observed omitted leaf and selection reveals it within bounds", () => {
+    const dense = fixtureSpace("beta", 0, 20);
+    dense.children[19]!.label = "Needle beyond Graph";
+    const world = fixtureWorld([fixtureHost("beta", [dense])]);
+    const projection = projectWorldGraph(world);
+    expect(
+      projection.nodes.some((node) => node.id === dense.children[19]!.id),
+    ).toBe(false);
+    expect(graphMatches(projection.hosts, "needle beyond graph")).toEqual(
+      new Set(["host:beta", "space:beta:0", "leaf:beta:0:19"]),
+    );
+    const revealed = projectWorldGraph(world, dense.children[19]!.id);
+    expect(
+      revealed.nodes.some((node) => node.id === dense.children[19]!.id),
+    ).toBe(true);
+    expect(revealed.spaces[0]!.children).toHaveLength(16);
+    expect(revealed.spaces[0]!.omittedChildCount).toBe(4);
+  });
+  test("watched leaves reserve ancestry before ordinary capacity is allocated", () => {
+    const spaces = Array.from({ length: 140 }, (_, index) =>
+      fixtureSpace("alpha", index, 1),
+    );
+    spaces[139]!.children[0]!.watched = true;
+    const graph = projectWorldGraph(
+      fixtureWorld([
+        fixtureHost("alpha", spaces),
+        fixtureHost("beta", [fixtureSpace("beta", 0, 1)]),
+      ]),
+    );
+    expect(graph.nodes.map(({ id }) => id)).toContain("leaf:alpha:139:0");
+    expect(graph.hosts[1]!.spaces).toHaveLength(1);
+    expect(graph.spaces).toHaveLength(128);
+  });
+  test("ordinary space capacity is shared fairly with exact qualified omissions", () => {
+    const graph = projectWorldGraph(
+      fixtureWorld([
+        fixtureHost(
+          "alpha",
+          Array.from({ length: 140 }, (_, index) =>
+            fixtureSpace("alpha", index, 1),
+          ),
+        ),
+        fixtureHost(
+          "beta",
+          Array.from({ length: 140 }, (_, index) =>
+            fixtureSpace("beta", index, 1),
+          ),
+        ),
+      ]),
+    );
+    expect(graph.hosts.map(({ spaces }) => spaces.length)).toEqual([64, 64]);
+    expect(
+      graph.hosts.map(({ omittedSpaceCount }) => omittedSpaceCount),
+    ).toEqual([76, 76]);
+    expect(graph.omittedSpaceCount).toBe(152);
+    expect(graph.coverage).toMatchObject({
+      observedSpaces: 280,
+      presentedSpaces: 128,
+      observedTerminals: 280,
+      presentedTerminals: 128,
+      omittedTerminals: 152,
+    });
+    const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+    expect(
+      graph.edges.every(
+        ({ sourceId, targetId }) =>
+          nodes.get(sourceId)?.source.connectionId ===
+          nodes.get(targetId)?.source.connectionId,
+      ),
+    ).toBe(true);
+  });
+
+  test("a small host retains its spaces alongside a dense host and an empty root", () => {
+    const graph = projectWorldGraph(
+      fixtureWorld([
+        fixtureHost(
+          "alpha",
+          Array.from({ length: 140 }, (_, index) =>
+            fixtureSpace("alpha", index, 1),
+          ),
+        ),
+        fixtureHost(
+          "beta",
+          Array.from({ length: 3 }, (_, index) =>
+            fixtureSpace("beta", index, 1),
+          ),
+        ),
+        fixtureHost("offline", []),
+      ]),
+    );
+    expect(graph.hosts.map(({ spaces }) => spaces.length)).toEqual([125, 3, 0]);
+    expect(graph.omittedSpaceCount).toBe(15);
+    expect(graph.coverage.configuredHosts).toBe(3);
+  });
   test("keeps duplicate native identifiers distinct inside qualified host trees", () => {
     const world = fixtureWorld([
       fixtureHost("local", [fixtureSpace("local", 0, 2)]),

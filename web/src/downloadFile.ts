@@ -6,6 +6,8 @@
  * context on iOS/standalone (the in-app browser offers a way back), and keep
  * the classic anchor download everywhere else.
  */
+import type { ConnectionClient } from "./api";
+
 export type FileDownloadStrategy = "share" | "new-context" | "anchor";
 
 /** Share sheets need the whole blob in memory; open large files instead. */
@@ -115,11 +117,33 @@ export async function downloadFileFromUrl(args: {
   url: string;
   /** Fallback name; the server's Content-Disposition name wins when present. */
   filename: string;
+  client?: ConnectionClient;
 }): Promise<"shared" | "opened" | "anchored"> {
+  const assertCurrent = () => {
+    if (
+      args.client &&
+      (!args.client.isCurrent() || args.client.serverRuntimeGeneration === null)
+    ) {
+      throw new Error("download runtime is unavailable");
+    }
+  };
+  assertCurrent();
   const strategy = chooseFileDownloadStrategy(currentDownloadEnvironment());
   if (strategy === "share") {
     try {
-      const response = await fetch(args.url, { credentials: "same-origin" });
+      const response = await fetch(args.url, {
+        credentials: "same-origin",
+        redirect: "error",
+      });
+      assertCurrent();
+      if (
+        args.client &&
+        (response.headers.get("X-Herdr-Connection-Id") !==
+          args.client.connectionId ||
+          response.headers.get("X-Herdr-Connection-Generation") !==
+            String(args.client.serverRuntimeGeneration))
+      )
+        throw new Error("download response connection identity mismatch");
       if (!response.ok) {
         throw new Error(`download failed (${response.status})`);
       }
@@ -129,6 +153,7 @@ export async function downloadFileFromUrl(args: {
         return "opened";
       }
       const blob = await response.blob();
+      assertCurrent();
       if (blob.size > MAX_SHARE_FILE_BYTES) {
         openInNewContext(args.url);
         return "opened";
@@ -145,7 +170,9 @@ export async function downloadFileFromUrl(args: {
       await navigator.share({ files: [file], title: filename });
       return "shared";
     } catch (error) {
+      assertCurrent();
       if ((error as Error).name === "AbortError") return "shared";
+      if (args.client) throw error;
       openInNewContext(args.url);
       return "opened";
     }

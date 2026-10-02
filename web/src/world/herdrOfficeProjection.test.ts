@@ -3,11 +3,114 @@ import type { Pane, Tab, Workspace } from "../types";
 import {
   OFFICE_PRESENTATION_BOUNDS,
   projectWorldOffice,
+  prepareWorldOffice,
 } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 
 describe("Pixel Office projection", () => {
+  test("cooperative roster preparation preserves selected-room ordering and every qualified flag", async () => {
+    const world = buildWorldObject(
+      Array.from({ length: 9 }, (_, index) => boundedConnection(index)),
+    );
+    const selected = world.spaces[world.spaces.length - 1]!.id;
+    const before = projectWorldOffice(world, 1, selected);
+    await prepareWorldOffice(world);
+    expect(projectWorldOffice(world, 1, selected)).toEqual(before);
+  });
+  test("a large idle roster keeps deterministic bounded bar admission and reserves an omitted selection", async () => {
+    const tabs = Array.from({ length: 100 }, (_, index) =>
+      tab("tab-" + index, index + 1),
+    );
+    const panes = tabs.map((entry) =>
+      pane(entry.tab_id, "idle", "Synthetic agent"),
+    );
+    const world = buildWorldObject([connection("beta", tabs, panes)]);
+    await prepareWorldOffice(world);
+    const ordinary = projectWorldOffice(world, 1);
+    const reordered = projectWorldOffice(
+      buildWorldObject([connection("beta", tabs, [...panes].reverse())]),
+      1,
+    );
+    expect(ordinary.barAgents.map((agent) => agent.key)).toEqual(
+      reordered.barAgents.map((agent) => agent.key),
+    );
+    expect(ordinary.barAgents).toHaveLength(
+      OFFICE_PRESENTATION_BOUNDS.barAgents,
+    );
+    expect(ordinary.roster).toHaveLength(100);
+    const omitted = world.leaves.find(
+      (leaf) => !ordinary.barAgents.some((agent) => agent.key === leaf.id),
+    )!;
+    const selected = projectWorldOffice(world, 1, omitted.id);
+    expect(selected.barAgents[0]?.key).toBe(omitted.id);
+    expect(selected.barAgents).toHaveLength(
+      OFFICE_PRESENTATION_BOUNDS.barAgents,
+    );
+    expect(selected.coverage.omittedBarAgents).toBe(84);
+    expect(
+      ordinary.roster.find((entry) => entry.agent.key === omitted.id)
+        ?.destinationPresented,
+    ).toBe(false);
+    expect(
+      selected.roster.find((entry) => entry.agent.key === omitted.id)
+        ?.destinationPresented,
+    ).toBe(true);
+  });
+  test("an observed search selection reserves its omitted desk, pane and agent without expanding Office bounds", async () => {
+    const tabs = Array.from({ length: 20 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const panes = tabs.map((entry, index) =>
+      pane(entry.tab_id, "working", `Synthetic ${index}`),
+    );
+    const world = buildWorldObject([connection("beta", tabs, panes)], null);
+    await prepareWorldOffice(world);
+    const selected = world.leaves[19]!;
+    const before = projectWorldOffice(world, 1);
+    expect(
+      before.paneRoster.find(({ device }) => device.nodeId === selected.id)
+        ?.presented,
+    ).toBe(false);
+    const revealed = projectWorldOffice(world, 1, selected.id);
+    expect(
+      revealed.paneRoster.find(({ device }) => device.nodeId === selected.id)
+        ?.presented,
+    ).toBe(true);
+    expect(
+      revealed.roster.find(({ agent }) => agent.key === selected.id)
+        ?.destinationPresented,
+    ).toBe(true);
+    expect(revealed.rooms[0]!.desks).toHaveLength(
+      OFFICE_PRESENTATION_BOUNDS.desksPerRoom,
+    );
+    expect(revealed.rooms[0]!.omittedDeskCount).toBe(12);
+    expect(
+      before.paneRoster.find((entry) => entry.device.nodeId === selected.id)
+        ?.presented,
+    ).toBe(false);
+  });
+  test("aggregate Office exposes qualified resources on both compatible ready hosts", () => {
+    const office = projectWorldOffice(
+      buildWorldObject(
+        ["alpha", "beta"].map((id) =>
+          connection(id, [tab("shared", 1)], [pane("shared", "working", id)]),
+        ),
+        null,
+      ),
+      1,
+    );
+    expect(office.hosts).toHaveLength(2);
+    expect(office.rooms.map(({ canOpenInSpaces }) => canOpenInSpaces)).toEqual([
+      true,
+      true,
+    ]);
+    expect(
+      office.paneRoster.map(({ device }) => device.canOpenInSpaces),
+    ).toEqual([true, true]);
+    expect(new Set(office.rooms.map(({ key }) => key)).size).toBe(2);
+    expect(office.coverage.observedAgents).toBe(2);
+  });
   test("places agents by structured status and keeps every admitted tab as a desk", () => {
     const tabs = [
       tab("work", 1),
@@ -129,10 +232,10 @@ describe("Pixel Office projection", () => {
     ).toEqual(["local", "other"]);
     expect(
       office.paneRoster.map(({ device }) => device.canOpenInSpaces),
-    ).toEqual([true, false]);
+    ).toEqual([true, true]);
   });
 
-  test("qualifies colliding native identifiers and disables inactive host operations", () => {
+  test("qualifies colliding native identifiers and admits both ready host operations", () => {
     const sources = ["host-a", "host-b"].map((id) =>
       connection(id, [tab("shared", 1)], [pane("shared", "working", id)]),
     );
@@ -148,7 +251,7 @@ describe("Pixel Office projection", () => {
     ]);
     expect(office.rooms.map(({ canOpenInSpaces }) => canOpenInSpaces)).toEqual([
       true,
-      false,
+      true,
     ]);
   });
 

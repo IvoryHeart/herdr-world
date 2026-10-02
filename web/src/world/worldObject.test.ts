@@ -4,6 +4,8 @@ import {
   buildWorldObject,
   taskSummarySessionFingerprint,
   worldObjectForConnection,
+  worldObjectForHosts,
+  worldObjectForWatches,
   worldObjectId,
 } from "./worldObject";
 
@@ -72,6 +74,81 @@ function connection(
 }
 
 describe("WorldObject", () => {
+  test("Pinned only intersects Hosts and recomputes matching coverage instead of reporting unrelated observations", () => {
+    const aggregate = buildWorldObject(
+      [connection("alpha"), connection("beta")],
+      "alpha",
+    );
+    const filtered = worldObjectForHosts(aggregate, ["beta"]);
+    const pinned = worldObjectForWatches(filtered, [
+      { connectionId: "alpha", generation: 4, terminalId: "shared-terminal" },
+      { connectionId: "beta", generation: 4, terminalId: "shell-terminal" },
+    ]);
+    expect(pinned.leaves.map((leaf) => leaf.connectionId)).toEqual(["beta"]);
+    expect(pinned.coverage).toMatchObject({
+      spaces: 1,
+      leaves: 1,
+      agents: 0,
+      shells: 1,
+    });
+    expect(pinned.hosts[0]!.coverage.leaves).toBe(1);
+    expect(pinned.spaces[0]!.coverage.leaves).toBe(1);
+    expect(filtered.coverage.agents).toBe(1);
+    expect(aggregate.coverage.agents).toBe(2);
+  });
+  test("current ready hosts admit independent actions without an operational host selection", () => {
+    for (const focused of [null, "alpha", "beta"]) {
+      const world = buildWorldObject(
+        [connection("alpha"), connection("beta")],
+        focused,
+      );
+      expect(world.spaces.map(({ actionable }) => actionable)).toEqual([
+        true,
+        true,
+      ]);
+      expect(
+        world.leaves.every(
+          ({ capabilities }) =>
+            capabilities.openTerminal &&
+            capabilities.files &&
+            capabilities.changes,
+        ),
+      ).toBe(true);
+      expect(new Set(world.leaves.map(({ id }) => id)).size).toBe(4);
+    }
+  });
+
+  test("aggregate admission rejects only stale or replaced owners while retaining their qualified roots", () => {
+    const world = buildWorldObject(
+      [
+        connection("alpha"),
+        connection("beta", { stale: true, actionable: false }),
+        connection("gamma", { generation: 5, snapshotGeneration: 4 }),
+        connection("offline", {
+          state: "disconnected",
+          snapshot: null,
+          snapshotGeneration: null,
+          actionable: false,
+        }),
+      ],
+      null,
+    );
+    expect(world.hosts).toHaveLength(4);
+    expect(
+      world.leaves
+        .filter(({ actionable }) => actionable)
+        .map(({ connectionId }) => connectionId),
+    ).toEqual(["alpha", "alpha"]);
+    expect(
+      world.hosts.find(({ connectionId }) => connectionId === "offline")
+        ?.spaces,
+    ).toEqual([]);
+    expect(
+      world.leaves
+        .filter(({ connectionId }) => connectionId !== "alpha")
+        .every(({ actionable }) => !actionable),
+    ).toBe(true);
+  });
   test("projects deterministic host-space-agent-or-terminal hierarchy", () => {
     const world = buildWorldObject(
       [connection("local"), connection("remote")],
@@ -96,11 +173,11 @@ describe("WorldObject", () => {
       nativeId: "shared-pane",
       hostState: "ready-inactive",
       selectedHost: false,
-      actionable: false,
+      actionable: true,
       capabilities: {
         activateHost: true,
-        openTerminal: false,
-        openSpaces: false,
+        openTerminal: true,
+        openSpaces: true,
       },
     });
     expect(world.hosts[0]).toMatchObject({

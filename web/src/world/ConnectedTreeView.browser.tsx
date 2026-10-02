@@ -169,22 +169,23 @@ async function run() {
     );
 
     const compact = window.innerWidth <= 720;
-    const diagram = host.querySelector<HTMLElement>(".world-connected-tree")!;
-    const outline = host.querySelector<HTMLElement>(".world-tree-outline")!;
+    const diagram = host.querySelector<HTMLElement>(".world-connected-tree");
+    const outline = host.querySelector<HTMLElement>(".world-tree-outline");
     check(
       compact
-        ? getComputedStyle(diagram).display === "none"
-        : getComputedStyle(diagram).display !== "none",
-      "Tree did not choose the expected viewport presentation",
+        ? diagram === null && outline !== null
+        : diagram !== null && outline === null,
+      "Tree mounted the inactive viewport presentation",
     );
+    const activePresentation = compact ? outline : diagram;
+    if (!activePresentation)
+      throw new Error("Tree did not mount the active viewport presentation");
     check(
-      compact
-        ? getComputedStyle(outline).display !== "none"
-        : getComputedStyle(outline).display === "none",
-      "Tree outline visibility did not match the viewport",
+      getComputedStyle(activePresentation).display !== "none",
+      "Tree hid its active viewport presentation",
     );
     if (compact) {
-      const rowTarget = outline.querySelector<HTMLElement>(
+      const rowTarget = activePresentation.querySelector<HTMLElement>(
         ".world-tree-outline-select",
       );
       check(
@@ -193,10 +194,9 @@ async function run() {
       );
     }
 
-    const activePresentation = compact ? outline : diagram;
     check(
       !hasAnchor(activePresentation, inactiveTerminal.id),
-      "Tree mixed another host into the selected-host presentation",
+      "Tree mixed an excluded host into the explicit connection projection",
     );
     const inactiveBranch = [
       ...activePresentation.querySelectorAll<HTMLElement>(
@@ -205,7 +205,7 @@ async function run() {
     ].find((element) => element.dataset.treeHostId === inactiveHost.id);
     check(
       inactiveBranch === undefined,
-      "Tree retained an inactive host branch",
+      "Tree retained an excluded host branch",
     );
     const hostToggle = activePresentation.querySelector<HTMLButtonElement>(
       `[aria-label="Collapse ${worldHost.label}"]`,

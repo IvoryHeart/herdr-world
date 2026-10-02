@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from "react";
 import {
-  bridge,
   type BridgeControlMsg,
+  bridge,
   type ConnectionLifecycleState,
   type ConnectionStatus,
 } from "../api";
 import type { Pane, Tab, Workspace } from "../types";
+import { prepareWorldOffice } from "./herdrOfficeProjection";
+import { prepareWorldObject, yieldWorldTask } from "./worldObject";
 
 const INVALIDATION_DEBOUNCE_MS = 80;
 const FALLBACK_REFRESH_MS = 15_000;
@@ -87,6 +89,10 @@ export type WorldRuntimeState = {
 };
 
 type WorldRuntimeClient = {
+  connection?(
+    connectionId: string,
+    generation: number,
+  ): { isCurrent(): boolean };
   call(method: string, params?: Record<string, unknown>): Promise<unknown>;
   onControl(callback: (control: BridgeControlMsg) => void): () => void;
   onStatus(callback: (status: ConnectionStatus) => void): () => void;
@@ -326,6 +332,28 @@ export function parseWorldSnapshotResult(
   };
 }
 
+/** Decode bounded owners in separate tasks; partial admission is never published. */
+async function prepareWorldSnapshotResult(
+  value: unknown,
+  current: () => boolean,
+): Promise<Omit<WorldRuntimeState, "status" | "error"> | null> {
+  const item = record(value);
+  if (!item || !Array.isArray(item.connections)) return null;
+  const header = parseWorldSnapshotResult({ ...item, connections: [] });
+  if (!header) return null;
+  const seen = new Set<string>();
+  for (const value of item.connections) {
+    if (!current()) return null;
+    const connection = parseConnection(value);
+    if (connection && !seen.has(connection.connectionId)) {
+      seen.add(connection.connectionId);
+      header.connections.push(connection);
+    }
+    await yieldWorldTask();
+  }
+  return current() ? header : null;
+}
+
 export class WorldRuntimeStore {
   private state: WorldRuntimeState = INITIAL_STATE;
   private readonly listeners = new Set<() => void>();
@@ -340,6 +368,17 @@ export class WorldRuntimeStore {
   private priorityVersion = 0;
   private appliedPriorityVersion = 0;
   private selectedConnectionId: string | null = null;
+  private visibleConnectionIds: string[] = [];
+  private openConnectionIds: string[] = [];
+
+  setVisibleConnectionIds(ids: readonly string[]) {
+    const next = [...new Set(ids)].slice(0, 128);
+    if (JSON.stringify(next) === JSON.stringify(this.visibleConnectionIds))
+      return;
+    this.visibleConnectionIds = next;
+    if (this.refreshInFlight) this.refreshQueued = true;
+    else if (this.unlistenControl) this.scheduleRefresh();
+  }
 
   constructor(private readonly client: WorldRuntimeClient) {}
 
@@ -382,31 +421,38 @@ export class WorldRuntimeStore {
 
   setPriorities(values: readonly WorldRuntimePriority[]): number {
     const seen = new Set<string>();
-    const next = values
-      .flatMap((value) => {
-        if (
-          !value.connectionId ||
-          !value.workspaceId ||
-          (value.paneId !== undefined && !value.paneId) ||
-          (value.terminalId !== undefined && !value.terminalId)
-        ) {
-          return [];
-        }
-        const normalized: WorldRuntimePriority = {
-          connectionId: value.connectionId,
-          workspaceId: value.workspaceId,
-          ...(value.paneId ? { paneId: value.paneId } : {}),
-          ...(value.terminalId ? { terminalId: value.terminalId } : {}),
-        };
-        const key = JSON.stringify(normalized);
-        if (seen.has(key)) return [];
-        seen.add(key);
-        return [normalized];
-      })
-      .slice(0, MAX_PRIORITIES);
-    if (JSON.stringify(next) === JSON.stringify(this.priorities)) {
+    const normalized = values.flatMap((value) => {
+      if (
+        !value.connectionId ||
+        !value.workspaceId ||
+        (value.paneId !== undefined && !value.paneId) ||
+        (value.terminalId !== undefined && !value.terminalId)
+      ) {
+        return [];
+      }
+      const normalized: WorldRuntimePriority = {
+        connectionId: value.connectionId,
+        workspaceId: value.workspaceId,
+        ...(value.paneId ? { paneId: value.paneId } : {}),
+        ...(value.terminalId ? { terminalId: value.terminalId } : {}),
+      };
+      const key = JSON.stringify(normalized);
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [normalized];
+    });
+    const next = normalized.slice(0, MAX_PRIORITIES);
+    const openConnectionIds = [
+      ...new Set(normalized.map((priority) => priority.connectionId)),
+    ].slice(0, 128);
+    if (
+      JSON.stringify(next) === JSON.stringify(this.priorities) &&
+      JSON.stringify(openConnectionIds) ===
+        JSON.stringify(this.openConnectionIds)
+    ) {
       return this.priorityVersion;
     }
+    this.openConnectionIds = openConnectionIds;
     this.priorities = next;
     this.priorityVersion += 1;
     if (this.unlistenControl) this.scheduleRefresh();
@@ -416,8 +462,7 @@ export class WorldRuntimeStore {
   setSelectedConnectionId(connectionId: string | null) {
     if (this.selectedConnectionId === connectionId) return;
     this.selectedConnectionId = connectionId;
-    // The previous response was prioritized for another operational host.
-    this.observationEpoch += 1;
+    // Scheduling preferences do not retire otherwise valid catalogue responses.
     if (this.refreshInFlight) this.refreshQueued = true;
     else if (this.unlistenControl) this.scheduleRefresh();
   }
@@ -460,23 +505,61 @@ export class WorldRuntimeStore {
     const priorityVersion = this.priorityVersion;
     const priorities = this.priorities;
     try {
-      const parsed = parseWorldSnapshotResult(
-        await this.client.call("world.snapshot", {
-          ...(this.selectedConnectionId
-            ? { selected_connection_id: this.selectedConnectionId }
-            : {}),
-          priorities: priorities.map((priority) => ({
-            connection_id: priority.connectionId,
-            workspace_id: priority.workspaceId,
-            ...(priority.paneId ? { pane_id: priority.paneId } : {}),
-            ...(priority.terminalId
-              ? { terminal_id: priority.terminalId }
-              : {}),
-          })),
-        }),
-      );
-      if (!parsed) throw new Error("invalid World snapshot response");
+      const response = await this.client.call("world.snapshot", {
+        priority_connection_ids: [
+          ...new Set([
+            // Open owners outrank the overview. With All hosts, promoting
+            // every visible peer would erase that scheduling preference.
+            ...(this.openConnectionIds.length
+              ? this.openConnectionIds
+              : this.visibleConnectionIds),
+          ]),
+        ].slice(0, 128),
+        ...(this.selectedConnectionId
+          ? { selected_connection_id: this.selectedConnectionId }
+          : {}),
+        priorities: priorities.map((priority) => ({
+          connection_id: priority.connectionId,
+          workspace_id: priority.workspaceId,
+          ...(priority.paneId ? { pane_id: priority.paneId } : {}),
+          ...(priority.terminalId ? { terminal_id: priority.terminalId } : {}),
+        })),
+      });
       if (observationEpoch !== this.observationEpoch) return;
+      const parsed = await prepareWorldSnapshotResult(
+        response,
+        () => observationEpoch === this.observationEpoch,
+      );
+      if (observationEpoch !== this.observationEpoch) return;
+      if (!parsed) throw new Error("invalid World snapshot response");
+      const current = () => observationEpoch === this.observationEpoch;
+      // Preparation yields to input and lifecycle events. Revalidate each
+      // captured owner after those boundaries without retiring healthy siblings.
+      for (;;) {
+        const world = await prepareWorldObject(parsed.connections, current);
+        if (!world) return;
+        await prepareWorldOffice(world, current);
+        if (!current()) return;
+        let changed = false;
+        const connections = parsed.connections.map((connection) => {
+          if (
+            !connection.actionable ||
+            !this.client.connection ||
+            this.client
+              .connection(connection.connectionId, connection.generation)
+              .isCurrent()
+          )
+            return connection;
+          changed = true;
+          return {
+            ...connection,
+            stale: connection.snapshot !== null,
+            actionable: false,
+          };
+        });
+        if (!changed) break;
+        parsed.connections = connections;
+      }
       this.appliedPriorityVersion = Math.max(
         this.appliedPriorityVersion,
         priorityVersion,

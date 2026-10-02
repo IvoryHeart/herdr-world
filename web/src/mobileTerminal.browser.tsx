@@ -90,6 +90,16 @@ __storeTesting.replaceState({
   activeConnectionId: client.connectionId,
   connectionGeneration: 1,
   serverRuntimeGeneration: 1,
+  connections: [
+    {
+      id: client.connectionId,
+      label: "Synthetic terminal",
+      source: "test",
+      is_default: true,
+      state: "ready",
+      generation: 1,
+    },
+  ],
   panes: [pane],
   selectedPaneId: pane.pane_id,
   layout: {
@@ -1075,11 +1085,20 @@ const api = {
     frame("\x1b[2J\x1b[Hgeneration selected");
     await settle();
     await selectWord();
-    client = { ...client, generation: client.generation + 1 };
+    client = {
+      ...client,
+      generation: client.generation + 1,
+      serverRuntimeGeneration: (client.serverRuntimeGeneration ?? 1) + 1,
+    };
     flushSync(() => {
       __storeTesting.replaceState({
         ...store.get(),
         connectionGeneration: client.generation,
+        serverRuntimeGeneration: client.serverRuntimeGeneration,
+        connections: store.get().connections.map((connection) => ({
+          ...connection,
+          generation: client.serverRuntimeGeneration!,
+        })),
       });
       store.clearNotice();
     });
@@ -1087,7 +1106,7 @@ const api = {
     check(
       !document.querySelector(".terminal-selection-handle") &&
         document.activeElement !== textarea(),
-      "connection generation invalidates touch selection and keyboard authorization",
+      "runtime generation replacement invalidates touch selection and keyboard authorization",
     );
     original = document.querySelector(".xterm");
     const native = document.createElement("div");

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { store } from "../store";
+import { useOperationalStore } from "../store";
 import { useConnectionClient } from "../useConnectionClient";
 import type { ExistingWorktree, WorktreeList } from "../types";
 import { resolveWorktreeOpenSource } from "../worktree";
@@ -41,6 +41,7 @@ export function WorktreeOpenDialog({
   sourceCwd?: string | null;
   onClose: () => void;
 }) {
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const [manualTarget, setManualTarget] = useState("");
   const [query, setQuery] = useState("");

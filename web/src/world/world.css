@@ -8,6 +8,79 @@
   background: var(--bg, #0e1116);
 }
 
+.world-hosts-control {
+  position: relative;
+  flex: 0 0 auto;
+}
+.world-navigator section {
+  padding: 8px;
+  border-bottom: 1px solid var(--border, #394252);
+}
+.world-navigator h3,
+.world-navigator p {
+  font-size: 12px;
+  margin: 4px 0;
+}
+.world-navigator button {
+  display: block;
+  max-width: 100%;
+  margin: 4px 0;
+  text-align: left;
+}
+.world-hosts-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(320px, 90vw);
+  max-height: 70vh;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--bg, #0e1116);
+  border: 1px solid var(--border, #394252);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px #0008;
+  z-index: 150;
+}
+.world-hosts-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.world-hosts-control > [role="status"] {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  width: min(320px, 90vw);
+  background: var(--bg, #0e1116);
+  font-size: 12px;
+}
+.world-search-results {
+  max-height: 180px;
+  overflow: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  background: var(--bg, #0e1116);
+}
+.world-search-results p {
+  width: 100%;
+  margin: 0;
+}
+.world-outside-filter {
+  position: absolute;
+  bottom: 4px;
+  left: 8px;
+  margin: 0;
+  pointer-events: none;
+  font-size: 12px;
+  background: var(--bg, #0e1116);
+}
+
 .world-topbar-host {
   z-index: 120;
   flex: 0 0 auto;
@@ -2102,4 +2175,9 @@
       border-color 120ms ease,
       background 120ms ease;
   }
+}
+
+.world-spatial-graph-space {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 600px;
 }

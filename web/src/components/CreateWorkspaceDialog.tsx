@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { luckyWorkspaceName } from "../luckyName";
-import { store, useEndpointCreationReason } from "../store";
+import {
+  OperationalContext,
+  store,
+  connectionSnapshot,
+  endpointCreationReason,
+  useStoreSelector,
+} from "../store";
 import { CloseButton } from "./CloseButton";
 import { focusDialogElement } from "./dialogFocus";
 
@@ -15,13 +21,49 @@ export function CreateWorkspaceDialog({
   initialCwd?: string;
   onClose: () => void;
 }) {
-  const createReason = useEndpointCreationReason("workspace.create");
+  const inherited = useContext(OperationalContext);
+  const snapshot = useStoreSelector((state) => state);
+  const [destination, setDestination] = useState<{
+    connectionId: string;
+    runtimeGeneration: number;
+  } | null>(null);
+  const ready = snapshot.connections.filter(
+    (connection) => connection.state === "ready",
+  );
+  const destinationSource = useRef({ ready, inherited });
+  destinationSource.current = { ready, inherited };
+  const current =
+    destination &&
+    ready.some(
+      (connection) =>
+        connection.id === destination.connectionId &&
+        connection.generation === destination.runtimeGeneration,
+    );
+  const createReason = !current
+    ? "Choose a current destination host."
+    : endpointCreationReason(
+        connectionSnapshot(snapshot, destination!.connectionId),
+        "workspace.create",
+      );
   const [label, setLabel] = useState("");
   const [cwd, setCwd] = useState("");
   const labelRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
 
   onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+    const { ready, inherited } = destinationSource.current;
+    const owner =
+      ready.find((connection) => connection.id === inherited?.connectionId) ??
+      ready[0];
+    setDestination(
+      owner
+        ? { connectionId: owner.id, runtimeGeneration: owner.generation }
+        : null,
+    );
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -43,8 +85,20 @@ export function CreateWorkspaceDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (createReason) return;
-    store.createWorkspace(label.trim() || undefined, cwd.trim() || undefined);
-    onClose();
+    if (!destination) return;
+    void store
+      .createQualifiedWorkspace(
+        destination,
+        label.trim() || undefined,
+        cwd.trim() || undefined,
+      )
+      .then(onClose, (error) =>
+        store.notify({
+          kind: "error",
+          message: "Workspace creation failed",
+          detail: String(error),
+        }),
+      );
   };
 
   return (
@@ -61,6 +115,36 @@ export function CreateWorkspaceDialog({
           <h2>Create Workspace</h2>
           <CloseButton onClick={onClose} />
         </div>
+
+        <label className="form-field">
+          <span>Destination host</span>
+          <select
+            aria-label="Destination host"
+            value={destination?.connectionId ?? ""}
+            onChange={(event) => {
+              const owner = ready.find(
+                (connection) => connection.id === event.target.value,
+              );
+              setDestination(
+                owner
+                  ? {
+                      connectionId: owner.id,
+                      runtimeGeneration: owner.generation,
+                    }
+                  : null,
+              );
+            }}
+          >
+            <option value="" disabled>
+              Choose a host
+            </option>
+            {ready.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connection.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <label className="form-field">
           <span>Name</span>

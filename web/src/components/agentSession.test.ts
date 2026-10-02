@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  downloadSession,
   agentStateKind,
   firstLinePreview,
   formatTokenTotal,
@@ -12,6 +13,58 @@ import {
   summarizeTabAgents,
   toolArgumentsPreview,
 } from "./agentSession";
+
+test("raw export URL retains the displayed original session", () => {
+  const originals = ["window", "navigator", "document"].map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  let url = "";
+  const link = {
+    href: "",
+    click() {
+      url = this.href;
+    },
+    remove() {},
+    download: "",
+    rel: "",
+  };
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { origin: "http://localhost" },
+      matchMedia: () => ({ matches: false }),
+    },
+  });
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { userAgent: "Chrome", maxTouchPoints: 0 },
+  });
+  Object.defineProperty(globalThis, "document", {
+    configurable: true,
+    value: { createElement: () => link, body: { appendChild() {} } },
+  });
+  try {
+    downloadSession(
+      { pane_id: "same-pane", agent: "pi" } as import("../types").Pane,
+      {
+        connectionId: "beta",
+        serverRuntimeGeneration: 7,
+        isCurrent: () => true,
+      } as import("../api").ConnectionClient,
+      "original-session",
+    );
+    expect(new URL(url).searchParams.get("expected_session")).toBe(
+      "original-session",
+    );
+    expect(new URL(url).pathname).toContain("/beta/");
+    expect(new URL(url).searchParams.get("connection_generation")).toBe("7");
+  } finally {
+    for (const [key, descriptor] of originals) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
+});
 
 function step(
   stepId: number,

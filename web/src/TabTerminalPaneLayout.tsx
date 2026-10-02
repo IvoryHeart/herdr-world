@@ -7,7 +7,7 @@ import type {
   MobileTerminalShortcutRows,
   MobileTerminalSideShortcuts,
 } from "./mobileTerminalShortcuts";
-import { store } from "./store";
+import { useOperationalStore } from "./store";
 import { terminalMountKey } from "./terminalConnection";
 import type { Pane, PaneLayout } from "./types";
 import type { TerminalWorkspaceFileRequest } from "./components/TerminalView";
@@ -199,7 +199,7 @@ export function TabTerminalPaneLayout({
   selectedPaneId,
   connectionId,
   connectionGeneration,
-  onFocusPane = (paneId) => void store.focusPane(paneId),
+  onFocusPane: suppliedFocusPane,
   terminalTheme,
   terminalFontScale,
   mobileShortcuts,
@@ -229,6 +229,9 @@ export function TabTerminalPaneLayout({
   onOpenWorkspaceFile: (request: TerminalWorkspaceFileRequest) => void;
   excludedPaneIds?: ReadonlySet<string>;
 }) {
+  const store = useOperationalStore();
+  const onFocusPane =
+    suppliedFocusPane ?? ((paneId: string) => void store.focusPane(paneId));
   const { mobile } = useLayoutPreferences();
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const visiblePanes =

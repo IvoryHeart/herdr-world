@@ -1006,17 +1006,19 @@ function FileExplorerContent({
       entry.type === "directory"
         ? `${entry.name || "download"}.tar.gz`
         : entry.name || "download";
-    void downloadFileFromUrl({ url: url.toString(), filename }).then(
-      (result) => {
-        if (result === "shared" || !connectionClient.isCurrent()) return;
-        store.notify({
-          kind: "info",
-          message: "Download started",
-          detail: entry.path,
-          autoDismissMs: 5000,
-        });
-      },
-    );
+    void downloadFileFromUrl({
+      url: url.toString(),
+      filename,
+      client: connectionClient,
+    }).then((result) => {
+      if (result === "shared" || !connectionClient.isCurrent()) return;
+      store.notify({
+        kind: "info",
+        message: "Download started",
+        detail: entry.path,
+        autoDismissMs: 5000,
+      });
+    });
   };
 
   const markDeletePath = (path: string, deleting: boolean) => {

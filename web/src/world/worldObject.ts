@@ -443,7 +443,7 @@ function actionCapabilities(
   kind: WorldObjectKind,
   state: WorldHostState,
 ): WorldActionCapabilities {
-  const operational = state === "active";
+  const operational = state === "active" || state === "ready-inactive";
   const leaf = kind === "agent" || kind === "terminal";
   const space = kind === "space";
   return {
@@ -501,14 +501,70 @@ function matchingAgentMetadata(
   );
 }
 
+const preparedHosts = new WeakMap<
+  WorldRuntimeConnection,
+  readonly [WorldHostObject, WorldHostObject | undefined]
+>();
+const preparedWorlds = new WeakMap<
+  readonly WorldRuntimeConnection[],
+  Map<string | null, WorldObject>
+>();
+
+/** Yield a task so terminal and keyboard callbacks can run between hosts. */
+export function yieldWorldTask(): Promise<void> {
+  const scheduler = (
+    globalThis as typeof globalThis & {
+      scheduler?: {
+        postTask(
+          task: () => void,
+          options: { priority: "background" },
+        ): Promise<void>;
+      };
+    }
+  ).scheduler;
+  // Observation work must not outrank incoming socket acknowledgements.
+  if (scheduler?.postTask)
+    return scheduler.postTask(() => {}, { priority: "background" });
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+export async function prepareWorldObject(
+  connections: readonly WorldRuntimeConnection[],
+  isCurrent: () => boolean = () => true,
+): Promise<WorldObject | null> {
+  // Admit already queued lifecycle and transport tasks before model allocation.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  for (const connection of connections) {
+    if (!isCurrent()) return null;
+    const inactive = buildHost(connection, null);
+    // Aggregate focus is independent of runtime authority. Prepare only the
+    // aggregate variant; a legacy selected variant is built on demand instead
+    // of duplicating every admitted leaf for every peer.
+    preparedHosts.set(connection, [inactive, undefined]);
+    await yieldWorldTask();
+  }
+  if (!isCurrent()) return null;
+  preparedWorlds.set(connections, new Map());
+  const world = buildWorldObject(connections);
+  await yieldWorldTask();
+  return isCurrent() ? world : null;
+}
+
 function buildHost(
   connection: WorldRuntimeConnection,
   selectedConnectionId: string | null,
 ): WorldHostObject {
+  const prepared =
+    preparedHosts.get(connection)?.[
+      connection.connectionId === selectedConnectionId ? 1 : 0
+    ];
+  if (prepared) return prepared;
   const connectionHostState = hostState(connection, selectedConnectionId);
   const selectedHost = connection.connectionId === selectedConnectionId;
   const hostCapabilities = actionCapabilities("host", connectionHostState);
-  const operational = connectionHostState === "active";
+  const operational =
+    connectionHostState === "active" ||
+    connectionHostState === "ready-inactive";
   const observedGeneration =
     connection.snapshotGeneration ?? connection.generation;
   const id = worldObjectId(
@@ -714,6 +770,9 @@ export function buildWorldObject(
   connections: readonly WorldRuntimeConnection[],
   selectedConnectionId: string | null = null,
 ): WorldObject {
+  const prepared = preparedWorlds.get(connections);
+  const cached = prepared?.get(selectedConnectionId);
+  if (cached) return cached;
   const hosts = [...connections]
     .sort(
       (left, right) =>
@@ -742,6 +801,56 @@ export function buildWorldObject(
       status: emptyStatusCounts(),
     },
   );
+  const world: WorldObject = {
+    version: 1,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage,
+  };
+  prepared?.set(selectedConnectionId, world);
+  return world;
+}
+
+/**
+ * Keeps aggregate observation intact while giving a focused client one coherent
+ * host presentation. The returned nodes are the original qualified objects, so
+ * identities and runtime generations cannot be rebound by the projection.
+ */
+export function worldObjectForHosts(
+  world: WorldObject,
+  connectionIds: readonly string[] | null,
+): WorldObject {
+  if (connectionIds === null) return world;
+  const ids = new Set(connectionIds);
+  const hosts = world.hosts.filter((host) => ids.has(host.connectionId));
+  const spaces = hosts.flatMap((host) => host.spaces);
+  const leaves = spaces.flatMap((space) => space.children);
+  const nodes: WorldObjectNode[] = hosts.flatMap((host) => [
+    host,
+    ...host.spaces.flatMap((space): WorldObjectNode[] => [
+      space,
+      ...space.children,
+    ]),
+  ]);
+  const coverage = {
+    spaces: 0,
+    tabs: 0,
+    leaves: 0,
+    agents: 0,
+    shells: 0,
+    status: emptyStatusCounts(),
+  };
+  for (const host of hosts) {
+    for (const key of ["spaces", "tabs", "leaves", "agents", "shells"] as const)
+      coverage[key] += host.coverage[key];
+    for (const key of Object.keys(
+      coverage.status,
+    ) as (keyof typeof coverage.status)[])
+      coverage.status[key] += host.coverage.status[key];
+  }
   return {
     version: 1,
     hosts,
@@ -753,11 +862,6 @@ export function buildWorldObject(
   };
 }
 
-/**
- * Keeps aggregate observation intact while giving a focused client one coherent
- * host presentation. The returned nodes are the original qualified objects, so
- * identities and runtime generations cannot be rebound by the projection.
- */
 export function worldObjectForConnection(
   world: WorldObject,
   connectionId: string | null,
@@ -818,9 +922,48 @@ export function worldObjectForWatches(
           JSON.stringify([leaf.connectionId, leaf.generation, leaf.terminalId]),
         ),
       );
-      return children.length ? [{ ...space, children }] : [];
+      if (!children.length) return [];
+      const tabs = space.tabs.filter((tab) =>
+        children.some((leaf) => leaf.tabId === tab.tab_id),
+      );
+      const status = emptyStatusCounts();
+      for (const leaf of children)
+        if (leaf.kind === "agent") status[leaf.status]++;
+      const agents = children.filter((leaf) => leaf.kind === "agent").length;
+      return [
+        {
+          ...space,
+          children,
+          tabs,
+          coverage: {
+            spaces: 1,
+            tabs: tabs.length,
+            leaves: children.length,
+            agents,
+            shells: children.length - agents,
+            status,
+          },
+        },
+      ];
     });
-    return spaces.length ? [{ ...host, spaces }] : [];
+    if (!spaces.length) return [];
+    const coverage = {
+      spaces: spaces.length,
+      tabs: 0,
+      leaves: 0,
+      agents: 0,
+      shells: 0,
+      status: emptyStatusCounts(),
+    };
+    for (const space of spaces) {
+      for (const key of ["tabs", "leaves", "agents", "shells"] as const)
+        coverage[key] += space.coverage[key];
+      for (const key of Object.keys(
+        coverage.status,
+      ) as (keyof typeof coverage.status)[])
+        coverage.status[key] += space.coverage.status[key];
+    }
+    return [{ ...host, spaces, coverage }];
   });
   const spaces = hosts.flatMap((host) => host.spaces);
   const leaves = spaces.flatMap((space) => space.children);
@@ -831,14 +974,17 @@ export function worldObjectForWatches(
       ...space.children,
     ]),
   ]);
-  return {
-    ...world,
-    hosts,
-    spaces,
-    leaves,
-    nodes,
-    nodeById: new Map(nodes.map((node) => [node.id, node])),
-  };
+  return worldObjectForHosts(
+    {
+      ...world,
+      hosts,
+      spaces,
+      leaves,
+      nodes,
+      nodeById: new Map(nodes.map((node) => [node.id, node])),
+    },
+    hosts.map((host) => host.connectionId),
+  );
 }
 
 export function worldObjectWithWatches(

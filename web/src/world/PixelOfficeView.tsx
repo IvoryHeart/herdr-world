@@ -1,10 +1,12 @@
+import { WorldSearchResults } from "./WorldSearchResults";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { worldLocalStorage } from "../browserStorage";
+import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { ConfirmDialog, TextInputDialog } from "../components/ModalDialogs";
 import {
   endpointCreationReason,
-  shallowEqual,
+  connectionSnapshot,
   store,
   useStoreSelector,
 } from "../store";
@@ -60,8 +62,17 @@ import {
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
 
 type RoomDialog =
-  | { mode: "create"; roomKey: string | null }
-  | { mode: "rename" | "close"; roomKey: string; label: string };
+  | {
+      mode: "create";
+      roomKey: string | null;
+      owner?: { connectionId: string; runtimeGeneration: number };
+    }
+  | {
+      mode: "rename" | "close";
+      roomKey: string;
+      label: string;
+      owner: { connectionId: string; runtimeGeneration: number };
+    };
 
 type PendingCreatedPane = {
   action: "Room" | "Seat";
@@ -94,19 +105,11 @@ export default function PixelOfficeView({
   ): void;
 }) {
   const office = useMemo(
-    (): HerdrOfficeProjection => projectWorldOffice(world, Date.now()),
-    [world],
+    (): HerdrOfficeProjection =>
+      projectWorldOffice(world, Date.now(), selectedId),
+    [world, selectedId],
   );
-  const creationSnapshot = useStoreSelector(
-    (snapshot) => ({
-      navigationMode: snapshot.navigationMode,
-      workspaces: snapshot.workspaces,
-      browserNavigation: snapshot.browserNavigation,
-      panes: snapshot.panes,
-      endpointAvailability: snapshot.endpointAvailability,
-    }),
-    shallowEqual,
-  );
+  const creationSnapshot = useStoreSelector((snapshot) => snapshot);
   const [preferences, setPreferences] = useState(() =>
     readOfficePreferences(worldLocalStorage),
   );
@@ -354,7 +357,18 @@ export default function PixelOfficeView({
   }, [pendingCreatedPane, pendingCreatedPaneLeaseCurrent]);
 
   const roomForKey = (roomKey: string | null) =>
-    roomKey ? (office.rooms.find(({ key }) => key === roomKey) ?? null) : null;
+    roomKey
+      ? (office.rooms.find(
+          (room) =>
+            room.key === roomKey &&
+            (!roomDialog?.owner ||
+              roomDialog.roomKey !== roomKey ||
+              (room.workspaceRef.connectionId ===
+                roomDialog.owner.connectionId &&
+                room.workspaceRef.generation ===
+                  roomDialog.owner.runtimeGeneration)),
+        ) ?? null)
+      : null;
   const seatCreationStates = useMemo(
     () =>
       Object.fromEntries(
@@ -366,7 +380,10 @@ export default function PixelOfficeView({
               admitted,
               admitted
                 ? endpointCreationReason(
-                    creationSnapshot,
+                    connectionSnapshot(
+                      creationSnapshot,
+                      room.workspaceRef.connectionId,
+                    ),
                     "tab.create",
                     room.workspaceRef.nativeId,
                   )
@@ -386,17 +403,19 @@ export default function PixelOfficeView({
     seatCreationState(roomKey).reason;
   const roomCreationState = (roomKey: string | null) => {
     const room = roomForKey(roomKey);
-    const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
-    const admitted = Boolean(
-      selectedHost?.actionable &&
-        !selectedHost.stale &&
-        (!room || room.workspaceRef.connectionId === selectedHost.connectionId),
-    );
+    const destination = room
+      ? world.hosts.find(
+          (host) =>
+            host.connectionId === room.workspaceRef.connectionId &&
+            host.generation === room.workspaceRef.generation,
+        )
+      : world.hosts.find((host) => host.actionable && !host.stale);
+    const admitted = Boolean(destination?.actionable && !destination.stale);
     return officeCreationActionState(
       admitted,
       admitted
         ? endpointCreationReason(
-            creationSnapshot,
+            connectionSnapshot(creationSnapshot, destination!.connectionId),
             "workspace.create",
             room?.workspaceRef.nativeId,
           )
@@ -470,7 +489,11 @@ export default function PixelOfficeView({
     }
   };
   const submitCreateRoom = async (label: string) => {
-    const selectedHost = world.hosts.find(({ selectedHost }) => selectedHost);
+    const selectedHost = world.hosts.find(
+      (host) =>
+        host.connectionId === roomDialog?.owner?.connectionId &&
+        host.generation === roomDialog.owner.runtimeGeneration,
+    );
     if (!selectedHost || !canCreateRoom(roomDialog?.roomKey ?? null)) return;
     setRoomDialog(null);
     try {
@@ -628,6 +651,7 @@ export default function PixelOfficeView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
+      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
       <div className="world-office-shell world-stage-shell">
         <OfficeCompactTargetChooser
           projection={office}
@@ -696,7 +720,20 @@ export default function PixelOfficeView({
                   canCreateRoom={canCreateRoom}
                   createRoomReason={createRoomReason}
                   onCreateRoom={(roomKey) =>
-                    setRoomDialog({ mode: "create", roomKey })
+                    setRoomDialog({
+                      mode: "create",
+                      roomKey,
+                      ...(roomForKey(roomKey)
+                        ? {
+                            owner: {
+                              connectionId:
+                                roomForKey(roomKey)!.workspaceRef.connectionId,
+                              runtimeGeneration:
+                                roomForKey(roomKey)!.workspaceRef.generation,
+                            },
+                          }
+                        : {}),
+                    })
                   }
                   canRenameRoom={(roomKey) => canManageRoom(roomKey, "rename")}
                   onRenameRoom={(roomKey) => {
@@ -706,6 +743,10 @@ export default function PixelOfficeView({
                         mode: "rename",
                         roomKey,
                         label: room.displayLabel,
+                        owner: {
+                          connectionId: room.workspaceRef.connectionId,
+                          runtimeGeneration: room.workspaceRef.generation,
+                        },
                       });
                     }
                   }}
@@ -717,6 +758,10 @@ export default function PixelOfficeView({
                         mode: "close",
                         roomKey,
                         label: room.displayLabel,
+                        owner: {
+                          connectionId: room.workspaceRef.connectionId,
+                          runtimeGeneration: room.workspaceRef.generation,
+                        },
                       });
                     }
                   }}
@@ -732,8 +777,12 @@ export default function PixelOfficeView({
             top={sceneHover.clientY}
           />
         ) : null}
+        <CreateWorkspaceDialog
+          open={roomDialog?.mode === "create" && roomDialog.roomKey === null}
+          onClose={() => setRoomDialog(null)}
+        />
         <TextInputDialog
-          open={roomDialog?.mode === "create"}
+          open={roomDialog?.mode === "create" && roomDialog.roomKey !== null}
           title="Create room"
           label="Room name"
           submitLabel="Create"

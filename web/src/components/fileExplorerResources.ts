@@ -1,6 +1,6 @@
 import { worldLocalStorage } from "../browserStorage";
 import type { ConnectionClient } from "../api";
-import { connectionHttpPath } from "../connectionHttp";
+import { connectionHttpResource } from "../connectionHttp";
 import { connectionStorageKey } from "../connectionStorage";
 import { gitDiffCode, type GitDiffCode } from "../gitDiffStatus";
 import { retireGitDiffSummaryResource } from "../gitDiffSummaryStore";
@@ -569,42 +569,26 @@ export async function uploadExplorerFile(
   directory: string,
   file: File,
 ) {
-  if (!client.isCurrent()) throw new Error("connection changed during upload");
-  const url = new URL(
-    connectionHttpPath(
-      client.connectionId,
-      "/file/upload",
-      client.serverRuntimeGeneration,
-    ),
-    window.location.origin,
-  );
-  if (url.origin !== window.location.origin)
-    throw new Error("invalid upload origin");
-  url.searchParams.set("workspace_id", workspaceId);
-  url.searchParams.set("directory", directory);
-  url.searchParams.set("filename", file.name);
-  const response = await fetch(url, {
-    method: "POST",
-    body: file,
+  const query = new URLSearchParams({
+    workspace_id: workspaceId,
+    directory,
+    filename: file.name,
   });
-  const text = await response.text();
-  if (!client.isCurrent()) throw new Error("connection changed during upload");
-  let payload: any;
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { error: text };
-  }
-  if (!response.ok) {
-    throw new Error(
-      payload?.error || text || `upload failed ${response.status}`,
-    );
-  }
-  return payload as {
-    path: string;
-    size: number;
-    overwritten: boolean;
-  };
+  return connectionHttpResource(
+    client,
+    `/file/upload?${query}`,
+    async (response) => {
+      const payload: unknown = await response.json();
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as { path?: unknown }).path !== "string"
+      )
+        throw new Error("invalid file upload response");
+      return payload as { path: string; size: number; overwritten: boolean };
+    },
+    { method: "POST", body: file },
+  );
 }
 
 export async function deleteExplorerEntry(
@@ -612,37 +596,22 @@ export async function deleteExplorerEntry(
   workspaceId: string,
   path: string,
 ) {
-  if (!client.isCurrent()) throw new Error("connection changed during delete");
-  const url = new URL(
-    connectionHttpPath(
-      client.connectionId,
-      "/file/delete",
-      client.serverRuntimeGeneration,
-    ),
-    window.location.origin,
+  const query = new URLSearchParams({ workspace_id: workspaceId, path });
+  return connectionHttpResource(
+    client,
+    `/file/delete?${query}`,
+    async (response) => {
+      const payload: unknown = await response.json();
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as { path?: unknown }).path !== "string"
+      )
+        throw new Error("invalid file delete response");
+      return payload as { path: string; type: FileExplorerEntry["type"] };
+    },
+    { method: "POST" },
   );
-  if (url.origin !== window.location.origin)
-    throw new Error("invalid delete origin");
-  url.searchParams.set("workspace_id", workspaceId);
-  url.searchParams.set("path", path);
-  const response = await fetch(url, { method: "POST" });
-  const text = await response.text();
-  if (!client.isCurrent()) throw new Error("connection changed during delete");
-  let payload: any;
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { error: text };
-  }
-  if (!response.ok) {
-    throw new Error(
-      payload?.error || text || `delete failed ${response.status}`,
-    );
-  }
-  return payload as {
-    path: string;
-    type: FileExplorerEntry["type"];
-  };
 }
 
 export function prefetchFileExplorerWorkspace(

@@ -305,8 +305,12 @@ export function tokenUsage(summary?: AgentSessionSummary | null) {
   return summary?.stats.token_usage ?? null;
 }
 
-export function downloadSession(pane: Pane, client: ConnectionClient) {
-  if (!client.isCurrent()) return;
+export function downloadSession(
+  pane: Pane,
+  client: ConnectionClient,
+  expectedSession?: string,
+) {
+  if (!client.isCurrent() || !expectedSession) return;
   const url = new URL(
     connectionHttpPath(
       client.connectionId,
@@ -315,10 +319,11 @@ export function downloadSession(pane: Pane, client: ConnectionClient) {
     ),
     window.location.origin,
   );
+  url.searchParams.set("expected_session", expectedSession);
   url.searchParams.set("pane_id", pane.pane_id);
   if (pane.agent) url.searchParams.set("agent", pane.agent);
   // Empty fallback keeps the server's Content-Disposition filename.
-  void downloadFileFromUrl({ url: url.toString(), filename: "" });
+  void downloadFileFromUrl({ url: url.toString(), filename: "", client });
 }
 
 function sessionAtifFilename(path?: string) {
@@ -334,8 +339,9 @@ export function downloadSessionAtif(
   pane: Pane,
   sessionName: string | undefined,
   client: ConnectionClient,
+  expectedSession?: string,
 ) {
-  if (!client.isCurrent()) return;
+  if (!client.isCurrent() || !expectedSession) return;
   const url = new URL(
     connectionHttpPath(
       client.connectionId,
@@ -344,11 +350,13 @@ export function downloadSessionAtif(
     ),
     window.location.origin,
   );
+  url.searchParams.set("expected_session", expectedSession);
   url.searchParams.set("pane_id", pane.pane_id);
   if (pane.agent) url.searchParams.set("agent", pane.agent);
   void downloadFileFromUrl({
     url: url.toString(),
     filename: sessionAtifFilename(sessionName),
+    client,
   });
 }
 
@@ -363,17 +371,20 @@ export async function exportSessionForConnection(
       agent: pane.agent,
     })) as AgentSessionSummary;
     if (!client.isCurrent()) return;
-    if (summary.status !== "ok") {
+    if (summary.status !== "ok" || !summary.session?.value) {
       store.notify({
         kind: "error",
         message: "Session unavailable",
         detail: summary.command
           ? `${summary.detail ?? summary.status} (${summary.command})`
-          : (summary.detail ?? summary.status),
+          : (summary.detail ??
+            (summary.status === "ok"
+              ? "Original session identity is unavailable"
+              : summary.status)),
       });
       return;
     }
-    downloadSession(pane, client);
+    downloadSession(pane, client, summary.session?.value);
     store.notify({
       kind: "info",
       message: "Session export started",

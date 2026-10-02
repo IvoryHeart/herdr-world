@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
@@ -23,15 +24,39 @@ export function OfficeSemanticTargetsOverlay({
   onActivateDesk(key: string): void;
   onActivateRoom(key: string): void;
 }) {
+  const targets = useMemo(
+    () => officeSemanticTargets(projection, layout),
+    [projection, layout],
+  );
+  const [progress, setProgress] = useState<{
+    targets: typeof targets;
+    limit: number;
+  } | null>(null);
+  const limit = progress?.targets === targets ? progress.limit : 64;
+  const rendered = targets.filter(
+    (target, index) => index < limit || target.key === selectedKey,
+  );
+  const pending = targets.length - rendered.length;
+  useEffect(() => {
+    if (!pending) return;
+    const frame = requestAnimationFrame(() =>
+      setProgress({ targets, limit: limit + 64 }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [targets, limit, pending]);
   const interactive =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
   return (
     <div
       className="world-semantic-targets-overlay"
       aria-label="Office scene targets"
+      aria-busy={pending > 0}
       aria-hidden={!interactive}
     >
-      {officeSemanticTargets(projection, layout).map((target) => (
+      {pending ? (
+        <span role="status">Rendering {pending} more observed targets</span>
+      ) : null}
+      {rendered.map((target) => (
         <button
           key={`${target.kind}:${target.key}`}
           className="world-semantic-target"

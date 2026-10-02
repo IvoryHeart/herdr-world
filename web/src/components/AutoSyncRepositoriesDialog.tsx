@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { store } from "../store";
+import { useOperationalStore } from "../store";
 import { UI_LOCALE } from "../uiLocale";
 import { useConnectionClient } from "../useConnectionClient";
 import { CloseButton } from "./CloseButton";
@@ -33,6 +33,7 @@ export function AutoSyncRepositoriesDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const [data, setData] = useState<AutoSyncConfigList | null>(null);
   const [loading, setLoading] = useState(false);

@@ -9,6 +9,70 @@ import type {
 } from "./worldObject";
 
 describe("World Tree projection", () => {
+  test("watched leaves reserve their owning space before ordinary host turns", () => {
+    const spaces = Array.from({ length: 140 }, (_, index) =>
+      space("alpha", index, 1),
+    );
+    spaces[139]!.children[0]!.watched = true;
+    const projection = projectWorldTree(
+      world([host("alpha", spaces), host("beta", [space("beta", 0, 1)])]),
+    );
+    expect(
+      projection.hosts[0]!.spaces.map(({ source }) => source.id),
+    ).toContain("space:alpha:139");
+    expect(projection.hosts[1]!.spaces).toHaveLength(1);
+    expect(projection.hosts.flatMap(({ spaces }) => spaces)).toHaveLength(128);
+  });
+  test("ordinary space capacity is shared fairly before a dense host receives another turn", () => {
+    const projection = projectWorldTree(
+      world([
+        host(
+          "alpha",
+          Array.from({ length: 140 }, (_, index) => space("alpha", index, 1)),
+        ),
+        host(
+          "beta",
+          Array.from({ length: 140 }, (_, index) => space("beta", index, 1)),
+        ),
+      ]),
+    );
+    expect(projection.hosts.map(({ spaces }) => spaces.length)).toEqual([
+      64, 64,
+    ]);
+    expect(
+      projection.hosts.map(({ omittedSpaceCount }) => omittedSpaceCount),
+    ).toEqual([76, 76]);
+    expect(projection.omittedSpaceCount).toBe(152);
+    expect(projection.coverage).toMatchObject({
+      observedLeaves: 280,
+      presentedLeaves: 128,
+      omittedLeaves: 152,
+    });
+  });
+
+  test("a small ordinary host is not crowded out and unused turns return to dense hosts", () => {
+    const projection = projectWorldTree(
+      world([
+        host(
+          "alpha",
+          Array.from({ length: 140 }, (_, index) => space("alpha", index, 1)),
+        ),
+        host(
+          "beta",
+          Array.from({ length: 3 }, (_, index) => space("beta", index, 1)),
+        ),
+        host("offline", []),
+      ]),
+    );
+    expect(projection.hosts.map(({ spaces }) => spaces.length)).toEqual([
+      125, 3, 0,
+    ]);
+    expect(
+      projection.hosts.map(({ omittedSpaceCount }) => omittedSpaceCount),
+    ).toEqual([15, 0, 0]);
+    expect(projection.omittedHostCount).toBe(0);
+    expect(projection.omittedSpaceCount).toBe(15);
+  });
   test("bounds dense unequal branches and reports exact omissions", () => {
     const crowded = space("local", 0, 19);
     crowded.children[18] = leaf("local", 0, 18, {

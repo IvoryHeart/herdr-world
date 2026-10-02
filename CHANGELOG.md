@@ -13,9 +13,9 @@ are optional because the merged PR history records their source.
   changes, and history available from the selected agent in every view.
 - Keep multiple Inspectors open and arrange, move, resize, or dock them while
   preserving each live conversation. Graph can arrange or rotate its layout.
-- Connect to local and OpenSSH Herdr hosts through one World service. Select the
-  host you want to work on while other connected hosts remain visible in the
-  background.
+- Connect to local and OpenSSH Herdr hosts through one World service. Work in
+  concurrent host-owned Inspectors and terminals while Hosts independently filters
+  the aggregate overview.
 - Follow agent progress with task summaries, checkout context, pane pins,
   notifications, and optional Office metrics. Visual Actions take you to the
   selected agent's details or workspace.
@@ -23,7 +23,17 @@ are optional because the merged PR history records their source.
   installer, npm, Homebrew, or the Herdr plugin. The responsive PWA provides a
   mobile view when World is reachable.
 
+- Terminal input with a lost acknowledgement reports its original host and an
+  uncertain outcome, with refresh-before-retry guidance and no replay.
+- Large aggregate updates share the World socket in bounded reply chunks, and
+  dense scene controls render progressively to keep host input responsive.
+
 ### Breaking Changes
+
+- Hosts now filters an aggregate Office, Tree and Graph view instead of selecting
+  one operational host. Manage connections remains separate. Open Inspectors,
+  terminals and resources retain their qualified host across filter and focus
+  changes; global creation confirms a single destination.
 
 - Replaced the 0.1.1 app with a new World service and responsive Web/PWA.
   Recreate connection profiles after upgrading; old bridge profiles and browser
@@ -35,6 +45,13 @@ are optional because the merged PR history records their source.
   [Herdr World PR #105](https://github.com/IvoryHeart/herdr-world/pull/105)
 
 ### Added
+
+- Concurrent local/SSH terminal and Inspector contexts over one World origin,
+  host-local retirement, qualified notification reveal, fair bounded multi-host
+  projection and observation, full-observation paged search, honest coverage and
+  cross-host window arrangements with independent restore baselines.
+  Dense observations prepare and render progressively while terminal input remains
+  responsive; streaming output preserves another terminal's keyboard focus.
 
 - Restored the npm and Homebrew installation channels for the new foundation.
   npm now installs one platform binary through optional dependencies; Homebrew

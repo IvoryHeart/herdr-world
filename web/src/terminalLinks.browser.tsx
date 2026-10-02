@@ -138,6 +138,16 @@ __storeTesting.replaceState({
   activeConnectionId: client.connectionId,
   connectionGeneration: 1,
   serverRuntimeGeneration: 1,
+  connections: [
+    {
+      id: client.connectionId,
+      label: "Synthetic terminal",
+      source: "test",
+      is_default: true,
+      state: "ready",
+      generation: 1,
+    },
+  ],
   panes: [pane],
   selectedPaneId: pane.pane_id,
   endpointAvailability: { terminal: endpoint },
@@ -592,6 +602,14 @@ async function runTouch() {
         }),
       );
       render(100);
+      await until(
+        () =>
+          !!terminals[terminals.length - 1]?.element?.querySelector(
+            ".xterm-screen",
+          ),
+        "replacement terminal mounted",
+      );
+      term = terminals[terminals.length - 1]!;
       await settle();
     }
   }

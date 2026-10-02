@@ -1,3 +1,4 @@
+import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
 import type { ServerWebSocket } from "bun";
 import { isHtmlPath } from "../../shared/filePreview";
 import { rmSync } from "node:fs";
@@ -819,9 +820,12 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     try {
       const snapshots = worldSnapshots;
       if (!snapshots) throw new Error("World snapshot service is unavailable");
-      sendReply(
-        { id, result: await snapshots.snapshot(params) },
-        "world-snapshot",
+      await sendWorldSnapshotReply(
+        id,
+        await snapshots.snapshot(params),
+        req.accept_world_snapshot_chunks === true,
+        (payload) => safeSend(ws, payload, "world-snapshot"),
+        () => clients.has(ws),
       );
     } catch (error) {
       sendError("world-snapshot-error", error);
@@ -1399,11 +1403,13 @@ async function handleConnectionHttpRequest(
       response = await connection.agentSessions.downloadFile({
         pane_id: url.searchParams.get("pane_id"),
         agent: url.searchParams.get("agent"),
+        expected_session: url.searchParams.get("expected_session"),
       });
     } else if (endpoint === "agent-session-atif") {
       response = await connection.agentSessions.downloadAtif({
         pane_id: url.searchParams.get("pane_id"),
         agent: url.searchParams.get("agent"),
+        expected_session: url.searchParams.get("expected_session"),
       });
     } else if (endpoint === "file-download") {
       try {
@@ -1616,6 +1622,7 @@ function main() {
                   connection_id: true,
                   connection_scoped_http: true,
                   connection_runtime_generation: true,
+                  world_snapshot_chunks: true,
                   world_snapshot: true,
                   herdr_task_notifications:
                     config.taskNotificationSource === "herdr",

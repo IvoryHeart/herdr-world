@@ -69,6 +69,7 @@ export interface WorkspaceInspectorRequest {
 export interface WorkspaceAnnotationRequest {
   connectionId: string;
   generation: number;
+  runtimeGeneration?: number;
   workspaceId: string;
   annotation: ReviewAnnotation;
 }

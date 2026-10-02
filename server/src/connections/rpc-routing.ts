@@ -6,6 +6,7 @@ import {
 } from "./protocol";
 
 export type ConnectionRpcRequest = {
+  accept_world_snapshot_chunks?: unknown;
   id: string;
   method: string;
   params?: Record<string, unknown>;

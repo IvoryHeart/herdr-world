@@ -71,6 +71,46 @@ function inspectorConversation(index: number): WorldInspectorConversation {
   };
 }
 
+describe("independent multi-host Inspector leases", () => {
+  test("retains both hosts and removes only a replaced generation, preserving resource tabs and geometry", () => {
+    const alpha = {
+      ...inspectorConversation(1),
+      connectionId: "alpha",
+      runtimeGeneration: 7,
+      view: "files" as const,
+    };
+    const beta = {
+      ...inspectorConversation(1),
+      connectionId: "beta",
+      runtimeGeneration: 3,
+      view: "history" as const,
+      size: 610,
+    };
+    // The existing single-lease helper must evolve to admit the catalogue of live owners.
+    // Reflect supplies that proposed boundary without weakening production types to make RED compile.
+    const reconcile = (
+      leases: Array<{ connectionId: string; runtimeGeneration: number }>,
+    ) =>
+      Reflect.apply(retainWorldInspectorConversations, undefined, [
+        [alpha, beta],
+        leases,
+      ]) as WorldInspectorConversation[];
+    expect(
+      reconcile([
+        { connectionId: "alpha", runtimeGeneration: 7 },
+        { connectionId: "beta", runtimeGeneration: 3 },
+      ]),
+    ).toEqual([alpha, beta]);
+    expect(
+      reconcile([
+        { connectionId: "alpha", runtimeGeneration: 8 },
+        { connectionId: "beta", runtimeGeneration: 3 },
+      ]),
+    ).toEqual([beta]);
+    expect(reconcile([])).toEqual([]);
+  });
+});
+
 describe("World view preference", () => {
   test("resumes Spaces before a next-tab shortcut focuses its target", () => {
     const events: string[] = [];
@@ -206,7 +246,7 @@ describe("World view preference", () => {
     expect(worldViewFromPath("/other")).toBe("office");
   });
 
-  test("rejects a stale top-tab selection after a host switch with colliding IDs", () => {
+  test("resolves each current top-tab owner independently of ambient focus with colliding IDs", () => {
     const snapshot = (label: string) => ({
       workspaces: [
         {
@@ -280,8 +320,8 @@ describe("World view preference", () => {
         runtimeGeneration: 4,
         workspaceId: "shared",
         paneId: "same-pane",
-      }),
-    ).toBeNull();
+      })?.connectionId,
+    ).toBe("host-a");
     expect(
       worldNodeForWorkspaceSurfaceSelection(world, {
         connectionId: "host-b",
@@ -382,7 +422,7 @@ describe("World view preference", () => {
       ],
       "host-a",
     ).spaces[0];
-    const activeConnectionId = "host-a";
+    let activeConnectionId = "host-a";
     let selectCalls = 0;
     let refreshCalls = 0;
     let focusCalls = 0;
@@ -412,12 +452,12 @@ describe("World view preference", () => {
       },
     };
 
-    await expect(focusWorldNode(space, focusStore)).rejects.toThrow(
-      "Activate Host B before opening this item",
-    );
+    await focusWorldNode(space, focusStore);
+    activeConnectionId = "host-c";
+    await focusWorldNode(space, focusStore);
     expect(selectCalls).toBe(0);
     expect(refreshCalls).toBe(0);
-    expect(focusCalls).toBe(0);
+    expect(focusCalls).toBe(2);
   });
 
   test("activates a ready observed host only through the explicit host action", async () => {
@@ -503,7 +543,7 @@ describe("World view preference", () => {
     ).toBe("Local · Active");
   });
 
-  test("retires the shared Inspector when selection moves to another host", () => {
+  test("retains current Inspectors when selection moves to another host", () => {
     const active = buildWorldObject(
       [
         {
@@ -535,7 +575,7 @@ describe("World view preference", () => {
     );
 
     expect(shouldCloseWorldInspector(active.hosts[0])).toBe(false);
-    expect(shouldCloseWorldInspector(active.hosts[1])).toBe(true);
+    expect(shouldCloseWorldInspector(active.hosts[1])).toBe(false);
     expect(shouldCloseWorldInspector(null)).toBe(false);
   });
 
@@ -751,18 +791,22 @@ describe("World view preference", () => {
       "host-b",
     ).spaces[0];
     let activeConnectionId = "host-b";
+    let ownerGeneration = 7;
     let focusTarget: unknown;
     const focusStore = {
       get: () => ({
         activeConnectionId,
         serverRuntimeGeneration: 7,
-        connections: [{ id: "host-b", state: "ready", generation: 7 }],
+        connections: [
+          { id: "host-b", state: "ready", generation: ownerGeneration },
+        ],
       }),
       selectConnection: () => true,
       refresh: async () => undefined,
       focusQualifiedTarget: async (target: unknown) => {
         focusTarget = target;
         activeConnectionId = "host-a";
+        ownerGeneration = 8;
         return true;
       },
     };

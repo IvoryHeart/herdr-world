@@ -3,7 +3,12 @@ import { Terminal, type ITheme } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { X } from "lucide-react";
 import { bridge } from "../api";
-import { store, useStoreSelector, type PopupInfo } from "../store";
+import { sendTerminalInput } from "../terminalInput";
+import {
+  useOperationalStore,
+  useStoreSelector,
+  type PopupInfo,
+} from "../store";
 import { useConnectionClient } from "../useConnectionClient";
 import { TERMINAL_FONT_FAMILY, terminalFontOptions } from "../appearance";
 import { isMobileLayout } from "../layoutPreferences";
@@ -25,12 +30,6 @@ function b64toText(b64: string): string | null {
   } catch {
     return null;
   }
-}
-
-function bytesToB64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
 }
 
 /** Rough CSS sizing from Herdr's cells-or-percent popup size config. A cell
@@ -65,6 +64,7 @@ export function PopupOverlay({
   terminalTheme: ITheme;
   terminalFontScale: number;
 }) {
+  const store = useOperationalStore();
   const popup = useStoreSelector((s) => s.popup);
   const connectionClient = useConnectionClient();
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -132,7 +132,7 @@ export function PopupOverlay({
     const client = connectionClient;
     const identity = {
       connectionId: client.connectionId,
-      generation: client.generation,
+      generation: client.serverRuntimeGeneration ?? client.generation,
     };
     liveAttachmentsRef.current += 1;
     const dims = fit.proposeDimensions();
@@ -206,10 +206,11 @@ export function PopupOverlay({
     const onData = term.onData((data) => {
       if (!client.isCurrent() || attachedTerminalIdRef.current !== terminalId)
         return;
-      void client.call("terminal.input", {
-        terminal_id: terminalId,
-        data: bytesToB64(new TextEncoder().encode(data)),
-      });
+      void sendTerminalInput(
+        client,
+        new TextEncoder().encode(data),
+        terminalId,
+      ).catch(() => {});
     });
 
     // Frames are rendered server-side and written straight into this view, so

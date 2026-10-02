@@ -48,6 +48,7 @@ export function officeSpaceForRoom(
       (space) =>
         space.parentId === room.hostKey &&
         space.connectionId === room.workspaceRef.connectionId &&
+        space.generation === room.workspaceRef.generation &&
         space.nativeId === room.workspaceRef.nativeId,
     ) ?? null
   );
@@ -59,11 +60,7 @@ export function officeRoomActionCapabilities(
 ): OfficeRoomActionCapabilities {
   const space = officeSpaceForRoom(world, room);
   const operational = Boolean(
-    space &&
-      space.selectedHost &&
-      space.actionable &&
-      !space.stale &&
-      !room.stale,
+    space && space.actionable && !space.stale && !room.stale,
   );
   return {
     createSeat: operational && space?.capabilities.launcher === true,

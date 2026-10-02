@@ -258,6 +258,7 @@ export async function createOfficeRenderer(
     await app.init({
       width: OFFICE_GEOMETRY.minOfficeWidth,
       height: 640,
+      autoStart: false,
       backgroundAlpha: 0,
       antialias: true,
       autoDensity: true,
@@ -287,6 +288,29 @@ export async function createOfficeRenderer(
     }
     throw new Error("renderer disposed");
   }
+  // Explicit ordinary-task turns between paints admit queued socket replies.
+  // A frame-rate cap alone still leaves the automatic rAF chain ahead of input.
+  app.ticker.maxFPS = 0;
+  let animationTimer: ReturnType<typeof setTimeout> | null = null;
+  let animationFrame: number | null = null;
+  const cancelAnimation = () => {
+    if (animationTimer !== null) clearTimeout(animationTimer);
+    if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    animationTimer = null;
+    animationFrame = null;
+  };
+  const scheduleAnimation = () => {
+    animationTimer = setTimeout(() => {
+      animationTimer = null;
+      if (disposed) return;
+      animationFrame = requestAnimationFrame((now) => {
+        animationFrame = null;
+        if (disposed) return;
+        app.ticker.update(now);
+        scheduleAnimation();
+      });
+    }, 16);
+  };
   officeDebug("renderer:pixi-ready");
   const canvas = app.canvas;
   element.replaceChildren(canvas);
@@ -626,7 +650,7 @@ export async function createOfficeRenderer(
 
   const ticker = () => {
     diagnostics.frames += 1;
-    tick += 1;
+    tick += app.ticker.deltaTime;
     if (reducedMotion) {
       return;
     }
@@ -649,13 +673,18 @@ export async function createOfficeRenderer(
       return;
     }
     const ready = officeFontReady();
+    headingWidths.clear();
     currentFontReady = ready;
     lastSceneSignature = null;
     build(lastWidth || element.clientWidth);
   };
   fontSet?.addEventListener("loadingdone", refreshFontMetrics);
   if (fontSet) {
-    void fontSet.ready.then(refreshFontMetrics);
+    void fontSet.ready.then(() => {
+      // The initial scene already measured a loaded font. Rebuilding it again
+      // in the same microtask turn delays socket replies without changing it.
+      if (officeFontReady() !== currentFontReady) refreshFontMetrics();
+    });
     diagnostics.activeListeners += 1;
   }
 
@@ -695,7 +724,9 @@ export async function createOfficeRenderer(
   diagnostics.activeObservers += 1;
   try {
     build();
+    scheduleAnimation();
   } catch (error) {
+    cancelAnimation();
     observer.disconnect();
     motionPreference.removeEventListener("change", onMotionChange);
     fontSet?.removeEventListener("loadingdone", refreshFontMetrics);
@@ -761,6 +792,7 @@ export async function createOfficeRenderer(
         return;
       }
       disposed = true;
+      cancelAnimation();
       const ownsCanvas = element.contains(canvas);
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
@@ -2870,9 +2902,13 @@ function measureOfficeRoomHeader(
   };
 }
 
+const headingWidths = new Map<string, number>();
 function measureOfficeHeadingText(value: string) {
+  const key = value.toUpperCase();
+  const previous = headingWidths.get(key);
+  if (previous !== undefined) return previous;
   const text = new Text({
-    text: value.toUpperCase(),
+    text: key,
     resolution: 4,
     style: new TextStyle({
       fontSize: OFFICE_HEADING_TEXT_SIZE,
@@ -2884,6 +2920,9 @@ function measureOfficeHeadingText(value: string) {
   });
   const width = text.width;
   text.destroy();
+  if (headingWidths.size >= 4096)
+    headingWidths.delete(headingWidths.keys().next().value!);
+  headingWidths.set(key, width);
   return width;
 }
 

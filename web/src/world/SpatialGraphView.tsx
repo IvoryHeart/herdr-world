@@ -1,3 +1,4 @@
+import { WorldSearchResults } from "./WorldSearchResults";
 import {
   ChevronRight,
   Maximize2,
@@ -40,7 +41,11 @@ import {
   type WorldGraphSpace,
 } from "./graph/graphProjection";
 import type { WorldObject } from "./worldObject";
-import { WorldViewToolbar } from "./WorldViewToolbar";
+import {
+  worldNodeSearchText,
+  worldSearchMatches,
+  WorldViewToolbar,
+} from "./WorldViewToolbar";
 
 export default function SpatialGraphView({
   world,
@@ -92,6 +97,46 @@ export default function SpatialGraphView({
   const visibleHosts = searchActive
     ? projection.hosts.filter(({ node }) => matches.has(node.id))
     : projection.hosts;
+  const [renderProgress, setRenderProgress] = useState<{
+    projection: typeof projection;
+    limit: number;
+  } | null>(null);
+  const renderLimit =
+    renderProgress?.projection === projection ? renderProgress.limit : 8;
+  const orderedSpaces: WorldGraphSpace[] = [];
+  for (
+    let index = 0;
+    visibleHosts.some((host) => index < host.spaces.length);
+    index++
+  )
+    for (const host of visibleHosts)
+      if (host.spaces[index]) orderedSpaces.push(host.spaces[index]!);
+  const admittedSpaces = new Set(
+    orderedSpaces.slice(0, renderLimit).map((space) => space.node.id),
+  );
+  for (const space of orderedSpaces)
+    if (
+      space.node.id === selectedId ||
+      space.children.some(
+        (leaf) =>
+          leaf.id === selectedId || conversationNodeIds.includes(leaf.id),
+      )
+    )
+      admittedSpaces.add(space.node.id);
+  const pendingSpaces = orderedSpaces.filter(
+    (space) => !admittedSpaces.has(space.node.id),
+  ).length;
+  const renderedHosts = visibleHosts.map((host) => ({
+    ...host,
+    spaces: host.spaces.filter((space) => admittedSpaces.has(space.node.id)),
+  }));
+  useEffect(() => {
+    if (!pendingSpaces) return;
+    const frame = requestAnimationFrame(() =>
+      setRenderProgress({ projection, limit: renderLimit + 8 }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [projection, renderLimit, pendingSpaces]);
   const anchorNodeIds = useMemo(
     () => [
       ...new Set([...(selectedId ? [selectedId] : []), ...conversationNodeIds]),
@@ -254,11 +299,13 @@ export default function SpatialGraphView({
       viewLabel="Graph"
       query={query}
       onQueryChange={setQuery}
+      onSubmit={() => {
+        const match = worldSearchMatches(world, query)[0];
+        if (match) onSelect(match.id);
+      }}
       resultLabel={
-        searchActive
-          ? visibleHosts.length
-            ? `${matches?.size ?? 0} matching items`
-            : "No matches"
+        query.trim()
+          ? `${worldSearchMatches(world, query).length} matching observed items`
           : undefined
       }
     >
@@ -322,7 +369,12 @@ export default function SpatialGraphView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      <div ref={rootRef} className="world-spatial-graph-shell">
+      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      <div
+        ref={rootRef}
+        className="world-spatial-graph-shell"
+        aria-busy={pendingSpaces > 0}
+      >
         <div className="world-spatial-graph-content">
           <aside
             className="world-spatial-graph-outline"
@@ -338,7 +390,7 @@ export default function SpatialGraphView({
             </div>
             {visibleHosts.length ? (
               <ul>
-                {visibleHosts.map((host) => (
+                {renderedHosts.map((host) => (
                   <SemanticHost
                     key={host.node.id}
                     host={host}
@@ -356,6 +408,11 @@ export default function SpatialGraphView({
             ) : (
               <p className="world-spatial-graph-empty">No Graph matches.</p>
             )}
+            {pendingSpaces ? (
+              <p role="status">
+                Rendering {pendingSpaces} more observed spaces
+              </p>
+            ) : null}
             {projection.omittedHostCount ? (
               <p className="world-spatial-graph-overflow-copy">
                 {projection.omittedHostCount} hosts omitted by the 128-host
@@ -459,7 +516,7 @@ function SemanticSpace({
     ? space.children.filter(({ id }) => props.matches?.has(id))
     : space.children;
   return (
-    <li data-state={space.node.status}>
+    <li className="world-spatial-graph-space" data-state={space.node.status}>
       <SemanticParentRow node={space.node} expanded={expanded} {...props} />
       {expanded ? (
         <ul>
@@ -595,34 +652,27 @@ export function graphMatches(
   if (!query) return null;
   const matches = new Set<string>();
   for (const host of hosts) {
-    if (host.node.searchText.includes(query)) {
-      addHost(matches, host);
-      continue;
-    }
-    for (const space of host.spaces) {
-      if (space.node.searchText.includes(query)) {
-        matches.add(host.node.id);
-        matches.add(space.node.id);
-        for (const child of space.children) matches.add(child.id);
-        continue;
+    const source = host.node.source;
+    if (source.kind !== "host") continue;
+    const hostMatch = worldNodeSearchText(source).includes(query);
+    if (hostMatch) matches.add(source.id);
+    for (const space of source.spaces) {
+      const spaceMatch =
+        hostMatch || worldNodeSearchText(space).includes(query);
+      if (spaceMatch) {
+        matches.add(source.id);
+        matches.add(space.id);
       }
-      for (const child of space.children) {
-        if (!child.searchText.includes(query)) continue;
-        matches.add(host.node.id);
-        matches.add(space.node.id);
-        matches.add(child.id);
+      for (const leaf of space.children) {
+        if (spaceMatch || worldNodeSearchText(leaf).includes(query)) {
+          matches.add(source.id);
+          matches.add(space.id);
+          matches.add(leaf.id);
+        }
       }
     }
   }
   return matches;
-}
-
-function addHost(matches: Set<string>, host: WorldGraphHost) {
-  matches.add(host.node.id);
-  for (const space of host.spaces) {
-    matches.add(space.node.id);
-    for (const child of space.children) matches.add(child.id);
-  }
 }
 
 function statusSymbol(node: WorldGraphNode) {

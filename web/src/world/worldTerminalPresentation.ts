@@ -101,13 +101,19 @@ export function upsertWorldInspectorConversation(
 
 export function retainWorldInspectorConversations(
   current: readonly WorldInspectorConversation[],
-  lease: { connectionId: string; runtimeGeneration: number } | null,
+  lease:
+    | { connectionId: string; runtimeGeneration: number }
+    | readonly { connectionId: string; runtimeGeneration: number }[]
+    | null,
 ) {
   if (!lease) return [];
-  return current.filter(
-    (conversation) =>
-      conversation.connectionId === lease.connectionId &&
-      conversation.runtimeGeneration === lease.runtimeGeneration,
+  const leases = Array.isArray(lease) ? lease : [lease];
+  return current.filter((conversation) =>
+    leases.some(
+      (owner) =>
+        conversation.connectionId === owner.connectionId &&
+        conversation.runtimeGeneration === owner.runtimeGeneration,
+    ),
   );
 }
 
@@ -189,7 +195,6 @@ export function worldInspectorForNode(
   if (
     node.kind === "host" ||
     !node.actionable ||
-    !node.selectedHost ||
     !availableViews.includes(view)
   ) {
     return null;

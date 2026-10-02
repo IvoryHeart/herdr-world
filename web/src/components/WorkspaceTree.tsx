@@ -1,5 +1,5 @@
 import { worldLocalStorage } from "../browserStorage";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
 import type { GitStatusSummary, Pane, Workspace } from "../types";
 import { shortId } from "../utils";
 import {
@@ -228,6 +228,7 @@ export function WorkspaceTree({
     }),
     shallowEqual,
   );
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const agentOrderStorageKey = connectionStorageKey(
     s.activeConnectionId,
@@ -274,6 +275,17 @@ export function WorkspaceTree({
     string | null
   >(null);
   const lastPrunedWorkspaceRefresh = useRef(0);
+  useEffect(() => {
+    setMenu(null);
+    setAgentMenu(null);
+    setPendingClosePane(null);
+    setDraggedWorkspaceId(null);
+    setWorkspaceDropTarget(null);
+    setDraggedAgentPaneId(null);
+    setAgentDropTarget(null);
+    setCreateOpen(false);
+    setLifecycleWorkspaceId(null);
+  }, [s.activeConnectionId, s.connectionGeneration]);
   const pinsStorageKey = connectionStorageKey(
     s.activeConnectionId,
     WORKSPACE_PINS_STORAGE_KEY,
@@ -922,6 +934,7 @@ function WorkspaceRow({
   onContextMenu: (w: Workspace, x: number, y: number) => void;
   workspaceDrag?: WorkspaceDragProps;
 }) {
+  const store = useOperationalStore();
   const children = childrenByParent.get(w.workspace_id) ?? [];
   const agents = agentsByWorkspace.get(w.workspace_id) ?? [];
   const tabCount = tabCountsByWorkspace.get(w.workspace_id) ?? 0;

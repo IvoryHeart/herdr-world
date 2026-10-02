@@ -4,7 +4,7 @@ import {
   keyboardContextMenuPoint,
   treeKeyboardAction,
 } from "./treeKeyboard";
-import { store, useStoreSelector } from "../store";
+import { useOperationalStore, useStoreSelector } from "../store";
 import type { Pane } from "../types";
 import { agentClass, basename, shortId } from "../utils";
 import { shouldShowAgentStatusLabel } from "./agentSession";
@@ -69,6 +69,7 @@ export function AgentRow({
     onDragEnd: () => void;
   };
 }) {
+  const store = useOperationalStore();
   const tabLabel = useStoreSelector((state) => {
     const label = state.tabs
       .find(
