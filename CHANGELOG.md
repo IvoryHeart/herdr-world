@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-02
+
 ### Highlights since 0.1.1
 
 - Explore agent work in Office, Tree, Graph, and Spaces, with terminal, files,
