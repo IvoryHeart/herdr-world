@@ -7,6 +7,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +17,7 @@ import {
   parseSha256File,
   readServiceEnv,
   releaseAssetFor,
+  resolvePluginRoot,
 } from "./world-plugin";
 
 describe("plugin build commands", () => {
@@ -102,7 +104,11 @@ globalThis.fetch = async (url) => {
     expect(result.exitCode).toBe(0);
     expect(
       readFileSync(join(root, "build.log"), "utf8").trim().split("\n"),
-    ).toEqual([`${root}: install --frozen-lockfile`, `${root}: run build`]);
+    ).toEqual([
+      `${root}: install --frozen-lockfile`,
+      `${root}: run build`,
+      `${root}: build --compile --no-compile-autoload-dotenv --no-compile-autoload-bunfig ${root}/scripts/world-plugin.ts --outfile ${root}/server/herdr-world-plugin.exe`,
+    ]);
     expect(existsSync(join(root, "fetch.log"))).toBe(false);
   });
 
@@ -138,6 +144,72 @@ globalThis.fetch = async (url) => {
       expect(existsSync(join(root, "server/herdr-world.exe"))).toBe(false);
     },
   );
+
+  test("compiled actions work with Bun absent from the server PATH", () => {
+    if (process.platform === "win32") return;
+    const root = checkout();
+    writeFileSync(
+      join(root, "server/herdr-world"),
+      '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "herdr-world 9.8.7"; else echo "installed"; fi\n',
+      { mode: 0o755 },
+    );
+    mkdirSync(join(root, "real-bin"));
+    symlinkSync(process.execPath, join(root, "real-bin/bun"));
+    const build = Bun.spawnSync(
+      [
+        process.execPath,
+        join(root, "scripts/world-plugin.ts"),
+        "compile-launcher",
+      ],
+      {
+        env: {
+          ...process.env,
+          PATH: `${join(root, "real-bin")}:/usr/bin:/bin`,
+        },
+      },
+    );
+    if (build.exitCode !== 0) throw new Error(build.stderr.toString());
+    const launcher = join(root, "server/herdr-world-plugin.exe");
+    expect(existsSync(launcher)).toBe(true);
+    for (const [verb, expected] of [
+      ["version", "herdr-world 9.8.7"],
+      ["status", "installed"],
+    ]) {
+      const result = Bun.spawnSync([launcher, verb], {
+        cwd: root,
+        env: { ...process.env, PATH: "/usr/bin:/bin" },
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.stdout.toString().trim()).toBe(expected);
+    }
+  });
+});
+
+test("compiled launcher resolves the plugin checkout instead of Bun's virtual module URL", () => {
+  expect(
+    resolvePluginRoot(
+      "/plugin/server/herdr-world-plugin.exe",
+      "file:///$bunfs/root/herdr-world-plugin.exe",
+    ),
+  ).toBe("/plugin");
+});
+
+test("plugin actions and panel use the standalone launcher", () => {
+  const manifest = Bun.TOML.parse(
+    readFileSync(join(import.meta.dir, "../herdr-plugin.toml"), "utf8"),
+  ) as {
+    build: Array<{ command: string[] }>;
+    panes: Array<{ command: string[] }>;
+    actions: Array<{ command: string[] }>;
+  };
+  expect(manifest.build[0]?.command).toEqual([
+    "bun",
+    "scripts/world-plugin.ts",
+    "build",
+  ]);
+  for (const entry of [...manifest.panes, ...manifest.actions]) {
+    expect(entry.command[0]).toBe("server/herdr-world-plugin.exe");
+  }
 });
 
 describe("releaseAssetFor", () => {

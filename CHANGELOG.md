@@ -175,6 +175,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Plugin actions and panel now launch from the Herdr server without requiring Bun
+  on its `PATH`; Bun is needed only to install or build the plugin.
+
 - An occupied World listener now explains how to keep the existing process and
   choose a persistent alternate port during an upgrade.
 

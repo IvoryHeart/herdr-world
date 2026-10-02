@@ -129,10 +129,17 @@ test("CI exercises the real plugin-managed launchd lifecycle on both protected a
     { arch: "arm64", runner: "macos-15" },
     { arch: "x86_64", runner: "macos-15-intel" },
   ]);
-  expect(lifecycle).toContain("bun scripts/world-plugin.ts start");
-  expect(lifecycle).toContain("bun scripts/world-plugin.ts status");
-  expect(lifecycle).toContain("bun scripts/world-plugin.ts restart");
-  expect(lifecycle).toContain("bun scripts/world-plugin.ts uninstall");
+  expect(
+    launchd?.steps.some(
+      (step) => step.run === "bun scripts/world-plugin.ts compile-launcher",
+    ),
+  ).toBe(true);
+  expect(lifecycle).toContain('PATH=/usr/bin:/bin "$plugin_launcher" start');
+  expect(lifecycle).toContain('PATH=/usr/bin:/bin "$plugin_launcher" status');
+  expect(lifecycle).toContain('PATH=/usr/bin:/bin "$plugin_launcher" restart');
+  expect(lifecycle).toContain(
+    'PATH=/usr/bin:/bin "$plugin_launcher" uninstall',
+  );
   expect(lifecycle).toContain("http://127.0.0.1:8787/healthz");
   expect(lifecycle).toContain("trap cleanup EXIT");
   expect(

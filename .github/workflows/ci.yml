@@ -91,14 +91,18 @@ jobs:
             - name: Build the native World service
               if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
               run: bun run build
+            - name: Compile the standalone plugin launcher
+              if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              run: bun scripts/world-plugin.ts compile-launcher
             - name: Exercise the real plugin-managed launchd lifecycle
               if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
               shell: bash
               run: |
                   set -euo pipefail
+                  plugin_launcher="$PWD/server/herdr-world-plugin.exe"
 
                   cleanup() {
-                    bun scripts/world-plugin.ts uninstall >/dev/null 2>&1 || true
+                    PATH=/usr/bin:/bin "$plugin_launcher" uninstall >/dev/null 2>&1 || true
                   }
                   wait_until_ready() {
                     for _ in {1..80}; do
@@ -115,13 +119,13 @@ jobs:
 
                   trap cleanup EXIT
                   cleanup
-                  bun scripts/world-plugin.ts start
+                  PATH=/usr/bin:/bin "$plugin_launcher" start
                   wait_until_ready
-                  bun scripts/world-plugin.ts status
-                  bun scripts/world-plugin.ts restart
+                  PATH=/usr/bin:/bin "$plugin_launcher" status
+                  PATH=/usr/bin:/bin "$plugin_launcher" restart
                   wait_until_ready
-                  bun scripts/world-plugin.ts status
-                  bun scripts/world-plugin.ts uninstall
+                  PATH=/usr/bin:/bin "$plugin_launcher" status
+                  PATH=/usr/bin:/bin "$plugin_launcher" uninstall
                   test ! -e "$HOME/Library/LaunchAgents/dev.herdr-world.plist"
                   trap - EXIT
 

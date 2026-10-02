@@ -4,10 +4,11 @@
 // are a frozen contract because managed installs call the action set cached
 // at install time.
 //
-// Verbs: build, build-source, start, restart, status, url, version,
-// uninstall, panel. The whole shim runs on Bun. `build` downloads the
-// checksum-verified prebuilt release binary matching this checkout's
-// version; `build-source` compiles unreleased checkouts before local linking.
+// Verbs: build, build-source, compile-launcher, start, restart, status, url,
+// version, uninstall, panel. Build verbs run on Bun at install time and compile
+// this shim into a standalone launcher for the Herdr server's action environment.
+// `build` downloads the checksum-verified prebuilt release binary matching
+// this checkout's version; `build-source` builds unreleased checkouts.
 // The service verbs (start, restart, status, uninstall) delegate to the binary,
 // downloading it first when missing. `url` and `version` only read on-disk
 // state. `panel` is the interactive popup TUI behind the manifest [[panes]]
@@ -26,12 +27,23 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { dataRoot, assertSafeDataPath } from "../server/src/config/data-paths";
 
-const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const LAUNCHER_NAME = "herdr-world-plugin.exe";
+
+export function resolvePluginRoot(
+  executable: string,
+  moduleUrl: string,
+): string {
+  return basename(executable).toLowerCase() === LAUNCHER_NAME
+    ? dirname(dirname(executable))
+    : fileURLToPath(new URL("..", moduleUrl));
+}
+
+const REPO_ROOT = resolvePluginRoot(process.execPath, import.meta.url);
 const BINARY_CANDIDATES =
   process.platform === "win32"
     ? ["herdr-world.exe", "herdr-world"]
@@ -177,7 +189,29 @@ async function downloadPrebuilt(): Promise<number> {
 function buildSource(): number {
   const installCode = run(["bun", "install", "--frozen-lockfile"], REPO_ROOT);
   if (installCode !== 0) return installCode;
-  return run(["bun", "run", "build"]);
+  const buildCode = run(["bun", "run", "build"]);
+  if (buildCode !== 0) return buildCode;
+  return compileLauncher();
+}
+
+function compileLauncher(): number {
+  const output = join(REPO_ROOT, "server", LAUNCHER_NAME);
+  mkdirSync(dirname(output), { recursive: true });
+  return run([
+    "bun",
+    "build",
+    "--compile",
+    "--no-compile-autoload-dotenv",
+    "--no-compile-autoload-bunfig",
+    join(REPO_ROOT, "scripts/world-plugin.ts"),
+    "--outfile",
+    output,
+  ]);
+}
+
+async function buildRelease(): Promise<number> {
+  const downloadCode = await downloadPrebuilt();
+  return downloadCode === 0 ? compileLauncher() : downloadCode;
 }
 
 async function ensureBinary(): Promise<string | null> {
@@ -389,9 +423,11 @@ function panel(): Promise<number> {
 async function main(): Promise<number> {
   switch (process.argv[2]) {
     case "build":
-      return downloadPrebuilt();
+      return buildRelease();
     case "build-source":
       return buildSource();
+    case "compile-launcher":
+      return compileLauncher();
     case "start":
       return service("install", "--force");
     case "restart":
@@ -408,7 +444,7 @@ async function main(): Promise<number> {
       return panel();
     default:
       console.error(
-        "usage: world-plugin.ts <build|build-source|start|restart|status|url|version|uninstall|panel>",
+        "usage: world-plugin.ts <build|build-source|compile-launcher|start|restart|status|url|version|uninstall|panel>",
       );
       return process.argv[2] ? 1 : 0;
   }
