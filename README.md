@@ -143,8 +143,8 @@ The process must stay running and reachable. **PWA mode is not offline access.**
 
 ## Documentation
 
-- [Website](https://ivoryheart.github.io/herdr-world/) and
-  [hands-on tutorial](https://ivoryheart.github.io/herdr-world/tutorial/)
+- [Website](https://herdr.world/) and
+  [hands-on tutorial](https://herdr.world/tutorial/)
   ([Markdown](./docs/TUTORIAL.md)): local work, mobile, and private remote access.
 - [Features and shortcuts](./FEATURES.md)
 - [Deployment](./docs/DEPLOYMENT.md): installation, configuration, services, builds.
@@ -153,7 +153,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
   [foundation source guide](./docs/foundation-guide.md): contracts, module owners,
   request paths, and focused tests for contributors and agents.
 - [Development](./docs/development.md), [packaging](./docs/packaging.md), and
-  [release process](./docs/release.md).
+  [release process](./docs/release.md), and [screenshot capture](./docs/SCREENSHOTS.md).
 - [Security](./SECURITY.md) and [contributing](./CONTRIBUTING.md).
 
 ## Development

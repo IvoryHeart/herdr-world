@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Visualize Herdr agent work in Office and Graph. Connect local and SSH hosts, then open terminals, files, and history for the selected host."
+      content="Visualize Herdr agent work in Office and Graph. Connect local and SSH hosts, browse their agents together, and open host-owned terminals, files, and history."
     />
     <meta property="og:type" content="website" />
     <meta
@@ -19,11 +19,11 @@
     />
     <meta
       property="og:url"
-      content="https://ivoryheart.github.io/herdr-world/"
+      content="https://herdr.world/"
     />
     <meta
       property="og:image"
-      content="https://ivoryheart.github.io/herdr-world/herdr-world-og.png"
+      content="https://herdr.world/herdr-world-og.png"
     />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -42,9 +42,9 @@
     />
     <meta
       name="twitter:image"
-      content="https://ivoryheart.github.io/herdr-world/herdr-world-og.png"
+      content="https://herdr.world/herdr-world-og.png"
     />
-    <link rel="canonical" href="https://ivoryheart.github.io/herdr-world/" />
+    <link rel="canonical" href="https://herdr.world/" />
     <link rel="icon" href="./favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/png" sizes="48x48" href="./assets/herdr-world-icon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/herdr-world-icon-180.png" />
@@ -58,7 +58,7 @@
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "description": "Visualize Herdr agent work in Office and Graph across local and SSH hosts.",
-        "url": "https://ivoryheart.github.io/herdr-world/",
+        "url": "https://herdr.world/",
         "downloadUrl": "https://github.com/IvoryHeart/herdr-world/releases/latest",
         "license": "https://opensource.org/license/mit"
       }
@@ -127,7 +127,7 @@
               >Herdr</a
             >
           </div>
-          <h1>Every Herdr host, <span>one selected view.</span></h1>
+          <h1>Every Herdr host, <span>one shared view.</span></h1>
           <p class="hero-lede">
             <a
               href="https://herdr.dev"
@@ -136,8 +136,8 @@
               >Herdr</a
             >
             keeps the terminals alive. Herdr World observes local and SSH hosts
-            in the background, projects the selected host into its visual views,
-            and opens the exact terminal, files, changes and session history.
+            together in Office, Tree and Graph. Hosts filters the overview while
+            terminals, files, changes and history retain their owning host.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">
@@ -192,7 +192,7 @@
                 />
                 <img
                   src="./assets/herdr-world-desktop-office.png"
-                  alt="Herdr World Office showing the selected Herdr host"
+                  alt="Herdr World Office showing spaces and agents"
                   width="1440"
                   height="900"
                   fetchpriority="high"
@@ -388,10 +388,10 @@
                 tabindex="0"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-office.png"
-                data-alt="Herdr World Office showing the selected Herdr host"
+                data-alt="Herdr World Office showing spaces and agents"
                 data-label="Office"
-                data-title="See the selected agent world at a glance."
-                data-copy="Keep local and SSH hosts observed in the background, then scan the selected host's spaces and recognized agents without losing the terminal workflow."
+                data-title="See agent work across hosts at a glance."
+                data-copy="Scan local and SSH hosts together, filter the overview, and keep host-owned terminals open while you work."
               >
                 <span>01</span> Office
               </button>
@@ -404,10 +404,10 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-tree.png"
-                data-alt="Herdr World Tree showing the selected host's spaces and agents"
+                data-alt="Herdr World Tree showing qualified spaces and agents"
                 data-label="Tree"
                 data-title="Trace every agent back to its runtime."
-                data-copy="Search and collapse the selected host's qualified space-agent hierarchy while World keeps every managed host distinct in the background."
+                data-copy="Search and collapse qualified spaces and agents across observed hosts, with each runtime and resource kept distinct."
               >
                 <span>02</span> Tree
               </button>
@@ -420,7 +420,7 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-graph.png"
-                data-alt="Herdr World Graph showing the selected host's spaces and agents"
+                data-alt="Herdr World Graph showing qualified spaces and agents"
                 data-label="Graph"
                 data-title="Follow runtime relationships visually."
                 data-copy="Move from a machine to a workspace to the exact agent or terminal, then hand off into its live Spaces context."
@@ -482,7 +482,7 @@
                 >
                   <img
                     src="./assets/herdr-world-desktop-office.png"
-                    alt="Herdr World Office showing the selected Herdr host"
+                    alt="Herdr World Office showing spaces and agents"
                     width="1440"
                     height="900"
                     loading="lazy"
@@ -493,11 +493,11 @@
               </div>
               <div class="showcase-caption" aria-live="polite">
                 <h3 data-showcase-title>
-                  See the selected agent world at a glance.
+                  See agent work across hosts at a glance.
                 </h3>
                 <p data-showcase-copy>
                   Keep local and SSH hosts observed in the background, then scan
-                  the selected host's spaces and recognized agents without
+                  qualified spaces and recognized agents across hosts without
                   losing the terminal workflow underneath.
                 </p>
               </div>
@@ -759,7 +759,12 @@
               target="_blank"
               rel="noopener noreferrer"
               >Herdr</a
-            >.
+            >. Derived from
+            <a href="https://github.com/powerfooI/roamgate">Roamgate</a>.
+          </p>
+          <p>
+            Agent names and logos belong to their respective owners. No endorsement
+            implied. <a href="./assets/agent-icons-LICENSE.txt">Icon licenses</a>.
           </p>
         </div>
         <div class="footer-links">

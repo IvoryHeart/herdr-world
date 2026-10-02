@@ -385,13 +385,13 @@ Credentials/options remain in the service user's OpenSSH configuration. Stderr i
 bounded and sanitized, not relayed as raw banners. Cleanup removes owned paths
 only after confirmed child exit; unconfirmed termination preserves paths and
 reports failure. Remote file, Git, hook, and supported session operations use the
-same runtime host boundary. See [connection setup](./DEPLOYMENT.md#multiple-and-remote-herdr-connections).
+same runtime host boundary. See [connection setup](./DEPLOYMENT.md#local-and-ssh-connections).
 
 ## Distribution model
 
 Production builds embed the frontend and Bun runtime into one platform executable;
 users need neither Bun nor Node.js. Source builds use Bun and Vite. See
-[standalone builds](./DEPLOYMENT.md#build-a-standalone-executable).
+[standalone builds](./DEPLOYMENT.md#source-development-and-builds).
 
 Herdr World has a separate release namespace: executable and package members,
 archive/checksum filenames, and manifest identity all use `herdr-world`. Every

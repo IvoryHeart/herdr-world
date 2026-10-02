@@ -1,4 +1,5 @@
-import { basename } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { worldEnv } from "../config/environment";
 
 type RunProcessWithCodeTimeout = (
@@ -41,6 +42,11 @@ interface UpdateRuntime {
 const DEFAULT_UPDATE_BASE_URL =
   "https://github.com/IvoryHeart/herdr-world/releases/latest/download";
 const UPDATE_METADATA_MAX_BYTES = 4096;
+const RELEASE_INDEX_MAX_BYTES = 2 * 1024 * 1024;
+const RELEASE_INDEX_PAGE_SIZE = 30;
+const RELEASE_INDEX_MAX_PAGES = 4;
+const RELEASE_INDEX_URL =
+  "https://api.github.com/repos/IvoryHeart/herdr-world/releases";
 const UPDATE_CHECK_CACHE_MS = 5 * 60 * 1000;
 const UPDATE_CHECK_TIMEOUT_MS = 15000;
 const UPDATE_INSTALL_TIMEOUT_MS = 120000;
@@ -48,7 +54,11 @@ function hasUpdateConfirmation(req: Request): boolean {
   return req.headers.get("x-herdr-world-update") === "1";
 }
 export const UPDATE_HTTP_IDLE_TIMEOUT_SECONDS =
-  Math.ceil((UPDATE_CHECK_TIMEOUT_MS + UPDATE_INSTALL_TIMEOUT_MS) / 1000) + 15;
+  Math.ceil(
+    ((RELEASE_INDEX_MAX_PAGES + 2) * UPDATE_CHECK_TIMEOUT_MS +
+      UPDATE_INSTALL_TIMEOUT_MS) /
+      1000,
+  ) + 15;
 
 export function resolveUpdateTarget(
   platform: string,
@@ -228,21 +238,24 @@ export function createUpdateHandlers({
   };
   const environment = environmentOverride ?? process.env;
   const updateTarget = resolveUpdateTarget(runtime.platform, runtime.arch);
+  const configuredUpdateBaseUrl = worldEnv("UPDATE_BASE_URL", environment);
+  const candidateCore = appVersion.match(/^(\d+\.\d+\.\d+)-rc\.\d+$/)?.[1];
   let updateBaseUrlValue: string | null = null;
   let updateBaseUrlError: Error | null = null;
   try {
-    updateBaseUrlValue = normalizeUpdateBaseUrl(
-      worldEnv("UPDATE_BASE_URL", environment),
-    );
+    updateBaseUrlValue = normalizeUpdateBaseUrl(configuredUpdateBaseUrl);
   } catch (error) {
     updateBaseUrlError = error as Error;
   }
   let updateInstallInProgress = false;
   let latestManifestCache: {
     expiresAt: number;
-    value: UpdateManifest;
+    value: { manifest: UpdateManifest; baseUrl: string };
   } | null = null;
-  let latestManifestRequest: Promise<UpdateManifest> | null = null;
+  let latestManifestRequest: Promise<{
+    manifest: UpdateManifest;
+    baseUrl: string;
+  }> | null = null;
 
   function updateBaseUrl(): string {
     if (updateBaseUrlError) throw updateBaseUrlError;
@@ -250,34 +263,36 @@ export function createUpdateHandlers({
     return updateBaseUrlValue;
   }
 
-  function updateArchiveUrl(): string {
-    return updateTarget
-      ? `${updateBaseUrl()}/${updateTarget.archiveName}`
-      : updateBaseUrl();
+  function updateArchiveUrl(baseUrl: string): string {
+    return updateTarget ? `${baseUrl}/${updateTarget.archiveName}` : baseUrl;
   }
 
-  function updateManifestUrl(): string {
-    return updateTarget
-      ? `${updateBaseUrl()}/${updateTarget.manifestName}`
-      : updateBaseUrl();
+  function updateManifestUrl(baseUrl: string): string {
+    return updateTarget ? `${baseUrl}/${updateTarget.manifestName}` : baseUrl;
   }
 
-  function sourceDetails(): Record<string, string> {
+  function sourceDetails(baseUrl?: string): Record<string, string> {
     if (updateBaseUrlError) return {};
+    const sourceBaseUrl =
+      baseUrl ??
+      (candidateCore && !configuredUpdateBaseUrl?.trim()
+        ? null
+        : updateBaseUrl());
+    if (!sourceBaseUrl) return {};
     return {
-      source_url: updateArchiveUrl(),
-      metadata_url: updateManifestUrl(),
+      source_url: updateArchiveUrl(sourceBaseUrl),
+      metadata_url: updateManifestUrl(sourceBaseUrl),
     };
   }
 
-  function curlTransportArgs(): string[] {
+  function curlTransportArgs(baseUrl: string): string[] {
     const protocol =
-      new URL(updateBaseUrl()).protocol === "https:" ? "=https" : "=http";
+      new URL(baseUrl).protocol === "https:" ? "=https" : "=http";
     return ["--proto", protocol, "--proto-redir", protocol];
   }
 
-  function curlTransportCommand(): string {
-    return curlTransportArgs().map(shQuote).join(" ");
+  function curlTransportCommand(baseUrl: string): string {
+    return curlTransportArgs(baseUrl).map(shQuote).join(" ");
   }
 
   function autoUpdateCapability(): {
@@ -285,6 +300,12 @@ export function createUpdateHandlers({
     reason?: string;
     targetPath?: string;
   } {
+    if (/^0\.0\.0-rc\.\d+$/.test(appVersion)) {
+      return {
+        canAutoUpdate: false,
+        reason: "Pre-merge previews have no update channel.",
+      };
+    }
     if (!updateTarget) {
       return {
         canAutoUpdate: false,
@@ -297,6 +318,17 @@ export function createUpdateHandlers({
       return {
         canAutoUpdate: false,
         reason: "Auto update is only available in the standalone binary.",
+      };
+    }
+    const executableDir = dirname(runtime.execPath);
+    if (
+      existsSync(join(executableDir, "VERSION")) ||
+      existsSync(join(dirname(executableDir), "package.json"))
+    ) {
+      return {
+        canAutoUpdate: false,
+        reason:
+          "This installation is managed by a package or plugin. Update it through its installation channel.",
       };
     }
     if (!isSupervisorManagedEnvironment(environment)) {
@@ -354,21 +386,147 @@ export function createUpdateHandlers({
     return manifest;
   }
 
-  async function loadLatestUpdateManifest(): Promise<UpdateManifest> {
+  async function resolveReleaseBaseUrl(): Promise<string> {
+    if (!candidateCore || configuredUpdateBaseUrl?.trim()) {
+      return updateBaseUrl();
+    }
+    const candidatePrefix = `v${candidateCore}-rc.`;
+    const stableTag = `v${candidateCore}`;
+    const matching: string[] = [];
+    function eligibleTag(release: unknown): string | null {
+      if (!release || typeof release !== "object") return null;
+      const entry = release as Record<string, unknown>;
+      const tag = entry.tag_name;
+      if (typeof tag !== "string" || entry.draft !== false) return null;
+      const candidate =
+        entry.prerelease === true &&
+        tag.startsWith(candidatePrefix) &&
+        /^\d+$/.test(tag.slice(candidatePrefix.length));
+      const stable = entry.prerelease === false && tag === stableTag;
+      if (!candidate && !stable) return null;
+      const assets = Array.isArray(entry.assets)
+        ? entry.assets.map((asset: { name?: unknown }) => asset?.name)
+        : [];
+      return assets.includes(updateTarget?.manifestName) &&
+        assets.includes(updateTarget?.archiveName)
+        ? tag
+        : null;
+    }
+    async function fetchIndexPage(page: number): Promise<unknown[]> {
+      const result = await runProcessWithCodeTimeout(
+        [
+          "curl",
+          "--proto",
+          "=https",
+          "--proto-redir",
+          "=https",
+          "-fsSL",
+          "--max-filesize",
+          String(RELEASE_INDEX_MAX_BYTES),
+          `${RELEASE_INDEX_URL}?per_page=${RELEASE_INDEX_PAGE_SIZE}&page=${page}`,
+        ],
+        UPDATE_CHECK_TIMEOUT_MS,
+      );
+      if (result.code !== 0) {
+        throw processFailure(result, "release index download");
+      }
+      let releases: unknown;
+      try {
+        releases = JSON.parse(result.stdout);
+      } catch {
+        throw new Error("invalid release index");
+      }
+      if (!Array.isArray(releases)) throw new Error("invalid release index");
+      return releases;
+    }
+    function collectTags(releases: unknown[]): boolean {
+      for (const release of releases) {
+        const tag = eligibleTag(release);
+        if (tag === stableTag) return true;
+        if (tag) matching.push(tag);
+      }
+      return false;
+    }
+
+    let releases = await fetchIndexPage(1);
+    if (collectTags(releases)) {
+      return `https://github.com/IvoryHeart/herdr-world/releases/download/${stableTag}`;
+    }
+    if (releases.length === RELEASE_INDEX_PAGE_SIZE) {
+      // The stable tag may be arbitrarily far back in the paginated index.
+      const result = await runProcessWithCodeTimeout(
+        [
+          "curl",
+          "--proto",
+          "=https",
+          "--proto-redir",
+          "=https",
+          "-fsSL",
+          "--max-filesize",
+          String(RELEASE_INDEX_MAX_BYTES),
+          "--write-out",
+          "\n%{http_code}",
+          `${RELEASE_INDEX_URL}/tags/${stableTag}`,
+        ],
+        UPDATE_CHECK_TIMEOUT_MS,
+      );
+      if (result.code === 0) {
+        const separator = result.stdout.lastIndexOf("\n");
+        if (separator < 0 || result.stdout.slice(separator + 1) !== "200") {
+          throw new Error("invalid stable release response");
+        }
+        let stableRelease: unknown;
+        try {
+          stableRelease = JSON.parse(result.stdout.slice(0, separator));
+        } catch {
+          throw new Error("invalid stable release response");
+        }
+        if (eligibleTag(stableRelease) === stableTag) {
+          return `https://github.com/IvoryHeart/herdr-world/releases/download/${stableTag}`;
+        }
+      } else if (result.stdout.trim() !== "404") {
+        throw processFailure(result, "stable release lookup");
+      }
+    }
+    for (
+      let page = 2;
+      page <= RELEASE_INDEX_MAX_PAGES &&
+      releases.length === RELEASE_INDEX_PAGE_SIZE;
+      page++
+    ) {
+      releases = await fetchIndexPage(page);
+      if (collectTags(releases)) {
+        return `https://github.com/IvoryHeart/herdr-world/releases/download/${stableTag}`;
+      }
+    }
+    matching.sort((left, right) =>
+      compareVersion(right.slice(1), left.slice(1)),
+    );
+    const tag = matching[0];
+    if (!tag)
+      throw new Error(`no published ${candidateCore} update is available`);
+    return `https://github.com/IvoryHeart/herdr-world/releases/download/${tag}`;
+  }
+
+  async function loadLatestUpdateManifest(): Promise<{
+    manifest: UpdateManifest;
+    baseUrl: string;
+  }> {
     if (!updateTarget) {
       throw new Error(
         `no update package is available for ${runtime.platform}-${runtime.arch}`,
       );
     }
+    const baseUrl = await resolveReleaseBaseUrl();
 
     const manifestResult = await runProcessWithCodeTimeout(
       [
         "curl",
-        ...curlTransportArgs(),
+        ...curlTransportArgs(baseUrl),
         "-fsSL",
         "--max-filesize",
         String(UPDATE_METADATA_MAX_BYTES),
-        updateManifestUrl(),
+        updateManifestUrl(baseUrl),
       ],
       UPDATE_CHECK_TIMEOUT_MS,
     );
@@ -376,12 +534,17 @@ export function createUpdateHandlers({
     if (manifestResult.code !== 0) {
       throw processFailure(manifestResult, "update manifest download");
     }
-    return validateUpdateManifest(parseUpdateManifest(manifestResult.stdout));
+    return {
+      manifest: validateUpdateManifest(
+        parseUpdateManifest(manifestResult.stdout),
+      ),
+      baseUrl,
+    };
   }
 
   async function readLatestUpdateManifest(
     forceRefresh = false,
-  ): Promise<UpdateManifest> {
+  ): Promise<{ manifest: UpdateManifest; baseUrl: string }> {
     if (
       !forceRefresh &&
       latestManifestCache &&
@@ -407,6 +570,16 @@ export function createUpdateHandlers({
 
   async function updateInfoPayload(): Promise<Record<string, unknown>> {
     const capability = autoUpdateCapability();
+    if (/^0\.0\.0-rc\.\d+$/.test(appVersion)) {
+      return {
+        current_version: appVersion,
+        update_available: false,
+        can_auto_update: false,
+        reason: capability.reason,
+        platform:
+          updateTarget?.platform ?? `${runtime.platform}-${runtime.arch}`,
+      };
+    }
     if (!updateTarget) {
       return {
         current_version: appVersion,
@@ -428,7 +601,8 @@ export function createUpdateHandlers({
         ...sourceDetails(),
       };
     }
-    const latest = await readLatestUpdateManifest();
+    const latestSource = await readLatestUpdateManifest();
+    const latest = latestSource.manifest;
     return {
       current_version: appVersion,
       latest_version: latest.version,
@@ -436,7 +610,7 @@ export function createUpdateHandlers({
       can_auto_update: capability.canAutoUpdate,
       reason: capability.reason,
       platform: latest.platform,
-      ...sourceDetails(),
+      ...sourceDetails(latestSource.baseUrl),
     };
   }
 
@@ -505,7 +679,8 @@ export function createUpdateHandlers({
     updateInstallInProgress = true;
     let waitingForManagedRestart = false;
     try {
-      const latest = await readLatestUpdateManifest(true);
+      const latestSource = await readLatestUpdateManifest(true);
+      const latest = latestSource.manifest;
       if (compareVersion(latest.version, appVersion) <= 0) {
         return updateJson({
           ok: true,
@@ -539,7 +714,7 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 archive="$tmp/${updateTarget.archiveName}"
 expected_sha256=${shQuote(latest.sha256)}
-curl ${curlTransportCommand()} -fsSL ${shQuote(updateArchiveUrl())} -o "$archive"
+curl ${curlTransportCommand(latestSource.baseUrl)} -fsSL ${shQuote(updateArchiveUrl(latestSource.baseUrl))} -o "$archive"
 if command -v shasum >/dev/null 2>&1; then
   actual_sha256="$(shasum -a 256 "$archive" | awk 'NR == 1 { print $1 }')"
 elif command -v sha256sum >/dev/null 2>&1; then

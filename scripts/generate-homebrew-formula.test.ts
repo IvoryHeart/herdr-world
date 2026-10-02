@@ -15,6 +15,7 @@ test("Homebrew Formula uses each platform's verified archive digest", () => {
     );
   }
   expect(formula).toContain('version "0.2.0"');
+  expect(formula).toContain('homepage "https://herdr.world/"');
   expect(formula).toContain('libexec.install "herdr-world", "VERSION"');
   expect(formula).not.toContain('Dir["herdr-world-*"]');
   expect(formula).toContain('libexec/"herdr-world"');

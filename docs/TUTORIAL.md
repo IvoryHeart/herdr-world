@@ -377,7 +377,7 @@ herdr plugin action invoke herdr-world.restart
 ```
 
 Plugin actions are asynchronous: confirm restart in its panel/log.
-See [service configuration and logs](./DEPLOYMENT.md#run-as-a-user-service).
+See [service configuration and logs](./DEPLOYMENT.md#user-service).
 
 #### Connect from another terminal on the same work computer
 
@@ -436,7 +436,7 @@ tailscale serve status
 
 `tailscale serve reset` clears the device's entire Serve configuration, including
 other services. **`--bg` persists Serve, not Herdr World, and does not prevent sleep.**
-After verification, configure a [Herdr World user service](./DEPLOYMENT.md#run-as-a-user-service)
+After verification, configure a [Herdr World user service](./DEPLOYMENT.md#user-service)
 if needed, keeping loopback and strict Tailscale policy.
 
 <a id="ssh"></a>
@@ -470,7 +470,7 @@ Image uploads, Git, file operations, and hooks run on that remote host.
 Explicit `--socket-path` / `--client-socket-path` or environment equivalents
 override tunnel paths; stale settings can select the wrong target. Profiles
 store no passwords/keys; OpenSSH owns host verification/authentication. See
-[connections](./DEPLOYMENT.md#multiple-and-remote-herdr-connections).
+[connections](./DEPLOYMENT.md#local-and-ssh-connections).
 
 #### Option B: Herdr World already runs remotely; forward its web port
 

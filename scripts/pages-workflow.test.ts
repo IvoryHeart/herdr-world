@@ -40,6 +40,7 @@ test("Pages deploys on main pushes or manual dispatch and checks installer avail
       "docs/TUTORIAL.md",
       "docs/images/**",
       "scripts/build-pages.ts",
+      "scripts/pages-content.ts",
       "scripts/pages-*.test.ts",
       ".github/workflows/pages.yml",
     ],
@@ -119,4 +120,35 @@ test("Pages installer probe requires HTTP 200 over HTTPS and fails closed on cur
   expect(args.at(-1)).toEndWith(
     "/releases/latest/download/install-herdr-world.sh",
   );
+});
+
+test("only a fully published stable release dispatches Pages from main", async () => {
+  const release = Bun.YAML.parse(
+    await Bun.file(
+      new URL("../.github/workflows/release.yml", import.meta.url),
+    ).text(),
+  ) as {
+    jobs: Record<
+      string,
+      {
+        if?: string;
+        needs?: string[];
+        permissions?: Record<string, string>;
+        steps?: Array<Step & { env?: Record<string, string> }>;
+      }
+    >;
+  };
+  const handoff = release.jobs["deploy-pages"];
+  expect(handoff).toBeDefined();
+  expect(handoff.needs).toEqual(["publish", "npm-publish", "homebrew-pr"]);
+  expect(handoff.if).toBe(
+    "startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-rc.')",
+  );
+  expect(handoff.permissions).toEqual({ actions: "write" });
+  expect(handoff.steps).toHaveLength(1);
+  expect(handoff.steps![0].env).toEqual({
+    GH_TOKEN: "${{ github.token }}",
+    GH_REPO: "${{ github.repository }}",
+  });
+  expect(handoff.steps![0].run).toBe("gh workflow run pages.yml --ref main");
 });

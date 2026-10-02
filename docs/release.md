@@ -134,5 +134,28 @@ tag: npm skips byte-identical versions and rejects changed content.
 Do not retag a release or build final artifacts from an unreviewed worktree. If a
 published RC artifact is wrong, prepare `X.Y.Z-rc.(N+1)` on a new reviewed release
 commit. Prepare the stable `X.Y.Z` only after testing the candidate across the
-supported platforms. PWA/site deployment runs from `main` and requires a valid
-published Latest release.
+supported platforms.
+
+Pages deployment runs from `main` and requires a working installer on the
+published stable Latest release. Candidates do not deploy the replacement site.
+After GitHub assets and npm packages publish and the Homebrew PR opens, the stable
+Release workflow dispatches **Deploy Pages** on `main`. Its HTTPS installer guard
+remains mandatory; it then builds the shared screenshots, tutorial, metadata,
+and World brand assets. The Homebrew tap PR still needs independent review and
+merge before that channel is ready.
+
+A main-branch site push before stable publication can fail the installer guard;
+this leaves the existing public site untouched. After stable publication, verify
+that **Deploy Pages** succeeds, and open the homepage and `/tutorial/`. Check the
+favicon, social image, all four views, desktop/mobile screenshots, and copied
+installation command. If dispatch or deployment fails, fix the failure and run
+**Deploy Pages** manually on `main`; do not remove the guard to publish broken
+download instructions. The dispatch uses the Release job's narrowly scoped
+`actions: write` token because releases created with `GITHUB_TOKEN` do not
+trigger a separate release-event workflow.
+
+Set the repository's GitHub social preview to `site/github-social-preview.png`
+in repository settings, and keep its homepage set to the Pages URL. The file's
+presence in Git does not configure GitHub's social preview. The homepage,
+README, PWA icons, and social images share the World brand; required Roamgate and
+third-party attributions remain visible in the notices.

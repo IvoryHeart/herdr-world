@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   localPageReferences,
   renderTutorial,
@@ -132,14 +133,15 @@ describe("Pages references", () => {
     expect(html).toContain('class="agent-stack"');
   });
 
-  test("describes background multi-host observation with one selected-host visual projection", async () => {
+  test("describes aggregate host views with independently owned resources", async () => {
     const site = await Bun.file(
       new URL("../site/index.html", import.meta.url),
     ).text();
-    expect(site).toContain("projects the selected host");
-    expect(site).toContain("selected host's spaces");
-    expect(site).not.toContain("agents across two Herdr hosts");
-    expect(site).not.toContain("Scan every connected host");
+    expect(site).toContain("one shared view");
+    expect(site).toContain("Hosts filters the overview");
+    expect(site).toContain("host-owned terminals");
+    expect(site).not.toContain("projects the selected host");
+    expect(site).not.toContain("selected host's spaces");
   });
 
   test("social previews and canonical URLs use the production domain", async () => {
@@ -147,17 +149,17 @@ describe("Pages references", () => {
       const html = await Bun.file(
         new URL(`../site/${page}`, import.meta.url),
       ).text();
-      expect(html).toContain("https://ivoryheart.github.io/herdr-world/");
+      expect(html).toContain("https://herdr.world/");
       expect(html).toMatch(
-        /property="og:image"\s+content="https:\/\/ivoryheart\.github\.io\/herdr-world\/herdr-world-og\.png"/,
+        /property="og:image"\s+content="https:\/\/herdr\.world\/herdr-world-og\.png"/,
       );
       expect(html).toMatch(
-        /name="twitter:image"\s+content="https:\/\/ivoryheart\.github\.io\/herdr-world\/herdr-world-og\.png"/,
+        /name="twitter:image"\s+content="https:\/\/herdr\.world\/herdr-world-og\.png"/,
       );
       expect(html).toContain(
         'name="twitter:card" content="summary_large_image"',
       );
-      const url = `https://ivoryheart.github.io/herdr-world/${page.replace("index.html", "")}`;
+      const url = `https://herdr.world/${page.replace("index.html", "")}`;
       expect(html.replace(/\s+/g, " ")).toContain(
         `rel="canonical" href="${url}"`,
       );
@@ -171,7 +173,7 @@ describe("Pages references", () => {
       const content = await Bun.file(
         new URL(`../site/${file}`, import.meta.url),
       ).text();
-      expect(content).toContain("https://ivoryheart.github.io/herdr-world/");
+      expect(content).toContain("https://herdr.world/");
     }
   });
 
@@ -262,5 +264,51 @@ describe("Pages references", () => {
       "index.html": '<a href="../private.txt">Outside</a>',
     });
     await rejects(verifySiteReferences(directory), /escapes output/);
+  });
+});
+
+describe("public documentation links", () => {
+  test("local documents and fragments referenced by release guidance exist", async () => {
+    const root = fileURLToPath(new URL("../", import.meta.url));
+    for (const source of [
+      "README.md",
+      "FEATURES.md",
+      "SECURITY.md",
+      "docs/DEPLOYMENT.md",
+      "docs/ARCHITECTURE.md",
+      "docs/TUTORIAL.md",
+      "docs/SCREENSHOTS.md",
+      "docs/release.md",
+    ]) {
+      const sourcePath = join(root, source);
+      const markdown = await Bun.file(sourcePath).text();
+      for (const match of markdown.matchAll(/\[[^\]]*\]\(([^\s)]+)\)/g)) {
+        const href = match[1]!;
+        if (/^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
+        const [path, fragment] = href.split("#");
+        const targetPath = resolve(dirname(sourcePath), path || sourcePath);
+        const target = Bun.file(targetPath);
+        expect(await target.exists(), `${source}: ${href}`).toBe(true);
+        if (!fragment) continue;
+        const text = await target.text();
+        const anchors = new Set(
+          [...text.matchAll(/(?:id|name)="([^"\s]+)"/g)].map(
+            (entry) => entry[1],
+          ),
+        );
+        for (const heading of text.matchAll(/^#{1,6} (.+)$/gm)) {
+          anchors.add(
+            heading[1]!
+              .toLowerCase()
+              .replace(/[^\p{L}\p{N}_ -]/gu, "")
+              .replace(/ /g, "-"),
+          );
+        }
+        expect(
+          anchors.has(decodeURIComponent(fragment)),
+          `${source}: ${href}`,
+        ).toBe(true);
+      }
+    }
   });
 });

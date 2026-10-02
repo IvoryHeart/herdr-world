@@ -53,9 +53,32 @@ test("the project site uses the World ram identity instead of renamed upstream a
   expect(index).toContain("./assets/herdr-world-logo.svg");
   expect(tutorial).toContain("../assets/herdr-world-logo.svg");
   expect(logo).toContain('aria-label="Herdr logo"');
-  expect(`${index}\n${tutorial}\n${logo}`.toLowerCase()).not.toContain(
-    "roamgate",
-  );
+  // Source attribution may name Roamgate; presentation and asset URLs use World.
+  for (const html of [index, tutorial]) {
+    const branding: string[] = [];
+    await new HTMLRewriter()
+      .on('img, meta, link[rel="icon"], link[rel="apple-touch-icon"]', {
+        element(element) {
+          for (const name of ["src", "href", "content", "alt"]) {
+            const value = element.getAttribute(name);
+            if (value) branding.push(value);
+          }
+        },
+      })
+      .on("title, .brand", {
+        text(chunk) {
+          branding.push(chunk.text);
+        },
+      })
+      .transform(new Response(html))
+      .text();
+    expect(branding.join("\n").toLowerCase()).not.toMatch(
+      /roamgate|herdr-studio/,
+    );
+  }
+  expect(logo.toLowerCase()).not.toContain("roamgate");
+  expect(index).toContain('href="https://github.com/powerfooI/roamgate"');
+  expect(index).toContain('href="./assets/agent-icons-LICENSE.txt"');
   expect(
     existsSync(
       new URL(

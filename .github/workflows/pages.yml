@@ -8,6 +8,7 @@ on:
             - docs/TUTORIAL.md
             - docs/images/**
             - scripts/build-pages.ts
+            - scripts/pages-content.ts
             - scripts/pages-*.test.ts
             - .github/workflows/pages.yml
     workflow_dispatch:

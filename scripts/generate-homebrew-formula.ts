@@ -16,7 +16,7 @@ export function renderHomebrewFormula(
   const conflict = candidate ? "herdr-world" : "herdr-world-rc";
   return `class ${formulaClass} < Formula
   desc "Visualize and control your agents in Office and Graph across multiple hosts"
-  homepage "https://ivoryheart.github.io/herdr-world/"
+  homepage "https://herdr.world/"
   version "${version}"
 
   on_macos do

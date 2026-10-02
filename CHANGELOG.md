@@ -7,21 +7,21 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
-### Highlights since 0.1.1
+### Breaking Changes
 
-- Explore agent work in Office, Tree, Graph, and Spaces, with terminal, files,
-  changes, and history available from the selected agent in every view.
-- Keep multiple Inspectors open and arrange, move, resize, or dock them while
-  preserving each live conversation. Graph can arrange or rotate its layout.
-- Connect to local and OpenSSH Herdr hosts through one World service. Work in
-  concurrent host-owned Inspectors and terminals while Hosts independently filters
-  the aggregate overview.
-- Follow agent progress with task summaries, checkout context, pane pins,
-  notifications, and optional Office metrics. Visual Actions take you to the
-  selected agent's details or workspace.
-- Install the same release through six desktop archives, the standalone
-  installer, npm, Homebrew, or the Herdr plugin. The responsive PWA provides a
-  mobile view when World is reachable.
+- Hosts now filters an aggregate Office, Tree and Graph view instead of selecting
+  one operational host. Manage connections remains separate. Open Inspectors,
+  terminals and resources retain their qualified host across filter and focus
+  changes; global creation confirms a single destination.
+
+### Added
+
+- Concurrent local/SSH terminal and Inspector contexts over one World origin,
+  host-local retirement, qualified notification reveal, fair bounded multi-host
+  projection and observation, full-observation paged search, honest coverage and
+  cross-host window arrangements with independent restore baselines.
+
+### Changed
 
 - Terminal input with a lost acknowledgement reports its original host and an
   uncertain outcome, with refresh-before-retry guidance and no replay.
@@ -32,14 +32,28 @@ are optional because the merged PR history records their source.
   unchanged terminal surfaces and offscreen scenes avoid redundant drawing.
 - Dense aggregate indexing yields between bounded batches and preserves complete
   coverage totals. Office limits reception painting to the visible horizontal
-  region while retaining every host in its semantic overview.
+  region while retaining every host in its semantic overview. Streaming output
+  preserves another terminal's keyboard focus.
+
+## [0.2.0] - 2026-10-02
+
+### Highlights since 0.1.1
+
+- Explore agent work in Office, Tree, Graph, and Spaces, with terminal, files,
+  changes, and history available from the selected agent in every view.
+- Keep multiple Inspectors open and arrange, move, resize, or dock them while
+  preserving each live conversation. Graph can arrange or rotate its layout.
+- Connect to local and OpenSSH Herdr hosts through one World service. Select the
+  host you want to work on while other connected hosts remain visible in the
+  background.
+- Follow agent progress with task summaries, checkout context, pane pins,
+  notifications, and optional Office metrics. Visual Actions take you to the
+  selected agent's details or workspace.
+- Install the same release through six desktop archives, the standalone
+  installer, npm, Homebrew, or the Herdr plugin. The responsive PWA provides a
+  mobile view when World is reachable.
 
 ### Breaking Changes
-
-- Hosts now filters an aggregate Office, Tree and Graph view instead of selecting
-  one operational host. Manage connections remains separate. Open Inspectors,
-  terminals and resources retain their qualified host across filter and focus
-  changes; global creation confirms a single destination.
 
 - Replaced the 0.1.1 app with a new World service and responsive Web/PWA.
   Recreate connection profiles after upgrading; old bridge profiles and browser
@@ -52,12 +66,14 @@ are optional because the merged PR history records their source.
 
 ### Added
 
-- Concurrent local/SSH terminal and Inspector contexts over one World origin,
-  host-local retirement, qualified notification reveal, fair bounded multi-host
-  projection and observation, full-observation paged search, honest coverage and
-  cross-host window arrangements with independent restore baselines.
-  Dense observations prepare and render progressively while terminal input remains
-  responsive; streaming output preserves another terminal's keyboard focus.
+- Prepared the project website and tutorial for `herdr.world`, including search,
+  social preview and Homebrew homepage metadata.
+
+- Added Tutorial, Features and shortcuts, Troubleshooting, and Report an issue
+  links to the application menu. Restored native HTTPS, Web Push, compatibility,
+  logging, and Pane Search guidance; corrected inherited documentation links
+  and website attribution. Stable release publication now requests a Pages
+  deployment while retaining the live installer guard.
 
 - Restored the npm and Homebrew installation channels for the new foundation.
   npm now installs one platform binary through optional dependencies; Homebrew
@@ -194,6 +210,12 @@ are optional because the merged PR history records their source.
   [Herdr World PR #93](https://github.com/IvoryHeart/herdr-world/pull/93)
 
 ### Fixed
+
+- Release candidates now check for newer candidates in their own version line,
+  while package-managed installations avoid in-app binary replacement.
+
+- macOS service installation now reports an occupied port instead of claiming
+  success while the new World service repeatedly fails to start.
 
 - Plugin actions and panel now launch from the Herdr server without requiring Bun
   on its `PATH`; Bun is needed only to install or build the plugin.

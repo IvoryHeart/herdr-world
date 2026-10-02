@@ -1,6 +1,6 @@
 id = "ivoryheart.herdr-world"
 name = "Herdr World"
-version = "0.2.0-rc.2"
+version = "0.2.0"
 min_herdr_version = "0.9.0"
 description = "Herdr World: Visualize and control your agents in Office and Graph across multiple hosts."
 platforms = ["linux", "macos", "windows"]
