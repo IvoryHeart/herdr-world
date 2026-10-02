@@ -78,7 +78,10 @@ import {
   type LegacyConnectionRuntime,
 } from "./connections/runtime";
 import { createShutdownController } from "./connections/shutdown";
-import { bindListenerBeforeConnectionStart } from "./connections/startup";
+import {
+  bindListenerBeforeConnectionStart,
+  describeListenerStartError,
+} from "./connections/startup";
 import { STARTUP_DEFAULT_CONNECTION_ID } from "./connections/types";
 import { createAuthHandlers, unauthenticatedLoginRedirect } from "./http/auth";
 import { browserRequestAdmissionError } from "./http/browser-admission";
@@ -1817,6 +1820,8 @@ process.on("SIGTERM", () => {
 try {
   main();
 } catch (e) {
-  logger.error("fatal startup error", { error: e });
+  logger.error("fatal startup error", {
+    error: describeListenerStartError(e, config.host, config.port),
+  });
   void shutdownController.request(1);
 }

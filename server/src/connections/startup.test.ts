@@ -1,5 +1,22 @@
 import { expect, test } from "bun:test";
-import { bindListenerBeforeConnectionStart } from "./startup";
+import {
+  bindListenerBeforeConnectionStart,
+  describeListenerStartError,
+} from "./startup";
+
+test("occupied listener gives a recoverable port choice without changing it", () => {
+  const error = describeListenerStartError(
+    new Error("Failed to start server. Is port 8787 in use?"),
+    "127.0.0.1",
+    8787,
+  );
+  expect(error.message).toContain("127.0.0.1:8787");
+  expect(error.message).toContain("--port");
+  expect(error.message).toContain("herdr-world.env");
+  expect(error.message).toContain("will not move");
+  const other = new Error("bad TLS certificate");
+  expect(describeListenerStartError(other, "127.0.0.1", 8787)).toBe(other);
+});
 
 test("listener remains available when downstream startup rejects", async () => {
   const events: string[] = [];

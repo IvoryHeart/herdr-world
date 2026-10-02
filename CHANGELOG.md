@@ -175,6 +175,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- An occupied World listener now explains how to keep the existing process and
+  choose a persistent alternate port during an upgrade.
+
 - Kept a partly clipped Inspector stationary when pointer focus raises it during
   Columns arrangement, while keyboard focus still scrolls it into view.
 - Opened terminal file links in the originating Office, Tree or Graph Inspector's Files tab,

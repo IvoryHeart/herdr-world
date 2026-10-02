@@ -59,11 +59,18 @@ This foundation starts with fresh World state. It uses
 `~/.config/herdr-world` (or `%APPDATA%\herdr-world`) and browser keys under
 `herdr-world:foundation-v2:`. It does not read old Herdr World bridge profiles,
 Roamgate settings, or their browser preferences. Those files remain untouched for
-rollback.
+rollback. These World paths are stable across 0.2.x versions: an upgrade does not
+create a new config directory. The plugin uses a temporary directory only while
+unpacking a release archive, then removes it. Browser storage is tied to the World
+origin, so opening the same service through a different hostname or port shows that
+browser's separate state. Saved connection profiles and service settings remain in
+the service user's config directory.
 
 ### Replacing Herdr World 0.1.1 or earlier
 
-Stop the old World process before upgrading so it does not retain port 8787. If
+Stop the old World process before upgrading so it does not retain port 8787. Do not
+stop the Herdr runtime or an unrelated Roamgate or Herdr Web process. If another
+product owns 8787, choose a different World port as described below. If
 continuing with npm or Homebrew, upgrade the existing channel:
 
 ```bash
@@ -102,11 +109,11 @@ herdr --session NAME plugin action invoke status --plugin ivoryheart.herdr-world
 herdr --session NAME plugin log list --plugin ivoryheart.herdr-world --limit 100
 ```
 
-Only after every target is confirmed stopped should the old controller be removed and
-the replacement installed:
+Only after every target is confirmed stopped, install the new plugin at the exact
+release tag. Herdr replaces the installed plugin in place; uninstalling 0.1.1 first
+is unnecessary:
 
 ```bash
-herdr plugin uninstall ivoryheart.herdr-world
 herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
@@ -118,7 +125,10 @@ rerun the installer. The obsolete `herdr-world-installer` command and old versio
 bundle can be removed manually after the new application and profiles are verified.
 
 Start the new release and recreate local or SSH profiles in Spaces. Old profile
-files and browser preferences are deliberately neither read nor deleted.
+files and browser preferences are deliberately neither read nor deleted. Check the
+new service and profiles before removing an old versioned bundle; reinstalling the
+old channel or relinking an old bundle is the rollback path. A new 0.2.x version
+continues to use the same World profiles, settings, token, and browser namespace.
 
 ## Managed Herdr setup
 
@@ -217,7 +227,10 @@ herdr plugin install IvoryHeart/herdr-world --ref vX.Y.Z
 ```
 
 The plugin downloads or uses the matching World binary and manages the same user
-service as the CLI. It does not install a second application.
+service as the CLI. It does not install a second application. Plugin actions run
+through Bun in the Herdr server's environment; ensure `bun` is on that server
+process's `PATH`, then restart Herdr if its environment changed. A shell where
+`bun` works does not prove an already-running Herdr server can find it.
 
 ```bash
 herdr plugin action invoke ivoryheart.herdr-world.start
@@ -250,6 +263,22 @@ is authoritative.
 | `--log-level <level>` | `HERDR_WORLD_LOG_LEVEL` | `info` |
 | `--open` | `OPEN_BROWSER=1` | Disabled |
 
+### Port conflicts
+
+World, Roamgate, and older Herdr Web processes may all try port 8787. Only one can
+listen on the same address and port. World reports an occupied listener and leaves
+the other process alone; it does not silently switch ports. On macOS, inspect the
+owner with `lsof -nP -iTCP:8787 -sTCP:LISTEN`; on Linux use
+`ss -ltnp '( sport = :8787 )'`. Stop an old World process before replacing it, or
+give World a free port, for example `herdr-world --port 8788`.
+
+For a managed World service, set `PORT=8788` in the preserved
+`~/.config/herdr-world/herdr-world.env` (or `%APPDATA%\herdr-world\herdr-world.env`)
+and run `herdr-world service restart`. Use that same port in the URL, reverse proxy,
+and health check. The service environment file is read by the managed service;
+`--port` or a shell `PORT` variable controls a foreground process. An existing
+service keeps its configured port when a new version is installed.
+
 Loopback listeners intentionally bypass login. A managed non-loopback service creates
 a persistent login token unless `HERDR_WORLD_PASSWORD` is set. A token URL establishes
 an HttpOnly session and removes the token from the address bar. Privileged browser HTTP
@@ -281,17 +310,17 @@ herdr-world service reload
 herdr-world service uninstall
 ```
 
-`service install` listens on `0.0.0.0:8787` and generates a login token. Edit
-`~/.config/herdr-world/herdr-world.env` (or the matching `%APPDATA%` file), then
-restart. The service identities are:
+`service install` listens on `0.0.0.0:8787` by default and generates a login
+token. Edit `~/.config/herdr-world/herdr-world.env` (or the matching `%APPDATA%`
+file), then restart to use a different port. The service identities are:
 
 - Linux: `~/.config/systemd/user/herdr-world.service`
 - macOS: `~/Library/LaunchAgents/dev.herdr-world.plist`
 - Windows: a per-user `dev.herdr-world-<key>` scheduled task
 
-Verify readiness with `curl -fsS http://127.0.0.1:8787/healthz`. Uninstall preserves
-configuration and tokens. The updater installs a checksum-verified replacement and
-leaves `herdr-world.previous` for recovery.
+Verify readiness with `curl -fsS http://127.0.0.1:8787/healthz`, substituting the
+configured port. Uninstall preserves configuration and tokens. The updater installs
+a checksum-verified replacement and leaves `herdr-world.previous` for recovery.
 
 ## Private remote access
 
