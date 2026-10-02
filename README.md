@@ -152,7 +152,7 @@ The process must stay running and reachable. **PWA mode is not offline access.**
   [foundation source guide](./docs/foundation-guide.md): contracts, module owners,
   request paths, and focused tests for contributors and agents.
 - [Development](./docs/development.md), [packaging](./docs/packaging.md), and
-  [release process](./docs/release.md).
+  [release process](./docs/release.md), and [screenshot capture](./docs/SCREENSHOTS.md).
 - [Security](./SECURITY.md) and [contributing](./CONTRIBUTING.md).
 
 ## Development

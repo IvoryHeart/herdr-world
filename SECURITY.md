@@ -35,8 +35,9 @@ the local application through DNS rebinding. This needs no user-maintained allow
 An independently authenticated HTTPS reverse proxy to loopback must preserve its public
 Host and configure that one exact external origin with `HERDR_WORLD_PUBLIC_ORIGIN` (or
 `--public-origin`). Originless native clients remain admissible, so listener access and
-authentication are still security boundaries: the built-in service supplies no TLS,
-rate limiting, multi-user authorization, or sandboxing.
+authentication are still security boundaries. Configure
+[native HTTPS](docs/DEPLOYMENT.md#native-https) or terminate TLS at a trusted proxy. The service supplies no rate limiting, multi-user authorization,
+or sandboxing.
 
 Updates trust the configured HTTPS release origin (or explicit loopback test
 mirror) and its manifest/checksums. Checksums detect corruption and bind the

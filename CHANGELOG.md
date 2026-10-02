@@ -39,6 +39,12 @@ are optional because the merged PR history records their source.
 - Prepared the project website and tutorial for `herdr.world`, including search,
   social preview and Homebrew homepage metadata.
 
+- Added Tutorial, Features and shortcuts, Troubleshooting, and Report an issue
+  links to the application menu. Restored native HTTPS, Web Push, compatibility,
+  logging, and Pane Search guidance; corrected inherited documentation links
+  and website attribution. Stable release publication now requests a Pages
+  deployment while retaining the live installer guard.
+
 - Restored the npm and Homebrew installation channels for the new foundation.
   npm now installs one platform binary through optional dependencies; Homebrew
   installs the same checksum-pinned release archive. Both serve the one World
