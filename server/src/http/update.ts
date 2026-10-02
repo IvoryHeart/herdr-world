@@ -43,8 +43,10 @@ const DEFAULT_UPDATE_BASE_URL =
   "https://github.com/IvoryHeart/herdr-world/releases/latest/download";
 const UPDATE_METADATA_MAX_BYTES = 4096;
 const RELEASE_INDEX_MAX_BYTES = 2 * 1024 * 1024;
+const RELEASE_INDEX_PAGE_SIZE = 30;
+const RELEASE_INDEX_MAX_PAGES = 4;
 const RELEASE_INDEX_URL =
-  "https://api.github.com/repos/IvoryHeart/herdr-world/releases?per_page=30";
+  "https://api.github.com/repos/IvoryHeart/herdr-world/releases";
 const UPDATE_CHECK_CACHE_MS = 5 * 60 * 1000;
 const UPDATE_CHECK_TIMEOUT_MS = 15000;
 const UPDATE_INSTALL_TIMEOUT_MS = 120000;
@@ -384,53 +386,118 @@ export function createUpdateHandlers({
     if (!candidateCore || configuredUpdateBaseUrl?.trim()) {
       return updateBaseUrl();
     }
-    const result = await runProcessWithCodeTimeout(
-      [
-        "curl",
-        "--proto",
-        "=https",
-        "--proto-redir",
-        "=https",
-        "-fsSL",
-        "--max-filesize",
-        String(RELEASE_INDEX_MAX_BYTES),
-        RELEASE_INDEX_URL,
-      ],
-      UPDATE_CHECK_TIMEOUT_MS,
-    );
-    if (result.code !== 0) {
-      throw processFailure(result, "release index download");
-    }
-    let releases: unknown;
-    try {
-      releases = JSON.parse(result.stdout);
-    } catch {
-      throw new Error("invalid release index");
-    }
-    if (!Array.isArray(releases)) throw new Error("invalid release index");
     const candidatePrefix = `v${candidateCore}-rc.`;
-    const matching = releases
-      .filter((release) => {
-        if (!release || typeof release !== "object") return false;
-        const tag = release.tag_name;
-        if (typeof tag !== "string" || release.draft !== false) return false;
-        const candidate =
-          release.prerelease === true &&
-          tag.startsWith(candidatePrefix) &&
-          /^\d+$/.test(tag.slice(candidatePrefix.length));
-        const stable =
-          release.prerelease === false && tag === `v${candidateCore}`;
-        if (!candidate && !stable) return false;
-        const assets = Array.isArray(release.assets)
-          ? release.assets.map((asset: { name?: unknown }) => asset?.name)
-          : [];
-        return (
-          assets.includes(updateTarget?.manifestName) &&
-          assets.includes(updateTarget?.archiveName)
-        );
-      })
-      .map((release) => release.tag_name as string)
-      .sort((left, right) => compareVersion(right.slice(1), left.slice(1)));
+    const stableTag = `v${candidateCore}`;
+    const matching: string[] = [];
+    function eligibleTag(release: unknown): string | null {
+      if (!release || typeof release !== "object") return null;
+      const entry = release as Record<string, unknown>;
+      const tag = entry.tag_name;
+      if (typeof tag !== "string" || entry.draft !== false) return null;
+      const candidate =
+        entry.prerelease === true &&
+        tag.startsWith(candidatePrefix) &&
+        /^\d+$/.test(tag.slice(candidatePrefix.length));
+      const stable = entry.prerelease === false && tag === stableTag;
+      if (!candidate && !stable) return null;
+      const assets = Array.isArray(entry.assets)
+        ? entry.assets.map((asset: { name?: unknown }) => asset?.name)
+        : [];
+      return assets.includes(updateTarget?.manifestName) &&
+        assets.includes(updateTarget?.archiveName)
+        ? tag
+        : null;
+    }
+    async function fetchIndexPage(page: number): Promise<unknown[]> {
+      const result = await runProcessWithCodeTimeout(
+        [
+          "curl",
+          "--proto",
+          "=https",
+          "--proto-redir",
+          "=https",
+          "-fsSL",
+          "--max-filesize",
+          String(RELEASE_INDEX_MAX_BYTES),
+          `${RELEASE_INDEX_URL}?per_page=${RELEASE_INDEX_PAGE_SIZE}&page=${page}`,
+        ],
+        UPDATE_CHECK_TIMEOUT_MS,
+      );
+      if (result.code !== 0) {
+        throw processFailure(result, "release index download");
+      }
+      let releases: unknown;
+      try {
+        releases = JSON.parse(result.stdout);
+      } catch {
+        throw new Error("invalid release index");
+      }
+      if (!Array.isArray(releases)) throw new Error("invalid release index");
+      return releases;
+    }
+    function collectTags(releases: unknown[]): boolean {
+      for (const release of releases) {
+        const tag = eligibleTag(release);
+        if (tag === stableTag) return true;
+        if (tag) matching.push(tag);
+      }
+      return false;
+    }
+
+    let releases = await fetchIndexPage(1);
+    if (collectTags(releases)) {
+      return `https://github.com/IvoryHeart/herdr-world/releases/download/${stableTag}`;
+    }
+    if (releases.length === RELEASE_INDEX_PAGE_SIZE) {
+      // The stable tag may be arbitrarily far back in the paginated index.
+      const result = await runProcessWithCodeTimeout(
+        [
+          "curl",
+          "--proto",
+          "=https",
+          "--proto-redir",
+          "=https",
+          "-fsSL",
+          "--max-filesize",
+          String(RELEASE_INDEX_MAX_BYTES),
+          "--write-out",
+          "\n%{http_code}",
+          `${RELEASE_INDEX_URL}/tags/${stableTag}`,
+        ],
+        UPDATE_CHECK_TIMEOUT_MS,
+      );
+      if (result.code === 0) {
+        const separator = result.stdout.lastIndexOf("\n");
+        if (separator < 0 || result.stdout.slice(separator + 1) !== "200") {
+          throw new Error("invalid stable release response");
+        }
+        let stableRelease: unknown;
+        try {
+          stableRelease = JSON.parse(result.stdout.slice(0, separator));
+        } catch {
+          throw new Error("invalid stable release response");
+        }
+        if (eligibleTag(stableRelease) === stableTag) {
+          return `https://github.com/IvoryHeart/herdr-world/releases/download/${stableTag}`;
+        }
+      } else if (result.stdout.trim() !== "404") {
+        throw processFailure(result, "stable release lookup");
+      }
+    }
+    for (
+      let page = 2;
+      page <= RELEASE_INDEX_MAX_PAGES &&
+      releases.length === RELEASE_INDEX_PAGE_SIZE;
+      page++
+    ) {
+      releases = await fetchIndexPage(page);
+      if (collectTags(releases)) {
+        return `https://github.com/IvoryHeart/herdr-world/releases/download/${stableTag}`;
+      }
+    }
+    matching.sort((left, right) =>
+      compareVersion(right.slice(1), left.slice(1)),
+    );
     const tag = matching[0];
     if (!tag)
       throw new Error(`no published ${candidateCore} update is available`);

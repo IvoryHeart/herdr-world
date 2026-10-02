@@ -346,6 +346,173 @@ describe("update helpers", () => {
     expect(commands[1]).toContain("/v0.2.0/");
   });
 
+  test("release candidates find their stable release beyond the first index page", async () => {
+    const commands: string[] = [];
+    const assets = [
+      { name: "herdr-world-linux-x64.update.json" },
+      { name: "herdr-world-linux-x64.tar.xz" },
+    ];
+    const handlers = createUpdateHandlers({
+      appVersion: "0.2.0-rc.2",
+      runProcessWithCodeTimeout: async (argv) => {
+        const command = argv.join(" ");
+        commands.push(command);
+        if (command.includes("per_page=30&page=1")) {
+          return {
+            code: 0,
+            stdout: JSON.stringify(
+              Array.from({ length: 30 }, (_, index) => ({
+                tag_name: `v0.3.0-rc.${index + 1}`,
+                draft: false,
+                prerelease: true,
+                assets,
+              })),
+            ),
+            stderr: "",
+          };
+        }
+        if (command.includes("/releases/tags/v0.2.0")) {
+          return {
+            code: 0,
+            stdout: `${JSON.stringify({
+              tag_name: "v0.2.0",
+              draft: false,
+              prerelease: false,
+              assets,
+            })}\n200`,
+            stderr: "",
+          };
+        }
+        expect(command).toContain("/v0.2.0/");
+        return {
+          code: 0,
+          stdout: updateManifest("0.2.0", "linux-x64"),
+          stderr: "",
+        };
+      },
+      shQuote,
+      runtime: linuxRuntime,
+      environment: systemdEnvironment,
+    });
+
+    const response = await handlers.handleUpdateCheck(updateCheckRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      latest_version: "0.2.0",
+      update_available: true,
+      source_url:
+        "https://github.com/IvoryHeart/herdr-world/releases/download/v0.2.0/herdr-world-linux-x64.tar.xz",
+    });
+    expect(commands).toHaveLength(3);
+    expect(commands[1]).toContain("/releases/tags/v0.2.0");
+    expect(commands.some((command) => command.includes("page=2"))).toBe(false);
+  });
+
+  test("release candidates search later index pages before giving up", async () => {
+    const commands: string[] = [];
+    const assets = [
+      { name: "herdr-world-darwin-arm64.update.json" },
+      { name: "herdr-world-darwin-arm64.tar.xz" },
+    ];
+    const handlers = createUpdateHandlers({
+      appVersion: "0.2.0-rc.2",
+      runProcessWithCodeTimeout: async (argv) => {
+        const command = argv.join(" ");
+        commands.push(command);
+        if (command.includes("per_page=30&page=1")) {
+          return {
+            code: 0,
+            stdout: JSON.stringify(
+              Array.from({ length: 30 }, (_, index) => ({
+                tag_name: `v0.3.0-rc.${index + 1}`,
+                draft: false,
+                prerelease: true,
+                assets,
+              })),
+            ),
+            stderr: "",
+          };
+        }
+        if (command.includes("/releases/tags/v0.2.0")) {
+          return { code: 22, stdout: "404", stderr: "" };
+        }
+        if (command.includes("per_page=30&page=2")) {
+          return {
+            code: 0,
+            stdout: JSON.stringify([
+              {
+                tag_name: "v0.2.0-rc.10",
+                draft: false,
+                prerelease: true,
+                assets,
+              },
+            ]),
+            stderr: "",
+          };
+        }
+        expect(command).toContain("/v0.2.0-rc.10/");
+        return {
+          code: 0,
+          stdout: updateManifest("0.2.0-rc.10", "darwin-arm64"),
+          stderr: "",
+        };
+      },
+      shQuote,
+      runtime: darwinRuntime,
+      environment: launchdEnvironment,
+    });
+
+    const response = await handlers.handleUpdateCheck(updateCheckRequest());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      latest_version: "0.2.0-rc.10",
+      update_available: true,
+    });
+    expect(commands).toHaveLength(4);
+    expect(commands[2]).toContain("page=2");
+  });
+
+  test("release candidate discovery limits index requests", async () => {
+    const commands: string[] = [];
+    const handlers = createUpdateHandlers({
+      appVersion: "0.2.0-rc.2",
+      runProcessWithCodeTimeout: async (argv) => {
+        const command = argv.join(" ");
+        commands.push(command);
+        if (command.includes("/releases/tags/v0.2.0")) {
+          return { code: 22, stdout: "404", stderr: "" };
+        }
+        return {
+          code: 0,
+          stdout: JSON.stringify(
+            Array.from({ length: 30 }, (_, index) => ({
+              tag_name: `v0.3.0-rc.${index + 1}`,
+              draft: false,
+              prerelease: true,
+              assets: [],
+            })),
+          ),
+          stderr: "",
+        };
+      },
+      shQuote,
+      runtime: darwinRuntime,
+      environment: launchdEnvironment,
+    });
+
+    const response = await handlers.handleUpdateCheck(updateCheckRequest());
+    expect(response.status).toBe(502);
+    expect(commands).toHaveLength(5);
+    const indexRequests = commands.filter((command) =>
+      command.includes("per_page=30"),
+    );
+    expect(indexRequests).toHaveLength(4);
+    for (let page = 1; page <= 4; page++) {
+      expect(indexRequests[page - 1]).toContain(`&page=${page}`);
+    }
+    expect(commands.some((command) => command.includes("&page=5"))).toBe(false);
+  });
+
   test("release candidate installation uses the selected tag for the archive", async () => {
     const commands: string[][] = [];
     let exitScheduled = false;
