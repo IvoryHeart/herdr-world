@@ -7,6 +7,11 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Refreshed the website and README screenshots with the 0.2.0 interface, including
+  readable Files, Changes, and agent History examples.
+
 ## [0.2.0] - 2026-10-02
 
 ### Highlights since 0.1.1

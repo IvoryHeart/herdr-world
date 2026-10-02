@@ -382,7 +382,7 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-changes"
+                id="tab-office"
                 aria-controls="showcase-panel"
                 aria-selected="true"
                 tabindex="0"
@@ -398,7 +398,7 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-files"
+                id="tab-tree"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
@@ -414,7 +414,7 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-annotations"
+                id="tab-graph"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
@@ -430,7 +430,7 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-resources"
+                id="tab-files"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
@@ -446,6 +446,22 @@
               <button
                 type="button"
                 role="tab"
+                id="tab-changes"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-changes.png"
+                data-alt="Herdr World Inspector showing changed files and a code diff"
+                data-label="Changes"
+                data-title="Review the agent's changes in context."
+                data-copy="See changed files and inspect a diff beside the selected agent's workspace."
+              >
+                <span>05</span> Changes
+              </button>
+              <button
+                type="button"
+                role="tab"
                 id="tab-history"
                 aria-controls="showcase-panel"
                 aria-selected="false"
@@ -457,7 +473,7 @@
                 data-title="Review what the agent actually did."
                 data-copy="Read the selected agent's session record beside its Office context, then return to the same live terminal."
               >
-                <span>05</span> History
+                <span>06</span> History
               </button>
             </div>
 
@@ -465,7 +481,7 @@
               class="showcase-panel"
               id="showcase-panel"
               role="tabpanel"
-              aria-labelledby="tab-changes"
+              aria-labelledby="tab-office"
               tabindex="0"
               data-showcase-panel
             >

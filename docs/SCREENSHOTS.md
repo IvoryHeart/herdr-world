@@ -37,6 +37,7 @@ PNG originals without adding fictional UI or agent conversations.
 | Desktop Graph | `herdr-world-desktop-graph.png` | Readable relationships, fitted to viewport |
 | Desktop Spaces | `herdr-world-desktop-spaces.png` | Focused workspace and live terminal |
 | Desktop Files | `herdr-world-desktop-files.png` | Same agent's file resource |
+| Desktop Changes | `herdr-world-desktop-changes.png` | Same agent's changed files and readable diff |
 | Desktop History | `herdr-world-desktop-history.png` | Same agent's real session history |
 | Mobile Office | `herdr-world-mobile-office.png` | Office and usable touch controls |
 | Mobile Tree | `herdr-world-mobile-tree.png` | Hierarchy at phone width |
