@@ -7,6 +7,11 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Added
+
+- Added `agent:await` for foreground agent commands with bounded output, private
+  logs and preserved exit codes, plus repo-local Herdr Workflows operating guidance.
+
 ## [0.2.0] - 2026-10-02
 
 ### Highlights since 0.1.1
