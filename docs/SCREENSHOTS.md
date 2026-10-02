@@ -1,7 +1,8 @@
 # Product screenshot capture
 
-Use one disposable demonstration project and a real Herdr runtime to refresh
-release screenshots. Capture Herdr World's actual UI and work state. Keep real
+Use disposable demonstration projects and a real Herdr runtime to refresh
+release screenshots. Capture Herdr World's actual UI and work state. Show multiple
+workspaces and agents where the view supports them. Keep real
 hosts, usernames, paths, sessions, and repository contents out of public assets.
 
 ## Prepare a reproducible scene
@@ -9,16 +10,17 @@ hosts, usernames, paths, sessions, and repository contents out of public assets.
 1. Use the World release or branch being documented and Herdr 0.9.0 / protocol 22.
    Record their exact versions and source revisions with the untracked capture
    originals. See [development](development.md) for a source build.
-2. Create a disposable demo repository with synthetic project names, source,
+2. Create disposable demo repositories with synthetic project names, source,
    Markdown, and images. Use a dedicated Herdr session and a fresh browser
    profile, without personal history or saved credentials. Keep the World
    listener on loopback for desktop capture.
 3. Open a workspace and terminal tab in Herdr, then connect World to that local
    runtime. Add only synthetic profile labels. Use the connection selector to
    confirm the selected host before photographing any view.
-4. Follow the [tutorial's review task](TUTORIAL.md#daily) in the demo
-   repository. Run an actual supported agent for history or status shots, review
-   its diff, and keep the same pane selected for Terminal, Files, and Agent History.
+4. Follow the [tutorial's review task](TUTORIAL.md#daily) in a demo
+   repository. Run actual supported agents in separate panes, including multiple
+   agents in one workspace. Review their diffs, and capture Terminal, Files,
+   Changes, and Agent History from panes in that synthetic workspace.
    Show completed work only when the captured session actually completed it.
 5. For mobile capture, use a reachable private World URL and the
    [remote-access guidance](DEPLOYMENT.md#private-remote-access). Do not photograph
@@ -32,7 +34,7 @@ PNG originals without adding fictional UI or agent conversations.
 
 | View | Shared file under `docs/images/` | Scene |
 | --- | --- | --- |
-| Desktop Office | `herdr-world-desktop-office.png` | Selected-host rooms and agents |
+| Desktop Office | `herdr-world-desktop-office.png` | Several selected-host rooms, with agents sharing a desk |
 | Desktop Tree | `herdr-world-desktop-tree.png` | Connected hierarchy and Inspector |
 | Desktop Graph | `herdr-world-desktop-graph.png` | Readable relationships, fitted to viewport |
 | Desktop Spaces | `herdr-world-desktop-spaces.png` | Focused workspace and live terminal |
