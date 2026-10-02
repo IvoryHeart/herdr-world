@@ -178,6 +178,9 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- macOS service installation now reports an occupied port instead of claiming
+  success while the new World service repeatedly fails to start.
+
 - Plugin actions and panel now launch from the Herdr server without requiring Bun
   on its `PATH`; Bun is needed only to install or build the plugin.
 

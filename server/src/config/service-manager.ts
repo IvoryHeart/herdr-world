@@ -25,6 +25,7 @@ import {
 import { publishDataFile } from "./data-paths";
 import { worldEnv } from "./environment";
 import { loadOrCreateAuthToken } from "./auth-token";
+import { describeListenerStartError } from "../connections/startup";
 import {
   browserUrlFor,
   getLanIPs,
@@ -430,6 +431,36 @@ function printServiceAccess(
   }
 }
 
+function assertLaunchdListenerAvailable(
+  host: string,
+  port: number,
+  previousJobLoaded: boolean,
+): void {
+  // launchctl bootout can return before the previous process releases its port.
+  const deadline = Date.now() + (previousJobLoaded ? 5_000 : 0);
+  for (;;) {
+    try {
+      const listener = Bun.listen({
+        hostname: host,
+        port,
+        exclusive: true,
+        socket: { data() {} },
+      });
+      listener.stop(true);
+      return;
+    } catch (cause) {
+      const error = describeListenerStartError(cause, host, port);
+      if (
+        !error.message.startsWith("Cannot listen on ") ||
+        Date.now() >= deadline
+      ) {
+        throw error;
+      }
+      Bun.sleepSync(100);
+    }
+  }
+}
+
 function installService(
   platform: ServicePlatform,
   runtime: ServiceRuntime,
@@ -509,6 +540,11 @@ function installService(
       code = 0;
     }
     if (code === 0) {
+      // A successful bootstrap only registers the job; a bind failure may be
+      // reported later by the child process. Reject an occupied port first.
+      if (runCommand === defaultRunCommand) {
+        assertLaunchdListenerAvailable(access.host, access.port, loaded);
+      }
       code = runCommand(["launchctl", "bootstrap", domain, paths.definition]);
     }
   } else {
