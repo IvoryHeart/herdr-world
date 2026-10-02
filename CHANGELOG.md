@@ -12,6 +12,11 @@ are optional because the merged PR history records their source.
 - Refreshed the website and README screenshots with the 0.2.0 interface, including
   readable Files, Changes, and agent History examples.
 
+### Added
+
+- Added "Promoted to CEO", a 62-second animated film about Herdr World, to the website.
+  It plays in the browser with a synthesized soundtrack and no video download.
+
 ## [0.2.0] - 2026-10-02
 
 ### Highlights since 0.1.1
