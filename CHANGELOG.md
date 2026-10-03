@@ -71,6 +71,11 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Preserved server error details for rejected resource requests and showed failed
+  file and session downloads without reopening them on another path.
+- Kept worktree results focused through metadata refreshes while respecting newer
+  browser selections, and prevented duplicate workspace creation submissions.
+- Reported observed watch counts when another filtered host is unavailable.
 - Prevented Office animation from starving large aggregate refreshes while
   another host remains interactive.
 - Kept the film's 16:9 picture from stretching in portrait fullscreen playback.

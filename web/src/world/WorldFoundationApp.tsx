@@ -937,9 +937,13 @@ function WorldControlPlane({
     [onPresentedWorldChange, presentedWorld],
   );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
-  const watchAdmissions = world.hosts.map(
-    (host) => host.connection.snapshot?.watchAdmission,
+  const watchAdmissions = world.hosts.flatMap((host) =>
+    host.connection.snapshot ? [host.connection.snapshot.watchAdmission] : [],
   );
+  const unavailableWatchHosts = world.hosts.length - watchAdmissions.length;
+  const unavailableWatchStatus = unavailableWatchHosts
+    ? ` · ${unavailableWatchHosts} ${unavailableWatchHosts === 1 ? "host" : "hosts"} unavailable`
+    : "";
   const watchCoverage = watchAdmissions.reduce(
     (counts, admission) => ({
       registered: counts.registered + (admission?.registered ?? 0),
@@ -966,7 +970,7 @@ function WorldControlPlane({
               !admission || admission.revision !== watchlist.revision,
           )
         ? "Watch availability pending for filtered hosts"
-        : `${watchCoverage.registered} pinned in filter · ${watchCoverage.admitted} admitted · ${watchCoverage.missing} missing · ${watchCoverage.unresolved} unresolved · ${watchCoverage.admissionFailed} not admitted`);
+        : `${watchCoverage.registered} pinned in filter · ${watchCoverage.admitted} admitted · ${watchCoverage.missing} missing · ${watchCoverage.unresolved} unresolved · ${watchCoverage.admissionFailed} not admitted${unavailableWatchStatus}`);
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,

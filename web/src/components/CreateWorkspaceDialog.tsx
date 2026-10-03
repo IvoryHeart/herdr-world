@@ -47,6 +47,8 @@ export function CreateWorkspaceDialog({
       );
   const [label, setLabel] = useState("");
   const [cwd, setCwd] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const submissionPending = useRef(false);
   const labelRef = useRef<HTMLInputElement>(null);
   const onCloseRef = useRef(onClose);
 
@@ -82,23 +84,29 @@ export function CreateWorkspaceDialog({
 
   if (!open) return null;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (createReason) return;
+    if (submissionPending.current || createReason) return;
     if (!destination) return;
-    void store
-      .createQualifiedWorkspace(
+    submissionPending.current = true;
+    setSubmitting(true);
+    try {
+      await store.createQualifiedWorkspace(
         destination,
         label.trim() || undefined,
         cwd.trim() || undefined,
-      )
-      .then(onClose, (error) =>
-        store.notify({
-          kind: "error",
-          message: "Workspace creation failed",
-          detail: String(error),
-        }),
       );
+      onClose();
+    } catch (error) {
+      store.notify({
+        kind: "error",
+        message: "Workspace creation failed",
+        detail: String(error),
+      });
+    } finally {
+      submissionPending.current = false;
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -120,6 +128,7 @@ export function CreateWorkspaceDialog({
           <span>Destination host</span>
           <select
             aria-label="Destination host"
+            disabled={submitting}
             value={destination?.connectionId ?? ""}
             onChange={(event) => {
               const owner = ready.find(
@@ -172,10 +181,10 @@ export function CreateWorkspaceDialog({
           </button>
           <button
             type="submit"
-            disabled={!!createReason}
+            disabled={submitting || !!createReason}
             title={createReason ?? undefined}
           >
-            Create
+            {submitting ? "Creating…" : "Create"}
           </button>
         </div>
       </form>

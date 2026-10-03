@@ -1010,15 +1010,23 @@ function FileExplorerContent({
       url: url.toString(),
       filename,
       client: connectionClient,
-    }).then((result) => {
-      if (result === "shared" || !connectionClient.isCurrent()) return;
-      store.notify({
-        kind: "info",
-        message: "Download started",
-        detail: entry.path,
-        autoDismissMs: 5000,
+    })
+      .then((result) => {
+        if (result === "shared" || !connectionClient.isCurrent()) return;
+        store.notify({
+          kind: "info",
+          message: "Download started",
+          detail: entry.path,
+          autoDismissMs: 5000,
+        });
+      })
+      .catch((error: unknown) => {
+        store.notify({
+          kind: "error",
+          message: "Download failed",
+          detail: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
   };
 
   const markDeletePath = (path: string, deleting: boolean) => {

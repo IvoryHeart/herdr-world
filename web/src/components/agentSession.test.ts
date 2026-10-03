@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   downloadSession,
+  downloadSessionAtif,
+  exportSessionForConnection,
   agentStateKind,
   firstLinePreview,
   formatTokenTotal,
@@ -13,6 +15,94 @@ import {
   summarizeTabAgents,
   toolArgumentsPreview,
 } from "./agentSession";
+import { __storeTesting, store } from "../store";
+import type { ConnectionClient } from "../api";
+
+test.each(["raw", "atif", "export"])(
+  "%s session download reports a share-platform HTTP failure without reopening it",
+  async (format) => {
+    const descriptors = ["window", "navigator"].map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+    );
+    const previousFetch = globalThis.fetch;
+    const previousState = store.get();
+    let opened = 0;
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        location: { origin: "https://world.example.test" },
+        matchMedia: () => ({ matches: false }),
+        open: () => {
+          opened++;
+        },
+      },
+    });
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+        userAgent: "iPhone",
+        maxTouchPoints: 5,
+        canShare: () => true,
+        share: async () => {
+          opened++;
+        },
+      },
+    });
+    globalThis.fetch = (async () =>
+      Response.json(
+        { error: "Synthetic session changed" },
+        {
+          status: 409,
+          headers: {
+            "X-Herdr-Connection-Id": "beta",
+            "X-Herdr-Connection-Generation": "7",
+          },
+        },
+      )) as unknown as typeof fetch;
+    const client: ConnectionClient = {
+      connectionId: "beta",
+      generation: 1,
+      serverRuntimeGeneration: 7,
+      isCurrent: () => true,
+      acceptsServerGeneration: () => true,
+      call: async () => ({
+        status: "ok",
+        session: { value: "synthetic-session" },
+      }),
+    };
+    const source = {
+      pane_id: "same-pane",
+      agent: "pi",
+    } as import("../types").Pane;
+    try {
+      store.clearNotice();
+      if (format === "raw")
+        await downloadSession(source, client, "synthetic-session");
+      else if (format === "atif")
+        await downloadSessionAtif(
+          source,
+          "synthetic.jsonl",
+          client,
+          "synthetic-session",
+        );
+      else await exportSessionForConnection(source, client);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(store.get().notice).toMatchObject({
+        kind: "error",
+        message: "Session download failed",
+      });
+      expect(store.get().notice?.detail).toContain("409");
+      expect(opened).toBe(0);
+    } finally {
+      globalThis.fetch = previousFetch;
+      __storeTesting.replaceState(previousState);
+      for (const [key, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+    }
+  },
+);
 
 test("raw export URL retains the displayed original session", () => {
   const originals = ["window", "navigator", "document"].map(

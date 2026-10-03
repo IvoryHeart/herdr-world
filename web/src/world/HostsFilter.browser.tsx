@@ -36,6 +36,10 @@ const watches: Array<{
   terminal_id: string;
   label: string;
 }> = [];
+const creation = Promise.withResolvers<unknown>();
+let watchAdmissionOld = false;
+let downloadPublications = 0;
+const downloadRequests: string[] = [];
 const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
@@ -150,6 +154,19 @@ function snapshot() {
               tabs: [tab],
               panes: dense && id === "beta" ? densePanes : [pane],
               agents: [],
+              ...(operation === "watch-unavailable"
+                ? {
+                    watch_admission: {
+                      revision: watches.length - (watchAdmissionOld ? 1 : 0),
+                      registered: 1,
+                      missing: 0,
+                      unresolved: 0,
+                      matched: 1,
+                      admitted: 1,
+                      admission_failed: 0,
+                    },
+                  }
+                : {}),
               coverage:
                 dense && id === "beta"
                   ? {
@@ -308,6 +325,41 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario() {
+  if (operation === "file-download-error") {
+    leaf("beta")!.click();
+    await frame();
+    await invokeCommand("visual-files");
+    await waitFor(
+      () => !!document.querySelector('button[aria-label="File actions"]'),
+      "The admitted file has no download actions",
+    );
+    document
+      .querySelector<HTMLButtonElement>('button[aria-label="File actions"]')!
+      .click();
+    await waitFor(
+      () => !!namedButton("Download file"),
+      "File download menu did not open",
+    );
+    namedButton("Download file")!.click();
+    await waitFor(
+      () => store.get().notice?.message === "Download failed",
+      "A failed native-share file download has no visible error notice",
+    );
+    check(
+      store.get().notice?.detail?.includes("404") === true,
+      "Download failure lost its HTTP status",
+    );
+    check(
+      downloadRequests.length === 1 &&
+        new URL(downloadRequests[0]!).pathname.includes("/beta/file/download"),
+      "The failed download lost its captured host or was retried",
+    );
+    check(
+      downloadPublications === 0,
+      "A failed admitted download reopened or published its resource",
+    );
+    return;
+  }
   if (operation === "focus-tab") {
     const selectView = async (next: string) => {
       const view = document.querySelector<HTMLSelectElement>(
@@ -381,6 +433,48 @@ async function operationalScenario() {
     check(
       store.get().activeConnectionId === "alpha",
       "Host filter changes operational ownership",
+    );
+    return;
+  }
+  if (operation === "watch-unavailable") {
+    await shellCommands();
+    await waitFor(
+      () =>
+        document.body.textContent?.includes(
+          "2 pinned in filter · 2 admitted",
+        ) === true,
+      "An unavailable host masked healthy-host watch counts",
+    );
+    check(
+      document.body.textContent?.includes("1 host unavailable") === true,
+      "Watch counts omitted the unavailable host explanation",
+    );
+    watchAdmissionOld = true;
+    await worldRuntimeStore.refresh();
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await frame();
+    await shellCommands();
+    await waitFor(
+      () =>
+        document.body.textContent?.includes(
+          "Watch availability pending for filtered hosts",
+        ) === true,
+      "An observed host with an older watch revision stopped reporting pending",
+    );
+    writeHostsFilter(["offline"]);
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    );
+    await frame();
+    await shellCommands();
+    await waitFor(
+      () =>
+        document.body.textContent?.includes(
+          "0 pinned in filter · 0 admitted",
+        ) === true,
+      "An unavailable-only filter remained pending instead of showing its empty observed coverage",
     );
     return;
   }
@@ -579,6 +673,7 @@ async function operationalScenario() {
   }
   if (
     operation === "global-creation" ||
+    operation === "global-creation-retry" ||
     operation === "global-creation-retirement"
   ) {
     await invokeCommand("create-workspace");
@@ -637,9 +732,49 @@ async function operationalScenario() {
       return;
     }
     dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    if (operation === "global-creation")
+      dialog.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
     await waitFor(
       () => dispatches.some((call) => call.method === "workspace.create"),
       "Confirmed destination did not receive creation",
+    );
+    check(
+      dispatches.filter((call) => call.method === "workspace.create").length ===
+        1,
+      "Repeated submission created duplicate workspaces",
+    );
+    check(
+      dialog.querySelector<HTMLButtonElement>('button[type="submit"]')
+        ?.disabled === true,
+      "Workspace creation remains enabled while its request is pending",
+    );
+    if (operation === "global-creation-retry") {
+      creation.reject(new Error("Synthetic creation failure"));
+      await waitFor(
+        () =>
+          dialog.querySelector<HTMLButtonElement>('button[type="submit"]')
+            ?.disabled === false &&
+          store.get().notice?.message === "Workspace creation failed",
+        "Failed creation did not release submission for retry",
+      );
+      dialog.dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+      await waitFor(
+        () =>
+          dispatches.filter((call) => call.method === "workspace.create")
+            .length === 2,
+        "Creation could not be retried after a definite failure",
+      );
+    } else creation.resolve({});
+    await waitFor(
+      () =>
+        !document.querySelector(
+          '[role="dialog"][aria-label="Create workspace"]',
+        ),
+      "Successful creation did not close the dialog",
     );
     check(
       dispatches
@@ -936,6 +1071,68 @@ async function run() {
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
   history.replaceState(null, "", "/tree");
   initializeLayoutPreferences();
+  if (operation === "file-download-error") {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "iPhone",
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+    Object.defineProperty(navigator, "canShare", {
+      configurable: true,
+      value: () => true,
+    });
+    Object.defineProperty(navigator, "share", {
+      configurable: true,
+      value: async () => {
+        downloadPublications++;
+      },
+    });
+    window.open = () => {
+      downloadPublications++;
+      return null;
+    };
+    const fetchResource = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+          location.href,
+        );
+        if (url.pathname.endsWith("/file/download")) {
+          downloadRequests.push(url.href);
+          return Promise.resolve(
+            Response.json(
+              { error: "Synthetic file missing" },
+              {
+                status: 404,
+                headers: {
+                  "X-Herdr-Connection-Id": "beta",
+                  "X-Herdr-Connection-Generation": "7",
+                },
+              },
+            ),
+          );
+        }
+        return fetchResource(input, init);
+      },
+      { preconnect: fetchResource.preconnect },
+    );
+  }
+  if (operation === "watch-unavailable")
+    watches.push(
+      ...["alpha", "beta"].map((id) => ({
+        connection_id: id,
+        connection_generation: 7,
+        terminal_id: "shared",
+        label: `Synthetic ${id}`,
+      })),
+    );
   store.init = () => {};
   store.selectConnection = (id) => {
     calls.push(`select:${id}`);
@@ -997,13 +1194,37 @@ async function run() {
     call: async (method, params = {}) => {
       calls.push(method);
       dispatches.push({ connectionId: id, generation, method, params });
+      if (
+        method === "workspace.create" &&
+        (operation === "global-creation" ||
+          operation === "global-creation-retry") &&
+        dispatches.filter((call) => call.method === "workspace.create")
+          .length === 1
+      )
+        return creation.promise;
+      if (method === "workspace.create" && operation === "global-creation")
+        return creation.promise;
       if (method === "file.list") {
         calls.push(`resource:${id}`);
         if (id === "alpha") {
           filesPending = true;
           return files.promise;
         }
-        return { entries: [], path: "", root: "/synthetic" };
+        return {
+          entries:
+            operation === "file-download-error"
+              ? [
+                  {
+                    name: "synthetic.txt",
+                    path: "synthetic.txt",
+                    type: "file",
+                    size: 1,
+                  },
+                ]
+              : [],
+          path: "",
+          root: "/synthetic",
+        };
       }
       if (method === "pane.layout") return { layout };
       if (method === "pane.get") {

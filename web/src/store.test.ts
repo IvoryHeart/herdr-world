@@ -555,6 +555,130 @@ describe("independent qualified operational sessions", () => {
     }
   }
 
+  test.each(
+    ["create", "open", "open-from-cwd"].flatMap((operation) =>
+      [false, true].map((superseded) => ({ operation, superseded })),
+    ),
+  )(
+    "worktree navigation survives metadata refresh without overriding newer selection: %j",
+    async ({ operation, superseded }) => {
+      await withIndependentClients(async (_calls, held) => {
+        const snapshot = store.get();
+        const navigation = {
+          revision: 10,
+          workspaceId: "same-workspace",
+          tabIds: { "same-workspace": "same-tab" },
+          paneIds: { "same-tab": "same-pane" },
+        };
+        __storeTesting.replaceState({
+          ...snapshot,
+          sessionsByConnectionId: {
+            ...snapshot.sessionsByConnectionId,
+            beta: {
+              ...snapshot.sessionsByConnectionId.beta!,
+              navigationMode: "browser-local",
+              browserNavigation: navigation,
+            },
+          },
+        });
+        const connection = bridge.connection;
+        bridge.connection = ((id, generation) => {
+          const client = connection(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params: Record<string, unknown>) => {
+              const result = await client.call(method, params);
+              if (method === "worktree.create" || method === "worktree.open")
+                return held.promise;
+              if (method === "workspace.list")
+                return {
+                  navigation_mode: "browser-local",
+                  workspaces: [
+                    ...session("beta").workspaces,
+                    {
+                      ...session("beta").workspaces[0]!,
+                      workspace_id: "created-workspace",
+                      active_tab_id: "created-tab",
+                    },
+                  ],
+                };
+              if (method === "tab.list")
+                return {
+                  tabs: [
+                    ...session("beta").tabs,
+                    {
+                      ...session("beta").tabs[0]!,
+                      workspace_id: "created-workspace",
+                      tab_id: "created-tab",
+                    },
+                  ],
+                };
+              if (method === "pane.list")
+                return {
+                  panes: [
+                    ...session("beta").panes,
+                    {
+                      ...pane("beta", "idle"),
+                      workspace_id: "created-workspace",
+                      tab_id: "created-tab",
+                      pane_id: "created-pane",
+                      terminal_id: "created-terminal",
+                    },
+                  ],
+                };
+              return result;
+            },
+          };
+        }) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        const pending =
+          operation === "create"
+            ? owned.createWorktree("same-workspace", "synthetic-branch")
+            : operation === "open"
+              ? owned.openWorktree("same-workspace", "synthetic-branch")
+              : owned.openWorktreeFromCwd(
+                  "/synthetic/repository",
+                  "synthetic-branch",
+                );
+        void pending.catch(() => {});
+        await owned.refresh();
+        expect(owned.get().browserNavigation).not.toBe(navigation);
+        expect(owned.get().browserNavigation.revision).toBe(10);
+        if (superseded) {
+          const current = store.get();
+          __storeTesting.replaceState({
+            ...current,
+            sessionsByConnectionId: {
+              ...current.sessionsByConnectionId,
+              beta: {
+                ...current.sessionsByConnectionId.beta!,
+                browserNavigation: {
+                  ...owned.get().browserNavigation,
+                  revision: 11,
+                },
+              },
+            },
+          });
+        }
+        held.resolve({
+          root_pane: {
+            workspace_id: "created-workspace",
+            tab_id: "created-tab",
+            pane_id: "created-pane",
+          },
+        });
+        await pending;
+        expect(owned.get().browserNavigation.workspaceId).toBe(
+          superseded ? "same-workspace" : "created-workspace",
+        );
+        expect(store.get().activeConnectionId).toBe("alpha");
+      });
+    },
+  );
+
   test("a worktree reply from a retired owner cannot report successful completion or replay", async () => {
     await withIndependentClients(async (calls, held) => {
       const connection = bridge.connection;

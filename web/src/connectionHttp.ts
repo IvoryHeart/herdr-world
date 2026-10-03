@@ -19,33 +19,13 @@ export async function connectionHttpResource<T>(
     client.serverRuntimeGeneration,
   );
   const method = (init?.method ?? "GET").toUpperCase();
+  let response: Response;
   try {
-    const response = await fetch(path, {
+    response = await fetch(path, {
       ...init,
       credentials: "same-origin",
       redirect: "error",
     });
-    try {
-      assertCurrent();
-    } catch (error) {
-      await response.body?.cancel();
-      throw error;
-    }
-    if (
-      response.headers.get("X-Herdr-Connection-Id") !== client.connectionId ||
-      response.headers.get("X-Herdr-Connection-Generation") !==
-        String(client.serverRuntimeGeneration)
-    ) {
-      await response.body?.cancel();
-      throw new Error("response connection identity mismatch");
-    }
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(`resource request failed: ${response.status}`);
-    }
-    const resource = await decode(response);
-    assertCurrent();
-    return resource;
   } catch (error) {
     if (method !== "GET" && method !== "HEAD") {
       throw new UncertainRequestError(
@@ -55,6 +35,35 @@ export async function connectionHttpResource<T>(
     }
     throw error;
   }
+  try {
+    assertCurrent();
+  } catch (error) {
+    await response.body?.cancel();
+    throw error;
+  }
+  if (
+    response.headers.get("X-Herdr-Connection-Id") !== client.connectionId ||
+    response.headers.get("X-Herdr-Connection-Generation") !==
+      String(client.serverRuntimeGeneration)
+  ) {
+    await response.body?.cancel();
+    throw new Error("response connection identity mismatch");
+  }
+  if (!response.ok) {
+    let message = `resource request failed: ${response.status}`;
+    try {
+      const payload = (await response.json()) as { error?: unknown } | null;
+      if (payload && typeof payload.error === "string" && payload.error)
+        message = payload.error;
+    } catch {
+      // The status still proves rejection if its explanation cannot be decoded.
+    }
+    assertCurrent();
+    throw new Error(message);
+  }
+  const resource = await decode(response);
+  assertCurrent();
+  return resource;
 }
 
 export function connectionHttpPath(

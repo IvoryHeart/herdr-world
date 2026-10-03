@@ -3474,7 +3474,7 @@ export const store = {
           branch,
           focus: leaseSnapshot(lease).navigationMode !== "browser-local",
         });
-        if (leaseSnapshot(lease).browserNavigation === navigation)
+        if (browserSelectionIsCurrent(navigation, lease))
           adoptBrowserTarget(lease, result);
         const setupHook = result?.setup_hook as
           | WorktreeHookRunResult
@@ -3535,7 +3535,7 @@ export const store = {
           focus:
             focus && leaseSnapshot(lease).navigationMode !== "browser-local",
         });
-        if (focus && leaseSnapshot(lease).browserNavigation === navigation)
+        if (focus && browserSelectionIsCurrent(navigation, lease))
           adoptBrowserTarget(lease, result);
         const openedHook = result?.opened_hook as
           | WorktreeHookRunResult
@@ -3575,7 +3575,7 @@ export const store = {
           focus:
             focus && leaseSnapshot(lease).navigationMode !== "browser-local",
         });
-        if (focus && leaseSnapshot(lease).browserNavigation === navigation)
+        if (focus && browserSelectionIsCurrent(navigation, lease))
           adoptBrowserTarget(lease, result);
         const openedHook = result?.opened_hook as
           | WorktreeHookRunResult

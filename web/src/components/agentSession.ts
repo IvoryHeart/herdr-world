@@ -323,7 +323,17 @@ export function downloadSession(
   url.searchParams.set("pane_id", pane.pane_id);
   if (pane.agent) url.searchParams.set("agent", pane.agent);
   // Empty fallback keeps the server's Content-Disposition filename.
-  void downloadFileFromUrl({ url: url.toString(), filename: "", client });
+  return downloadFileFromUrl({
+    url: url.toString(),
+    filename: "",
+    client,
+  }).catch((error: unknown) => {
+    store.notify({
+      kind: "error",
+      message: "Session download failed",
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 function sessionAtifFilename(path?: string) {
@@ -353,10 +363,16 @@ export function downloadSessionAtif(
   url.searchParams.set("expected_session", expectedSession);
   url.searchParams.set("pane_id", pane.pane_id);
   if (pane.agent) url.searchParams.set("agent", pane.agent);
-  void downloadFileFromUrl({
+  return downloadFileFromUrl({
     url: url.toString(),
     filename: sessionAtifFilename(sessionName),
     client,
+  }).catch((error: unknown) => {
+    store.notify({
+      kind: "error",
+      message: "Session download failed",
+      detail: error instanceof Error ? error.message : String(error),
+    });
   });
 }
 
@@ -384,7 +400,12 @@ export async function exportSessionForConnection(
       });
       return;
     }
-    downloadSession(pane, client, summary.session?.value);
+    const delivered = await downloadSession(
+      pane,
+      client,
+      summary.session?.value,
+    );
+    if (!delivered || !client.isCurrent()) return;
     store.notify({
       kind: "info",
       message: "Session export started",
