@@ -156,7 +156,7 @@ export function receiptAfterRead(
  * a harness whose sessions World cannot read) settles as "no receipt", so the
  * stop can still be marked. A failed refresh keeps the previous receipt but not
  * as current; the periodic refresh retries it, and a second failure for the
- * same state settles on the previous receipt.
+ * same state settles as no receipt.
  */
 export function receiptAfterError(
   previous: StoredReceipt | undefined,
@@ -165,9 +165,11 @@ export function receiptAfterError(
 ): StoredReceipt {
   if (!previous) return { receipt: null, trigger };
   // A second failure for the same state means the agent has become
-  // unreadable (for example, a rotated transcript): settle on the last known
-  // receipt so the stop can still be marked.
-  return failures >= 2 ? { receipt: previous.receipt, trigger } : previous;
+  // unreadable (for example, a rotated transcript). Settle as "no receipt" so
+  // the stop can be marked under its own observed identity: reusing the last
+  // receipt would give a new stop an older stop's id, and with it that stop's
+  // review mark and report.
+  return failures >= 2 ? { receipt: null, trigger } : previous;
 }
 
 export function receiptStateOf(

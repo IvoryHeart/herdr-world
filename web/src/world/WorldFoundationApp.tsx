@@ -2233,7 +2233,10 @@ function WorldControlPlane({
           dockedInspectorIdRef.current = worldInspectorWindowId(admitted);
           onDockedInspectorIdChange(worldInspectorWindowId(admitted));
           if (admitted.view === "terminal") {
-            focusInspectorTerminal(worldInspectorWindowId(admitted));
+            // A preview (focusTarget false) shows the terminal without taking
+            // keyboard focus; only an explicit open focuses it.
+            if (focusTarget)
+              focusInspectorTerminal(worldInspectorWindowId(admitted));
           }
           return true;
         }
@@ -2248,7 +2251,10 @@ function WorldControlPlane({
           onInspectorConversationsChange(nextConversations);
         }
         if (admitted.view === "terminal") {
-          focusInspectorTerminal(worldInspectorWindowId(admitted));
+          // A preview (focusTarget false) shows the terminal without taking
+          // keyboard focus; only an explicit open focuses it.
+          if (focusTarget)
+            focusInspectorTerminal(worldInspectorWindowId(admitted));
         }
       } catch (cause) {
         if (intentRequestRef.current === requestId) {
@@ -2306,7 +2312,10 @@ function WorldControlPlane({
         worldInspectorWindowId(admittedConversation);
       onDockedInspectorIdChange(worldInspectorWindowId(admittedConversation));
       if (admittedConversation.view === "terminal") {
-        focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
+        // A preview (focusTarget false) shows the terminal without taking
+        // keyboard focus; only an explicit open focuses it.
+        if (focusTarget)
+          focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
       }
     } catch (cause) {
       if (intentRequestRef.current === requestId) {

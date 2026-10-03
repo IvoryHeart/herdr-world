@@ -267,7 +267,7 @@ describe("receipt currency", () => {
     expect(state.current).toBe(false);
   });
 
-  test("a second failure for the same state settles on the previous receipt", () => {
+  test("a second failure for the same state settles as no receipt, not an older stop", () => {
     const previous = receiptAfterRead(
       receipt("earlier", 5),
       receiptTrigger(agent("working")),
@@ -279,8 +279,15 @@ describe("receipt currency", () => {
       2,
     );
     const state = receiptStateOf(settled, agent("done"), true);
-    expect(state.receipt?.turn_id).toBe("earlier");
+    expect(state.receipt).toBeNull();
     expect(state.current).toBe(true);
+    const lanes = partitionDesk(
+      [agent("done")],
+      () => state,
+      new Set([JSON.stringify([receiptIdentity(agent("done")), "earlier"])]),
+      NOW,
+    );
+    expect(lanes.review[0]?.handled).toBe(false);
   });
 
   test("agents outside the read bound are never pending", () => {

@@ -238,9 +238,32 @@ async function run() {
     previewed.join(",") === "alpha",
     `rapid moves previewed once, at the final agent (previewed: ${previewed.join(",")})`,
   );
+  // The active card is highlighted and follows J.
+  check(
+    document.querySelector(".desk-card.is-focused") === card("alpha"),
+    "the active card is highlighted",
+  );
+  // Esc right after a move cancels the pending preview.
+  previewed.length = 0;
+  press(document.activeElement!, "j");
   press(document.activeElement!, "Escape");
-  await settle();
+  await settle(300);
   check(closed === 1, "Esc closed the reading pane");
+  check(
+    previewed.length === 0,
+    `Esc cancelled the pending preview (previewed: ${previewed.join(",")})`,
+  );
+  // Marking with E keeps focus inside the guarded Desk.
+  const reviewCard = card("gamma") ?? card("alpha");
+  reviewCard?.focus();
+  await settle();
+  press(reviewCard!, "e");
+  await settle(200);
+  check(
+    Boolean(document.activeElement?.closest(".desk")) &&
+      terminalFocusBlockedByOverlay(document.activeElement, document),
+    `focus stayed in the Desk after marking (active: ${document.activeElement?.tagName})`,
+  );
 
   // Enter on a focused control keeps its native meaning.
   const mark = card("alpha")?.querySelectorAll<HTMLButtonElement>("button")[1];

@@ -507,12 +507,20 @@ export function DeskBoard({
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
   const previewTimer = useRef<number | undefined>(undefined);
+  // The reading pane as it is now, for previews that fire after a delay.
+  const readingRef = useRef(reading);
+  readingRef.current = reading;
+  const cancelPreview = () => {
+    window.clearTimeout(previewTimer.current);
+    previewTimer.current = undefined;
+  };
   useEffect(() => () => window.clearTimeout(previewTimer.current), []);
   const lastFocusIndex = useRef(0);
   const focusIndex = focusIndexOf(order, focusedId, lastFocusIndex.current);
   lastFocusIndex.current = focusIndex;
   const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
+    cancelPreview();
     setError(null);
     recordOpen(leaf);
     void onOpenTerminal(leaf.id).catch((reason: unknown) =>
@@ -522,6 +530,18 @@ export function DeskBoard({
     );
   };
 
+  // Keep DOM focus inside the Desk (and so inside the terminal focus guard):
+  // on the given card once it renders, otherwise on the Desk itself.
+  const focusCard = (id: string | null) => {
+    requestAnimationFrame(() => {
+      const card = id
+        ? rootRef.current?.querySelector<HTMLElement>(
+            `[data-desk-card="${CSS.escape(id)}"]`,
+          )
+        : null;
+      (card ?? rootRef.current)?.focus({ preventScroll: true });
+    });
+  };
   const toggleReviewed = (item: Item) => {
     mark(item.handoffId, !item.handled);
     setToast(
@@ -557,6 +577,7 @@ export function DeskBoard({
         !target?.closest?.("input, textarea, select")
       ) {
         event.preventDefault();
+        cancelPreview();
         onCloseReading?.();
         return;
       }
@@ -591,10 +612,11 @@ export function DeskBoard({
         if (reading && onPreview) {
           window.clearTimeout(previewTimer.current);
           const id = next.leaf.id;
-          previewTimer.current = window.setTimeout(
-            () => void onPreview(id).catch(() => {}),
-            PREVIEW_DELAY_MS,
-          );
+          previewTimer.current = window.setTimeout(() => {
+            previewTimer.current = undefined;
+            // The pane may have been closed or replaced meanwhile.
+            if (readingRef.current) void onPreview(id).catch(() => {});
+          }, PREVIEW_DELAY_MS);
         }
         // Keep DOM focus on the highlighted card so Enter and E act on it.
         rootRef.current
@@ -622,6 +644,7 @@ export function DeskBoard({
         const neighbour = order[focusIndex + 1] ?? order[focusIndex - 1];
         setFocusedId(neighbour?.leaf.id ?? null);
         toggleReviewed(focused.item);
+        focusCard(neighbour?.leaf.id ?? null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -635,7 +658,7 @@ export function DeskBoard({
   }, [focusIndex]);
 
   const card = (item: Item) => {
-    const index = order.indexOf(item);
+    const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
     const { leaf, receipt } = item;
     const screen = screens(leaf) ?? "";
     const isFocused = index === focusIndex;
@@ -852,6 +875,21 @@ export function DeskBoard({
       // and guarded so a streaming terminal in the reading pane cannot take it.
       tabIndex={-1}
       data-terminal-focus-guard=""
+      // When the focused card or button leaves the page (marked, undone,
+      // moved), focus would fall to the page body outside the guard. Bring it
+      // back to the active card or the Desk itself.
+      onBlur={(event) => {
+        const lost = event.target;
+        if (event.relatedTarget) return;
+        requestAnimationFrame(() => {
+          if (
+            !lost.isConnected &&
+            (document.activeElement === document.body ||
+              document.activeElement === null)
+          )
+            focusCard(focusedId);
+        });
+      }}
     >
       <header className="desk-top">
         <div className="desk-summary" aria-label="Attention summary">
