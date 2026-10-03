@@ -1775,8 +1775,6 @@
   }
 
   .film-card {
-    position: relative;
-    display: block;
     overflow: hidden;
     border: 1px solid var(--line-strong);
     border-radius: var(--radius-lg);
@@ -1784,65 +1782,23 @@
     box-shadow: var(--shadow-window);
   }
 
-  .film-card img {
+  .film-card iframe {
     display: block;
     width: 100%;
-    height: auto;
     aspect-ratio: 16 / 9;
-    transition: transform 0.4s ease;
+    border: 0;
   }
 
-  .film-play {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    display: grid;
-    width: clamp(64px, 10vw, 112px);
-    aspect-ratio: 1;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--blue);
-    box-shadow:
-      0 0 0 10px rgba(122, 162, 247, 0.18),
-      0 18px 60px rgba(0, 0, 0, 0.6);
-    transform: translate(-50%, -50%);
-    transition: transform 0.2s ease;
-  }
-
-  .film-play svg {
-    width: 42%;
-    height: 42%;
-    margin-left: 8%;
-    fill: #080b12;
-  }
-
-  .film-label {
-    position: absolute;
-    right: 0;
-    bottom: 5%;
-    left: 0;
-    color: var(--text-soft);
+  .film-links {
+    margin-top: 16px;
+    color: var(--muted);
     font-family: var(--font-mono);
     font-size: 0.82rem;
-    letter-spacing: 0.12em;
     text-align: center;
-    text-transform: uppercase;
-    text-shadow: 0 2px 8px #000;
   }
 
-  .film-card:hover img,
-  .film-card:focus-visible img {
-    transform: scale(1.015);
-  }
-
-  .film-card:hover .film-play,
-  .film-card:focus-visible .film-play {
-    transform: translate(-50%, -50%) scale(1.06);
-  }
-
-  .film-card:focus-visible {
-    outline: 3px solid var(--blue-bright);
-    outline-offset: 4px;
+  .film-links a {
+    color: var(--blue-bright);
   }
 }
 

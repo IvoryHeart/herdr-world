@@ -92,6 +92,18 @@
   body.render .wrap { max-width: none; display: block; }
   body.render .eyebrow, body.render .bar, body.render .note, body.render .big-play { display: none; }
   body.render .stage { width: 1920px; height: 1080px; border: 0; border-radius: 0; }
+  body.embed { padding: 0; background: #000; }
+  body.embed .wrap { max-width: none; display: block; }
+  body.embed .eyebrow, body.embed .note { display: none; }
+  body.embed .stage { width: 100vw; height: 100vh; aspect-ratio: auto; border: 0; border-radius: 0; }
+  body.embed .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
+    opacity: 0; transition: opacity .2s ease;
+  }
+  body.embed .stage:hover ~ .bar, body.embed .bar:hover, body.embed .bar:focus-within { opacity: 1; }
+  body.embed:not(.playing) .bar { opacity: 0; pointer-events: none; }
+  body.embed .bar button { padding: 7px 10px; }
 </style>
 </head>
 <body>
@@ -124,6 +136,8 @@ const LOGO_SRC = "data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIGFyaWEtbGFiZWw9
 const W = 1920, H = 1080, DUR = 62;
 const RENDER = new URLSearchParams(location.search).has('render');
 if (RENDER) document.body.classList.add('render');
+const EMBED = new URLSearchParams(location.search).has('embed');
+if (EMBED) document.body.classList.add('embed');
 
 const cv = document.getElementById('film');
 const ctx = cv.getContext('2d');
@@ -1022,7 +1036,7 @@ function schedule(c, out, from, base) {
 }
 
 // ================= playback =================
-let audio = null, playing = false, cur = 61.95, offset = 0, t0perf = 0, muted = false;
+let audio = null, playing = false, cur = EMBED ? 0 : 61.95, offset = 0, t0perf = 0, muted = false;
 function startAudio(from) {
   stopAudio();
   try {
@@ -1038,6 +1052,7 @@ function ui() {
   $('mute').textContent = muted ? 'Sound off' : 'Sound on'; $('mute').setAttribute('aria-pressed', String(muted));
   $('clock').textContent = `${fmt(cur)} / ${fmt(DUR)}`; $('scrub').value = Math.round(cur * 10);
   $('bigplay').hidden = playing;
+  document.body.classList.toggle('playing', playing);
 }
 function play() {
   if (cur >= DUR - .1) cur = 0;
@@ -1060,9 +1075,10 @@ const ready = Promise.all([
   document.fonts.load('400 20px "Silkscreen"'), document.fonts.load('700 20px "JetBrains Mono"'), document.fonts.load('400 20px "JetBrains Mono"')
 ].map(p => Promise.resolve(p).catch(() => {}))).then(() => document.fonts.ready);
 
-ready.then(() => { frame(cur); ui(); });
+ready.then(() => { frame(EMBED ? 12.8 : cur); ui(); });
 if (!RENDER) {
   $('bigplay').addEventListener('click', play);
+  cv.addEventListener('click', () => { if (playing) pause(); });
   $('play').addEventListener('click', () => playing ? pause() : play());
   $('restart').addEventListener('click', () => { cur = 0; if (playing) seek(0); else play(); });
   $('scrub').addEventListener('input', e => seek(e.target.value / 10));
