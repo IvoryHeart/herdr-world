@@ -63,14 +63,19 @@ export function pollingTargets(
     .map(({ leaf }) => leaf);
 }
 
-export function receiptRequestKey(leaf: WorldLeafObject) {
+/** The agent session a receipt describes. */
+export function receiptIdentity(leaf: WorldLeafObject) {
   return JSON.stringify([
-    leaf.id,
+    leaf.connectionId,
     leaf.generation,
+    leaf.id,
     leaf.agentSessionFingerprint ?? null,
-    leaf.status,
-    leaf.lastActivityAt ?? null,
   ]);
+}
+
+/** Changes that make a stored receipt worth fetching again. */
+export function receiptTrigger(leaf: WorldLeafObject) {
+  return `${leaf.status}:${leaf.lastActivityAt ?? ""}`;
 }
 
 function isReceipt(value: unknown): value is TurnReceipt {
@@ -113,9 +118,12 @@ export function useNow(intervalMs = 15_000) {
 }
 
 /**
- * Latest turn receipt per agent, keyed by `receiptRequestKey`. A receipt is
- * fetched again whenever the agent's state or activity changes and on a slow
+ * Latest turn receipt per agent session. The stored receipt is keyed by the
+ * session (`receiptIdentity`), so it stays visible while a refresh is in
+ * flight; a change in status or activity (`receiptTrigger`) only marks it due.
+ * Changed agents are fetched first, and every agent is refreshed on a slow
  * interval so transcript writes that land after a state change are seen.
+ * Polling pauses while the page is hidden.
  */
 export function useTurnReceipts(
   leaves: WorldLeafObject[],
@@ -125,21 +133,64 @@ export function useTurnReceipts(
     () => new Map(),
   );
   const [tick, setTick] = useState(0);
+  const fetched = useRef(new Map<string, string>());
+  const due = useRef(new Set<string>());
   const targets = pollingTargets(leaves);
-  const requestKeys = targets.map(receiptRequestKey).join("\n");
+  const requestKeys = targets
+    .map((leaf) => `${receiptIdentity(leaf)}=${receiptTrigger(leaf)}`)
+    .join("\n");
 
-  useEffect(() => setReceipts(new Map()), [client.connectionId]);
   useEffect(() => {
-    const timer = window.setInterval(() => setTick((v) => v + 1), REFRESH_MS);
-    return () => window.clearInterval(timer);
+    setReceipts(new Map());
+    fetched.current = new Map();
+    due.current = new Set();
+  }, [client.connectionId]);
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "hidden") setTick((v) => v + 1);
+    };
+    const timer = window.setInterval(refresh, REFRESH_MS);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, []);
   useEffect(() => {
+    if (tick > 0)
+      for (const leaf of targets) due.current.add(receiptIdentity(leaf));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+  useEffect(() => {
+    const live = new Set(targets.map(receiptIdentity));
+    for (const key of [...fetched.current.keys()])
+      if (!live.has(key)) fetched.current.delete(key);
+    for (const key of [...due.current])
+      if (!live.has(key)) due.current.delete(key);
+    setReceipts((current) => {
+      const kept = new Map([...current].filter(([key]) => live.has(key)));
+      return kept.size === current.size ? current : kept;
+    });
+    if (document.visibilityState === "hidden") return;
+    const queue = targets.filter((leaf) => {
+      const identity = receiptIdentity(leaf);
+      return (
+        due.current.has(identity) ||
+        fetched.current.get(identity) !== receiptTrigger(leaf)
+      );
+    });
     let cancelled = false;
     void (async () => {
-      for (const leaf of targets) {
+      for (const leaf of queue) {
         if (cancelled || !client.isCurrent()) return;
-        if (!leaf.pane.agent) continue;
-        const key = receiptRequestKey(leaf);
+        const identity = receiptIdentity(leaf);
+        const trigger = receiptTrigger(leaf);
+        if (!leaf.pane.agent) {
+          fetched.current.set(identity, trigger);
+          due.current.delete(identity);
+          setReceipts((current) => new Map(current).set(identity, null));
+          continue;
+        }
         try {
           const result = await client.call("agent_turn.get", {
             pane_id: leaf.pane.pane_id,
@@ -149,25 +200,36 @@ export function useTurnReceipts(
           });
           const turn = (result as { turn?: unknown } | null)?.turn;
           if (cancelled || !client.isCurrent()) return;
+          fetched.current.set(identity, trigger);
+          due.current.delete(identity);
           setReceipts((current) =>
-            new Map(current).set(key, isReceipt(turn) ? turn : null),
+            new Map(current).set(identity, isReceipt(turn) ? turn : null),
           );
         } catch {
-          if (!cancelled)
-            setReceipts((current) => new Map(current).set(key, null));
+          if (cancelled) return;
+          fetched.current.set(identity, trigger);
+          due.current.delete(identity);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-    // requestKeys captures every leaf change; tick refreshes transcripts.
+    // requestKeys captures every identity and trigger; tick marks all due.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [client, requestKeys, tick]);
 
+  const polled = new Set(targets.map(receiptIdentity));
+  // `undefined` means a polled agent's receipt is still on its way; agents
+  // outside the polling bound have no receipt rather than a pending one.
   return useCallback(
-    (leaf: WorldLeafObject) => receipts.get(receiptRequestKey(leaf)),
-    [receipts],
+    (leaf: WorldLeafObject) => {
+      const identity = receiptIdentity(leaf);
+      return polled.has(identity) ? receipts.get(identity) : null;
+    },
+    // requestKeys covers the polled set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [receipts, requestKeys],
   );
 }
 

@@ -105,6 +105,13 @@ export function usePaneScreens(
       return kept.size === current.size ? current : kept;
     });
     const poll = async () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      timer = undefined;
+      // A hidden page reads nothing; it refreshes as soon as it is shown.
+      if (document.visibilityState === "hidden") {
+        if (!cancelled) timer = window.setTimeout(run, POLL_MS);
+        return;
+      }
       for (const leaf of targets) {
         if (cancelled || !client.isCurrent()) return;
         const identity = screenIdentity(leaf);
@@ -127,11 +134,25 @@ export function usePaneScreens(
           // A pane that cannot be read keeps its last screen until it can.
         }
       }
-      if (!cancelled) timer = window.setTimeout(poll, POLL_MS);
+      if (!cancelled) timer = window.setTimeout(run, POLL_MS);
     };
-    void poll();
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !polling) void run();
+    };
+    let polling = false;
+    const run = async () => {
+      polling = true;
+      try {
+        await poll();
+      } finally {
+        polling = false;
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    void run();
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
       if (timer !== undefined) window.clearTimeout(timer);
     };
     // targetKey captures every identity and status change of the polled panes.

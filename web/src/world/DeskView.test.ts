@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { partitionDesk } from "./DeskView";
+import { deskShortcut, focusIndexOf, partitionDesk } from "./DeskView";
 import {
   operationalAgents,
   pollingTargets,
@@ -164,5 +164,50 @@ describe("screen identity", () => {
     expect(screenIdentity(pane("a"))).toBe(screenIdentity(pane("a")));
     expect(screenIdentity(pane("b"))).not.toBe(screenIdentity(pane("a")));
     expect(screenIdentity(pane("a", 2))).not.toBe(screenIdentity(pane("a")));
+  });
+});
+
+describe("Desk keyboard", () => {
+  const key = (
+    k: string,
+    overrides: Partial<Parameters<typeof deskShortcut>[0]> = {},
+  ) =>
+    deskShortcut({
+      key: k,
+      modified: false,
+      onDesk: true,
+      editable: false,
+      control: false,
+      ...overrides,
+    });
+
+  test("leaves Enter to focused controls and ignores keys aimed elsewhere", () => {
+    expect(key("Enter")).toBe("open");
+    expect(key("Enter", { control: true })).toBeNull();
+    expect(key("j", { control: true })).toBe("next");
+    expect(key("Enter", { onDesk: false })).toBeNull();
+    expect(key("e", { editable: true })).toBeNull();
+    expect(key("k", { modified: true })).toBeNull();
+  });
+
+  test("keeps focus on the same agent when lanes reorder", () => {
+    const before = [{ leaf: { id: "a" } }, { leaf: { id: "b" } }];
+    const after = [{ leaf: { id: "new-blocked" } }, ...before];
+    expect(focusIndexOf(before, "b")).toBe(1);
+    expect(focusIndexOf(after, "b")).toBe(2);
+    expect(focusIndexOf(after, "gone")).toBe(0);
+  });
+
+  test("marks a stop pending until its receipt has been fetched", () => {
+    const lanes = partitionDesk(
+      [leaf("fetching", "done"), leaf("none", "done")],
+      (agent) => (agent.id === "fetching" ? undefined : null),
+      new Set(),
+      NOW,
+    );
+    expect(lanes.review.map((item) => [item.leaf.id, item.pending])).toEqual([
+      ["fetching", true],
+      ["none", false],
+    ]);
   });
 });

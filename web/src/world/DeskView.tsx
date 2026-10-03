@@ -28,6 +28,8 @@ type Item = {
   receipt: TurnReceipt | null;
   handoffId: string;
   handled: boolean;
+  /** The receipt has not been fetched yet, so the stop has no stable id. */
+  pending: boolean;
   since: number | null;
 };
 
@@ -69,7 +71,9 @@ export function partitionDesk(
   const working: Item[] = [];
   const quiet: WorldLeafObject[] = [];
   for (const leaf of agents) {
-    const receipt = receiptFor(leaf) ?? null;
+    const fetchedReceipt = receiptFor(leaf);
+    const pending = fetchedReceipt === undefined;
+    const receipt = fetchedReceipt ?? null;
     const stoppedAt = stops.get(leaf.id);
     const id = handoffId(leaf, receipt, stoppedAt);
     const since =
@@ -80,6 +84,7 @@ export function partitionDesk(
         leaf,
         receipt,
         handoffId: id,
+        pending,
         handled: false,
         since,
       });
@@ -90,6 +95,7 @@ export function partitionDesk(
         leaf,
         receipt,
         handoffId: id,
+        pending,
         handled: false,
         since: Number.isFinite(started) ? started : null,
       });
@@ -104,6 +110,7 @@ export function partitionDesk(
         leaf,
         receipt,
         handoffId: id,
+        pending,
         handled: handled.has(id),
         since,
       });
@@ -185,6 +192,39 @@ function Screen({
   );
 }
 
+export type DeskShortcut = "next" | "previous" | "open" | "mark" | null;
+
+/**
+ * Decides what a key does on the Desk. Keys aimed elsewhere in the app, at
+ * editable fields or with modifiers do nothing, and Enter keeps its native
+ * meaning on any focused control.
+ */
+export function deskShortcut(input: {
+  key: string;
+  modified: boolean;
+  onDesk: boolean;
+  editable: boolean;
+  control: boolean;
+}): DeskShortcut {
+  if (input.modified || !input.onDesk || input.editable) return null;
+  if (input.key === "j" || input.key === "ArrowDown") return "next";
+  if (input.key === "k" || input.key === "ArrowUp") return "previous";
+  if (input.key === "Enter") return input.control ? null : "open";
+  if (input.key === "e") return "mark";
+  return null;
+}
+
+/** The focused card's position, following the agent as lanes reorder. */
+export function focusIndexOf(
+  order: readonly { leaf: { id: string } }[],
+  focusedId: string | null,
+) {
+  return Math.max(
+    0,
+    order.findIndex((item) => item.leaf.id === focusedId),
+  );
+}
+
 export function DeskView({
   world,
   onOpenTerminal,
@@ -203,7 +243,8 @@ export function DeskView({
   const [fullReports, setFullReports] = useState<Map<string, string>>(
     () => new Map(),
   );
-  const [focus, setFocus] = useState(0);
+  // Focus follows an agent, not a position: lanes reorder as agents change.
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -235,7 +276,8 @@ export function DeskView({
     world.hosts.find((host) => host.selectedHost)?.label ?? "this host";
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
-  const focused = order[Math.min(focus, order.length - 1)];
+  const focusIndex = focusIndexOf(order, focusedId);
+  const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
     setError(null);
     void onOpenTerminal(leaf.id).catch((reason: unknown) =>
@@ -248,28 +290,51 @@ export function DeskView({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      if (
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey ||
-        (target &&
-          (target.isContentEditable ||
-            ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))) ||
-        target?.closest?.(".xterm, [role='dialog']")
-      )
-        return;
       if (!order.length) return;
-      if (event.key === "j" || event.key === "ArrowDown") {
+      const action = deskShortcut({
+        key: event.key,
+        modified: event.metaKey || event.ctrlKey || event.altKey,
+        // Shortcuts belong to the Desk: ignore keys aimed at the rest of the
+        // app (top bar, Inspector windows, terminals, dialogs).
+        onDesk:
+          !target ||
+          target === document.body ||
+          rootRef.current?.contains(target) === true,
+        editable: Boolean(
+          target?.isContentEditable ||
+            target?.closest?.("input, textarea, select, [role='dialog']"),
+        ),
+        control: Boolean(
+          target?.closest?.(
+            "button, a, summary, label, [role='button'], [role='menuitem'], [role='checkbox']",
+          ),
+        ),
+      });
+      const move = (step: number) => {
+        const next =
+          order[Math.min(order.length - 1, Math.max(0, focusIndex + step))];
+        if (next) setFocusedId(next.leaf.id);
+      };
+      if (action === "next") {
         event.preventDefault();
-        setFocus((value) => Math.min(order.length - 1, value + 1));
-      } else if (event.key === "k" || event.key === "ArrowUp") {
+        move(1);
+      } else if (action === "previous") {
         event.preventDefault();
-        setFocus((value) => Math.max(0, value - 1));
-      } else if (event.key === "Enter" && focused) {
+        move(-1);
+      } else if (action === "open" && focused) {
         event.preventDefault();
         open(focused.leaf);
-      } else if (event.key === "e" && focused?.lane === "review") {
+      } else if (
+        action === "mark" &&
+        focused?.lane === "review" &&
+        !focused.pending
+      ) {
         event.preventDefault();
+        // Marking moves the item; keep the operator's place in the queue.
+        if (!focused.handled && !showReviewed) {
+          const neighbour = order[focusIndex + 1] ?? order[focusIndex - 1];
+          setFocusedId(neighbour?.leaf.id ?? null);
+        }
         mark(focused.handoffId, !focused.handled);
       }
     };
@@ -281,13 +346,13 @@ export function DeskView({
     rootRef.current
       ?.querySelector(".desk-card.is-focused")
       ?.scrollIntoView({ block: "nearest" });
-  }, [focus]);
+  }, [focusIndex]);
 
   const card = (item: Item) => {
     const index = order.indexOf(item);
     const { leaf, receipt } = item;
     const screen = screens(leaf) ?? "";
-    const isFocused = index === Math.min(focus, order.length - 1);
+    const isFocused = index === focusIndex;
     const ask = receipt?.ask ?? leaf.taskSummary ?? null;
     const age = item.since ? formatSpan(now - item.since) : null;
     const isExpanded = expanded === item.handoffId;
@@ -295,7 +360,7 @@ export function DeskView({
       <li
         key={leaf.id}
         className={`desk-card is-${item.lane}${item.handled ? " is-handled" : ""}${isFocused ? " is-focused" : ""}`}
-        onMouseEnter={() => index >= 0 && setFocus(index)}
+        onMouseEnter={() => setFocusedId(leaf.id)}
       >
         <div className="desk-card-head">
           <span className="desk-card-name">{agentName(leaf)}</span>
@@ -414,6 +479,10 @@ export function DeskView({
           {item.lane === "review" ? (
             <button
               type="button"
+              disabled={item.pending}
+              title={
+                item.pending ? "Waiting for this turn's receipt" : undefined
+              }
               onClick={() => mark(item.handoffId, !item.handled)}
             >
               {item.handled ? "Reopen" : "Mark reviewed"}
