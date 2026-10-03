@@ -62,6 +62,7 @@
     background: radial-gradient(circle at 50% 50%, rgba(8,11,18,.15), rgba(8,11,18,.55));
     border: 0; cursor: pointer; color: var(--text);
   }
+  .big-play[hidden] { display: none; }
   .big-play .disc {
     width: clamp(64px, 11vw, 120px); aspect-ratio: 1; border-radius: 50%;
     background: var(--herd); display: grid; place-items: center;
@@ -71,11 +72,6 @@
   .big-play:hover .disc, .big-play:focus-visible .disc { transform: scale(1.06); }
   .big-play:focus-visible { outline: 3px solid var(--herd-bright); outline-offset: -3px; }
   .big-play svg { width: 42%; height: 42%; margin-left: 8%; fill: var(--void); }
-  .big-play .label {
-    position: absolute; bottom: 7%; left: 0; right: 0; text-align: center;
-    font: 700 clamp(11px, 1.3vw, 15px)/1 "Silkscreen", monospace; letter-spacing: .12em;
-    color: var(--soft); text-shadow: 0 2px 8px #000;
-  }
   .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .bar button {
     font: 700 12px/1 "Silkscreen", "JetBrains Mono", monospace; letter-spacing: .08em;
@@ -99,10 +95,10 @@
   body.embed .bar {
     position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
     background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
-    opacity: 0; transition: opacity .2s ease;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
   }
-  body.embed .stage:hover ~ .bar, body.embed .bar:hover, body.embed .bar:focus-within { opacity: 1; }
-  body.embed:not(.playing) .bar { opacity: 0; pointer-events: none; }
+  body.embed.playing.controls-visible .bar,
+  body.embed.playing .bar:focus-within { opacity: 1; pointer-events: auto; }
   body.embed .bar button { padding: 7px 10px; }
 </style>
 </head>
@@ -113,7 +109,6 @@
     <canvas id="film" width="1920" height="1080" aria-label="Animated film: Promoted to CEO, about Herdr World"></canvas>
     <button class="big-play" id="bigplay" type="button" aria-label="Play the film">
       <span class="disc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l16 9-16 9z"/></svg></span>
-      <span class="label" id="biglabel">Play · Promoted to CEO</span>
     </button>
   </div>
   <div class="bar">
@@ -1037,6 +1032,7 @@ function schedule(c, out, from, base) {
 
 // ================= playback =================
 let audio = null, playing = false, cur = EMBED ? 0 : 61.95, offset = 0, t0perf = 0, muted = false;
+let controlsTimer = null;
 function startAudio(from) {
   stopAudio();
   try {
@@ -1052,19 +1048,27 @@ function ui() {
   $('mute').textContent = muted ? 'Sound off' : 'Sound on'; $('mute').setAttribute('aria-pressed', String(muted));
   $('clock').textContent = `${fmt(cur)} / ${fmt(DUR)}`; $('scrub').value = Math.round(cur * 10);
   $('bigplay').hidden = playing;
+  $('bigplay').setAttribute('aria-label', cur >= DUR - .1 ? 'Replay the film' : cur > 0 ? 'Resume the film' : 'Play the film');
   document.body.classList.toggle('playing', playing);
+  if (!playing) document.body.classList.remove('controls-visible');
+}
+function showControls() {
+  if (!EMBED || !playing) return;
+  document.body.classList.add('controls-visible');
+  clearTimeout(controlsTimer);
+  controlsTimer = setTimeout(() => document.body.classList.remove('controls-visible'), 1800);
 }
 function play() {
   if (cur >= DUR - .1) cur = 0;
   offset = cur; t0perf = performance.now(); playing = true;
   if (!muted) startAudio(cur);
-  ui(); requestAnimationFrame(loop);
+  ui(); showControls(); requestAnimationFrame(loop);
 }
 function pause() { playing = false; stopAudio(); ui(); }
 function loop() {
   if (!playing) return;
   cur = offset + (performance.now() - t0perf) / 1000;
-  if (cur >= DUR) { cur = DUR - .05; playing = false; frame(cur); $('biglabel').textContent = 'Replay'; ui(); return; }
+  if (cur >= DUR) { cur = DUR - .05; playing = false; frame(cur); ui(); return; }
   frame(cur); ui(); requestAnimationFrame(loop);
 }
 function seek(t) { cur = clamp(t, 0, DUR - .05); frame(cur); if (playing) { offset = cur; t0perf = performance.now(); if (!muted) startAudio(cur); } ui(); }
@@ -1079,6 +1083,10 @@ ready.then(() => { frame(EMBED ? 12.8 : cur); ui(); });
 if (!RENDER) {
   $('bigplay').addEventListener('click', play);
   cv.addEventListener('click', () => { if (playing) pause(); });
+  if (EMBED) {
+    document.querySelector('.stage').addEventListener('pointermove', showControls);
+    document.querySelector('.bar').addEventListener('pointermove', showControls);
+  }
   $('play').addEventListener('click', () => playing ? pause() : play());
   $('restart').addEventListener('click', () => { cur = 0; if (playing) seek(0); else play(); });
   $('scrub').addEventListener('input', e => seek(e.target.value / 10));
