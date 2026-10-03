@@ -188,7 +188,7 @@ describe("Pages references", () => {
     );
     const screenshotPattern = /herdr-world-(?:desktop|mobile)-[a-z-]+\.png/g;
     const screenshots = [...new Set(readme.match(screenshotPattern))].sort();
-    expect(screenshots).toHaveLength(9);
+    expect(screenshots).toHaveLength(10);
     expect([...new Set(build.match(screenshotPattern))].sort()).toEqual(
       screenshots,
     );

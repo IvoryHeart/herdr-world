@@ -67,6 +67,77 @@ const showcaseLabel = document.querySelector("[data-showcase-label]");
 const showcaseTitle = document.querySelector("[data-showcase-title]");
 const showcaseCopy = document.querySelector("[data-showcase-copy]");
 
+const heroCarousel = document.querySelector("[data-hero-carousel]");
+const heroSource = heroCarousel?.querySelector("[data-hero-source]");
+const heroImage = heroCarousel?.querySelector("[data-hero-image]");
+const heroLink = heroCarousel?.querySelector("[data-hero-link]");
+const heroLabel = heroCarousel?.querySelector("[data-hero-label]");
+const heroPosition = heroCarousel?.querySelector("[data-hero-position]");
+const officeSrcset = heroSource?.getAttribute("srcset") ?? "";
+const officeSizes = heroSource?.getAttribute("sizes") ?? "";
+let heroIndex = 0;
+let heroVisible = false;
+
+const showHeroSlide = (index) => {
+  if (!(heroImage instanceof HTMLImageElement) || !showcaseTabs.length) return;
+  const nextIndex = (index + showcaseTabs.length) % showcaseTabs.length;
+  const tab = showcaseTabs[nextIndex];
+  const image = tab.dataset.image;
+  if (!image) return;
+
+  heroIndex = nextIndex;
+  if (heroSource instanceof HTMLSourceElement) {
+    heroSource.type = nextIndex === 0 ? "image/avif" : "image/png";
+    heroSource.srcset = nextIndex === 0 ? officeSrcset : image;
+    if (nextIndex === 0) heroSource.sizes = officeSizes;
+    else heroSource.removeAttribute("sizes");
+  }
+  heroImage.src = image;
+  heroImage.alt = tab.dataset.alt ?? "Herdr World product view";
+  if (heroLink instanceof HTMLAnchorElement) {
+    heroLink.href = image;
+    heroLink.setAttribute(
+      "aria-label",
+      `Open the Herdr World ${tab.dataset.label} screenshot`,
+    );
+  }
+  if (heroLabel) heroLabel.textContent = tab.dataset.label;
+  if (heroPosition) {
+    heroPosition.textContent = `${String(nextIndex + 1).padStart(2, "0")} / ${String(showcaseTabs.length).padStart(2, "0")}`;
+  }
+};
+
+heroCarousel
+  ?.querySelector("[data-hero-previous]")
+  ?.addEventListener("click", () => showHeroSlide(heroIndex - 1));
+heroCarousel
+  ?.querySelector("[data-hero-next]")
+  ?.addEventListener("click", () => showHeroSlide(heroIndex + 1));
+
+if (heroCarousel && "IntersectionObserver" in window) {
+  new IntersectionObserver(
+    (entries) => {
+      heroVisible = entries.some((entry) => entry.isIntersecting);
+    },
+    { threshold: 0.25 },
+  ).observe(heroCarousel);
+} else {
+  heroVisible = true;
+}
+
+if (heroCarousel) {
+  window.setInterval(() => {
+    if (
+      reducedMotion.matches ||
+      !heroVisible ||
+      document.hidden ||
+      heroCarousel.matches(":hover, :focus-within")
+    )
+      return;
+    showHeroSlide(heroIndex + 1);
+  }, 6000);
+}
+
 const activateShowcaseTab = (tab) => {
   if (!(tab instanceof HTMLButtonElement)) return;
 
@@ -127,12 +198,6 @@ showcaseTabs.forEach((tab, index) => {
   });
 });
 
-const copyButton = document.querySelector("[data-copy-command]");
-const copyLabel = copyButton?.querySelector("span");
-const installCommand = document.querySelector("[data-install-command]");
-const commandText =
-  "curl -fsSL https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh | sh";
-
 const copyText = async (text) => {
   if (!navigator.clipboard || !window.isSecureContext) {
     throw new Error("Clipboard API unavailable");
@@ -140,27 +205,44 @@ const copyText = async (text) => {
   await navigator.clipboard.writeText(text);
 };
 
-copyButton?.addEventListener("click", async () => {
-  try {
-    await copyText(commandText);
-    if (copyLabel) copyLabel.textContent = "Copied";
-    copyButton.setAttribute("aria-label", "Install command copied");
-  } catch {
-    if (installCommand instanceof HTMLElement) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(installCommand);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-    if (copyLabel) copyLabel.textContent = "Select text";
-  }
+const installCommands = {
+  homebrew: "brew install IvoryHeart/tap/herdr-world",
+  npm: "npm install --global @ivoryheart/herdr-world",
+  standalone:
+    "curl -fsSL https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh | sh",
+};
 
-  window.setTimeout(() => {
-    if (copyLabel) copyLabel.textContent = "Copy";
-    copyButton.setAttribute("aria-label", "Copy install command");
-  }, 1800);
-});
+for (const copyButton of document.querySelectorAll("[data-copy-command]")) {
+  const command = installCommands[copyButton.dataset.copyCommand];
+  if (!command) continue;
+  const copyLabel = copyButton.querySelector("span");
+  const installCommand = copyButton
+    .closest(".install-terminal")
+    ?.querySelector("[data-install-command]");
+  const originalLabel = copyButton.getAttribute("aria-label");
+
+  copyButton.addEventListener("click", async () => {
+    try {
+      await copyText(command);
+      if (copyLabel) copyLabel.textContent = "Copied";
+      copyButton.setAttribute("aria-label", "Install command copied");
+    } catch {
+      if (installCommand instanceof HTMLElement) {
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(installCommand);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      }
+      if (copyLabel) copyLabel.textContent = "Select text";
+    }
+
+    window.setTimeout(() => {
+      if (copyLabel) copyLabel.textContent = "Copy";
+      if (originalLabel) copyButton.setAttribute("aria-label", originalLabel);
+    }, 1800);
+  });
+}
 
 if (!reducedMotion.matches && window.matchMedia("(pointer: fine)").matches) {
   for (const element of document.querySelectorAll("[data-spotlight]")) {

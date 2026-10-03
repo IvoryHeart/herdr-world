@@ -21,6 +21,12 @@ are optional because the merged PR history records their source.
   projection and observation, full-observation paged search, honest coverage and
   cross-host window arrangements with independent restore baselines.
 
+- Added "Promoted to CEO", a 62-second animated film about Herdr World, to the website.
+  It plays in the browser with a synthesized soundtrack and no video download.
+
+- Added `agent:await` for foreground agent commands with bounded output, private
+  logs and preserved exit codes, plus repo-local Herdr Workflows operating guidance.
+
 ### Changed
 
 - Terminal input with a lost acknowledgement reports its original host and an
@@ -50,6 +56,17 @@ are optional because the merged PR history records their source.
   admitting matching layout controls through ordinary tasks after painting.
   Its canvas and text textures follow the visible viewport and device resolution
   while retaining the complete layout and two-axis navigation.
+- Removed the homepage film introduction so the video leads directly from the
+  navigation into the product content.
+- Removed CEO Mode from the homepage navigation and added a full-screen film
+  control. The film now shows the full website URL and npm install command.
+- Put the "Promoted to CEO" film first on the homepage, with a Home navigation
+  link. Its play overlay and controls now clear during playback.
+- Turned the product hero screenshot into a carousel of the six showcase views.
+- Moved installation closer to the top of the homepage and showed Homebrew,
+  npm, and standalone commands together.
+- Refreshed the website and README screenshots with the 0.2.0 interface, including
+  readable Files, Changes, and agent History examples.
 
 ## [0.2.0] - 2026-10-02
 
