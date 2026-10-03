@@ -82,13 +82,15 @@ export function HandoffQueue({
         className={`world-handoffs-trigger${waitingOnYou ? " has-questions" : ""}`}
         aria-expanded={open}
         aria-controls="world-handoffs-panel"
+        aria-label={`Handoffs: ${items.length} to review${waitingOnYou ? `, ${waitingOnYou} waiting on you` : ""}`}
+        title="Handoffs"
         onClick={() => setOpen((value) => !value)}
       >
-        Handoffs
-        <span
-          className="world-handoffs-count"
-          aria-label={`${items.length} to review`}
-        >
+        {/* Compact so the visual-view toolbar keeps room for search. */}
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M2 9.5V12.5a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V9.5M2 9.5 3.6 3.2a1 1 0 0 1 1-.7h6.8a1 1 0 0 1 1 .7L14 9.5M2 9.5h3.2l.8 1.6h4l.8-1.6H14" />
+        </svg>
+        <span className="world-handoffs-count" aria-hidden="true">
           {items.length}
         </span>
       </button>
