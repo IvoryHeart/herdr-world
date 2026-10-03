@@ -46,6 +46,15 @@ machine- and user-specific data untracked and use synthetic examples in tests.
 
 ## Run an optional visible team
 
+For HWF operating guidance, use the repo-local
+[Herdr Workflows skill](../.agents/skills/herdr-workflows/SKILL.md).
+Run long commands through `bun run agent:await --log .agents/hwf/check-001.log --
+bun run check` (choose a fresh log path). The helper blocks until completion,
+preserves the exit code and prints at most 8 KiB plus the full log path. Logs are
+local and ignored. Resume a running execution session with its blocking wait;
+do not run status probes alongside it. The helper forwards interrupts to its
+immediate child and does not clean up agent panes or unrelated processes.
+
 The repository includes an opt-in
 [Herdr Workflows recipe](../.hwf/workflows/agent-delivery.yaml) for two visible
 Codex agents. It uses a startup handshake, one implementation pass, independent
