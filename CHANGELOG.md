@@ -9,8 +9,22 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Removed the homepage film introduction so the video leads directly from the
+  navigation into the product content.
+- Removed CEO Mode from the homepage navigation and added a full-screen film
+  control. The film now shows the full website URL and a one-shot npm command.
+- Styled the homepage, film, and social preview cards as Herdr.World.
+- Put the "Promoted to CEO" film first on the homepage, with a Home navigation
+  link. Its play overlay and controls now clear during playback.
+- Turned the product hero screenshot into a carousel of the six showcase views.
+- Moved installation closer to the top of the homepage and showed Homebrew,
+  npm, and standalone commands together.
 - Refreshed the website and README screenshots with the 0.2.0 interface, including
   readable Files, Changes, and agent History examples.
+
+### Fixed
+
+- Kept the film's 16:9 picture from stretching in portrait fullscreen playback.
 
 ### Added
 

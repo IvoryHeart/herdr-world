@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#080b12">
-<title>Promoted to CEO - a Herdr World film</title>
-<meta name="description" content="A 62-second film about Herdr World: stop babysitting AI agents, start herding them.">
+<title>Promoted to CEO - a Herdr.World film</title>
+<meta name="description" content="A 62-second film about Herdr.World: stop babysitting AI agents, start herding them.">
 <meta property="og:type" content="video.other">
-<meta property="og:title" content="Promoted to CEO - a Herdr World film">
-<meta property="og:description" content="You hired 12 AI agents. They hired a babysitter. Herdr World promotes you to CEO.">
+<meta property="og:title" content="Promoted to CEO - a Herdr.World film">
+<meta property="og:description" content="You hired 12 AI agents. They hired a babysitter. Herdr.World promotes you to CEO.">
 <meta property="og:url" content="https://herdr.world/film/">
 <meta property="og:image" content="https://herdr.world/assets/herdr-world-film-poster.jpg">
 <meta property="og:image:width" content="1280">
@@ -56,12 +56,13 @@
     position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%;
     background: #000; border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
   }
-  canvas { display: block; width: 100%; height: 100%; }
+  canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
   .big-play {
     position: absolute; inset: 0; display: grid; place-items: center; gap: 0;
     background: radial-gradient(circle at 50% 50%, rgba(8,11,18,.15), rgba(8,11,18,.55));
     border: 0; cursor: pointer; color: var(--text);
   }
+  .big-play[hidden] { display: none; }
   .big-play .disc {
     width: clamp(64px, 11vw, 120px); aspect-ratio: 1; border-radius: 50%;
     background: var(--herd); display: grid; place-items: center;
@@ -71,11 +72,6 @@
   .big-play:hover .disc, .big-play:focus-visible .disc { transform: scale(1.06); }
   .big-play:focus-visible { outline: 3px solid var(--herd-bright); outline-offset: -3px; }
   .big-play svg { width: 42%; height: 42%; margin-left: 8%; fill: var(--void); }
-  .big-play .label {
-    position: absolute; bottom: 7%; left: 0; right: 0; text-align: center;
-    font: 700 clamp(11px, 1.3vw, 15px)/1 "Silkscreen", monospace; letter-spacing: .12em;
-    color: var(--soft); text-shadow: 0 2px 8px #000;
-  }
   .bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .bar button {
     font: 700 12px/1 "Silkscreen", "JetBrains Mono", monospace; letter-spacing: .08em;
@@ -99,21 +95,28 @@
   body.embed .bar {
     position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
     background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
-    opacity: 0; transition: opacity .2s ease;
+    opacity: 0; pointer-events: none; transition: opacity .2s ease;
   }
-  body.embed .stage:hover ~ .bar, body.embed .bar:hover, body.embed .bar:focus-within { opacity: 1; }
-  body.embed:not(.playing) .bar { opacity: 0; pointer-events: none; }
+  body.embed:not(.playing) .bar,
+  body.embed.playing.controls-visible .bar,
+  body.embed.playing .bar:focus-within { opacity: 1; pointer-events: auto; }
   body.embed .bar button { padding: 7px 10px; }
+  .wrap:fullscreen { width: 100vw; height: 100vh; max-width: none; display: block; background: #000; }
+  .wrap:fullscreen .eyebrow, .wrap:fullscreen .note { display: none; }
+  .wrap:fullscreen .stage { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+  .wrap:fullscreen .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="eyebrow"><a href="../">← Herdr World</a><span>Promoted to CEO · 62 s · sound on</span></div>
+  <div class="eyebrow"><a href="../">← Herdr.World</a><span>Promoted to CEO · 62 s · sound on</span></div>
   <div class="stage">
-    <canvas id="film" width="1920" height="1080" aria-label="Animated film: Promoted to CEO, about Herdr World"></canvas>
+    <canvas id="film" width="1920" height="1080" aria-label="Animated film: Promoted to CEO, about Herdr.World"></canvas>
     <button class="big-play" id="bigplay" type="button" aria-label="Play the film">
       <span class="disc"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l16 9-16 9z"/></svg></span>
-      <span class="label" id="biglabel">Play · Promoted to CEO</span>
     </button>
   </div>
   <div class="bar">
@@ -122,9 +125,10 @@
     <input id="scrub" type="range" min="0" max="620" value="619" aria-label="Seek">
     <span id="clock">1:02 / 1:02</span>
     <button id="mute" type="button" aria-pressed="false">Sound on</button>
+    <button id="fullscreen" type="button" aria-pressed="false">Full screen</button>
   </div>
   <p class="note">Everything here is drawn and scored live in your browser: canvas pixels and Web Audio, no video file.
-    Get Herdr World at <a href="../#install">herdr.world</a>.
+    Get Herdr.World at <a href="../#install">https://herdr.world</a>.
     Pixel characters are downscaled from the Claw-Empire sprite set (Apache-2.0). Fonts: Big Shoulders, JetBrains Mono and Silkscreen (<a href="./fonts/OFL.txt">SIL Open Font License 1.1</a>).</p>
 </div>
 
@@ -502,7 +506,7 @@ function drawOffice(t) {
   ctx.save(); ctx.translate(0, cy);
   ctx.fillStyle = '#0d111b'; ctx.fillRect(0, 0, W, 64); ctx.fillStyle = C.line; ctx.fillRect(0, 63, W, 1);
   logoTile(42, 32, 38);
-  text('Herdr World', 74, 41, 24, C.text, { weight: 700 });
+  text('Herdr.World', 74, 41, 24, C.text, { weight: 700 });
   fillRR(250, 14, 230, 36, 7, C.panel); strokeRR(250, 14, 230, 36, 7, C.line, 1.5); circle(270, 32, 6, C.green);
   text('laptop  Connected ▾', 286, 38, 16, C.soft, { weight: 700 });
   fillRR(496, 14, 150, 36, 7, C.panel); strokeRR(496, 14, 150, 36, 7, C.line, 1.5); text('Office ▾', 512, 38, 16, C.soft, { weight: 700 });
@@ -825,7 +829,7 @@ function S6(t) {
     const term = t >= 49.1;
     if (!term) {
       ctx.fillStyle = '#0d111b'; ctx.fillRect(sx, sy + 56, sw, 56);
-      logoTile(sx + 34, sy + 84, 30); text('Herdr World', sx + 58, sy + 91, 18, C.text, { weight: 700 });
+      logoTile(sx + 34, sy + 84, 30); text('Herdr.World', sx + 58, sy + 91, 18, C.text, { weight: 700 });
       fillRR(sx + 210, sy + 68, 180, 32, 6, C.panel); circle(sx + 226, sy + 84, 5, C.green); text('gpu-box ▾', sx + 240, sy + 90, 15, C.soft, { weight: 700 });
       ctx.save(); ctx.translate(sx - 30, sy + 130); ctx.scale(.42, .42); ctx.translate(-30, -90); drawOffice(46.8); ctx.restore();
       if (t >= 47.6) {
@@ -833,7 +837,7 @@ function S6(t) {
         const ny = sy + lerp(-140, 60, np);
         ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 30; fillRR(sx + 14, ny, sw - 28, 110, 22, 'rgba(36,44,64,.97)'); ctx.shadowBlur = 0;
         logoTile(sx + 50, ny + 40, 34);
-        text('HERDR WORLD', sx + 80, ny + 34, 14, C.muted, { fam: F.px, weight: 700 }); text('now', sx + sw - 40, ny + 34, 14, C.muted, { align: 'right' });
+        text('HERDR.WORLD', sx + 80, ny + 34, 14, C.muted, { fam: F.px, weight: 700 }); text('now', sx + sw - 40, ny + 34, 14, C.muted, { align: 'right' });
         text('reviewer needs input ?', sx + 80, ny + 64, 19, C.text, { weight: 700 });
         text('gpu-box · eval · codex', sx + 80, ny + 90, 16, C.soft);
         if (t >= 48.9) { const rp = seg(t, 48.9, 49.2); circle(sx + sw / 2, ny + 55, 30 + rp * 30, `rgba(255,255,255,${.35 * (1 - rp)})`); }
@@ -887,10 +891,10 @@ function S7(t) {
     if (t >= 56.2) {
       const lp = eback(seg(t, 56.2, 56.65));
       ctx.save(); ctx.translate(W / 2, 270); ctx.scale(lp, lp); logoTile(0, 0, 200, 1); ctx.restore();
-      withA(seg(t, 56.45, 56.8), () => text('Herdr World', W / 2, 520, 150, C.text, { fam: F.disp, weight: 900, align: 'center', ls: 2 }));
+      withA(seg(t, 56.45, 56.8), () => text('Herdr.World', W / 2, 520, 150, C.text, { fam: F.disp, weight: 900, align: 'center', ls: 2 }));
       if (t >= 56.9) {
         withA(seg(t, 56.9, 57.1), () => {
-          const cmd = 'brew install IvoryHeart/tap/herdr-world';
+          const cmd = 'npx @ivoryheart/herdr-world';
           const k = Math.floor(seg(t, 57.1, 58.8) * cmd.length);
           fillRR(W / 2 - 520, 580, 1040, 92, 14, C.panel); strokeRR(W / 2 - 520, 580, 1040, 92, 14, C.line, 2);
           text('$', W / 2 - 480, 640, 34, C.blue, { weight: 700 });
@@ -898,7 +902,7 @@ function S7(t) {
         });
       }
       withA(seg(t, 59.1, 59.5), () => {
-        text('herdr.world', W / 2, 768, 72, C.blueB, { fam: F.disp, weight: 900, align: 'center', ls: 2 });
+        text('https://herdr.world', W / 2, 768, 72, C.blueB, { fam: F.disp, weight: 900, align: 'center', ls: 2 });
         text('FREE AND OPEN SOURCE · MIT · MACOS · LINUX · WINDOWS', W / 2, 826, 22, C.muted, { fam: F.px, weight: 700, align: 'center', ls: 2 });
       });
     }
@@ -1037,6 +1041,7 @@ function schedule(c, out, from, base) {
 
 // ================= playback =================
 let audio = null, playing = false, cur = EMBED ? 0 : 61.95, offset = 0, t0perf = 0, muted = false;
+let controlsTimer = null;
 function startAudio(from) {
   stopAudio();
   try {
@@ -1052,19 +1057,30 @@ function ui() {
   $('mute').textContent = muted ? 'Sound off' : 'Sound on'; $('mute').setAttribute('aria-pressed', String(muted));
   $('clock').textContent = `${fmt(cur)} / ${fmt(DUR)}`; $('scrub').value = Math.round(cur * 10);
   $('bigplay').hidden = playing;
+  $('bigplay').setAttribute('aria-label', cur >= DUR - .1 ? 'Replay the film' : cur > 0 ? 'Resume the film' : 'Play the film');
+  const fullscreen = document.fullscreenElement === document.querySelector('.wrap');
+  $('fullscreen').textContent = fullscreen ? 'Exit full screen' : 'Full screen';
+  $('fullscreen').setAttribute('aria-pressed', String(fullscreen));
   document.body.classList.toggle('playing', playing);
+  if (!playing) document.body.classList.remove('controls-visible');
+}
+function showControls() {
+  if (!EMBED || !playing) return;
+  document.body.classList.add('controls-visible');
+  clearTimeout(controlsTimer);
+  controlsTimer = setTimeout(() => document.body.classList.remove('controls-visible'), 1800);
 }
 function play() {
   if (cur >= DUR - .1) cur = 0;
   offset = cur; t0perf = performance.now(); playing = true;
   if (!muted) startAudio(cur);
-  ui(); requestAnimationFrame(loop);
+  ui(); showControls(); requestAnimationFrame(loop);
 }
 function pause() { playing = false; stopAudio(); ui(); }
 function loop() {
   if (!playing) return;
   cur = offset + (performance.now() - t0perf) / 1000;
-  if (cur >= DUR) { cur = DUR - .05; playing = false; frame(cur); $('biglabel').textContent = 'Replay'; ui(); return; }
+  if (cur >= DUR) { cur = DUR - .05; playing = false; frame(cur); ui(); return; }
   frame(cur); ui(); requestAnimationFrame(loop);
 }
 function seek(t) { cur = clamp(t, 0, DUR - .05); frame(cur); if (playing) { offset = cur; t0perf = performance.now(); if (!muted) startAudio(cur); } ui(); }
@@ -1079,10 +1095,20 @@ ready.then(() => { frame(EMBED ? 12.8 : cur); ui(); });
 if (!RENDER) {
   $('bigplay').addEventListener('click', play);
   cv.addEventListener('click', () => { if (playing) pause(); });
+  if (EMBED) {
+    document.querySelector('.stage').addEventListener('pointermove', showControls);
+    document.querySelector('.bar').addEventListener('pointermove', showControls);
+  }
   $('play').addEventListener('click', () => playing ? pause() : play());
   $('restart').addEventListener('click', () => { cur = 0; if (playing) seek(0); else play(); });
   $('scrub').addEventListener('input', e => seek(e.target.value / 10));
   $('mute').addEventListener('click', () => { muted = !muted; if (playing) { muted ? stopAudio() : startAudio(cur); } ui(); });
+  $('fullscreen').hidden = !document.fullscreenEnabled;
+  $('fullscreen').addEventListener('click', async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.querySelector('.wrap').requestFullscreen();
+  });
+  document.addEventListener('fullscreenchange', ui);
   document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') { e.preventDefault(); playing ? pause() : play(); } });
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
 }
