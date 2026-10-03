@@ -12,7 +12,8 @@ are optional because the merged PR history records their source.
 - Removed the homepage film introduction so the video leads directly from the
   navigation into the product content.
 - Removed CEO Mode from the homepage navigation and added a full-screen film
-  control. The film now shows the full website URL and npm install command.
+  control. The film now shows the full website URL and a one-shot npm command.
+- Styled the homepage, film, and social preview cards as Herdr.World.
 - Put the "Promoted to CEO" film first on the homepage, with a Home navigation
   link. Its play overlay and controls now clear during playback.
 - Turned the product hero screenshot into a carousel of the six showcase views.
