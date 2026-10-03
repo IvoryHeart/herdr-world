@@ -1,6 +1,7 @@
 import { isConversationStep } from "./session-messages";
 import type { AtifStep, AtifTrajectory, SessionFile } from "./session-types";
-import { stableMessageId } from "./session-utils";
+import { createHash } from "node:crypto";
+import { basename } from "node:path";
 
 const MAX_ASK_CHARS = 600;
 const MAX_REPORT_CHARS = 2_400;
@@ -76,6 +77,24 @@ function editedPaths(step: AtifStep, into: Set<string>) {
   }
 }
 
+/** Agent steps that represent real work rather than projection bookkeeping. */
+function isProgress(step: AtifStep) {
+  return (
+    step.source === "agent" &&
+    (Boolean(step.tool_calls?.length) || !PLACEHOLDER.test(step.message.trim()))
+  );
+}
+
+/**
+ * Names the session file itself, not only its basename: some harnesses use
+ * the same file name for every session (for example, Kimi's `wire.jsonl`), so
+ * a basename alone would let one session's stop id collide with another's.
+ */
+function sessionKey(file: SessionFile) {
+  const digest = createHash("sha256").update(file.path).digest("hex");
+  return `${basename(file.path)}#${digest.slice(0, 12)}`;
+}
+
 export const FULL_REPORT_CHARS = 32_000;
 
 export function latestTurnReceipt(
@@ -112,10 +131,11 @@ export function latestTurnReceipt(
     editedPaths(step, files);
   }
   const started = time(askStep) ?? time(turn[0]);
-  // Later system records (hooks, resumes) do not extend the agent's work.
-  let ended: number | null = null;
-  for (let index = turn.length - 1; index >= 0 && ended === null; index -= 1)
-    if (turn[index].source === "agent") ended = time(turn[index]);
+  // The stop is the agent's last real progress. System records (hooks,
+  // resumes) and accounting placeholders such as a trailing usage record are
+  // bookkeeping: they neither extend the work nor create a new stop.
+  const stop = turn.findLast(isProgress);
+  const ended = time(stop);
   const listed = [...files];
   const fullReport = report
     ? clip(report.message, Number.MAX_SAFE_INTEGER)
@@ -125,8 +145,8 @@ export function latestTurnReceipt(
     // names the agent's latest step: each stop is a separate handoff. Trailing
     // system records (hooks, resumes) are bookkeeping and must not reopen a
     // reviewed stop.
-    turn_id: `${stableMessageId(file.path, askStep?.step_id ?? -1)}..${
-      turn.findLast((step) => step.source === "agent")?.step_id ?? "start"
+    turn_id: `${sessionKey(file)}:${askStep?.step_id ?? -1}..${
+      stop?.step_id ?? "start"
     }`,
     ask: askStep ? clip(askStep.message, MAX_ASK_CHARS) : null,
     report: fullReport === null ? null : clip(fullReport, reportChars),

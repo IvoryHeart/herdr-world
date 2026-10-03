@@ -51,7 +51,7 @@ describe("latestTurnReceipt", () => {
       ]),
     );
     expect(receipt).toMatchObject({
-      turn_id: "example.jsonl:2..6",
+      turn_id: expect.stringMatching(/^example\.jsonl#[0-9a-f]{12}:2\.\.6$/),
       ask: "Add retry backoff",
       report: "Added backoff; tests pass.",
       started_at: at(10),
@@ -106,6 +106,45 @@ describe("latestTurnReceipt", () => {
     );
     expect(first?.turn_id).not.toBe(second?.turn_id);
     expect(second?.report).toBe("Pushed.");
+  });
+
+  test("names stops from different sessions with the same file name apart", () => {
+    const steps = trajectory([
+      { source: "user", message: "Go", timestamp: at(0) },
+      { source: "agent", message: "Done.", timestamp: at(1) },
+    ]);
+    const first = latestTurnReceipt(
+      { path: "/a/agents/main/wire.jsonl", mtimeMs: 0 },
+      steps,
+    );
+    const second = latestTurnReceipt(
+      { path: "/b/agents/main/wire.jsonl", mtimeMs: 0 },
+      steps,
+    );
+    expect(first?.turn_id).not.toBe(second?.turn_id);
+  });
+
+  test("ignores a trailing usage record for the stop id and end time", () => {
+    const base: Omit<AtifStep, "step_id">[] = [
+      { source: "user", message: "Go", timestamp: at(0) },
+      { source: "agent", message: "Done", timestamp: at(1) },
+    ];
+    const stop = latestTurnReceipt(file, trajectory(base));
+    const withUsage = latestTurnReceipt(
+      file,
+      trajectory([
+        ...base,
+        {
+          source: "agent",
+          message: "Token usage",
+          timestamp: at(15),
+          metrics: { prompt_tokens: 10 },
+        },
+      ]),
+    );
+    expect(withUsage?.turn_id).toBe(stop?.turn_id);
+    expect(withUsage?.ended_at).toBe(stop?.ended_at);
+    expect(withUsage?.duration_ms).toBe(60_000);
   });
 
   test("keeps a stop's id across later system records", () => {

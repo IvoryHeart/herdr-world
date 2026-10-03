@@ -18,6 +18,7 @@ import {
   type SessionProjectionCache,
 } from "./session-projection-cache";
 import { HISTORY_WINDOW_LIMIT, redactHistoryUpdate } from "./session-history";
+import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 import { FULL_REPORT_CHARS, latestTurnReceipt } from "./turn-receipt";
 
 const MAX_MESSAGES_PER_AGENT = 200;
@@ -98,6 +99,24 @@ export function createAgentSessionHandlers(args: {
       return { entry_id: entry.id, text: entry.text };
     },
     readTurn: async (params: Record<string, unknown>) => {
+      // The caller names the agent session it is showing. The receipt is only
+      // published for that session: a replacement session in the same pane,
+      // before or during the read, yields no receipt rather than its text.
+      const expected =
+        typeof params.agent_session_fingerprint === "string" &&
+        /^[a-f0-9]{64}$/u.test(params.agent_session_fingerprint)
+          ? params.agent_session_fingerprint
+          : null;
+      const sessionIsCurrent = async () =>
+        expected === null ||
+        (await paneSessionFingerprint(args.herdrCall, params.pane_id)) ===
+          expected;
+      const changed = {
+        turn: null,
+        session_changed: true,
+        agent_session_fingerprint: expected,
+      };
+      if (!(await sessionIsCurrent())) return changed;
       const resolved = await resolveAgentSession(
         params,
         args.herdrCall,
@@ -106,18 +125,21 @@ export function createAgentSessionHandlers(args: {
       );
       if (!resolved.file) {
         cache.invalidate(resolved);
-        return { ...resolved, turn: null };
+        return { ...resolved, turn: null, agent_session_fingerprint: expected };
       }
       const projection = await cache.get(resolved);
+      const turn = latestTurnReceipt(
+        projection.file,
+        projection.trajectory,
+        params.full_report === true ? FULL_REPORT_CHARS : undefined,
+      );
+      if (!(await sessionIsCurrent())) return changed;
       return {
         ...resolved,
         file: projection.file,
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
-        turn: latestTurnReceipt(
-          projection.file,
-          projection.trajectory,
-          params.full_report === true ? FULL_REPORT_CHARS : undefined,
-        ),
+        agent_session_fingerprint: expected,
+        turn,
       };
     },
     readSummary: (params: Record<string, unknown>) =>
@@ -321,4 +343,32 @@ export async function downloadAgentSessionAtif(
       "x-agent-session-path": encodeURIComponent(resolved.file.path),
     },
   });
+}
+
+/** The fingerprint of the agent session Herdr currently reports for a pane. */
+async function paneSessionFingerprint(
+  herdrCall: HerdrCall,
+  paneId: unknown,
+): Promise<string | null> {
+  if (typeof paneId !== "string" || !paneId) return null;
+  const result = (await herdrCall("pane.get", { pane_id: paneId })) as Record<
+    string,
+    unknown
+  > | null;
+  const pane =
+    result && typeof result.pane === "object" && result.pane
+      ? (result.pane as Record<string, unknown>)
+      : result;
+  const session = pane?.agent_session as Record<string, unknown> | undefined;
+  if (
+    !session ||
+    pane?.pane_id !== paneId ||
+    ["source", "agent", "kind", "value"].some(
+      (key) => typeof session[key] !== "string" || !session[key],
+    )
+  )
+    return null;
+  return taskSummarySessionFingerprint(
+    session as { source: string; agent: string; kind: string; value: string },
+  );
 }
