@@ -390,6 +390,94 @@ async function run() {
     Boolean(card("remote-alpha")),
     "host filtering retains the remote Desk card",
   );
+
+  localStorage.clear();
+  let releaseSlow!: () => void;
+  const slowRead = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
+  const slowCalls: string[] = [];
+  const slowClient = {
+    ...remoteClient,
+    async call(method: string, params?: Record<string, unknown>) {
+      slowCalls.push(method);
+      await slowRead;
+      return remoteClient.call(method, params);
+    },
+  } as ConnectionClient;
+  const healthyCalls: string[] = [];
+  const healthyClient = {
+    ...client,
+    async call(method: string, params?: Record<string, unknown>) {
+      healthyCalls.push(method);
+      return client.call(method, params);
+    },
+  } as ConnectionClient;
+  const independent = (leaf: WorldLeafObject) =>
+    leaf.connectionId === "remote" ? slowClient : healthyClient;
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        key="slow-host"
+        world={{ ...filtered, leaves: [remote, leaves[0]] }}
+        client={independent}
+        onOpenTerminal={async () => {}}
+      />,
+    ),
+  );
+  await settle(500);
+  check(
+    card("alpha")?.textContent?.includes("Report from alpha") === true,
+    "a slow host does not delay another host's receipt or review controls",
+  );
+  const healthyReview = [
+    ...(card("alpha")?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"));
+  check(
+    Boolean(healthyReview) && !healthyReview!.disabled,
+    "the healthy host's review control becomes ready while the slow read is pending",
+  );
+  check(
+    healthyCalls.includes("pane.read"),
+    "the healthy host's screen is read while another host is pending",
+  );
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        key="slow-host"
+        world={{
+          ...filtered,
+          leaves: [{ ...remote, status: "blocked" }, leaves[0]],
+        }}
+        client={independent}
+        onOpenTerminal={async () => {}}
+      />,
+    ),
+  );
+  await settle(200);
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "hidden",
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle(200);
+  check(
+    slowCalls.filter((method) => method === "agent_turn.get").length === 1 &&
+      slowCalls.filter((method) => method === "pane.read").length === 1,
+    "status and visibility changes do not overlap reads on a pending host",
+  );
+  await settle(4400);
+  check(
+    healthyCalls.filter((method) => method === "pane.read").length >= 2,
+    "healthy screen polling continues independently of the slow host",
+  );
+  releaseSlow();
+  await settle(200);
 }
 
 run()

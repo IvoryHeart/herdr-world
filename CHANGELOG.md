@@ -37,6 +37,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Desk receipt and screen queues run independently by host and share bounded
+  read capacity across equally urgent hosts, so slow hosts leave healthy agents
+  available for review and live observation.
+
 - Inspector tab shortcuts restore the destination tab's selected pane and refresh
   unobserved panes. File preview and Changes cache invalidation follows runtime
   generations even when browser transport epochs differ. Mutations whose response

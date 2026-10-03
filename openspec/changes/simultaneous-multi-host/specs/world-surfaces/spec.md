@@ -1233,7 +1233,9 @@ Desk SHALL remain the default view and SHALL triage current actionable agents fr
 Its receipts, full reports and screen reads SHALL target each leaf's immutable connection ID and
 runtime generation. Failed or retired hosts SHALL NOT redirect reads to another host or prevent
 healthy hosts from being read. Receipt and screen reads SHALL retain their global bounds of 40 and
-16 agents respectively. Review marks, observed stops and recent opens SHALL use connection,
+16 agents respectively, with fair capacity among equally urgent hosts and independent
+per-host queues. Pending reads SHALL retain active admission until settlement; refreshes and
+visibility changes SHALL coalesce queued work without overlapping reads on the same host. Review marks, observed stops and recent opens SHALL use connection,
 runtime, pane and agent session identities across host filter and operational focus changes.
 Hosts outside the filter SHALL remain read-only aggregate summaries.
 
@@ -1247,3 +1249,10 @@ Hosts outside the filter SHALL remain read-only aggregate summaries.
 
 - **WHEN** a receipt, full report or screen read completes after its runtime is retired
 - **THEN** its result is not published and healthy hosts remain independently readable
+
+
+#### Scenario: Slow Desk host alongside a healthy host
+
+- **WHEN** a filtered host's receipt or screen read remains pending
+- **THEN** another host's receipts, review controls and screen polling progress independently,
+  and equally urgent hosts share the bounded read admission fairly
