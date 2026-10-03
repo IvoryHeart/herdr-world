@@ -79,6 +79,10 @@ export type WorldLeafObject = WorldObjectBase & {
   tabLabel?: string;
   tabNumber?: number;
   agentLabel?: string;
+  /** The live name supplied to Herdr when the agent was started. */
+  agentName?: string;
+  /** The harness title for its thread, from the terminal title. */
+  terminalTitle?: string;
   modelLabel?: string;
   taskSummary?: string;
   agentSessionIdentity?: string;
@@ -130,6 +134,24 @@ function boundedCodePointPrefix(value: string, limit: number) {
     length += 1;
   }
   return result;
+}
+
+export function agentThreadTitle(
+  value: unknown,
+  agent: unknown,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const cleaned = value
+    .replace(/^[\s\u2800-\u28ff✳✶✻✽✢·*•◐◓◑◒⏺]+/u, "")
+    .split(" | ")[0]
+    ?.trim();
+  if (!cleaned) return undefined;
+  if (
+    typeof agent === "string" &&
+    cleaned.toLowerCase() === agent.toLowerCase()
+  )
+    return undefined;
+  return boundedCodePointPrefix(cleaned, 120);
 }
 
 export function boundedOptionalText(
@@ -774,6 +796,16 @@ function* constructHost(
             100,
           )
         : undefined;
+      const agentName = isAgent
+        ? boundedOptionalText(agentMetadata?.name, 100)
+        : undefined;
+      const terminalTitle = isAgent
+        ? agentThreadTitle(
+            agentMetadata?.terminal_title_stripped ??
+              agentMetadata?.terminal_title,
+            pane.agent,
+          )
+        : undefined;
       const modelLabel = isAgent
         ? boundedOptionalText(
             pane.model_name ??
@@ -832,6 +864,8 @@ function* constructHost(
           ? { tabNumber: tab?.number }
           : {}),
         ...(agentLabel ? { agentLabel } : {}),
+        ...(agentName ? { agentName } : {}),
+        ...(terminalTitle ? { terminalTitle } : {}),
         ...(modelLabel ? { modelLabel } : {}),
         ...(taskSummary ? { taskSummary } : {}),
         ...(agentSessionIdentity ? { agentSessionIdentity } : {}),

@@ -4599,6 +4599,70 @@ async function run() {
     "Open all changed a Herdr tab, pane, or session",
   );
 
+  // Desk: previewing the next agent in the docked reading pane must keep
+  // keyboard focus in the queue, so triage keys never reach a terminal.
+  const deskViewSelect = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="World view"]',
+  );
+  Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  )?.set?.call(deskViewSelect, "desk");
+  deskViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+  await until(() => Boolean(document.querySelector(".desk")), "Desk view");
+  // Earlier steps leave every terminal window open and arranged; close them
+  // so the reading pane docks instead of joining the arrangement.
+  await arrangeWindows("Close all terminal windows");
+  [...document.querySelectorAll<HTMLButtonElement>(".desk-modes button")]
+    .find((button) => button.textContent?.startsWith("Agents"))
+    ?.click();
+  const deskRows = () => [
+    ...document.querySelectorAll<HTMLButtonElement>(".desk-row"),
+  ];
+  await until(() => deskRows().length >= 2, "Desk Agents rows");
+  deskRows()[0]?.click();
+  await new Promise((resolve) => window.setTimeout(resolve, 1500));
+  check(
+    Boolean(document.querySelector(".desk.has-reading")),
+    `Desk reading pane did not open: rail=${Boolean(document.querySelector(".world-context-rail.has-inspector"))} layoutContext=${Boolean(document.querySelector(".world-view-layout.has-context"))} floating=${document.querySelectorAll('[role="dialog"][aria-label$=" Inspector"]').length} inspector=${document.querySelectorAll(".workspace-inspector").length} rows=${deskRows().length} error=${document.querySelector(".desk-error")?.textContent ?? ""} width=${window.innerWidth}`,
+  );
+  const firstRow = deskRows()[0]!;
+  firstRow.focus();
+  await settle();
+  firstRow.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "j", bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => window.setTimeout(resolve, 900));
+  const readingRow = document.querySelector<HTMLElement>(
+    ".desk-row.is-reading",
+  );
+  check(
+    Boolean(readingRow) &&
+      readingRow?.dataset.deskCard !== firstRow.dataset.deskCard,
+    "Desk preview did not show the next agent in the reading pane",
+  );
+  // Returning to the agent opened first, whose pane is Herdr's selected pane,
+  // must not focus its terminal either.
+  document.activeElement?.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "k", bubbles: true, cancelable: true }),
+  );
+  await new Promise((resolve) => window.setTimeout(resolve, 900));
+  const deskActive = document.activeElement;
+  check(
+    Boolean(deskActive?.closest(".desk")) && !deskActive?.closest(".xterm"),
+    `Desk preview moved keyboard focus out of the queue (active: ${deskActive?.tagName}.${deskActive?.className})`,
+  );
+
+  const officeViewSelect = document.querySelector<HTMLSelectElement>(
+    'select[aria-label="World view"]',
+  );
+  Object.getOwnPropertyDescriptor(
+    HTMLSelectElement.prototype,
+    "value",
+  )?.set?.call(officeViewSelect, "office");
+  officeViewSelect?.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle();
+
   runtimeGeneration += 1;
   worldRevision += 1;
   __storeTesting.applyCatalog(

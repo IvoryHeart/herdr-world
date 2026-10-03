@@ -11,6 +11,7 @@ import {
 } from "./agent-sessions";
 import type { AgentSessionFileAccess } from "./session-file-access";
 import type { HerdrCall } from "./session-types";
+import { taskSummarySessionFingerprint } from "../herdr/task-summary";
 
 const tempDirectories: string[] = [];
 const remotePiSessionPath = "/srv/herdr-gui-test/sessions/pi-session.jsonl";
@@ -461,5 +462,37 @@ describe("Pi agent sessions", () => {
       session_id: sessionId,
       agent: { name: "antigravity-cli" },
     });
+  });
+});
+
+describe("agent_turn.get session fence", () => {
+  const session = (value: string) => ({
+    source: "herdr:codex",
+    agent: "codex",
+    kind: "id",
+    value,
+  });
+  const fingerprint = (value: string) =>
+    taskSummarySessionFingerprint(session(value));
+
+  test("returns no receipt when the pane now runs another session", async () => {
+    const calls: string[] = [];
+    const handlers = createAgentSessionHandlers({
+      herdrCall: async (method) => {
+        calls.push(method);
+        if (method === "pane.get")
+          return { pane: { pane_id: "p1", agent_session: session("B") } };
+        throw new Error(`unexpected ${method}`);
+      },
+      files: {} as AgentSessionFileAccess,
+    });
+    const result = (await handlers.readTurn({
+      pane_id: "p1",
+      agent: "codex",
+      agent_session_fingerprint: fingerprint("A"),
+    })) as { turn: unknown; session_changed?: boolean };
+    expect(result.turn).toBeNull();
+    expect(result.session_changed).toBe(true);
+    expect(calls).toEqual(["pane.get"]);
   });
 });

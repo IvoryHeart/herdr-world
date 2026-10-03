@@ -9,12 +9,20 @@ are optional because the merged PR history records their source.
 
 ### Breaking Changes
 
-- Hosts now filters an aggregate Office, Tree and Graph view instead of selecting
+- Hosts now filters an aggregate Desk, Office, Tree and Graph view instead of selecting
   one operational host. Manage connections remains separate. Open Inspectors,
   terminals and resources retain their qualified host across filter and focus
   changes; global creation confirms a single destination.
 
 ### Added
+
+- Added the Desk, now the default view, with triage across filtered hosts and
+  connection-qualified receipt and screen reads. It sorts agents into Needs you, To review,
+  and In flight. Each card shows the agent's question, report, or live terminal
+  line, and the turn's request, duration, and edited files. The cards support
+  keyboard triage. Agents and Reviewed modes, one search across them, and Undo
+  after marking keep every agent and reviewed stop one step away. On wide
+  screens, agents open in a docked reading pane beside a one-column queue.
 
 - Concurrent local/SSH terminal and Inspector contexts over one World origin,
   host-local retirement, qualified notification reveal, fair bounded multi-host

@@ -36,7 +36,7 @@ describe("terminalFocusBlockedByOverlay", () => {
     expect(
       terminalFocusBlockedByOverlay(
         elementMatching([
-          '[data-radix-popper-content-wrapper], .modal-backdrop, .workspace-tree-panel, .workspace-inspector, .annotation-panel, .tabbar-utilities, .mobile-nav, .pane-jump-backdrop, .popup-overlay-backdrop, [role="dialog"], [role="menu"]',
+          '[data-radix-popper-content-wrapper], .modal-backdrop, .workspace-tree-panel, .workspace-inspector, .annotation-panel, .tabbar-utilities, .mobile-nav, .pane-jump-backdrop, .popup-overlay-backdrop, [role="dialog"], [role="menu"], [data-terminal-focus-guard]',
         ]),
         doc,
       ),
@@ -73,4 +73,15 @@ describe("terminal pointer focus", () => {
     expect(terminalTouchShouldDismissInput(true, false, false)).toBe(false);
     expect(terminalTouchShouldDismissInput(false, false, true)).toBe(false);
   });
+});
+
+test("streaming output does not take focus from a guarded surface such as the Desk queue", () => {
+  const doc = { querySelector: () => null };
+  const inQueue = {
+    closest: (selector: string) =>
+      selector.includes("[data-terminal-focus-guard]") ? ({} as Element) : null,
+  };
+  const elsewhere = { closest: () => null };
+  expect(terminalFocusBlockedByOverlay(inQueue, doc)).toBe(true);
+  expect(terminalFocusBlockedByOverlay(elsewhere, doc)).toBe(false);
 });

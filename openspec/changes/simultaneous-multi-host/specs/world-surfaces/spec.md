@@ -9,11 +9,11 @@ exactly once as an agent or terminal child of its owning space. Equal native ide
 different connections SHALL remain distinct. A pane SHALL retain stable terminal-backed identity
 when its agent classification, label, status or focus changes.
 
-Spaces, Office, Tree and Graph SHALL consume the same connection and generation identities and
+Desk, Spaces, Office, Tree and Graph SHALL consume the same connection and generation identities and
 reuse shell-owned Inspector resources and terminal ownership. Selection SHALL not itself mutate
 Herdr. All managed hosts SHALL be observed independently of the browser's view filter.
 
-Office, Tree and Graph SHALL present the aggregate filtered by All hosts or an explicit set of
+Desk, Office, Tree and Graph SHALL present the aggregate filtered by All hosts or an explicit set of
 managed hosts. Counts and search SHALL use the same filter and distinguish current, stale and
 omitted observations. Every managed host in scope SHALL retain a qualified root, including offline
 hosts without children. A host filter SHALL NOT connect, disconnect, select an operational runtime,
@@ -1225,3 +1225,25 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 #### Scenario: Follow a stale notification
 - **WHEN** a notification's runtime generation or agent session has been replaced
 - **THEN** World reports the original target as unavailable and does not open its replacement
+
+
+### Requirement: Aggregate Desk triage
+
+Desk SHALL remain the default view and SHALL triage current actionable agents from the host filter.
+Its receipts, full reports and screen reads SHALL target each leaf's immutable connection ID and
+runtime generation. Failed or retired hosts SHALL NOT redirect reads to another host or prevent
+healthy hosts from being read. Receipt and screen reads SHALL retain their global bounds of 40 and
+16 agents respectively. Review marks, observed stops and recent opens SHALL use connection,
+runtime, pane and agent session identities across host filter and operational focus changes.
+Hosts outside the filter SHALL remain read-only aggregate summaries.
+
+#### Scenario: Colliding agent panes on filtered hosts
+
+- **WHEN** two filtered hosts expose the same native pane ID
+- **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
+  stop does not mark the other host's stop reviewed
+
+#### Scenario: A Desk read completes after host retirement
+
+- **WHEN** a receipt, full report or screen read completes after its runtime is retired
+- **THEN** its result is not published and healthy hosts remain independently readable

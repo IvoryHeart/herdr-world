@@ -13,7 +13,7 @@ selection acting as a view filter and each operation targeting its owning runtim
 - Admit concurrent, independently qualified browser contexts for terminals,
   Inspectors and workspace operations. Opening another host or changing filters
   does not retire unrelated contexts or redirect pending operations.
-- Present aggregate Office, Tree and Graph views with consistent filters, search,
+- Present aggregate Desk, Office, Tree and Graph views with consistent filters, search,
   counts, host labels, observation coverage and explicit overflow reporting.
 - Route resource, launcher, navigation, notification and keyboard actions through
   explicit entity contexts. Creation without an owning entity names a destination.

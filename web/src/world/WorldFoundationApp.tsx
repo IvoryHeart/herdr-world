@@ -96,6 +96,7 @@ import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
+import { DeskView, useMediaQuery } from "./DeskView";
 import {
   defaultFloatingTerminalGeometry,
   FLOATING_TERMINAL_MIN_SIZE,
@@ -174,10 +175,17 @@ const OfficeObservabilityDialog = lazyWithReload("world-observability", () =>
   })),
 );
 
-export type WorldView = "spaces" | "office" | "tree" | "graph";
+export type WorldView = "desk" | "spaces" | "office" | "tree" | "graph";
 
-const WORLD_VIEWS: readonly WorldView[] = ["office", "spaces", "tree", "graph"];
+const WORLD_VIEWS: readonly WorldView[] = [
+  "desk",
+  "office",
+  "spaces",
+  "tree",
+  "graph",
+];
 const WORLD_VIEW_PATHS: Record<WorldView, string> = {
+  desk: "/desk",
   spaces: "/spaces",
   office: "/office",
   tree: "/tree",
@@ -300,14 +308,15 @@ function inspectorViewportBounds() {
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
     ? (value as WorldView)
-    : "office";
+    : "desk";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
   if (pathname === "/spaces") return "spaces";
   if (pathname === "/tree") return "tree";
   if (pathname === "/graph") return "graph";
-  return "office";
+  if (pathname === "/office") return "office";
+  return "desk";
 }
 
 export function worldSelectionIsCurrent(
@@ -464,7 +473,7 @@ export default function WorldFoundationApp() {
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
     () => {
       const initial = initialView();
-      return initial === "spaces" ? "office" : initial;
+      return initial === "spaces" ? "desk" : initial;
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
@@ -927,6 +936,7 @@ function WorldControlPlane({
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
   const watchlist = useWorldWatchlist(watchlistStore);
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const deskReadingPane = useMediaQuery("(min-width: 981px)");
   useEffect(() => {
     watchlistStore.start();
     return () => watchlistStore.stop();
@@ -2311,7 +2321,10 @@ function WorldControlPlane({
           dockedInspectorIdRef.current = worldInspectorWindowId(admitted);
           onDockedInspectorIdChange(worldInspectorWindowId(admitted));
           if (admitted.view === "terminal") {
-            focusInspectorTerminal(worldInspectorWindowId(admitted));
+            // A preview (focusTarget false) shows the terminal without taking
+            // keyboard focus; only an explicit open focuses it.
+            if (focusTarget)
+              focusInspectorTerminal(worldInspectorWindowId(admitted));
           }
           return true;
         }
@@ -2326,7 +2339,10 @@ function WorldControlPlane({
           onInspectorConversationsChange(nextConversations);
         }
         if (admitted.view === "terminal") {
-          focusInspectorTerminal(worldInspectorWindowId(admitted));
+          // A preview (focusTarget false) shows the terminal without taking
+          // keyboard focus; only an explicit open focuses it.
+          if (focusTarget)
+            focusInspectorTerminal(worldInspectorWindowId(admitted));
         }
       } catch (cause) {
         if (intentRequestRef.current === requestId) {
@@ -2384,7 +2400,10 @@ function WorldControlPlane({
         worldInspectorWindowId(admittedConversation);
       onDockedInspectorIdChange(worldInspectorWindowId(admittedConversation));
       if (admittedConversation.view === "terminal") {
-        focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
+        // A preview (focusTarget false) shows the terminal without taking
+        // keyboard focus; only an explicit open focuses it.
+        if (focusTarget)
+          focusInspectorTerminal(worldInspectorWindowId(admittedConversation));
       }
     } catch (cause) {
       if (intentRequestRef.current === requestId) {
@@ -2872,6 +2891,16 @@ function WorldControlPlane({
     }
   };
 
+  // Preview an agent in the Desk's reading pane without moving keyboard focus
+  // out of the queue; opening (above) also focuses its terminal.
+  const previewTerminalById = async (id: string) => {
+    if (!world.nodeById.get(id)) return;
+    await applySelection(id, "terminal", false, world);
+  };
+  const closeDeskReading = () => {
+    void applySelection(null);
+  };
+
   const openTerminalById = async (id: string, signal?: AbortSignal) => {
     if (signal?.aborted) throw new Error("Terminal activation was superseded");
     const node = world.nodeById.get(id);
@@ -2883,10 +2912,14 @@ function WorldControlPlane({
           worldInspectorWindowIdForNode(node),
       );
       if (
-        view === "office" &&
-        (officeInspectorPresentation === "docked" ||
-          (existing &&
-            worldInspectorWindowId(existing) === dockedInspectorIdRef.current))
+        // On wide screens the Desk reads agents in the docked Inspector beside
+        // its queue; phones keep the full-screen floating Inspector.
+        (view === "desk" && deskReadingPane) ||
+        (view === "office" &&
+          (officeInspectorPresentation === "docked" ||
+            (existing &&
+              worldInspectorWindowId(existing) ===
+                dockedInspectorIdRef.current)))
       ) {
         if (!(await applySelection(id, "terminal", true, world, signal))) {
           throw new Error("This terminal could not be opened");
@@ -3390,7 +3423,20 @@ function WorldControlPlane({
                 }
               >
                 <WorldViewErrorBoundary key={view}>
-                  {view === "office" ? (
+                  {view === "desk" ? (
+                    <DeskView
+                      world={world}
+                      aggregate={aggregateWorld}
+                      onOpenTerminal={openTerminalById}
+                      reading={
+                        deskReadingPane && contextRailInspector
+                          ? contextRailInspector.nodeId
+                          : null
+                      }
+                      onPreview={deskReadingPane ? previewTerminalById : null}
+                      onCloseReading={closeDeskReading}
+                    />
+                  ) : view === "office" ? (
                     <Suspense
                       fallback={
                         <div className="world-view-loading">

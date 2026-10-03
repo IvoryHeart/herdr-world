@@ -5,6 +5,27 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
+- **Desk** is the default view. It organizes the filtered hosts' agents by what
+  they need from you rather than where they run:
+  - **Needs you** lists blocked agents, oldest first, with the question and choices
+    read from the agent's screen.
+  - **To review** lists finished turns with your request, the agent's closing
+    report, how long it ran, its tool calls and the files it edited, all read from
+    the session transcript. **Mark reviewed** (`E`) clears a turn in this browser.
+  - **In flight** lists working agents with their current request and a live line
+    from each terminal. Quiet agents collapse below.
+  - **Agents** lists every agent in the host filter, those you recently opened from the
+    Desk first, then each workspace by recent activity. **Reviewed** lists the
+    stops you marked, newest first, with **Reopen**; marking offers **Undo**.
+  - On wide screens, opening a card docks that agent's Inspector (terminal,
+    files, changes, history) beside the Desk as a reading pane and folds the lanes
+    into one queue. `J`/`K` preview the next agent there, `Enter` moves into its
+    terminal and `Esc` closes the pane. Phones open the Inspector full screen.
+  - One search (`/`) filters every mode by agent name, thread title, harness,
+    workspace, tab, folder, request and report. Agents are named by the thread
+    title their harness writes to the terminal when they have no Herdr name.
+  - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
+    answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.

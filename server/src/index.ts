@@ -215,6 +215,7 @@ const IMPORTANT_RPC_METHODS = new Set([
   "agent_history.get",
   "agent_history.entry",
   "agent_session.get",
+  "agent_turn.get",
   "agent_checkout.get",
   "file.read",
   "git.diff_file",
@@ -1027,6 +1028,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     readHistory: readAgentMessageHistory,
     readSummary: readAgentSessionSummary,
     readEntry: readAgentHistoryEntry,
+    readTurn: readAgentTurn,
   } = connection.agentSessions;
 
   if (
@@ -1083,6 +1085,15 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
       sendReply({ id, result }, "agent-session-get");
     } catch (e) {
       sendError("agent-session-get-error", e);
+    }
+    return;
+  }
+  if (method === "agent_turn.get") {
+    try {
+      const result = await readAgentTurn(params ?? {});
+      sendReply({ id, result }, "agent-turn-get");
+    } catch (e) {
+      sendError("agent-turn-get-error", e);
     }
     return;
   }

@@ -5,7 +5,7 @@
 </p>
 
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
-hosts, see their agents together in Office, Tree or Graph, and use independently
+hosts, see their agents together in Desk, Office, Tree or Graph, and use independently
 qualified terminals, files, changes and agent history on desktop or mobile.
 **Requires a running Herdr server.**
 
@@ -15,7 +15,8 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Office groups agent work by host. Tree and Graph show the same filtered aggregate,
+Desk is the default view for agent triage across filtered hosts. Office groups agent
+work by host. Tree and Graph show the same filtered aggregate,
 while Spaces keeps one qualified workspace's terminal and repository workflow
 one click away. Hosts defaults to All hosts; filtering changes visibility while
 open Inspectors and pending operations keep their captured owners.
