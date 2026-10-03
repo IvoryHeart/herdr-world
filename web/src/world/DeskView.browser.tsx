@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { ConnectionClient } from "../api";
 import "../styles/tokens.css";
 import "../styles/base.css";
+import { terminalFocusBlockedByOverlay } from "../terminalFocus";
 import { DeskBoard } from "./DeskView";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
 
@@ -216,11 +217,26 @@ async function run() {
   );
   card("alpha")?.focus();
   await settle();
+  // A streaming terminal in the reading pane must not take focus from here.
+  check(
+    terminalFocusBlockedByOverlay(document.activeElement, document),
+    "terminal autofocus is blocked while focus is in the Desk queue",
+  );
   press(card("alpha")!, "j");
-  await settle();
+  await settle(300);
   check(
     previewed.join(",") === "gamma",
     `J previewed the next agent (previewed: ${previewed.join(",")})`,
+  );
+  // Rapid moves preview only where the operator stops.
+  previewed.length = 0;
+  press(document.activeElement!, "k");
+  press(document.activeElement!, "j");
+  press(document.activeElement!, "k");
+  await settle(300);
+  check(
+    previewed.join(",") === "alpha",
+    `rapid moves previewed once, at the final agent (previewed: ${previewed.join(",")})`,
   );
   press(document.activeElement!, "Escape");
   await settle();

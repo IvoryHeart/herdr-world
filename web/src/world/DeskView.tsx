@@ -234,6 +234,7 @@ const DESK_MODES: { mode: DeskMode; label: string }[] = [
   { mode: "reviewed", label: "Reviewed" },
 ];
 const RECENT_LIMIT = 6;
+const PREVIEW_DELAY_MS = 150;
 
 /** The folder an agent works in, which tells same-named tabs apart. */
 export function agentFolder(leaf: WorldLeafObject) {
@@ -505,6 +506,8 @@ export function DeskBoard({
     world.hosts.find((host) => host.selectedHost)?.label ?? "this host";
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
+  const previewTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(previewTimer.current), []);
   const lastFocusIndex = useRef(0);
   const focusIndex = focusIndexOf(order, focusedId, lastFocusIndex.current);
   lastFocusIndex.current = focusIndex;
@@ -582,8 +585,17 @@ export function DeskBoard({
           order[Math.min(order.length - 1, Math.max(0, focusIndex + step))];
         if (!next) return;
         setFocusedId(next.leaf.id);
-        // With the reading pane open, moving previews the next agent there.
-        if (reading && onPreview) void onPreview(next.leaf.id).catch(() => {});
+        // With the reading pane open, moving previews the next agent there,
+        // once the operator pauses: holding J must not attach a terminal for
+        // every agent it passes.
+        if (reading && onPreview) {
+          window.clearTimeout(previewTimer.current);
+          const id = next.leaf.id;
+          previewTimer.current = window.setTimeout(
+            () => void onPreview(id).catch(() => {}),
+            PREVIEW_DELAY_MS,
+          );
+        }
         // Keep DOM focus on the highlighted card so Enter and E act on it.
         rootRef.current
           ?.querySelector<HTMLElement>(
@@ -836,6 +848,10 @@ export function DeskBoard({
     <div
       className={`desk is-${mode}${reading ? " has-reading" : ""}`}
       ref={rootRef}
+      // Focusable so a click anywhere in the queue keeps keyboard focus here,
+      // and guarded so a streaming terminal in the reading pane cannot take it.
+      tabIndex={-1}
+      data-terminal-focus-guard=""
     >
       <header className="desk-top">
         <div className="desk-summary" aria-label="Attention summary">

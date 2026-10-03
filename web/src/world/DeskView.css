@@ -2,6 +2,9 @@
   padding: 0;
   overflow: hidden;
 }
+.desk:focus {
+  outline: none;
+}
 .desk {
   --desk-needs: #ffb454;
   --desk-review: #9ece6a;
