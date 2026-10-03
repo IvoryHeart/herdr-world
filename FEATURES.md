@@ -14,6 +14,12 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     the session transcript. **Mark reviewed** (`E`) clears a turn in this browser.
   - **In flight** lists working agents with their current request and a live line
     from each terminal. Quiet agents collapse below.
+  - **Agents** lists every agent on the host, those you recently opened from the
+    Desk first, then each workspace by recent activity. **Reviewed** lists the
+    stops you marked, newest first, with **Reopen**; marking offers **Undo**.
+  - One search (`/`) filters every mode by agent name, thread title, harness,
+    workspace, tab, folder, request and report. Agents are named by the thread
+    title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
     answer, review, or watch. Other managed hosts appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,

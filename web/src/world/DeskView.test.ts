@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+  agentDirectory,
   deskShortcut,
   focusIndexOf,
+  matchesQuery,
   otherHostSummaries,
   partitionDesk,
 } from "./DeskView";
+import { agentThreadTitle } from "./worldObject";
 import {
   advanceObservedStops,
   answersSession,
@@ -264,6 +267,22 @@ describe("receipt currency", () => {
     expect(state.current).toBe(false);
   });
 
+  test("a second failure for the same state settles on the previous receipt", () => {
+    const previous = receiptAfterRead(
+      receipt("earlier", 5),
+      receiptTrigger(agent("working")),
+    );
+    const trigger = receiptTrigger(agent("done"));
+    const settled = receiptAfterError(
+      receiptAfterError(previous, trigger, 1),
+      trigger,
+      2,
+    );
+    const state = receiptStateOf(settled, agent("done"), true);
+    expect(state.receipt?.turn_id).toBe("earlier");
+    expect(state.current).toBe(true);
+  });
+
   test("agents outside the read bound are never pending", () => {
     expect(receiptStateOf(undefined, agent("done"), false)).toEqual({
       receipt: null,
@@ -368,5 +387,52 @@ describe("other-host summaries", () => {
         working: 1,
       },
     ]);
+  });
+});
+
+describe("finding agents", () => {
+  const named = (id: string, extra: Partial<WorldLeafObject>) =>
+    ({
+      ...leaf(id, "idle"),
+      spaceLabel: "herdr-world",
+      tabLabel: "4",
+      pane: { pane_id: id, cwd: "/work/herdr-world" },
+      ...extra,
+    }) as WorldLeafObject;
+
+  test("matches every word across title, tab, folder and request", () => {
+    const agent = named("a", { terminalTitle: "Fix mobile viewport layout" });
+    expect(matchesQuery(agent, null, "mobile layout")).toBe(true);
+    expect(matchesQuery(agent, null, "herdr-world 4")).toBe(true);
+    expect(matchesQuery(agent, receipt("t", 1), "do the thing")).toBe(true);
+    expect(matchesQuery(agent, null, "mobile billing")).toBe(false);
+  });
+
+  test("lists recent opens first and orders workspaces by their latest agent", () => {
+    const old = named("old", { spaceLabel: "career" });
+    const fresh = named("fresh", { spaceLabel: "herdr-world" });
+    const middle = named("middle", { spaceLabel: "career" });
+    const active: Record<string, number> = { old: 1, fresh: 30, middle: 20 };
+    const opened: Record<string, number> = { old: 50 };
+    const { recent, groups } = agentDirectory(
+      [old, fresh, middle],
+      (agent) => active[agent.id] ?? null,
+      (agent) => opened[agent.id] ?? null,
+    );
+    expect(recent.map((agent) => agent.id)).toEqual(["old"]);
+    expect(
+      groups.map((group) => [group.workspace, group.agents.map((a) => a.id)]),
+    ).toEqual([
+      ["herdr-world", ["fresh"]],
+      ["career", ["middle", "old"]],
+    ]);
+  });
+
+  test("reads the harness thread title from the terminal title", () => {
+    expect(
+      agentThreadTitle("⠋ Fix mobile viewport layout | herdr-world", "codex"),
+    ).toBe("Fix mobile viewport layout");
+    expect(agentThreadTitle("codex", "codex")).toBeUndefined();
+    expect(agentThreadTitle(undefined, "codex")).toBeUndefined();
   });
 });

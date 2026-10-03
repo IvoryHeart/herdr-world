@@ -31,7 +31,8 @@ are optional because the merged PR history records their source.
 - Added the Desk, now the default view. It sorts agents into Needs you, To review,
   and In flight. Each card shows the agent's question, report, or live terminal
   line, and the turn's request, duration, and edited files. The cards support
-  keyboard triage.
+  keyboard triage. Agents and Reviewed modes, one search across them, and Undo
+  after marking keep every agent and reviewed stop one step away.
 
 - Added "Promoted to CEO", a 62-second animated film about Herdr World, to the website.
   It plays in the browser with a synthesized soundtrack and no video download.

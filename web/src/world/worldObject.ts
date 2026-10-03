@@ -81,6 +81,8 @@ export type WorldLeafObject = WorldObjectBase & {
   agentLabel?: string;
   /** The live agent name the operator gave Herdr (`herdr agent start <name>`). */
   agentName?: string;
+  /** The harness's own title for its thread, from the terminal title. */
+  terminalTitle?: string;
   modelLabel?: string;
   taskSummary?: string;
   agentSessionIdentity?: string;
@@ -118,6 +120,29 @@ function boundedLabel(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
   const normalized = value.trim();
   return normalized ? boundedCodePointPrefix(normalized, 100) : fallback;
+}
+
+/**
+ * The thread title a harness writes to its terminal ("Fix mobile layout |
+ * repo"), without spinner glyphs or the trailing folder. Titles that only
+ * repeat the harness name carry no identity and are dropped.
+ */
+export function agentThreadTitle(
+  value: unknown,
+  agent: unknown,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const cleaned = value
+    .replace(/^[\s\u2800-\u28ff✳✶✻✽✢·*•◐◓◑◒⏺]+/u, "")
+    .split(" | ")[0]
+    ?.trim();
+  if (!cleaned) return undefined;
+  if (
+    typeof agent === "string" &&
+    cleaned.toLowerCase() === agent.toLowerCase()
+  )
+    return undefined;
+  return boundedCodePointPrefix(cleaned, 120);
 }
 
 function boundedCodePointPrefix(value: string, limit: number) {
@@ -567,6 +592,13 @@ function buildHost(
           const agentName = isAgent
             ? boundedOptionalText(agentMetadata?.name, 100)
             : undefined;
+          const terminalTitle = isAgent
+            ? agentThreadTitle(
+                agentMetadata?.terminal_title_stripped ??
+                  agentMetadata?.terminal_title,
+                pane.agent,
+              )
+            : undefined;
           const modelLabel = isAgent
             ? boundedOptionalText(
                 pane.model_name ??
@@ -629,6 +661,7 @@ function buildHost(
               : {}),
             ...(agentLabel ? { agentLabel } : {}),
             ...(agentName ? { agentName } : {}),
+            ...(terminalTitle ? { terminalTitle } : {}),
             ...(modelLabel ? { modelLabel } : {}),
             ...(taskSummary ? { taskSummary } : {}),
             ...(agentSessionIdentity ? { agentSessionIdentity } : {}),

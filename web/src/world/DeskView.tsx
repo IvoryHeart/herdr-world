@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionClient } from "../api";
+import { worldLocalStorage } from "../browserStorage";
 import { useConnectionClient } from "../useConnectionClient";
 import {
   fetchFullReport,
@@ -14,6 +15,7 @@ import {
   useHandledTurns,
   useNow,
   useObservedStops,
+  useRecentOpens,
   useTurnReceipts,
 } from "./handoffs";
 import {
@@ -50,16 +52,25 @@ function handoffId(
 }
 
 function where(leaf: WorldLeafObject) {
-  return [leaf.spaceLabel, leaf.tabLabel].filter(Boolean).join(" › ");
+  return [leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
+    .filter(Boolean)
+    .join(" › ");
 }
 
+/**
+ * What the operator recognizes an agent by: the name they gave it, otherwise
+ * the harness's own thread title, otherwise the harness.
+ */
 function agentName(leaf: WorldLeafObject) {
-  return leaf.agentName ?? leaf.agentLabel ?? leaf.label;
+  return leaf.agentName ?? leaf.terminalTitle ?? leaf.agentLabel ?? leaf.label;
 }
 
 /** Harness and model, so the operator can tell what each agent runs on. */
 function agentRuntime(leaf: WorldLeafObject) {
-  return [leaf.agentName ? leaf.agentLabel : null, leaf.modelLabel]
+  return [
+    leaf.agentName || leaf.terminalTitle ? leaf.agentLabel : null,
+    leaf.modelLabel,
+  ]
     .filter(Boolean)
     .join(" · ");
 }
@@ -198,6 +209,87 @@ function Screen({
   );
 }
 
+export type DeskMode = "now" | "agents" | "reviewed";
+const DESK_MODES: { mode: DeskMode; label: string }[] = [
+  { mode: "now", label: "Now" },
+  { mode: "agents", label: "Agents" },
+  { mode: "reviewed", label: "Reviewed" },
+];
+const RECENT_LIMIT = 6;
+
+/** The folder an agent works in, which tells same-named tabs apart. */
+export function agentFolder(leaf: WorldLeafObject) {
+  const cwd = leaf.pane.foreground_cwd ?? leaf.pane.cwd;
+  if (!cwd) return null;
+  const parts = cwd.replace(/[\\/]+$/, "").split(/[\\/]/);
+  return parts[parts.length - 1] || cwd;
+}
+
+/**
+ * Whether an agent matches every word of a search across the things an
+ * operator remembers: its name, harness, workspace, tab, folder, request and
+ * report.
+ */
+export function matchesQuery(
+  leaf: WorldLeafObject,
+  receipt: TurnReceipt | null,
+  query: string,
+) {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const haystack = [
+    leaf.agentName,
+    leaf.terminalTitle,
+    leaf.agentLabel,
+    leaf.modelLabel,
+    leaf.label,
+    leaf.spaceLabel,
+    leaf.tabLabel,
+    agentFolder(leaf),
+    leaf.taskSummary,
+    receipt?.ask,
+    receipt?.report,
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .toLowerCase();
+  return words.every((word) => haystack.includes(word));
+}
+
+export type DirectoryGroup = {
+  workspace: string;
+  agents: WorldLeafObject[];
+};
+
+/**
+ * Every agent, most recently active first: a "Recently opened" shortlist from
+ * the Desk, then workspaces ordered by their most recent agent.
+ */
+export function agentDirectory(
+  agents: readonly WorldLeafObject[],
+  activeAt: (leaf: WorldLeafObject) => number | null,
+  openedAt: (leaf: WorldLeafObject) => number | null,
+): { recent: WorldLeafObject[]; groups: DirectoryGroup[] } {
+  const newest = (left: WorldLeafObject, right: WorldLeafObject) =>
+    (activeAt(right) ?? 0) - (activeAt(left) ?? 0);
+  const recent = agents
+    .filter((leaf) => openedAt(leaf) !== null)
+    .sort((left, right) => (openedAt(right) ?? 0) - (openedAt(left) ?? 0))
+    .slice(0, RECENT_LIMIT);
+  const byWorkspace = new Map<string, WorldLeafObject[]>();
+  for (const leaf of agents) {
+    const group = byWorkspace.get(leaf.spaceLabel) ?? [];
+    group.push(leaf);
+    byWorkspace.set(leaf.spaceLabel, group);
+  }
+  const groups = [...byWorkspace].map(([workspace, members]) => ({
+    workspace,
+    agents: [...members].sort(newest),
+  }));
+  groups.sort((left, right) => newest(left.agents[0], right.agents[0]));
+  return { recent, groups };
+}
+
 export type DeskShortcut = "next" | "previous" | "open" | "mark" | null;
 
 /**
@@ -258,7 +350,26 @@ export function DeskBoard({
   const receiptFor = useTurnReceipts(agents, client);
   const { handled, mark } = useHandledTurns(client.connectionId);
   const stops = useObservedStops(client.connectionId, agents);
-  const [showReviewed, setShowReviewed] = useState(false);
+  const { opens, record: recordOpen } = useRecentOpens(client.connectionId);
+  const [mode, setModeState] = useState<DeskMode>(() => {
+    try {
+      const saved = worldLocalStorage.getItem("desk.mode.v1");
+      return saved === "agents" || saved === "reviewed" ? saved : "now";
+    } catch {
+      return "now";
+    }
+  });
+  const setMode = (next: DeskMode) => {
+    setModeState(next);
+    try {
+      worldLocalStorage.setItem("desk.mode.v1", next);
+    } catch {
+      // The chosen mode is a browser convenience.
+    }
+  };
+  const [query, setQuery] = useState("");
+  const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [fullReports, setFullReports] = useState<Map<string, string>>(
     () => new Map(),
@@ -276,8 +387,39 @@ export function DeskBoard({
     stops,
   );
   const pendingReview = review.filter((item) => !item.handled);
-  const shownReview = showReviewed ? review : pendingReview;
-  const reviewedCount = review.length - pendingReview.length;
+  const matches = (item: Item) => matchesQuery(item.leaf, item.receipt, query);
+  const shownNeeds = needs.filter(matches);
+  const shownReview = pendingReview.filter(matches);
+  const shownWorking = working.filter(matches);
+  const reviewed = review
+    .filter((item) => item.handled)
+    .sort((left, right) => (right.since ?? 0) - (left.since ?? 0));
+  const shownReviewed = reviewed.filter(matches);
+  const shownQuiet = quiet.filter((leaf) =>
+    matchesQuery(leaf, receiptFor(leaf).receipt, query),
+  );
+  const openedAt = (leaf: WorldLeafObject) =>
+    opens.get(receiptIdentity(leaf)) ?? null;
+  const activeAt = (leaf: WorldLeafObject) => {
+    const candidates = [
+      receiptEndedAt(receiptFor(leaf).receipt),
+      stops.get(receiptIdentity(leaf)) ?? null,
+      leaf.lastActivityAt ?? null,
+      openedAt(leaf),
+    ].filter((value): value is number => typeof value === "number");
+    return candidates.length ? Math.max(...candidates) : null;
+  };
+  const directory = agentDirectory(
+    agents.filter((leaf) =>
+      matchesQuery(leaf, receiptFor(leaf).receipt, query),
+    ),
+    activeAt,
+    openedAt,
+  );
+  const directoryCount = directory.groups.reduce(
+    (total, group) => total + group.agents.length,
+    0,
+  );
   const screenTargets = useMemo(
     () =>
       agents.filter(
@@ -290,7 +432,13 @@ export function DeskBoard({
     [agents, stops],
   );
   const screens = usePaneScreens(screenTargets, client);
-  const order = [...needs, ...shownReview, ...working];
+  // Keyboard order is the list the operator is looking at.
+  const order =
+    mode === "now"
+      ? [...shownNeeds, ...shownReview, ...shownWorking]
+      : mode === "reviewed"
+        ? shownReviewed
+        : [];
   // Other hosts come from the aggregate observation, never the selected-host
   // projection, and are summaries only.
   const others = otherHostSummaries(aggregate ?? world);
@@ -304,6 +452,7 @@ export function DeskBoard({
   const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
     setError(null);
+    recordOpen(leaf);
     void onOpenTerminal(leaf.id).catch((reason: unknown) =>
       setError(
         reason instanceof Error ? reason.message : "Could not open terminal",
@@ -311,9 +460,34 @@ export function DeskBoard({
     );
   };
 
+  const toggleReviewed = (item: Item) => {
+    mark(item.handoffId, !item.handled);
+    setToast(
+      item.handled ? null : { id: item.handoffId, name: agentName(item.leaf) },
+    );
+  };
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
+      // "/" jumps to search from anywhere on the Desk.
+      if (
+        event.key === "/" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        (target === document.body || rootRef.current?.contains(target)) &&
+        !target?.closest?.("input, textarea, select")
+      ) {
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
       if (!order.length) return;
       const action = deskShortcut({
         key: event.key,
@@ -361,12 +535,10 @@ export function DeskBoard({
         !focused.pending
       ) {
         event.preventDefault();
-        // Marking moves the item; keep the operator's place in the queue.
-        if (!focused.handled && !showReviewed) {
-          const neighbour = order[focusIndex + 1] ?? order[focusIndex - 1];
-          setFocusedId(neighbour?.leaf.id ?? null);
-        }
-        mark(focused.handoffId, !focused.handled);
+        // Marking moves the item out of this list; keep the operator's place.
+        const neighbour = order[focusIndex + 1] ?? order[focusIndex - 1];
+        setFocusedId(neighbour?.leaf.id ?? null);
+        toggleReviewed(focused);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -518,7 +690,7 @@ export function DeskBoard({
               title={
                 item.pending ? "Waiting for this turn's receipt" : undefined
               }
-              onClick={() => mark(item.handoffId, !item.handled)}
+              onClick={() => toggleReviewed(item)}
             >
               {item.handled ? "Reopen" : "Mark reviewed"}
               <kbd>E</kbd>
@@ -529,47 +701,151 @@ export function DeskBoard({
     );
   };
 
-  return (
-    <div className="desk" ref={rootRef}>
-      <header className="desk-summary" aria-label="Attention summary">
-        <div className={`desk-stat is-needs${needs.length ? " is-hot" : ""}`}>
-          <strong>{needs.length}</strong>
-          <span>
-            need{needs.length === 1 ? "s" : ""} you
-            {oldestWait ? <em>oldest {oldestWait}</em> : null}
+  const statusLabel: Record<string, string> = {
+    blocked: "Needs you",
+    done: "Done",
+    working: "Working",
+    idle: "Idle",
+    unknown: "Unknown",
+  };
+  const row = (leaf: WorldLeafObject, showWorkspace = false) => {
+    const { receipt } = receiptFor(leaf);
+    const line = receipt?.ask ?? leaf.taskSummary ?? null;
+    const at = activeAt(leaf);
+    const meta = [
+      agentRuntime(leaf),
+      showWorkspace ? leaf.spaceLabel : null,
+      leaf.tabLabel ? `tab ${leaf.tabLabel}` : null,
+      agentFolder(leaf),
+    ].filter(Boolean);
+    return (
+      <li key={leaf.id}>
+        <button
+          type="button"
+          className={`desk-row is-${leaf.status}`}
+          onClick={() => open(leaf)}
+        >
+          <span className="desk-row-status">
+            {statusLabel[leaf.status] ?? leaf.status}
           </span>
-        </div>
-        <div className="desk-stat is-review">
-          <strong>{pendingReview.length}</strong>
-          <span>to review</span>
-        </div>
-        <div className="desk-stat">
-          <strong>{working.length}</strong>
-          <span>working</span>
-        </div>
-        <div className="desk-stat is-quiet">
-          <strong>{quiet.length}</strong>
-          <span>quiet</span>
-        </div>
-        <div className="desk-hosts">
-          <span className="desk-host is-selected">{hostLabel}</span>
-          {others.map((host) => (
-            <span
-              key={host.connectionId}
-              className={`desk-host${host.needs ? " has-needs" : ""}`}
-              title={
-                host.stale
-                  ? "Cached observation; switch hosts to act"
-                  : "Observed in the background; switch hosts to act"
-              }
-            >
-              {host.label}
-              {host.needs ? ` · ${host.needs} need you` : ""}
-              {host.done ? ` · ${host.done} done` : ""}
-              {host.working ? ` · ${host.working} working` : ""}
-              {!host.needs && !host.done && !host.working ? " · quiet" : ""}
+          <span className="desk-row-main">
+            <span className="desk-row-title">
+              <strong>{agentName(leaf)}</strong>
+              <small>{meta.join(" · ")}</small>
             </span>
-          ))}
+            {line ? <span className="desk-row-line">{line}</span> : null}
+          </span>
+          <span className="desk-row-age">
+            {at ? `${formatSpan(now - at)} ago` : ""}
+          </span>
+        </button>
+      </li>
+    );
+  };
+  const modeCount: Record<DeskMode, number> = {
+    now: needs.length + pendingReview.length + working.length,
+    agents: agents.length,
+    reviewed: reviewed.length,
+  };
+  const noMatch = (
+    <p className="desk-empty">Nothing here matches &ldquo;{query}&rdquo;.</p>
+  );
+
+  return (
+    <div className={`desk is-${mode}`} ref={rootRef}>
+      <header className="desk-top">
+        <div className="desk-summary" aria-label="Attention summary">
+          <button
+            type="button"
+            className={`desk-stat is-needs${needs.length ? " is-hot" : ""}`}
+            onClick={() => setMode("now")}
+          >
+            <strong>{needs.length}</strong>
+            <span>
+              need{needs.length === 1 ? "s" : ""} you
+              {oldestWait ? <em>oldest {oldestWait}</em> : null}
+            </span>
+          </button>
+          <button
+            type="button"
+            className="desk-stat is-review"
+            onClick={() => setMode("now")}
+          >
+            <strong>{pendingReview.length}</strong>
+            <span>to review</span>
+          </button>
+          <button
+            type="button"
+            className="desk-stat"
+            onClick={() => setMode("now")}
+          >
+            <strong>{working.length}</strong>
+            <span>working</span>
+          </button>
+          <button
+            type="button"
+            className="desk-stat is-quiet"
+            onClick={() => setMode("agents")}
+          >
+            <strong>{quiet.length}</strong>
+            <span>quiet</span>
+          </button>
+          <div className="desk-hosts">
+            <span className="desk-host is-selected">{hostLabel}</span>
+            {others.map((host) => (
+              <span
+                key={host.connectionId}
+                className={`desk-host${host.needs ? " has-needs" : ""}`}
+                title={
+                  host.stale
+                    ? "Cached observation; switch hosts to act"
+                    : "Observed in the background; switch hosts to act"
+                }
+              >
+                {host.label}
+                {host.needs ? ` · ${host.needs} need you` : ""}
+                {host.done ? ` · ${host.done} done` : ""}
+                {host.working ? ` · ${host.working} working` : ""}
+                {!host.needs && !host.done && !host.working ? " · quiet" : ""}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="desk-controls">
+          <div className="desk-modes" role="tablist" aria-label="Desk views">
+            {DESK_MODES.map((candidate) => (
+              <button
+                key={candidate.mode}
+                type="button"
+                role="tab"
+                aria-selected={mode === candidate.mode}
+                className={mode === candidate.mode ? "is-active" : ""}
+                onClick={() => setMode(candidate.mode)}
+              >
+                {candidate.label}
+                <span className="desk-mode-count">
+                  {modeCount[candidate.mode]}
+                </span>
+              </button>
+            ))}
+          </div>
+          <label className="desk-search">
+            <span className="desk-search-label">Find</span>
+            <input
+              ref={searchRef}
+              type="search"
+              value={query}
+              placeholder="Agent, workspace, tab, folder or request"
+              aria-label="Find an agent"
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setQuery("");
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          </label>
         </div>
       </header>
       {error ? (
@@ -577,75 +853,149 @@ export function DeskBoard({
           {error}
         </p>
       ) : null}
-      <div className="desk-lanes">
-        <section className="desk-lane is-needs" aria-label="Needs you">
-          <h2>
-            Needs you <small>questions and approvals, oldest first</small>
-          </h2>
-          {needs.length ? (
-            <ol>{needs.map(card)}</ol>
-          ) : (
-            <p className="desk-empty">Nobody is waiting on you.</p>
-          )}
-        </section>
-        <section className="desk-lane is-review" aria-label="To review">
-          <h2>
-            To review <small>finished turns and what they produced</small>
-            {reviewedCount ? (
-              <label className="desk-toggle">
-                <input
-                  type="checkbox"
-                  checked={showReviewed}
-                  onChange={(event) => setShowReviewed(event.target.checked)}
-                />
-                {reviewedCount} reviewed
-              </label>
+      {mode === "now" ? (
+        <div className="desk-lanes">
+          <section className="desk-lane is-needs" aria-label="Needs you">
+            <h2>
+              Needs you <small>questions and approvals, oldest first</small>
+            </h2>
+            {shownNeeds.length ? (
+              <ol>{shownNeeds.map(card)}</ol>
+            ) : query && needs.length ? (
+              noMatch
+            ) : (
+              <p className="desk-empty">Nobody is waiting on you.</p>
+            )}
+          </section>
+          <section className="desk-lane is-review" aria-label="To review">
+            <h2>
+              To review <small>finished turns and what they produced</small>
+              {reviewed.length ? (
+                <button
+                  type="button"
+                  className="desk-link desk-lane-link"
+                  onClick={() => setMode("reviewed")}
+                >
+                  {reviewed.length} reviewed
+                </button>
+              ) : null}
+            </h2>
+            {shownReview.length ? (
+              <ol>{shownReview.map(card)}</ol>
+            ) : query && pendingReview.length ? (
+              noMatch
+            ) : (
+              <p className="desk-empty">
+                Nothing to review. Finished turns land here with the request,
+                the agent&rsquo;s report and the files it edited.
+              </p>
+            )}
+          </section>
+          <section className="desk-lane is-working" aria-label="In flight">
+            <h2>
+              In flight <small>live from each terminal</small>
+            </h2>
+            {shownWorking.length ? (
+              <ol>{shownWorking.map(card)}</ol>
+            ) : query && working.length ? (
+              noMatch
+            ) : (
+              <p className="desk-empty">No agent is working right now.</p>
+            )}
+            {shownQuiet.length ? (
+              <details className="desk-quiet">
+                <summary>
+                  {shownQuiet.length} quiet agent
+                  {shownQuiet.length === 1 ? "" : "s"}
+                </summary>
+                <ul className="desk-rows">
+                  {shownQuiet.map((leaf) => row(leaf, true))}
+                </ul>
+              </details>
             ) : null}
+          </section>
+        </div>
+      ) : mode === "agents" ? (
+        <section className="desk-directory" aria-label="Agents">
+          {query && !directoryCount ? noMatch : null}
+          {directory.recent.length ? (
+            <div className="desk-group is-recent">
+              <h3>
+                Recently opened <small>from the Desk, newest first</small>
+              </h3>
+              <ul className="desk-rows">
+                {directory.recent.map((leaf) => row(leaf, true))}
+              </ul>
+            </div>
+          ) : null}
+          {directory.groups.map((group) => (
+            <div className="desk-group" key={group.workspace}>
+              <h3>
+                {group.workspace}
+                <small>
+                  {group.agents.length} agent
+                  {group.agents.length === 1 ? "" : "s"}
+                </small>
+              </h3>
+              <ul className="desk-rows">
+                {group.agents.map((leaf) => row(leaf))}
+              </ul>
+            </div>
+          ))}
+          {!agents.length ? (
+            <p className="desk-empty">No agents on {hostLabel}.</p>
+          ) : null}
+        </section>
+      ) : (
+        <section
+          className="desk-lane is-review desk-reviewed"
+          aria-label="Reviewed"
+        >
+          <h2>
+            Reviewed <small>stops you marked, newest first</small>
           </h2>
-          {shownReview.length ? (
-            <ol>{shownReview.map(card)}</ol>
+          {shownReviewed.length ? (
+            <ol>{shownReviewed.map(card)}</ol>
+          ) : query && reviewed.length ? (
+            noMatch
           ) : (
             <p className="desk-empty">
-              Nothing to review. Finished turns land here with the request, the
-              agent&rsquo;s report and the files it edited.
+              Nothing marked reviewed yet. Marked stops stay here for 12 hours
+              so you can return to them; every agent is always under Agents.
             </p>
           )}
         </section>
-        <section className="desk-lane is-working" aria-label="In flight">
-          <h2>
-            In flight <small>live from each terminal</small>
-          </h2>
-          {working.length ? (
-            <ol>{working.map(card)}</ol>
-          ) : (
-            <p className="desk-empty">No agent is working right now.</p>
-          )}
-          {quiet.length ? (
-            <details className="desk-quiet">
-              <summary>
-                {quiet.length} quiet agent{quiet.length === 1 ? "" : "s"}
-              </summary>
-              <ul>
-                {quiet.map((leaf) => (
-                  <li key={leaf.id}>
-                    <button type="button" onClick={() => open(leaf)}>
-                      <span>{agentName(leaf)}</span>
-                      <small>{where(leaf)}</small>
-                      <em>
-                        {leaf.status}
-                        {leaf.lastActivityAt
-                          ? ` · ${formatSpan(now - leaf.lastActivityAt)} ago`
-                          : ""}
-                      </em>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </section>
-      </div>
+      )}
+      {toast ? (
+        <div className="desk-toast" role="status">
+          <span>
+            Marked <strong>{toast.name}</strong> reviewed
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              mark(toast.id, false);
+              setToast(null);
+            }}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="desk-toast-link"
+            onClick={() => {
+              setToast(null);
+              setMode("reviewed");
+            }}
+          >
+            See reviewed
+          </button>
+        </div>
+      ) : null}
       <footer className="desk-keys" aria-hidden="true">
+        <span>
+          <kbd>/</kbd> find
+        </span>
         <span>
           <kbd>J</kbd>
           <kbd>K</kbd> move

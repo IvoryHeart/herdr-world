@@ -7,8 +7,15 @@ operator. Needs you SHALL list blocked agents, oldest wait first, with the quest
 bottom of the agent's visible screen. To review SHALL list done agents, idle agents whose latest turn
 ended within 12 hours, and agents this browser observed stop working within 12 hours, each with its
 turn receipt or, without one, its latest screen lines. In flight SHALL list working agents with their
-current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards SHALL
-name the Herdr agent and, when reported, its harness and model.
+current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards and
+rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
+writes to the terminal, otherwise the harness, and SHALL show its harness, model, workspace, tab and
+working folder when known.
+Desk SHALL offer three modes, Now (the lanes above), Agents (every agent on the selected host,
+agents recently opened from the Desk first, then workspaces ordered by their most recently active
+agent) and Reviewed (stops marked reviewed, newest first, each reopenable). One search SHALL filter
+every mode by agent name, thread title, harness, workspace, tab, folder, request and report. Marking
+a stop reviewed SHALL offer an immediate undo.
 Every card's primary action SHALL open the existing terminal Inspector for that exact
 connection-qualified pane. Desk SHALL NOT send terminal input, answer approvals, assign tasks or run
 lifecycle commands itself. Review marks SHALL apply to one stop of one agent session and SHALL remain
@@ -37,6 +44,18 @@ to another session in the same terminal.
 - **WHEN** an agent finishes a turn
 - **THEN** its card moves from In flight to To review with the request, closing report, duration,
   tool calls and edited files, and marking it reviewed hides only that stop
+
+#### Scenario: Return to a reviewed stop
+
+- **WHEN** an operator marks a stop reviewed and later wants it back
+- **THEN** Undo restores it immediately, and Reviewed lists it with its receipt and a Reopen action
+
+#### Scenario: Find the agent worked with recently
+
+- **WHEN** an operator searches for words from an agent's thread title, tab, folder or request, or
+  opens Agents
+- **THEN** the matching agents appear with those identifying details, with agents recently opened
+  from the Desk listed first, and selecting one opens its terminal Inspector
 
 #### Scenario: Keys aimed at other controls
 

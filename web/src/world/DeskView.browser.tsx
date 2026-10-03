@@ -116,6 +116,61 @@ async function run() {
   check(!card("beta"), "E marked the focused card (beta) reviewed");
   check(!!card("alpha") && !!card("gamma"), "E left the other cards alone");
 
+  // Marking offers Undo, and the stop stays reachable under Reviewed.
+  const undo = [
+    ...document.querySelectorAll<HTMLButtonElement>(".desk-toast button"),
+  ].find((button) => button.textContent === "Undo");
+  check(!!undo, "marking shows an Undo toast");
+  const tab = (label: string) =>
+    [
+      ...document.querySelectorAll<HTMLButtonElement>(".desk-modes button"),
+    ].find((button) => button.textContent?.startsWith(label));
+  tab("Reviewed")?.click();
+  await settle(150);
+  check(!!card("beta"), "Reviewed lists the stop that was marked");
+  tab("Now")?.click();
+  await settle(150);
+  undo?.click();
+  await settle(150);
+  check(!!card("beta"), "Undo returns the stop to To review");
+  const betaAgain =
+    card("beta")?.querySelector<HTMLButtonElement>("button.is-primary");
+  betaAgain?.focus();
+  await settle();
+  press(betaAgain!, "e");
+  await settle(200);
+
+  // Search narrows the Desk to matching agents.
+  const search = document.querySelector<HTMLInputElement>(".desk-search input");
+  const setValue = Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  setValue?.call(search, "gamma");
+  search?.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle(150);
+  const visible = () =>
+    [...document.querySelectorAll<HTMLElement>("[data-desk-card]")]
+      .map((element) => element.dataset.deskCard)
+      .join(",");
+  check(
+    !card("alpha") && !!card("gamma"),
+    `search narrows To review to gamma (visible: ${visible()}, query: ${search?.value})`,
+  );
+  setValue?.call(search, "");
+  search?.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle(150);
+
+  // Agents lists every agent, including reviewed ones.
+  tab("Agents")?.click();
+  await settle(150);
+  check(
+    document.querySelectorAll(".desk-row").length === 3,
+    "Agents lists every agent",
+  );
+  tab("Now")?.click();
+  await settle(150);
+
   // J moves DOM focus with the highlight, so Enter opens that agent.
   card("alpha")?.focus();
   await settle();

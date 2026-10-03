@@ -10,6 +10,8 @@
 - [x] 2.3 Open the existing terminal Inspector from every card; support J/K/Enter/E without capturing keys aimed at other controls or the rest of the app; keep keyboard focus on the same agent as lanes reorder.
 - [x] 2.4 Bound receipt and screen reads most urgent first, key them by session identity, prune retired entries, and pause while the page is hidden.
 
+- [x] 2.5 Add Now, Agents and Reviewed modes with one search, recent opens, thread titles from the terminal title, and Undo after marking; mounted browser test covers Undo, Reviewed, search and Agents.
+
 ## 3. Documentation
 
 - [x] 3.1 Update FEATURES, the changelog, the knowledge map and the World component routes.
