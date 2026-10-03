@@ -71,6 +71,8 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Prevented Office animation from starving large aggregate refreshes while
+  another host remains interactive.
 - Kept the film's 16:9 picture from stretching in portrait fullscreen playback.
 
 ## [0.2.0] - 2026-10-02

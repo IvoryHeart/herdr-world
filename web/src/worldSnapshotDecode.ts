@@ -1,4 +1,4 @@
-import { yieldWorldTask } from "./world/worldObject";
+import { yieldWorldAdmissionTask } from "./world/worldObject";
 
 /** Decode large read-only observations away from terminal/keyboard tasks.
  * Each isolated worker owns one request. Host-sized messages split decoded
@@ -117,9 +117,9 @@ export function decodeWorldSnapshot(
         ) {
           connections.push(data.connection);
           // Receiving a host includes native structured-clone work. Only admit
-          // the next payload after a background turn so the worker cannot queue
-          // the whole catalogue ahead of incoming socket acknowledgements.
-          void yieldWorldTask().then(() => {
+          // the next payload after an ordinary task turn so the worker cannot
+          // queue the whole catalogue or wait indefinitely behind scene paints.
+          void yieldWorldAdmissionTask().then(() => {
             if (!done && !signal.aborted)
               worker?.postMessage({ admitted: data.index });
           });

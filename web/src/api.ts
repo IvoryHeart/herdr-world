@@ -8,7 +8,7 @@ import {
   validateSshDestination,
 } from "./sshProfileValidation";
 import { decodeWorldSnapshot } from "./worldSnapshotDecode";
-import { yieldWorldTask } from "./world/worldObject";
+import { yieldWorldAdmissionTask } from "./world/worldObject";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -889,7 +889,7 @@ export class Bridge {
         chunk.index + 1 < chunk.total
       ) {
         const socket = this.ws;
-        void yieldWorldTask().then(() => {
+        void yieldWorldAdmissionTask().then(() => {
           if (
             !socket ||
             this.ws !== socket ||

@@ -547,6 +547,7 @@ test.skipIf(!chrome).each(
             last: calls.slice(-3),
             sent: sent.length,
             acknowledged: observed.acknowledgements.length,
+            phases: observed.phases,
           }),
         );
       expect(observed.failures).toEqual([]);

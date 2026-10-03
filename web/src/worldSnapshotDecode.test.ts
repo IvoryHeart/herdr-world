@@ -102,6 +102,50 @@ test("decoded hosts wait for browser admission before posting another payload", 
   expect(messages[messages.length - 1]).toEqual({ complete: true });
 });
 
+test.each([false, true])(
+  "host admission progresses with starved background tasks and retirement=%j",
+  async (retire) => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "scheduler");
+    const admissionTurn = Promise.withResolvers<void>();
+    Object.defineProperty(globalThis, "scheduler", {
+      configurable: true,
+      value: {
+        postTask: (_task: () => void, { priority }: { priority: string }) =>
+          priority === "background"
+            ? new Promise<void>(() => {})
+            : admissionTurn.promise,
+      },
+    });
+    try {
+      const job = request();
+      job.worker.receive({ header: { revision: 1 }, total: 1 });
+      job.worker.receive({ index: 0, connection: { connection_id: "alpha" } });
+      expect(
+        job.worker.posted.filter((message) => !Array.isArray(message)),
+      ).toEqual([]);
+      if (retire) job.controller.abort();
+      admissionTurn.resolve();
+      await Promise.resolve();
+      expect(
+        job.worker.posted.filter((message) => !Array.isArray(message)),
+      ).toEqual(retire ? [] : [{ admitted: 0 }]);
+      if (retire) await expect(job.pending).rejects.toThrow("retired");
+      else {
+        job.worker.receive({ complete: true });
+        expect(await job.pending).toEqual({
+          revision: 1,
+          connections: [{ connection_id: "alpha" }],
+        });
+      }
+    } finally {
+      admissionTurn.resolve();
+      if (descriptor)
+        Object.defineProperty(globalThis, "scheduler", descriptor);
+      else delete (globalThis as any).scheduler;
+    }
+  },
+);
+
 test("bounded decode capacity is released on retirement and old completion cannot publish", async () => {
   const a = request(),
     b = request(),

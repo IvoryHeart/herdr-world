@@ -62,16 +62,21 @@ describe("simultaneous qualified runtime admission", () => {
   }
 
   test.each([false, true])(
-    "browser snapshot credit yields to sibling input and fences retirement=%j",
+    "snapshot credit progresses beside input with starved background tasks and retirement=%j",
     async (retire) => {
       const descriptor = Object.getOwnPropertyDescriptor(
         globalThis,
         "scheduler",
       );
-      const background = Promise.withResolvers<void>();
+      const admissionTurn = Promise.withResolvers<void>();
       Object.defineProperty(globalThis, "scheduler", {
         configurable: true,
-        value: { postTask: () => background.promise },
+        value: {
+          postTask: (_task: () => void, { priority }: { priority: string }) =>
+            priority === "background"
+              ? new Promise<void>(() => {})
+              : admissionTurn.promise,
+        },
       });
       try {
         const { bridge, socket } = setup(undefined, true);
@@ -100,7 +105,7 @@ describe("simultaneous qualified runtime admission", () => {
         });
         expect(await input).toEqual({ ok: true });
         if (retire) bridge.disconnect();
-        background.resolve();
+        admissionTurn.resolve();
         await Promise.resolve();
         expect(
           socket.sent.filter((frame) => frame.world_snapshot_admitted),
@@ -119,7 +124,7 @@ describe("simultaneous qualified runtime admission", () => {
         if (retire) await expect(snapshot).rejects.toThrow();
         else expect(await snapshot).toEqual({ connections: [] });
       } finally {
-        background.resolve();
+        admissionTurn.resolve();
         if (descriptor)
           Object.defineProperty(globalThis, "scheduler", descriptor);
         else delete (globalThis as any).scheduler;

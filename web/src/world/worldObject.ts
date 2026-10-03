@@ -517,19 +517,30 @@ const preparedWorlds = new WeakMap<
 
 /** Yield a task so terminal and keyboard callbacks can run between hosts. */
 export function yieldWorldTask(): Promise<void> {
+  return scheduleWorldTask("background");
+}
+
+/** Bounded transport admission must progress alongside continuously painted scenes. */
+export function yieldWorldAdmissionTask(): Promise<void> {
+  return scheduleWorldTask("user-visible");
+}
+
+function scheduleWorldTask(
+  priority: "background" | "user-visible",
+): Promise<void> {
   const scheduler = (
     globalThis as typeof globalThis & {
       scheduler?: {
         postTask(
           task: () => void,
-          options: { priority: "background" },
+          options: { priority: "background" | "user-visible" },
         ): Promise<void>;
       };
     }
   ).scheduler;
-  // Observation work must not outrank incoming socket acknowledgements.
-  if (scheduler?.postTask)
-    return scheduler.postTask(() => {}, { priority: "background" });
+  // Model preparation stays in the background. Bounded transport admission
+  // needs ordinary turns so a continuously painted scene cannot starve it.
+  if (scheduler?.postTask) return scheduler.postTask(() => {}, { priority });
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 

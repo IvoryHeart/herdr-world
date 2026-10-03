@@ -584,6 +584,10 @@ async function run() {
           detail: { phase: stage },
         });
       await runtime.refresh();
+      check(
+        runtime.get().status === "ready",
+        stage + " snapshot unavailable: " + runtime.get().error,
+      );
       if (traceEnabled)
         performance.mark("acceptance-projection-complete", {
           detail: { phase: stage },
