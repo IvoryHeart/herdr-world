@@ -18,6 +18,7 @@ import {
   type SessionProjectionCache,
 } from "./session-projection-cache";
 import { HISTORY_WINDOW_LIMIT, redactHistoryUpdate } from "./session-history";
+import { latestTurnReceipt } from "./turn-receipt";
 
 const MAX_MESSAGES_PER_AGENT = 200;
 
@@ -95,6 +96,25 @@ export function createAgentSessionHandlers(args: {
         );
       }
       return { entry_id: entry.id, text: entry.text };
+    },
+    readTurn: async (params: Record<string, unknown>) => {
+      const resolved = await resolveAgentSession(
+        params,
+        args.herdrCall,
+        args.files,
+        resolverContext,
+      );
+      if (!resolved.file) {
+        cache.invalidate(resolved);
+        return { ...resolved, turn: null };
+      }
+      const projection = await cache.get(resolved);
+      return {
+        ...resolved,
+        file: projection.file,
+        updated_at: new Date(projection.file.mtimeMs).toISOString(),
+        turn: latestTurnReceipt(projection.file, projection.trajectory),
+      };
     },
     readSummary: (params: Record<string, unknown>) =>
       readAgentSessionSummary(

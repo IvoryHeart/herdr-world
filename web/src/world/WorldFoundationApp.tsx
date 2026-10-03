@@ -78,6 +78,8 @@ import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
+import { HandoffQueue } from "./HandoffQueue";
+import { useConnectionClient } from "../useConnectionClient";
 import {
   defaultFloatingTerminalGeometry,
   FLOATING_TERMINAL_MIN_SIZE,
@@ -834,6 +836,7 @@ function WorldControlPlane({
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
   const watchlist = useWorldWatchlist(watchlistStore);
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const handoffClient = useConnectionClient();
   useEffect(() => {
     watchlistStore.start();
     return () => watchlistStore.stop();
@@ -3138,6 +3141,14 @@ function WorldControlPlane({
               </Suspense>
             ) : null}
           </section>
+          {active ? (
+            <HandoffQueue
+              world={world}
+              client={handoffClient}
+              portal={viewToolbarPortal}
+              onOpenTerminal={openTerminalById}
+            />
+          ) : null}
           {contextRailInspector &&
           visualConversationAnchors?.[contextRailInspector.nodeId] &&
           intentOverlayAnchor ? (
