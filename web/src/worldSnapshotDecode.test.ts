@@ -103,17 +103,13 @@ test("decoded hosts wait for browser admission before posting another payload", 
 });
 
 test.each([false, true])(
-  "host admission progresses with starved background tasks and retirement=%j",
+  "received host credit progresses with all scheduled tasks stalled and retirement=%j",
   async (retire) => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "scheduler");
-    const admissionTurn = Promise.withResolvers<void>();
     Object.defineProperty(globalThis, "scheduler", {
       configurable: true,
       value: {
-        postTask: (_task: () => void, { priority }: { priority: string }) =>
-          priority === "background"
-            ? new Promise<void>(() => {})
-            : admissionTurn.promise,
+        postTask: () => new Promise<void>(() => {}),
       },
     });
     try {
@@ -124,7 +120,6 @@ test.each([false, true])(
         job.worker.posted.filter((message) => !Array.isArray(message)),
       ).toEqual([]);
       if (retire) job.controller.abort();
-      admissionTurn.resolve();
       await Promise.resolve();
       expect(
         job.worker.posted.filter((message) => !Array.isArray(message)),
@@ -138,7 +133,6 @@ test.each([false, true])(
         });
       }
     } finally {
-      admissionTurn.resolve();
       if (descriptor)
         Object.defineProperty(globalThis, "scheduler", descriptor);
       else delete (globalThis as any).scheduler;

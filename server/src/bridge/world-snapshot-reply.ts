@@ -46,6 +46,9 @@ export async function sendWorldSnapshotReply(
       index + 1 < total
     )
       await waitForAdmission(index);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // Negotiated credit already bounds and yields each four-chunk batch.
+    // Legacy chunk readers still need an explicit turn between messages.
+    if (!waitForAdmission)
+      await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

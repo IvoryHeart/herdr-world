@@ -1,5 +1,3 @@
-import { yieldWorldAdmissionTask } from "./world/worldObject";
-
 /** Decode large read-only observations away from terminal/keyboard tasks.
  * Each isolated worker owns one request. Host-sized messages split decoded
  * admission across tasks; the complete semantic result is retained.
@@ -28,7 +26,6 @@ self.onmessage = async ({data}) => {
         awaiting = index;
         self.postMessage({index, connection: connections[index]});
       });
-      await new Promise(resolve => setTimeout(resolve, 0));
     }
     self.postMessage({complete: true});
   } catch { self.postMessage({error: "invalid World snapshot response"}); }
@@ -116,10 +113,10 @@ export function decodeWorldSnapshot(
           !Array.isArray(data.connection)
         ) {
           connections.push(data.connection);
-          // Receiving a host includes native structured-clone work. Only admit
-          // the next payload after an ordinary task turn so the worker cannot
-          // queue the whole catalogue or wait indefinitely behind scene paints.
-          void yieldWorldAdmissionTask().then(() => {
+          // Each host arrives in its own message task. Acknowledge after this
+          // handler without inserting another scheduled task: the next host
+          // still requires a worker round trip and a fresh browser message task.
+          queueMicrotask(() => {
             if (!done && !signal.aborted)
               worker?.postMessage({ admitted: data.index });
           });

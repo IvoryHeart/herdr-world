@@ -88,6 +88,8 @@ test("a negotiated sender waits for browser admission before its next bounded ba
       await admitted.promise;
     },
   );
+  // Credit already yields after one bounded batch; per-chunk timers delay it.
+  expect(messages).toBe(4);
   const state = await Promise.race([
     waiting.promise.then(() => "waiting"),
     sending.then(() => "finished"),

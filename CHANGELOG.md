@@ -77,7 +77,8 @@ are optional because the merged PR history records their source.
   browser selections, and prevented duplicate workspace creation submissions.
 - Reported observed watch counts when another filtered host is unavailable.
 - Prevented Office animation from starving large aggregate refreshes while
-  another host remains interactive.
+  another host remains interactive. Removed redundant transport and decoder
+  timer turns while preserving bounded batches and one-host admission.
 - Kept the film's 16:9 picture from stretching in portrait fullscreen playback.
 
 ## [0.2.0] - 2026-10-02
