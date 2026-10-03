@@ -654,6 +654,52 @@
   color: var(--muted, #9da7b4);
   font-weight: 600;
 }
+/* Wide screens read an agent in the docked Inspector beside a single queue. */
+.world-view-layout:has(.desk.has-reading) .world-context-rail {
+  width: min(760px, 56%);
+}
+.desk.has-reading {
+  padding-right: calc(min(760px, 56%) + 24px);
+}
+.desk.has-reading .desk-lanes {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  overflow-y: auto;
+}
+.desk.has-reading .desk-lane {
+  min-height: auto;
+}
+.desk.has-reading .desk-lane ol {
+  overflow: visible;
+}
+.desk.has-reading .desk-hosts {
+  display: none;
+}
+.desk.has-reading .desk-summary {
+  flex-wrap: nowrap;
+}
+.desk.has-reading .desk-stat {
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 6px 10px;
+}
+.desk.has-reading .desk-stat strong {
+  font-size: 20px;
+}
+.desk-card.is-reading,
+.desk-row.is-reading {
+  border-color: var(--accent, #79a6ff);
+  box-shadow: inset 3px 0 0 var(--accent, #79a6ff);
+}
+.desk-row.is-focused {
+  border-color: color-mix(in srgb, var(--accent, #79a6ff) 60%, transparent);
+}
+.desk-card[data-desk-card] {
+  cursor: default;
+}
+.desk.has-reading .desk-card {
+  cursor: pointer;
+}
 @media (max-width: 980px) {
   .desk-top {
     position: sticky;

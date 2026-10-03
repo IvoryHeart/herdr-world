@@ -396,8 +396,13 @@ describe("finding agents", () => {
       ...leaf(id, "idle"),
       spaceLabel: "herdr-world",
       tabLabel: "4",
-      pane: { pane_id: id, cwd: "/work/herdr-world" },
       ...extra,
+      pane: {
+        pane_id: id,
+        cwd: `/work/${extra.spaceLabel ?? "herdr-world"}`,
+        workspace_id: `ws-${extra.spaceLabel ?? "herdr-world"}`,
+        ...(extra.pane ?? {}),
+      },
     }) as WorldLeafObject;
 
   test("matches every word across title, tab, folder and request", () => {
@@ -426,6 +431,27 @@ describe("finding agents", () => {
       ["herdr-world", ["fresh"]],
       ["career", ["middle", "old"]],
     ]);
+  });
+
+  test("groups by workspace identity and tells same-named workspaces apart", () => {
+    const first = named("one", {
+      spaceLabel: "repo",
+      pane: { pane_id: "one", workspace_id: "w1", cwd: "/a/repo-main" },
+    } as Partial<WorldLeafObject>);
+    const second = named("two", {
+      spaceLabel: "repo",
+      pane: { pane_id: "two", workspace_id: "w2", cwd: "/b/repo-fix" },
+    } as Partial<WorldLeafObject>);
+    const { groups } = agentDirectory(
+      [first, second],
+      () => null,
+      () => null,
+    );
+    expect(groups.map((group) => group.workspace).sort()).toEqual([
+      "repo (repo-fix)",
+      "repo (repo-main)",
+    ]);
+    expect(new Set(groups.map((group) => group.key)).size).toBe(2);
   });
 
   test("reads the harness thread title from the terminal title", () => {

@@ -12,6 +12,8 @@
 
 - [x] 2.5 Add Now, Agents and Reviewed modes with one search, recent opens, thread titles from the terminal title, and Undo after marking; mounted browser test covers Undo, Reviewed, search and Agents.
 
+- [x] 2.6 On wide screens, read agents in the docked Inspector beside a one-column queue, with J/K preview and Esc to close; group Agents by workspace identity; open on Now each session; mounted test covers preview and close.
+
 ## 3. Documentation
 
 - [x] 3.1 Update FEATURES, the changelog, the knowledge map and the World component routes.

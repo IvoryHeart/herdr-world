@@ -17,6 +17,10 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   - **Agents** lists every agent on the host, those you recently opened from the
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     stops you marked, newest first, with **Reopen**; marking offers **Undo**.
+  - On wide screens, opening a card docks that agent's Inspector (terminal,
+    files, changes, history) beside the Desk as a reading pane and folds the lanes
+    into one queue. `J`/`K` preview the next agent there, `Enter` moves into its
+    terminal and `Esc` closes the pane. Phones open the Inspector full screen.
   - One search (`/`) filters every mode by agent name, thread title, harness,
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.

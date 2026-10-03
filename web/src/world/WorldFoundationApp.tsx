@@ -78,7 +78,7 @@ import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
-import { DeskView } from "./DeskView";
+import { DeskView, useMediaQuery } from "./DeskView";
 import {
   defaultFloatingTerminalGeometry,
   FLOATING_TERMINAL_MIN_SIZE,
@@ -843,6 +843,7 @@ function WorldControlPlane({
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
   const watchlist = useWorldWatchlist(watchlistStore);
   const [pinnedOnly, setPinnedOnly] = useState(false);
+  const deskReadingPane = useMediaQuery("(min-width: 981px)");
   useEffect(() => {
     watchlistStore.start();
     return () => watchlistStore.stop();
@@ -2628,6 +2629,16 @@ function WorldControlPlane({
     }
   };
 
+  // Preview an agent in the Desk's reading pane without moving keyboard focus
+  // out of the queue; opening (above) also focuses its terminal.
+  const previewTerminalById = async (id: string) => {
+    if (!world.nodeById.get(id)) return;
+    await applySelection(id, "terminal", false, world);
+  };
+  const closeDeskReading = () => {
+    void applySelection(null);
+  };
+
   const openTerminalById = async (id: string, signal?: AbortSignal) => {
     if (signal?.aborted) throw new Error("Terminal activation was superseded");
     const node = world.nodeById.get(id);
@@ -2639,10 +2650,14 @@ function WorldControlPlane({
           worldInspectorWindowIdForNode(node),
       );
       if (
-        view === "office" &&
-        (officeInspectorPresentation === "docked" ||
-          (existing &&
-            worldInspectorWindowId(existing) === dockedInspectorIdRef.current))
+        // On wide screens the Desk reads agents in the docked Inspector beside
+        // its queue; phones keep the full-screen floating Inspector.
+        (view === "desk" && deskReadingPane) ||
+        (view === "office" &&
+          (officeInspectorPresentation === "docked" ||
+            (existing &&
+              worldInspectorWindowId(existing) ===
+                dockedInspectorIdRef.current)))
       ) {
         if (!(await applySelection(id, "terminal", true, world, signal))) {
           throw new Error("This terminal could not be opened");
@@ -3094,6 +3109,13 @@ function WorldControlPlane({
                       world={world}
                       aggregate={aggregateWorld}
                       onOpenTerminal={openTerminalById}
+                      reading={
+                        deskReadingPane && contextRailInspector
+                          ? contextRailInspector.nodeId
+                          : null
+                      }
+                      onPreview={deskReadingPane ? previewTerminalById : null}
+                      onCloseReading={closeDeskReading}
                     />
                   ) : view === "office" ? (
                     <Suspense

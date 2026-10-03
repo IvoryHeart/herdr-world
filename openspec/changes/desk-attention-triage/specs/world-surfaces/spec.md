@@ -11,11 +11,18 @@ current request and a live screen line. Remaining agents SHALL collapse into a q
 rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
 writes to the terminal, otherwise the harness, and SHALL show its harness, model, workspace, tab and
 working folder when known.
-Desk SHALL offer three modes, Now (the lanes above), Agents (every agent on the selected host,
-agents recently opened from the Desk first, then workspaces ordered by their most recently active
-agent) and Reviewed (stops marked reviewed, newest first, each reopenable). One search SHALL filter
-every mode by agent name, thread title, harness, workspace, tab, folder, request and report. Marking
-a stop reviewed SHALL offer an immediate undo.
+Desk SHALL offer three modes and SHALL open on Now for each browser session: Now (the lanes above),
+Agents (every agent on the selected host, agents recently opened from the Desk first, then
+workspaces, grouped by workspace identity and ordered by their most recently active agent) and
+Reviewed (each agent's latest stop that the operator marked reviewed, newest first and reopenable,
+while that agent remains idle or done). Older stops are not retained. One search SHALL filter every
+mode by agent name, thread title, harness, workspace, tab, folder, request and report. Marking a
+stop reviewed SHALL offer an immediate undo.
+On wide screens, opening an agent from the Desk SHALL show its existing Inspector docked beside the
+Desk as a reading pane, with the lanes folded into one prioritized queue. Moving through the queue
+with J and K SHALL show the next agent in the reading pane without moving keyboard focus out of
+the queue, Enter SHALL move focus into its terminal, and Esc SHALL close the pane. On narrow screens
+the Inspector SHALL open full screen instead.
 Every card's primary action SHALL open the existing terminal Inspector for that exact
 connection-qualified pane. Desk SHALL NOT send terminal input, answer approvals, assign tasks or run
 lifecycle commands itself. Review marks SHALL apply to one stop of one agent session and SHALL remain
@@ -26,9 +33,10 @@ replace the native activation of a focused control, and SHALL act on the card th
 focus: focusing any control in a card makes it the active card, J and K move keyboard focus with the
 highlight, and focus stays on the same agent while lanes reorder.
 Within the shared shell, Desk SHALL participate in the shell Actions menu, window arrangements of the
-Inspectors it opens, and view-local failure isolation. It SHALL NOT establish a visual selection, so
-selection-driven behavior (visual-route Action targets, the shared view-control search, watched
-visual projection and the docked selection Inspector) SHALL NOT apply to it. Other managed hosts
+Inspectors it opens, and view-local failure isolation. On wide screens it SHALL select the agent shown
+in its reading pane only to dock that agent's Inspector; other selection-driven behavior
+(visual-route Action targets, the shared view-control search and watched visual projection) SHALL
+NOT apply to it. Other managed hosts
 SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks and
 observed stops SHALL be scoped to the agent session and runtime generation, so they never carry over
 to another session in the same terminal.
@@ -48,7 +56,8 @@ to another session in the same terminal.
 #### Scenario: Return to a reviewed stop
 
 - **WHEN** an operator marks a stop reviewed and later wants it back
-- **THEN** Undo restores it immediately, and Reviewed lists it with its receipt and a Reopen action
+- **THEN** Undo restores it immediately, and while the agent stays idle or done, Reviewed lists that
+  stop with its receipt and a Reopen action
 
 #### Scenario: Find the agent worked with recently
 
@@ -56,6 +65,12 @@ to another session in the same terminal.
   opens Agents
 - **THEN** the matching agents appear with those identifying details, with agents recently opened
   from the Desk listed first, and selecting one opens its terminal Inspector
+
+#### Scenario: Work through the queue beside a reading pane
+
+- **WHEN** an operator on a wide screen opens a card and then presses J
+- **THEN** the agent's Inspector stays docked beside a one-column queue and shows the next agent,
+  while keyboard focus stays in the queue until Enter moves it into that terminal
 
 #### Scenario: Keys aimed at other controls
 

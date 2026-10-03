@@ -187,6 +187,45 @@ async function run() {
     `Enter opened the focused agent (opened: ${opened.join(",")})`,
   );
 
+  // With the reading pane open, J previews the next agent and Esc closes it.
+  const previewed: string[] = [];
+  let closed = 0;
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        world={world}
+        client={client}
+        onOpenTerminal={async (id) => {
+          opened.push(id);
+        }}
+        reading="alpha"
+        onPreview={async (id) => {
+          previewed.push(id);
+        }}
+        onCloseReading={() => {
+          closed += 1;
+        }}
+      />,
+    ),
+  );
+  await settle(200);
+  check(
+    !!document.querySelector(".desk.has-reading") &&
+      card("alpha")?.classList.contains("is-reading") === true,
+    "the card being read is marked in the queue",
+  );
+  card("alpha")?.focus();
+  await settle();
+  press(card("alpha")!, "j");
+  await settle();
+  check(
+    previewed.join(",") === "gamma",
+    `J previewed the next agent (previewed: ${previewed.join(",")})`,
+  );
+  press(document.activeElement!, "Escape");
+  await settle();
+  check(closed === 1, "Esc closed the reading pane");
+
   // Enter on a focused control keeps its native meaning.
   const mark = card("alpha")?.querySelectorAll<HTMLButtonElement>("button")[1];
   mark?.focus();

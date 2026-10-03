@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionClient } from "../api";
-import { worldLocalStorage } from "../browserStorage";
+import { worldSessionStorage } from "../browserStorage";
 import { useConnectionClient } from "../useConnectionClient";
 import {
   fetchFullReport,
@@ -209,6 +209,24 @@ function Screen({
   );
 }
 
+/** Whether a media query matches, updating as the viewport changes. */
+export function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.(query).matches === true,
+  );
+  useEffect(() => {
+    const list = window.matchMedia?.(query);
+    if (!list) return;
+    const update = () => setMatches(list.matches);
+    update();
+    list.addEventListener("change", update);
+    return () => list.removeEventListener("change", update);
+  }, [query]);
+  return matches;
+}
+
 export type DeskMode = "now" | "agents" | "reviewed";
 const DESK_MODES: { mode: DeskMode; label: string }[] = [
   { mode: "now", label: "Now" },
@@ -257,6 +275,9 @@ export function matchesQuery(
 }
 
 export type DirectoryGroup = {
+  /** Connection-qualified workspace identity. */
+  key: string;
+  /** Heading; disambiguated by folder when two workspaces share a label. */
   workspace: string;
   agents: WorldLeafObject[];
 };
@@ -276,16 +297,33 @@ export function agentDirectory(
     .filter((leaf) => openedAt(leaf) !== null)
     .sort((left, right) => (openedAt(right) ?? 0) - (openedAt(left) ?? 0))
     .slice(0, RECENT_LIMIT);
+  // Group by workspace identity, not its display label: two checkouts named
+  // after the same repository are different workspaces.
   const byWorkspace = new Map<string, WorldLeafObject[]>();
   for (const leaf of agents) {
-    const group = byWorkspace.get(leaf.spaceLabel) ?? [];
+    const key = JSON.stringify([leaf.connectionId, leaf.pane.workspace_id]);
+    const group = byWorkspace.get(key) ?? [];
     group.push(leaf);
-    byWorkspace.set(leaf.spaceLabel, group);
+    byWorkspace.set(key, group);
   }
-  const groups = [...byWorkspace].map(([workspace, members]) => ({
-    workspace,
-    agents: [...members].sort(newest),
-  }));
+  const labelCounts = new Map<string, number>();
+  for (const members of byWorkspace.values())
+    labelCounts.set(
+      members[0].spaceLabel,
+      (labelCounts.get(members[0].spaceLabel) ?? 0) + 1,
+    );
+  const groups = [...byWorkspace].map(([key, members]) => {
+    const label = members[0].spaceLabel;
+    const folder = agentFolder(members[0]);
+    return {
+      key,
+      workspace:
+        (labelCounts.get(label) ?? 0) > 1 && folder
+          ? `${label} (${folder})`
+          : label,
+      agents: [...members].sort(newest),
+    };
+  });
   groups.sort((left, right) => newest(left.agents[0], right.agents[0]));
   return { recent, groups };
 }
@@ -328,6 +366,9 @@ export function DeskView(props: {
   world: WorldObject;
   aggregate?: WorldObject;
   onOpenTerminal(id: string): Promise<void>;
+  reading?: string | null;
+  onPreview?: ((id: string) => Promise<void>) | null;
+  onCloseReading?: () => void;
 }) {
   const client = useConnectionClient();
   return <DeskBoard {...props} client={client} />;
@@ -339,11 +380,18 @@ export function DeskBoard({
   aggregate,
   client,
   onOpenTerminal,
+  reading = null,
+  onPreview = null,
+  onCloseReading,
 }: {
   world: WorldObject;
   aggregate?: WorldObject;
   client: ConnectionClient;
   onOpenTerminal(id: string): Promise<void>;
+  /** The agent shown in the docked reading pane, on wide screens. */
+  reading?: string | null;
+  onPreview?: ((id: string) => Promise<void>) | null;
+  onCloseReading?: () => void;
 }) {
   const now = useNow(10_000);
   const agents = useMemo(() => operationalAgents(world), [world]);
@@ -353,7 +401,8 @@ export function DeskBoard({
   const { opens, record: recordOpen } = useRecentOpens(client.connectionId);
   const [mode, setModeState] = useState<DeskMode>(() => {
     try {
-      const saved = worldLocalStorage.getItem("desk.mode.v1");
+      // The mode lasts for this browser session; a fresh visit triages first.
+      const saved = worldSessionStorage.getItem("desk.mode.v1");
       return saved === "agents" || saved === "reviewed" ? saved : "now";
     } catch {
       return "now";
@@ -362,7 +411,7 @@ export function DeskBoard({
   const setMode = (next: DeskMode) => {
     setModeState(next);
     try {
-      worldLocalStorage.setItem("desk.mode.v1", next);
+      worldSessionStorage.setItem("desk.mode.v1", next);
     } catch {
       // The chosen mode is a browser convenience.
     }
@@ -433,12 +482,22 @@ export function DeskBoard({
   );
   const screens = usePaneScreens(screenTargets, client);
   // Keyboard order is the list the operator is looking at.
-  const order =
+  const order: { leaf: WorldLeafObject; item?: Item }[] =
     mode === "now"
-      ? [...shownNeeds, ...shownReview, ...shownWorking]
+      ? [...shownNeeds, ...shownReview, ...shownWorking].map((item) => ({
+          leaf: item.leaf,
+          item,
+        }))
       : mode === "reviewed"
-        ? shownReviewed
-        : [];
+        ? shownReviewed.map((item) => ({ leaf: item.leaf, item }))
+        : [
+            ...new Map(
+              [
+                ...directory.recent,
+                ...directory.groups.flatMap((group) => group.agents),
+              ].map((leaf) => [leaf.id, { leaf }]),
+            ).values(),
+          ];
   // Other hosts come from the aggregate observation, never the selected-host
   // projection, and are summaries only.
   const others = otherHostSummaries(aggregate ?? world);
@@ -488,6 +547,16 @@ export function DeskBoard({
         searchRef.current?.focus();
         return;
       }
+      if (
+        event.key === "Escape" &&
+        reading &&
+        (target === document.body || rootRef.current?.contains(target)) &&
+        !target?.closest?.("input, textarea, select")
+      ) {
+        event.preventDefault();
+        onCloseReading?.();
+        return;
+      }
       if (!order.length) return;
       const action = deskShortcut({
         key: event.key,
@@ -513,6 +582,8 @@ export function DeskBoard({
           order[Math.min(order.length - 1, Math.max(0, focusIndex + step))];
         if (!next) return;
         setFocusedId(next.leaf.id);
+        // With the reading pane open, moving previews the next agent there.
+        if (reading && onPreview) void onPreview(next.leaf.id).catch(() => {});
         // Keep DOM focus on the highlighted card so Enter and E act on it.
         rootRef.current
           ?.querySelector<HTMLElement>(
@@ -531,14 +602,14 @@ export function DeskBoard({
         open(focused.leaf);
       } else if (
         action === "mark" &&
-        focused?.lane === "review" &&
-        !focused.pending
+        focused?.item?.lane === "review" &&
+        !focused.item.pending
       ) {
         event.preventDefault();
         // Marking moves the item out of this list; keep the operator's place.
         const neighbour = order[focusIndex + 1] ?? order[focusIndex - 1];
         setFocusedId(neighbour?.leaf.id ?? null);
-        toggleReviewed(focused);
+        toggleReviewed(focused.item);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -562,12 +633,20 @@ export function DeskBoard({
     return (
       <li
         key={leaf.id}
-        className={`desk-card is-${item.lane}${item.handled ? " is-handled" : ""}${isFocused ? " is-focused" : ""}`}
+        className={`desk-card is-${item.lane}${item.handled ? " is-handled" : ""}${isFocused ? " is-focused" : ""}${reading === leaf.id ? " is-reading" : ""}`}
         data-desk-card={leaf.id}
         tabIndex={-1}
         // The active card follows keyboard and pointer focus, never hover.
         onFocus={() => setFocusedId(leaf.id)}
         onPointerDown={() => setFocusedId(leaf.id)}
+        // On wide screens, clicking a card's text reads it in the side pane.
+        onClick={(event) => {
+          if (
+            onPreview &&
+            !(event.target as HTMLElement).closest("button, a, summary, pre")
+          )
+            void onPreview(leaf.id).catch(() => {});
+        }}
       >
         <div className="desk-card-head">
           <span className="desk-card-name">{agentName(leaf)}</span>
@@ -722,7 +801,9 @@ export function DeskBoard({
       <li key={leaf.id}>
         <button
           type="button"
-          className={`desk-row is-${leaf.status}`}
+          className={`desk-row is-${leaf.status}${focusedId === leaf.id && mode === "agents" ? " is-focused" : ""}${reading === leaf.id ? " is-reading" : ""}`}
+          data-desk-card={leaf.id}
+          onFocus={() => setFocusedId(leaf.id)}
           onClick={() => open(leaf)}
         >
           <span className="desk-row-status">
@@ -752,7 +833,10 @@ export function DeskBoard({
   );
 
   return (
-    <div className={`desk is-${mode}`} ref={rootRef}>
+    <div
+      className={`desk is-${mode}${reading ? " has-reading" : ""}`}
+      ref={rootRef}
+    >
       <header className="desk-top">
         <div className="desk-summary" aria-label="Attention summary">
           <button
@@ -929,7 +1013,7 @@ export function DeskBoard({
             </div>
           ) : null}
           {directory.groups.map((group) => (
-            <div className="desk-group" key={group.workspace}>
+            <div className="desk-group" key={group.key}>
               <h3>
                 {group.workspace}
                 <small>
@@ -952,7 +1036,11 @@ export function DeskBoard({
           aria-label="Reviewed"
         >
           <h2>
-            Reviewed <small>stops you marked, newest first</small>
+            Reviewed{" "}
+            <small>
+              each agent&rsquo;s latest stop you marked, while it stays idle or
+              done
+            </small>
           </h2>
           {shownReviewed.length ? (
             <ol>{shownReviewed.map(card)}</ol>
@@ -960,8 +1048,9 @@ export function DeskBoard({
             noMatch
           ) : (
             <p className="desk-empty">
-              Nothing marked reviewed yet. Marked stops stay here for 12 hours
-              so you can return to them; every agent is always under Agents.
+              Nothing marked reviewed yet. An agent&rsquo;s latest stop stays
+              here after you mark it until the agent works again; every agent is
+              always under Agents.
             </p>
           )}
         </section>
@@ -1006,6 +1095,11 @@ export function DeskBoard({
         <span>
           <kbd>E</kbd> mark reviewed
         </span>
+        {reading ? (
+          <span>
+            <kbd>Esc</kbd> close pane
+          </span>
+        ) : null}
       </footer>
     </div>
   );
