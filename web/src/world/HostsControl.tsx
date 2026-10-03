@@ -1,7 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown, Server } from "lucide-react";
 import type { ConnectionSummary } from "../api";
 import { ConnectionManagerDialog } from "../components/ConnectionSwitcher";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "../components/ui/popover";
 import type { HostsFilter } from "./hostsFilter";
 
 export function HostsControl({
@@ -17,46 +23,34 @@ export function HostsControl({
 }) {
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (event: PointerEvent) => {
-      if (
-        event.target instanceof Node &&
-        !rootRef.current?.contains(event.target)
-      )
-        setOpen(false);
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-        rootRef.current
-          ?.querySelector<HTMLButtonElement>('button[aria-label="Hosts"]')
-          ?.focus();
-      }
-    };
-    document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", escape);
-    return () => {
-      document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [open]);
+  const openingManager = useRef(false);
   return (
-    <div ref={rootRef} className="world-hosts-control">
-      <button
-        type="button"
-        aria-label="Hosts"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        Hosts · {ids === null ? "All hosts" : `${ids.length} selected`}
-      </button>
-      {open ? (
-        <div
+    <div className="world-hosts-control connection-switcher">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="connection-switcher-trigger"
+            aria-label="Hosts"
+            aria-expanded={open}
+          >
+            <Server size={14} />
+            <span className="connection-switcher-label">
+              {ids === null ? "All hosts" : `${ids.length} hosts`}
+            </span>
+            <ChevronDown size={14} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
           className="world-hosts-menu"
           role="group"
           aria-label="Hosts filter"
+          onCloseAutoFocus={(event) => {
+            if (openingManager.current) {
+              openingManager.current = false;
+              event.preventDefault();
+            }
+          }}
         >
           <button type="button" onClick={() => onChange(null)}>
             All hosts
@@ -88,14 +82,15 @@ export function HostsControl({
           <button
             type="button"
             onClick={() => {
+              openingManager.current = true;
               setOpen(false);
               setManaging(true);
             }}
           >
             Manage connections
           </button>
-        </div>
-      ) : null}
+        </PopoverContent>
+      </Popover>
       {explanation ? <span role="status">{explanation}</span> : null}
       {managing
         ? createPortal(

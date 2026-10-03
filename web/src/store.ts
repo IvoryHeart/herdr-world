@@ -903,6 +903,10 @@ export function numberedCreatedTabRename(
 
 const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const refreshingConnectionKeys = new Set<string>();
+const refreshCompletions = new Map<
+  string,
+  { promise: Promise<void>; resolve(): void }
+>();
 const queuedConnectionKeys = new Set<string>();
 let initialized = false;
 let catalogRequestSeq = 0;
@@ -1448,8 +1452,10 @@ async function refreshNow(lease = captureConnectionLease()) {
   const refreshKey = `${lease.connectionId}:${lease.generation}`;
   if (refreshingConnectionKeys.has(refreshKey)) {
     queuedConnectionKeys.add(refreshKey);
-    return;
+    return refreshCompletions.get(refreshKey)?.promise;
   }
+  const completion = Promise.withResolvers<void>();
+  refreshCompletions.set(refreshKey, completion);
   refreshingConnectionKeys.add(refreshKey);
   const observationStartedAt = performance.now();
   // Snapshot the pending-focus marker when the fetch actually starts. Only a
@@ -1638,6 +1644,8 @@ async function refreshNow(lease = captureConnectionLease()) {
     setForConnection(lease, { error: (error as Error).message });
   } finally {
     refreshingConnectionKeys.delete(refreshKey);
+    refreshCompletions.delete(refreshKey);
+    completion.resolve();
     if (queuedConnectionKeys.delete(refreshKey) && leaseIsCurrent(lease)) {
       void refreshNow(lease);
     }

@@ -863,6 +863,7 @@ function SpacesTabTerminal({
 }
 
 export type WorkspaceSurfaceSelection = {
+  view?: InspectorView;
   connectionId: string;
   runtimeGeneration: number;
   workspaceId: string;
@@ -887,6 +888,7 @@ export default function App({
   workspaceSurface = null,
   workspaceSurfaceVisible = true,
   workspaceSurfaceInspector = null,
+  workspaceSurfaceContext = null,
   onWorkspaceSurfaceSelect,
   worldTerminalPresentations = [],
   spacesTabWindows,
@@ -907,10 +909,13 @@ export default function App({
   visualActionExtension?: CommandExtension;
   primaryViewControl?: ReactNode;
   connectionControl?: ReactNode;
-  workspaceNavigator?: ReactNode;
+  workspaceNavigator?:
+    | ReactNode
+    | ((onSelectionAdmitted: () => void) => ReactNode);
   workspaceSurface?: ReactNode;
   workspaceSurfaceVisible?: boolean;
   workspaceSurfaceInspector?: WorkspaceSurfaceInspectorControl | null;
+  workspaceSurfaceContext?: OperationalContext | null;
   onWorkspaceSurfaceSelect?: (
     selection: WorkspaceSurfaceSelection,
   ) => void | Promise<unknown>;
@@ -930,11 +935,40 @@ export default function App({
   const hasWorkspaceSurface =
     workspaceSurface !== null && workspaceSurfaceVisible;
   const focusExplicitTab = useCallback(
-    (tabId: string) =>
-      focusExplicitSpacesTab(tabId, onSelectSpacesTab, (id) =>
+    async (tabId: string) => {
+      if (
+        hasWorkspaceSurface &&
+        workspaceSurfaceContext &&
+        onWorkspaceSurfaceSelect
+      ) {
+        const snapshot = store.getConnection(
+          workspaceSurfaceContext.connectionId,
+        );
+        const tab = snapshot.tabs.find(
+          (candidate) => candidate.tab_id === tabId,
+        );
+        if (!tab) return false;
+        const pane =
+          snapshot.panes.find(
+            (candidate) => candidate.tab_id === tabId && candidate.focused,
+          ) ?? snapshot.panes.find((candidate) => candidate.tab_id === tabId);
+        return onWorkspaceSurfaceSelect({
+          ...workspaceSurfaceContext,
+          workspaceId: tab.workspace_id,
+          ...(pane ? { paneId: pane.pane_id } : {}),
+        });
+      }
+      return focusExplicitSpacesTab(tabId, onSelectSpacesTab, (id) =>
         operations.focusTab(id),
-      ),
-    [onSelectSpacesTab, operations],
+      );
+    },
+    [
+      hasWorkspaceSurface,
+      workspaceSurfaceContext,
+      onWorkspaceSurfaceSelect,
+      onSelectSpacesTab,
+      operations,
+    ],
   );
   useShortcutPreferences();
   const s = useStoreSelector(
@@ -1124,16 +1158,28 @@ export default function App({
           tab.workspace_id === focusedWorkspace?.workspace_id,
       ),
   );
-  const focusedWorkspaceTabCount = focusedWorkspace
-    ? s.tabs.filter((tab) => tab.workspace_id === focusedWorkspace.workspace_id)
-        .length
-    : 0;
+  const { workspace: tabWorkspace, tabCount: focusedWorkspaceTabCount } =
+    useStoreSelector((state) => {
+      const snapshot =
+        hasWorkspaceSurface && workspaceSurfaceContext
+          ? connectionSnapshot(state, workspaceSurfaceContext.connectionId)
+          : state;
+      const workspace = snapshot.workspaces.find(
+        (candidate) => candidate.focused,
+      );
+      return {
+        workspace,
+        tabCount: snapshot.tabs.filter(
+          (tab) => tab.workspace_id === workspace?.workspace_id,
+        ).length,
+      };
+    }, shallowEqual);
   useEffect(() => {
     // Drop mobile-only controls when their context disappears so they cannot
     // stay active invisibly or resurface when the mobile layout returns.
-    if (!mobile || !focusedWorkspace) setMobileTabSheetOpen(false);
+    if (!mobile || !tabWorkspace) setMobileTabSheetOpen(false);
     if (!mobile) setOpenTerminalComposerScopeKey(null);
-  }, [mobile, focusedWorkspace]);
+  }, [mobile, tabWorkspace]);
   useEffect(() => {
     setOpenTerminalComposerScopeKey(null);
   }, [terminalComposerScopeKey]);
@@ -3749,12 +3795,17 @@ export default function App({
           <span className="mobile-nav-label">History</span>
         </button>
       </nav>
-      <MobileTabSheet
-        open={mobile && mobileTabSheetOpen}
-        onClose={() => setMobileTabSheetOpen(false)}
-        onShowSession={activateTerminalSurface}
-        onSelectTab={focusExplicitTab}
-      />
+      <OperationalContext.Provider
+        value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
+      >
+        <MobileTabSheet
+          key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:mobile-tabs`}
+          open={mobile && mobileTabSheetOpen}
+          onClose={() => setMobileTabSheetOpen(false)}
+          onShowSession={activateTerminalSurface}
+          onSelectTab={focusExplicitTab}
+        />
+      </OperationalContext.Provider>
       <button
         type="button"
         className={`mobile-workspace-shortcut ${
@@ -3791,7 +3842,7 @@ export default function App({
             aria-label="Show tabs"
             aria-pressed={mobileTabSheetOpen}
             tabIndex={mobileControlsCollapsed ? -1 : 0}
-            disabled={!focusedWorkspace}
+            disabled={!tabWorkspace}
             onPointerDown={blurActiveInput}
             onClick={() => setMobileTabSheetOpen((open) => !open)}
           >
@@ -3969,7 +4020,9 @@ export default function App({
           style={!mobile ? { width: sidebarWidth } : undefined}
         >
           <div className="sidebar-content">
-            {workspaceNavigator ?? (
+            {(typeof workspaceNavigator === "function"
+              ? workspaceNavigator(() => setMobileView("session"))
+              : workspaceNavigator) ?? (
               <WorkspaceTree
                 agentsFirst={
                   (mobile
@@ -4052,23 +4105,27 @@ export default function App({
           </button>
         ) : null}
         <main className="main">
-          <TabBar
-            key={`${resourceUiKey}:tabs`}
-            mobile={mobile}
-            inspectorOpen={
-              !hasWorkspaceSurface && inspectorState?.open === true
-            }
-            showInspector={!hasWorkspaceSurface}
-            annotationsOpen={annotationsOpen}
-            annotationCount={annotations.length}
-            onToggleInspector={toggleWorkspaceInspector}
-            onToggleAnnotations={toggleAnnotations}
-            onFocusSurface={onWorkspaceSurfaceSelect}
-            onSelectTab={
-              operationalShortcutsEnabled ? onSelectSpacesTab : undefined
-            }
-            arrangementControl={arrangementControl}
-          />
+          <OperationalContext.Provider
+            value={hasWorkspaceSurface ? workspaceSurfaceContext : null}
+          >
+            <TabBar
+              key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:tabs`}
+              mobile={mobile}
+              inspectorOpen={
+                !hasWorkspaceSurface && inspectorState?.open === true
+              }
+              showInspector={!hasWorkspaceSurface}
+              annotationsOpen={annotationsOpen}
+              annotationCount={annotations.length}
+              onToggleInspector={toggleWorkspaceInspector}
+              onToggleAnnotations={toggleAnnotations}
+              onFocusSurface={onWorkspaceSurfaceSelect}
+              onSelectTab={
+                operationalShortcutsEnabled ? onSelectSpacesTab : undefined
+              }
+              arrangementControl={arrangementControl}
+            />
+          </OperationalContext.Provider>
           <div
             className={`workspace-surfaces ${annotationsDocked ? "has-annotations" : ""}`}
           >

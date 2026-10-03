@@ -65,6 +65,7 @@ import {
   type WorldLeafObject,
   type WorldObject,
   type WorldObjectNode,
+  type WorldSpaceObject,
   worldObjectForHosts,
   worldObjectForWatches,
   worldObjectWithWatches,
@@ -419,6 +420,33 @@ export function worldIntentInitialView(
   return views[0] ?? null;
 }
 
+export function worldWorkspaceTerminalTarget(
+  space: WorldSpaceObject,
+  selectedPaneId?: string | null,
+  selectedTabId?: string,
+): WorldLeafObject | null {
+  const leaves = space.children.filter(
+    (leaf) =>
+      leaf.actionable &&
+      leaf.capabilities.openTerminal &&
+      leaf.connectionId === space.connectionId &&
+      leaf.generation === space.generation &&
+      leaf.workspaceId === space.nativeId,
+  );
+  const tabId =
+    selectedTabId ??
+    space.workspace.active_tab_id ??
+    space.tabs.find((tab) => tab.focused)?.tab_id;
+  return (
+    leaves.find((leaf) => leaf.nativeId === selectedPaneId) ??
+    leaves.find((leaf) => leaf.tabId === tabId && leaf.focused) ??
+    leaves.find((leaf) => leaf.tabId === tabId) ??
+    leaves.find((leaf) => leaf.focused) ??
+    leaves[0] ??
+    null
+  );
+}
+
 export function worldSnapshotPriorityForNode(
   node: WorldObjectNode,
 ): WorldRuntimePriority | null {
@@ -681,21 +709,23 @@ export default function WorldFoundationApp() {
               onChange={hostsFilter.setIds}
             />
           }
-          workspaceNavigator={
+          workspaceNavigator={(onSelectionAdmitted) => (
             <WorldNavigator
               world={topbarWorld}
-              onSelect={(node) => {
+              onSelect={async (node, requestedView) => {
                 if (node.kind === "host") return;
-                void workspaceSurfaceSelectionRef.current?.({
+                const admitted = await workspaceSurfaceSelectionRef.current?.({
                   connectionId: node.connectionId,
                   runtimeGeneration: node.generation,
+                  view: requestedView,
                   workspaceId:
                     node.kind === "space" ? node.nativeId : node.workspaceId,
                   ...(node.kind === "space" ? {} : { paneId: node.nativeId }),
                 });
+                if (admitted) onSelectionAdmitted();
               }}
             />
-          }
+          )}
           primaryViewControl={
             <div className="world-topbar-control-plane">
               <label className="world-primary-view-select">
@@ -759,6 +789,9 @@ export default function WorldFoundationApp() {
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
+          workspaceSurfaceContext={
+            view !== "spaces" ? visualActionExtension?.context : null
+          }
           arrangementControl={activeArrangementControl}
           spacesTabWindows={spaces.spacesTabWindows}
           onFocusSpacesTabWindow={spaces.onFocusSpacesTabWindow}
@@ -2061,10 +2094,17 @@ function WorldControlPlane({
     if (!view || !context) return null;
     const workspaceId =
       node.kind === "space" ? node.nativeId : node.workspaceId;
-    const workspace = connectionSnapshot(
-      store.get(),
-      node.connectionId,
-    ).workspaces.find((candidate) => candidate.workspace_id === workspaceId);
+    const workspace =
+      connectionSnapshot(store.get(), node.connectionId).workspaces.find(
+        (candidate) => candidate.workspace_id === workspaceId,
+      ) ??
+      aggregateWorld.spaces.find(
+        (space) =>
+          space.connectionId === node.connectionId &&
+          space.generation === node.generation &&
+          space.nativeId === workspaceId &&
+          space.actionable,
+      )?.workspace;
     if (!workspace) return null;
     const preferences = readInspectorPreferences(
       worldLocalStorage,
@@ -2094,6 +2134,12 @@ function WorldControlPlane({
     }
     const attempt = (remaining: number) => {
       if (inspectorFocusIntentRef.current !== focusIntent) return;
+      if (
+        document.querySelector(
+          '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"]',
+        )
+      )
+        return;
       const conversation = inspectorConversationsRef.current.find(
         (candidate) => worldInspectorWindowId(candidate) === windowId,
       );
@@ -2157,7 +2203,18 @@ function WorldControlPlane({
     signal?: AbortSignal,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
-    const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
+    const selected = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
+    const session = selected
+      ? connectionSnapshot(store.get(), selected.connectionId)
+      : null;
+    const next =
+      selected?.kind === "space" && requestedView === null
+        ? (worldWorkspaceTerminalTarget(
+            selected,
+            session?.selectedPaneId,
+            session?.browserNavigation.tabIds[selected.nativeId],
+          ) ?? selected)
+        : selected;
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
     setIntentError(null);
@@ -2469,12 +2526,27 @@ function WorldControlPlane({
   }, [active, activeInspectorId]);
   const selectNode = (id: string, signal?: AbortSignal) => {
     if (signal?.aborted) return Promise.resolve(false);
-    const node = world.nodeById.get(id);
+    const selected = world.nodeById.get(id);
+    const session = selected
+      ? connectionSnapshot(store.get(), selected.connectionId)
+      : null;
+    const node =
+      selected?.kind === "space"
+        ? (worldWorkspaceTerminalTarget(
+            selected,
+            session?.selectedPaneId,
+            session?.browserNavigation.tabIds[selected.nativeId],
+          ) ?? selected)
+        : selected;
+    const nodeId = node?.id ?? id;
     if (
       view === "office" &&
       officeInspectorPresentation === "floating" &&
+      window.innerWidth > 720 &&
+      document.documentElement.dataset.layout !== "mobile" &&
       node?.kind !== "host" &&
-      node?.actionable
+      node?.actionable &&
+      node.capabilities.openTerminal
     ) {
       const existing = inspectorConversationsRef.current.find(
         (conversation) =>
@@ -2485,7 +2557,7 @@ function WorldControlPlane({
         existing &&
         worldInspectorWindowId(existing) === dockedInspectorIdRef.current
       ) {
-        return applySelection(id, null, true, world, signal);
+        return applySelection(nodeId, null, true, world, signal);
       }
       return openFloatingInspector(node, signal)
         .then(() => true)
@@ -2498,14 +2570,14 @@ function WorldControlPlane({
           return false;
         });
     }
-    return applySelection(id, null, true, world, signal);
+    return applySelection(nodeId, null, true, world, signal);
   };
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
     const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
-    if (node) return applySelection(node.id);
+    if (node) return applySelection(node.id, surfaceSelection.view ?? null);
     if (
       runtime.connections.find(
         ({ connectionId }) => connectionId === surfaceSelection.connectionId,
@@ -2530,7 +2602,12 @@ function WorldControlPlane({
           surfaceSelection,
         );
         return refreshedNode
-          ? applySelection(refreshedNode.id, null, true, refreshedWorld)
+          ? applySelection(
+              refreshedNode.id,
+              surfaceSelection.view ?? null,
+              true,
+              refreshedWorld,
+            )
           : false;
       })
       .catch((cause) => {

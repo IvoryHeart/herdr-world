@@ -758,6 +758,60 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  test("opening a cold host waits for its already running topology refresh", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      const connection = bridge.connection;
+      const topology = Promise.withResolvers<unknown>();
+      let first = true;
+      bridge.connection = ((...args: Parameters<typeof bridge.connection>) => {
+        const client = connection(...args);
+        return {
+          ...client,
+          call: async (method: string, params = {}) => {
+            if (method === "workspace.list" && first) {
+              first = false;
+              return topology.promise;
+            }
+            return client.call(method, params);
+          },
+        };
+      }) as typeof bridge.connection;
+      const snapshot = partitionState();
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: {
+          ...snapshot.sessionsByConnectionId,
+          beta: emptyServerSessionState(1),
+        },
+      });
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const refresh = owned.refresh();
+      const focused = store.focusQualifiedTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+      });
+      try {
+        topology.resolve({
+          workspaces: snapshot.sessionsByConnectionId.beta.workspaces,
+          navigation_mode: "browser-local",
+        });
+        expect(await focused).toBe(true);
+        expect(owned.get().selectedPaneId).toBe("same-pane");
+        expect(store.get().activeConnectionId).toBe("alpha");
+      } finally {
+        topology.resolve({ workspaces: [] });
+        await refresh;
+        bridge.connection = connection;
+      }
+    });
+  });
+
   test("focuses a ready sibling host's colliding pane without replacing another session", async () => {
     await withIndependentClients(async (calls, held) => {
       const snapshot = partitionState();

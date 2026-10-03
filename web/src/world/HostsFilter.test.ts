@@ -7,9 +7,12 @@ const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 
 const cases = [
+  ...[1440, 390].map((width) => ({ width, operation: "room", view: "office" })),
   ...[1440, 390].flatMap((width) =>
     [
       "filters",
+      "cold-host",
+      "navigator",
       "delayed-catalogue",
       "empty-catalogue",
       "nonempty-filter",
@@ -40,6 +43,8 @@ const cases = [
     ["graph", "office"].flatMap((view) =>
       [
         "actions",
+        "cold-host",
+        "navigator",
         "watches",
         "hidden-spaces",
         "hidden-selection",

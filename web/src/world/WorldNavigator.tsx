@@ -1,3 +1,9 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight, Server } from "lucide-react";
+import { WorkspaceTree } from "../components/WorkspaceTree";
+import { useLayoutPreferences } from "../layoutPreferences";
+import { OperationalContext } from "../store";
+import type { InspectorView } from "../workspaceResource";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
 import { projectWorldTree } from "./treeProjection";
 
@@ -6,61 +12,128 @@ export function WorldNavigator({
   onSelect,
 }: {
   world: WorldObject;
-  onSelect(node: WorldObjectNode): void;
+  onSelect(node: WorldObjectNode, view?: InspectorView): void;
 }) {
   const projection = projectWorldTree(world);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const { mobile, preferences } = useLayoutPreferences();
+  const agentsFirst =
+    (mobile
+      ? preferences.mobileSidebarOrder
+      : preferences.desktopSidebarOrder) === "agents-first";
   return (
     <nav
       aria-label="Hosts and workspaces"
       className="world-navigator"
       tabIndex={0}
     >
-      {projection.hosts.map((host) => (
-        <section
-          key={host.source.id}
-          data-world-navigator-host={host.source.connectionId}
-        >
-          <h3>
-            {host.source.label} ·{" "}
-            {host.source.stale ? "stale" : host.source.connection.state}
-          </h3>
-          {!host.source.connection.snapshot ? (
-            <p>Observation unavailable · counts unknown</p>
-          ) : null}
-          {host.spaces.map((space) => (
-            <div key={space.source.id}>
-              <button
-                type="button"
-                disabled={!space.source.actionable}
-                onClick={() => onSelect(space.source)}
+      {projection.hosts.map((host) => {
+        const spaces = host.spaces.map(({ source }) => source);
+        const leaves = host.spaces.flatMap(({ children }) => children);
+        const selectWorkspace = (id: string, view?: InspectorView) => {
+          const node = spaces.find((space) => space.nativeId === id);
+          if (node) onSelect(node, view);
+        };
+        const selectPane = (id: string, view?: InspectorView) => {
+          const node = leaves.find((leaf) => leaf.nativeId === id);
+          if (node) onSelect(node, view);
+        };
+        return (
+          <section
+            key={host.source.id}
+            data-world-navigator-host={host.source.connectionId}
+          >
+            <button
+              type="button"
+              className="world-navigator-host tree-row"
+              aria-expanded={!collapsed.has(host.source.id)}
+              onClick={() =>
+                setCollapsed((current) => {
+                  const next = new Set(current);
+                  if (next.has(host.source.id)) next.delete(host.source.id);
+                  else next.add(host.source.id);
+                  return next;
+                })
+              }
+            >
+              {collapsed.has(host.source.id) ? (
+                <ChevronRight size={14} />
+              ) : (
+                <ChevronDown size={14} />
+              )}
+              <Server size={14} />
+              <span className="ws-label">{host.source.label}</span>
+              <span className="muted">
+                {host.source.stale ? "stale" : host.source.connection.state}
+              </span>
+            </button>
+            {!host.source.connection.snapshot ? (
+              <p>Observation unavailable · counts unknown</p>
+            ) : null}
+            {!collapsed.has(host.source.id) &&
+            host.source.connection.snapshot ? (
+              <OperationalContext.Provider
+                value={{
+                  connectionId: host.source.connectionId,
+                  runtimeGeneration: host.source.generation,
+                }}
               >
-                {space.source.label}
-              </button>
-              {space.children.map((leaf) => (
-                <button
-                  type="button"
-                  key={leaf.id}
-                  className={
-                    leaf.kind === "agent" ? "agent-row" : "terminal-row"
-                  }
-                  aria-label={`${leaf.pane.agent ?? leaf.label} pane · ${leaf.hostLabel}`}
-                  data-world-navigator-node={leaf.id}
-                  disabled={!leaf.actionable}
-                  onClick={() => onSelect(leaf)}
+                <div
+                  className="world-navigator-tree"
+                  ref={(element) => {
+                    if (element) element.inert = !host.source.actionable;
+                  }}
                 >
-                  {leaf.label} · {leaf.stateLabels[leaf.status] ?? leaf.status}
-                </button>
-              ))}
-              {space.omittedChildCount ? (
-                <p>{space.omittedChildCount} observed leaves omitted</p>
-              ) : null}
-            </div>
-          ))}
-          {host.omittedSpaceCount ? (
-            <p>{host.omittedSpaceCount} observed spaces omitted</p>
-          ) : null}
-        </section>
-      ))}
+                  <WorkspaceTree
+                    agentsFirst={agentsFirst}
+                    focusOnSelect={false}
+                    observedTopology={{
+                      workspaces: host.spaces.map(
+                        ({ source }) => source.workspace,
+                      ),
+                      tabs: host.spaces.flatMap(({ source }) => source.tabs),
+                      panes: host.spaces.flatMap(({ children }) =>
+                        children.map((leaf) => leaf.pane),
+                      ),
+                    }}
+                    onSelect={(workspace) =>
+                      selectWorkspace(workspace.workspace_id)
+                    }
+                    onSelectAgent={(pane) => selectPane(pane.pane_id)}
+                    onBrowseFiles={(workspace) =>
+                      selectWorkspace(workspace.workspace_id, "files")
+                    }
+                    onReviewChanges={(workspace) =>
+                      selectWorkspace(workspace.workspace_id, "changes")
+                    }
+                    onBrowseFilesForAgent={(pane) =>
+                      selectPane(pane.pane_id, "files")
+                    }
+                    onReviewChangesForAgent={(pane) =>
+                      selectPane(pane.pane_id, "changes")
+                    }
+                    onViewAgentHistory={(pane) =>
+                      selectPane(pane.pane_id, "history")
+                    }
+                  />
+                </div>
+              </OperationalContext.Provider>
+            ) : null}
+            {host.omittedSpaceCount ? (
+              <p>{host.omittedSpaceCount} observed spaces omitted</p>
+            ) : null}
+            {host.spaces.some((space) => space.omittedChildCount > 0) ? (
+              <p>
+                {host.spaces.reduce(
+                  (count, space) => count + space.omittedChildCount,
+                  0,
+                )}{" "}
+                observed panes omitted
+              </p>
+            ) : null}
+          </section>
+        );
+      })}
       {!world.hosts.length ? <p>No hosts in this filter.</p> : null}
     </nav>
   );

@@ -29,6 +29,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Hosts adds collapsible groups around the existing workspace navigator, retaining
+  its agent layouts, worktrees and context menus. The host filter opens above the
+  toolbar with connection management, and workspace/room selections open terminals
+  on their owning host even before its first operational refresh finishes.
 - Terminal input with a lost acknowledgement reports its original host and an
   uncertain outcome, with refresh-before-retry guidance and no replay.
 - Large aggregate updates share the World socket in bounded reply chunks, and

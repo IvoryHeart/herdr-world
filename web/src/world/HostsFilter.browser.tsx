@@ -44,6 +44,10 @@ const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
 const requestedView =
   new URLSearchParams(location.search).get("view") ?? "tree";
+const coldHost =
+  operation === "cold-host" ||
+  operation === "navigator" ||
+  operation === "room";
 const dispatches: Array<{
   connectionId: string;
   generation: number | null;
@@ -97,7 +101,7 @@ const layout = {
 };
 const session = () => ({
   ...emptyServerSessionState(7),
-  navigationMode: "shared" as const,
+  navigationMode: coldHost ? ("browser-local" as const) : ("shared" as const),
   workspaces: [workspace],
   tabs: [tab],
   panes: [pane],
@@ -287,12 +291,8 @@ async function invokeCommand(key: string) {
 }
 function leaf(id: string) {
   if (requestedView !== "tree")
-    return [
-      ...document.querySelectorAll<HTMLElement>("[data-world-navigator-node]"),
-    ].find(
-      (element) =>
-        element.dataset.worldNavigatorNode ===
-        worldObjectId(id, "terminal", "shared"),
+    return document.querySelector<HTMLElement>(
+      `[data-world-navigator-host="${id}"] .agent-row[data-pane-id="shared"]`,
     );
   return [
     ...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]"),
@@ -325,6 +325,163 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario() {
+  if (operation === "room") {
+    if (window.innerWidth <= 720) {
+      namedButton("Show workspaces")!.click();
+      await frame();
+      document
+        .querySelector<HTMLElement>(
+          '[data-world-navigator-host="alpha"] .tree-row[role="treeitem"]',
+        )!
+        .click();
+      await waitFor(
+        () => !!document.querySelector(".body.mobile-view-session"),
+        "The initial host's terminal did not enter the mobile session view",
+      );
+    }
+    const room = () =>
+      [
+        ...document.querySelectorAll<HTMLButtonElement>(
+          '.world-semantic-target[data-kind="room"]',
+        ),
+      ].find(
+        (element) =>
+          element.dataset.targetKey ===
+          worldObjectId("beta", "space", "shared"),
+      );
+    await waitFor(
+      () => !!room() && !room()!.disabled,
+      "The Office workspace room did not become interactive",
+    );
+    room()!.click();
+    await waitFor(
+      () => calls.includes("attached:beta"),
+      "The Office room did not open its owning host's terminal",
+    );
+    if (window.innerWidth <= 720) {
+      await waitFor(
+        () =>
+          [...document.querySelectorAll(".workspace-inspector")].some(
+            (inspector) =>
+              inspector.textContent?.includes("Synthetic beta") &&
+              !!inspector
+                .querySelector(".terminal-main")
+                ?.getBoundingClientRect().width,
+          ),
+        "The mobile Office room left its terminal in a hidden floating Inspector",
+      );
+    }
+    check(
+      store.get().activeConnectionId === "alpha",
+      "The Office room changed the Spaces owner",
+    );
+    return;
+  }
+  if (operation === "cold-host") {
+    check(
+      store.get().sessionsByConnectionId.beta?.workspaces.length === 0,
+      "The inactive host must start without a focused session cache",
+    );
+    await float("beta");
+    await waitFor(
+      () => calls.includes("attached:beta"),
+      "Opening an unvisited host did not attach its terminal",
+    );
+    check(
+      store.get().activeConnectionId === "alpha",
+      "Opening an unvisited host changed the Spaces owner",
+    );
+    return;
+  }
+  if (operation === "navigator") {
+    const host = document.querySelector<HTMLElement>(
+      '[data-world-navigator-host="beta"]',
+    )!;
+    check(
+      !!host.querySelector('.workspace-tree-panel .tree-row[role="treeitem"]'),
+      "The host level must preserve the existing workspace tree",
+    );
+    check(
+      !!host.querySelector(".workspace-agent-layout-control"),
+      "The host tree lost the existing agent layout controls",
+    );
+    const row = host.querySelector<HTMLElement>('.tree-row[role="treeitem"]');
+    if (row) {
+      if (window.innerWidth <= 720) {
+        namedButton("Show workspaces")!.click();
+        await frame();
+      }
+      row.click();
+      await waitFor(
+        () => calls.includes("attached:beta"),
+        "Selecting an unvisited host's workspace did not open its terminal",
+      );
+      await frame();
+      check(
+        !document.querySelector(".body.mobile-view-workspaces"),
+        "Selecting a workspace left its admitted terminal behind the mobile navigator",
+      );
+      // The existing compact layout hides a strip with only one tab.
+      if (window.innerWidth > 720) {
+        const tab = document.querySelector<HTMLElement>(".main .tabbar-tab");
+        check(
+          !!tab,
+          "The selected host's admitted tabs are missing from the visible tab strip",
+        );
+        if (tab) {
+          const beforeTab = dispatches.length;
+          tab.click();
+          await frame();
+          const tabFocus = dispatches
+            .slice(beforeTab)
+            .filter((call) => call.method === "pane.get");
+          check(
+            tabFocus.length > 0 &&
+              tabFocus.every(
+                (call) => call.connectionId === "beta" && call.generation === 7,
+              ),
+            "The visible tab strip opened the original Spaces host instead of its Inspector's host",
+          );
+        }
+      } else {
+        namedButton("Show tabs")!.click();
+        await frame();
+        const tab = document.querySelector<HTMLElement>(
+          ".mobile-tab-sheet .mobile-tab-sheet-focus",
+        );
+        check(!!tab, "The mobile tab sheet omitted the selected host's tabs");
+        if (tab) {
+          const beforeTab = dispatches.length;
+          tab.click();
+          await frame();
+          const tabFocus = dispatches
+            .slice(beforeTab)
+            .filter((call) => call.method === "pane.get");
+          check(
+            tabFocus.length > 0 &&
+              tabFocus.every(
+                (call) => call.connectionId === "beta" && call.generation === 7,
+              ),
+            "The mobile tab sheet opened the original Spaces host instead of its Inspector's host",
+          );
+        }
+      }
+    }
+    namedButton("Hosts")!.click();
+    await frame();
+    const menu = document.querySelector<HTMLElement>(".world-hosts-menu")!;
+    const box = menu.getBoundingClientRect();
+    check(
+      menu.contains(document.elementFromPoint(box.left + 12, box.top + 12)),
+      "The host menu is clipped or covered by the top bar",
+    );
+    namedButton("Manage connections")!.click();
+    await waitFor(
+      () => !!document.querySelector(".connection-manager-modal"),
+      "The host menu did not expose connection management",
+    );
+    return;
+  }
   if (operation === "file-download-error") {
     leaf("beta")!.click();
     await frame();
@@ -1168,7 +1325,11 @@ async function run() {
         });
         return { revision: watches.length, records: watches };
       }
-      if (method === "workspace.list") return { workspaces: [workspace] };
+      if (method === "workspace.list")
+        return {
+          workspaces: [workspace],
+          navigation_mode: coldHost ? "browser-local" : "shared",
+        };
       if (method === "pane.list") return { panes: dense ? densePanes : [pane] };
       if (method === "tab.list") return { tabs: [tab] };
       return {};
@@ -1271,7 +1432,7 @@ async function run() {
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
-    navigationMode: "shared",
+    navigationMode: coldHost ? "browser-local" : "shared",
     catalogueReady: true,
     activeConnectionId: "alpha",
     defaultConnectionId: "alpha",
@@ -1289,7 +1450,10 @@ async function run() {
     panes: [pane],
     tabs: [tab],
     layout,
-    sessionsByConnectionId: { alpha: session(), beta: session() },
+    sessionsByConnectionId: {
+      alpha: session(),
+      beta: coldHost ? emptyServerSessionState(7) : session(),
+    },
   });
   await worldRuntimeStore.refresh();
   const admissionScenario =

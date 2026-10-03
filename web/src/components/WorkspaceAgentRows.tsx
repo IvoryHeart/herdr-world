@@ -100,6 +100,7 @@ export function AgentRow({
 
   return (
     <div
+      data-pane-id={pane.pane_id}
       className={`agent-row ${nested ? "is-nested" : "is-standalone"} ${
         selected ? "is-selected" : ""
       } ${pane.focused ? "is-focused" : ""} ${
