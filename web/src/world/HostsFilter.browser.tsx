@@ -61,8 +61,8 @@ const workspace: Workspace = {
   number: 1,
   label: "Synthetic Studio",
   focused: operation === "focus-tab",
-  pane_count: 1,
-  tab_count: 1,
+  pane_count: operation === "spaces-navigator" ? 2 : 1,
+  tab_count: operation === "spaces-navigator" ? 2 : 1,
   agent_status: "idle",
 };
 const pane: Pane = {
@@ -135,19 +135,25 @@ const densePanes: Pane[] = Array.from({ length: 40 }, (_, index) => ({
     index === 19 ? "Needle beyond bounds" : "Repeated synthetic agent",
 }));
 let revision = 0;
-const statusCounts = { working: 0, idle: 1, blocked: 0, done: 0, unknown: 0 };
+const statusCounts = {
+  working: 0,
+  idle: fixturePanes.filter((value) => value.agent).length,
+  blocked: 0,
+  done: 0,
+  unknown: 0,
+};
 const coverage = {
   workspaces: 1,
-  tabs: 1,
-  panes: 1,
-  agent_panes: 1,
+  tabs: fixtureTabs.length,
+  panes: fixturePanes.length,
+  agent_panes: fixturePanes.filter((value) => value.agent).length,
   status: statusCounts,
   by_workspace: [
     {
       workspace_id: "shared",
-      tabs: 1,
-      panes: 1,
-      agent_panes: 1,
+      tabs: fixtureTabs.length,
+      panes: fixturePanes.length,
+      agent_panes: fixturePanes.filter((value) => value.agent).length,
       status: statusCounts,
     },
   ],
@@ -347,6 +353,13 @@ async function operationalScenario() {
       await frame();
     }
     if (operation === "bare-navigator") {
+      await waitFor(
+        () =>
+          !!document.querySelector(
+            '[data-world-navigator-host="beta"] .tree-row[role="treeitem"]',
+          ),
+        "The shell-only host's workspace did not become available",
+      );
       const host = document.querySelector<HTMLElement>(
         '[data-world-navigator-host="beta"]',
       )!;
@@ -391,6 +404,20 @@ async function operationalScenario() {
       );
       return;
     }
+    const hostOrder = () =>
+      [...document.querySelectorAll<HTMLElement>("[data-world-navigator-host]")]
+        .map((element) => element.dataset.worldNavigatorHost)
+        .join(",");
+    const initialHostOrder = hostOrder();
+    const paneOrder = () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-world-navigator-host="beta"] .agent-row',
+        ),
+      ]
+        .map((element) => element.dataset.paneId)
+        .join(",");
+    const initialPaneOrder = paneOrder();
     for (const id of ["beta", "alpha", "alpha", "beta"]) {
       if (
         window.innerWidth <= 720 &&
@@ -416,6 +443,10 @@ async function operationalScenario() {
         `Spaces did not display the selected ${id} host's terminal`,
       );
       await frame();
+      check(
+        hostOrder() === initialHostOrder,
+        "Spaces moved the selected host to the top of the navigator",
+      );
       check(
         !document.querySelector(".body.mobile-view-workspaces"),
         "Spaces selection left its terminal behind the mobile navigator",
@@ -468,6 +499,10 @@ async function operationalScenario() {
         store.get().selectedPaneId === "second" &&
         store.get().browserNavigation.tabIds.shared === "second",
       "Spaces terminal selection did not close Files and restore the clicked tab and pane",
+    );
+    check(
+      paneOrder() === initialPaneOrder,
+      "Spaces moved the focused tab to the top of its workspace list",
     );
     return;
   }

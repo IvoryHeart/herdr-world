@@ -9,6 +9,49 @@ import type {
 } from "./worldObject";
 
 describe("World Tree projection", () => {
+  test("keeps admitted terminal rows stable when focus, attention or selection changes", () => {
+    const original = space("alpha", 0, 3);
+    for (const focused of original.children) {
+      const room = {
+        ...original,
+        children: original.children.map((leaf) => ({
+          ...leaf,
+          focused: leaf.id === focused.id,
+          status:
+            leaf.id === focused.id ? ("blocked" as const) : ("idle" as const),
+        })),
+      };
+      for (const selectedId of [null, focused.id]) {
+        expect(
+          projectWorldTree(
+            world([host("alpha", [room])]),
+            selectedId,
+          ).hosts[0]!.spaces[0]!.children.map(({ id }) => id),
+        ).toEqual(original.children.map(({ id }) => id));
+      }
+    }
+  });
+  test("keeps admitted hosts in their original order when selection changes", () => {
+    const hosts = [
+      host("alpha", [space("alpha", 0, 1)]),
+      host("beta", [space("beta", 0, 1)]),
+    ];
+    for (const selected of hosts) {
+      const observed = world(
+        hosts.map((candidate) => ({
+          ...candidate,
+          selectedHost: candidate.id === selected.id,
+        })),
+      );
+      for (const selectedId of [null, selected.spaces[0]!.children[0]!.id]) {
+        expect(
+          projectWorldTree(observed, selectedId).hosts.map(
+            ({ source }) => source.id,
+          ),
+        ).toEqual(hosts.map(({ id }) => id));
+      }
+    }
+  });
   test("watched leaves reserve their owning space before ordinary host turns", () => {
     const spaces = Array.from({ length: 140 }, (_, index) =>
       space("alpha", index, 1),

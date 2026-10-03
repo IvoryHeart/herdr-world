@@ -59,7 +59,8 @@ export function projectWorldTree(
   const presentedHosts = world.hosts
     .map((host, index): IndexedHost => ({ host, index }))
     .sort((left, right) => compareHosts(left, right, selected.hostId))
-    .slice(0, TREE_PRESENTATION_BOUNDS.hosts);
+    .slice(0, TREE_PRESENTATION_BOUNDS.hosts)
+    .sort((left, right) => left.index - right.index);
   const presentedHostIds = new Set(presentedHosts.map(({ host }) => host.id));
   const presentedSpaces = admitWorldSpaces(
     world.spaces
@@ -136,6 +137,7 @@ function projectSpace(
     .map((leaf, index) => ({ leaf, index }))
     .sort((left, right) => compareLeaves(left, right, selectedLeafId))
     .slice(0, TREE_PRESENTATION_BOUNDS.childrenPerSpace)
+    .sort((left, right) => left.index - right.index)
     .map(({ leaf }) => leaf);
   return {
     source: space,

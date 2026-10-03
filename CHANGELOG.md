@@ -31,6 +31,8 @@ are optional because the merged PR history records their source.
 
 - Spaces sidebar selections activate the terminal's owning host. Workspaces with
   shell terminals can expand in the host navigator even when no agent is running.
+- Host groups and terminal rows keep their established order when selection,
+  focus or agent status changes.
 - Office keeps admitted workspace rooms, desks, pane devices and standing agents
   in a stable order when terminals are selected. Graph retains readable node
   labels when Fit zooms out.
