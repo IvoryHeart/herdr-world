@@ -258,9 +258,9 @@
   line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  /* Keep the newest lines (the question and its choices) in view. */
-  display: flex;
-  flex-direction: column-reverse;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 .is-needs .desk-screen {
   border-color: color-mix(in srgb, var(--desk-needs) 45%, transparent);

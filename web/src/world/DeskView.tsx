@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useConnectionClient } from "../useConnectionClient";
 import {
   formatSpan,
@@ -152,10 +152,27 @@ function Screen({
   live?: boolean;
   fallback: string;
 }) {
+  const ref = useRef<HTMLPreElement | null>(null);
+  // Follow the newest lines (the question and its choices) unless the reader
+  // has scrolled up to read earlier output.
+  const pinned = useRef(true);
+  const text = lines.join("\n");
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (element && pinned.current) element.scrollTop = element.scrollHeight;
+  }, [text]);
   if (!lines.length) return <p className="desk-card-missing">{fallback}</p>;
   return (
-    <pre className={`desk-screen${live ? " is-live" : ""}`}>
-      <span>{lines.join("\n")}</span>
+    <pre
+      ref={ref}
+      className={`desk-screen${live ? " is-live" : ""}`}
+      onScroll={(event) => {
+        const element = event.currentTarget;
+        pinned.current =
+          element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+      }}
+    >
+      {text}
     </pre>
   );
 }
