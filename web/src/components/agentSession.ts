@@ -12,10 +12,10 @@ export function paneHasAgentHistory<T extends Pick<Pane, "agent">>(
 
 export function groupAgentPanesByWorkspace<
   T extends Pick<Pane, "agent" | "workspace_id">,
->(panes: readonly T[]): Map<string, T[]> {
+>(panes: readonly T[], includeTerminals = false): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
   for (const pane of panes) {
-    if (!paneHasAgentHistory(pane)) continue;
+    if (!includeTerminals && !paneHasAgentHistory(pane)) continue;
     const workspacePanes = grouped.get(pane.workspace_id);
     if (workspacePanes) workspacePanes.push(pane);
     else grouped.set(pane.workspace_id, [pane]);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Server } from "lucide-react";
 import { WorkspaceTree } from "../components/WorkspaceTree";
 import { useLayoutPreferences } from "../layoutPreferences";
@@ -12,10 +12,24 @@ export function WorldNavigator({
   onSelect,
 }: {
   world: WorldObject;
-  onSelect(node: WorldObjectNode, view?: InspectorView): void;
+  onSelect(node: WorldObjectNode, view?: InspectorView): void | Promise<void>;
 }) {
   const projection = projectWorldTree(world);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const selectionSequence = useRef(0);
+  const selectNode = async (node: WorldObjectNode, view?: InspectorView) => {
+    const sequence = ++selectionSequence.current;
+    setSelectionError(null);
+    try {
+      await onSelect(node, view);
+    } catch (error) {
+      if (sequence === selectionSequence.current)
+        setSelectionError(
+          error instanceof Error ? error.message : String(error),
+        );
+    }
+  };
   const { mobile, preferences } = useLayoutPreferences();
   const agentsFirst =
     (mobile
@@ -27,16 +41,17 @@ export function WorldNavigator({
       className="world-navigator"
       tabIndex={0}
     >
+      {selectionError ? <p role="alert">{selectionError}</p> : null}
       {projection.hosts.map((host) => {
         const spaces = host.spaces.map(({ source }) => source);
         const leaves = host.spaces.flatMap(({ children }) => children);
         const selectWorkspace = (id: string, view?: InspectorView) => {
           const node = spaces.find((space) => space.nativeId === id);
-          if (node) onSelect(node, view);
+          if (node) void selectNode(node, view);
         };
         const selectPane = (id: string, view?: InspectorView) => {
           const node = leaves.find((leaf) => leaf.nativeId === id);
-          if (node) onSelect(node, view);
+          if (node) void selectNode(node, view);
         };
         return (
           <section
@@ -85,6 +100,7 @@ export function WorldNavigator({
                   }}
                 >
                   <WorkspaceTree
+                    includeTerminals
                     agentsFirst={agentsFirst}
                     focusOnSelect={false}
                     observedTopology={{

@@ -47,6 +47,8 @@ const requestedView =
 const coldHost =
   operation === "cold-host" ||
   operation === "navigator" ||
+  operation === "spaces-navigator" ||
+  operation === "bare-navigator" ||
   operation === "room";
 const dispatches: Array<{
   connectionId: string;
@@ -69,7 +71,7 @@ const pane: Pane = {
   workspace_id: "shared",
   tab_id: "shared",
   focused: false,
-  agent: "codex",
+  ...(operation === "bare-navigator" ? {} : { agent: "codex" }),
   agent_status: "idle",
   revision: 1,
 };
@@ -82,6 +84,20 @@ const tab: Tab = {
   pane_count: 1,
   agent_status: "idle",
 };
+const fixturePanes =
+  operation === "spaces-navigator"
+    ? [
+        pane,
+        { ...pane, pane_id: "second", terminal_id: "second", tab_id: "second" },
+      ]
+    : [pane];
+const fixtureTabs =
+  operation === "spaces-navigator"
+    ? [
+        tab,
+        { ...tab, tab_id: "second", number: 2, label: "Second synthetic tab" },
+      ]
+    : [tab];
 const files = Promise.withResolvers<unknown>();
 let filesPending = false;
 const layout = {
@@ -103,8 +119,8 @@ const session = () => ({
   ...emptyServerSessionState(7),
   navigationMode: coldHost ? ("browser-local" as const) : ("shared" as const),
   workspaces: [workspace],
-  tabs: [tab],
-  panes: [pane],
+  tabs: fixtureTabs,
+  panes: fixturePanes,
   selectedPaneId: "shared",
   layout,
 });
@@ -155,8 +171,8 @@ function snapshot() {
           ? null
           : {
               workspaces: [workspace],
-              tabs: [tab],
-              panes: dense && id === "beta" ? densePanes : [pane],
+              tabs: fixtureTabs,
+              panes: dense && id === "beta" ? densePanes : fixturePanes,
               agents: [],
               ...(operation === "watch-unavailable"
                 ? {
@@ -325,6 +341,136 @@ async function float(id: string) {
   await frame();
 }
 async function operationalScenario() {
+  if (operation === "spaces-navigator" || operation === "bare-navigator") {
+    if (window.innerWidth <= 720) {
+      namedButton("Show workspaces")!.click();
+      await frame();
+    }
+    if (operation === "bare-navigator") {
+      const host = document.querySelector<HTMLElement>(
+        '[data-world-navigator-host="beta"]',
+      )!;
+      const toggle = host.querySelector<HTMLButtonElement>(
+        ".workspace-group-toggle",
+      );
+      if (!toggle)
+        throw new Error(
+          "A workspace with bare terminals has no expansion control",
+        );
+      check(!!leaf("beta"), "Expanded workspace omitted its bare terminal");
+      toggle.click();
+      await frame();
+      check(!leaf("beta"), "Collapsing a workspace retained its terminal rows");
+      toggle.click();
+      await frame();
+      check(
+        !!leaf("beta"),
+        "Expanding a workspace did not restore its terminal rows",
+      );
+      leaf("beta")!.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true }),
+      );
+      await frame();
+      check(
+        !document.body.textContent?.includes("View agent history") &&
+          !document.body.textContent?.includes("Export session"),
+        "A bare terminal advertised agent session actions",
+      );
+      document.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+      await frame();
+      leaf("beta")!.click();
+      await waitFor(
+        () => calls.includes("attached:beta"),
+        "The bare terminal did not attach to its owning host",
+      );
+      check(
+        store.get().activeConnectionId === "alpha",
+        "Visual navigation changed the Spaces owner",
+      );
+      return;
+    }
+    for (const id of ["beta", "alpha", "alpha", "beta"]) {
+      if (
+        window.innerWidth <= 720 &&
+        !document.querySelector(".body.mobile-view-workspaces")
+      ) {
+        namedButton("Show workspaces")!.click();
+        await frame();
+      }
+      leaf(id)!.click();
+      await waitFor(
+        () =>
+          store.get().activeConnectionId === id &&
+          calls.includes(`attached:${id}`) &&
+          [
+            ...document.querySelectorAll<HTMLElement>(
+              ".main [data-terminal-owner]",
+            ),
+          ].some(
+            (element) =>
+              element.dataset.terminalOwner === id &&
+              element.getBoundingClientRect().width > 0,
+          ),
+        `Spaces did not display the selected ${id} host's terminal`,
+      );
+      await frame();
+      check(
+        !document.querySelector(".body.mobile-view-workspaces"),
+        "Spaces selection left its terminal behind the mobile navigator",
+      );
+      check(
+        !document.querySelector(".world-floating-terminal"),
+        "Spaces selection opened a visual Inspector instead of its terminal surface",
+      );
+    }
+    check(
+      store.get().sessionsByConnectionId.alpha?.workspaces.length === 1,
+      "Switching hosts discarded the previous host's session",
+    );
+    if (window.innerWidth <= 720) {
+      namedButton("Show workspaces")!.click();
+      await frame();
+    }
+    document
+      .querySelector<HTMLElement>(
+        '[data-world-navigator-host="beta"] .tree-row[role="treeitem"]',
+      )!
+      .click();
+    await waitFor(
+      () =>
+        [
+          ...document.querySelectorAll<HTMLElement>(
+            '.workspace-inspector[data-view="files"]',
+          ),
+        ].some((element) => element.getBoundingClientRect().width > 0) &&
+        calls.includes("resource:beta"),
+      "Spaces workspace selection did not open Files",
+    );
+    if (window.innerWidth <= 720) {
+      namedButton("Show workspaces")!.click();
+      await frame();
+    }
+    document
+      .querySelector<HTMLElement>(
+        '[data-world-navigator-host="beta"] [data-pane-id="second"]',
+      )!
+      .click();
+    await waitFor(
+      () =>
+        ![
+          ...document.querySelectorAll<HTMLElement>(
+            '.workspace-inspector[data-view="files"]',
+          ),
+        ].some((element) => element.getBoundingClientRect().width > 0) &&
+        !!document.querySelector('.main [data-terminal-owner="beta"]') &&
+        store.get().selectedPaneId === "second" &&
+        store.get().browserNavigation.tabIds.shared === "second",
+      "Spaces terminal selection did not close Files and restore the clicked tab and pane",
+    );
+    return;
+  }
   if (operation === "room") {
     if (window.innerWidth <= 720) {
       namedButton("Show workspaces")!.click();
@@ -1315,10 +1461,11 @@ async function run() {
       })),
     );
   store.init = () => {};
-  store.selectConnection = (id) => {
-    calls.push(`select:${id}`);
-    return true;
-  };
+  if (operation !== "spaces-navigator")
+    store.selectConnection = (id) => {
+      calls.push(`select:${id}`);
+      return true;
+    };
   bridge.onStatus = (listener) => {
     listener("connected");
     return () => {};
@@ -1354,14 +1501,19 @@ async function run() {
           workspaces: [workspace],
           navigation_mode: coldHost ? "browser-local" : "shared",
         };
-      if (method === "pane.list") return { panes: dense ? densePanes : [pane] };
-      if (method === "tab.list") return { tabs: [tab] };
+      if (method === "pane.list")
+        return { panes: dense ? densePanes : fixturePanes };
+      if (method === "tab.list") return { tabs: fixtureTabs };
       return {};
     },
   };
-  bridge.connection = (id = "alpha", generation = 7) => ({
+  bridge.connection = (
+    id = store.get().activeConnectionId,
+    generation = 7,
+  ) => ({
     ...client,
     connectionId: id,
+    generation: bridge.clientGeneration,
     serverRuntimeGeneration: generation,
     isCurrent: () =>
       catalogue.includes(id) &&
@@ -1411,9 +1563,20 @@ async function run() {
           root: "/synthetic",
         };
       }
-      if (method === "pane.layout") return { layout };
+      if (method === "pane.layout")
+        return {
+          layout:
+            params.tab_id === "second"
+              ? {
+                  ...layout,
+                  tab_id: "second",
+                  focused_pane_id: "second",
+                  panes: [{ ...layout.panes[0], pane_id: "second" }],
+                }
+              : layout,
+        };
       if (method === "pane.get") {
-        const target = (dense ? densePanes : [pane]).find(
+        const target = (dense ? densePanes : fixturePanes).find(
           (value) => value.pane_id === params.pane_id,
         );
         if (!target) throw new Error("Synthetic pane is unavailable");
@@ -1471,8 +1634,8 @@ async function run() {
       generation: 7,
     })),
     workspaces: [workspace],
-    panes: [pane],
-    tabs: [tab],
+    panes: fixturePanes,
+    tabs: fixtureTabs,
     layout,
     sessionsByConnectionId: {
       alpha: session(),
@@ -1540,11 +1703,13 @@ async function run() {
       )!;
       view.value = requestedView;
       view.dispatchEvent(new Event("change", { bubbles: true }));
-      const title = requestedView === "office" ? "Office" : "Graph";
-      await waitFor(
-        () => !!document.querySelector(`[aria-label="${title} controls"]`),
-        `${title} did not mount`,
-      );
+      if (requestedView !== "spaces") {
+        const title = requestedView === "office" ? "Office" : "Graph";
+        await waitFor(
+          () => !!document.querySelector(`[aria-label="${title} controls"]`),
+          `${title} did not mount`,
+        );
+      }
       await frame();
     }
     if (operation !== "filters") {

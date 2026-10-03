@@ -197,6 +197,7 @@ function GitStatusBadges({
 export function WorkspaceTree({
   agentsFirst = false,
   focusOnSelect = true,
+  includeTerminals = false,
   observedTopology,
   onSelect,
   onBrowseFiles,
@@ -208,6 +209,7 @@ export function WorkspaceTree({
 }: {
   agentsFirst?: boolean;
   focusOnSelect?: boolean;
+  includeTerminals?: boolean;
   observedTopology?: { workspaces: Workspace[]; tabs: Tab[]; panes: Pane[] };
   onSelect?: (workspace: Workspace) => void;
   onBrowseFiles?: (workspace: Workspace) => void;
@@ -328,8 +330,8 @@ export function WorkspaceTree({
   const collapsedWorktreeGroupSet = new Set(collapsedWorktreeGroupKeys);
   const activePaneId = activePaneIdForSnapshot(s) ?? null;
   const agentsByWorkspace = useMemo(
-    () => groupAgentPanesByWorkspace(s.panes),
-    [s.panes],
+    () => groupAgentPanesByWorkspace(s.panes, includeTerminals),
+    [s.panes, includeTerminals],
   );
   const tabCountsByWorkspace = useMemo(() => {
     const counts = new Map<string, number>();
@@ -345,13 +347,15 @@ export function WorkspaceTree({
         workspace.number,
       ]),
     );
-    return s.panes.filter(paneHasAgentHistory).sort((left, right) => {
-      const workspaceOrder =
-        (workspaceNumbers.get(left.workspace_id) ?? 0) -
-        (workspaceNumbers.get(right.workspace_id) ?? 0);
-      return workspaceOrder || left.pane_id.localeCompare(right.pane_id);
-    });
-  }, [s.panes, s.workspaces]);
+    return s.panes
+      .filter((pane) => includeTerminals || paneHasAgentHistory(pane))
+      .sort((left, right) => {
+        const workspaceOrder =
+          (workspaceNumbers.get(left.workspace_id) ?? 0) -
+          (workspaceNumbers.get(right.workspace_id) ?? 0);
+        return workspaceOrder || left.pane_id.localeCompare(right.pane_id);
+      });
+  }, [s.panes, s.workspaces, includeTerminals]);
   const agentPanes = useMemo(
     () =>
       sortAgentPanes(

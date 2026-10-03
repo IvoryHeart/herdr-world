@@ -686,6 +686,39 @@ export default function WorldFoundationApp() {
               world={topbarWorld}
               onSelect={async (node, requestedView) => {
                 if (node.kind === "host") return;
+                if (view === "spaces") {
+                  if (store.get().activeConnectionId !== node.connectionId)
+                    await activateWorldNodeHost(node);
+                  const resourceView =
+                    requestedView ?? (node.kind === "space" ? "files" : null);
+                  if (resourceView)
+                    await dispatchWorldInspectorRequest(
+                      node,
+                      resourceView,
+                      store,
+                      window,
+                      () => {
+                        if (
+                          store.get().activeConnectionId !== node.connectionId
+                        )
+                          throw new Error(
+                            "The selected host changed while it was opening",
+                          );
+                      },
+                    );
+                  else {
+                    window.dispatchEvent(
+                      new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT),
+                    );
+                    await focusWorldNode(node);
+                    if (store.get().activeConnectionId !== node.connectionId)
+                      throw new Error(
+                        "The selected host changed while it was opening",
+                      );
+                    onSelectionAdmitted();
+                  }
+                  return;
+                }
                 const admitted = await workspaceSurfaceSelectionRef.current?.({
                   connectionId: node.connectionId,
                   runtimeGeneration: node.generation,
