@@ -1,4 +1,5 @@
 import { sendWorldSnapshotReply } from "../../../server/src/bridge/world-snapshot-reply";
+import { WorldSnapshotAdmission } from "../../../server/src/bridge/world-snapshot-admission";
 import { serveStatic } from "../../../server/src/http/static-files";
 import { expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -47,11 +48,42 @@ test.skipIf(!chrome).each(
         )
       : 0;
     let stalledResponseVerified = false;
+    const admission = new WorldSnapshotAdmission();
+    const diagnostic = Boolean(Bun.env.WORLD_TRACE_PREFIX);
+    const serviceTasks: { stage: string; beginAt: number; endAt: number }[] =
+      [];
+    const serviceInputs: {
+      id: string;
+      receivedAt: number;
+      repliedAt: number;
+    }[] = [];
+    const serviceSends: {
+      id: string;
+      sendAt: number;
+      completedAt: number;
+      bufferedBefore: number;
+      bufferedAfter: number;
+      result: number;
+      bytes: number;
+    }[] = [];
+    const loopDelays: { dueAt: number; ranAt: number }[] = [];
+    let nextLoopAt = Date.now() + 20;
+    const loopMonitor = diagnostic
+      ? setInterval(() => {
+          const ranAt = Date.now();
+          if (ranAt - nextLoopAt > 10)
+            loopDelays.push({ dueAt: nextLoopAt, ranAt });
+          nextLoopAt = ranAt + 20;
+        }, 20)
+      : undefined;
     const stringify = JSON.stringify;
     let serializationMs = 0;
     JSON.stringify = function (value, replacer: any, space?: string | number) {
       const began = performance.now();
+      const beginAt = diagnostic ? Date.now() : 0;
       const text = stringify(value, replacer, space);
+      if (diagnostic && performance.now() - began > 15)
+        serviceTasks.push({ stage: "serialize", beginAt, endAt: Date.now() });
       if (value?.connections?.length === 64)
         serializationMs = Math.max(serializationMs, performance.now() - began);
       return text;
@@ -72,6 +104,12 @@ test.skipIf(!chrome).each(
       receivedAt: number;
     }[] = [];
     const sent: { phase: string; dueAt: number; sentAt: number }[] = [];
+    const dispatches: {
+      phase: string;
+      sequence: number;
+      cdpSentAt: number;
+      cdpCompleteAt: number;
+    }[] = [];
     const producer = new Worker(
       new URL("./browserInput.worker.ts", import.meta.url).href,
     );
@@ -81,6 +119,10 @@ test.skipIf(!chrome).each(
       ReturnType<typeof Promise.withResolvers<any>>
     >();
     producer.onmessage = ({ data }) => {
+      if (data.dispatch) {
+        dispatches.push(data.dispatch);
+        return;
+      }
       if (data.input) {
         sent.push(data.input);
         return;
@@ -109,6 +151,24 @@ test.skipIf(!chrome).each(
         receivedAt: number;
         host: string;
       }[];
+      nativeInputs: {
+        phase: string;
+        sequence: number;
+        nativeAt: number;
+        target: string;
+      }[];
+      socketInputs: { id: string; phase: string; sentAt: number }[];
+      socketReplies: { id: string; receivedAt: number }[];
+      cloneAdmissions: {
+        worker: number;
+        index: number;
+        host: string;
+        phase: string | null;
+        beganAt: number;
+        completedAt: number;
+        durationMs: number;
+      }[];
+      bridgeReplies: { id: string; beganAt: number; completedAt: number }[];
       phases: Record<string, number>;
       paints: number;
       notices: number;
@@ -120,12 +180,37 @@ test.skipIf(!chrome).each(
       text: string,
       coalesceKey?: string,
       context = "synthetic acceptance",
+      inputId?: string,
     ) =>
-      sendWebSocketMessage(ws, text, {
-        cleanup: () => {},
-        coalesceKey,
-        context,
-      });
+      sendWebSocketMessage(
+        diagnostic && inputId
+          ? {
+              close: (code, reason) => ws.close(code, reason),
+              getBufferedAmount: () => ws.getBufferedAmount(),
+              send: (payload, compress) => {
+                const sendAt = Date.now();
+                const bufferedBefore = ws.getBufferedAmount();
+                const result = ws.send(payload, compress);
+                serviceSends.push({
+                  id: inputId,
+                  sendAt,
+                  completedAt: Date.now(),
+                  bufferedBefore,
+                  bufferedAfter: ws.getBufferedAmount(),
+                  result,
+                  bytes: Buffer.byteLength(payload),
+                });
+                return result;
+              },
+            }
+          : ws,
+        text,
+        {
+          cleanup: () => {},
+          coalesceKey,
+          context,
+        },
+      );
     const frame = (ws: any, host: string, terminalId = "shared") =>
       send(
         ws,
@@ -163,6 +248,9 @@ test.skipIf(!chrome).each(
             action: "start",
             profile: Bun.env.WORLD_PROFILE === "1",
             slowdown: Number(Bun.env.WORLD_CPU_RATE ?? 1),
+            tracePath: Bun.env.WORLD_TRACE_PREFIX
+              ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}-${width}-${phase}.json`
+              : undefined,
             phase,
             url: pages.find((page) => page.type === "page")!
               .webSocketDebuggerUrl,
@@ -174,6 +262,9 @@ test.skipIf(!chrome).each(
             action: "stop",
             phase: url.searchParams.get("phase")!,
             profile: Bun.env.WORLD_PROFILE === "1",
+            tracePath: Bun.env.WORLD_TRACE_PREFIX
+              ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}-${width}-${url.searchParams.get("phase")}.json`
+              : undefined,
           });
           if (observed.hotspots)
             console.log(
@@ -212,6 +303,7 @@ test.skipIf(!chrome).each(
                 connection_scoped_http: true,
                 connection_runtime_generation: true,
                 world_snapshot_chunks: true,
+                world_snapshot_chunk_admission: true,
               },
             }),
           );
@@ -221,7 +313,9 @@ test.skipIf(!chrome).each(
             }, 25);
         },
         async message(ws, raw) {
+          const receivedAt = diagnostic ? Date.now() : 0;
           const request = JSON.parse(String(raw));
+          if (admission.acknowledge(ws, request)) return;
           request.connection_id ??= request.params?.connection_id;
           request.connection_generation ??=
             request.params?.connection_generation;
@@ -239,14 +333,20 @@ test.skipIf(!chrome).each(
                     }
                   : {}),
               }),
+              undefined,
+              "synthetic acceptance",
+              request.method === "terminal.input" ? request.id : undefined,
             );
           if (request.method === "world.snapshot") {
+            const task = { stage: "snapshot", beginAt: Date.now(), endAt: 0 };
+            if (diagnostic) serviceTasks.push(task);
             const refresh = ++revision === 2;
             if (refresh) fixture!.startStalledAttentionRefresh();
             const began = Date.now();
             const snapshotResult = await fixture!.service.snapshot(
               request.params,
             );
+            task.endAt = Date.now();
             if (refresh)
               stalledResponseVerified =
                 Date.now() - began >= 19900 &&
@@ -256,13 +356,26 @@ test.skipIf(!chrome).each(
                       connection.connection_id === id && connection.stale,
                   ),
                 );
-            await sendWorldSnapshotReply(
-              request.id,
-              snapshotResult,
-              request.accept_world_snapshot_chunks === true,
-              (text) => send(ws, text, undefined, "world-snapshot"),
-              () => ws.readyState === 1,
-            );
+            const framing = { stage: "framing", beginAt: Date.now(), endAt: 0 };
+            if (diagnostic) serviceTasks.push(framing);
+            const transfer =
+              request.accept_world_snapshot_chunks === true &&
+              request.accept_world_snapshot_chunk_admission === true
+                ? admission.open(ws, request.id)
+                : undefined;
+            try {
+              await sendWorldSnapshotReply(
+                request.id,
+                snapshotResult,
+                request.accept_world_snapshot_chunks === true,
+                (text) => send(ws, text, undefined, "world-snapshot"),
+                () => ws.readyState === 1,
+                transfer?.wait,
+              );
+            } finally {
+              transfer?.close();
+            }
+            framing.endAt = Date.now();
             return;
           }
           if (
@@ -325,6 +438,12 @@ test.skipIf(!chrome).each(
             return;
           }
           reply({});
+          if (diagnostic && request.method === "terminal.input")
+            serviceInputs.push({
+              id: request.id,
+              receivedAt,
+              repliedAt: Date.now(),
+            });
         },
         drain(ws) {
           flushCoalescedMessages(ws, {
@@ -332,7 +451,8 @@ test.skipIf(!chrome).each(
             context: "synthetic drain",
           });
         },
-        close() {
+        close(ws) {
+          admission.retire(ws);
           clearInterval(noise);
         },
       },
@@ -390,7 +510,12 @@ test.skipIf(!chrome).each(
           "--remote-debugging-port=" + debuggingPort,
           "--user-data-dir=" + dir + "/profile",
           "--window-size=" + width + ",1100",
-          server.url + "?view=" + view + "&entry=" + entry,
+          server.url +
+            "?view=" +
+            view +
+            "&entry=" +
+            entry +
+            (Bun.env.WORLD_TRACE_PREFIX ? "&trace=1" : ""),
         ],
         { stdout: "ignore", stderr: "ignore" },
       );
@@ -465,6 +590,26 @@ test.skipIf(!chrome).each(
         const dispatch = inputs.map(
           (call, index) => call.receivedAt - sent[index]!.dueAt,
         );
+        if (Bun.env.WORLD_TRACE_PREFIX)
+          await Bun.write(
+            `${Bun.env.WORLD_TRACE_PREFIX}-${view}-${width}-inputs.json`,
+            JSON.stringify({
+              sent,
+              inputs,
+              acknowledgements: observed.acknowledgements,
+              nativeInputs: observed.nativeInputs,
+              socketInputs: observed.socketInputs,
+              dispatches,
+              serviceTasks,
+              serviceInputs,
+              serviceSends,
+              socketReplies: observed.socketReplies,
+              cloneAdmissions: observed.cloneAdmissions,
+              bridgeReplies: observed.bridgeReplies,
+              loopDelays,
+              phases: observed.phases,
+            }),
+          );
         console.info(
           "Production dense " +
             view +
@@ -508,6 +653,7 @@ test.skipIf(!chrome).each(
         );
       }
     } finally {
+      clearInterval(loopMonitor);
       JSON.stringify = stringify;
       fixture?.release();
       producer.terminate();

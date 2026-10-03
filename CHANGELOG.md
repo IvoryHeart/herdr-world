@@ -34,6 +34,22 @@ are optional because the merged PR history records their source.
   coverage totals. Office limits reception painting to the visible horizontal
   region while retaining every host in its semantic overview. Streaming output
   preserves another terminal's keyboard focus.
+- Dense host construction also yields and cancels within a host. Office reuses
+  qualified pane devices across its scene and complete roster, and newer
+  Inspector control focus supersedes queued terminal refocusing.
+  Expired aggregate observations yield between hosts to admit terminal input.
+  Snapshot decoding admits one host payload at a time so socket acknowledgements
+  can interleave with observation work.
+  Negotiated snapshot transport waits for browser admission after each bounded
+  chunk batch, preventing bulk replies from queuing ahead of terminal input.
+  Progressive Tree admission reuses unchanged spaces instead of rendering
+  every admitted subtree again on each batch.
+- Graph overview keeps every node and semantic target while deferring unreadably
+  small canvas text until zoomed in.
+- Office constructs and paints its visible scene across cancellable task turns,
+  admitting matching layout controls through ordinary tasks after painting.
+  Its canvas and text textures follow the visible viewport and device resolution
+  while retaining the complete layout and two-axis navigation.
 
 ## [0.2.0] - 2026-10-02
 

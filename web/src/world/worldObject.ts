@@ -119,6 +119,9 @@ function boundedLabel(value: unknown, fallback: string) {
 }
 
 function boundedCodePointPrefix(value: string, limit: number) {
+  // Most admitted labels already fit. Their UTF-16 length is an upper bound
+  // on code points, so retain the string instead of allocating per character.
+  if (value.length <= limit) return value;
   let result = "";
   let length = 0;
   for (const character of value) {
@@ -351,9 +354,9 @@ function emptyStatusCounts(): WorldAgentStatusCounts {
   return { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
 }
 
-function observedCoverage(
+function* observedCoverage(
   connection: WorldRuntimeConnection,
-): WorldObservedCoverage {
+): Generator<number, WorldObservedCoverage> {
   const snapshot = connection.snapshot;
   if (!snapshot) {
     return {
@@ -381,9 +384,11 @@ function observedCoverage(
   const statusCounts = emptyStatusCounts();
   let agents = 0;
   for (const pane of snapshot.panes) {
-    if (typeof pane.agent !== "string" || !pane.agent.trim()) continue;
-    agents += 1;
-    statusCounts[status(pane.agent_status)] += 1;
+    if (typeof pane.agent === "string" && pane.agent.trim()) {
+      agents += 1;
+      statusCounts[status(pane.agent_status)] += 1;
+    }
+    yield 1;
   }
   return {
     spaces: snapshot.workspaces.length,
@@ -533,13 +538,14 @@ export async function prepareWorldObject(
   isCurrent: () => boolean = () => true,
   options: {
     yieldTask?: (
-      checkpoint: "host" | "node-batch" | "complete",
+      checkpoint: "host" | "host-batch" | "node-batch" | "complete",
       count: number,
     ) => Promise<void>;
     onWorkSlice?: (
-      checkpoint: "host" | "node-batch",
+      checkpoint: "host" | "host-batch" | "node-batch",
       count: number,
       durationMs: number,
+      connectionId?: string,
     ) => void;
   } = {},
 ): Promise<WorldObject | null> {
@@ -548,9 +554,31 @@ export async function prepareWorldObject(
   await new Promise((resolve) => setTimeout(resolve, 0));
   for (const connection of connections) {
     if (!isCurrent()) return null;
-    const sliceStart = performance.now();
-    const inactive = buildHost(connection, null);
-    options.onWorkSlice?.("host", 1, performance.now() - sliceStart);
+    let inactive = preparedHosts.get(connection)?.[0];
+    if (!inactive) {
+      const construction = constructHost(connection, null);
+      let result: IteratorResult<number, WorldHostObject>;
+      do {
+        const sliceStart = performance.now();
+        let count = 0;
+        do {
+          result = construction.next();
+          if (result.done) break;
+          count += result.value;
+        } while (count < 256 && performance.now() - sliceStart < 8);
+        options.onWorkSlice?.(
+          "host-batch",
+          count,
+          performance.now() - sliceStart,
+          connection.connectionId,
+        );
+        if (!result.done) {
+          await yieldTask("host-batch", count);
+          if (!isCurrent()) return null;
+        }
+      } while (!result.done);
+      inactive = result.value;
+    }
     // Aggregate focus is independent of runtime authority. Prepare only the
     // aggregate variant; a legacy selected variant is built on demand instead
     // of duplicating every admitted leaf for every peer.
@@ -652,6 +680,19 @@ function buildHost(
       connection.connectionId === selectedConnectionId ? 1 : 0
     ];
   if (prepared) return prepared;
+  const construction = constructHost(connection, selectedConnectionId);
+  let result = construction.next();
+  while (!result.done) result = construction.next();
+  return result.value;
+}
+
+// Both entry points consume this semantic constructor. Async preparation can
+// suspend grouping, leaf allocation and coverage work without publishing a
+// partial host; the legacy synchronous path retains exactly the same contract.
+function* constructHost(
+  connection: WorldRuntimeConnection,
+  selectedConnectionId: string | null,
+): Generator<number, WorldHostObject> {
   const connectionHostState = hostState(connection, selectedConnectionId);
   const selectedHost = connection.connectionId === selectedConnectionId;
   const hostCapabilities = actionCapabilities("host", connectionHostState);
@@ -668,177 +709,178 @@ function buildHost(
   const tabsByWorkspace = new Map<string, Tab[]>();
   const panesByWorkspace = new Map<string, Pane[]>();
   const tabsById = new Map<string, Tab>();
-  const workspaceCoverage = new Map(
-    (connection.snapshot?.coverage?.byWorkspace ?? []).map((coverage) => [
-      coverage.workspaceId,
-      coverage,
-    ]),
-  );
+  const workspaceCoverage = new Map<
+    string,
+    NonNullable<
+      NonNullable<WorldRuntimeConnection["snapshot"]>["coverage"]
+    >["byWorkspace"][number]
+  >();
+  for (const coverage of connection.snapshot?.coverage?.byWorkspace ?? []) {
+    workspaceCoverage.set(coverage.workspaceId, coverage);
+    yield 1;
+  }
+  const hostLabel = boundedLabel(connection.label, "Host");
   for (const tab of connection.snapshot?.tabs ?? []) {
     const tabs = tabsByWorkspace.get(tab.workspace_id) ?? [];
     tabs.push(tab);
     tabsByWorkspace.set(tab.workspace_id, tabs);
     tabsById.set(tab.tab_id, tab);
+    yield 1;
   }
   for (const pane of connection.snapshot?.panes ?? []) {
     const panes = panesByWorkspace.get(pane.workspace_id) ?? [];
     panes.push(pane);
     panesByWorkspace.set(pane.workspace_id, panes);
+    yield 1;
   }
-  const spaces = (connection.snapshot?.workspaces ?? []).map(
-    (workspace): WorldSpaceObject => {
-      const spaceId = worldObjectId(
-        connection.connectionId,
-        "space",
-        workspace.workspace_id,
-      );
-      const children = (panesByWorkspace.get(workspace.workspace_id) ?? []).map(
-        (pane): WorldLeafObject => {
-          const isAgent =
-            typeof pane.agent === "string" && pane.agent.trim().length > 0;
-          const kind = isAgent ? "agent" : "terminal";
-          const capabilities = actionCapabilities(kind, connectionHostState);
-          const tab = tabsById.get(pane.tab_id);
-          const tabLabel = boundedOptionalText(tab?.label, 100);
-          const agentMetadata = isAgent
-            ? matchingAgentMetadata(connection.snapshot?.agents ?? [], pane)
-            : null;
-          const agentLabel = isAgent
-            ? boundedOptionalText(
-                pane.display_agent ??
-                  agentMetadata?.display_agent ??
-                  pane.agent,
-                100,
-              )
-            : undefined;
-          const modelLabel = isAgent
-            ? boundedOptionalText(
-                pane.model_name ??
-                  pane.model ??
-                  agentMetadata?.model_name ??
-                  agentMetadata?.model,
-                100,
-              )
-            : undefined;
-          const taskSummary = isAgent
-            ? (taskSummaryFromTokens(pane, agentMetadata) ??
-              boundedOptionalText(
-                pane.task_summary ?? agentMetadata?.task_summary,
-                160,
-              ))
-            : undefined;
-          const agentSessionIdentity = isAgent
-            ? admittedAgentSessionIdentity(agentMetadata)
-            : undefined;
-          const agentSessionFingerprint = isAgent
-            ? admittedAgentSessionFingerprint(pane, agentMetadata)
-            : undefined;
-          const lastActivityAt = isAgent
-            ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
-            : undefined;
-          return {
-            id: worldObjectId(
-              connection.connectionId,
-              "terminal",
-              pane.terminal_id,
-            ),
-            kind,
-            nativeId: pane.pane_id,
-            parentId: spaceId,
-            connectionId: connection.connectionId,
-            generation: observedGeneration,
-            label: boundedLabel(
-              agentLabel,
-              isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
-            ),
-            hostLabel: boundedLabel(connection.label, "Host"),
-            hostState: connectionHostState,
-            selectedHost,
-            stale: connection.stale,
-            actionable: operational,
-            capabilities,
-            pane,
-            workspaceId: pane.workspace_id,
-            tabId: pane.tab_id,
-            terminalId: pane.terminal_id,
-            status: status(pane.agent_status),
-            focused: pane.focused === true,
-            spaceLabel: boundedLabel(
-              workspace.label,
-              `Space ${workspace.number ?? ""}`,
-            ),
-            ...(tabLabel ? { tabLabel } : {}),
-            ...(Number.isSafeInteger(tab?.number)
-              ? { tabNumber: tab?.number }
-              : {}),
-            ...(agentLabel ? { agentLabel } : {}),
-            ...(modelLabel ? { modelLabel } : {}),
-            ...(taskSummary ? { taskSummary } : {}),
-            ...(agentSessionIdentity ? { agentSessionIdentity } : {}),
-            ...(agentSessionFingerprint ? { agentSessionFingerprint } : {}),
-            stateLabels: isAgent
-              ? admittedStateLabels(
-                  pane.state_labels ?? agentMetadata?.state_labels,
-                )
-              : {},
-            ...(typeof lastActivityAt === "number" &&
-            Number.isFinite(lastActivityAt) &&
-            lastActivityAt > 0
-              ? { lastActivityAt }
-              : {}),
-          };
-        },
-      );
-      const exactCoverage = workspaceCoverage.get(workspace.workspace_id);
-      const spaceStatus = emptyStatusCounts();
-      let spaceAgents = 0;
-      if (!exactCoverage) {
-        for (const child of children) {
-          if (child.kind !== "agent") continue;
-          spaceAgents += 1;
-          spaceStatus[child.status] += 1;
-        }
-      }
-      return {
-        id: spaceId,
-        kind: "space",
-        nativeId: workspace.workspace_id,
-        parentId: id,
+  const spaces: WorldSpaceObject[] = [];
+  for (const workspace of connection.snapshot?.workspaces ?? []) {
+    const spaceId = worldObjectId(
+      connection.connectionId,
+      "space",
+      workspace.workspace_id,
+    );
+    const spaceLabel = boundedLabel(
+      workspace.label,
+      `Space ${workspace.number ?? ""}`,
+    );
+    const children: WorldLeafObject[] = [];
+    const spaceStatus = emptyStatusCounts();
+    let spaceAgents = 0;
+    for (const pane of panesByWorkspace.get(workspace.workspace_id) ?? []) {
+      const isAgent =
+        typeof pane.agent === "string" && pane.agent.trim().length > 0;
+      const kind = isAgent ? "agent" : "terminal";
+      const capabilities = actionCapabilities(kind, connectionHostState);
+      const tab = tabsById.get(pane.tab_id);
+      const tabLabel = boundedOptionalText(tab?.label, 100);
+      const agentMetadata = isAgent
+        ? matchingAgentMetadata(connection.snapshot?.agents ?? [], pane)
+        : null;
+      const agentLabel = isAgent
+        ? boundedOptionalText(
+            pane.display_agent ?? agentMetadata?.display_agent ?? pane.agent,
+            100,
+          )
+        : undefined;
+      const modelLabel = isAgent
+        ? boundedOptionalText(
+            pane.model_name ??
+              pane.model ??
+              agentMetadata?.model_name ??
+              agentMetadata?.model,
+            100,
+          )
+        : undefined;
+      const taskSummary = isAgent
+        ? (taskSummaryFromTokens(pane, agentMetadata) ??
+          boundedOptionalText(
+            pane.task_summary ?? agentMetadata?.task_summary,
+            160,
+          ))
+        : undefined;
+      const agentSessionIdentity = isAgent
+        ? admittedAgentSessionIdentity(agentMetadata)
+        : undefined;
+      const agentSessionFingerprint = isAgent
+        ? admittedAgentSessionFingerprint(pane, agentMetadata)
+        : undefined;
+      const lastActivityAt = isAgent
+        ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
+        : undefined;
+      const child: WorldLeafObject = {
+        id: worldObjectId(
+          connection.connectionId,
+          "terminal",
+          pane.terminal_id,
+        ),
+        kind,
+        nativeId: pane.pane_id,
+        parentId: spaceId,
         connectionId: connection.connectionId,
         generation: observedGeneration,
-        label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
-        hostLabel: boundedLabel(connection.label, "Host"),
+        label: boundedLabel(
+          agentLabel,
+          isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
+        ),
+        hostLabel,
         hostState: connectionHostState,
         selectedHost,
         stale: connection.stale,
         actionable: operational,
-        capabilities: actionCapabilities("space", connectionHostState),
-        workspace,
-        tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
-        children,
-        coverage: exactCoverage
-          ? {
-              spaces: 1,
-              tabs: exactCoverage.tabs,
-              leaves: exactCoverage.panes,
-              agents: exactCoverage.agentPanes,
-              shells: Math.max(
-                0,
-                exactCoverage.panes - exactCoverage.agentPanes,
-              ),
-              status: { ...exactCoverage.status },
-            }
-          : {
-              spaces: 1,
-              tabs: (tabsByWorkspace.get(workspace.workspace_id) ?? []).length,
-              leaves: children.length,
-              agents: spaceAgents,
-              shells: children.length - spaceAgents,
-              status: spaceStatus,
-            },
+        capabilities,
+        pane,
+        workspaceId: pane.workspace_id,
+        tabId: pane.tab_id,
+        terminalId: pane.terminal_id,
+        status: status(pane.agent_status),
+        focused: pane.focused === true,
+        spaceLabel,
+        ...(tabLabel ? { tabLabel } : {}),
+        ...(Number.isSafeInteger(tab?.number)
+          ? { tabNumber: tab?.number }
+          : {}),
+        ...(agentLabel ? { agentLabel } : {}),
+        ...(modelLabel ? { modelLabel } : {}),
+        ...(taskSummary ? { taskSummary } : {}),
+        ...(agentSessionIdentity ? { agentSessionIdentity } : {}),
+        ...(agentSessionFingerprint ? { agentSessionFingerprint } : {}),
+        stateLabels: isAgent
+          ? admittedStateLabels(
+              pane.state_labels ?? agentMetadata?.state_labels,
+            )
+          : {},
+        ...(typeof lastActivityAt === "number" &&
+        Number.isFinite(lastActivityAt) &&
+        lastActivityAt > 0
+          ? { lastActivityAt }
+          : {}),
       };
-    },
-  );
+      children.push(child);
+      if (child.kind === "agent") {
+        spaceAgents += 1;
+        spaceStatus[child.status] += 1;
+      }
+      yield 1;
+    }
+    const exactCoverage = workspaceCoverage.get(workspace.workspace_id);
+    spaces.push({
+      id: spaceId,
+      kind: "space",
+      nativeId: workspace.workspace_id,
+      parentId: id,
+      connectionId: connection.connectionId,
+      generation: observedGeneration,
+      label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
+      hostLabel,
+      hostState: connectionHostState,
+      selectedHost,
+      stale: connection.stale,
+      actionable: operational,
+      capabilities: actionCapabilities("space", connectionHostState),
+      workspace,
+      tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
+      children,
+      coverage: exactCoverage
+        ? {
+            spaces: 1,
+            tabs: exactCoverage.tabs,
+            leaves: exactCoverage.panes,
+            agents: exactCoverage.agentPanes,
+            shells: Math.max(0, exactCoverage.panes - exactCoverage.agentPanes),
+            status: { ...exactCoverage.status },
+          }
+        : {
+            spaces: 1,
+            tabs: (tabsByWorkspace.get(workspace.workspace_id) ?? []).length,
+            leaves: children.length,
+            agents: spaceAgents,
+            shells: children.length - spaceAgents,
+            status: spaceStatus,
+          },
+    });
+    yield 1;
+  }
   return {
     id,
     kind: "host",
@@ -847,7 +889,7 @@ function buildHost(
     connectionId: connection.connectionId,
     generation: connection.generation,
     label: boundedLabel(connection.label, "Host"),
-    hostLabel: boundedLabel(connection.label, "Host"),
+    hostLabel,
     hostState: connectionHostState,
     selectedHost,
     stale: connection.stale,
@@ -855,7 +897,7 @@ function buildHost(
     capabilities: hostCapabilities,
     connection,
     spaces,
-    coverage: observedCoverage(connection),
+    coverage: yield* observedCoverage(connection),
   };
 }
 

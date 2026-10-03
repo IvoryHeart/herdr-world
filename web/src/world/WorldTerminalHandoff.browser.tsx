@@ -1600,6 +1600,14 @@ async function run() {
       Math.abs(bounds.width - dockBeforeMaximize.width) < 2
     );
   }, "docked Inspector restored its placement");
+  check(
+    Boolean(
+      document.querySelector(
+        ".world-context-rail .workspace-inspector-terminal-portal > .world-terminal-owner",
+      ),
+    ),
+    "restored dock lost the retained terminal portal owner",
+  );
   const dockResize = document.querySelector<HTMLButtonElement>(
     '.world-context-rail button[aria-label="Resize Inspector window"]',
   );
@@ -1644,6 +1652,12 @@ async function run() {
     () =>
       Number(floatingReviewer.style.zIndex) > Number(focusedDock.style.zIndex),
     "floating Inspector focus raised it above the dock",
+  );
+  await settle();
+  check(
+    document.activeElement ===
+      floatingReviewer.querySelector('[aria-label="Resize Inspector window"]'),
+    "queued dock terminal focus overrode the newer floating control intent",
   );
 
   const paneGetsBeforeClosedTargetFocus = calls.filter(

@@ -4,6 +4,7 @@ import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import type { PublishedOfficeLayout } from "./officeLayout";
 import { officeSemanticTargets } from "./officeSemanticTargets";
+import { yieldWorldTask } from "./worldObject";
 
 export function OfficeSemanticTargetsOverlay({
   layout,
@@ -39,10 +40,15 @@ export function OfficeSemanticTargetsOverlay({
   const pending = targets.length - rendered.length;
   useEffect(() => {
     if (!pending) return;
-    const frame = requestAnimationFrame(() =>
-      setProgress({ targets, limit: limit + 64 }),
-    );
-    return () => cancelAnimationFrame(frame);
+    let current = true;
+    // Canvas frames may be delayed by GPU work or browser throttling. Admit
+    // bounded semantic controls through ordinary tasks independently of paint.
+    void yieldWorldTask().then(() => {
+      if (current) setProgress({ targets, limit: limit + 64 });
+    });
+    return () => {
+      current = false;
+    };
   }, [targets, limit, pending]);
   const interactive =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;

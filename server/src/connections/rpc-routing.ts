@@ -7,6 +7,7 @@ import {
 
 export type ConnectionRpcRequest = {
   accept_world_snapshot_chunks?: unknown;
+  accept_world_snapshot_chunk_admission?: unknown;
   id: string;
   method: string;
   params?: Record<string, unknown>;

@@ -710,6 +710,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         panes.value,
         agents.status === "fulfilled" ? agents.value : null,
       ];
+      // An expired catalogue can complete every downstream read immediately.
+      // Break that microtask chain before host projection/digest work so native
+      // terminal input and socket replies get an ordinary event-loop turn.
+      // Revalidate the lease after yielding before publishing any topology.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
       } else {

@@ -1,6 +1,7 @@
 import {
   WORLD_SNAPSHOT_CHUNK_CHARACTERS,
   WORLD_SNAPSHOT_MAX_CHUNKS,
+  WORLD_SNAPSHOT_ADMISSION_WINDOW,
 } from "../../../shared/worldSnapshotChunks";
 
 /** Yield between bounded messages so scoped replies can use the same socket. */
@@ -10,6 +11,7 @@ export async function sendWorldSnapshotReply(
   chunks: boolean,
   send: (payload: string) => boolean,
   current: () => boolean = () => true,
+  waitForAdmission?: (index: number) => Promise<void>,
 ) {
   const json = JSON.stringify(result);
   if (!chunks || json.length <= WORLD_SNAPSHOT_CHUNK_CHARACTERS) {
@@ -38,6 +40,12 @@ export async function sendWorldSnapshotReply(
       )
     )
       return;
+    if (
+      waitForAdmission &&
+      (index + 1) % WORLD_SNAPSHOT_ADMISSION_WINDOW === 0 &&
+      index + 1 < total
+    )
+      await waitForAdmission(index);
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }

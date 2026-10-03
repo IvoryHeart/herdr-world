@@ -1,4 +1,5 @@
 import { sendWorldSnapshotReply } from "./bridge/world-snapshot-reply";
+import { WorldSnapshotAdmission } from "./bridge/world-snapshot-admission";
 import type { ServerWebSocket } from "bun";
 import { isHtmlPath } from "../../shared/filePreview";
 import { rmSync } from "node:fs";
@@ -114,6 +115,7 @@ import {
   WORKTREE_REMOVE_TIMEOUT_MS,
 } from "./worktree/remove";
 
+const snapshotAdmission = new WorldSnapshotAdmission();
 const APP_VERSION = currentBuildVersion(
   process.env.HERDR_WORLD_BUILD_VERSION,
   packageJson.version,
@@ -664,6 +666,7 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     );
     return;
   }
+  if (snapshotAdmission.acknowledge(ws, parsed)) return;
   if (!isConnectionRpcEnvelope(parsed)) {
     safeSend(
       ws,
@@ -817,18 +820,27 @@ async function handleRpc(ws: ServerWebSocket<unknown>, raw: string) {
     return;
   }
   if (method === "world.snapshot") {
+    let transfer: ReturnType<WorldSnapshotAdmission["open"]> | undefined;
     try {
       const snapshots = worldSnapshots;
       if (!snapshots) throw new Error("World snapshot service is unavailable");
+      if (
+        req.accept_world_snapshot_chunks === true &&
+        req.accept_world_snapshot_chunk_admission === true
+      )
+        transfer = snapshotAdmission.open(ws, id);
       await sendWorldSnapshotReply(
         id,
         await snapshots.snapshot(params),
         req.accept_world_snapshot_chunks === true,
         (payload) => safeSend(ws, payload, "world-snapshot"),
         () => clients.has(ws),
+        transfer?.wait,
       );
     } catch (error) {
       sendError("world-snapshot-error", error);
+    } finally {
+      transfer?.close();
     }
     return;
   }
@@ -1623,6 +1635,7 @@ function main() {
                   connection_scoped_http: true,
                   connection_runtime_generation: true,
                   world_snapshot_chunks: true,
+                  world_snapshot_chunk_admission: true,
                   world_snapshot: true,
                   herdr_task_notifications:
                     config.taskNotificationSource === "herdr",
@@ -1706,6 +1719,7 @@ function main() {
               });
           },
           close(ws) {
+            snapshotAdmission.retire(ws);
             const { client, viewedTerminals } = webSocketCleanup.complete(ws);
             logger.debug("client disconnected", {
               client,

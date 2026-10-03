@@ -67,3 +67,34 @@ test("clients without negotiation receive an ordinary reply", async () => {
   expect(messages).toHaveLength(1);
   expect(JSON.parse(messages[0]!)).toEqual({ id: "legacy", result });
 });
+
+test("a negotiated sender waits for browser admission before its next bounded batch", async () => {
+  const admitted = Promise.withResolvers<void>();
+  const waiting = Promise.withResolvers<void>();
+  let messages = 0;
+  const result = "x".repeat(WORLD_SNAPSHOT_CHUNK_CHARACTERS * 6);
+  const sending = sendWorldSnapshotReply(
+    "bounded",
+    result,
+    true,
+    () => {
+      messages++;
+      return true;
+    },
+    () => true,
+    async (index) => {
+      expect(index).toBe(3);
+      waiting.resolve();
+      await admitted.promise;
+    },
+  );
+  const state = await Promise.race([
+    waiting.promise.then(() => "waiting"),
+    sending.then(() => "finished"),
+  ]);
+  expect(state).toBe("waiting");
+  expect(messages).toBe(4);
+  admitted.resolve();
+  await sending;
+  expect(messages).toBe(7);
+});

@@ -276,7 +276,95 @@ async function run() {
   }
 }
 
+async function checkProgressiveTreeReuse() {
+  const nativeFrame = window.requestAnimationFrame;
+  const nativeCancel = window.cancelAnimationFrame;
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  window.requestAnimationFrame = (callback) => {
+    const id = ++nextFrame;
+    frames.set(id, callback);
+    return id;
+  };
+  window.cancelAnimationFrame = (id) => {
+    frames.delete(id);
+  };
+  const element = document.createElement("main");
+  document.body.append(element);
+  const root = createRoot(element);
+  const world = buildWorldObject(
+    Array.from({ length: 12 }, (_, index) =>
+      connection(`reuse-${index}`, `Host ${index}`),
+    ),
+  );
+  const leaf = world.leaves[0]!;
+  const label = leaf.label;
+  let labelReads = 0;
+  Object.defineProperty(leaf, "label", {
+    get: () => {
+      labelReads++;
+      return label;
+    },
+  });
+  try {
+    root.render(
+      <ConnectedTreeView
+        world={world}
+        selectedId={null}
+        conversationNodeIds={[]}
+        inlineInspectorNodeId={null}
+        onSelect={() => {}}
+        onOpenTerminal={() => {}}
+        onInlineInspectorPortalChange={() => {}}
+        onSelectedAnchorChange={() => {}}
+        onNodeAnchorsChange={() => {}}
+      />,
+    );
+    await waitFor(
+      () => hasAnchor(element, leaf.id),
+      "First progressive Tree space did not mount",
+    );
+    const mountedReads = labelReads;
+    check(
+      mountedReads > 0,
+      "Tree render reuse probe did not observe its initial leaf",
+    );
+    check(
+      element.querySelector('[aria-busy="true"]') !== null,
+      "Tree reuse fixture did not defer any spaces",
+    );
+    for (
+      let turn = 0;
+      turn < 10 && element.querySelector('[aria-busy="true"]');
+      turn++
+    ) {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach((callback) => callback(performance.now()));
+      await settle();
+    }
+    check(
+      element.querySelector('[aria-busy="false"]') !== null,
+      "Progressive Tree did not admit every space",
+    );
+    check(
+      world.leaves.every((node) => hasAnchor(element, node.id)),
+      "Progressive Tree omitted observed leaves",
+    );
+    check(
+      labelReads === mountedReads,
+      "Progressive admission rerendered a previously mounted, unchanged Tree space",
+    );
+  } finally {
+    root.unmount();
+    element.remove();
+    window.requestAnimationFrame = nativeFrame;
+    window.cancelAnimationFrame = nativeCancel;
+  }
+}
+
 run()
+  .then(checkProgressiveTreeReuse)
   .catch((error: unknown) =>
     failures.push(
       error instanceof Error ? (error.stack ?? error.message) : String(error),

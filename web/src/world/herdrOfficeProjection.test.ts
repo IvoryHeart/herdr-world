@@ -9,6 +9,26 @@ import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 
 describe("Pixel Office projection", () => {
+  test("prepared scenes reuse qualified pane devices from the complete roster", async () => {
+    const world = buildWorldObject([
+      connection(
+        "reuse",
+        [tab("tab", 1)],
+        [pane("tab", "working", "Synthetic")],
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    const office = projectWorldOffice(world, 1);
+    const device = office.rooms[0]!.desks[0]!.paneDevices[0]!;
+    expect(
+      device ===
+        office.paneRoster.find((entry) => entry.device.key === device.key)!
+          .device,
+    ).toBe(true);
+    const selected = projectWorldOffice(world, 2, device.nodeId);
+    expect(selected.rooms[0]!.desks[0]!.paneDevices[0] === device).toBe(true);
+    expect(office.paneRoster[0]!.device.order).toBe(0);
+  });
   test("cooperative roster preparation preserves selected-room ordering and every qualified flag", async () => {
     const world = buildWorldObject(
       Array.from({ length: 9 }, (_, index) => boundedConnection(index)),

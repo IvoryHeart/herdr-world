@@ -78,6 +78,69 @@ function deferred<T>() {
 }
 
 describe("WorldSnapshotService", () => {
+  test("expired catalogue observations admit ordinary transport work between hosts", async () => {
+    const ids = Array.from({ length: 64 }, (_, index) => `synthetic-${index}`);
+    const host = runtime("Synthetic");
+    let now = 0;
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (connectionId) => ({
+          connectionId,
+          generation: 1,
+          runtime: host,
+          isCurrent: () => true,
+        }),
+      },
+      () => now,
+    );
+    await service.snapshot();
+    now = 20_000;
+    let controlRan = false;
+    const control = setTimeout(() => {
+      controlRan = true;
+    }, 0);
+    try {
+      const result = await service.snapshot();
+      expect(controlRan).toBe(true);
+      expect(
+        result.connections.map((connection) => connection.connection_id),
+      ).toEqual(ids);
+      expect(
+        result.connections.every(
+          (connection) =>
+            connection.actionable && connection.snapshot?.panes.length === 1,
+        ),
+      ).toBe(true);
+    } finally {
+      clearTimeout(control);
+    }
+  });
+
+  test("a host retired during its construction turn cannot publish actionable topology", async () => {
+    let current = true;
+    const host = runtime("Synthetic");
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("synthetic")],
+      readyRuntimeLease: (connectionId) => ({
+        connectionId,
+        generation: 1,
+        runtime: host,
+        isCurrent: () => current,
+      }),
+    });
+    const retirement = setTimeout(() => {
+      current = false;
+    }, 0);
+    try {
+      const result = await service.snapshot();
+      expect(result.connections[0]?.actionable).toBe(false);
+      expect(result.connections[0]?.snapshot).toBe(null);
+    } finally {
+      clearTimeout(retirement);
+    }
+  });
+
   test("32-host catalogue preserves healthy background progress with three stalled priority owners", async () => {
     const ids = Array.from(
       { length: 32 },
@@ -221,8 +284,9 @@ describe("WorldSnapshotService", () => {
     try {
       expect(started).toEqual(ids.slice(0, 4));
       open.resolve();
-      // Drain the completed owner's promise chain; stalled peers remain held.
-      for (let index = 0; index < 24; index++) await Promise.resolve();
+      // Observe actual admission across the cooperative task turn while all
+      // stalled peers remain held; microtask draining is no longer sufficient.
+      await healthyStarted.promise;
       expect(started).toContain("healthy");
     } finally {
       open.resolve();

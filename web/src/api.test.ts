@@ -18,6 +18,7 @@ const testBridges: Bridge[] = [];
 describe("simultaneous qualified runtime admission", () => {
   function setup(
     decode?: (parts: string[], signal: AbortSignal) => Promise<unknown>,
+    admission = false,
   ) {
     class Socket extends HangingWebSocket {
       static instance: Socket;
@@ -50,6 +51,7 @@ describe("simultaneous qualified runtime admission", () => {
         connection_scoped_http: true,
         connection_runtime_generation: true,
         world_snapshot_chunks: true,
+        world_snapshot_chunk_admission: admission,
       },
     });
     bridge.setConnectionRuntimeGenerations([
@@ -58,6 +60,72 @@ describe("simultaneous qualified runtime admission", () => {
     ]);
     return { bridge, socket, currentSocket: () => Socket.instance };
   }
+
+  test.each([false, true])(
+    "browser snapshot credit yields to sibling input and fences retirement=%j",
+    async (retire) => {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "scheduler",
+      );
+      const background = Promise.withResolvers<void>();
+      Object.defineProperty(globalThis, "scheduler", {
+        configurable: true,
+        value: { postTask: () => background.promise },
+      });
+      try {
+        const { bridge, socket } = setup(undefined, true);
+        const snapshot = bridge.call("world.snapshot", {});
+        void snapshot.catch(() => {});
+        expect(socket.sent[0]!.accept_world_snapshot_chunk_admission).toBe(
+          true,
+        );
+        const id = socket.sent[0]!.id;
+        for (let index = 0; index < 4; index++)
+          socket.receive({
+            id,
+            world_snapshot_chunk: { index, total: 5, data: " " },
+          });
+        expect(
+          socket.sent.filter((frame) => frame.world_snapshot_admitted),
+        ).toHaveLength(0);
+        const input = bridge
+          .connection("beta", 3)
+          .call("terminal.input", { terminal_id: "same", data: "eA==" });
+        socket.receive({
+          id: socket.sent[1]!.id,
+          connection_id: "beta",
+          connection_generation: 3,
+          result: { ok: true },
+        });
+        expect(await input).toEqual({ ok: true });
+        if (retire) bridge.disconnect();
+        background.resolve();
+        await Promise.resolve();
+        expect(
+          socket.sent.filter((frame) => frame.world_snapshot_admitted),
+        ).toEqual(
+          retire ? [] : [{ world_snapshot_admitted: { id, index: 3 } }],
+        );
+        if (!retire)
+          socket.receive({
+            id,
+            world_snapshot_chunk: {
+              index: 4,
+              total: 5,
+              data: '{"connections":[]}',
+            },
+          });
+        if (retire) await expect(snapshot).rejects.toThrow();
+        else expect(await snapshot).toEqual({ connections: [] });
+      } finally {
+        background.resolve();
+        if (descriptor)
+          Object.defineProperty(globalThis, "scheduler", descriptor);
+        else delete (globalThis as any).scheduler;
+      }
+    },
+  );
 
   test("deferred snapshot decoding admits sibling ACKs and retires before old publication", async () => {
     const held = Promise.withResolvers<unknown>();

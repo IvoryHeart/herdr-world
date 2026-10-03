@@ -1,8 +1,20 @@
+import { yieldWorldTask } from "./world/worldObject";
+
 /** Decode large read-only observations away from terminal/keyboard tasks.
  * Each isolated worker owns one request. Host-sized messages split decoded
  * admission across tasks; the complete semantic result is retained.
  */
-const SOURCE = `self.onmessage = async ({data}) => {
+const SOURCE = `let admit, awaiting = -1;
+self.onmessage = async ({data}) => {
+  if (!Array.isArray(data)) {
+    if (admit && data?.admitted === awaiting) {
+      const release = admit;
+      admit = undefined;
+      awaiting = -1;
+      release();
+    }
+    return;
+  }
   try {
     const began = performance.now();
     const value = JSON.parse(data.join(""));
@@ -11,7 +23,11 @@ const SOURCE = `self.onmessage = async ({data}) => {
     delete value.connections;
     self.postMessage({header: value, total: connections.length, parseMs: performance.now() - began});
     for (let index = 0; index < connections.length; index++) {
-      self.postMessage({index, connection: connections[index]});
+      await new Promise(resolve => {
+        admit = resolve;
+        awaiting = index;
+        self.postMessage({index, connection: connections[index]});
+      });
       await new Promise(resolve => setTimeout(resolve, 0));
     }
     self.postMessage({complete: true});
@@ -100,6 +116,13 @@ export function decodeWorldSnapshot(
           !Array.isArray(data.connection)
         ) {
           connections.push(data.connection);
+          // Receiving a host includes native structured-clone work. Only admit
+          // the next payload after a background turn so the worker cannot queue
+          // the whole catalogue ahead of incoming socket acknowledgements.
+          void yieldWorldTask().then(() => {
+            if (!done && !signal.aborted)
+              worker?.postMessage({ admitted: data.index });
+          });
         } else finish(new Error("invalid World snapshot response"));
       };
       const began = performance.now();

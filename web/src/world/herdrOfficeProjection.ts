@@ -295,6 +295,7 @@ export function projectWorldOffice(
       .slice(0, OFFICE_PRESENTATION_BOUNDS.desksPerRoom)
       .map((desk) => {
         const devices = projectPaneDevices(entry.source.children, desk)
+          .slice()
           .sort(
             (left, right) =>
               Number(right.nodeId === selectedId) -
@@ -845,11 +846,14 @@ function buildRoom(space: WorldSpaceObject, host: OfficeHost): ProjectedRoom {
   };
 }
 
+const preparedPaneDevices = new WeakMap<OfficeDesk, OfficePaneDevice[]>();
 function projectPaneDevices(
   leaves: readonly WorldLeafObject[],
   desk: OfficeDesk,
 ): OfficePaneDevice[] {
-  return leaves
+  const previous = preparedPaneDevices.get(desk);
+  if (previous) return previous;
+  const devices = leaves
     .filter(({ tabId }) => tabId === desk.tabRef.nativeId)
     .sort((left, right) => left.nativeId.localeCompare(right.nativeId))
     .map((leaf, order) => ({
@@ -871,6 +875,8 @@ function projectPaneDevices(
       canOpenInSpaces: leaf.capabilities.openSpaces,
       ...(leaf.kind === "agent" ? { agentKey: leaf.id } : {}),
     }));
+  preparedPaneDevices.set(desk, devices);
+  return devices;
 }
 
 function projectAgent(

@@ -60,6 +60,10 @@ const measurements = {
   worldBuildSliceCount: 0,
   worldBuildMaxSliceNodes: 0,
   worldBuildMaxSliceDurationMs: 0,
+  worldBuildCheckpoints: {} as Record<
+    string,
+    { slices: number; maxCount: number; maxMs: number; connectionId?: string }
+  >,
   treeProjectionMs: 0,
   graphProjectionMs: 0,
   officeProjectionMs: 0,
@@ -441,10 +445,23 @@ async function run() {
   if (!observed) throw new Error("dense snapshot admission failed");
   const buildStart = performance.now();
   const recordWorldBuildSlice = (
-    _checkpoint: string,
+    checkpoint: string,
     count: number,
     durationMs: number,
+    connectionId?: string,
   ) => {
+    const record = measurements.worldBuildCheckpoints[checkpoint] ?? {
+      slices: 0,
+      maxCount: 0,
+      maxMs: 0,
+    };
+    record.slices += 1;
+    record.maxCount = Math.max(record.maxCount, count);
+    if (durationMs > record.maxMs) {
+      record.maxMs = durationMs;
+      record.connectionId = connectionId;
+    }
+    measurements.worldBuildCheckpoints[checkpoint] = record;
     measurements.worldBuildSliceCount += 1;
     measurements.worldBuildMaxSliceNodes = Math.max(
       measurements.worldBuildMaxSliceNodes,

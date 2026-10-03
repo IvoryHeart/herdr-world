@@ -1,12 +1,14 @@
 import {
   WORLD_SNAPSHOT_CHUNK_CHARACTERS,
   WORLD_SNAPSHOT_MAX_CHUNKS,
+  WORLD_SNAPSHOT_ADMISSION_WINDOW,
 } from "../../shared/worldSnapshotChunks";
 import {
   validateRemoteSocketPath,
   validateSshDestination,
 } from "./sshProfileValidation";
 import { decodeWorldSnapshot } from "./worldSnapshotDecode";
+import { yieldWorldTask } from "./world/worldObject";
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 
@@ -164,6 +166,7 @@ export interface BridgeHello {
     connection_scoped_http?: boolean;
     connection_runtime_generation?: boolean;
     world_snapshot_chunks?: boolean;
+    world_snapshot_chunk_admission?: boolean;
     /** Task notifications follow Herdr's semantic notifications, not pane status. */
     herdr_task_notifications?: boolean;
     [key: string]: unknown;
@@ -265,6 +268,7 @@ type Pending = {
   runtimeLease: object | undefined;
   chunks?: { total: number; parts: string[] };
   acceptsChunks: boolean;
+  acceptsChunkAdmission: boolean;
   decodeAbort?: AbortController;
 };
 
@@ -381,6 +385,7 @@ function isBridgeHello(value: unknown): value is BridgeHello {
     "connection_runtime_generation",
     "herdr_task_notifications",
     "world_snapshot_chunks",
+    "world_snapshot_chunk_admission",
   ]) {
     const value = capabilities[capability];
     if (value !== undefined && typeof value !== "boolean") return false;
@@ -878,6 +883,32 @@ export class Bridge {
       }
       pending.chunks ??= { total: chunk.total, parts: [] };
       pending.chunks.parts.push(chunk.data);
+      if (
+        pending.acceptsChunkAdmission &&
+        (chunk.index + 1) % WORLD_SNAPSHOT_ADMISSION_WINDOW === 0 &&
+        chunk.index + 1 < chunk.total
+      ) {
+        const socket = this.ws;
+        void yieldWorldTask().then(() => {
+          if (
+            !socket ||
+            this.ws !== socket ||
+            socket.readyState !== WebSocket.OPEN ||
+            this.pending.get(msg.id) !== pending ||
+            pending.transportEpoch !== this.transportEpoch
+          )
+            return;
+          try {
+            socket.send(
+              JSON.stringify({
+                world_snapshot_admitted: { id: msg.id, index: chunk.index },
+              }),
+            );
+          } catch {
+            this.forceReconnect("World snapshot admission could not be sent");
+          }
+        });
+      }
       if (pending.chunks.parts.length !== chunk.total) return;
       const parts = pending.chunks.parts;
       pending.chunks = undefined;
@@ -1158,6 +1189,11 @@ export class Bridge {
           connectionId === null &&
           method === "world.snapshot" &&
           this._hello?.capabilities.world_snapshot_chunks === true,
+        acceptsChunkAdmission:
+          connectionId === null &&
+          method === "world.snapshot" &&
+          this._hello?.capabilities.world_snapshot_chunks === true &&
+          this._hello?.capabilities.world_snapshot_chunk_admission === true,
         runtimeLease:
           connectionId === null
             ? undefined
@@ -1173,6 +1209,12 @@ export class Bridge {
             method === "world.snapshot" &&
             this._hello?.capabilities.world_snapshot_chunks === true
               ? { accept_world_snapshot_chunks: true }
+              : {}),
+            ...(connectionId === null &&
+            method === "world.snapshot" &&
+            this._hello?.capabilities.world_snapshot_chunks === true &&
+            this._hello?.capabilities.world_snapshot_chunk_admission === true
+              ? { accept_world_snapshot_chunk_admission: true }
               : {}),
             ...(connectionId === null
               ? {}

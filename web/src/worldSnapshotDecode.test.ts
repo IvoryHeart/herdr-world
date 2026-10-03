@@ -14,10 +14,13 @@ class DecoderWorker {
   onmessage: ((message: { data: unknown }) => void) | null = null;
   onerror: (() => void) | null = null;
   terminated = false;
-  constructor() {
+  posted: unknown[] = [];
+  constructor(readonly sourceUrl: string) {
     DecoderWorker.instances.push(this);
   }
-  postMessage() {}
+  postMessage(message: unknown) {
+    this.posted.push(message);
+  }
   terminate() {
     this.terminated = true;
   }
@@ -41,6 +44,64 @@ function request() {
   };
 }
 
+test("decoded hosts wait for browser admission before posting another payload", async () => {
+  const job = request();
+  const source = await (await fetch(job.worker.sourceUrl)).text();
+  job.controller.abort();
+  const messages: any[] = [];
+  const first = Promise.withResolvers<void>();
+  const second = Promise.withResolvers<void>();
+  const scope: {
+    onmessage: ((event: { data: unknown }) => Promise<void>) | null;
+    postMessage(message: any): void;
+  } = {
+    onmessage: null,
+    postMessage(message) {
+      messages.push(message);
+      if (message.index === 0) first.resolve();
+      if (message.index === 1) second.resolve();
+    },
+  };
+  new Function("self", source)(scope);
+  const connections = [
+    {
+      connection_id: "alpha",
+      generation: 7,
+      snapshot: { panes: [{ pane_id: "shared" }] },
+    },
+    {
+      connection_id: "beta",
+      generation: 9,
+      stale: true,
+      snapshot: { panes: [{ pane_id: "shared" }] },
+    },
+  ];
+  const running = scope.onmessage!({
+    data: [JSON.stringify({ revision: 3, connections })],
+  });
+  void running.catch(() => {});
+  await first.promise;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(
+    messages
+      .filter((message) => "index" in message)
+      .map((message) => message.index),
+  ).toEqual([0]);
+  await scope.onmessage!({ data: { admitted: 99 } });
+  expect(messages.some((message) => message.complete)).toBe(false);
+  await scope.onmessage!({ data: { admitted: 0 } });
+  await second.promise;
+  expect(messages.some((message) => message.complete)).toBe(false);
+  await scope.onmessage!({ data: { admitted: 1 } });
+  await running;
+  expect(
+    messages
+      .filter((message) => "index" in message)
+      .map((message) => message.connection),
+  ).toEqual(connections);
+  expect(messages[messages.length - 1]).toEqual({ complete: true });
+});
+
 test("bounded decode capacity is released on retirement and old completion cannot publish", async () => {
   const a = request(),
     b = request(),
@@ -61,6 +122,19 @@ test("bounded decode capacity is released on retirement and old completion canno
   });
   expect(next.worker.terminated).toBe(true);
   b.controller.abort();
+});
+
+test("retiring a decode cancels queued admission feedback without resuming the worker", async () => {
+  const job = request();
+  job.worker.receive({ header: { revision: 1 }, total: 1 });
+  job.worker.receive({ index: 0, connection: { connection_id: "alpha" } });
+  job.controller.abort();
+  await expect(job.pending).rejects.toThrow("retired");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(
+    job.worker.posted.filter((message) => !Array.isArray(message)),
+  ).toEqual([]);
+  expect(job.worker.terminated).toBe(true);
 });
 
 test("malformed ordering and worker errors reject only their own isolated job", async () => {

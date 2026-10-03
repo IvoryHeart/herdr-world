@@ -657,10 +657,13 @@ class GraphRenderer {
           : statusStroke(source.status);
     context.stroke();
     context.setLineDash([]);
+    // Below six screen pixels labels cannot be read. Keep every node, link,
+    // status color and hit target while avoiding tiny glyph submissions.
+    const detailed = this.#camera.zoom * 9 >= 6;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillStyle = "#e8edf4";
-    if (source.kind === "agent" || source.kind === "terminal") {
+    if (detailed && (source.kind === "agent" || source.kind === "terminal")) {
       context.font = "700 11px sans-serif";
       context.fillText(
         source.kind === "agent" ? statusSymbol(source.status) : ">_",
@@ -673,32 +676,36 @@ class GraphRenderer {
         0,
         radius + 14,
       );
-    } else {
-      context.font =
-        source.kind === "host" ? "700 13px sans-serif" : "600 11px sans-serif";
-      context.fillText(
-        shortCanvasLabel(
-          context,
-          source.label,
-          source.kind === "host" ? 98 : 78,
-        ),
-        0,
-        -5,
-      );
-      context.fillStyle = "#9da7b4";
-      context.font = "500 8px sans-serif";
-      context.fillText(
-        shortCanvasLabel(
-          context,
-          source.kind === "host" ? hostStateLabel(source) : source.hostLabel,
-          88,
-        ),
-        0,
-        11,
-      );
-      if (source.omittedChildCount > 0) {
-        context.fillStyle = "#f2c879";
-        context.fillText(`+${source.omittedChildCount}`, 0, 25);
+    } else if (source.kind === "host" || source.kind === "space") {
+      if (detailed) {
+        context.font =
+          source.kind === "host"
+            ? "700 13px sans-serif"
+            : "600 11px sans-serif";
+        context.fillText(
+          shortCanvasLabel(
+            context,
+            source.label,
+            source.kind === "host" ? 98 : 78,
+          ),
+          0,
+          -5,
+        );
+        context.fillStyle = "#9da7b4";
+        context.font = "500 8px sans-serif";
+        context.fillText(
+          shortCanvasLabel(
+            context,
+            source.kind === "host" ? hostStateLabel(source) : source.hostLabel,
+            88,
+          ),
+          0,
+          11,
+        );
+        if (source.omittedChildCount > 0) {
+          context.fillStyle = "#f2c879";
+          context.fillText(`+${source.omittedChildCount}`, 0, 25);
+        }
       }
       const badge = collapseBadgeOffset(source.kind);
       context.beginPath();
@@ -710,13 +717,14 @@ class GraphRenderer {
       context.stroke();
       context.fillStyle = "#e8edf4";
       context.font = "700 14px sans-serif";
-      context.fillText(
-        this.#collapsedIds.has(source.id) ? "+" : "−",
-        badge,
-        -badge,
-      );
+      if (detailed)
+        context.fillText(
+          this.#collapsedIds.has(source.id) ? "+" : "−",
+          badge,
+          -badge,
+        );
     }
-    if (source.stale) {
+    if (source.stale && detailed) {
       context.fillStyle = "#ef9b85";
       context.font = "700 9px sans-serif";
       context.fillText("STALE", 0, -radius - 10);

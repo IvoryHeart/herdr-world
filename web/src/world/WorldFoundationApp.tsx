@@ -994,6 +994,7 @@ function WorldControlPlane({
   const [pendingSurfacePriority, setPendingSurfacePriority] =
     useState<WorldRuntimePriority | null>(null);
   const intentRequestRef = useRef(0);
+  const inspectorFocusIntentRef = useRef(0);
   const contextRailRef = useRef<HTMLElement | null>(null);
   const dockedInspectorMoveRef = useRef<DockedInspectorMove | null>(null);
   const [dockedInspectorGeometry, setDockedInspectorGeometry] =
@@ -1361,6 +1362,9 @@ function WorldControlPlane({
     stage: visualArrangementStage,
   };
   const raiseInspector = useCallback((id: string, pointer = false) => {
+    // Native pointer/focus intent supersedes any older queued terminal focus,
+    // including controls in this same Inspector after a portal move.
+    inspectorFocusIntentRef.current += 1;
     setRaisedInspectorIds((current) =>
       current[current.length - 1] === id
         ? current
@@ -2073,6 +2077,7 @@ function WorldControlPlane({
   };
 
   const focusInspectorTerminal = (windowId: string) => {
+    const focusIntent = ++inspectorFocusIntentRef.current;
     const expected = inspectorConversationsRef.current.find(
       (candidate) => worldInspectorWindowId(candidate) === windowId,
     );
@@ -2084,6 +2089,7 @@ function WorldControlPlane({
       return;
     }
     const attempt = (remaining: number) => {
+      if (inspectorFocusIntentRef.current !== focusIntent) return;
       const conversation = inspectorConversationsRef.current.find(
         (candidate) => worldInspectorWindowId(candidate) === windowId,
       );

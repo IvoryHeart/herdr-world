@@ -146,15 +146,18 @@ export default function ConnectedTreeView({
     writeTreePreferences(worldLocalStorage, { collapsedIds: [...collapsed] });
   }, [collapsed]);
 
-  const toggle = (id: string) => {
-    if (searchActive) return;
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const toggle = useCallback(
+    (id: string) => {
+      if (searchActive) return;
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    },
+    [searchActive],
+  );
 
   const reportAnchors = useCallback(() => {
     const root = rootRef.current;

@@ -46,6 +46,9 @@ at most four per-host observations, rotates open-context priorities with backgro
 progress, and returns a
 complete catalogue by its 20-second deadline with unfinished cached hosts stale.
 `web/src/world/runtimeStore.ts` rejects late aggregate responses, and
+negotiated [snapshot admission](../server/src/bridge/world-snapshot-admission.ts)
+bounds unadmitted chunk batches on each browser socket independently of terminal
+replies. Old transports retain the ordinary chunk protocol.
 `web/src/world/worldObject.ts` qualifies every node by connection. Mutations and terminal
 attachments use captured operational contexts and independently addressable sessions
 in `web/src/store.ts`. The persisted `hostsFilter.ts` affects visibility only;

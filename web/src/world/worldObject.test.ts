@@ -23,7 +23,7 @@ test("aggregate indexing yields and retires before indexing every dense leaf", a
   expect(
     await prepareWorldObject([owner], () => current, {
       yieldTask: async (checkpoint, count) => {
-        slices.push({ checkpoint, count });
+        if (checkpoint !== "host-batch") slices.push({ checkpoint, count });
         if (checkpoint === "node-batch") current = false;
       },
     }),
@@ -32,6 +32,38 @@ test("aggregate indexing yields and retires before indexing every dense leaf", a
     { checkpoint: "host", count: 1 },
     { checkpoint: "node-batch", count: 256 },
   ]);
+});
+
+test("dense host construction yields and cancels before allocating every leaf", async () => {
+  const owner = connection("construction");
+  const pane = owner.snapshot!.panes[0]!;
+  let constructed = 0;
+  owner.snapshot!.panes = Array.from({ length: 4096 }, (_, index) => ({
+    ...pane,
+    pane_id: `construction-${index}`,
+    terminal_id: `construction-terminal-${index}`,
+    get agent() {
+      constructed += 1;
+      return "synthetic";
+    },
+  }));
+  let current = true;
+  const batches: number[] = [];
+  const prepared = await prepareWorldObject([owner], () => current, {
+    yieldTask: async (checkpoint, count) => {
+      if (checkpoint === "host-batch") {
+        batches.push(count);
+        if (constructed > 0) current = false;
+      }
+    },
+  });
+  expect(prepared).toBeNull();
+  expect(constructed).toBeGreaterThan(0);
+  expect(constructed).toBeLessThan(4096);
+  expect(batches.length).toBeGreaterThan(0);
+  expect(Math.max(...batches)).toBeLessThanOrEqual(256);
+  // Cancellation must not publish an incomplete host in the semantic cache.
+  expect(buildWorldObject([owner]).leaves).toHaveLength(4096);
 });
 
 test("chunked aggregate indexing preserves complete ordered topology and stale hosts", async () => {
@@ -43,10 +75,10 @@ test("chunked aggregate indexing preserves complete ordered topology and stale h
     pane_id: `dense-pane-${index}`,
     terminal_id: `dense-terminal-${index}`,
   }));
+  const expected = buildWorldObject([beta, alpha]);
   const prepared = await prepareWorldObject([beta, alpha], undefined, {
     yieldTask: async () => {},
   });
-  const expected = buildWorldObject([beta, alpha]);
 
   expect(prepared).not.toBeNull();
   expect(prepared!.hosts.map(({ id }) => id)).toEqual(
@@ -62,6 +94,7 @@ test("chunked aggregate indexing preserves complete ordered topology and stale h
     expected.nodes.map(({ id }) => id),
   );
   expect(prepared!.coverage).toEqual(expected.coverage);
+  expect(prepared).toEqual(expected);
   expect(
     prepared!.hosts.find(({ connectionId }) => connectionId === "beta")?.stale,
   ).toBe(true);

@@ -26,6 +26,7 @@ import "../styles/vendor.css";
 import "./world.css";
 
 const view = new URL(location.href).searchParams.get("view")!;
+const traceEnabled = new URL(location.href).searchParams.has("trace");
 const failures: string[] = [];
 document.addEventListener("securitypolicyviolation", (event) => {
   if (event.violatedDirective.startsWith("worker-src"))
@@ -41,6 +42,43 @@ const acknowledgements: {
   host: string;
 }[] = [];
 const phases: Record<string, number> = {};
+const nativeInputs: {
+  phase: string;
+  sequence: number;
+  nativeAt: number;
+  target: string;
+}[] = [];
+const socketInputs: { id: string; phase: string; sentAt: number }[] = [];
+const socketReplies: { id: string; receivedAt: number }[] = [];
+const bridgeReplies: { id: string; beganAt: number; completedAt: number }[] =
+  [];
+const cloneAdmissions: {
+  worker: number;
+  index: number;
+  host: string;
+  phase: string | null;
+  beganAt: number;
+  completedAt: number;
+  durationMs: number;
+}[] = [];
+if (traceEnabled)
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!phase || event.key !== "z") return;
+      const detail = {
+        phase,
+        sequence: nativeInputs.filter((input) => input.phase === phase).length,
+        nativeAt: Date.now(),
+        target:
+          (event.target as HTMLElement)?.closest<HTMLElement>("[data-host]")
+            ?.dataset.host ?? "other",
+      };
+      nativeInputs.push(detail);
+      performance.mark("acceptance-native-keydown", { detail });
+    },
+    true,
+  );
 new PerformanceObserver((list) => {
   for (const entry of list.getEntries())
     if (entry.name === "world-snapshot-worker-decoded" && phase)
@@ -81,10 +119,98 @@ const socketSend = WebSocket.prototype.send;
 WebSocket.prototype.send = function (data) {
   if (typeof data === "string" && data.length < 10000) {
     const request = JSON.parse(data);
-    if (request.method === "terminal.input") lastInputRequestId = request.id;
+    if (request.method === "terminal.input") {
+      lastInputRequestId = request.id;
+      if (traceEnabled && phase) {
+        const detail = { id: request.id, phase, sentAt: Date.now() };
+        socketInputs.push(detail);
+        performance.mark("acceptance-input-socket-send", { detail });
+      }
+    }
   }
   return socketSend.call(this, data);
 };
+if (traceEnabled) {
+  const NativeWorker = window.Worker;
+  let nextWorker = 0;
+  window.Worker = class extends NativeWorker {
+    constructor(url: string | URL, options?: WorkerOptions) {
+      super(url, options);
+      const worker = ++nextWorker;
+      this.addEventListener("message", (event) => {
+        const began = performance.now();
+        const beganAt = Date.now();
+        // MessageEvent.data performs the native structured-clone admission.
+        // Capture it before the decoder's onmessage handler reads the value.
+        const data = event.data;
+        const completed = performance.now();
+        const completedAt = Date.now();
+        if (!data?.connection || !Number.isInteger(data.index)) return;
+        const detail = {
+          worker,
+          index: data.index,
+          host:
+            data.connection.connection_id ?? data.connection.id ?? "unknown",
+          phase,
+          beganAt,
+          completedAt,
+          durationMs: completed - began,
+        };
+        cloneAdmissions.push(detail);
+        performance.mark("acceptance-native-clone-start", {
+          startTime: began,
+          detail,
+        });
+        performance.mark("acceptance-native-clone-end", {
+          startTime: completed,
+          detail,
+        });
+      });
+    }
+  };
+  const NativeWebSocket = window.WebSocket;
+  window.WebSocket = class extends NativeWebSocket {
+    constructor(url: string | URL, protocols?: string | string[]) {
+      super(url, protocols);
+      this.addEventListener(
+        "message",
+        (event) => {
+          const receivedAt = Date.now();
+          if (
+            typeof event.data !== "string" ||
+            event.data.length >= 10000 ||
+            !event.data.startsWith('{"id":')
+          )
+            return;
+          const message = parse(event.data);
+          if (!socketInputs.some((input) => input.id === message.id)) return;
+          const detail = { id: message.id, receivedAt };
+          socketReplies.push(detail);
+          performance.mark("acceptance-input-socket-received", { detail });
+        },
+        true,
+      );
+    }
+  };
+  const tracedBridge = bridge as unknown as { onMessage(raw: string): void };
+  const handleMessage = tracedBridge.onMessage.bind(bridge);
+  tracedBridge.onMessage = (raw) => {
+    const beganAt = Date.now();
+    const id =
+      typeof raw === "string" && raw.length < 10000 && raw.startsWith('{"id":')
+        ? parse(raw).id
+        : undefined;
+    try {
+      return handleMessage(raw);
+    } finally {
+      if (id && socketInputs.some((input) => input.id === id)) {
+        const detail = { id, beganAt, completedAt: Date.now() };
+        bridgeReplies.push(detail);
+        performance.mark("acceptance-input-bridge-processed", { detail });
+      }
+    }
+  };
+}
 // Transparent instrumentation: every call and acknowledgement uses the original
 // production Bridge client, socket, lease and JSON admission.
 const connection = bridge.connection.bind(bridge);
@@ -106,6 +232,10 @@ bridge.connection = (...args) => {
           .catch(() => {});
       if (method === "terminal.input" && ownerPhase) {
         const admitted = promise.then(() => {
+          if (traceEnabled)
+            performance.mark("acceptance-input-ack", {
+              detail: { id: requestId, phase: ownerPhase, at: Date.now() },
+            });
           acknowledgements.push({
             id: requestId,
             phase: ownerPhase,
@@ -136,7 +266,15 @@ for (const context of [WebGLRenderingContext, WebGL2RenderingContext]) {
 const applicationRender = Application.prototype.render;
 Application.prototype.render = function () {
   const began = performance.now();
+  if (traceEnabled)
+    performance.mark("acceptance-office-paint-start", {
+      detail: { at: Date.now(), ready: window.__HERDR_WORLD_RENDERER__?.ready },
+    });
   const result = applicationRender.call(this);
+  if (traceEnabled)
+    performance.mark("acceptance-office-paint-end", {
+      detail: { at: Date.now(), ready: window.__HERDR_WORLD_RENDERER__?.ready },
+    });
   if (phase)
     phases["paint-" + phase] = Math.max(
       phases["paint-" + phase] ?? 0,
@@ -441,7 +579,15 @@ async function run() {
       phase = stage;
       await fetch("/input-ready?phase=" + stage);
       const began = performance.now();
+      if (traceEnabled)
+        performance.mark("acceptance-projection-start", {
+          detail: { phase: stage },
+        });
       await runtime.refresh();
+      if (traceEnabled)
+        performance.mark("acceptance-projection-complete", {
+          detail: { phase: stage },
+        });
       const world: WorldObject = buildWorldObject(runtime.get().connections);
       check(world.hosts.length === 64, "Actual Bridge lost catalogue roots");
       if (stage === "refresh") {
@@ -554,6 +700,11 @@ async function run() {
     body: JSON.stringify({
       failures,
       acknowledgements,
+      nativeInputs,
+      socketInputs,
+      socketReplies,
+      cloneAdmissions,
+      bridgeReplies,
       phases,
       paints,
       notices,
@@ -570,6 +721,11 @@ void run().catch(async (error) => {
     body: JSON.stringify({
       failures,
       acknowledgements,
+      nativeInputs,
+      socketInputs,
+      socketReplies,
+      cloneAdmissions,
+      bridgeReplies,
       phases,
       paints,
       notices,
