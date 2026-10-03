@@ -91,9 +91,9 @@
         </button>
 
         <nav class="primary-nav" id="primary-nav" aria-label="Primary" data-nav>
-          <a href="#product">Product</a>
+          <a href="#top">Home</a>
           <a href="#workflow">How it works</a>
-          <a href="#film">Film</a>
+          <a href="#film">CEO Mode</a>
           <a href="#mobile">Mobile</a>
           <a href="./tutorial/">Tutorial</a>
           <a
@@ -116,7 +116,29 @@
     </header>
 
     <main id="main-content">
-      <section class="hero shell" id="top">
+      <section class="section shell film-section" id="top">
+        <div class="section-heading reveal">
+          <div>
+            <p class="kicker">Hands off or Hands on</p>
+            <h1><span class="sr-only">Herdr World: </span>Promoted to CEO.</h1>
+          </div>
+          <p>
+            Let the agents cook. See who's moving, who's stuck, and what changed.
+            Step in when the plot needs a human.
+          </p>
+        </div>
+
+        <div class="film-card reveal" id="film">
+          <iframe
+            src="./film/index.html?embed"
+            title="Promoted to CEO, a 62-second Herdr World film"
+            loading="eager"
+            allow="autoplay; fullscreen"
+          ></iframe>
+        </div>
+      </section>
+
+      <section class="hero shell">
         <div class="hero-copy reveal">
           <div class="eyebrow">
             <span class="status-dot"></span>
@@ -128,7 +150,7 @@
               >Herdr</a
             >
           </div>
-          <h1>Every Herdr host, <span>one selected view.</span></h1>
+          <h2>Every Herdr host, <span>one selected view.</span></h2>
           <p class="hero-lede">
             <a
               href="https://herdr.dev"
@@ -169,21 +191,27 @@
           </p>
         </div>
 
-        <div class="hero-visual reveal reveal-delay" data-spotlight>
+        <div class="hero-visual reveal reveal-delay" data-spotlight data-hero-carousel>
           <div class="product-window">
-            <div class="window-bar" aria-hidden="true">
-              <span class="traffic traffic-red"></span>
-              <span class="traffic traffic-yellow"></span>
-              <span class="traffic traffic-green"></span>
-              <div class="window-title">Herdr World</div>
-              <span class="window-live"><i></i> Connected</span>
+            <div class="window-bar">
+              <span class="traffic traffic-red" aria-hidden="true"></span>
+              <span class="traffic traffic-yellow" aria-hidden="true"></span>
+              <span class="traffic traffic-green" aria-hidden="true"></span>
+              <div class="window-title" data-hero-label>Office</div>
+              <div class="hero-carousel-controls" role="group" aria-label="Product screenshots">
+                <button type="button" data-hero-previous aria-label="Previous screenshot">&#8592;</button>
+                <span data-hero-position>01 / 06</span>
+                <button type="button" data-hero-next aria-label="Next screenshot">&#8594;</button>
+              </div>
             </div>
             <a
               href="./assets/herdr-world-desktop-office.png"
               aria-label="Open the Herdr World Office screenshot"
+              data-hero-link
             >
               <picture>
                 <source
+                  data-hero-source
                   type="image/avif"
                   srcset="
                     ./assets/herdr-world-hero-720.avif   720w,
@@ -192,11 +220,12 @@
                   sizes="(max-width: 620px) calc(100vw - 8px), (max-width: 1240px) calc(100vw - 48px), 1180px"
                 />
                 <img
+                  data-hero-image
                   src="./assets/herdr-world-desktop-office.png"
                   alt="Herdr World Office showing six agents across four workspaces on the selected host"
                   width="1440"
                   height="900"
-                  fetchpriority="high"
+                  loading="lazy"
                 />
               </picture>
             </a>
@@ -238,29 +267,91 @@
         </div>
       </section>
 
-      <section class="section shell film-section" id="film">
-        <div class="section-heading reveal">
-          <div>
-            <p class="kicker">The 62-second version</p>
-            <h2>Promoted to CEO.</h2>
+      <section class="section shell install-section" id="install">
+        <div class="install-card reveal" data-spotlight>
+          <div class="install-copy">
+            <p class="kicker">Ready when the next task starts</p>
+            <h2>Give your agents a window.</h2>
+            <p>
+              Choose one installer, then run <code>herdr-world</code> and open the
+              URL it prints. Homebrew covers macOS and Linux; npm also covers
+              Windows with Node.js 22.14+. The standalone script works on macOS
+              and Linux. Herdr is installed separately.
+            </p>
+            <div class="install-actions">
+              <a
+                class="button button-primary"
+                href="https://github.com/IvoryHeart/herdr-world/releases/latest"
+              >
+                Download latest release
+              </a>
+              <a
+                class="button button-secondary"
+                href="https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md"
+              >
+                Deployment guide
+              </a>
+            </div>
           </div>
-          <p>
-            You hired twelve AI agents. They hired a babysitter. Watch Herdr
-            World turn a wall of waiting terminals into a company you can run.
-          </p>
-        </div>
 
-        <div class="film-card reveal">
-          <iframe
-            src="./film/index.html?embed"
-            title="Promoted to CEO, a 62-second Herdr World film"
-            loading="lazy"
-            allow="autoplay; fullscreen"
-          ></iframe>
+          <div class="install-options">
+            <div class="install-terminal">
+              <div class="install-terminal-bar">
+                <span><i></i><i></i><i></i></span>
+                <strong>Homebrew</strong>
+                <button
+                  type="button"
+                  data-copy-command="homebrew"
+                  aria-label="Copy Homebrew install command"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
+                  </svg>
+                  <span aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <pre><code data-install-command><span>$</span> brew install IvoryHeart/tap/herdr-world</code></pre>
+            </div>
+
+            <div class="install-terminal">
+              <div class="install-terminal-bar">
+                <span><i></i><i></i><i></i></span>
+                <strong>npm</strong>
+                <button
+                  type="button"
+                  data-copy-command="npm"
+                  aria-label="Copy npm install command"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
+                  </svg>
+                  <span aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <pre><code data-install-command><span>$</span> npm install --global @ivoryheart/herdr-world</code></pre>
+            </div>
+
+            <div class="install-terminal">
+              <div class="install-terminal-bar">
+                <span><i></i><i></i><i></i></span>
+                <strong>Standalone</strong>
+                <button
+                  type="button"
+                  data-copy-command="standalone"
+                  aria-label="Copy standalone install command"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
+                  </svg>
+                  <span aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <pre><code data-install-command><span>$</span> curl -fsSL \
+  https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
+  | sh</code></pre>
+            </div>
+          </div>
         </div>
-        <p class="film-links">
-          <a href="./film/">Open the film page</a>
-        </p>
       </section>
 
       <section class="section shell" id="product">
@@ -730,61 +821,6 @@
         </div>
       </section>
 
-      <section class="section shell install-section" id="install">
-        <div class="install-card reveal" data-spotlight>
-          <div class="install-copy">
-            <p class="kicker">Ready when the next task starts</p>
-            <h2>Give your agents a window.</h2>
-            <p>
-              Install the standalone binary on macOS or Linux, start
-              Herdr World, and open the URL it prints. From version 0.2.0,
-              Homebrew and npm are also available; npm supports Windows x64 and ARM64. All six platform
-              archives are available from GitHub Releases.
-            </p>
-            <div class="install-actions">
-              <a
-                class="button button-primary"
-                href="https://github.com/IvoryHeart/herdr-world/releases/latest"
-              >
-                Download latest release
-              </a>
-              <a
-                class="button button-secondary"
-                href="https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md"
-              >
-                Deployment guide
-              </a>
-            </div>
-          </div>
-
-          <div class="install-terminal">
-            <div class="install-terminal-bar">
-              <span><i></i><i></i><i></i></span>
-              <strong>Install</strong>
-              <button
-                type="button"
-                data-copy-command
-                aria-label="Copy install command"
-              >
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
-                </svg>
-                <span aria-live="polite">Copy</span>
-              </button>
-            </div>
-            <pre><code data-install-command><span>$</span> curl -fsSL \
-  https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
-  | sh</code></pre>
-            <div class="install-result" aria-hidden="true">
-              <span></span>
-              <p>
-                <strong>Herdr World installed</strong
-                ><small>Run <code>herdr-world</code> to start</small>
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
