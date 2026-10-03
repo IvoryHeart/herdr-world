@@ -16,7 +16,6 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     from each terminal. Quiet agents collapse below.
   - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
     answer, review, or watch. Other managed hosts appear as summary chips.
-  - The same queue is available from **Handoffs** in Office, Tree, and Graph.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Office**, **Tree**, and **Graph** show one selected local or SSH Herdr profile

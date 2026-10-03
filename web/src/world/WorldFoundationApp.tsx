@@ -78,9 +78,7 @@ import { useSpacesTabWindowArrangement } from "./useSpacesTabWindowArrangement";
 import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
-import { HandoffQueue } from "./HandoffQueue";
 import { DeskView } from "./DeskView";
-import { useConnectionClient } from "../useConnectionClient";
 import {
   defaultFloatingTerminalGeometry,
   FLOATING_TERMINAL_MIN_SIZE,
@@ -724,7 +722,6 @@ export default function WorldFoundationApp() {
               onVisualActionExtensionReady={setVisualActionExtension}
               viewToolbarPortal={viewToolbarPortal}
               onGoToSpaces={() => setView("spaces")}
-              onGoToDesk={() => setView("desk")}
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
@@ -814,7 +811,6 @@ function WorldControlPlane({
   onVisualActionExtensionReady,
   viewToolbarPortal,
   onGoToSpaces,
-  onGoToDesk,
 }: {
   view: Exclude<WorldView, "spaces">;
   active: boolean;
@@ -842,13 +838,11 @@ function WorldControlPlane({
   onVisualActionExtensionReady(extension: CommandExtension): void;
   viewToolbarPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
-  onGoToDesk(): void;
 }) {
   const runtime = useWorldRuntime();
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
   const watchlist = useWorldWatchlist(watchlistStore);
   const [pinnedOnly, setPinnedOnly] = useState(false);
-  const handoffClient = useConnectionClient();
   useEffect(() => {
     watchlistStore.start();
     return () => watchlistStore.stop();
@@ -3155,15 +3149,6 @@ function WorldControlPlane({
               </Suspense>
             ) : null}
           </section>
-          {active && view !== "desk" ? (
-            <HandoffQueue
-              world={world}
-              client={handoffClient}
-              portal={viewToolbarPortal}
-              onOpenTerminal={openTerminalById}
-              onOpenDesk={onGoToDesk}
-            />
-          ) : null}
           {contextRailInspector &&
           visualConversationAnchors?.[contextRailInspector.nodeId] &&
           intentOverlayAnchor ? (
