@@ -28,6 +28,8 @@ export type TurnReceipt = {
   turn_id: string;
   ask: string | null;
   report: string | null;
+  /** The closing message was longer than this receipt carries. */
+  report_truncated: boolean;
   started_at: string | null;
   ended_at: string | null;
   duration_ms: number | null;
@@ -74,9 +76,12 @@ function editedPaths(step: AtifStep, into: Set<string>) {
   }
 }
 
+export const FULL_REPORT_CHARS = 32_000;
+
 export function latestTurnReceipt(
   file: SessionFile,
   trajectory: AtifTrajectory,
+  reportChars = MAX_REPORT_CHARS,
 ): TurnReceipt | null {
   const steps = trajectory.steps;
   if (!steps.length) return null;
@@ -112,6 +117,9 @@ export function latestTurnReceipt(
   for (let index = turn.length - 1; index >= 0 && ended === null; index -= 1)
     if (turn[index].source === "agent") ended = time(turn[index]);
   const listed = [...files];
+  const fullReport = report
+    ? clip(report.message, Number.MAX_SAFE_INTEGER)
+    : null;
   return {
     // A blocked agent can resume within the same user turn, so the id also
     // names the latest step: each stop is a separate handoff to review.
@@ -119,7 +127,9 @@ export function latestTurnReceipt(
       turn.at(-1)?.step_id ?? "start"
     }`,
     ask: askStep ? clip(askStep.message, MAX_ASK_CHARS) : null,
-    report: report ? clip(report.message, MAX_REPORT_CHARS) : null,
+    report: fullReport === null ? null : clip(fullReport, reportChars),
+    report_truncated:
+      fullReport !== null && [...fullReport].length > reportChars,
     started_at: started === null ? null : new Date(started).toISOString(),
     ended_at: ended === null ? null : new Date(ended).toISOString(),
     duration_ms:

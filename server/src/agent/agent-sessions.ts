@@ -18,7 +18,7 @@ import {
   type SessionProjectionCache,
 } from "./session-projection-cache";
 import { HISTORY_WINDOW_LIMIT, redactHistoryUpdate } from "./session-history";
-import { latestTurnReceipt } from "./turn-receipt";
+import { FULL_REPORT_CHARS, latestTurnReceipt } from "./turn-receipt";
 
 const MAX_MESSAGES_PER_AGENT = 200;
 
@@ -113,7 +113,11 @@ export function createAgentSessionHandlers(args: {
         ...resolved,
         file: projection.file,
         updated_at: new Date(projection.file.mtimeMs).toISOString(),
-        turn: latestTurnReceipt(projection.file, projection.trajectory),
+        turn: latestTurnReceipt(
+          projection.file,
+          projection.trajectory,
+          params.full_report === true ? FULL_REPORT_CHARS : undefined,
+        ),
       };
     },
     readSummary: (params: Record<string, unknown>) =>

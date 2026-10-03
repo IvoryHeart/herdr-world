@@ -65,6 +65,20 @@ describe("partitionDesk", () => {
 });
 
 describe("pane screens", () => {
+  test("drops Pi footer lines from live activity", () => {
+    const pi = [
+      "Reading openspec/changes/example/specs/world/spec.md",
+      "Searching web/src for watchlist",
+      "────────────────────────",
+      "~/projects/demo (main)",
+      "↑40k ↓3.5k $0.012 (sub) 4.0%/1.0M (auto)   (deepseek) deepseek-v4-pro • high",
+    ].join("\n");
+    expect(activityFromScreen(pi, 2)).toEqual([
+      "Reading openspec/changes/example/specs/world/spec.md",
+      "Searching web/src for watchlist",
+    ]);
+  });
+
   const blocked = [
     "• Edited package.json",
     "",

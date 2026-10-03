@@ -127,6 +127,7 @@ describe("latestTurnReceipt", () => {
     );
     expect([...(receipt?.ask ?? "")].length).toBe(600);
     expect([...(receipt?.report ?? "")].length).toBe(2_400);
+    expect(receipt?.report_truncated).toBe(true);
     expect(receipt?.files).toHaveLength(24);
     expect(receipt?.files_truncated).toBe(true);
     expect(receipt?.duration_ms).toBeNull();

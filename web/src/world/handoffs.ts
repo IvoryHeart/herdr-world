@@ -8,6 +8,7 @@ export type TurnReceipt = {
   turn_id: string;
   ask: string | null;
   report: string | null;
+  report_truncated?: boolean;
   started_at: string | null;
   ended_at: string | null;
   duration_ms: number | null;
@@ -267,4 +268,20 @@ export function useObservedStops(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionId, statusKey]);
   return stops;
+}
+
+/** Fetches one agent's complete closing report for reading in full. */
+export async function fetchFullReport(
+  client: ConnectionClient,
+  leaf: WorldLeafObject,
+): Promise<string | null> {
+  const result = await client.call("agent_turn.get", {
+    pane_id: leaf.pane.pane_id,
+    workspace_id: leaf.pane.workspace_id,
+    tab_id: leaf.pane.tab_id,
+    agent: leaf.pane.agent,
+    full_report: true,
+  });
+  const turn = (result as { turn?: unknown } | null)?.turn;
+  return isReceipt(turn) ? turn.report : null;
 }

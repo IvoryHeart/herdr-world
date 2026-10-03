@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useConnectionClient } from "../useConnectionClient";
 import {
+  fetchFullReport,
   formatSpan,
   IDLE_WINDOW_MS,
   isRecent,
@@ -46,7 +47,14 @@ function where(leaf: WorldLeafObject) {
 }
 
 function agentName(leaf: WorldLeafObject) {
-  return leaf.agentLabel ?? leaf.label;
+  return leaf.agentName ?? leaf.agentLabel ?? leaf.label;
+}
+
+/** Harness and model, so the operator can tell what each agent runs on. */
+function agentRuntime(leaf: WorldLeafObject) {
+  return [leaf.agentName ? leaf.agentLabel : null, leaf.modelLabel]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function partitionDesk(
@@ -192,6 +200,9 @@ export function DeskView({
   const stops = useObservedStops(client.connectionId, agents);
   const [showReviewed, setShowReviewed] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [fullReports, setFullReports] = useState<Map<string, string>>(
+    () => new Map(),
+  );
   const [focus, setFocus] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -288,7 +299,9 @@ export function DeskView({
       >
         <div className="desk-card-head">
           <span className="desk-card-name">{agentName(leaf)}</span>
-          <span className="desk-card-where">{where(leaf)}</span>
+          <span className="desk-card-where">
+            {[agentRuntime(leaf), where(leaf)].filter(Boolean).join(" · ")}
+          </span>
           {age ? (
             <span className="desk-card-age">
               {item.lane === "needs"
@@ -323,13 +336,30 @@ export function DeskView({
             <p
               className={`desk-card-report${isExpanded ? " is-expanded" : ""}`}
             >
-              {receipt.report}
+              {isExpanded
+                ? (fullReports.get(item.handoffId) ?? receipt.report)
+                : receipt.report}
             </p>
-            {receipt.report.length > 360 ? (
+            {receipt.report.length > 360 || receipt.report_truncated ? (
               <button
                 type="button"
                 className="desk-link"
-                onClick={() => setExpanded(isExpanded ? null : item.handoffId)}
+                onClick={() => {
+                  if (isExpanded) return setExpanded(null);
+                  setExpanded(item.handoffId);
+                  if (
+                    receipt.report_truncated &&
+                    !fullReports.has(item.handoffId)
+                  )
+                    void fetchFullReport(client, leaf)
+                      .then((full) => {
+                        if (full)
+                          setFullReports((current) =>
+                            new Map(current).set(item.handoffId, full),
+                          );
+                      })
+                      .catch(() => {});
+                }}
               >
                 {isExpanded ? "Show less" : "Read all"}
               </button>

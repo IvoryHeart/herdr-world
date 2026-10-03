@@ -79,6 +79,8 @@ export type WorldLeafObject = WorldObjectBase & {
   tabLabel?: string;
   tabNumber?: number;
   agentLabel?: string;
+  /** The live agent name the operator gave Herdr (`herdr agent start <name>`). */
+  agentName?: string;
   modelLabel?: string;
   taskSummary?: string;
   agentSessionIdentity?: string;
@@ -562,6 +564,9 @@ function buildHost(
                 100,
               )
             : undefined;
+          const agentName = isAgent
+            ? boundedOptionalText(agentMetadata?.name, 100)
+            : undefined;
           const modelLabel = isAgent
             ? boundedOptionalText(
                 pane.model_name ??
@@ -623,6 +628,7 @@ function buildHost(
               ? { tabNumber: tab?.number }
               : {}),
             ...(agentLabel ? { agentLabel } : {}),
+            ...(agentName ? { agentName } : {}),
             ...(modelLabel ? { modelLabel } : {}),
             ...(taskSummary ? { taskSummary } : {}),
             ...(agentSessionIdentity ? { agentSessionIdentity } : {}),

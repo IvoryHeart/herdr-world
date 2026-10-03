@@ -7,7 +7,7 @@ const POLL_MS = 4_000;
 const BORDER_ONLY = /^[\s─━│┃╭╮╰╯┌┐└┘├┤┬┴┼═║╔╗╚╝▔▁▏▕\-_=+|·•.]*$/;
 // Footer and input chrome that agent TUIs draw below their output.
 const CHROME =
-  /\?\s*for shortcuts|esc to cancel|ctrl\+[a-z] to|shift\+tab to|context (left|\d+% used)|weekly \d+% left|tokens? used|f\d to view|for agents|^\s*[⎿└]?\s*tip:|update installed|restart to update/i;
+  /\?\s*for shortcuts|esc to cancel|ctrl\+[a-z] to|shift\+tab to|context (left|\d+% used)|weekly \d+% left|tokens? used|f\d to view|for agents|^\s*[⎿└]?\s*tip:|update installed|restart to update|^\s*[↑↓]\s?\d|\$\d+\.\d+ \(|\(auto\)|^\s*~?\/\S*( \([^)]*\))?\s*$/i;
 const INPUT_PROMPT = /^\s*(?:[›❯>]|│\s*[›❯>])(?:\s|$)/;
 
 function textOf(result: unknown): string | null {
