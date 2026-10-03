@@ -97,9 +97,17 @@
     background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
     opacity: 0; pointer-events: none; transition: opacity .2s ease;
   }
+  body.embed:not(.playing) .bar,
   body.embed.playing.controls-visible .bar,
   body.embed.playing .bar:focus-within { opacity: 1; pointer-events: auto; }
   body.embed .bar button { padding: 7px 10px; }
+  .wrap:fullscreen { width: 100vw; height: 100vh; max-width: none; display: block; background: #000; }
+  .wrap:fullscreen .eyebrow, .wrap:fullscreen .note { display: none; }
+  .wrap:fullscreen .stage { width: 100%; height: 100%; aspect-ratio: auto; border: 0; border-radius: 0; }
+  .wrap:fullscreen .bar {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 12px 10px;
+    background: linear-gradient(rgba(0,0,0,0), rgba(0,0,0,.78));
+  }
 </style>
 </head>
 <body>
@@ -117,9 +125,10 @@
     <input id="scrub" type="range" min="0" max="620" value="619" aria-label="Seek">
     <span id="clock">1:02 / 1:02</span>
     <button id="mute" type="button" aria-pressed="false">Sound on</button>
+    <button id="fullscreen" type="button" aria-pressed="false">Full screen</button>
   </div>
   <p class="note">Everything here is drawn and scored live in your browser: canvas pixels and Web Audio, no video file.
-    Get Herdr World at <a href="../#install">herdr.world</a>.
+    Get Herdr World at <a href="../#install">https://herdr.world</a>.
     Pixel characters are downscaled from the Claw-Empire sprite set (Apache-2.0). Fonts: Big Shoulders, JetBrains Mono and Silkscreen (<a href="./fonts/OFL.txt">SIL Open Font License 1.1</a>).</p>
 </div>
 
@@ -885,7 +894,7 @@ function S7(t) {
       withA(seg(t, 56.45, 56.8), () => text('Herdr World', W / 2, 520, 150, C.text, { fam: F.disp, weight: 900, align: 'center', ls: 2 }));
       if (t >= 56.9) {
         withA(seg(t, 56.9, 57.1), () => {
-          const cmd = 'brew install IvoryHeart/tap/herdr-world';
+          const cmd = 'npm install --global @ivoryheart/herdr-world';
           const k = Math.floor(seg(t, 57.1, 58.8) * cmd.length);
           fillRR(W / 2 - 520, 580, 1040, 92, 14, C.panel); strokeRR(W / 2 - 520, 580, 1040, 92, 14, C.line, 2);
           text('$', W / 2 - 480, 640, 34, C.blue, { weight: 700 });
@@ -893,7 +902,7 @@ function S7(t) {
         });
       }
       withA(seg(t, 59.1, 59.5), () => {
-        text('herdr.world', W / 2, 768, 72, C.blueB, { fam: F.disp, weight: 900, align: 'center', ls: 2 });
+        text('https://herdr.world', W / 2, 768, 72, C.blueB, { fam: F.disp, weight: 900, align: 'center', ls: 2 });
         text('FREE AND OPEN SOURCE · MIT · MACOS · LINUX · WINDOWS', W / 2, 826, 22, C.muted, { fam: F.px, weight: 700, align: 'center', ls: 2 });
       });
     }
@@ -1049,6 +1058,9 @@ function ui() {
   $('clock').textContent = `${fmt(cur)} / ${fmt(DUR)}`; $('scrub').value = Math.round(cur * 10);
   $('bigplay').hidden = playing;
   $('bigplay').setAttribute('aria-label', cur >= DUR - .1 ? 'Replay the film' : cur > 0 ? 'Resume the film' : 'Play the film');
+  const fullscreen = document.fullscreenElement === document.querySelector('.wrap');
+  $('fullscreen').textContent = fullscreen ? 'Exit full screen' : 'Full screen';
+  $('fullscreen').setAttribute('aria-pressed', String(fullscreen));
   document.body.classList.toggle('playing', playing);
   if (!playing) document.body.classList.remove('controls-visible');
 }
@@ -1091,6 +1103,12 @@ if (!RENDER) {
   $('restart').addEventListener('click', () => { cur = 0; if (playing) seek(0); else play(); });
   $('scrub').addEventListener('input', e => seek(e.target.value / 10));
   $('mute').addEventListener('click', () => { muted = !muted; if (playing) { muted ? stopAudio() : startAudio(cur); } ui(); });
+  $('fullscreen').hidden = !document.fullscreenEnabled;
+  $('fullscreen').addEventListener('click', async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.querySelector('.wrap').requestFullscreen();
+  });
+  document.addEventListener('fullscreenchange', ui);
   document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'BUTTON' && e.target.tagName !== 'INPUT') { e.preventDefault(); playing ? pause() : play(); } });
   document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
 }
