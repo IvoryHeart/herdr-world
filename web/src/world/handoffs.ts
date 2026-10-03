@@ -155,13 +155,19 @@ export function receiptAfterRead(
  * The stored entry after a failed read. A first read that fails (for example,
  * a harness whose sessions World cannot read) settles as "no receipt", so the
  * stop can still be marked. A failed refresh keeps the previous receipt but not
- * as current; the periodic refresh retries it.
+ * as current; the periodic refresh retries it, and a second failure for the
+ * same state settles on the previous receipt.
  */
 export function receiptAfterError(
   previous: StoredReceipt | undefined,
   trigger: string,
+  failures = 1,
 ): StoredReceipt {
-  return previous ?? { receipt: null, trigger };
+  if (!previous) return { receipt: null, trigger };
+  // A second failure for the same state means the agent has become
+  // unreadable (for example, a rotated transcript): settle on the last known
+  // receipt so the stop can still be marked.
+  return failures >= 2 ? { receipt: previous.receipt, trigger } : previous;
 }
 
 export function receiptStateOf(
@@ -233,6 +239,9 @@ export function useTurnReceipts(
   const [tick, setTick] = useState(0);
   const fetched = useRef(new Map<string, string>());
   const due = useRef(new Set<string>());
+  const failures = useRef(
+    new Map<string, { trigger: string; count: number }>(),
+  );
   const targets = pollingTargets(leaves);
   const requestKeys = targets
     .map((leaf) => `${receiptIdentity(leaf)}=${receiptTrigger(leaf)}`)
@@ -265,6 +274,8 @@ export function useTurnReceipts(
       if (!live.has(key)) fetched.current.delete(key);
     for (const key of [...due.current])
       if (!live.has(key)) due.current.delete(key);
+    for (const key of [...failures.current.keys()])
+      if (!live.has(key)) failures.current.delete(key);
     setReceipts((current) => {
       const kept = new Map([...current].filter(([key]) => live.has(key)));
       return kept.size === current.size ? current : kept;
@@ -301,6 +312,7 @@ export function useTurnReceipts(
           due.current.delete(identity);
           // Only the session this card shows may publish a receipt to it; the
           // next observation names the replacement session.
+          failures.current.delete(identity);
           if (!answersSession(result, leaf)) continue;
           const turn = (result as { turn?: unknown } | null)?.turn;
           setReceipts((current) =>
@@ -313,10 +325,13 @@ export function useTurnReceipts(
           if (cancelled) return;
           fetched.current.set(identity, trigger);
           due.current.delete(identity);
+          const failed = failures.current.get(identity);
+          const count = failed?.trigger === trigger ? failed.count + 1 : 1;
+          failures.current.set(identity, { trigger, count });
           setReceipts((current) =>
             new Map(current).set(
               identity,
-              receiptAfterError(current.get(identity), trigger),
+              receiptAfterError(current.get(identity), trigger, count),
             ),
           );
         }
@@ -500,4 +515,55 @@ export async function fetchFullReport(
   return isReceipt(turn) && turn.turn_id === expectedTurnId
     ? turn.report
     : null;
+}
+
+const OPENS_LIMIT = 40;
+
+function opensKey(connectionId: string) {
+  return `desk.opened.v1.${connectionId}`;
+}
+
+/**
+ * When the operator last opened each agent session from the Desk, so the
+ * agents they recently worked with stay one tap away after review.
+ */
+export function useRecentOpens(connectionId: string) {
+  const read = useCallback((): Map<string, number> => {
+    try {
+      const saved = JSON.parse(
+        worldLocalStorage.getItem(opensKey(connectionId)) ?? "{}",
+      ) as Record<string, unknown>;
+      return new Map(
+        Object.entries(saved).filter(
+          (entry): entry is [string, number] => typeof entry[1] === "number",
+        ),
+      );
+    } catch {
+      return new Map();
+    }
+  }, [connectionId]);
+  const [opens, setOpens] = useState<Map<string, number>>(read);
+  useEffect(() => setOpens(read()), [read]);
+  const record = useCallback(
+    (leaf: WorldLeafObject) => {
+      const next = new Map(read());
+      next.set(receiptIdentity(leaf), Date.now());
+      const kept = new Map(
+        [...next]
+          .sort((left, right) => right[1] - left[1])
+          .slice(0, OPENS_LIMIT),
+      );
+      try {
+        worldLocalStorage.setItem(
+          opensKey(connectionId),
+          JSON.stringify(Object.fromEntries(kept)),
+        );
+      } catch {
+        // Recent opens are a browser convenience.
+      }
+      setOpens(kept);
+    },
+    [connectionId, read],
+  );
+  return { opens, record };
 }
