@@ -76,6 +76,87 @@ test("retired native-share downloads neither publish a blob nor reopen the reque
   }
 });
 
+test.each(["healthy", "retired", "mismatched", "rejected", "cancelled"])(
+  "qualified native-share fallback: %s",
+  async (scenario) => {
+    const descriptors = ["navigator", "window"].map(
+      (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+    );
+    const previousFetch = globalThis.fetch;
+    let current = true;
+    const opened: string[] = [];
+    let shares = 0;
+    const url = "/api/connections/alpha/file/download?connection_generation=7";
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      value: {
+        userAgent: "iPhone",
+        maxTouchPoints: 5,
+        canShare: () => true,
+        share: async () => {
+          shares++;
+          if (scenario === "retired") current = false;
+          throw scenario === "cancelled"
+            ? new DOMException("Dismissed", "AbortError")
+            : new TypeError("Cannot share actual file");
+        },
+      },
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        matchMedia: () => ({ matches: false }),
+        open: (path: string) => {
+          opened.push(path);
+          return {};
+        },
+      },
+    });
+    globalThis.fetch = (async () =>
+      new Response("synthetic", {
+        status: scenario === "rejected" ? 404 : 200,
+        headers: {
+          "X-Herdr-Connection-Id": scenario === "mismatched" ? "beta" : "alpha",
+          "X-Herdr-Connection-Generation": "7",
+        },
+      })) as unknown as typeof fetch;
+    const client: ConnectionClient = {
+      connectionId: "alpha",
+      generation: 10,
+      serverRuntimeGeneration: 7,
+      isCurrent: () => current,
+      acceptsServerGeneration: () => true,
+      call: async () => undefined,
+    };
+    try {
+      const pending = downloadFileFromUrl({
+        url,
+        filename: "synthetic.txt",
+        client,
+      });
+      if (scenario === "healthy") {
+        expect(await pending).toBe("opened");
+        expect(opened).toEqual([url]);
+      } else if (scenario === "cancelled") {
+        expect(await pending).toBe("shared");
+        expect(opened).toEqual([]);
+      } else {
+        await expect(pending).rejects.toThrow();
+        expect(opened).toEqual([]);
+      }
+      expect(shares).toBe(
+        scenario === "mismatched" || scenario === "rejected" ? 0 : 1,
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+      for (const [key, descriptor] of descriptors) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else Reflect.deleteProperty(globalThis, key);
+      }
+    }
+  },
+);
+
 describe("isIosDevice", () => {
   test("detects iPhones, iPads, and iPads reporting as Macintosh", () => {
     expect(

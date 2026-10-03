@@ -28,6 +28,7 @@ import {
 import type { CommandExtension } from "../components/CommandCombobox";
 import { ConfirmDialog } from "../components/ModalDialogs";
 import { shortcutMatches } from "../shortcutPreferences";
+import { createdRootPaneId } from "./officeRoomActions";
 import { paneShortcutAction } from "../paneShortcuts";
 import {
   adjacentTabId,
@@ -733,7 +734,15 @@ export default function WorldFoundationApp() {
           )}
           primaryViewControl={
             <div className="world-topbar-control-plane">
-              <label className="world-primary-view-select">
+              <label
+                className="world-primary-view-select"
+                title={`World view: ${view}`}
+              >
+                <LayoutGrid
+                  className="world-primary-view-icon"
+                  size={18}
+                  aria-hidden="true"
+                />
                 <select
                   aria-label="World view"
                   value={view}
@@ -2206,6 +2215,7 @@ function WorldControlPlane({
     focusTarget = true,
     candidateWorld = world,
     signal?: AbortSignal,
+    agentSessionId?: string,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
     const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
@@ -2250,7 +2260,7 @@ function WorldControlPlane({
       setIntentOpening(true);
       const unbindAbort = bindSelectionIntentAbort(signal, requestId);
       try {
-        if (focusTarget) await focusWorldNode(next);
+        if (focusTarget) await focusWorldNode(next, store, agentSessionId);
         if (signal?.aborted || intentRequestRef.current !== requestId)
           return false;
         const currentConversations = inspectorConversationsRef.current;
@@ -2335,7 +2345,7 @@ function WorldControlPlane({
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
-      if (focusTarget) await focusWorldNode(next);
+      if (focusTarget) await focusWorldNode(next, store, agentSessionId);
       if (signal?.aborted || intentRequestRef.current !== requestId)
         return false;
       const currentConversations = inspectorConversationsRef.current;
@@ -2423,14 +2433,10 @@ function WorldControlPlane({
   notificationHandlerRef.current = (target) => {
     void store.focusTaskNotificationTarget(target).then((admitted) => {
       if (!admitted) return;
-      const node = aggregateWorld.leaves.find(
-        (leaf) =>
-          leaf.connectionId === target.connectionId &&
-          leaf.generation === target.runtimeGeneration &&
-          leaf.workspaceId === target.workspaceId &&
-          leaf.nativeId === target.paneId,
-      );
-      if (node) void applySelection(node.id, "terminal", false, aggregateWorld);
+      void workspaceSurfaceSelectionHandlerRef.current({
+        ...target,
+        view: "terminal",
+      });
     });
   };
   useEffect(() => {
@@ -2489,16 +2495,42 @@ function WorldControlPlane({
         );
         if (target) setInspectorClose({ conversation, operations, target });
         return;
-      } else if (tabAction === "create")
-        action = store.createQualifiedTab(owner, conversation.workspaceId, {
-          numberedLabel: true,
-        });
-      else if (tabAction === "previous" || tabAction === "next") {
+      } else if (tabAction === "create") {
+        if (event.repeat) return;
+        action = store
+          .createQualifiedTab(owner, conversation.workspaceId, {
+            numberedLabel: true,
+          })
+          .then((result) => {
+            const paneId = createdRootPaneId(result);
+            return paneId
+              ? workspaceSurfaceSelectionHandlerRef.current({
+                  ...owner,
+                  workspaceId: conversation.workspaceId,
+                  paneId,
+                  view: "terminal",
+                })
+              : false;
+          });
+      } else if (tabAction === "previous" || tabAction === "next") {
         const tabs = operations
           .get()
           .tabs.filter((tab) => tab.workspace_id === conversation.workspaceId);
         const id = adjacentTabId(tabs, conversation.tabId, tabAction);
-        if (id) action = operations.focusTab(id);
+        const pane =
+          operations
+            .get()
+            .panes.find(
+              (candidate) => candidate.tab_id === id && candidate.focused,
+            ) ??
+          operations.get().panes.find((candidate) => candidate.tab_id === id);
+        if (pane)
+          action = workspaceSurfaceSelectionHandlerRef.current({
+            ...owner,
+            workspaceId: conversation.workspaceId,
+            paneId: pane.pane_id,
+            view: "terminal",
+          });
       } else if (paneAction && conversation.paneId) {
         if (event.repeat && paneAction.type !== "focus") return;
         action =
@@ -2566,8 +2598,19 @@ function WorldControlPlane({
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
-    const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
-    if (node) return applySelection(node.id, surfaceSelection.view ?? null);
+    const node = worldNodeForWorkspaceSurfaceSelection(
+      aggregateWorld,
+      surfaceSelection,
+    );
+    if (node)
+      return applySelection(
+        node.id,
+        surfaceSelection.view ?? null,
+        true,
+        aggregateWorld,
+        undefined,
+        surfaceSelection.agentSessionId,
+      );
     if (
       runtime.connections.find(
         ({ connectionId }) => connectionId === surfaceSelection.connectionId,
@@ -2597,6 +2640,8 @@ function WorldControlPlane({
               surfaceSelection.view ?? null,
               true,
               refreshedWorld,
+              undefined,
+              surfaceSelection.agentSessionId,
             )
           : false;
       })
@@ -4003,6 +4048,7 @@ function worldNodeLeaseIsCurrent(
 export async function focusWorldNode(
   node: WorldObjectNode,
   focusStore: WorldFocusStore = store,
+  agentSessionId?: string,
 ) {
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
@@ -4025,6 +4071,7 @@ export async function focusWorldNode(
     runtimeGeneration: node.generation,
     workspaceId: target.workspaceId,
     paneId: target.paneId,
+    ...(agentSessionId ? { agentSessionId } : {}),
   });
   if (!focused) {
     throw new Error("The selected item could not be focused");

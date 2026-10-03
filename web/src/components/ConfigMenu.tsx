@@ -2,6 +2,7 @@ import { lazyWithReload } from "../lazyWithReload";
 import type { ReactNode } from "react";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
+  Menu as MenuIcon,
   ChevronDown,
   ChevronRight,
   Download,
@@ -203,7 +204,9 @@ export function ConfigMenu({
           aria-expanded={open}
           aria-haspopup="dialog"
         >
-          Menu{updateAvailable ? <span className="menu-update-dot" /> : null}
+          <MenuIcon className="menu-button-icon" size={18} aria-hidden="true" />
+          <span className="menu-button-label">Menu</span>
+          {updateAvailable ? <span className="menu-update-dot" /> : null}
         </button>
         {open ? (
           <div

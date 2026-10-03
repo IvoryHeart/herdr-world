@@ -105,6 +105,8 @@ const panes: Pane[] = [
     revision: 1,
   },
 ];
+let notificationSessionId = "reviewer-session";
+let replaceNotificationSessionOnSnapshot = false;
 let focusedPaneId = panes[0].pane_id;
 let focusedTabId = tabs[0]!.tab_id;
 let worldRevision = 1;
@@ -117,6 +119,7 @@ const initialTerminalAttach = Promise.withResolvers<void>();
 let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let delayedTabList: { promise: Promise<void>; tabs: Tab[] } | null = null;
+let rejectCreatedPaneFocus = true;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
 let agents: Record<string, unknown>[] = [
@@ -234,7 +237,13 @@ const client: ConnectionClient = {
   acceptsServerGeneration: (generation) => generation === 7,
   call: async (method, params = {}) => {
     calls.push({ method, params });
+    if (method === "agent_session.get" && !params.agent)
+      return { session: { value: notificationSessionId } };
     if (method === "world.snapshot") {
+      if (replaceNotificationSessionOnSnapshot) {
+        notificationSessionId = "replacement-session";
+        replaceNotificationSessionOnSnapshot = false;
+      }
       if (rejectNextWorldSnapshot) {
         rejectNextWorldSnapshot = false;
         throw new Error("Synthetic transient World observation failure");
@@ -323,7 +332,7 @@ const client: ConnectionClient = {
       worldRevision += 1;
       focusedTabId = createdTab.tab_id;
       focusedPaneId = createdPane.pane_id;
-      rejectNextPaneGetId = createdPane.pane_id;
+      if (rejectCreatedPaneFocus) rejectNextPaneGetId = createdPane.pane_id;
       return {
         type: "tab_created",
         tab: createdTab,
@@ -526,6 +535,22 @@ async function run() {
     selectedPaneId: focusedPaneId,
     lastRefresh: Date.now(),
   });
+
+  const originalWithResolvers = Promise.withResolvers;
+  try {
+    Object.defineProperty(Promise, "withResolvers", {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+    await store.refresh();
+    check(
+      !store.get().error,
+      "refresh failed on the declared browser baseline without Promise.withResolvers",
+    );
+  } finally {
+    Promise.withResolvers = originalWithResolvers;
+  }
 
   const host = document.createElement("div");
   host.style.cssText = "position:fixed;inset:0;";
@@ -1054,6 +1079,135 @@ async function run() {
       !document.querySelector('[role="dialog"][aria-label$=" Inspector"]'),
     "shared navigator docked Inspector with Floating Office preference",
   );
+  const inspectorPane = () =>
+    document.querySelector<HTMLElement>(".world-context-rail [data-pane-id]")
+      ?.dataset.paneId;
+  const shortcut = (action: "next" | "previous" | "create", key: string) => {
+    updateShortcut(`tab.${action}`, [`Ctrl+Alt+Shift+${key}`]);
+    terminalInput(document.querySelector(".world-context-rail")!)?.focus();
+    terminalInput(
+      document.querySelector(".world-context-rail")!,
+    )!.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key,
+        code: `Digit${key}`,
+        ctrlKey: true,
+        altKey: true,
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  };
+  shortcut("next", "8");
+  await until(
+    () => inspectorPane() === "builder-pane",
+    "Next-tab presents Builder terminal",
+  );
+  shortcut("previous", "9");
+  await until(
+    () => inspectorPane() === "reviewer-pane",
+    "Previous-tab presents Reviewer terminal",
+  );
+  rejectCreatedPaneFocus = false;
+  shortcut("create", "7");
+  await until(
+    () => inspectorPane() === "created-pane-3",
+    "Create-tab presents newly created terminal",
+  );
+  check(
+    calls.some(
+      ({ method, params }) =>
+        method === "tab.rename" && params.tab_id === "created-tab-3",
+    ),
+    "keyboard-created tab was not numbered",
+  );
+  for (const close of document.querySelectorAll<HTMLButtonElement>(
+    'button[aria-label="Close Workspace Inspector"]',
+  ))
+    close.click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "keyboard Inspector cleanup",
+  );
+  tabs.splice(
+    tabs.findIndex(({ tab_id }) => tab_id === "created-tab-3"),
+    1,
+  );
+  panes.splice(
+    panes.findIndex(({ pane_id }) => pane_id === "created-pane-3"),
+    1,
+  );
+  focusedTabId = "work";
+  focusedPaneId = "builder-pane";
+  worldRevision++;
+  await store.refresh();
+  omitNextWorldTopology = true;
+  await worldRuntimeStore.refresh();
+  await until(
+    () => worldRuntimeStore.get().connections[0]?.snapshot?.panes.length === 0,
+    "notification target omitted from aggregate",
+  );
+  window.dispatchEvent(
+    new CustomEvent("herdr-world:visual-notification", {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "reviewer-pane",
+        agentSessionId: "reviewer-session",
+      },
+    }),
+  );
+  await until(
+    () => inspectorPane() === "reviewer-pane",
+    "notification reveals operational pane omitted from overview",
+  );
+  document
+    .querySelector<HTMLButtonElement>(
+      '.world-context-rail button[aria-label="Close Workspace Inspector"]',
+    )!
+    .click();
+  await until(
+    () => !document.querySelector(".workspace-inspector"),
+    "notification Inspector cleanup",
+  );
+  omitNextWorldTopology = true;
+  await worldRuntimeStore.refresh();
+  replaceNotificationSessionOnSnapshot = true;
+  const snapshotsBeforeReplacement = calls.filter(
+    ({ method }) => method === "world.snapshot",
+  ).length;
+  window.dispatchEvent(
+    new CustomEvent("herdr-world:visual-notification", {
+      detail: {
+        connectionId: "local",
+        runtimeGeneration: 7,
+        workspaceId: "studio",
+        paneId: "reviewer-pane",
+        agentSessionId: "reviewer-session",
+      },
+    }),
+  );
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "world.snapshot").length >
+        snapshotsBeforeReplacement &&
+      notificationSessionId === "replacement-session",
+    "notification priority refresh replaced agent session",
+  );
+  await settle();
+  check(
+    !document.querySelector(".workspace-inspector"),
+    "notification opened a replacement agent session",
+  );
+  notificationSessionId = "reviewer-session";
+  flushSync(() => floatingPreferenceNavigatorRow()?.click());
+  await until(
+    () => inspectorPane() === "reviewer-pane",
+    "Reviewer Inspector restored after rejected notification",
+  );
+  rejectCreatedPaneFocus = true;
   document
     .querySelector<HTMLButtonElement>(
       '.world-context-rail button[aria-label="Close Workspace Inspector"]',

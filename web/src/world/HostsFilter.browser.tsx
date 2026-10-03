@@ -39,6 +39,9 @@ const watches: Array<{
 const creation = Promise.withResolvers<unknown>();
 let watchAdmissionOld = false;
 let downloadPublications = 0;
+let syntheticFileDeleted = false;
+let mutationRequests = 0;
+let uploadRequests = 0;
 const downloadRequests: string[] = [];
 const operation =
   new URLSearchParams(location.search).get("operation") ?? "filters";
@@ -685,6 +688,69 @@ async function operationalScenario() {
       () => !!document.querySelector(".connection-manager-modal"),
       "The host menu did not expose connection management",
     );
+    return;
+  }
+  if (operation === "file-mutation-interruption") {
+    leaf("beta")!.click();
+    await frame();
+    await invokeCommand("visual-files");
+    await waitFor(
+      () => !!document.querySelector('button[aria-label="File actions"]'),
+      "file mutation actions",
+    );
+    const listsBefore = dispatches.filter(
+      (call) => call.connectionId === "beta" && call.method === "file.list",
+    ).length;
+    document
+      .querySelector<HTMLButtonElement>('button[aria-label="File actions"]')!
+      .click();
+    await waitFor(() => !!namedButton("Delete file"), "delete file menu");
+    namedButton("Delete file")!.click();
+    await waitFor(() => !!namedButton("Delete"), "delete confirmation");
+    namedButton("Delete")!.click();
+    await waitFor(
+      () => store.get().notice?.message === "Delete outcome is uncertain",
+      "interrupted deletion reports uncertainty",
+    );
+    check(
+      dispatches.filter(
+        (call) => call.connectionId === "beta" && call.method === "file.list",
+      ).length > listsBefore,
+      "interrupted deletion did not refresh owning directory",
+    );
+    await waitFor(
+      () => !document.querySelector('button[aria-label="File actions"]'),
+      "interrupted deletion clears the stale cached entry",
+    );
+    check(mutationRequests === 1, "interrupted deletion was replayed");
+    const listsBeforeUpload = dispatches.filter(
+      (call) => call.connectionId === "beta" && call.method === "file.list",
+    ).length;
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["definite"], "rejected.txt"));
+    transfer.items.add(new File(["uncertain"], "synthetic.txt"));
+    document.querySelector(".file-tree")!.dispatchEvent(
+      new DragEvent("drop", {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: transfer,
+      }),
+    );
+    await waitFor(
+      () => store.get().notice?.message === "Upload outcome is uncertain",
+      "mixed upload results preserve uncertainty",
+    );
+    check(
+      dispatches.filter(
+        (call) => call.connectionId === "beta" && call.method === "file.list",
+      ).length > listsBeforeUpload,
+      "mixed upload results skipped owning directory refresh",
+    );
+    await waitFor(
+      () => !!document.querySelector('button[aria-label="File actions"]'),
+      "interrupted upload refresh reveals the completed file",
+    );
+    check(uploadRequests === 2, "mixed upload results replayed a mutation");
     return;
   }
   if (operation === "file-download-error") {
@@ -1433,6 +1499,75 @@ async function run() {
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
   history.replaceState(null, "", "/tree");
   initializeLayoutPreferences();
+  if (operation === "file-mutation-interruption") {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+          location.href,
+        );
+        if (url.pathname.endsWith("/file/upload")) {
+          uploadRequests++;
+          const headers = {
+            "X-Herdr-Connection-Id": "beta",
+            "X-Herdr-Connection-Generation": "7",
+          };
+          if (uploadRequests === 1)
+            return Promise.resolve(
+              Response.json(
+                { error: "Synthetic definite rejection" },
+                { status: 400, headers },
+              ),
+            );
+          syntheticFileDeleted = false;
+          return Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.error(
+                    new TypeError("Synthetic interrupted upload body"),
+                  );
+                },
+              }),
+              { headers },
+            ),
+          );
+        }
+        if (url.pathname.endsWith("/file/delete")) {
+          mutationRequests++;
+          check(
+            url.pathname.includes("/beta/file/delete") &&
+              url.searchParams.get("connection_generation") === "7",
+            "interrupted mutation lost its owner",
+          );
+          syntheticFileDeleted = true;
+          return Promise.resolve(
+            new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.error(
+                    new TypeError("Synthetic interrupted mutation body"),
+                  );
+                },
+              }),
+              {
+                headers: {
+                  "X-Herdr-Connection-Id": "beta",
+                  "X-Herdr-Connection-Generation": "7",
+                },
+              },
+            ),
+          );
+        }
+        return originalFetch(input, init);
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+  }
   if (operation === "file-download-error") {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
@@ -1584,7 +1719,9 @@ async function run() {
         }
         return {
           entries:
-            operation === "file-download-error"
+            operation === "file-download-error" ||
+            (operation === "file-mutation-interruption" &&
+              !syntheticFileDeleted)
               ? [
                   {
                     name: "synthetic.txt",
@@ -1769,6 +1906,35 @@ async function run() {
       hosts.getBoundingClientRect().right <= window.innerWidth &&
         hosts.getBoundingClientRect().width > 0,
       "Hosts control is outside the visible viewport",
+    );
+    const mobileTopbar = document.documentElement.dataset.layout === "mobile";
+    const hostLabel = hosts.querySelector<HTMLElement>(
+      ".connection-switcher-label",
+    )!;
+    const hostCount = hosts.querySelector<HTMLElement>(".world-hosts-count")!;
+    const viewIcon = document.querySelector<HTMLElement>(
+      ".world-primary-view-icon",
+    )!;
+    const menuIcon = document.querySelector<HTMLElement>(".menu-button-icon")!;
+    const menuLabel =
+      document.querySelector<HTMLElement>(".menu-button-label")!;
+    check(
+      (getComputedStyle(hostLabel).display === "none") === mobileTopbar,
+      "Hosts label does not follow mobile layout",
+    );
+    check(
+      (getComputedStyle(viewIcon).display !== "none") === mobileTopbar,
+      "World view icon does not follow mobile layout",
+    );
+    check(
+      (getComputedStyle(menuIcon).display !== "none") === mobileTopbar &&
+        (getComputedStyle(menuLabel).display === "none") === mobileTopbar,
+      "Menu icon and label do not follow mobile layout",
+    );
+    check(
+      hostCount.textContent === String(catalogue.length) &&
+        (getComputedStyle(hostCount).display !== "none") === mobileTopbar,
+      "Hosts icon does not show the catalogue count on mobile",
     );
     for (const id of ["alpha", "beta"]) {
       const node = [

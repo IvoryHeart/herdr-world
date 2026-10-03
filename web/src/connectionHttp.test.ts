@@ -72,6 +72,42 @@ test.each(["GET", "POST"])(
   },
 );
 
+test.each(["GET", "POST", "DELETE"])(
+  "%s classifies an interrupted successful response body",
+  async (method) => {
+    const previousFetch = globalThis.fetch;
+    const response = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(new TypeError("Synthetic interrupted body"));
+        },
+      }),
+      {
+        headers: {
+          "X-Herdr-Connection-Id": "alpha",
+          "X-Herdr-Connection-Generation": "7",
+        },
+      },
+    );
+    globalThis.fetch = (async () => response) as unknown as typeof fetch;
+    try {
+      const error = await connectionHttpResource(
+        owner,
+        "/file/delete",
+        (reply) => reply.json(),
+        { method },
+      ).catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(Error);
+      if (method === "GET")
+        expect(error).not.toBeInstanceOf(UncertainRequestError);
+      else expect(error).toBeInstanceOf(UncertainRequestError);
+      expect((error as Error).message).toContain("Synthetic interrupted body");
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  },
+);
+
 describe("connection-scoped HTTP paths", () => {
   test("encodes one valid nontrivial connection path segment", () => {
     expect(connectionHttpPath("alpha:remote-1", "/upload-image")).toBe(

@@ -61,9 +61,21 @@ export async function connectionHttpResource<T>(
     assertCurrent();
     throw new Error(message);
   }
-  const resource = await decode(response);
-  assertCurrent();
-  return resource;
+  try {
+    const resource = await decode(response);
+    assertCurrent();
+    return resource;
+  } catch (error) {
+    if (method !== "GET" && method !== "HEAD") {
+      throw new UncertainRequestError(
+        `HTTP ${method}`,
+        error instanceof Error
+          ? error.message
+          : "resource response interrupted",
+      );
+    }
+    throw error;
+  }
 }
 
 export function connectionHttpPath(

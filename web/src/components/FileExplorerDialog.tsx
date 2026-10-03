@@ -1,3 +1,4 @@
+import { UncertainRequestError } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import {
   type DragEvent,
@@ -1126,9 +1127,24 @@ function FileExplorerContent({
       });
     } catch (e) {
       if (!runtimeContextIsCurrent(requestContext)) return;
+      if (e instanceof UncertainRequestError) {
+        clearDeletedPreview(entry);
+        invalidateFilePreviewCache(
+          connectionClient,
+          workspace.workspace_id,
+          entry.path,
+          entry.type === "directory",
+        );
+        await loadDirectory(parentDirectoryPath(entry.path), true);
+        if (!runtimeContextIsCurrent(requestContext)) return;
+        void loadGitStatus(true);
+      }
       store.notify({
         kind: "error",
-        message: "Delete failed",
+        message:
+          e instanceof UncertainRequestError
+            ? "Delete outcome is uncertain"
+            : "Delete failed",
         detail: (e as Error).message,
       });
     } finally {
@@ -1183,10 +1199,14 @@ function FileExplorerContent({
         ),
       );
       if (!runtimeContextIsCurrent(requestContext)) return;
-      const failed = results.find(
+      const failures = results.filter(
         (result): result is PromiseRejectedResult =>
           result.status === "rejected",
       );
+      const failed =
+        failures.find(
+          (result) => result.reason instanceof UncertainRequestError,
+        ) ?? failures[0];
       if (failed) throw failed.reason;
       if (directory) {
         updateCache({ expanded: new Set(expanded).add(directory) });
@@ -1211,9 +1231,22 @@ function FileExplorerContent({
       });
     } catch (e) {
       if (!runtimeContextIsCurrent(requestContext)) return;
+      if (e instanceof UncertainRequestError) {
+        await loadDirectory(directory, true);
+        if (!runtimeContextIsCurrent(requestContext)) return;
+        invalidateUploadedPreviews(
+          uploadFiles.map((file) =>
+            directory ? `${directory}/${file.name}` : file.name,
+          ),
+        );
+        void loadGitStatus(true);
+      }
       store.notify({
         kind: "error",
-        message: "Upload failed",
+        message:
+          e instanceof UncertainRequestError
+            ? "Upload outcome is uncertain"
+            : "Upload failed",
         detail: (e as Error).message,
       });
     } finally {

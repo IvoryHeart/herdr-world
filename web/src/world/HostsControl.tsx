@@ -32,13 +32,17 @@ export function HostsControl({
             type="button"
             className="connection-switcher-trigger"
             aria-label="Hosts"
+            title={`Hosts (${connections.length})`}
             aria-expanded={open}
           >
-            <Server size={14} />
+            <span className="world-hosts-icon" aria-hidden="true">
+              <Server size={16} />
+              <span className="world-hosts-count">{connections.length}</span>
+            </span>
             <span className="connection-switcher-label">
               {ids === null ? "All hosts" : `${ids.length} hosts`}
             </span>
-            <ChevronDown size={14} />
+            <ChevronDown className="world-hosts-chevron" size={14} />
           </button>
         </PopoverTrigger>
         <PopoverContent

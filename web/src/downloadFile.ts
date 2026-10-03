@@ -130,6 +130,7 @@ export async function downloadFileFromUrl(args: {
   assertCurrent();
   const strategy = chooseFileDownloadStrategy(currentDownloadEnvironment());
   if (strategy === "share") {
+    let sharing = false;
     try {
       const response = await fetch(args.url, {
         credentials: "same-origin",
@@ -167,12 +168,13 @@ export async function downloadFileFromUrl(args: {
       const file = new File([blob], filename, {
         type: blob.type || "application/octet-stream",
       });
+      sharing = true;
       await navigator.share({ files: [file], title: filename });
       return "shared";
     } catch (error) {
       assertCurrent();
-      if ((error as Error).name === "AbortError") return "shared";
-      if (args.client) throw error;
+      if (sharing && (error as Error).name === "AbortError") return "shared";
+      if (args.client && !sharing) throw error;
       openInNewContext(args.url);
       return "opened";
     }

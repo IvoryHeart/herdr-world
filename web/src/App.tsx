@@ -863,6 +863,7 @@ function SpacesTabTerminal({
 }
 
 export type WorkspaceSurfaceSelection = {
+  agentSessionId?: string;
   view?: InspectorView;
   connectionId: string;
   runtimeGeneration: number;

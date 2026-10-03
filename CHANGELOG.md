@@ -29,6 +29,9 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Mobile top-bar controls use icons for Hosts, view selection, Actions and Menu,
+  with a host-count badge on Hosts.
+
 - Spaces sidebar selections activate the terminal's owning host. Workspaces with
   shell terminals can expand in the host navigator even when no agent is running.
 - Host groups and terminal rows keep their established order when selection,
@@ -82,6 +85,12 @@ are optional because the merged PR history records their source.
   readable Files, Changes, and agent History examples.
 
 ### Fixed
+
+- Kept Inspector terminals in sync with keyboard tab navigation and creation,
+  and revealed qualified notification targets omitted from the host overview.
+- Preserved refresh support on the declared browser baseline. Interrupted file
+  mutation responses now report uncertain outcomes and refresh the owning
+  directory; healthy iOS downloads retain their fallback when native sharing fails.
 
 - Preserved server error details for rejected resource requests and showed failed
   file and session downloads without reopening them on another path.

@@ -1459,7 +1459,11 @@ async function refreshNow(
       ? refreshCompletions.get(refreshKey)?.promise
       : undefined;
   }
-  const completion = Promise.withResolvers<void>();
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  const completion = { promise, resolve };
   refreshCompletions.set(refreshKey, completion);
   refreshingConnectionKeys.add(refreshKey);
   const observationStartedAt = performance.now();
