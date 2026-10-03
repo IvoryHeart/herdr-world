@@ -21,6 +21,13 @@ at commit `66a24ea7df2435ef897c48c147deb7ec572c01c2`, licensed under Apache-2.0,
 Copyright 2026 GreenSheep01201 (seowongil@gmail.com). The licence is retained in
 [`LICENSES/CLAW-EMPIRE-APACHE-2.0.txt`](LICENSES/CLAW-EMPIRE-APACHE-2.0.txt).
 
+## Website film fonts
+
+The website film under `site/film/fonts` bundles Big Shoulders Display, JetBrains Mono
+and Silkscreen under the SIL Open Font License 1.1. The film also embeds downscaled
+copies of the Claw-Empire character sprites listed above. The font licence is
+retained in [`LICENSES/FILM-FONTS-OFL.txt`](LICENSES/FILM-FONTS-OFL.txt).
+
 ## Nerd Fonts
 
 `web/src/assets/herdr-nerd-symbols.woff2` is a glyph-only derivative of

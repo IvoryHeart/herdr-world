@@ -27,6 +27,10 @@ const assets = [
     "herdr-world-desktop-files.png",
   ],
   [
+    "docs/images/herdr-world-desktop-changes.png",
+    "herdr-world-desktop-changes.png",
+  ],
+  [
     "docs/images/herdr-world-desktop-history.png",
     "herdr-world-desktop-history.png",
   ],

@@ -1773,6 +1773,33 @@
     font-family: var(--font-mono);
     font-size: 0.64rem;
   }
+
+  .film-card {
+    overflow: hidden;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius-lg);
+    background: #000;
+    box-shadow: var(--shadow-window);
+  }
+
+  .film-card iframe {
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 0;
+  }
+
+  .film-links {
+    margin-top: 16px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    text-align: center;
+  }
+
+  .film-links a {
+    color: var(--blue-bright);
+  }
 }
 
 @layer utilities {
