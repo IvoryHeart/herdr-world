@@ -12,7 +12,8 @@ name the Herdr agent and, when reported, its harness and model.
 Every card's primary action SHALL open the existing terminal Inspector for that exact
 connection-qualified pane. Desk SHALL NOT send terminal input, answer approvals, assign tasks or run
 lifecycle commands itself. Review marks SHALL apply to one stop of one agent session and SHALL remain
-unavailable until that stop's receipt has been read. Keyboard shortcuts (J and K to move, Enter to
+unavailable until a receipt has been read for the agent's present state; when no receipt can be read
+for that state, the stop SHALL become markable without one. Keyboard shortcuts (J and K to move, Enter to
 open, E to mark reviewed) SHALL apply only while focus is on the Desk or the page itself, SHALL NOT
 replace the native activation of a focused control, and SHALL keep focus on the same agent while
 lanes reorder.

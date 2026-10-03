@@ -7,6 +7,7 @@ import {
   isRecent,
   operationalAgents,
   receiptEndedAt,
+  type ReceiptState,
   type TurnReceipt,
   useHandledTurns,
   useNow,
@@ -28,7 +29,7 @@ type Item = {
   receipt: TurnReceipt | null;
   handoffId: string;
   handled: boolean;
-  /** The receipt has not been fetched yet, so the stop has no stable id. */
+  /** No receipt has been read for the agent's present state yet. */
   pending: boolean;
   since: number | null;
 };
@@ -61,7 +62,7 @@ function agentRuntime(leaf: WorldLeafObject) {
 
 export function partitionDesk(
   agents: WorldLeafObject[],
-  receiptFor: (leaf: WorldLeafObject) => TurnReceipt | null | undefined,
+  receiptFor: (leaf: WorldLeafObject) => ReceiptState,
   handled: Set<string>,
   now: number,
   stops: Map<string, number> = new Map(),
@@ -71,9 +72,10 @@ export function partitionDesk(
   const working: Item[] = [];
   const quiet: WorldLeafObject[] = [];
   for (const leaf of agents) {
-    const fetchedReceipt = receiptFor(leaf);
-    const pending = fetchedReceipt === undefined;
-    const receipt = fetchedReceipt ?? null;
+    // A receipt read for an earlier state may name an earlier stop, so marking
+    // waits until the receipt matches the agent's present state.
+    const { receipt, current } = receiptFor(leaf);
+    const pending = !current;
     const stoppedAt = stops.get(leaf.id);
     const id = handoffId(leaf, receipt, stoppedAt);
     const since =
@@ -101,7 +103,6 @@ export function partitionDesk(
       });
     } else if (
       leaf.status === "done" ||
-      (leaf.status !== "idle" && leaf.status !== "unknown") ||
       isRecent(receipt, now) ||
       (stoppedAt !== undefined && now - stoppedAt <= IDLE_WINDOW_MS)
     ) {
@@ -218,11 +219,12 @@ export function deskShortcut(input: {
 export function focusIndexOf(
   order: readonly { leaf: { id: string } }[],
   focusedId: string | null,
+  fallback = 0,
 ) {
-  return Math.max(
-    0,
-    order.findIndex((item) => item.leaf.id === focusedId),
-  );
+  const index = order.findIndex((item) => item.leaf.id === focusedId);
+  // A focused agent that left the list hands focus to the card now nearest
+  // its last position, not to the top of the queue.
+  return index >= 0 ? index : Math.max(0, Math.min(fallback, order.length - 1));
 }
 
 export function DeskView({
@@ -276,7 +278,9 @@ export function DeskView({
     world.hosts.find((host) => host.selectedHost)?.label ?? "this host";
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
-  const focusIndex = focusIndexOf(order, focusedId);
+  const lastFocusIndex = useRef(0);
+  const focusIndex = focusIndexOf(order, focusedId, lastFocusIndex.current);
+  lastFocusIndex.current = focusIndex;
   const focused = order[focusIndex];
   const open = (leaf: WorldLeafObject) => {
     setError(null);

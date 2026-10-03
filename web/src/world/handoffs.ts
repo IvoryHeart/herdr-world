@@ -78,6 +78,49 @@ export function receiptTrigger(leaf: WorldLeafObject) {
   return `${leaf.status}:${leaf.lastActivityAt ?? ""}`;
 }
 
+/** A stored receipt and the agent state it was read for. */
+export type StoredReceipt = { receipt: TurnReceipt | null; trigger: string };
+
+/** What the Desk knows about one agent's latest stop. */
+export type ReceiptState = {
+  receipt: TurnReceipt | null;
+  /** Read for the agent's present state, so its stop identity can be marked. */
+  current: boolean;
+};
+
+/** The stored entry after a successful read. */
+export function receiptAfterRead(
+  receipt: TurnReceipt | null,
+  trigger: string,
+): StoredReceipt {
+  return { receipt, trigger };
+}
+
+/**
+ * The stored entry after a failed read. A first read that fails (for example,
+ * a harness whose sessions World cannot read) settles as "no receipt", so the
+ * stop can still be marked. A failed refresh keeps the previous receipt but not
+ * as current; the periodic refresh retries it.
+ */
+export function receiptAfterError(
+  previous: StoredReceipt | undefined,
+  trigger: string,
+): StoredReceipt {
+  return previous ?? { receipt: null, trigger };
+}
+
+export function receiptStateOf(
+  stored: StoredReceipt | undefined,
+  leaf: WorldLeafObject,
+  polled: boolean,
+): ReceiptState {
+  if (!polled) return { receipt: null, current: true };
+  return {
+    receipt: stored?.receipt ?? null,
+    current: stored !== undefined && stored.trigger === receiptTrigger(leaf),
+  };
+}
+
 function isReceipt(value: unknown): value is TurnReceipt {
   return (
     !!value &&
@@ -129,7 +172,7 @@ export function useTurnReceipts(
   leaves: WorldLeafObject[],
   client: ConnectionClient,
 ) {
-  const [receipts, setReceipts] = useState<Map<string, TurnReceipt | null>>(
+  const [receipts, setReceipts] = useState<Map<string, StoredReceipt>>(
     () => new Map(),
   );
   const [tick, setTick] = useState(0);
@@ -188,7 +231,9 @@ export function useTurnReceipts(
         if (!leaf.pane.agent) {
           fetched.current.set(identity, trigger);
           due.current.delete(identity);
-          setReceipts((current) => new Map(current).set(identity, null));
+          setReceipts((current) =>
+            new Map(current).set(identity, receiptAfterRead(null, trigger)),
+          );
           continue;
         }
         try {
@@ -203,12 +248,21 @@ export function useTurnReceipts(
           fetched.current.set(identity, trigger);
           due.current.delete(identity);
           setReceipts((current) =>
-            new Map(current).set(identity, isReceipt(turn) ? turn : null),
+            new Map(current).set(
+              identity,
+              receiptAfterRead(isReceipt(turn) ? turn : null, trigger),
+            ),
           );
         } catch {
           if (cancelled) return;
           fetched.current.set(identity, trigger);
           due.current.delete(identity);
+          setReceipts((current) =>
+            new Map(current).set(
+              identity,
+              receiptAfterError(current.get(identity), trigger),
+            ),
+          );
         }
       }
     })();
@@ -220,12 +274,11 @@ export function useTurnReceipts(
   }, [client, requestKeys, tick]);
 
   const polled = new Set(targets.map(receiptIdentity));
-  // `undefined` means a polled agent's receipt is still on its way; agents
-  // outside the polling bound have no receipt rather than a pending one.
+  // Agents outside the polling bound have no receipt rather than a pending one.
   return useCallback(
-    (leaf: WorldLeafObject) => {
+    (leaf: WorldLeafObject): ReceiptState => {
       const identity = receiptIdentity(leaf);
-      return polled.has(identity) ? receipts.get(identity) : null;
+      return receiptStateOf(receipts.get(identity), leaf, polled.has(identity));
     },
     // requestKeys covers the polled set.
     // eslint-disable-next-line react-hooks/exhaustive-deps

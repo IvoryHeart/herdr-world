@@ -3,6 +3,10 @@ import { deskShortcut, focusIndexOf, partitionDesk } from "./DeskView";
 import {
   operationalAgents,
   pollingTargets,
+  receiptAfterError,
+  receiptAfterRead,
+  receiptStateOf,
+  receiptTrigger,
   type TurnReceipt,
 } from "./handoffs";
 import {
@@ -54,7 +58,7 @@ describe("partitionDesk", () => {
         leaf("observed", "idle"),
         leaf("unknown", "unknown"),
       ],
-      (agent) => receipts.get(agent.id),
+      (agent) => ({ receipt: receipts.get(agent.id) ?? null, current: true }),
       new Set(["turn-seen"]),
       NOW,
       new Map([["observed", NOW - 60_000]]),
@@ -143,7 +147,12 @@ describe("agents beyond the polling limit", () => {
   test("keep a blocked agent in triage and poll it first", () => {
     const agents = operationalAgents({ leaves } as unknown as WorldObject);
     expect(agents).toHaveLength(41);
-    const lanes = partitionDesk(agents, () => null, new Set(), NOW);
+    const lanes = partitionDesk(
+      agents,
+      () => ({ receipt: null, current: true }),
+      new Set(),
+      NOW,
+    );
     expect(lanes.needs.map((item) => item.leaf.id)).toEqual(["waiting"]);
     expect(pollingTargets(agents)[0]?.id).toBe("waiting");
     expect(pollingTargets(agents)).toHaveLength(40);
@@ -195,13 +204,14 @@ describe("Desk keyboard", () => {
     const after = [{ leaf: { id: "new-blocked" } }, ...before];
     expect(focusIndexOf(before, "b")).toBe(1);
     expect(focusIndexOf(after, "b")).toBe(2);
-    expect(focusIndexOf(after, "gone")).toBe(0);
+    expect(focusIndexOf(after, "gone", 1)).toBe(1);
+    expect(focusIndexOf(before, "gone", 5)).toBe(1);
   });
 
   test("marks a stop pending until its receipt has been fetched", () => {
     const lanes = partitionDesk(
       [leaf("fetching", "done"), leaf("none", "done")],
-      (agent) => (agent.id === "fetching" ? undefined : null),
+      (agent) => ({ receipt: null, current: agent.id !== "fetching" }),
       new Set(),
       NOW,
     );
@@ -209,5 +219,45 @@ describe("Desk keyboard", () => {
       ["fetching", true],
       ["none", false],
     ]);
+  });
+});
+
+describe("receipt currency", () => {
+  const agent = (status: WorldLeafObject["status"]) =>
+    ({ ...leaf("a", status), lastActivityAt: 1 }) as WorldLeafObject;
+
+  test("a receipt read while working is not current once the agent stops", () => {
+    const stored = receiptAfterRead(
+      receipt("mid-turn", 1),
+      receiptTrigger(agent("working")),
+    );
+    expect(receiptStateOf(stored, agent("working"), true).current).toBe(true);
+    expect(receiptStateOf(stored, agent("done"), true).current).toBe(false);
+  });
+
+  test("a failed first read settles as no receipt so the stop can be marked", () => {
+    const stored = receiptAfterError(undefined, receiptTrigger(agent("done")));
+    expect(receiptStateOf(stored, agent("done"), true)).toEqual({
+      receipt: null,
+      current: true,
+    });
+  });
+
+  test("a failed refresh keeps the previous receipt without making it current", () => {
+    const previous = receiptAfterRead(
+      receipt("earlier", 5),
+      receiptTrigger(agent("working")),
+    );
+    const stored = receiptAfterError(previous, receiptTrigger(agent("done")));
+    const state = receiptStateOf(stored, agent("done"), true);
+    expect(state.receipt?.turn_id).toBe("earlier");
+    expect(state.current).toBe(false);
+  });
+
+  test("agents outside the read bound are never pending", () => {
+    expect(receiptStateOf(undefined, agent("done"), false)).toEqual({
+      receipt: null,
+      current: true,
+    });
   });
 });
