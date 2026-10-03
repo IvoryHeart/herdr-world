@@ -1661,6 +1661,18 @@ async function refreshNow(
   }
 }
 
+/** Observe after a focus change, including when an older observation is running. */
+async function refreshAfterCurrent(lease: StoreConnectionLease) {
+  const key = `${lease.connectionId}:${lease.generation}`;
+  const pending = refreshCompletions.get(key)?.promise;
+  if (pending) await pending;
+  if (!leaseIsCurrent(lease)) return;
+  // The old observation may have started its queued successor in finally.
+  const successor = refreshCompletions.get(key)?.promise;
+  if (successor) await successor;
+  else await refreshNow(lease);
+}
+
 function scheduleRefresh(lease = captureConnectionLease()) {
   if (state.connectionPaused || !leaseIsCurrent(lease)) return;
   const key = `${lease.connectionId}:${lease.generation}`;
@@ -4520,17 +4532,55 @@ export function operationalStore(context: OperationalContext) {
       const tab = snapshot.tabs.find((tab) => tab.tab_id === tabId);
       if (!tab) return Promise.resolve(false);
       if (snapshot.navigationMode === "browser-local")
-        return navigateBrowser(tab.workspace_id, tabId, undefined, lease);
-      const pane =
-        snapshot.panes.find((pane) => pane.tab_id === tabId && pane.focused) ??
-        snapshot.panes.find((pane) => pane.tab_id === tabId);
-      return tab
-        ? store.focusQualifiedTarget({
+        return navigateBrowser(tab.workspace_id, tabId, undefined, lease).then(
+          async () => {
+            const current = leaseSnapshot(lease);
+            if (
+              leaseIsCurrent(lease) &&
+              !current.panes.some(
+                (pane) =>
+                  pane.tab_id === tabId &&
+                  pane.pane_id === current.selectedPaneId,
+              )
+            )
+              await refreshAfterCurrent(lease);
+            return leaseIsCurrent(lease);
+          },
+        );
+      if (tab.focused && snapshot.layout?.tab_id === tabId) {
+        const pane =
+          snapshot.panes.find(
+            (pane) => pane.tab_id === tabId && pane.focused,
+          ) ??
+          snapshot.panes.find(
+            (pane) =>
+              pane.tab_id === tabId &&
+              pane.pane_id === snapshot.layout?.focused_pane_id,
+          );
+        // Restore current native/layout focus without rebuilding the tab.
+        if (pane)
+          return store.focusQualifiedTarget({
             ...context,
             workspaceId: tab.workspace_id,
-            paneId: pane?.pane_id ?? null,
-          })
-        : Promise.resolve(false);
+            paneId: pane.pane_id,
+          });
+      }
+      return enqueueFocusAction(async () => {
+        if (!leaseIsCurrent(lease)) return false;
+        await lease.client.call("workspace.focus", {
+          workspace_id: tab.workspace_id,
+        });
+        if (!leaseIsCurrent(lease)) return false;
+        await lease.client.call("tab.focus", { tab_id: tabId });
+        if (!leaseIsCurrent(lease)) return false;
+        // Observe the destination layout before replacing the selection;
+        // restoring the current tab must not transiently remove its pane.
+        await refreshAfterCurrent(lease);
+        const layout = leaseSnapshot(lease).layout;
+        if (leaseIsCurrent(lease) && layout?.tab_id === tabId)
+          setForConnection(lease, { selectedPaneId: layout.focused_pane_id });
+        return leaseIsCurrent(lease);
+      }, lease.connectionId);
     },
     createTab: (
       workspaceId: string,

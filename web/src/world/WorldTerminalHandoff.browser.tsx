@@ -107,8 +107,10 @@ const panes: Pane[] = [
 ];
 let notificationSessionId = "reviewer-session";
 let replaceNotificationSessionOnSnapshot = false;
+let omitNextOperationalTabPanes: string | null = null;
 let focusedPaneId = panes[0].pane_id;
 let focusedTabId = tabs[0]!.tab_id;
+const rememberedTabPanes = new Map<string, string>();
 let worldRevision = 1;
 let runtimeGeneration = 7;
 let rejectNextWorldSnapshot = false;
@@ -119,6 +121,8 @@ const initialTerminalAttach = Promise.withResolvers<void>();
 let zoomedFocusedPaneId: string | null = null;
 let delayedPaneGet: { paneId: string; promise: Promise<void> } | null = null;
 let delayedTabList: { promise: Promise<void>; tabs: Tab[] } | null = null;
+let delayedPaneLayout: { promise: Promise<void>; layout: PaneLayout } | null =
+  null;
 let rejectCreatedPaneFocus = true;
 let rejectNextPaneGetId: string | null = null;
 let rejectedPaneGets = 0;
@@ -291,6 +295,7 @@ const client: ConnectionClient = {
       if (pane) {
         focusedPaneId = pane.pane_id;
         focusedTabId = pane.tab_id;
+        rememberedTabPanes.set(pane.tab_id, pane.pane_id);
       }
       return pane ? { pane: { ...pane, focused: true } } : {};
     }
@@ -306,7 +311,13 @@ const client: ConnectionClient = {
       if (delayed) await delayed.promise;
       return { tabs: listed };
     }
-    if (method === "pane.list") return { panes: currentPanes() };
+    if (method === "pane.list") {
+      const omittedTab = omitNextOperationalTabPanes;
+      omitNextOperationalTabPanes = null;
+      return {
+        panes: currentPanes().filter((pane) => pane.tab_id !== omittedTab),
+      };
+    }
     if (method === "tab.create") {
       const number = tabs.length + 1;
       const createdTab: Tab = {
@@ -353,7 +364,13 @@ const client: ConnectionClient = {
         panes.find(
           (candidate) =>
             candidate.tab_id === tabId && candidate.pane_id === focusedPaneId,
-        ) ?? panes.find((candidate) => candidate.tab_id === tabId);
+        ) ??
+        panes.find(
+          (candidate) =>
+            candidate.tab_id === tabId &&
+            candidate.pane_id === rememberedTabPanes.get(tabId),
+        ) ??
+        panes.find((candidate) => candidate.tab_id === tabId);
       if (targetTab && targetPane) {
         focusedTabId = targetTab.tab_id;
         focusedPaneId = targetPane.pane_id;
@@ -361,7 +378,11 @@ const client: ConnectionClient = {
       return {};
     }
     if (method === "agent.list") return { agents: [] };
-    if (method === "pane.layout") return { layout: layout() };
+    if (method === "pane.layout") {
+      const delayed = delayedPaneLayout;
+      if (delayed) await delayed.promise;
+      return { layout: delayed?.layout ?? layout() };
+    }
     if (method === "file.list") {
       return {
         workspace_id: workspaceBase.workspace_id,
@@ -1080,8 +1101,9 @@ async function run() {
     "shared navigator docked Inspector with Floating Office preference",
   );
   const inspectorPane = () =>
-    document.querySelector<HTMLElement>(".world-context-rail [data-pane-id]")
-      ?.dataset.paneId;
+    document.querySelector<HTMLElement>(
+      ".world-context-rail .pane-layout-single[data-pane-id], .world-context-rail .pane-layout-cell.is-active[data-pane-id]",
+    )?.dataset.paneId;
   const shortcut = (action: "next" | "previous" | "create", key: string) => {
     updateShortcut(`tab.${action}`, [`Ctrl+Alt+Shift+${key}`]);
     terminalInput(document.querySelector(".world-context-rail")!)?.focus();
@@ -1099,15 +1121,80 @@ async function run() {
       }),
     );
   };
+  panes.push({
+    ...panes[0]!,
+    pane_id: "builder-second-pane",
+    terminal_id: "builder-second-terminal",
+    focused: false,
+    agent: undefined,
+    display_agent: undefined,
+  });
+  await store.refresh();
+  await store.focusQualifiedTarget({
+    connectionId: "local",
+    runtimeGeneration: 7,
+    workspaceId: "studio",
+    paneId: "builder-second-pane",
+  });
+  await store.focusQualifiedTarget({
+    connectionId: "local",
+    runtimeGeneration: 7,
+    workspaceId: "studio",
+    paneId: "reviewer-pane",
+  });
+  const priorLayout = Promise.withResolvers<void>();
+  delayedPaneLayout = { promise: priorLayout.promise, layout: layout() };
+  const layoutsBeforeShortcut = calls.filter(
+    ({ method }) => method === "pane.layout",
+  ).length;
+  const priorRefresh = store.refresh();
+  await until(
+    () =>
+      calls.filter(({ method }) => method === "pane.layout").length >
+      layoutsBeforeShortcut,
+    "pre-existing refresh is waiting on the previous tab layout",
+  );
+  const focusCallsBeforeShortcut = calls.filter(
+    ({ method }) => method === "tab.focus",
+  ).length;
   shortcut("next", "8");
   await until(
-    () => inspectorPane() === "builder-pane",
-    "Next-tab presents Builder terminal",
+    () =>
+      calls.filter(({ method }) => method === "tab.focus").length >
+      focusCallsBeforeShortcut,
+    "Next-tab focus dispatched while the prior observation is pending",
+  );
+  delayedPaneLayout = null;
+  priorLayout.resolve();
+  await priorRefresh;
+  await until(
+    () => inspectorPane() === "builder-second-pane",
+    "Next-tab presents the remembered second pane instead of list order",
   );
   shortcut("previous", "9");
   await until(
     () => inspectorPane() === "reviewer-pane",
     "Previous-tab presents Reviewer terminal",
+  );
+  omitNextOperationalTabPanes = "work";
+  await store.refresh();
+  check(
+    !store.get().panes.some((pane) => pane.tab_id === "work"),
+    "destination panes must be absent before the cold-tab shortcut",
+  );
+  shortcut("next", "8");
+  await until(
+    () => inspectorPane() === "builder-second-pane",
+    "Next-tab refreshes an unobserved destination tab and presents its terminal",
+  );
+  shortcut("previous", "9");
+  await until(
+    () => inspectorPane() === "reviewer-pane",
+    "cold-tab shortcut cleanup",
+  );
+  panes.splice(
+    panes.findIndex(({ pane_id }) => pane_id === "builder-second-pane"),
+    1,
   );
   rejectCreatedPaneFocus = false;
   shortcut("create", "7");

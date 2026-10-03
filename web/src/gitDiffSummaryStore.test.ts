@@ -194,12 +194,12 @@ describe("shared git diff summaries", () => {
     expect(readGitDiffSummary(key).summary).toBe(fresh);
   });
 
-  test("does not publish a request retired by resource cleanup", async () => {
+  test("runtime resource cleanup retires requests when transport epochs differ", async () => {
     const resolvers: Array<(value: GitDiffSummary) => void> = [];
     const client: ConnectionClient = {
       connectionId: "retired-summary",
-      generation: 1,
-      serverRuntimeGeneration: 1,
+      generation: 10,
+      serverRuntimeGeneration: 7,
       isCurrent: () => true,
       acceptsServerGeneration: () => true,
       call: () =>

@@ -1,3 +1,5 @@
+import { connectionHttpResource } from "../../../web/src/connectionHttp";
+import { UncertainRequestError } from "../../../web/src/api";
 import { describe, expect, test } from "bun:test";
 import {
   connectionRoutingErrorResponse,
@@ -428,3 +430,38 @@ describe("connection HTTP routing", () => {
     expect(malformed.headers.has("X-Herdr-Connection-Id")).toBe(false);
   });
 });
+
+test.each(["POST", "DELETE", "GET"])(
+  "%s classifies a server response replaced after dispatch retirement",
+  async (method) => {
+    const previousFetch = globalThis.fetch;
+    const published = publishConnectionHttpResponse(
+      { connectionId: "alpha", generation: 7, isCurrent: () => false },
+      Response.json({ completed: true }),
+    );
+    globalThis.fetch = (async () => published) as unknown as typeof fetch;
+    try {
+      expect(published.status).toBe(409);
+      const error = await connectionHttpResource(
+        {
+          connectionId: "alpha",
+          generation: 10,
+          serverRuntimeGeneration: 7,
+          isCurrent: () => true,
+          acceptsServerGeneration: (value) => value === 7,
+          call: async () => undefined,
+        },
+        "/file/delete",
+        (response) => response.json(),
+        { method },
+      ).catch((error: unknown) => error);
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        "connection changed during request",
+      );
+      expect(error instanceof UncertainRequestError).toBe(method !== "GET");
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  },
+);

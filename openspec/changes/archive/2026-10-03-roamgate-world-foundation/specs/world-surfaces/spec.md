@@ -120,11 +120,6 @@ switch hosts implicitly.
 - **WHEN** Office, Tree or Graph places an agent differently for presentation
 - **THEN** the shared hierarchy still records it beneath the authoritative owning host and space
 
-#### Scenario: Open an unavailable catalogue
-
-- **WHEN** profiles exist but none is ready
-- **THEN** the overview retains their health and explicitly stale cached topology with actions disabled
-
 ### Requirement: Accessible navigation
 
 World SHALL expose named, keyboard-reachable controls for view navigation, hierarchy disclosure,

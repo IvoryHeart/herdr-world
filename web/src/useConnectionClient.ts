@@ -33,14 +33,23 @@ export function useConnectionClient(): ConnectionClient {
   ]);
 }
 
+export type ConnectionClientScope = Pick<
+  ConnectionClient,
+  "connectionId" | "generation"
+> &
+  Partial<Pick<ConnectionClient, "serverRuntimeGeneration">>;
+
+export function connectionClientScopeGeneration(client: ConnectionClientScope) {
+  return client.serverRuntimeGeneration ?? client.generation;
+}
+
 export function connectionClientScopeKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation"> &
-    Partial<Pick<ConnectionClient, "serverRuntimeGeneration">>,
+  client: ConnectionClientScope,
   ...parts: unknown[]
 ): string {
   return JSON.stringify([
     client.connectionId,
-    client.serverRuntimeGeneration ?? client.generation,
+    connectionClientScopeGeneration(client),
     ...parts,
   ]);
 }

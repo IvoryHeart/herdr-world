@@ -56,15 +56,21 @@ export async function connectionHttpResource<T>(
       if (payload && typeof payload.error === "string" && payload.error)
         message = payload.error;
     } catch {
-      // The status still proves rejection if its explanation cannot be decoded.
+      // Preserve the status when its explanation cannot be decoded.
     }
     assertCurrent();
+    if (
+      method !== "GET" &&
+      method !== "HEAD" &&
+      response.headers.get("X-Herdr-Request-Outcome") === "uncertain"
+    ) {
+      throw new UncertainRequestError(`HTTP ${method}`, message);
+    }
     throw new Error(message);
   }
+  let resource: T;
   try {
-    const resource = await decode(response);
-    assertCurrent();
-    return resource;
+    resource = await decode(response);
   } catch (error) {
     if (method !== "GET" && method !== "HEAD") {
       throw new UncertainRequestError(
@@ -76,6 +82,8 @@ export async function connectionHttpResource<T>(
     }
     throw error;
   }
+  assertCurrent();
+  return resource;
 }
 
 export function connectionHttpPath(

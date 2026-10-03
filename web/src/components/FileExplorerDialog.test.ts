@@ -211,6 +211,35 @@ describe("connection-scoped file prefetch", () => {
 });
 
 describe("connection-scoped file previews", () => {
+  test("runtime-generation invalidation retires an in-flight preview when transport epochs differ", async () => {
+    const resolvers: Array<(value: FilePreview) => void> = [];
+    const scopedClient = {
+      ...client(
+        "unequal-preview-epochs",
+        10,
+        () => new Promise<FilePreview>((resolve) => resolvers.push(resolve)),
+      ),
+      serverRuntimeGeneration: 7,
+    };
+    const stale = requestFilePreview("same", "same.txt", {
+      client: scopedClient,
+    });
+    invalidateFilePreviewCache(scopedClient, "same", "same.txt");
+    const fresh = requestFilePreview("same", "same.txt", {
+      client: scopedClient,
+      refresh: true,
+    });
+    expect(fresh).not.toBe(stale);
+    expect(resolvers).toHaveLength(2);
+    resolvers[1]!(preview("after"));
+    await expect(fresh).resolves.toMatchObject({ text: "after" });
+    resolvers[0]!(preview("before"));
+    await expect(stale).rejects.toThrow("file preview request superseded");
+    await expect(
+      requestFilePreview("same", "same.txt", { client: scopedClient }),
+    ).resolves.toMatchObject({ text: "after" });
+  });
+
   test("isolates colliding workspace paths by connection generation", async () => {
     const alpha = client("alpha", 1, async () => preview("alpha"));
     const beta = client("beta", 1, async () => preview("beta"));

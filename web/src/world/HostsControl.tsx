@@ -26,6 +26,11 @@ export function HostsControl({
   const [managing, setManaging] = useState(false);
   const openingManager = useRef(false);
   const count = hostCount(connections);
+  const selectedCount = hostCount(
+    ids === null
+      ? connections
+      : connections.filter(({ id }) => ids.includes(id)),
+  );
   return (
     <div className="world-hosts-control connection-switcher">
       <Popover open={open} onOpenChange={setOpen}>
@@ -42,7 +47,7 @@ export function HostsControl({
               <span className="world-hosts-count">{count}</span>
             </span>
             <span className="connection-switcher-label">
-              {ids === null ? "All hosts" : `${ids.length} hosts`}
+              {ids === null ? "All hosts" : `${selectedCount} hosts`}
             </span>
             <ChevronDown className="world-hosts-chevron" size={14} />
           </button>

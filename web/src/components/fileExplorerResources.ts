@@ -4,7 +4,11 @@ import { connectionHttpResource } from "../connectionHttp";
 import { connectionStorageKey } from "../connectionStorage";
 import { gitDiffCode, type GitDiffCode } from "../gitDiffStatus";
 import { retireGitDiffSummaryResource } from "../gitDiffSummaryStore";
-import { connectionClientScopeKey } from "../useConnectionClient";
+import {
+  connectionClientScopeKey,
+  connectionClientScopeGeneration,
+  type ConnectionClientScope,
+} from "../useConnectionClient";
 import type {
   FileExplorerEntry,
   FileExplorerList,
@@ -76,7 +80,7 @@ let previewResourceRevision = 0;
 export const FILE_SHOW_HIDDEN_PREFIX = "fileExplorerShowHidden:";
 
 export function explorerRuntimeContextKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId?: string,
   resourceKey = workspaceId,
 ) {
@@ -89,7 +93,7 @@ export function explorerRuntimeContextKey(
 }
 
 export function explorerCacheKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId?: string,
   showHidden = false,
   resourceKey = workspaceId,
@@ -119,7 +123,7 @@ function retireExplorerCache(key: string) {
 }
 
 export function clearFileExplorerResourceCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   resourceKey: string,
   storage: Pick<Storage, "removeItem"> = worldLocalStorage,
 ) {
@@ -147,7 +151,7 @@ function emptyExplorerCache(): FileExplorerCache {
 }
 
 export function readExplorerCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId?: string,
   showHidden = false,
   resourceKey = workspaceId,
@@ -171,7 +175,7 @@ export function readExplorerCache(
 }
 
 export function writeExplorerCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string | undefined,
   showHidden: boolean,
   patch: Partial<FileExplorerCache>,
@@ -190,7 +194,7 @@ export function writeExplorerCache(
 }
 
 export function filePreviewCacheKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string | undefined,
   path: string,
 ) {
@@ -266,7 +270,7 @@ function previewCacheKeyParts(key: string) {
 }
 
 export function invalidateFilePreviewCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string,
   path: string,
   recursive = false,
@@ -277,7 +281,7 @@ export function invalidateFilePreviewCache(
     if (
       !parts ||
       parts.connectionId !== client.connectionId ||
-      parts.generation !== client.generation ||
+      parts.generation !== connectionClientScopeGeneration(client) ||
       parts.workspaceId !== workspaceId
     ) {
       continue;

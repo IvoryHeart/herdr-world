@@ -11,16 +11,54 @@ const owner: ConnectionClient = {
   call: async () => undefined,
 };
 
-test.each(["POST", "DELETE"])(
-  "%s preserves a definite HTTP rejection and its server explanation",
-  async (method) => {
+test("retirement after successful mutation decoding remains a stale context error", async () => {
+  const previousFetch = globalThis.fetch;
+  let current = true;
+  globalThis.fetch = (async () =>
+    Response.json(
+      { completed: true },
+      {
+        headers: {
+          "X-Herdr-Connection-Id": "alpha",
+          "X-Herdr-Connection-Generation": "7",
+        },
+      },
+    )) as unknown as typeof fetch;
+  try {
+    const error = await connectionHttpResource(
+      { ...owner, isCurrent: () => current },
+      "/file/upload",
+      async (response) => {
+        const result = await response.json();
+        current = false;
+        return result;
+      },
+      { method: "POST" },
+    ).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(UncertainRequestError);
+    expect((error as Error).message).toBe(
+      "connection runtime generation is unavailable",
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test.each(
+  ["POST", "DELETE"].flatMap((method) =>
+    [400, 409].map((status) => ({ method, status })),
+  ),
+)(
+  "%j preserves a definite HTTP rejection and its server explanation",
+  async ({ method, status }) => {
     const previousFetch = globalThis.fetch;
     let decoded = false;
     globalThis.fetch = (async () =>
       Response.json(
         { error: "Synthetic path is outside the workspace" },
         {
-          status: 400,
+          status,
           headers: {
             "X-Herdr-Connection-Id": "alpha",
             "X-Herdr-Connection-Generation": "7",

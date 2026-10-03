@@ -213,6 +213,16 @@ export async function checkAnnotationUX(
     isCurrent: () => store.get().connectionGeneration === 1,
     acceptsServerGeneration: (generation) => generation === 1,
     call: async (method, params = {}) => {
+      // Tab restoration now observes the owning runtime instead of choosing
+      // the first cached pane. Keep this fixture's topology available to it.
+      if (method === "workspace.list")
+        return {
+          workspaces: store.get().workspaces,
+          navigation_mode: store.get().navigationMode,
+        };
+      if (method === "tab.list") return { tabs: store.get().tabs };
+      if (method === "pane.list") return { panes: store.get().panes };
+      if (method === "pane.layout") return { layout: store.get().layout };
       if (method === "agent_session.get")
         return { status: "ok", stats: { turns: 0, records: 0 } };
       if (method === "agent_history.get")

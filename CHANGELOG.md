@@ -29,6 +29,12 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Inspector tab shortcuts restore the destination tab's selected pane and refresh
+  unobserved panes. File preview and Changes cache invalidation follows runtime
+  generations even when browser transport epochs differ. Mutations whose response
+  is withheld after runtime retirement report an uncertain outcome; retirement
+  after successful response decoding remains a stale-context error.
+
 - Mobile top-bar controls use icons for Hosts, view selection, Actions and Menu,
   with a distinct compass for view selection, a host-count badge that counts
   matching runtime endpoints once, and

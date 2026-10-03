@@ -2518,19 +2518,22 @@ function WorldControlPlane({
           .get()
           .tabs.filter((tab) => tab.workspace_id === conversation.workspaceId);
         const id = adjacentTabId(tabs, conversation.tabId, tabAction);
-        const pane =
-          operations
-            .get()
-            .panes.find(
-              (candidate) => candidate.tab_id === id && candidate.focused,
-            ) ??
-          operations.get().panes.find((candidate) => candidate.tab_id === id);
-        if (pane)
-          action = workspaceSurfaceSelectionHandlerRef.current({
-            ...owner,
-            workspaceId: conversation.workspaceId,
-            paneId: pane.pane_id,
-            view: "terminal",
+        if (id)
+          action = operations.focusTab(id).then(() => {
+            const snapshot = operations.get();
+            const pane = snapshot.panes.find(
+              (candidate) =>
+                candidate.tab_id === id &&
+                candidate.pane_id === snapshot.selectedPaneId,
+            );
+            return pane
+              ? workspaceSurfaceSelectionHandlerRef.current({
+                  ...owner,
+                  workspaceId: conversation.workspaceId,
+                  paneId: pane.pane_id,
+                  view: "terminal",
+                })
+              : false;
           });
       } else if (paneAction && conversation.paneId) {
         if (event.repeat && paneAction.type !== "focus") return;

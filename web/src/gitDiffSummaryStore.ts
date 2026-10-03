@@ -1,7 +1,11 @@
 import { useSyncExternalStore } from "react";
 import type { ConnectionClient } from "./api";
 import type { GitDiffSummary } from "./types";
-import { connectionClientScopeKey } from "./useConnectionClient";
+import {
+  connectionClientScopeKey,
+  connectionClientScopeGeneration,
+  type ConnectionClientScope,
+} from "./useConnectionClient";
 
 export type GitDiffSummaryMode = "working" | "branch-main" | "last-step";
 
@@ -27,7 +31,7 @@ const activeTokens = new Map<string, symbol>();
 const MAX_RETAINED_SUMMARIES = 24;
 
 export function gitDiffSummaryKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
@@ -70,14 +74,14 @@ function publish(key: string, patch: Partial<GitDiffSummaryState>) {
 
 function keyMatchesResource(
   key: string,
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   resourceKey: string,
 ) {
   try {
     const parts = JSON.parse(key) as unknown[];
     return (
       parts[0] === client.connectionId &&
-      parts[1] === client.generation &&
+      parts[1] === connectionClientScopeGeneration(client) &&
       parts[2] === "git-diff-summary" &&
       parts[3] === resourceKey
     );
@@ -87,7 +91,7 @@ function keyMatchesResource(
 }
 
 export function retireGitDiffSummary(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
@@ -101,7 +105,7 @@ export function retireGitDiffSummary(
 }
 
 export function retireGitDiffSummaryResource(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   resourceKey: string,
 ) {
   const keys = new Set([
@@ -139,7 +143,7 @@ export function readGitDiffSummary(key: string | null) {
 }
 
 export function useGitDiffSummaryState(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string | undefined,
   mode: GitDiffSummaryMode,
   resourceKey = workspaceId,
