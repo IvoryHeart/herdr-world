@@ -116,6 +116,9 @@
   display: none;
 }
 :where(html[data-layout="mobile"]) {
+  .world-topbar-control-plane .world-topbar-status {
+    display: none;
+  }
   .world-hosts-control .connection-switcher-label,
   .world-hosts-chevron {
     display: none;

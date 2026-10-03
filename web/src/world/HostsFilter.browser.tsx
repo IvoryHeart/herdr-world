@@ -1936,6 +1936,13 @@ async function run() {
         (getComputedStyle(hostCount).display !== "none") === mobileTopbar,
       "Hosts icon does not show the catalogue count on mobile",
     );
+    const topbarStatus = document.querySelector<HTMLElement>(
+      ".world-topbar-status",
+    )!;
+    check(
+      (getComputedStyle(topbarStatus).display === "none") === mobileTopbar,
+      "Aggregate status text must be hidden only in the mobile top bar",
+    );
     for (const id of ["alpha", "beta"]) {
       const node = [
         ...document.querySelectorAll<HTMLElement>("[data-world-node-anchor]"),
