@@ -522,9 +522,11 @@ test.skipIf(!chrome).each(
       const observed = await Promise.race([
         result.promise,
         new Promise<never>((_, reject) => {
+          // Bound browser startup and both observation/render phases, including
+          // the deliberate 20-second stall. Input latency has separate budgets.
           deadline = setTimeout(
             () => reject(Error("Production context acceptance deadline")),
-            60000,
+            90000,
           );
         }),
       ]);
@@ -665,5 +667,6 @@ test.skipIf(!chrome).each(
       await rm(dir, { recursive: true, force: true });
     }
   },
-  70000,
+  // Also allow fixture/build setup and cleanup outside the browser watchdog.
+  100000,
 );

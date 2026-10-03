@@ -32,6 +32,6 @@
 
 - [x] 5.1 Add browser coverage for cross-host input, resource races, filter changes, dock/floating behavior, cross-view handoff and compact layout; verify the same acceptance scenarios in Office, Tree, Graph and Spaces.
 - [x] 5.2 Exercise one local and one SSH runtime with concurrent terminals and resources; verify isolated disconnect/reconnect, profile removal, unsupported capabilities, stale notifications and whole-World disconnect, retaining only synthetic/sanitized evidence.
-- [ ] 5.3 Exercise the catalogue bound, dense topology, stalled hosts and noisy terminal output; report observation deadlines, payload sizes, fairness and healthy-host input responsiveness, and resolve starvation before completion.
+- [x] 5.3 Exercise the catalogue bound, dense topology, stalled hosts and noisy terminal output; report observation deadlines, payload sizes, fairness and healthy-host input responsiveness, and resolve starvation before completion.
 - [x] 5.4 Synchronize accepted deltas and Purpose text into current specs; update README, FEATURES, architecture, knowledge map, foundation guide, tutorial and changelog, then verify links and strict OpenSpec validation.
-- [ ] 5.5 Run the repository's applicable delivery gates and required browser checks, obtain independent review and deliver the implementation PR; record evidence and limitations without marking unverified tasks complete.
+- [x] 5.5 Run the repository's applicable delivery gates and required browser checks, obtain independent review and deliver the implementation PR; record evidence and limitations without marking unverified tasks complete.
