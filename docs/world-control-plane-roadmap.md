@@ -1,6 +1,6 @@
 # World control plane follow-ups
 
-> **Status (3 October 2026):** every OpenSpec package below is implemented and archived under `openspec/changes/archive/`. Their requirements live in the current capability specs under `openspec/specs/`. Keep this document as planning history.
+> **Status (3 October 2026):** the OpenSpec packages for Assignments B–F are implemented and archived under `openspec/changes/archive/`, and their requirements live in the current capability specs under `openspec/specs/`. Assignment A (the upstream-first Roamgate merge) is delivered; [UPSTREAM.md](../UPSTREAM.md) records the current source. Assignment G (live acceptance) is not an OpenSpec package; its broader local-plus-SSH acceptance remains tracked in [#95](https://github.com/IvoryHeart/herdr-world/issues/95). Keep this document as planning history.
 
 Planning baseline: `origin/main` at `7ac882b6` on 25 September 2026. Recheck main and upstream before starting a branch. This is a task handoff for separate, reviewed changes, not an assertion that the proposed behavior exists today.
 
