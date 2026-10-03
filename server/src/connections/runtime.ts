@@ -384,6 +384,12 @@ export function createLegacyConnectionRuntime(args: {
           workspace_id: event.workspaceId ?? null,
           tab_id: event.tabId ?? null,
           pane_id: event.paneId ?? null,
+          ...(!event.agentSessionId && event.paneId
+            ? { session_identity_unavailable: true }
+            : {}),
+          ...(event.agentSessionId
+            ? { agent_session_id: event.agentSessionId }
+            : {}),
         },
       },
       identity,
@@ -471,7 +477,19 @@ export function createLegacyConnectionRuntime(args: {
               kind: notification.kind,
               forwarded: event !== null,
             });
-            if (event) relayTaskEvent(event);
+            if (event) {
+              const agentSessionId =
+                event.workspaceId && event.paneId
+                  ? taskEvents.captureAgentSession(
+                      event.workspaceId,
+                      event.paneId,
+                    )
+                  : undefined;
+              relayTaskEvent({
+                ...event,
+                ...(agentSessionId ? { agentSessionId } : {}),
+              });
+            }
           },
         })
       : null;

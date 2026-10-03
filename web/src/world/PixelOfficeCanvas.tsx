@@ -140,7 +140,7 @@ export function PixelOfficeCanvas({
       if (!sceneAnchor) {
         return null;
       }
-      const x = canvasRect.left + sceneAnchor.x;
+      const x = canvasRect.left + sceneAnchor.x - scroll.scrollLeft;
       const y = canvasRect.top + sceneAnchor.y - scroll.scrollTop;
       const visible =
         x >= scrollRect.left &&
@@ -263,8 +263,11 @@ export function PixelOfficeCanvas({
       latestRef.current.roomAlignment,
       latestRef.current.longRoomTitleMode,
       initialization.signal,
+      () => {
+        if (!disposed) setFailure(true);
+      },
     )
-      .then((controller) => {
+      .then(async (controller) => {
         if (disposed) {
           controller.destroy();
           return;
@@ -276,7 +279,7 @@ export function PixelOfficeCanvas({
           desks: latestRef.current.projection.deskRoster.length,
         });
         const latest = latestRef.current;
-        controller.update(
+        await controller.update(
           latest.projection,
           latest.selectedKey,
           latest.completionSeenKeys,
@@ -313,16 +316,26 @@ export function PixelOfficeCanvas({
   }, []);
 
   useEffect(() => {
-    controllerRef.current?.update(
-      projection,
-      selectedKey,
-      completionSeenKeys,
-      observability,
-      roomAlignment,
-      longRoomTitleMode,
-      seatCreationStates,
-    );
-    scheduleAnchorReportRef.current();
+    let current = true;
+    void controllerRef.current
+      ?.update(
+        projection,
+        selectedKey,
+        completionSeenKeys,
+        observability,
+        roomAlignment,
+        longRoomTitleMode,
+        seatCreationStates,
+      )
+      .then(() => {
+        if (current) scheduleAnchorReportRef.current();
+      })
+      .catch(() => {
+        if (current) setFailure(true);
+      });
+    return () => {
+      current = false;
+    };
   }, [
     completionSeenKeys,
     longRoomTitleMode,

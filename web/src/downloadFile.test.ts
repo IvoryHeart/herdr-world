@@ -1,10 +1,80 @@
 import { describe, expect, test } from "bun:test";
 import {
+  downloadFileFromUrl,
   chooseFileDownloadStrategy,
   filenameFromContentDisposition,
   isIosDevice,
   isStandaloneDisplay,
 } from "./downloadFile";
+import type { ConnectionClient } from "./api";
+
+test("retired native-share downloads neither publish a blob nor reopen the request", async () => {
+  const descriptors = ["navigator", "window"].map(
+    (key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const,
+  );
+  const originalFetch = globalThis.fetch;
+  const decoding = Promise.withResolvers<void>();
+  const body = Promise.withResolvers<Blob>();
+  let current = true;
+  let publications = 0;
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: {
+      userAgent: "iPhone",
+      maxTouchPoints: 5,
+      canShare: () => true,
+      share: async () => {
+        publications++;
+      },
+    },
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      matchMedia: () => ({ matches: false }),
+      open: () => {
+        publications++;
+      },
+    },
+  });
+  const response = new Response("synthetic", {
+    headers: {
+      "X-Herdr-Connection-Id": "alpha",
+      "X-Herdr-Connection-Generation": "7",
+    },
+  });
+  response.blob = () => {
+    decoding.resolve();
+    return body.promise;
+  };
+  globalThis.fetch = (async () => response) as unknown as typeof fetch;
+  const client = {
+    connectionId: "alpha",
+    generation: 10,
+    serverRuntimeGeneration: 7,
+    isCurrent: () => current,
+    acceptsServerGeneration: () => true,
+    call: async () => undefined,
+  } satisfies ConnectionClient;
+  try {
+    const pending = downloadFileFromUrl({
+      url: "/api/connections/alpha/file/download?connection_generation=7",
+      filename: "synthetic.txt",
+      client,
+    });
+    await decoding.promise;
+    current = false;
+    body.resolve(new Blob(["synthetic"]));
+    await expect(pending).rejects.toThrow();
+    expect(publications).toBe(0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, descriptor] of descriptors) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+  }
+});
 
 describe("isIosDevice", () => {
   test("detects iPhones, iPads, and iPads reporting as Macintosh", () => {

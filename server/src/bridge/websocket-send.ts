@@ -135,7 +135,7 @@ export function sendWebSocketMessage(
 
     const result = ws.send(
       payload,
-      context === "terminal-frame" &&
+      (context === "terminal-frame" || context === "world-snapshot") &&
         Buffer.byteLength(payload) >= WS_COMPRESSION_MIN_BYTES,
     );
     if (result === 0) {

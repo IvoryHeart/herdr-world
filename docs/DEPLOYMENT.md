@@ -162,12 +162,12 @@ sessions, explicit sockets, and SSH targets must be started by their operator.
 
 ## Local and SSH connections
 
-Open the connection selector in Spaces to add, test, connect, disconnect, edit, or
-remove profiles. Profiles are shared by authenticated browsers; each browser chooses
-its own focused connection for terminal and Inspector work. Office, Tree, Graph,
-their counts, and search show only that selected connection. Changing the connection
-replaces the complete visual presentation; other configured connections remain
-observed in the background until selected.
+Open Manage connections to add, test, connect, disconnect, edit, or remove
+profiles. Profiles are shared by authenticated browsers. Office, Tree, Graph,
+counts, and search aggregate the observed hosts; Hosts filters that overview.
+Each terminal and Inspector retains its own connection and runtime generation.
+Changing the filter or focusing another host leaves unrelated contexts open and
+does not redirect their operations.
 
 Local profiles name existing Herdr control and render sockets. SSH profiles accept
 only an OpenSSH alias or `user@host`. Leave remote socket fields empty to use the
@@ -387,7 +387,7 @@ session's subscriptions. An alert with a pane target revalidates its connection
 and runtime generation; it never falls back to a different host.
 
 If alerts fail, check HTTPS trust, browser permission, Background push enrollment,
-provider connectivity, and the selected Herdr connection. Local browser alerts
+provider connectivity, and the alert's owning Herdr connection. Local browser alerts
 and background push are different delivery paths; an open-page alert alone does
 not prove background enrollment.
 

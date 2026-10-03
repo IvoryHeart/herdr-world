@@ -94,6 +94,51 @@ describe("officeSceneSignature", () => {
     expect(second).not.toBe(first);
   });
 
+  it("tracks only reception hosts and desks admitted to the rendered strip", () => {
+    const scene = projection(1, 1);
+    scene.hosts = [
+      { key: "visible-host", displayLabel: "Visible" },
+      { key: "distant-host", displayLabel: "Distant" },
+    ].map((host, displayOrder) => ({
+      ...host,
+      displayOrder,
+      connectionState: "ready-inactive",
+      observed: true,
+      stale: false,
+      compatibleWithWorld: true,
+      compatibleWithSpaces: true,
+      selected: false,
+      deterministicSkin: { themeIndex: 0, badge: "V" },
+    }));
+    scene.receptions = [
+      { key: "visible", hostKey: "visible-host" },
+      { key: "distant", hostKey: "distant-host" },
+    ].map((reception) => ({
+      ...reception,
+      hostLabel: reception.hostKey,
+      stale: false,
+      waitingAgents: [],
+      observedWaitingAgentCount: 0,
+      overflowCount: 0,
+    }));
+    const makeSignature = () =>
+      officeSceneSignature({
+        layout,
+        projection: scene,
+        selectedKey: null,
+        visibleRoomIndices: [],
+        visibleReceptionIndices: [0],
+      });
+    const first = makeSignature();
+
+    scene.hosts[1]!.displayLabel = "Distant changed";
+    scene.receptions[1]!.key = "distant changed";
+    expect(makeSignature()).toBe(first);
+
+    scene.receptions[0]!.key = "visible changed";
+    expect(makeSignature()).not.toBe(first);
+  });
+
   it("changes when completion markers become seen", () => {
     const first = officeSceneSignature({
       layout,

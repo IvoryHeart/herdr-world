@@ -8,6 +8,7 @@ export interface TaskNotificationTarget {
   runtimeGeneration: number;
   workspaceId: string;
   paneId: string;
+  agentSessionId?: string;
 }
 
 export function isTaskNotificationTarget(
@@ -24,7 +25,10 @@ export function isTaskNotificationTarget(
     typeof target.workspaceId === "string" &&
     target.workspaceId.length > 0 &&
     typeof target.paneId === "string" &&
-    target.paneId.length > 0
+    target.paneId.length > 0 &&
+    (target.agentSessionId === undefined ||
+      (typeof target.agentSessionId === "string" &&
+        target.agentSessionId.length > 0))
   );
 }
 

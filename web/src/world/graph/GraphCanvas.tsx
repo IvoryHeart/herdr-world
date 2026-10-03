@@ -28,6 +28,51 @@ const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 1.25;
 
+export function graphViewportBounds(
+  width: number,
+  height: number,
+  camera: GraphCamera,
+  center: { x: number; y: number },
+  rotation: number,
+) {
+  const corners = [
+    [0, 0],
+    [width, 0],
+    [0, height],
+    [width, height],
+  ].map(([x, y]) =>
+    rotateGraphPoint(
+      {
+        x: (x! - width / 2 - camera.x) / camera.zoom,
+        y: (y! - height / 2 - camera.y) / camera.zoom,
+      },
+      center,
+      -rotation,
+    ),
+  );
+  return {
+    minX: Math.min(...corners.map((p) => p.x)),
+    maxX: Math.max(...corners.map((p) => p.x)),
+    minY: Math.min(...corners.map((p) => p.y)),
+    maxY: Math.max(...corners.map((p) => p.y)),
+  };
+}
+
+/** Conservative clipping retains crossing links and all node labels/badges. */
+export function graphDrawingIntersects(
+  bounds: ReturnType<typeof graphViewportBounds>,
+  a: { x: number; y: number },
+  b = a,
+  padding = 100,
+) {
+  return (
+    Math.max(a.x, b.x) + padding >= bounds.minX &&
+    Math.min(a.x, b.x) - padding <= bounds.maxX &&
+    Math.max(a.y, b.y) + padding >= bounds.minY &&
+    Math.min(a.y, b.y) - padding <= bounds.maxY
+  );
+}
+
 type GraphRendererDiagnostics = {
   mounts: number;
   destroys: number;
@@ -207,6 +252,7 @@ class GraphRenderer {
   readonly #resizeValues: LatestFrameValue<{ width: number; height: number }>;
   readonly #resizeObserver: ResizeObserver | null;
   #layout: GraphLayoutState | null = null;
+  #drawOrder: GraphLayoutNode[] = [];
   #savedPositions: Record<string, SavedGraphPosition>;
   #projectionNodeIds: ReadonlySet<string> = new Set();
   #nodeParentIds = new Map<string, string>();
@@ -220,6 +266,7 @@ class GraphRenderer {
   #width = 1;
   #height = 1;
   #alpha = 0;
+  #frameDelay: number | null = null;
   #frame: number | null = null;
   #pointer: PointerInteraction | null = null;
   #disposed = false;
@@ -328,6 +375,9 @@ class GraphRenderer {
       this.#savedPositions,
     );
     this.#layout = reconciled.state;
+    this.#drawOrder = [...this.#layout.nodes.values()].sort(
+      (left, right) => nodeRank(left.kind) - nodeRank(right.kind),
+    );
     this.#collapsedIds = collapsedIds;
     this.#selectedId = selectedId;
     this.#matchedIds = matchedIds;
@@ -484,12 +534,27 @@ class GraphRenderer {
   }
 
   #requestFrame() {
-    if (this.#disposed || this.#hidden || this.#frame !== null) return;
-    this.#frame = window.requestAnimationFrame(this.#tick);
-    this.#diagnostics.activeAnimationFrames += 1;
+    if (
+      this.#disposed ||
+      this.#hidden ||
+      this.#frame !== null ||
+      this.#frameDelay !== null
+    )
+      return;
+    // A dense canvas must leave ordinary socket tasks a turn between paints.
+    this.#frameDelay = window.setTimeout(() => {
+      this.#frameDelay = null;
+      if (this.#disposed || this.#hidden) return;
+      this.#frame = window.requestAnimationFrame(this.#tick);
+      this.#diagnostics.activeAnimationFrames += 1;
+    }, 16);
   }
 
   #cancelFrame() {
+    if (this.#frameDelay !== null) {
+      window.clearTimeout(this.#frameDelay);
+      this.#frameDelay = null;
+    }
     if (this.#frame === null) return;
     window.cancelAnimationFrame(this.#frame);
     this.#frame = null;
@@ -532,6 +597,13 @@ class GraphRenderer {
     );
     context.scale(this.#camera.zoom, this.#camera.zoom);
     const center = this.#graphCenter();
+    const viewport = graphViewportBounds(
+      this.#width,
+      this.#height,
+      this.#camera,
+      center,
+      this.#rotation,
+    );
     context.translate(center.x, center.y);
     context.rotate((this.#rotation * Math.PI) / 2);
     context.translate(-center.x, -center.y);
@@ -539,6 +611,10 @@ class GraphRenderer {
       const source = layout.nodes.get(edge.sourceId);
       const target = layout.nodes.get(edge.targetId);
       if (!source || !target) continue;
+      if (
+        !graphDrawingIntersects(viewport, source, target, 2 / this.#camera.zoom)
+      )
+        continue;
       context.beginPath();
       context.moveTo(source.x, source.y);
       context.lineTo(target.x, target.y);
@@ -546,10 +622,8 @@ class GraphRenderer {
       context.lineWidth = 1.5 / this.#camera.zoom;
       context.stroke();
     }
-    const nodes = [...layout.nodes.values()].sort(
-      (left, right) => nodeRank(left.kind) - nodeRank(right.kind),
-    );
-    for (const node of nodes) this.#drawNode(context, node);
+    for (const node of this.#drawOrder)
+      if (graphDrawingIntersects(viewport, node)) this.#drawNode(context, node);
     context.restore();
     this.#publishNodes(layout, center);
     this.#emitAnchors(layout, center);
@@ -583,10 +657,13 @@ class GraphRenderer {
           : statusStroke(source.status);
     context.stroke();
     context.setLineDash([]);
+    // Below six screen pixels labels cannot be read. Keep every node, link,
+    // status color and hit target while avoiding tiny glyph submissions.
+    const detailed = this.#camera.zoom * 9 >= 6;
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillStyle = "#e8edf4";
-    if (source.kind === "agent" || source.kind === "terminal") {
+    if (detailed && (source.kind === "agent" || source.kind === "terminal")) {
       context.font = "700 11px sans-serif";
       context.fillText(
         source.kind === "agent" ? statusSymbol(source.status) : ">_",
@@ -599,32 +676,36 @@ class GraphRenderer {
         0,
         radius + 14,
       );
-    } else {
-      context.font =
-        source.kind === "host" ? "700 13px sans-serif" : "600 11px sans-serif";
-      context.fillText(
-        shortCanvasLabel(
-          context,
-          source.label,
-          source.kind === "host" ? 98 : 78,
-        ),
-        0,
-        -5,
-      );
-      context.fillStyle = "#9da7b4";
-      context.font = "500 8px sans-serif";
-      context.fillText(
-        shortCanvasLabel(
-          context,
-          source.kind === "host" ? hostStateLabel(source) : source.hostLabel,
-          88,
-        ),
-        0,
-        11,
-      );
-      if (source.omittedChildCount > 0) {
-        context.fillStyle = "#f2c879";
-        context.fillText(`+${source.omittedChildCount}`, 0, 25);
+    } else if (source.kind === "host" || source.kind === "space") {
+      if (detailed) {
+        context.font =
+          source.kind === "host"
+            ? "700 13px sans-serif"
+            : "600 11px sans-serif";
+        context.fillText(
+          shortCanvasLabel(
+            context,
+            source.label,
+            source.kind === "host" ? 98 : 78,
+          ),
+          0,
+          -5,
+        );
+        context.fillStyle = "#9da7b4";
+        context.font = "500 8px sans-serif";
+        context.fillText(
+          shortCanvasLabel(
+            context,
+            source.kind === "host" ? hostStateLabel(source) : source.hostLabel,
+            88,
+          ),
+          0,
+          11,
+        );
+        if (source.omittedChildCount > 0) {
+          context.fillStyle = "#f2c879";
+          context.fillText(`+${source.omittedChildCount}`, 0, 25);
+        }
       }
       const badge = collapseBadgeOffset(source.kind);
       context.beginPath();
@@ -636,13 +717,14 @@ class GraphRenderer {
       context.stroke();
       context.fillStyle = "#e8edf4";
       context.font = "700 14px sans-serif";
-      context.fillText(
-        this.#collapsedIds.has(source.id) ? "+" : "−",
-        badge,
-        -badge,
-      );
+      if (detailed)
+        context.fillText(
+          this.#collapsedIds.has(source.id) ? "+" : "−",
+          badge,
+          -badge,
+        );
     }
-    if (source.stale) {
+    if (source.stale && detailed) {
       context.fillStyle = "#ef9b85";
       context.font = "700 9px sans-serif";
       context.fillText("STALE", 0, -radius - 10);
@@ -1100,12 +1182,30 @@ function hostStateLabel(node: WorldGraphNode) {
         : "Offline · stale";
 }
 
+const measuredLabels = new WeakMap<
+  CanvasRenderingContext2D,
+  Map<string, string>
+>();
+
 function shortCanvasLabel(
   context: CanvasRenderingContext2D,
   label: string,
   maxWidth: number,
 ) {
-  if (context.measureText(label).width <= maxWidth) return label;
+  let cached = measuredLabels.get(context);
+  if (!cached) {
+    cached = new Map();
+    measuredLabels.set(context, cached);
+  }
+  const key = JSON.stringify([context.font, label, maxWidth]);
+  const previous = cached.get(key);
+  if (previous !== undefined) return previous;
+  const remember = (value: string) => {
+    if (cached.size >= 4096) cached.delete(cached.keys().next().value!);
+    cached.set(key, value);
+    return value;
+  };
+  if (context.measureText(label).width <= maxWidth) return remember(label);
   const points = [...label];
   while (
     points.length > 1 &&
@@ -1113,7 +1213,7 @@ function shortCanvasLabel(
   ) {
     points.pop();
   }
-  return `${points.join("")}…`;
+  return remember(`${points.join("")}…`);
 }
 
 function clamp(value: number, minimum: number, maximum: number) {

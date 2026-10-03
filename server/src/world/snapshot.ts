@@ -263,7 +263,7 @@ function parseSnapshotParameters(value: unknown) {
   const selected = params?.selected_connection_id;
   if (
     params &&
-    Object.hasOwn(params, "selected_connection_id") &&
+    Object.prototype.hasOwnProperty.call(params, "selected_connection_id") &&
     !nativeId(selected)
   ) {
     throw new Error("invalid selected World connection");
@@ -271,7 +271,25 @@ function parseSnapshotParameters(value: unknown) {
   return {
     priorities,
     selectedConnectionId: selected as string | undefined,
+    priorityConnectionIds: parsePriorityConnections(
+      params?.priority_connection_ids,
+    ),
   };
+}
+
+function parsePriorityConnections(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 128)
+    throw new Error("invalid World priority connections");
+  return [
+    ...new Set(
+      value.map((id) => {
+        if (!nativeId(id) || !/^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(id))
+          throw new Error("invalid World priority connection");
+        return id as string;
+      }),
+    ),
+  ];
 }
 
 function priorityKey(
@@ -402,7 +420,10 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   private readonly lateInvalidations = new Map<string, number>();
   private active = 0;
   private activeInactive = 0;
-  private reserveSelectedSlot = false;
+  private enqueuing = false;
+  private priorityStarts = 0;
+  private priorityRotation = 0;
+  private backgroundRotation = 0;
   private lateInvalidationScheduled = false;
 
   constructor(
@@ -433,7 +454,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   async snapshot(params?: unknown): Promise<WorldSnapshotResult> {
-    const { priorities, selectedConnectionId } =
+    const { priorities, selectedConnectionId, priorityConnectionIds } =
       parseSnapshotParameters(params);
     // The profile store bounds the managed catalogue. Preserve that complete
     // candidate set here so each view can apply its own relevance-aware bound.
@@ -445,6 +466,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       throw new Error("unknown selected World connection");
     }
     const managedIds = new Set(statuses.map(({ id }) => id));
+    const priorityIds = new Set([
+      ...priorityConnectionIds,
+      ...(selectedConnectionId ? [selectedConnectionId] : []),
+      ...priorities.map((priority) => priority.connection_id),
+    ]);
+    for (const id of priorityIds)
+      if (!managedIds.has(id))
+        throw new Error("unknown World priority connection");
     for (const cachedId of this.cache.keys()) {
       if (!managedIds.has(cachedId)) this.cache.delete(cachedId);
     }
@@ -453,25 +482,50 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         this.invalidationVersions.delete(invalidatedId);
       }
     }
-    const ordered = selectedConnectionId
-      ? [
-          ...statuses.filter(({ id }) => id === selectedConnectionId),
-          ...statuses.filter(({ id }) => id !== selectedConnectionId),
-        ]
-      : statuses;
+    const rotate = (group: typeof statuses, cursor: number) => {
+      const offset = group.length ? cursor % group.length : 0;
+      return [...group.slice(offset), ...group.slice(0, offset)];
+    };
+    const hinted = priorityIds.size > 0;
+    const ordered = [
+      ...rotate(
+        statuses.filter((status) => priorityIds.has(status.id)),
+        hinted ? this.priorityRotation : 0,
+      ),
+      ...rotate(
+        statuses.filter((status) => !priorityIds.has(status.id)),
+        hinted ? this.backgroundRotation : 0,
+      ),
+    ];
     const work = new Map<string, HostWork<Runtime> | null>();
     const completed = new Map<string, WorldConnectionSnapshot>();
-    for (const status of ordered) {
-      const fresh = this.freshCachedConnection(status, priorities);
-      if (fresh) {
-        completed.set(status.id, fresh);
-        work.set(status.id, null);
-        continue;
+    let scheduledNewWork = false;
+    this.enqueuing = true;
+    try {
+      for (const status of ordered) {
+        const fresh = this.freshCachedConnection(status, priorities);
+        if (fresh) {
+          completed.set(status.id, fresh);
+          work.set(status.id, null);
+          continue;
+        }
+        const previous = this.workByConnection.get(status.id);
+        const observation = this.workFor(
+          status,
+          priorities,
+          priorityIds.has(status.id),
+        );
+        if (observation && observation !== previous) scheduledNewWork = true;
+        work.set(status.id, observation);
       }
-      work.set(
-        status.id,
-        this.workFor(status, priorities, status.id === selectedConnectionId),
-      );
+    } finally {
+      this.enqueuing = false;
+      this.drain();
+    }
+    // Coalesced and cached requests do not consume another fair scheduling turn.
+    if (hinted && scheduledNewWork) {
+      this.priorityRotation++;
+      this.backgroundRotation++;
     }
 
     let accepting = true;
@@ -560,7 +614,6 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       return null;
     }
     if (!lease || lease.generation !== status.generation) return null;
-    if (selected) this.reserveSelectedSlot = true;
     const existing = this.workByConnection.get(status.id);
     if (
       existing &&
@@ -568,8 +621,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       existing.lease.runtime === lease.runtime &&
       existing.lease.isCurrent()
     ) {
-      if (selected && existing.state === "queued") {
-        existing.selected = true;
+      if (existing.state === "queued" && existing.selected !== selected) {
+        existing.selected = selected;
         this.drain();
       }
       return existing;
@@ -601,21 +654,23 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   private drain() {
+    if (this.enqueuing) return;
     while (this.active < MAX_CONCURRENT_CONNECTIONS) {
       const selectedIndex = this.queue.findIndex((work) => work.selected);
+      const backgroundIndex = this.queue.findIndex((work) => !work.selected);
+      const backgroundAvailable =
+        this.activeInactive <
+        (selectedIndex >= 0 || this.active > this.activeInactive
+          ? MAX_CONCURRENT_CONNECTIONS - 1
+          : MAX_CONCURRENT_CONNECTIONS);
       const index =
-        selectedIndex >= 0
+        selectedIndex >= 0 &&
+        (this.priorityStarts < 3 || backgroundIndex < 0 || !backgroundAvailable)
           ? selectedIndex
-          : this.activeInactive <
-              (this.reserveSelectedSlot
-                ? MAX_CONCURRENT_CONNECTIONS - 1
-                : MAX_CONCURRENT_CONNECTIONS)
-            ? 0
-            : -1;
+          : backgroundIndex >= 0 && backgroundAvailable
+            ? backgroundIndex
+            : selectedIndex;
       if (index < 0 || this.queue.length === 0) {
-        if (this.active === 0 && this.queue.length === 0) {
-          this.reserveSelectedSlot = false;
-        }
         return;
       }
       const [work] = this.queue.splice(index, 1);
@@ -630,6 +685,7 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         continue;
       }
       work.state = "running";
+      this.priorityStarts = work.selected ? this.priorityStarts + 1 : 0;
       this.active += 1;
       if (!work.selected) this.activeInactive += 1;
       void this.runWork(work);
@@ -654,6 +710,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
         panes.value,
         agents.status === "fulfilled" ? agents.value : null,
       ];
+      // An expired catalogue can complete every downstream read immediately.
+      // Break that microtask chain before host projection/digest work so native
+      // terminal input and socket replies get an ordinary event-loop turn.
+      // Revalidate the lease after yielding before publishing any topology.
+      await new Promise((resolve) => setTimeout(resolve, 0));
       if (!this.current(work)) {
         outcome = { error: "connection changed during snapshot" };
       } else {

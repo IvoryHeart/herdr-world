@@ -63,8 +63,8 @@ The browser never talks directly to Herdr sockets or a remote World bridge.
 
 | Area | Owner and responsibility | Focused evidence |
 | --- | --- | --- |
-| Transport and focused runtime | [api](../web/src/api.ts) owns the one World WebSocket and qualified connection clients; [store](../web/src/store.ts) retains the selected operational connection, its current topology and control state; [useConnectionClient](../web/src/useConnectionClient.ts) captures a component's connection lease. | [API tests](../web/src/api.test.ts), [store tests](../web/src/store.test.ts), [lease tests](../web/src/useConnectionClient.test.ts) |
-| Aggregate model and views | [runtimeStore](../web/src/world/runtimeStore.ts) admits bounded all-host snapshots; [worldObject](../web/src/world/worldObject.ts) builds qualified nodes; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) projects the selected host into Office, Tree and Graph. | [Runtime tests](../web/src/world/runtimeStore.test.ts), [model tests](../web/src/world/worldObject.test.ts), [shell tests](../web/src/world/WorldFoundationApp.test.ts) |
+| Transport and focused runtime | [api](../web/src/api.ts) owns the one World WebSocket and qualified connection clients; [store](../web/src/store.ts) retains independently addressable connection sessions and captured operational contexts with their own topology and control state; [useConnectionClient](../web/src/useConnectionClient.ts) captures a component's connection lease. | [API tests](../web/src/api.test.ts), [store tests](../web/src/store.test.ts), [lease tests](../web/src/useConnectionClient.test.ts) |
+| Aggregate model and views | [runtimeStore](../web/src/world/runtimeStore.ts) admits bounded all-host snapshots; [worldObject](../web/src/world/worldObject.ts) builds qualified nodes; [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) applies the persisted Hosts filter to the aggregate for Office, Tree and Graph. Context-bound selectors and commands in the existing store admit independent connections; the filter never supplies mutation authority. | [Runtime tests](../web/src/world/runtimeStore.test.ts), [model tests](../web/src/world/worldObject.test.ts), [shell tests](../web/src/world/WorldFoundationApp.test.ts) |
 | Terminal UI | [TerminalView](../web/src/components/TerminalView.tsx), [terminalConnection](../web/src/terminalConnection.ts), [terminalEndpointPresentation](../web/src/terminalEndpointPresentation.ts) and [TabTerminalPaneLayout](../web/src/TabTerminalPaneLayout.tsx) handle attachment, frames, input and split-pane presentation. | [Presentation tests](../web/src/terminalEndpointPresentation.test.ts), [layout tests](../web/src/visibleTabLayout.test.ts), [browser terminal suite](../package.json) |
 | Workspace and Inspector resources | [workspaceResource](../web/src/workspaceResource.ts) scopes Inspector context; [fileExplorerResources](../web/src/components/fileExplorerResources.ts) and [DiffViewerPanel](../web/src/components/DiffViewerPanel.tsx) own file/diff caches and UI. | [Resource tests](../web/src/workspaceResource.test.ts), [Explorer tests](../web/src/components/FileExplorerDialog.test.ts), [diff tests](../web/src/components/DiffViewerPanel.test.ts) |
 | Browser-local behavior | [browserNavigation](../web/src/browserNavigation.ts) projects local tab/pane choices; [browserStorage](../web/src/browserStorage.ts) namespaces World preferences; [layoutPreferences](../web/src/layoutPreferences.ts), [shortcutPreferences](../web/src/shortcutPreferences.ts) and [appearance](../web/src/appearance.ts) validate preferences. | [Navigation tests](../web/src/browserNavigation.test.ts), [storage tests](../web/src/browserStorage.test.ts), [preference tests](../web/src/workspacePreferences.test.ts) |
@@ -80,9 +80,10 @@ component.
 
 ## Follow a request across the boundary
 
-1. **Select a host.** The [connection selector](../web/src/components/ConnectionSwitcher.tsx)
-   changes the focused [store](../web/src/store.ts). [api](../web/src/api.ts)
-   creates a client bound to that connection and current generation. The service
+1. **Capture an owner.** The [connection selector](../web/src/components/ConnectionSwitcher.tsx)
+   manages profile lifecycle separately from Hosts visibility. A workspace or
+   Inspector captures its owner in the [store](../web/src/store.ts). [api](../web/src/api.ts)
+   creates a client bound to that connection, runtime generation and transport epoch. The service
    resolves it through [RPC routing](../server/src/connections/rpc-routing.ts)
    and [manager](../server/src/connections/manager.ts). A replaced runtime cannot
    publish its old result. [Runtime federation](../openspec/specs/runtime-federation/spec.md)
@@ -92,7 +93,8 @@ component.
    reads each managed runtime with bounded concurrency and a deadline. The
    [WorldObject](../web/src/world/worldObject.ts) preserves every qualified host;
    [WorldFoundationApp](../web/src/world/WorldFoundationApp.tsx) gives visual
-   views only the selected host. Observation is read-only and stale hosts cannot
+   views the same filtered aggregate, with shared fair space admission and paged
+   full-observation search. Observation is read-only and stale hosts cannot
    authorize actions.
 3. **Open a terminal or resource.** A visual target or Spaces pane resolves an
    exact connection, generation and native ID through [visual actions](../web/src/world/visualRouteActions.ts)

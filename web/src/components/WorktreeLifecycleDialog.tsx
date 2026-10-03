@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { FolderOpen, GitBranch, RefreshCw, Settings } from "lucide-react";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { useConnectionClient } from "../useConnectionClient";
-import { store, useStoreSelector } from "../store";
+import { useOperationalStore, useStoreSelector } from "../store";
 import type { Workspace, WorktreeList } from "../types";
 import { resolveWorktreeOpenSource, worktreeCreationSource } from "../worktree";
 import {
@@ -88,6 +88,7 @@ export function WorktreeLifecycleDialog({
   onClose: () => void;
 }) {
   const workspaces = useStoreSelector((state) => state.workspaces);
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.workspace_id === workspaceId,
@@ -212,7 +213,7 @@ export function WorktreeLifecycleDialog({
         }
       }
     },
-    [connectionClient, repositoryWorkspaceId],
+    [connectionClient, repositoryWorkspaceId, store],
   );
 
   useEffect(() => {

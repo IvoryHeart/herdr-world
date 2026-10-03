@@ -169,22 +169,23 @@ async function run() {
     );
 
     const compact = window.innerWidth <= 720;
-    const diagram = host.querySelector<HTMLElement>(".world-connected-tree")!;
-    const outline = host.querySelector<HTMLElement>(".world-tree-outline")!;
+    const diagram = host.querySelector<HTMLElement>(".world-connected-tree");
+    const outline = host.querySelector<HTMLElement>(".world-tree-outline");
     check(
       compact
-        ? getComputedStyle(diagram).display === "none"
-        : getComputedStyle(diagram).display !== "none",
-      "Tree did not choose the expected viewport presentation",
+        ? diagram === null && outline !== null
+        : diagram !== null && outline === null,
+      "Tree mounted the inactive viewport presentation",
     );
+    const activePresentation = compact ? outline : diagram;
+    if (!activePresentation)
+      throw new Error("Tree did not mount the active viewport presentation");
     check(
-      compact
-        ? getComputedStyle(outline).display !== "none"
-        : getComputedStyle(outline).display === "none",
-      "Tree outline visibility did not match the viewport",
+      getComputedStyle(activePresentation).display !== "none",
+      "Tree hid its active viewport presentation",
     );
     if (compact) {
-      const rowTarget = outline.querySelector<HTMLElement>(
+      const rowTarget = activePresentation.querySelector<HTMLElement>(
         ".world-tree-outline-select",
       );
       check(
@@ -193,10 +194,9 @@ async function run() {
       );
     }
 
-    const activePresentation = compact ? outline : diagram;
     check(
       !hasAnchor(activePresentation, inactiveTerminal.id),
-      "Tree mixed another host into the selected-host presentation",
+      "Tree mixed an excluded host into the explicit connection projection",
     );
     const inactiveBranch = [
       ...activePresentation.querySelectorAll<HTMLElement>(
@@ -205,7 +205,7 @@ async function run() {
     ].find((element) => element.dataset.treeHostId === inactiveHost.id);
     check(
       inactiveBranch === undefined,
-      "Tree retained an inactive host branch",
+      "Tree retained an excluded host branch",
     );
     const hostToggle = activePresentation.querySelector<HTMLButtonElement>(
       `[aria-label="Collapse ${worldHost.label}"]`,
@@ -276,7 +276,95 @@ async function run() {
   }
 }
 
+async function checkProgressiveTreeReuse() {
+  const nativeFrame = window.requestAnimationFrame;
+  const nativeCancel = window.cancelAnimationFrame;
+  const frames = new Map<number, FrameRequestCallback>();
+  let nextFrame = 0;
+  window.requestAnimationFrame = (callback) => {
+    const id = ++nextFrame;
+    frames.set(id, callback);
+    return id;
+  };
+  window.cancelAnimationFrame = (id) => {
+    frames.delete(id);
+  };
+  const element = document.createElement("main");
+  document.body.append(element);
+  const root = createRoot(element);
+  const world = buildWorldObject(
+    Array.from({ length: 12 }, (_, index) =>
+      connection(`reuse-${index}`, `Host ${index}`),
+    ),
+  );
+  const leaf = world.leaves[0]!;
+  const label = leaf.label;
+  let labelReads = 0;
+  Object.defineProperty(leaf, "label", {
+    get: () => {
+      labelReads++;
+      return label;
+    },
+  });
+  try {
+    root.render(
+      <ConnectedTreeView
+        world={world}
+        selectedId={null}
+        conversationNodeIds={[]}
+        inlineInspectorNodeId={null}
+        onSelect={() => {}}
+        onOpenTerminal={() => {}}
+        onInlineInspectorPortalChange={() => {}}
+        onSelectedAnchorChange={() => {}}
+        onNodeAnchorsChange={() => {}}
+      />,
+    );
+    await waitFor(
+      () => hasAnchor(element, leaf.id),
+      "First progressive Tree space did not mount",
+    );
+    const mountedReads = labelReads;
+    check(
+      mountedReads > 0,
+      "Tree render reuse probe did not observe its initial leaf",
+    );
+    check(
+      element.querySelector('[aria-busy="true"]') !== null,
+      "Tree reuse fixture did not defer any spaces",
+    );
+    for (
+      let turn = 0;
+      turn < 10 && element.querySelector('[aria-busy="true"]');
+      turn++
+    ) {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach((callback) => callback(performance.now()));
+      await settle();
+    }
+    check(
+      element.querySelector('[aria-busy="false"]') !== null,
+      "Progressive Tree did not admit every space",
+    );
+    check(
+      world.leaves.every((node) => hasAnchor(element, node.id)),
+      "Progressive Tree omitted observed leaves",
+    );
+    check(
+      labelReads === mountedReads,
+      "Progressive admission rerendered a previously mounted, unchanged Tree space",
+    );
+  } finally {
+    root.unmount();
+    element.remove();
+    window.requestAnimationFrame = nativeFrame;
+    window.cancelAnimationFrame = nativeCancel;
+  }
+}
+
 run()
+  .then(checkProgressiveTreeReuse)
   .catch((error: unknown) =>
     failures.push(
       error instanceof Error ? (error.stack ?? error.message) : String(error),

@@ -140,6 +140,8 @@ test.skipIf(!chrome).each([
           "--window-size=500,800",
           "--no-first-run",
           "--no-default-browser-check",
+          // Temporary test profiles must not wait on the desktop credential store.
+          "--password-store=basic",
           `--user-data-dir=${join(dir, "profile")}`,
           "about:blank",
         ],

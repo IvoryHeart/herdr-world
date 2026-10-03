@@ -42,8 +42,15 @@ const task: PushTask = {
   runtimeGeneration: 3,
   workspaceId: "w1",
   paneId: "p1",
+  agentSessionId: "synthetic-original",
   agent: "Example agent",
 };
+
+test("push tasks with unknown original sessions cannot redirect clicks to a reused pane", () => {
+  const payload = taskPushPayload({ ...task, agentSessionId: undefined });
+  expect(payload.target).toBeNull();
+  expect(payload.body).toContain("session identity is unavailable");
+});
 function request(
   method = "GET",
   body?: unknown,
@@ -309,6 +316,7 @@ test("completion and blocked preferences, stale runtimes and expired endpoints a
       runtimeGeneration: 3,
       workspaceId: "w1",
       paneId: "p1",
+      agentSessionId: "synthetic-original",
     });
     expect(JSON.parse(readFileSync(f.path, "utf8")).devices).toHaveLength(2);
     f.service.notify({ ...task, kind: "completed" }, () => true);
@@ -379,6 +387,7 @@ test.each([
             runtimeGeneration: 3,
             workspaceId: "w1",
             paneId: "p1",
+            agentSessionId: "synthetic-original",
           },
         });
       }
@@ -522,6 +531,7 @@ test.each(["older first", "newer first"])(
           tab_id: "t1",
           agent: "Example agent",
           agent_status: agentStatus,
+          agent_session: { value: `synthetic-${paneId}` },
         },
       });
     }
@@ -585,6 +595,7 @@ test.each([
     tab_id: "t1",
     agent: "Example agent",
     agent_status: "working",
+    agent_session: { value: "synthetic-original" },
   };
   let workspaceLabel = "Agents";
   let tabLabel = "Peter";
@@ -670,7 +681,12 @@ test.each([
     }
     runtime.herdr.emit("event", {
       event: "pane.agent_status_changed",
-      data: { pane_id: "p1", workspace_id: "w1", agent_status: "blocked" },
+      data: {
+        pane_id: "p1",
+        workspace_id: "w1",
+        agent_status: "blocked",
+        agent_session: { value: "synthetic-original" },
+      },
     });
     const payload = JSON.parse(await sent.promise);
     expect(payload.title).toBe("Herdr World agent needs input");
@@ -701,6 +717,7 @@ test("push payload keeps the status wording and target", () => {
       runtimeGeneration: 3,
       workspaceId: "w1",
       paneId: "p1",
+      agentSessionId: "synthetic-original",
     },
   });
 });

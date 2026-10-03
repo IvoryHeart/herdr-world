@@ -6,12 +6,12 @@
     <meta name="theme-color" content="#080b12" />
     <meta
       name="description"
-      content="Visualize Herdr agent work in Office and Graph. Connect local and SSH hosts, then open terminals, files, and history for the selected host."
+      content="Visualize Herdr agent work in Office and Graph. Connect local and SSH hosts, browse their agents together, and open host-owned terminals, files, and history."
     />
     <meta property="og:type" content="website" />
     <meta
       property="og:title"
-      content="Herdr World - View agent work in Office and Graph"
+      content="Herdr.World - View agent work in Office and Graph"
     />
     <meta
       property="og:description"
@@ -29,12 +29,12 @@
     <meta property="og:image:height" content="630" />
     <meta
       property="og:image:alt"
-      content="Herdr World - View agent work in Office and Graph"
+      content="Herdr.World - View agent work in Office and Graph"
     />
     <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Herdr World - View agent work in Office and Graph"
+      content="Herdr.World - View agent work in Office and Graph"
     />
     <meta
       name="twitter:description"
@@ -49,12 +49,12 @@
     <link rel="icon" type="image/png" sizes="48x48" href="./assets/herdr-world-icon-48.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./assets/herdr-world-icon-180.png" />
     <link rel="stylesheet" href="./styles.css" />
-    <title>Herdr World - View agent work in Office and Graph</title>
+    <title>Herdr.World - View agent work in Office and Graph</title>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
-        "name": "Herdr World",
+        "name": "Herdr.World",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "macOS, Linux, Windows",
         "description": "Visualize Herdr agent work in Office and Graph across local and SSH hosts.",
@@ -73,9 +73,9 @@
 
     <header class="site-header" data-header>
       <div class="shell header-inner">
-        <a class="brand" href="#top" aria-label="Herdr World home">
+        <a class="brand" href="#top" aria-label="Herdr.World home">
           <img class="brand-logo" src="./assets/herdr-world-logo.svg" width="36" height="36" alt="" />
-          <span>Herdr World</span>
+          <span>Herdr.World</span>
         </a>
 
         <button
@@ -91,14 +91,14 @@
         </button>
 
         <nav class="primary-nav" id="primary-nav" aria-label="Primary" data-nav>
-          <a href="#product">Product</a>
+          <a href="#top">Home</a>
           <a href="#workflow">How it works</a>
           <a href="#mobile">Mobile</a>
           <a href="./tutorial/">Tutorial</a>
           <a
             class="github-link"
             href="https://github.com/IvoryHeart/herdr-world"
-            aria-label="Herdr World on GitHub"
+            aria-label="Herdr.World on GitHub"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path
@@ -115,7 +115,19 @@
     </header>
 
     <main id="main-content">
-      <section class="hero shell" id="top">
+      <section class="section shell film-section" id="top">
+        <h1 class="sr-only">Herdr.World</h1>
+        <div class="film-card reveal" id="film">
+          <iframe
+            src="./film/index.html?embed"
+            title="Promoted to CEO, a 62-second Herdr.World film"
+            loading="eager"
+            allow="autoplay; fullscreen"
+          ></iframe>
+        </div>
+      </section>
+
+      <section class="hero shell">
         <div class="hero-copy reveal">
           <div class="eyebrow">
             <span class="status-dot"></span>
@@ -127,7 +139,7 @@
               >Herdr</a
             >
           </div>
-          <h1>Every Herdr host, <span>one selected view.</span></h1>
+          <h2>Every Herdr host, <span>one shared view.</span></h2>
           <p class="hero-lede">
             <a
               href="https://herdr.dev"
@@ -135,13 +147,13 @@
               rel="noopener noreferrer"
               >Herdr</a
             >
-            keeps the terminals alive. Herdr World observes local and SSH hosts
-            in the background, projects the selected host into its visual views,
-            and opens the exact terminal, files, changes and session history.
+            keeps the terminals alive. Herdr.World observes local and SSH hosts
+            together in Office, Tree and Graph. Hosts filters the overview while
+            terminals, files, changes and history retain their owning host.
           </p>
           <div class="hero-actions">
             <a class="button button-primary" href="#install">
-              Install Herdr World
+              Install Herdr.World
               <svg viewBox="0 0 20 20" aria-hidden="true">
                 <path d="m7 4 6 6-6 6" />
               </svg>
@@ -168,21 +180,27 @@
           </p>
         </div>
 
-        <div class="hero-visual reveal reveal-delay" data-spotlight>
+        <div class="hero-visual reveal reveal-delay" data-spotlight data-hero-carousel>
           <div class="product-window">
-            <div class="window-bar" aria-hidden="true">
-              <span class="traffic traffic-red"></span>
-              <span class="traffic traffic-yellow"></span>
-              <span class="traffic traffic-green"></span>
-              <div class="window-title">Herdr World</div>
-              <span class="window-live"><i></i> Connected</span>
+            <div class="window-bar">
+              <span class="traffic traffic-red" aria-hidden="true"></span>
+              <span class="traffic traffic-yellow" aria-hidden="true"></span>
+              <span class="traffic traffic-green" aria-hidden="true"></span>
+              <div class="window-title" data-hero-label>Office</div>
+              <div class="hero-carousel-controls" role="group" aria-label="Product screenshots">
+                <button type="button" data-hero-previous aria-label="Previous screenshot">&#8592;</button>
+                <span data-hero-position>01 / 06</span>
+                <button type="button" data-hero-next aria-label="Next screenshot">&#8594;</button>
+              </div>
             </div>
             <a
               href="./assets/herdr-world-desktop-office.png"
-              aria-label="Open the Herdr World Office screenshot"
+              aria-label="Open the Herdr.World Office screenshot"
+              data-hero-link
             >
               <picture>
                 <source
+                  data-hero-source
                   type="image/avif"
                   srcset="
                     ./assets/herdr-world-hero-720.avif   720w,
@@ -191,11 +209,12 @@
                   sizes="(max-width: 620px) calc(100vw - 8px), (max-width: 1240px) calc(100vw - 48px), 1180px"
                 />
                 <img
+                  data-hero-image
                   src="./assets/herdr-world-desktop-office.png"
-                  alt="Herdr World Office showing the selected Herdr host"
+                  alt="Herdr.World Office showing six agents across four workspaces on one host"
                   width="1440"
                   height="900"
-                  fetchpriority="high"
+                  loading="lazy"
                 />
               </picture>
             </a>
@@ -233,6 +252,93 @@
           <div>
             <strong>Local or SSH</strong>
             <span>Supported local and remote hosts</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section shell install-section" id="install">
+        <div class="install-card reveal" data-spotlight>
+          <div class="install-copy">
+            <p class="kicker">Ready when the next task starts</p>
+            <h2>Give your agents a window.</h2>
+            <p>
+              Choose one installer, then run <code>herdr-world</code> and open the
+              URL it prints. Homebrew covers macOS and Linux; npm also covers
+              Windows with Node.js 22.14+. The standalone script works on macOS
+              and Linux. Herdr is installed separately.
+            </p>
+            <div class="install-actions">
+              <a
+                class="button button-primary"
+                href="https://github.com/IvoryHeart/herdr-world/releases/latest"
+              >
+                Download latest release
+              </a>
+              <a
+                class="button button-secondary"
+                href="https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md"
+              >
+                Deployment guide
+              </a>
+            </div>
+          </div>
+
+          <div class="install-options">
+            <div class="install-terminal">
+              <div class="install-terminal-bar">
+                <span><i></i><i></i><i></i></span>
+                <strong>Homebrew</strong>
+                <button
+                  type="button"
+                  data-copy-command="homebrew"
+                  aria-label="Copy Homebrew install command"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
+                  </svg>
+                  <span aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <pre><code data-install-command><span>$</span> brew install IvoryHeart/tap/herdr-world</code></pre>
+            </div>
+
+            <div class="install-terminal">
+              <div class="install-terminal-bar">
+                <span><i></i><i></i><i></i></span>
+                <strong>npm</strong>
+                <button
+                  type="button"
+                  data-copy-command="npm"
+                  aria-label="Copy npm install command"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
+                  </svg>
+                  <span aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <pre><code data-install-command><span>$</span> npm install --global @ivoryheart/herdr-world</code></pre>
+            </div>
+
+            <div class="install-terminal">
+              <div class="install-terminal-bar">
+                <span><i></i><i></i><i></i></span>
+                <strong>Standalone</strong>
+                <button
+                  type="button"
+                  data-copy-command="standalone"
+                  aria-label="Copy standalone install command"
+                >
+                  <svg viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
+                  </svg>
+                  <span aria-live="polite">Copy</span>
+                </button>
+              </div>
+              <pre><code data-install-command><span>$</span> curl -fsSL \
+  https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
+  | sh</code></pre>
+            </div>
           </div>
         </div>
       </section>
@@ -382,45 +488,45 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-changes"
+                id="tab-office"
                 aria-controls="showcase-panel"
                 aria-selected="true"
                 tabindex="0"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-office.png"
-                data-alt="Herdr World Office showing the selected Herdr host"
+                data-alt="Herdr.World Office showing spaces and agents"
                 data-label="Office"
-                data-title="See the selected agent world at a glance."
-                data-copy="Keep local and SSH hosts observed in the background, then scan the selected host's spaces and recognized agents without losing the terminal workflow."
+                data-title="See agent work across hosts at a glance."
+                data-copy="Scan local and SSH hosts together, filter the overview, and keep host-owned terminals open while you work."
               >
                 <span>01</span> Office
               </button>
               <button
                 type="button"
                 role="tab"
-                id="tab-files"
+                id="tab-tree"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-tree.png"
-                data-alt="Herdr World Tree showing the selected host's spaces and agents"
+                data-alt="Herdr.World Tree showing qualified spaces and agents"
                 data-label="Tree"
                 data-title="Trace every agent back to its runtime."
-                data-copy="Search and collapse the selected host's qualified space-agent hierarchy while World keeps every managed host distinct in the background."
+                data-copy="Search and collapse qualified spaces and agents across observed hosts, with each runtime and resource kept distinct."
               >
                 <span>02</span> Tree
               </button>
               <button
                 type="button"
                 role="tab"
-                id="tab-annotations"
+                id="tab-graph"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-graph.png"
-                data-alt="Herdr World Graph showing the selected host's spaces and agents"
+                data-alt="Herdr.World Graph showing qualified spaces and agents"
                 data-label="Graph"
                 data-title="Follow runtime relationships visually."
                 data-copy="Move from a machine to a workspace to the exact agent or terminal, then hand off into its live Spaces context."
@@ -430,18 +536,34 @@
               <button
                 type="button"
                 role="tab"
-                id="tab-resources"
+                id="tab-files"
                 aria-controls="showcase-panel"
                 aria-selected="false"
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-files.png"
-                data-alt="Herdr World Inspector browsing files for the selected agent"
+                data-alt="Herdr.World Inspector browsing files for the selected agent"
                 data-label="Files"
                 data-title="Inspect the repository without leaving the agent."
                 data-copy="Browse the selected workspace and keep its terminal, changes, and agent identity in one movable Inspector."
               >
                 <span>04</span> Files
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="tab-changes"
+                aria-controls="showcase-panel"
+                aria-selected="false"
+                tabindex="-1"
+                data-showcase-tab
+                data-image="./assets/herdr-world-desktop-changes.png"
+                data-alt="Herdr.World Inspector showing changed files and a code diff"
+                data-label="Changes"
+                data-title="Review the agent's changes in context."
+                data-copy="See changed files and inspect a diff beside the selected agent's workspace."
+              >
+                <span>05</span> Changes
               </button>
               <button
                 type="button"
@@ -452,12 +574,12 @@
                 tabindex="-1"
                 data-showcase-tab
                 data-image="./assets/herdr-world-desktop-history.png"
-                data-alt="Herdr World Inspector showing agent session history"
+                data-alt="Herdr.World Inspector showing agent session history"
                 data-label="History"
                 data-title="Review what the agent actually did."
                 data-copy="Read the selected agent's session record beside its Office context, then return to the same live terminal."
               >
-                <span>05</span> History
+                <span>06</span> History
               </button>
             </div>
 
@@ -465,7 +587,7 @@
               class="showcase-panel"
               id="showcase-panel"
               role="tabpanel"
-              aria-labelledby="tab-changes"
+              aria-labelledby="tab-office"
               tabindex="0"
               data-showcase-panel
             >
@@ -477,12 +599,12 @@
                 </div>
                 <a
                   href="./assets/herdr-world-desktop-office.png"
-                  aria-label="Open the current Herdr World product screenshot"
+                  aria-label="Open the current Herdr.World product screenshot"
                   data-showcase-link
                 >
                   <img
                     src="./assets/herdr-world-desktop-office.png"
-                    alt="Herdr World Office showing the selected Herdr host"
+                    alt="Herdr.World Office showing spaces and agents"
                     width="1440"
                     height="900"
                     loading="lazy"
@@ -493,11 +615,11 @@
               </div>
               <div class="showcase-caption" aria-live="polite">
                 <h3 data-showcase-title>
-                  See the selected agent world at a glance.
+                  See agent work across hosts at a glance.
                 </h3>
                 <p data-showcase-copy>
                   Keep local and SSH hosts observed in the background, then scan
-                  the selected host's spaces and recognized agents without
+                  qualified spaces and recognized agents across hosts without
                   losing the terminal workflow underneath.
                 </p>
               </div>
@@ -513,7 +635,7 @@
             <h2>Running in three steps.</h2>
           </div>
           <p>
-            Herdr World connects your browser to the Herdr runtime you already use.
+            Herdr.World connects your browser to the Herdr runtime you already use.
             Your agents still live in real terminal sessions owned by Herdr.
           </p>
         </div>
@@ -539,7 +661,7 @@
                 <path d="M8 5 3 12l5 7m8-14 5 7-5 7M14 3l-4 18" />
               </svg>
             </div>
-            <h3>Herdr World connects locally or over SSH</h3>
+            <h3>Herdr.World connects locally or over SSH</h3>
             <p>
               Run one World service on your computer. It connects to local or
               SSH Herdr hosts and serves the browser UI, terminals, files,
@@ -580,7 +702,7 @@
                 <span></span>Responsive file, diff, pane, and session views
               </li>
               <li>
-                <span></span>Install Herdr World as a PWA on desktop or mobile
+                <span></span>Install Herdr.World as a PWA on desktop or mobile
               </li>
             </ul>
             <a
@@ -594,14 +716,14 @@
           <div
             class="phone-stage reveal reveal-delay"
             role="group"
-            aria-label="Herdr World mobile views"
+            aria-label="Herdr.World mobile views"
           >
             <figure class="phone phone-left">
               <div class="phone-speaker"></div>
               <a href="./assets/herdr-world-mobile-office.png">
                 <img
                   src="./assets/herdr-world-mobile-office.png"
-                  alt="Herdr World Office view on mobile"
+                  alt="Herdr.World Office view on mobile"
                   width="390"
                   height="844"
                   loading="lazy"
@@ -614,7 +736,7 @@
               <a href="./assets/herdr-world-mobile-tree.png">
                 <img
                   src="./assets/herdr-world-mobile-tree.png"
-                  alt="Herdr World Tree view on mobile"
+                  alt="Herdr.World Tree view on mobile"
                   width="390"
                   height="844"
                   loading="lazy"
@@ -627,7 +749,7 @@
               <a href="./assets/herdr-world-mobile-spaces.png">
                 <img
                   src="./assets/herdr-world-mobile-spaces.png"
-                  alt="Herdr World Spaces terminal controls on mobile"
+                  alt="Herdr.World Spaces terminal controls on mobile"
                   width="390"
                   height="844"
                   loading="lazy"
@@ -688,61 +810,6 @@
         </div>
       </section>
 
-      <section class="section shell install-section" id="install">
-        <div class="install-card reveal" data-spotlight>
-          <div class="install-copy">
-            <p class="kicker">Ready when the next task starts</p>
-            <h2>Give your agents a window.</h2>
-            <p>
-              Install the standalone binary on macOS or Linux, start
-              Herdr World, and open the URL it prints. From version 0.2.0,
-              Homebrew and npm are also available; npm supports Windows x64 and ARM64. All six platform
-              archives are available from GitHub Releases.
-            </p>
-            <div class="install-actions">
-              <a
-                class="button button-primary"
-                href="https://github.com/IvoryHeart/herdr-world/releases/latest"
-              >
-                Download latest release
-              </a>
-              <a
-                class="button button-secondary"
-                href="https://github.com/IvoryHeart/herdr-world/blob/main/docs/DEPLOYMENT.md"
-              >
-                Deployment guide
-              </a>
-            </div>
-          </div>
-
-          <div class="install-terminal">
-            <div class="install-terminal-bar">
-              <span><i></i><i></i><i></i></span>
-              <strong>Install</strong>
-              <button
-                type="button"
-                data-copy-command
-                aria-label="Copy install command"
-              >
-                <svg viewBox="0 0 20 20" aria-hidden="true">
-                  <path d="M7 6V4h9v9h-2M4 7h9v9H4z" />
-                </svg>
-                <span aria-live="polite">Copy</span>
-              </button>
-            </div>
-            <pre><code data-install-command><span>$</span> curl -fsSL \
-  https://github.com/IvoryHeart/herdr-world/releases/latest/download/install-herdr-world.sh \
-  | sh</code></pre>
-            <div class="install-result" aria-hidden="true">
-              <span></span>
-              <p>
-                <strong>Herdr World installed</strong
-                ><small>Run <code>herdr-world</code> to start</small>
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
     </main>
 
     <footer class="site-footer">
@@ -750,7 +817,7 @@
         <div class="footer-brand">
           <a class="brand" href="#top">
             <img class="brand-logo" src="./assets/herdr-world-logo.svg" width="36" height="36" alt="" />
-            <span>Herdr World</span>
+            <span>Herdr.World</span>
           </a>
           <p>
             An open-source visual control plane for
@@ -805,7 +872,7 @@
         </div>
       </div>
       <div class="shell footer-bottom">
-        <span>&copy; <span data-year></span> Herdr World contributors.</span>
+        <span>&copy; <span data-year></span> Herdr.World contributors.</span>
         <span>Real terminals. Clear context. Any screen.</span>
       </div>
     </footer>

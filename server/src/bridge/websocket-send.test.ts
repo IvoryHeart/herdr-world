@@ -68,6 +68,32 @@ function sendWithObservability(
   return { cleanupCount, result, warnings };
 }
 
+test("large aggregate replies negotiate compression without coalescing acknowledgements", () => {
+  const { ws, sent, compressed } = createWebSocket();
+  const payload = JSON.stringify({
+    id: "synthetic-snapshot",
+    result: {
+      connections: ["synthetic host"].concat(
+        Array(4096).fill("synthetic topology"),
+      ),
+    },
+  });
+  expect(
+    sendWebSocketMessage(ws, payload, {
+      cleanup: () => {},
+      context: "world-snapshot",
+    }),
+  ).toBe(true);
+  expect(
+    sendWebSocketMessage(ws, '{"id":"synthetic-input","result":{}}', {
+      cleanup: () => {},
+      context: "terminal-input",
+    }),
+  ).toBe(true);
+  expect(sent).toEqual([payload, '{"id":"synthetic-input","result":{}}']);
+  expect(compressed).toEqual([true, false]);
+});
+
 test("negotiated compression reduces wire bytes and preserves uncompressed-client compatibility", async () => {
   const frame = JSON.stringify({
     terminal: {

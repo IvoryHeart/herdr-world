@@ -1003,7 +1003,9 @@ export function AgentHistoryDrawer({
       <button
         type="button"
         className="agent-history-icon"
-        onClick={() => downloadSession(pane, connectionClient)}
+        onClick={() =>
+          downloadSession(pane, connectionClient, session.session?.value)
+        }
         aria-label="Export raw session"
         title="Export raw session"
       >

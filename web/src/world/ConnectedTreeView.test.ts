@@ -4,6 +4,43 @@ import { projectWorldTree } from "./treeProjection";
 import type { WorldObject } from "./worldObject";
 
 describe("connected Tree search", () => {
+  test("finds an observed leaf omitted by rendering and reveals its qualified ancestry on selection", () => {
+    const world = fixtureWorld();
+    const source = world.leaves[0]!;
+    const children = Array.from({ length: 20 }, (_, index) => ({
+      ...source,
+      id: `observed-${index}`,
+      label: index === 19 ? "Needle beyond renderer" : `Ordinary ${index}`,
+      taskSummary: undefined,
+      focused: false,
+    }));
+    world.spaces[0]!.children = children;
+    world.spaces[0]!.coverage = {
+      ...world.spaces[0]!.coverage,
+      leaves: 20,
+      agents: 20,
+      shells: 0,
+    };
+    world.hosts[0]!.coverage = world.spaces[0]!.coverage;
+    world.coverage = world.spaces[0]!.coverage;
+    world.leaves = children;
+    world.nodes = [...world.hosts, ...world.spaces, ...children];
+    world.nodeById = new Map(world.nodes.map((node) => [node.id, node]));
+    const projection = projectWorldTree(world);
+    expect(
+      projection.hosts[0]!.spaces[0]!.children.some(
+        ({ id }) => id === "observed-19",
+      ),
+    ).toBe(false);
+    expect(connectedTreeMatches(projection, "needle beyond renderer")).toEqual(
+      new Set(["host-a", "space-a", "observed-19"]),
+    );
+    expect(
+      projectWorldTree(world, "observed-19").hosts[0]!.spaces[0]!.children.map(
+        ({ id }) => id,
+      ),
+    ).toContain("observed-19");
+  });
   test("keeps complete ancestor context for a matching task without mutating disclosure", () => {
     const matches = connectedTreeMatches(
       projectWorldTree(fixtureWorld()),

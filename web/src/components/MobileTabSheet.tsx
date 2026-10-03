@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   shallowEqual,
-  store,
+  useOperationalStore,
   useStoreSelector,
   useEndpointCreationReason,
 } from "../store";
@@ -30,6 +30,7 @@ export function MobileTabSheet({
   onShowSession: () => void;
   onSelectTab?: (tabId: string) => void | Promise<unknown>;
 }) {
+  const store = useOperationalStore();
   const s = useStoreSelector(
     (state) => ({
       panes: state.panes,
@@ -169,7 +170,13 @@ export function MobileTabSheet({
                   aria-label={`Close ${name}`}
                   title={`Close ${name}`}
                   disabled={transitionPending}
-                  onClick={() => requestCloseTab(t.tab_id)}
+                  onClick={() =>
+                    requestCloseTab(t.tab_id, {
+                      connectionId: store.get().activeConnectionId,
+                      runtimeGeneration:
+                        store.get().serverRuntimeGeneration ?? -1,
+                    })
+                  }
                 >
                   <X size={14} />
                 </button>

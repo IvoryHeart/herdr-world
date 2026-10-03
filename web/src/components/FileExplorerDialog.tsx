@@ -1006,8 +1006,12 @@ function FileExplorerContent({
       entry.type === "directory"
         ? `${entry.name || "download"}.tar.gz`
         : entry.name || "download";
-    void downloadFileFromUrl({ url: url.toString(), filename }).then(
-      (result) => {
+    void downloadFileFromUrl({
+      url: url.toString(),
+      filename,
+      client: connectionClient,
+    })
+      .then((result) => {
         if (result === "shared" || !connectionClient.isCurrent()) return;
         store.notify({
           kind: "info",
@@ -1015,8 +1019,14 @@ function FileExplorerContent({
           detail: entry.path,
           autoDismissMs: 5000,
         });
-      },
-    );
+      })
+      .catch((error: unknown) => {
+        store.notify({
+          kind: "error",
+          message: "Download failed",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      });
   };
 
   const markDeletePath = (path: string, deleting: boolean) => {

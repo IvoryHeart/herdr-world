@@ -562,7 +562,7 @@ function SshProfileForm({
   );
 }
 
-function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
+export function ConnectionManagerDialog({ onClose }: { onClose: () => void }) {
   const connections = useStoreSelector((snapshot) => snapshot.connections);
   const [editing, setEditing] = useState<
     ConnectionSummary | "new-local" | "new-ssh" | null

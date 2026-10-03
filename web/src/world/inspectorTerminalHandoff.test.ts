@@ -28,7 +28,7 @@ const panes = [
 ] as Pane[];
 const request: InspectorTerminalFileRequest = {
   connectionId: "local",
-  connectionGeneration: 2,
+  connectionGeneration: 7,
   runtimeGeneration: 7,
   workspaceId: "studio",
   paneId: "builder-pane",

@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { store } from "../store";
+import { useOperationalStore } from "../store";
 import type { InspectorView } from "../workspaceResource";
 import {
   lifecycleAutoSyncLabel,
@@ -44,6 +44,7 @@ export function WorktreeLifecycleRow({
   onOpenResource: (row: LifecycleRow, view: InspectorView) => Promise<unknown>;
   onRemove: (row: LifecycleRow) => void;
 }) {
+  const store = useOperationalStore();
   const workspace = row.workspace;
   const rowKey = row.worktree.path;
   const title = lifecycleWorktreeTitle(row.worktree);

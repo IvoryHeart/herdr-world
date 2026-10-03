@@ -42,6 +42,7 @@ type Interaction = {
 
 export default function WorldFloatingInspectorWindow({
   conversation,
+  outsideFilter = false,
   cascadeIndex,
   compactActive,
   onFocus,
@@ -57,6 +58,7 @@ export default function WorldFloatingInspectorWindow({
   zIndex,
 }: {
   conversation: WorldInspectorConversation | WorldFloatingTerminal;
+  outsideFilter?: boolean;
   cascadeIndex: number;
   compactActive: boolean;
   onFocus(): void;
@@ -409,6 +411,11 @@ export default function WorldFloatingInspectorWindow({
       }
     >
       <div ref={setPortalRef} className="world-floating-terminal-portal" />
+      {outsideFilter ? (
+        <p className="world-outside-filter" role="status">
+          Outside the Hosts filter
+        </p>
+      ) : null}
       <button
         type="button"
         className="world-floating-terminal-resize"

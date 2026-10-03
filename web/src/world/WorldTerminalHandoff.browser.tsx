@@ -15,13 +15,13 @@ import type { Pane, PaneLayout, Tab, Workspace } from "../types";
 import "../styles/tokens.css";
 import "../styles/base.css";
 import "../styles/vendor.css";
-import WorldFoundationApp from "./WorldFoundationApp";
-import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
-import { worldRuntimeStore } from "./runtimeStore";
 import {
   INSPECTOR_TERMINAL_FILE_EVENT,
   type InspectorTerminalFileRequest,
 } from "./inspectorTerminalHandoff";
+import { CREATED_PANE_ADMISSION_TIMEOUT_MS } from "./officeRoomActions";
+import { worldRuntimeStore } from "./runtimeStore";
+import WorldFoundationApp from "./WorldFoundationApp";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 
 const failures: string[] = [];
@@ -738,7 +738,7 @@ async function run() {
     "World status was not moved into the inherited top bar",
   );
   const topbarHost = document.querySelector<HTMLElement>(
-    ".connection-switcher",
+    ".world-hosts-control",
   );
   const topbarView = document.querySelector<HTMLElement>(
     ".world-primary-view-select",
@@ -782,11 +782,11 @@ async function run() {
         left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING,
     );
   check(
-    precedes(topbarHost, topbarView) &&
-      precedes(topbarView, topbarDetails) &&
-      precedes(topbarDetails, topbarActions) &&
+    precedes(topbarView, topbarDetails) &&
+      precedes(topbarDetails, topbarHost) &&
+      precedes(topbarHost, topbarActions) &&
       precedes(topbarActions, topbarMenu),
-    "top bar did not order host, view, details, Actions and Menu",
+    "top bar did not order view, details, Hosts, Actions and Menu",
   );
   await setShellActionsOpen(true);
   await until(
@@ -899,7 +899,7 @@ async function run() {
     "Zen mode exposed the ordinary navigator restore control",
   );
   sharedNavigator?.style.removeProperty("top");
-  document.querySelector<HTMLElement>(".workspace-tree-panel")?.focus();
+  document.querySelector<HTMLElement>(".world-navigator")?.focus();
   await until(
     () =>
       Boolean(
@@ -1039,10 +1039,11 @@ async function run() {
     () => !document.querySelector(".config-dropdown"),
     "Office settings closed before shell Actions",
   );
-  const floatingPreferenceNavigatorRow = [
-    ...document.querySelectorAll<HTMLElement>(".sidebar .agent-row"),
-  ].find((row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"));
-  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  const floatingPreferenceNavigatorRow = () =>
+    [...document.querySelectorAll<HTMLElement>(".sidebar .agent-row")].find(
+      (row) => row.getAttribute("aria-label")?.startsWith("reviewer pane"),
+    );
+  flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
     () =>
       document
@@ -1599,6 +1600,14 @@ async function run() {
       Math.abs(bounds.width - dockBeforeMaximize.width) < 2
     );
   }, "docked Inspector restored its placement");
+  check(
+    Boolean(
+      document.querySelector(
+        ".world-context-rail .workspace-inspector-terminal-portal > .world-terminal-owner",
+      ),
+    ),
+    "restored dock lost the retained terminal portal owner",
+  );
   const dockResize = document.querySelector<HTMLButtonElement>(
     '.world-context-rail button[aria-label="Resize Inspector window"]',
   );
@@ -1644,6 +1653,12 @@ async function run() {
       Number(floatingReviewer.style.zIndex) > Number(focusedDock.style.zIndex),
     "floating Inspector focus raised it above the dock",
   );
+  await settle();
+  check(
+    document.activeElement ===
+      floatingReviewer.querySelector('[aria-label="Resize Inspector window"]'),
+    "queued dock terminal focus overrode the newer floating control intent",
+  );
 
   const paneGetsBeforeClosedTargetFocus = calls.filter(
     ({ method }) => method === "pane.get",
@@ -1653,7 +1668,7 @@ async function run() {
     paneId: "reviewer-pane",
     promise: delayedClosedTargetFocus.promise,
   };
-  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
     () =>
       calls.filter(({ method }) => method === "pane.get").length ===
@@ -1699,7 +1714,7 @@ async function run() {
     paneId: "reviewer-pane",
     promise: delayedDockOutFocus.promise,
   };
-  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
     () =>
       calls.filter(({ method }) => method === "pane.get").length ===
@@ -1869,7 +1884,7 @@ async function run() {
       ),
     "restore Reviewer for ordinary navigator admission",
   );
-  flushSync(() => floatingPreferenceNavigatorRow?.click());
+  flushSync(() => floatingPreferenceNavigatorRow()?.click());
   await until(
     () =>
       document
@@ -2524,7 +2539,7 @@ async function run() {
   )!;
   const fileRequest: InspectorTerminalFileRequest = {
     connectionId: client.connectionId,
-    connectionGeneration: client.generation,
+    connectionGeneration: runtimeGeneration,
     runtimeGeneration,
     workspaceId: "studio",
     paneId: "reviewer-pane",
@@ -2965,7 +2980,7 @@ async function run() {
   const selectTreeNode = (label: string) => {
     const button = [
       ...document.querySelectorAll<HTMLButtonElement>(
-        ".world-tree-outline-select",
+        ".world-tree-outline-select, .world-connected-tree-card",
       ),
     ].find((candidate) =>
       candidate.querySelector("strong")?.textContent?.includes(label),
@@ -4341,6 +4356,13 @@ async function run() {
 
   runtimeGeneration += 1;
   worldRevision += 1;
+  __storeTesting.applyCatalog(
+    store.get().connections.map((connection) => ({
+      ...connection,
+      generation: runtimeGeneration,
+    })),
+    client.connectionId,
+  );
   await worldRuntimeStore.refresh();
   await until(
     () =>

@@ -1,7 +1,7 @@
 import { shortcutTitle, useShortcutPreferences } from "../shortcutPreferences";
 import {
   shallowEqual,
-  store,
+  useOperationalStore,
   useStoreSelector,
   useEndpointCreationReason,
 } from "../store";
@@ -47,16 +47,22 @@ export function tabName(tab?: Tab) {
  * Routes non-TabBar close controls through the same confirmation dialog used
  * by the tab strip, so keyboard shortcuts cannot bypass destructive-action UX.
  */
-export function requestCloseTab(tabId: string) {
+export function requestCloseTab(
+  tabId: string,
+  owner: { connectionId: string; runtimeGeneration: number },
+) {
   window.dispatchEvent(
-    new CustomEvent(REQUEST_CLOSE_TAB_EVENT, { detail: { tabId } }),
+    new CustomEvent(REQUEST_CLOSE_TAB_EVENT, { detail: { tabId, ...owner } }),
   );
 }
 
 /** Routes pane shortcuts through confirmation even when terminals are hidden. */
-export function requestClosePane(paneId: string) {
+export function requestClosePane(
+  paneId: string,
+  owner: { connectionId: string; runtimeGeneration: number },
+) {
   window.dispatchEvent(
-    new CustomEvent(REQUEST_CLOSE_PANE_EVENT, { detail: { paneId } }),
+    new CustomEvent(REQUEST_CLOSE_PANE_EVENT, { detail: { paneId, ...owner } }),
   );
 }
 
@@ -93,6 +99,7 @@ export function TabBar({
   }) => void | Promise<unknown>;
   onSelectTab?: (tabId: string) => void;
 }) {
+  const store = useOperationalStore();
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
@@ -173,12 +180,35 @@ export function TabBar({
 
   useEffect(() => {
     const onRequestClose = (event: Event) => {
-      const tabId = (event as CustomEvent<{ tabId?: unknown }>).detail?.tabId;
+      const detail = (
+        event as CustomEvent<{
+          tabId?: unknown;
+          connectionId?: string;
+          runtimeGeneration?: number;
+        }>
+      ).detail;
+      if (
+        detail?.connectionId !== s.activeConnectionId ||
+        detail?.runtimeGeneration !== s.serverRuntimeGeneration
+      )
+        return;
+      const tabId = detail.tabId;
       if (typeof tabId === "string" && tabId) setPendingCloseTabId(tabId);
     };
     const onRequestClosePane = (event: Event) => {
-      const paneId = (event as CustomEvent<{ paneId?: unknown }>).detail
-        ?.paneId;
+      const detail = (
+        event as CustomEvent<{
+          paneId?: unknown;
+          connectionId?: string;
+          runtimeGeneration?: number;
+        }>
+      ).detail;
+      if (
+        detail?.connectionId !== s.activeConnectionId ||
+        detail?.runtimeGeneration !== s.serverRuntimeGeneration
+      )
+        return;
+      const paneId = detail.paneId;
       if (typeof paneId === "string" && paneId) setPendingClosePaneId(paneId);
     };
     window.addEventListener(REQUEST_CLOSE_TAB_EVENT, onRequestClose);
@@ -187,7 +217,14 @@ export function TabBar({
       window.removeEventListener(REQUEST_CLOSE_TAB_EVENT, onRequestClose);
       window.removeEventListener(REQUEST_CLOSE_PANE_EVENT, onRequestClosePane);
     };
-  }, []);
+  }, [s.activeConnectionId, s.serverRuntimeGeneration]);
+
+  useEffect(() => {
+    setMenu(null);
+    setPendingCloseTabId(null);
+    setPendingClosePaneId(null);
+    setPendingRenameTab(null);
+  }, [s.activeConnectionId, s.serverRuntimeGeneration]);
 
   if (!focusedWs) return null;
 

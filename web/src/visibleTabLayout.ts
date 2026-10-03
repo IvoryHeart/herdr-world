@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { shallowEqual, store, useStoreSelector, type State } from "./store";
+import {
+  shallowEqual,
+  useOperationalStore,
+  useStoreSelector,
+  type State,
+} from "./store";
 import {
   provisionalTabLayout,
   rememberTabLayout,
@@ -147,6 +152,7 @@ export function useVisibleTabLayoutState(
   workspaceId: string,
   tabId: string,
 ): { layout: PaneLayout | null; error: string | null } {
+  const store = useOperationalStore();
   const client = useConnectionClient();
   const snapshot = useStoreSelector(
     (state) => ({
@@ -251,6 +257,7 @@ export function useVisibleTabLayoutState(
     };
   }, [
     client,
+    store,
     snapshot.activeConnectionId,
     workspaceId,
     tabId,

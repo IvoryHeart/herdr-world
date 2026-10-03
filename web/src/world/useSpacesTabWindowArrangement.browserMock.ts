@@ -47,10 +47,20 @@ const calls = {
   requestCloseTab: [] as string[],
 };
 
-export function requestCloseTab(tabId: string) {
+export function requestCloseTab(
+  tabId: string,
+  owner: { connectionId: string; runtimeGeneration: number },
+) {
+  if (
+    owner.connectionId !== snapshot.activeConnectionId ||
+    owner.runtimeGeneration !== snapshot.serverRuntimeGeneration
+  )
+    throw new Error("Retired Spaces close capture");
   calls.requestCloseTab.push(tabId);
   window.dispatchEvent(
-    new CustomEvent("herdr-world:request-close-tab", { detail: { tabId } }),
+    new CustomEvent("herdr-world:request-close-tab", {
+      detail: { tabId, ...owner },
+    }),
   );
 }
 
@@ -99,6 +109,21 @@ export const store = {
     return Promise.resolve();
   },
 };
+
+export function useOperationalStore() {
+  const owner = snapshot.activeConnectionId;
+  const generation = snapshot.serverRuntimeGeneration;
+  return {
+    focusTab(tabId: string) {
+      if (
+        owner !== snapshot.activeConnectionId ||
+        generation !== snapshot.serverRuntimeGeneration
+      )
+        return Promise.reject(new Error("Retired Spaces focus capture"));
+      return store.focusTab(tabId);
+    },
+  };
+}
 
 export function useStoreSelector<T>(selector: (state: TestSnapshot) => T): T {
   const [, setRevision] = useState(0);

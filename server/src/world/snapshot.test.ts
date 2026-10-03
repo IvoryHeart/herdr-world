@@ -78,6 +78,360 @@ function deferred<T>() {
 }
 
 describe("WorldSnapshotService", () => {
+  test("expired catalogue observations admit ordinary transport work between hosts", async () => {
+    const ids = Array.from({ length: 64 }, (_, index) => `synthetic-${index}`);
+    const host = runtime("Synthetic");
+    let now = 0;
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (connectionId) => ({
+          connectionId,
+          generation: 1,
+          runtime: host,
+          isCurrent: () => true,
+        }),
+      },
+      () => now,
+    );
+    await service.snapshot();
+    now = 20_000;
+    let controlRan = false;
+    const control = setTimeout(() => {
+      controlRan = true;
+    }, 0);
+    try {
+      const result = await service.snapshot();
+      expect(controlRan).toBe(true);
+      expect(
+        result.connections.map((connection) => connection.connection_id),
+      ).toEqual(ids);
+      expect(
+        result.connections.every(
+          (connection) =>
+            connection.actionable && connection.snapshot?.panes.length === 1,
+        ),
+      ).toBe(true);
+    } finally {
+      clearTimeout(control);
+    }
+  });
+
+  test("a host retired during its construction turn cannot publish actionable topology", async () => {
+    let current = true;
+    const host = runtime("Synthetic");
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("synthetic")],
+      readyRuntimeLease: (connectionId) => ({
+        connectionId,
+        generation: 1,
+        runtime: host,
+        isCurrent: () => current,
+      }),
+    });
+    const retirement = setTimeout(() => {
+      current = false;
+    }, 0);
+    try {
+      const result = await service.snapshot();
+      expect(result.connections[0]?.actionable).toBe(false);
+      expect(result.connections[0]?.snapshot).toBe(null);
+    } finally {
+      clearTimeout(retirement);
+    }
+  });
+
+  test("32-host catalogue preserves healthy background progress with three stalled priority owners", async () => {
+    const ids = Array.from(
+      { length: 32 },
+      (_, index) => `synthetic-host-${index}`,
+    );
+    const stalledIds = new Set(ids.slice(0, 3));
+    const release = deferred<void>();
+    const healthyFinished = deferred<void>();
+    const started: string[] = [];
+    const finished = new Set<string>();
+    let active = 0;
+    let maximumActive = 0;
+    const workspaces = Array.from({ length: 514 }, (_, index) => ({
+      workspace_id: `space-${index}`,
+      label: `Synthetic space ${index}`,
+    }));
+    const tabs = workspaces.map(({ workspace_id }) => ({
+      workspace_id,
+      tab_id: `tab-${workspace_id}`,
+    }));
+    const panes = tabs.flatMap(({ workspace_id, tab_id }) =>
+      Array.from({ length: 17 }, (_, index) => ({
+        workspace_id,
+        tab_id,
+        pane_id: `pane-${workspace_id}-${index}`,
+        terminal_id: `terminal-${workspace_id}-${index}`,
+        agent: "codex",
+        agent_status: "idle",
+      })),
+    );
+    const began = performance.now();
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => ids.map((id) => status(id)),
+      readyRuntimeLease: (id) => ({
+        connectionId: id,
+        generation: 1,
+        isCurrent: () => true,
+        runtime: {
+          herdr: {
+            async call(method) {
+              if (method === "workspace.list") {
+                started.push(id);
+                active++;
+                maximumActive = Math.max(maximumActive, active);
+              }
+              if (stalledIds.has(id)) await release.promise;
+              const result =
+                method === "workspace.list"
+                  ? { workspaces }
+                  : method === "tab.list"
+                    ? { tabs }
+                    : method === "pane.list"
+                      ? { panes }
+                      : await runtime(id).herdr.call(method);
+              if (method === "agent.list") {
+                active--;
+                finished.add(id);
+                if (
+                  ids
+                    .filter((candidate) => !stalledIds.has(candidate))
+                    .every((candidate) => finished.has(candidate))
+                )
+                  healthyFinished.resolve();
+              }
+              return result;
+            },
+          },
+        },
+      }),
+    });
+    const pending = service.snapshot({
+      priority_connection_ids: ids.slice(0, 8),
+    });
+    try {
+      await healthyFinished.promise;
+      expect(maximumActive).toBeLessThanOrEqual(4);
+      expect(started).toHaveLength(32);
+      expect(new Set(started).size).toBe(32);
+      expect(finished.size).toBe(29);
+      expect([...stalledIds].some((id) => finished.has(id))).toBe(false);
+    } finally {
+      release.resolve();
+      await pending;
+    }
+    const result = await service.snapshot({
+      priority_connection_ids: ids.slice(0, 8),
+    });
+    expect(result.connections).toHaveLength(32);
+    expect(
+      new Set(result.connections.map((connection) => connection.connection_id))
+        .size,
+    ).toBe(32);
+    expect(
+      result.connections.every(
+        (connection) => connection.actionable && !connection.stale,
+      ),
+    ).toBe(true);
+    expect(started).toHaveLength(32);
+    for (const connection of result.connections) {
+      expect(connection.snapshot?.workspaces).toHaveLength(512);
+      expect(connection.snapshot?.panes).toHaveLength(4096);
+      expect(connection.snapshot?.coverage).toMatchObject({
+        workspaces: 514,
+        tabs: 514,
+        panes: 8738,
+        agent_panes: 8738,
+      });
+    }
+    console.info(
+      `Synthetic 32-host dense observation: ${Math.round(performance.now() - began)}ms, ${Buffer.byteLength(JSON.stringify(result))} UTF-8 bytes, peak ${maximumActive} hosts; 29 healthy owners completed before releasing three stalls.`,
+    );
+  });
+  test("completion of the open owner releases the fourth slot to healthy background work", async () => {
+    const ids = ["open", "stalled-0", "stalled-1", "stalled-2", "healthy"];
+    const stalled = deferred<void>();
+    const open = deferred<void>();
+    const started: string[] = [];
+    const healthyStarted = deferred<void>();
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => ids.map((id) => status(id)),
+      readyRuntimeLease: (id) => ({
+        connectionId: id,
+        generation: 1,
+        isCurrent: () => true,
+        runtime: {
+          herdr: {
+            async call(method) {
+              if (method === "workspace.list") {
+                started.push(id);
+                if (id === "healthy") healthyStarted.resolve();
+              }
+              if (id === "open") await open.promise;
+              else if (id.startsWith("stalled")) await stalled.promise;
+              return runtime(id).herdr.call(method);
+            },
+          },
+        },
+      }),
+    });
+    const pending = service.snapshot({ priority_connection_ids: ["open"] });
+    try {
+      expect(started).toEqual(ids.slice(0, 4));
+      open.resolve();
+      // Observe actual admission across the cooperative task turn while all
+      // stalled peers remain held; microtask draining is no longer sufficient.
+      await healthyStarted.promise;
+      expect(started).toContain("healthy");
+    } finally {
+      open.resolve();
+      stalled.resolve();
+      await pending;
+    }
+    await healthyStarted.promise;
+  });
+  test("repeated priority invalidations rotate initial admissions and preserve background progress without refetching cached hosts", async () => {
+    const ids = Array.from({ length: 8 }, (_, index) => `host-${index}`);
+    const priorityIds = ids.slice(0, 5);
+    let now = 0;
+    let release = deferred<void>();
+    const started: string[] = [];
+    const initialPriorities = new Set<string>();
+    const initialBackground = new Set<string>();
+    const values = new Map(
+      ids.map((id) => [
+        id,
+        {
+          herdr: {
+            async call(method: string) {
+              if (method === "workspace.list") started.push(id);
+              await release.promise;
+              return runtime(id).herdr.call(method);
+            },
+          },
+        },
+      ]),
+    );
+    const service = new WorldSnapshotService<Runtime>(
+      {
+        list: () => ids.map((id) => status(id)),
+        readyRuntimeLease: (id) => ({
+          connectionId: id,
+          generation: 1,
+          runtime: values.get(id)!,
+          isCurrent: () => true,
+        }),
+      },
+      () => now,
+    );
+    for (let round = 0; round < ids.length; round++) {
+      started.length = 0;
+      release = deferred<void>();
+      now += 16_000;
+      for (const id of priorityIds) service.invalidate(id);
+      const first = service.snapshot({ priority_connection_ids: priorityIds });
+      const overlapping = service.snapshot({
+        priority_connection_ids: [...priorityIds].reverse(),
+      });
+      try {
+        expect(started).toHaveLength(4);
+        const foreground = started.filter((id) => priorityIds.includes(id));
+        const background = started.filter((id) => !priorityIds.includes(id));
+        expect(foreground).toHaveLength(3);
+        expect(background).toHaveLength(1);
+        for (const id of foreground) initialPriorities.add(id);
+        for (const id of background) initialBackground.add(id);
+      } finally {
+        release.resolve();
+        await Promise.all([first, overlapping]);
+      }
+      expect(started).toHaveLength(ids.length);
+      expect(new Set(started).size).toBe(ids.length);
+      await service.snapshot({ priority_connection_ids: priorityIds });
+      expect(started).toHaveLength(ids.length);
+    }
+    expect(initialPriorities.size).toBe(priorityIds.length);
+    expect(initialBackground.size).toBe(ids.length - priorityIds.length);
+  });
+  test.each([
+    null,
+    "alpha",
+    [""],
+    [3],
+    ["unknown"],
+    Array.from({ length: 129 }, (_, index) => `host-${index}`),
+  ])(
+    "rejects malformed, unknown or unbounded host scheduling hints before acquiring leases: %j",
+    async (hint) => {
+      let acquired = 0;
+      const service = new WorldSnapshotService<Runtime>({
+        list: () => [
+          status("alpha"),
+          status("beta"),
+          ...Array.from({ length: 129 }, (_, index) => status(`host-${index}`)),
+        ],
+        readyRuntimeLease: () => {
+          acquired++;
+          return null;
+        },
+      });
+      await expect(
+        service.snapshot({ priority_connection_ids: hint }),
+      ).rejects.toThrow();
+      expect(acquired).toBe(0);
+    },
+  );
+
+  test("several open-context hosts are scheduled before stalled peers while retaining bounded background work", async () => {
+    const ids = Array.from({ length: 12 }, (_, index) => `host-${index}`);
+    const priorityIds = ids.slice(8);
+    const release = deferred<void>();
+    const started: string[] = [];
+    const values = new Map(
+      ids.map((id) => [
+        id,
+        {
+          herdr: {
+            async call(method: string) {
+              if (method === "workspace.list") started.push(id);
+              await release.promise;
+              return runtime(id).herdr.call(method);
+            },
+          },
+        },
+      ]),
+    );
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => ids.map((id) => status(id)),
+      readyRuntimeLease: (id) => ({
+        connectionId: id,
+        generation: 1,
+        runtime: values.get(id)!,
+        isCurrent: () => true,
+      }),
+    });
+    const pending = service.snapshot({
+      priority_connection_ids: [...priorityIds, priorityIds[0]],
+    });
+    try {
+      expect(started).toHaveLength(4);
+      expect(
+        started.filter((id) => priorityIds.includes(id)).length,
+      ).toBeGreaterThanOrEqual(2);
+      expect(started.some((id) => !priorityIds.includes(id))).toBe(true);
+    } finally {
+      release.resolve();
+      const result = await pending;
+      expect(result.connections).toHaveLength(12);
+      expect(new Set(started).size).toBe(12);
+      expect(started).toHaveLength(12);
+    }
+  });
   test("reserves all watched panes and ancestry beyond ordinary bounds", async () => {
     const panes = Array.from({ length: 4_224 }, (_, index) => ({
       pane_id: `pane-${index}`,
@@ -280,7 +634,7 @@ describe("WorldSnapshotService", () => {
         result.connections.map(({ connection_id }) => connection_id),
       ).toEqual(hostIds);
       expect(started[0]).toBe("host-63");
-      expect(started).toHaveLength(4);
+      expect(started).toHaveLength(5);
       expect(result.connections[63]).toMatchObject({
         actionable: true,
         stale: false,
@@ -298,7 +652,7 @@ describe("WorldSnapshotService", () => {
         selected_connection_id: "host-63",
       });
       expect(repeated.connections[63].actionable).toBe(true);
-      expect(started).toHaveLength(4);
+      expect(started).toHaveLength(5);
       expect(JSON.stringify(repeated).length).toBeLessThan(40_000);
     } finally {
       release.resolve();
@@ -474,14 +828,17 @@ describe("WorldSnapshotService", () => {
       });
       expect(first.connections[0].actionable).toBe(true);
       expect(started).not.toContain("host-5");
-      const second = await service.snapshot({
+      const initialCount = started.length;
+      const secondPending = service.snapshot({
         selected_connection_id: "host-5",
       });
+      // All four slots are used once host-0 finishes. A newly queued
+      // priority starts as soon as an existing observation releases capacity.
+      release.resolve();
+      const second = await secondPending;
       expect(second.connections[5].actionable).toBe(true);
       expect(started).toContain("host-5");
-      expect(started.indexOf("host-5")).toBeLessThan(
-        started.indexOf("host-4") < 0 ? Infinity : started.indexOf("host-4"),
-      );
+      expect(started[initialCount]).toBe("host-5");
     } finally {
       release.resolve();
     }

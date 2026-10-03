@@ -54,6 +54,16 @@ export async function uploadTerminalImage(
     );
   }
 
+  const replyConnection = res.headers.get("X-Herdr-Connection-Id");
+  const replyGeneration = res.headers.get("X-Herdr-Connection-Generation");
+  if (
+    replyConnection !== client.connectionId ||
+    replyGeneration !== String(client.serverRuntimeGeneration)
+  ) {
+    await res.body?.cancel();
+    throw new Error("response connection identity mismatch");
+  }
+
   const data: unknown = await res.json();
   if (!client.isCurrent()) throw new Error("connection changed during upload");
   if (data === null || typeof data !== "object" || Array.isArray(data)) {

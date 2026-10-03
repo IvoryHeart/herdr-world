@@ -55,7 +55,12 @@ import {
   officeHeaderLabels,
 } from "./officeLayout";
 import { officeDebug } from "../officeDebug";
+import {
+  officeVisibleReceptions,
+  officeVisibleRooms,
+} from "./officeVirtualization";
 import { officeSceneSignature } from "./officeSceneSignature";
+import { yieldWorldTask } from "./worldObject";
 import {
   destroyOfficeSceneChildren,
   OFFICE_SCENE_DESTROY_OPTIONS,
@@ -115,8 +120,6 @@ const STATUS_CUES = Object.freeze({
   unknown: { label: "UNKNOWN", color: 0xc29add },
 });
 
-const VIRTUAL_ROOM_ROW_OVERSCAN = 4;
-
 type AnimatedItem =
   | { kind: "character"; node: Container; baseY: number; phase: number }
   | {
@@ -174,7 +177,7 @@ export type OfficeRendererController = {
     roomAlignment?: OfficeRoomAlignment,
     longRoomTitleMode?: OfficeLongRoomTitleMode,
     seatCreationStates?: Readonly<Record<string, OfficeCreationActionState>>,
-  ) => void;
+  ) => Promise<void>;
   getAnchors: (
     selectedKey: string | null,
     conversationTargetKey: string | null,
@@ -215,6 +218,7 @@ export async function createOfficeRenderer(
   roomAlignment: OfficeRoomAlignment,
   longRoomTitleMode: OfficeLongRoomTitleMode,
   initializationSignal?: AbortSignal,
+  onRendererError?: (error: unknown) => void,
 ): Promise<OfficeRendererController> {
   officeDebug("renderer:create-start", {
     rooms: projection.rooms.length,
@@ -245,6 +249,8 @@ export async function createOfficeRenderer(
   let resizeTimer: number | null = null;
   let lastRendererSize = { width: 0, height: 0 };
   let lastSceneSignature: string | null = null;
+  let sceneRequest = 0;
+  let sceneComplete = false;
   let tick = 0;
   let currentFontReady = officeFontReady();
   const animated: AnimatedItem[] = [];
@@ -258,6 +264,7 @@ export async function createOfficeRenderer(
     await app.init({
       width: OFFICE_GEOMETRY.minOfficeWidth,
       height: 640,
+      autoStart: false,
       backgroundAlpha: 0,
       antialias: true,
       autoDensity: true,
@@ -287,6 +294,29 @@ export async function createOfficeRenderer(
     }
     throw new Error("renderer disposed");
   }
+  // Explicit ordinary-task turns between paints admit queued socket replies.
+  // A frame-rate cap alone still leaves the automatic rAF chain ahead of input.
+  app.ticker.maxFPS = 0;
+  let animationTimer: ReturnType<typeof setTimeout> | null = null;
+  let animationFrame: number | null = null;
+  const cancelAnimation = () => {
+    if (animationTimer !== null) clearTimeout(animationTimer);
+    if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+    animationTimer = null;
+    animationFrame = null;
+  };
+  const scheduleAnimation = () => {
+    animationTimer = setTimeout(() => {
+      animationTimer = null;
+      if (disposed) return;
+      animationFrame = requestAnimationFrame((now) => {
+        animationFrame = null;
+        if (disposed) return;
+        app.ticker.update(now);
+        scheduleAnimation();
+      });
+    }, 16);
+  };
   officeDebug("renderer:pixi-ready");
   const canvas = app.canvas;
   element.replaceChildren(canvas);
@@ -384,7 +414,20 @@ export async function createOfficeRenderer(
   app.canvas.addEventListener("dblclick", onCanvasDoubleClick);
   diagnostics.activeListeners += 3;
 
-  const renderScene = (layout: OfficeLayout) => {
+  const reportSceneFailure = (error: unknown) => {
+    diagnostics.lastError =
+      error instanceof Error ? error.message.slice(0, 160) : "renderer failed";
+    diagnostics.ready = false;
+    onRendererError?.(error);
+  };
+  const acknowledgeCanvas = () => {
+    if (
+      currentLayout &&
+      layoutPublisher.ackCanvasRendered(currentLayout.layoutRevision)
+    )
+      onCanvasRendered(currentLayout.layoutRevision);
+  };
+  const renderScene = async (layout: OfficeLayout) => {
     if (disposed) {
       return;
     }
@@ -393,18 +436,16 @@ export async function createOfficeRenderer(
       layout.totalHeight,
       Math.max(1, scrollElement?.clientHeight ?? layout.totalHeight),
     );
-    const largestRoomHeight = Math.max(
-      OFFICE_GEOMETRY.minRoomHeight,
-      ...layout.rooms.map(({ height }) => height),
+    const visibleRooms = officeVisibleRooms(
+      layout.rooms,
+      scrollTop,
+      viewportHeight,
     );
-    const overscan =
-      (largestRoomHeight +
-        Math.max(OFFICE_GEOMETRY.roomGap, OFFICE_GEOMETRY.roomRowGap)) *
-      VIRTUAL_ROOM_ROW_OVERSCAN;
-    const visibleRooms = layout.rooms.filter(
-      (room) =>
-        room.y + room.height >= scrollTop - overscan &&
-        room.y <= scrollTop + viewportHeight + overscan,
+    const visibleReceptions = officeVisibleReceptions(
+      currentProjection.receptions,
+      layout.ceoBlocks.receptions,
+      scrollElement?.scrollLeft ?? 0,
+      scrollElement?.clientWidth ?? layout.officeWidth,
     );
     const sceneSignature = officeSceneSignature({
       layout,
@@ -414,16 +455,30 @@ export async function createOfficeRenderer(
       observability: currentObservability,
       seatCreationStates: currentSeatCreationStates,
       visibleRoomIndices: visibleRooms.map(({ index }) => index),
+      visibleReceptionIndices: visibleReceptions.map(({ index }) => index),
     });
     if (sceneSignature === lastSceneSignature) {
       diagnostics.sceneSkips += 1;
+      if (sceneComplete) acknowledgeCanvas();
       return;
     }
+    const request = ++sceneRequest;
+    sceneComplete = false;
+    diagnostics.ready = false;
+    const current = () =>
+      !disposed && !initializationSignal?.aborted && request === sceneRequest;
+    const paintSlice = async () => {
+      if (!current()) return false;
+      app.render();
+      await yieldWorldTask();
+      return current();
+    };
     lastSceneSignature = sceneSignature;
     diagnostics.sceneRenders += 1;
     animated.splice(0);
     destroyOfficeSceneChildren(app.stage);
     drawBackground(app.stage, layout);
+    if (!(await paintSlice())) return;
     drawCeoReception(
       app.stage,
       layout,
@@ -434,9 +489,11 @@ export async function createOfficeRenderer(
       animated,
       select,
       activateAgent,
+      visibleReceptions,
     );
+    if (!(await paintSlice())) return;
     drawHallways(app.stage, layout);
-    visibleRooms.forEach((rect) => {
+    for (const rect of visibleRooms) {
       const room = currentProjection.rooms[rect.index];
       if (room) {
         drawRoom(
@@ -459,11 +516,15 @@ export async function createOfficeRenderer(
           onNewSeat,
         );
       }
-    });
+      if (!(await paintSlice())) return;
+    }
     // Room floors/borders must not cover the road bands between rows and
     // columns. The road pass uses the resolved outer rectangles, so it is
     // safe to paint after rooms without entering their mathematical bounds.
-    drawRoomRoads(app.stage, layout);
+    drawRoomRoads(app.stage, layout, visibleRooms);
+    if (!(await paintSlice())) return;
+    sceneComplete = true;
+    acknowledgeCanvas();
     if (!diagnostics.ready) {
       officeDebug("renderer:scene-ready", {
         rooms: layout.rooms.length,
@@ -493,9 +554,10 @@ export async function createOfficeRenderer(
   };
 
   const syncScrollPosition = () => {
+    app.stage.position.x = -(scrollElement?.scrollLeft ?? 0);
     app.stage.position.y = -(scrollElement?.scrollTop ?? 0);
     if (currentLayout) {
-      renderScene(currentLayout);
+      void renderScene(currentLayout).catch(reportSceneFailure);
     }
   };
   if (scrollElement) {
@@ -505,7 +567,7 @@ export async function createOfficeRenderer(
     diagnostics.activeListeners += 1;
   }
 
-  const build = (requestedWidth = element.clientWidth) => {
+  const build = async (requestedWidth = element.clientWidth) => {
     if (disposed) {
       return;
     }
@@ -591,29 +653,27 @@ export async function createOfficeRenderer(
       layout.totalHeight,
       Math.max(1, scrollElement?.clientHeight ?? layout.totalHeight),
     );
+    const canvasWidth = Math.min(
+      layout.officeWidth,
+      Math.max(1, scrollElement?.clientWidth ?? layout.officeWidth),
+    );
     currentLayout = layout;
     diagnostics.publishedLayout = layout;
     onLayoutChange(layout);
     lastWidth = layout.officeWidth;
     if (
-      lastRendererSize.width !== layout.officeWidth ||
+      lastRendererSize.width !== canvasWidth ||
       lastRendererSize.height !== viewportHeight
     ) {
-      app.renderer.resize(layout.officeWidth, viewportHeight);
-      lastRendererSize = { width: layout.officeWidth, height: viewportHeight };
+      app.renderer.resize(canvasWidth, viewportHeight);
+      lastRendererSize = { width: canvasWidth, height: viewportHeight };
     }
     element.style.width = `${layout.officeWidth}px`;
     element.style.height = `${layout.totalHeight}px`;
+    app.stage.position.x = -(scrollElement?.scrollLeft ?? 0);
     app.stage.position.y = -(scrollElement?.scrollTop ?? 0);
-    renderScene(layout);
-    // Render the published scene before admitting its matching DOM controls.
-    // A ticker-frame acknowledgement can remain pending indefinitely while a
-    // browser throttles the canvas, leaving the initial room actions disabled
-    // until an unrelated topology update triggers another build.
-    app.render();
-    if (layoutPublisher.ackCanvasRendered(layout.layoutRevision)) {
-      onCanvasRendered(layout.layoutRevision);
-    }
+    await renderScene(layout);
+    if (disposed || currentLayout !== layout) return;
     diagnostics.layout = {
       officeWidth: layout.officeWidth,
       totalHeight: layout.totalHeight,
@@ -626,7 +686,7 @@ export async function createOfficeRenderer(
 
   const ticker = () => {
     diagnostics.frames += 1;
-    tick += 1;
+    tick += app.ticker.deltaTime;
     if (reducedMotion) {
       return;
     }
@@ -649,13 +709,18 @@ export async function createOfficeRenderer(
       return;
     }
     const ready = officeFontReady();
+    headingWidths.clear();
     currentFontReady = ready;
     lastSceneSignature = null;
-    build(lastWidth || element.clientWidth);
+    void build(lastWidth || element.clientWidth).catch(reportSceneFailure);
   };
   fontSet?.addEventListener("loadingdone", refreshFontMetrics);
   if (fontSet) {
-    void fontSet.ready.then(refreshFontMetrics);
+    void fontSet.ready.then(() => {
+      // The initial scene already measured a loaded font. Rebuilding it again
+      // in the same microtask turn delays socket replies without changing it.
+      if (officeFontReady() !== currentFontReady) refreshFontMetrics();
+    });
     diagnostics.activeListeners += 1;
   }
 
@@ -688,14 +753,16 @@ export async function createOfficeRenderer(
     }
     resizeTimer = window.setTimeout(() => {
       resizeTimer = null;
-      build(nextWidth);
+      void build(nextWidth).catch(reportSceneFailure);
     }, 80);
   });
   observer.observe(scrollElement ?? element);
   diagnostics.activeObservers += 1;
   try {
-    build();
+    await build();
+    scheduleAnimation();
   } catch (error) {
+    cancelAnimation();
     observer.disconnect();
     motionPreference.removeEventListener("change", onMotionChange);
     fontSet?.removeEventListener("loadingdone", refreshFontMetrics);
@@ -744,7 +811,7 @@ export async function createOfficeRenderer(
       currentCompletionSeenKeys = nextCompletionSeenKeys;
       currentObservability = nextObservability;
       currentSeatCreationStates = nextSeatCreationStates;
-      build(lastWidth || element.clientWidth);
+      return build(lastWidth || element.clientWidth);
     },
     getAnchors(selectedKey, conversationTargetKey) {
       return currentLayout
@@ -761,6 +828,7 @@ export async function createOfficeRenderer(
         return;
       }
       disposed = true;
+      cancelAnimation();
       const ownsCanvas = element.contains(canvas);
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
@@ -970,6 +1038,11 @@ function drawCeoReception(
   animated: AnimatedItem[],
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
+  visibleReceptions: readonly {
+    reception: HerdrOfficeProjection["receptions"][number];
+    index: number;
+    rect: OfficeReceptionRect;
+  }[],
 ) {
   const band = new Container();
   if (layout.fallbackMessage) {
@@ -1020,12 +1093,9 @@ function drawCeoReception(
   drawCeo(ceoContent, textures, ceoBlocks.localCeoX);
   drawOtelCostBoard(ceoContent, observability, ceoBlocks.localOtelBoardX);
   drawLiveStateBlackboard(ceoContent, projection, ceoBlocks.localBoardX);
-  const receptionRects = ceoBlocks.localReceptions;
-  projection.receptions.forEach((reception, index) => {
-    const rect = receptionRects[index];
-    if (!rect) {
-      return;
-    }
+  visibleReceptions.forEach(({ reception, index }) => {
+    const rect = ceoBlocks.localReceptions[index];
+    if (!rect) return;
     drawReceptionDesk(
       ceoContent,
       reception,
@@ -1510,10 +1580,14 @@ function drawHallways(stage: Container, layout: OfficeLayout) {
   stage.addChild(hall);
 }
 
-function drawRoomRoads(stage: Container, layout: OfficeLayout) {
+function drawRoomRoads(
+  stage: Container,
+  layout: OfficeLayout,
+  visibleRooms: readonly OfficeRoomRect[],
+) {
   const road = new Graphics();
   const rows = new Map<number, OfficeRoomRect[]>();
-  layout.rooms.forEach((room) => {
+  visibleRooms.forEach((room) => {
     const row = rows.get(room.row) ?? [];
     row.push(room);
     rows.set(room.row, row);
@@ -2797,7 +2871,6 @@ function label(
 ) {
   const text = new Text({
     text: value,
-    resolution: 4,
     style: new TextStyle({
       fontSize: options.size ?? 9,
       fill: options.color ?? 0xffffff,
@@ -2870,10 +2943,13 @@ function measureOfficeRoomHeader(
   };
 }
 
+const headingWidths = new Map<string, number>();
 function measureOfficeHeadingText(value: string) {
+  const key = value.toUpperCase();
+  const previous = headingWidths.get(key);
+  if (previous !== undefined) return previous;
   const text = new Text({
-    text: value.toUpperCase(),
-    resolution: 4,
+    text: key,
     style: new TextStyle({
       fontSize: OFFICE_HEADING_TEXT_SIZE,
       fill: 0xffffff,
@@ -2884,6 +2960,9 @@ function measureOfficeHeadingText(value: string) {
   });
   const width = text.width;
   text.destroy();
+  if (headingWidths.size >= 4096)
+    headingWidths.delete(headingWidths.keys().next().value!);
+  headingWidths.set(key, width);
   return width;
 }
 

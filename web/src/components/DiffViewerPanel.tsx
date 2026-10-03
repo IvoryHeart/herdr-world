@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import type { ConnectionClient } from "../api";
 import type { GitDiffEntry, GitDiffFile, GitDiffSummary } from "../types";
-import { useStoreSelector } from "../store";
+import { useOperationalStore, useStoreSelector } from "../store";
 import {
   connectionClientScopeKey,
   useConnectionClient,
@@ -41,7 +41,7 @@ import {
   useGitDiffSummaryState,
 } from "../gitDiffSummaryStore";
 import { diffAutoCollapseInfo } from "./diffAutoCollapse";
-import { store } from "../store";
+
 import { copyTextFromUserGesture } from "../terminalClipboard";
 import { bumpFileExplorerRefresh } from "../fileExplorerRefresh";
 import {
@@ -843,6 +843,7 @@ export const DiffViewerPanel = forwardRef<
   { workspaceId, resourceKey, onSelectionChange, onOpenFile },
   ref,
 ) {
+  const store = useOperationalStore();
   const workspaces = useStoreSelector((state) => state.workspaces);
   const connectionClient = useConnectionClient();
   const focusedWorkspace = workspaces.find((w) => w.focused);

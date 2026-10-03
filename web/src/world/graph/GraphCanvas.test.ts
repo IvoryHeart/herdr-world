@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { hitGraphNode } from "./GraphCanvas";
+import {
+  graphViewportBounds,
+  graphDrawingIntersects,
+  hitGraphNode,
+} from "./GraphCanvas";
 import type { GraphLayoutNode } from "./graphLayout";
 import type { WorldGraphNode } from "./graphProjection";
 
@@ -23,6 +27,40 @@ function layoutNode(
 }
 
 describe("Graph canvas hit testing", () => {
+  test("culling keeps crossing edges and boundary labels through zoom, pan and quarter turns", () => {
+    for (const rotation of [0, 1, 2, 3]) {
+      const bounds = graphViewportBounds(
+        800,
+        600,
+        { x: 0, y: 0, zoom: 2 },
+        { x: 0, y: 0 },
+        rotation,
+      );
+      expect(
+        graphDrawingIntersects(
+          bounds,
+          { x: -1000, y: 0 },
+          { x: 1000, y: 0 },
+          0,
+        ),
+      ).toBe(true);
+      expect(
+        graphDrawingIntersects(bounds, { x: bounds.maxX + 80, y: 0 }),
+      ).toBe(true);
+      expect(
+        graphDrawingIntersects(bounds, { x: bounds.maxX + 101, y: 0 }),
+      ).toBe(false);
+    }
+    const panned = graphViewportBounds(
+      800,
+      600,
+      { x: 2000, y: 0, zoom: 1 },
+      { x: 0, y: 0 },
+      0,
+    );
+    expect(graphDrawingIntersects(panned, { x: 0, y: 0 })).toBe(false);
+    expect(graphDrawingIntersects(panned, { x: -2000, y: 0 })).toBe(true);
+  });
   test("selects the visibly topmost leaf when a parent circle overlaps it", () => {
     const leaf = layoutNode("leaf", "terminal", 0, 0);
     const space = layoutNode("space", "space", 0, 44);

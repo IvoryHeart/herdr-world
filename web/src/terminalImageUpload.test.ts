@@ -31,9 +31,58 @@ afterEach(() => {
 });
 
 describe("terminal image upload responses", () => {
+  test("a sibling host's successful upload reply cannot provide a path to this terminal", async () => {
+    globalThis.fetch = (async () =>
+      Response.json(
+        { path: "/synthetic/beta-image.png" },
+        {
+          headers: {
+            "X-Herdr-Connection-Id": "conn-b",
+            "X-Herdr-Connection-Generation": "3",
+          },
+        },
+      )) as unknown as typeof fetch;
+    await expect(uploadTerminalImage(client, image)).rejects.toThrow();
+  });
+
+  test("runtime retirement during delayed JSON decoding rejects the uploaded path", async () => {
+    let current = true;
+    const body = Promise.withResolvers<unknown>();
+    const decoding = Promise.withResolvers<void>();
+    const response = Response.json(
+      {},
+      {
+        headers: {
+          "X-Herdr-Connection-Id": "conn-a",
+          "X-Herdr-Connection-Generation": "3",
+        },
+      },
+    );
+    response.json = () => {
+      decoding.resolve();
+      return body.promise;
+    };
+    globalThis.fetch = (async () => response) as unknown as typeof fetch;
+    const pending = uploadTerminalImage(
+      { ...client, isCurrent: () => current },
+      image,
+    );
+    await decoding.promise;
+    current = false;
+    body.resolve({ path: "/synthetic/retired.png" });
+    await expect(pending).rejects.toThrow("connection changed during upload");
+  });
   test("returns a validated path", async () => {
     globalThis.fetch = (async () =>
-      Response.json({ path: "/tmp/image.png" })) as unknown as typeof fetch;
+      Response.json(
+        { path: "/tmp/image.png" },
+        {
+          headers: {
+            "X-Herdr-Connection-Id": "conn-a",
+            "X-Herdr-Connection-Generation": "3",
+          },
+        },
+      )) as unknown as typeof fetch;
 
     await expect(uploadTerminalImage(client, image)).resolves.toBe(
       "/tmp/image.png",
@@ -76,7 +125,15 @@ describe("terminal image upload responses", () => {
 
   test("rejects successful responses without a path", async () => {
     globalThis.fetch = (async () =>
-      Response.json({})) as unknown as typeof fetch;
+      Response.json(
+        {},
+        {
+          headers: {
+            "X-Herdr-Connection-Id": "conn-a",
+            "X-Herdr-Connection-Generation": "3",
+          },
+        },
+      )) as unknown as typeof fetch;
 
     await expect(uploadTerminalImage(client, image)).rejects.toThrow(
       "image upload response did not include a path",

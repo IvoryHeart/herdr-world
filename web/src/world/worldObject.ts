@@ -119,6 +119,9 @@ function boundedLabel(value: unknown, fallback: string) {
 }
 
 function boundedCodePointPrefix(value: string, limit: number) {
+  // Most admitted labels already fit. Their UTF-16 length is an upper bound
+  // on code points, so retain the string instead of allocating per character.
+  if (value.length <= limit) return value;
   let result = "";
   let length = 0;
   for (const character of value) {
@@ -351,9 +354,9 @@ function emptyStatusCounts(): WorldAgentStatusCounts {
   return { working: 0, idle: 0, blocked: 0, done: 0, unknown: 0 };
 }
 
-function observedCoverage(
+function* observedCoverage(
   connection: WorldRuntimeConnection,
-): WorldObservedCoverage {
+): Generator<number, WorldObservedCoverage> {
   const snapshot = connection.snapshot;
   if (!snapshot) {
     return {
@@ -381,9 +384,11 @@ function observedCoverage(
   const statusCounts = emptyStatusCounts();
   let agents = 0;
   for (const pane of snapshot.panes) {
-    if (typeof pane.agent !== "string" || !pane.agent.trim()) continue;
-    agents += 1;
-    statusCounts[status(pane.agent_status)] += 1;
+    if (typeof pane.agent === "string" && pane.agent.trim()) {
+      agents += 1;
+      statusCounts[status(pane.agent_status)] += 1;
+    }
+    yield 1;
   }
   return {
     spaces: snapshot.workspaces.length,
@@ -443,7 +448,7 @@ function actionCapabilities(
   kind: WorldObjectKind,
   state: WorldHostState,
 ): WorldActionCapabilities {
-  const operational = state === "active";
+  const operational = state === "active" || state === "ready-inactive";
   const leaf = kind === "agent" || kind === "terminal";
   const space = kind === "space";
   return {
@@ -501,14 +506,210 @@ function matchingAgentMetadata(
   );
 }
 
+const preparedHosts = new WeakMap<
+  WorldRuntimeConnection,
+  readonly [WorldHostObject, WorldHostObject | undefined]
+>();
+const preparedWorlds = new WeakMap<
+  readonly WorldRuntimeConnection[],
+  Map<string | null, WorldObject>
+>();
+
+/** Yield a task so terminal and keyboard callbacks can run between hosts. */
+export function yieldWorldTask(): Promise<void> {
+  return scheduleWorldTask("background");
+}
+
+/** Bounded transport admission must progress alongside continuously painted scenes. */
+export function yieldWorldAdmissionTask(): Promise<void> {
+  return scheduleWorldTask("user-visible");
+}
+
+function scheduleWorldTask(
+  priority: "background" | "user-visible",
+): Promise<void> {
+  const scheduler = (
+    globalThis as typeof globalThis & {
+      scheduler?: {
+        postTask(
+          task: () => void,
+          options: { priority: "background" | "user-visible" },
+        ): Promise<void>;
+      };
+    }
+  ).scheduler;
+  // Model preparation stays in the background. Bounded transport admission
+  // needs ordinary turns so a continuously painted scene cannot starve it.
+  if (scheduler?.postTask) return scheduler.postTask(() => {}, { priority });
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+export async function prepareWorldObject(
+  connections: readonly WorldRuntimeConnection[],
+  isCurrent: () => boolean = () => true,
+  options: {
+    yieldTask?: (
+      checkpoint: "host" | "host-batch" | "node-batch" | "complete",
+      count: number,
+    ) => Promise<void>;
+    onWorkSlice?: (
+      checkpoint: "host" | "host-batch" | "node-batch",
+      count: number,
+      durationMs: number,
+      connectionId?: string,
+    ) => void;
+  } = {},
+): Promise<WorldObject | null> {
+  const yieldTask = options.yieldTask ?? yieldWorldTask;
+  // Admit already queued lifecycle and transport tasks before model allocation.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  for (const connection of connections) {
+    if (!isCurrent()) return null;
+    let inactive = preparedHosts.get(connection)?.[0];
+    if (!inactive) {
+      const construction = constructHost(connection, null);
+      let result: IteratorResult<number, WorldHostObject>;
+      do {
+        const sliceStart = performance.now();
+        let count = 0;
+        do {
+          result = construction.next();
+          if (result.done) break;
+          count += result.value;
+        } while (count < 256 && performance.now() - sliceStart < 8);
+        options.onWorkSlice?.(
+          "host-batch",
+          count,
+          performance.now() - sliceStart,
+          connection.connectionId,
+        );
+        if (!result.done) {
+          await yieldTask("host-batch", count);
+          if (!isCurrent()) return null;
+        }
+      } while (!result.done);
+      inactive = result.value;
+    }
+    // Aggregate focus is independent of runtime authority. Prepare only the
+    // aggregate variant; a legacy selected variant is built on demand instead
+    // of duplicating every admitted leaf for every peer.
+    preparedHosts.set(connection, [inactive, undefined]);
+    await yieldTask("host", 1);
+  }
+  if (!isCurrent()) return null;
+  const hosts = [...connections]
+    .sort(
+      (left, right) =>
+        Number(right.isDefault) - Number(left.isDefault) ||
+        left.label.localeCompare(right.label) ||
+        left.connectionId.localeCompare(right.connectionId),
+    )
+    .map((connection) => buildHost(connection, null));
+  const spaces: WorldSpaceObject[] = [];
+  const leaves: WorldLeafObject[] = [];
+  const nodes: WorldObjectNode[] = [];
+  const nodeById = new Map<string, WorldObjectNode>();
+  let coverage: WorldObservedCoverage = {
+    spaces: 0,
+    tabs: 0,
+    leaves: 0,
+    agents: 0,
+    shells: 0,
+    status: emptyStatusCounts(),
+  };
+  let batch = 0;
+  let sliceCount = 0;
+  const indexNode = (node: WorldObjectNode) => {
+    nodes.push(node);
+    nodeById.set(node.id, node);
+    batch += 1;
+    sliceCount += 1;
+    return sliceCount === 256;
+  };
+  let indexSliceStart = performance.now();
+  for (const host of hosts) {
+    coverage = addCoverage(coverage, host.coverage);
+    if (indexNode(host)) {
+      const durationMs = performance.now() - indexSliceStart;
+      options.onWorkSlice?.("node-batch", sliceCount, durationMs);
+      await yieldTask("node-batch", sliceCount);
+      if (!isCurrent()) return null;
+      indexSliceStart = performance.now();
+      sliceCount = 0;
+    }
+    for (const space of host.spaces) {
+      spaces.push(space);
+      if (indexNode(space)) {
+        const durationMs = performance.now() - indexSliceStart;
+        options.onWorkSlice?.("node-batch", sliceCount, durationMs);
+        await yieldTask("node-batch", sliceCount);
+        if (!isCurrent()) return null;
+        indexSliceStart = performance.now();
+        sliceCount = 0;
+      }
+      for (const leaf of space.children) {
+        leaves.push(leaf);
+        if (indexNode(leaf)) {
+          const durationMs = performance.now() - indexSliceStart;
+          options.onWorkSlice?.("node-batch", sliceCount, durationMs);
+          await yieldTask("node-batch", sliceCount);
+          if (!isCurrent()) return null;
+          indexSliceStart = performance.now();
+          sliceCount = 0;
+        }
+      }
+    }
+  }
+  const world: WorldObject = {
+    version: 1,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById,
+    coverage,
+  };
+  if (sliceCount > 0) {
+    options.onWorkSlice?.(
+      "node-batch",
+      sliceCount,
+      performance.now() - indexSliceStart,
+    );
+  }
+  await yieldTask("complete", batch);
+  if (!isCurrent()) return null;
+  preparedWorlds.set(connections, new Map([[null, world]]));
+  return world;
+}
+
 function buildHost(
   connection: WorldRuntimeConnection,
   selectedConnectionId: string | null,
 ): WorldHostObject {
+  const prepared =
+    preparedHosts.get(connection)?.[
+      connection.connectionId === selectedConnectionId ? 1 : 0
+    ];
+  if (prepared) return prepared;
+  const construction = constructHost(connection, selectedConnectionId);
+  let result = construction.next();
+  while (!result.done) result = construction.next();
+  return result.value;
+}
+
+// Both entry points consume this semantic constructor. Async preparation can
+// suspend grouping, leaf allocation and coverage work without publishing a
+// partial host; the legacy synchronous path retains exactly the same contract.
+function* constructHost(
+  connection: WorldRuntimeConnection,
+  selectedConnectionId: string | null,
+): Generator<number, WorldHostObject> {
   const connectionHostState = hostState(connection, selectedConnectionId);
   const selectedHost = connection.connectionId === selectedConnectionId;
   const hostCapabilities = actionCapabilities("host", connectionHostState);
-  const operational = connectionHostState === "active";
+  const operational =
+    connectionHostState === "active" ||
+    connectionHostState === "ready-inactive";
   const observedGeneration =
     connection.snapshotGeneration ?? connection.generation;
   const id = worldObjectId(
@@ -519,177 +720,178 @@ function buildHost(
   const tabsByWorkspace = new Map<string, Tab[]>();
   const panesByWorkspace = new Map<string, Pane[]>();
   const tabsById = new Map<string, Tab>();
-  const workspaceCoverage = new Map(
-    (connection.snapshot?.coverage?.byWorkspace ?? []).map((coverage) => [
-      coverage.workspaceId,
-      coverage,
-    ]),
-  );
+  const workspaceCoverage = new Map<
+    string,
+    NonNullable<
+      NonNullable<WorldRuntimeConnection["snapshot"]>["coverage"]
+    >["byWorkspace"][number]
+  >();
+  for (const coverage of connection.snapshot?.coverage?.byWorkspace ?? []) {
+    workspaceCoverage.set(coverage.workspaceId, coverage);
+    yield 1;
+  }
+  const hostLabel = boundedLabel(connection.label, "Host");
   for (const tab of connection.snapshot?.tabs ?? []) {
     const tabs = tabsByWorkspace.get(tab.workspace_id) ?? [];
     tabs.push(tab);
     tabsByWorkspace.set(tab.workspace_id, tabs);
     tabsById.set(tab.tab_id, tab);
+    yield 1;
   }
   for (const pane of connection.snapshot?.panes ?? []) {
     const panes = panesByWorkspace.get(pane.workspace_id) ?? [];
     panes.push(pane);
     panesByWorkspace.set(pane.workspace_id, panes);
+    yield 1;
   }
-  const spaces = (connection.snapshot?.workspaces ?? []).map(
-    (workspace): WorldSpaceObject => {
-      const spaceId = worldObjectId(
-        connection.connectionId,
-        "space",
-        workspace.workspace_id,
-      );
-      const children = (panesByWorkspace.get(workspace.workspace_id) ?? []).map(
-        (pane): WorldLeafObject => {
-          const isAgent =
-            typeof pane.agent === "string" && pane.agent.trim().length > 0;
-          const kind = isAgent ? "agent" : "terminal";
-          const capabilities = actionCapabilities(kind, connectionHostState);
-          const tab = tabsById.get(pane.tab_id);
-          const tabLabel = boundedOptionalText(tab?.label, 100);
-          const agentMetadata = isAgent
-            ? matchingAgentMetadata(connection.snapshot?.agents ?? [], pane)
-            : null;
-          const agentLabel = isAgent
-            ? boundedOptionalText(
-                pane.display_agent ??
-                  agentMetadata?.display_agent ??
-                  pane.agent,
-                100,
-              )
-            : undefined;
-          const modelLabel = isAgent
-            ? boundedOptionalText(
-                pane.model_name ??
-                  pane.model ??
-                  agentMetadata?.model_name ??
-                  agentMetadata?.model,
-                100,
-              )
-            : undefined;
-          const taskSummary = isAgent
-            ? (taskSummaryFromTokens(pane, agentMetadata) ??
-              boundedOptionalText(
-                pane.task_summary ?? agentMetadata?.task_summary,
-                160,
-              ))
-            : undefined;
-          const agentSessionIdentity = isAgent
-            ? admittedAgentSessionIdentity(agentMetadata)
-            : undefined;
-          const agentSessionFingerprint = isAgent
-            ? admittedAgentSessionFingerprint(pane, agentMetadata)
-            : undefined;
-          const lastActivityAt = isAgent
-            ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
-            : undefined;
-          return {
-            id: worldObjectId(
-              connection.connectionId,
-              "terminal",
-              pane.terminal_id,
-            ),
-            kind,
-            nativeId: pane.pane_id,
-            parentId: spaceId,
-            connectionId: connection.connectionId,
-            generation: observedGeneration,
-            label: boundedLabel(
-              agentLabel,
-              isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
-            ),
-            hostLabel: boundedLabel(connection.label, "Host"),
-            hostState: connectionHostState,
-            selectedHost,
-            stale: connection.stale,
-            actionable: operational,
-            capabilities,
-            pane,
-            workspaceId: pane.workspace_id,
-            tabId: pane.tab_id,
-            terminalId: pane.terminal_id,
-            status: status(pane.agent_status),
-            focused: pane.focused === true,
-            spaceLabel: boundedLabel(
-              workspace.label,
-              `Space ${workspace.number ?? ""}`,
-            ),
-            ...(tabLabel ? { tabLabel } : {}),
-            ...(Number.isSafeInteger(tab?.number)
-              ? { tabNumber: tab?.number }
-              : {}),
-            ...(agentLabel ? { agentLabel } : {}),
-            ...(modelLabel ? { modelLabel } : {}),
-            ...(taskSummary ? { taskSummary } : {}),
-            ...(agentSessionIdentity ? { agentSessionIdentity } : {}),
-            ...(agentSessionFingerprint ? { agentSessionFingerprint } : {}),
-            stateLabels: isAgent
-              ? admittedStateLabels(
-                  pane.state_labels ?? agentMetadata?.state_labels,
-                )
-              : {},
-            ...(typeof lastActivityAt === "number" &&
-            Number.isFinite(lastActivityAt) &&
-            lastActivityAt > 0
-              ? { lastActivityAt }
-              : {}),
-          };
-        },
-      );
-      const exactCoverage = workspaceCoverage.get(workspace.workspace_id);
-      const spaceStatus = emptyStatusCounts();
-      let spaceAgents = 0;
-      if (!exactCoverage) {
-        for (const child of children) {
-          if (child.kind !== "agent") continue;
-          spaceAgents += 1;
-          spaceStatus[child.status] += 1;
-        }
-      }
-      return {
-        id: spaceId,
-        kind: "space",
-        nativeId: workspace.workspace_id,
-        parentId: id,
+  const spaces: WorldSpaceObject[] = [];
+  for (const workspace of connection.snapshot?.workspaces ?? []) {
+    const spaceId = worldObjectId(
+      connection.connectionId,
+      "space",
+      workspace.workspace_id,
+    );
+    const spaceLabel = boundedLabel(
+      workspace.label,
+      `Space ${workspace.number ?? ""}`,
+    );
+    const children: WorldLeafObject[] = [];
+    const spaceStatus = emptyStatusCounts();
+    let spaceAgents = 0;
+    for (const pane of panesByWorkspace.get(workspace.workspace_id) ?? []) {
+      const isAgent =
+        typeof pane.agent === "string" && pane.agent.trim().length > 0;
+      const kind = isAgent ? "agent" : "terminal";
+      const capabilities = actionCapabilities(kind, connectionHostState);
+      const tab = tabsById.get(pane.tab_id);
+      const tabLabel = boundedOptionalText(tab?.label, 100);
+      const agentMetadata = isAgent
+        ? matchingAgentMetadata(connection.snapshot?.agents ?? [], pane)
+        : null;
+      const agentLabel = isAgent
+        ? boundedOptionalText(
+            pane.display_agent ?? agentMetadata?.display_agent ?? pane.agent,
+            100,
+          )
+        : undefined;
+      const modelLabel = isAgent
+        ? boundedOptionalText(
+            pane.model_name ??
+              pane.model ??
+              agentMetadata?.model_name ??
+              agentMetadata?.model,
+            100,
+          )
+        : undefined;
+      const taskSummary = isAgent
+        ? (taskSummaryFromTokens(pane, agentMetadata) ??
+          boundedOptionalText(
+            pane.task_summary ?? agentMetadata?.task_summary,
+            160,
+          ))
+        : undefined;
+      const agentSessionIdentity = isAgent
+        ? admittedAgentSessionIdentity(agentMetadata)
+        : undefined;
+      const agentSessionFingerprint = isAgent
+        ? admittedAgentSessionFingerprint(pane, agentMetadata)
+        : undefined;
+      const lastActivityAt = isAgent
+        ? (pane.last_activity_at ?? agentMetadata?.last_activity_at)
+        : undefined;
+      const child: WorldLeafObject = {
+        id: worldObjectId(
+          connection.connectionId,
+          "terminal",
+          pane.terminal_id,
+        ),
+        kind,
+        nativeId: pane.pane_id,
+        parentId: spaceId,
         connectionId: connection.connectionId,
         generation: observedGeneration,
-        label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
-        hostLabel: boundedLabel(connection.label, "Host"),
+        label: boundedLabel(
+          agentLabel,
+          isAgent ? "Agent" : `Terminal ${pane.pane_id.slice(0, 8)}`,
+        ),
+        hostLabel,
         hostState: connectionHostState,
         selectedHost,
         stale: connection.stale,
         actionable: operational,
-        capabilities: actionCapabilities("space", connectionHostState),
-        workspace,
-        tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
-        children,
-        coverage: exactCoverage
-          ? {
-              spaces: 1,
-              tabs: exactCoverage.tabs,
-              leaves: exactCoverage.panes,
-              agents: exactCoverage.agentPanes,
-              shells: Math.max(
-                0,
-                exactCoverage.panes - exactCoverage.agentPanes,
-              ),
-              status: { ...exactCoverage.status },
-            }
-          : {
-              spaces: 1,
-              tabs: (tabsByWorkspace.get(workspace.workspace_id) ?? []).length,
-              leaves: children.length,
-              agents: spaceAgents,
-              shells: children.length - spaceAgents,
-              status: spaceStatus,
-            },
+        capabilities,
+        pane,
+        workspaceId: pane.workspace_id,
+        tabId: pane.tab_id,
+        terminalId: pane.terminal_id,
+        status: status(pane.agent_status),
+        focused: pane.focused === true,
+        spaceLabel,
+        ...(tabLabel ? { tabLabel } : {}),
+        ...(Number.isSafeInteger(tab?.number)
+          ? { tabNumber: tab?.number }
+          : {}),
+        ...(agentLabel ? { agentLabel } : {}),
+        ...(modelLabel ? { modelLabel } : {}),
+        ...(taskSummary ? { taskSummary } : {}),
+        ...(agentSessionIdentity ? { agentSessionIdentity } : {}),
+        ...(agentSessionFingerprint ? { agentSessionFingerprint } : {}),
+        stateLabels: isAgent
+          ? admittedStateLabels(
+              pane.state_labels ?? agentMetadata?.state_labels,
+            )
+          : {},
+        ...(typeof lastActivityAt === "number" &&
+        Number.isFinite(lastActivityAt) &&
+        lastActivityAt > 0
+          ? { lastActivityAt }
+          : {}),
       };
-    },
-  );
+      children.push(child);
+      if (child.kind === "agent") {
+        spaceAgents += 1;
+        spaceStatus[child.status] += 1;
+      }
+      yield 1;
+    }
+    const exactCoverage = workspaceCoverage.get(workspace.workspace_id);
+    spaces.push({
+      id: spaceId,
+      kind: "space",
+      nativeId: workspace.workspace_id,
+      parentId: id,
+      connectionId: connection.connectionId,
+      generation: observedGeneration,
+      label: boundedLabel(workspace.label, `Space ${workspace.number ?? ""}`),
+      hostLabel,
+      hostState: connectionHostState,
+      selectedHost,
+      stale: connection.stale,
+      actionable: operational,
+      capabilities: actionCapabilities("space", connectionHostState),
+      workspace,
+      tabs: tabsByWorkspace.get(workspace.workspace_id) ?? [],
+      children,
+      coverage: exactCoverage
+        ? {
+            spaces: 1,
+            tabs: exactCoverage.tabs,
+            leaves: exactCoverage.panes,
+            agents: exactCoverage.agentPanes,
+            shells: Math.max(0, exactCoverage.panes - exactCoverage.agentPanes),
+            status: { ...exactCoverage.status },
+          }
+        : {
+            spaces: 1,
+            tabs: (tabsByWorkspace.get(workspace.workspace_id) ?? []).length,
+            leaves: children.length,
+            agents: spaceAgents,
+            shells: children.length - spaceAgents,
+            status: spaceStatus,
+          },
+    });
+    yield 1;
+  }
   return {
     id,
     kind: "host",
@@ -698,7 +900,7 @@ function buildHost(
     connectionId: connection.connectionId,
     generation: connection.generation,
     label: boundedLabel(connection.label, "Host"),
-    hostLabel: boundedLabel(connection.label, "Host"),
+    hostLabel,
     hostState: connectionHostState,
     selectedHost,
     stale: connection.stale,
@@ -706,7 +908,7 @@ function buildHost(
     capabilities: hostCapabilities,
     connection,
     spaces,
-    coverage: observedCoverage(connection),
+    coverage: yield* observedCoverage(connection),
   };
 }
 
@@ -714,6 +916,9 @@ export function buildWorldObject(
   connections: readonly WorldRuntimeConnection[],
   selectedConnectionId: string | null = null,
 ): WorldObject {
+  const prepared = preparedWorlds.get(connections);
+  const cached = prepared?.get(selectedConnectionId);
+  if (cached) return cached;
   const hosts = [...connections]
     .sort(
       (left, right) =>
@@ -742,6 +947,56 @@ export function buildWorldObject(
       status: emptyStatusCounts(),
     },
   );
+  const world: WorldObject = {
+    version: 1,
+    hosts,
+    spaces,
+    leaves,
+    nodes,
+    nodeById: new Map(nodes.map((node) => [node.id, node])),
+    coverage,
+  };
+  prepared?.set(selectedConnectionId, world);
+  return world;
+}
+
+/**
+ * Keeps aggregate observation intact while giving a focused client one coherent
+ * host presentation. The returned nodes are the original qualified objects, so
+ * identities and runtime generations cannot be rebound by the projection.
+ */
+export function worldObjectForHosts(
+  world: WorldObject,
+  connectionIds: readonly string[] | null,
+): WorldObject {
+  if (connectionIds === null) return world;
+  const ids = new Set(connectionIds);
+  const hosts = world.hosts.filter((host) => ids.has(host.connectionId));
+  const spaces = hosts.flatMap((host) => host.spaces);
+  const leaves = spaces.flatMap((space) => space.children);
+  const nodes: WorldObjectNode[] = hosts.flatMap((host) => [
+    host,
+    ...host.spaces.flatMap((space): WorldObjectNode[] => [
+      space,
+      ...space.children,
+    ]),
+  ]);
+  const coverage = {
+    spaces: 0,
+    tabs: 0,
+    leaves: 0,
+    agents: 0,
+    shells: 0,
+    status: emptyStatusCounts(),
+  };
+  for (const host of hosts) {
+    for (const key of ["spaces", "tabs", "leaves", "agents", "shells"] as const)
+      coverage[key] += host.coverage[key];
+    for (const key of Object.keys(
+      coverage.status,
+    ) as (keyof typeof coverage.status)[])
+      coverage.status[key] += host.coverage.status[key];
+  }
   return {
     version: 1,
     hosts,
@@ -753,11 +1008,6 @@ export function buildWorldObject(
   };
 }
 
-/**
- * Keeps aggregate observation intact while giving a focused client one coherent
- * host presentation. The returned nodes are the original qualified objects, so
- * identities and runtime generations cannot be rebound by the projection.
- */
 export function worldObjectForConnection(
   world: WorldObject,
   connectionId: string | null,
@@ -818,9 +1068,48 @@ export function worldObjectForWatches(
           JSON.stringify([leaf.connectionId, leaf.generation, leaf.terminalId]),
         ),
       );
-      return children.length ? [{ ...space, children }] : [];
+      if (!children.length) return [];
+      const tabs = space.tabs.filter((tab) =>
+        children.some((leaf) => leaf.tabId === tab.tab_id),
+      );
+      const status = emptyStatusCounts();
+      for (const leaf of children)
+        if (leaf.kind === "agent") status[leaf.status]++;
+      const agents = children.filter((leaf) => leaf.kind === "agent").length;
+      return [
+        {
+          ...space,
+          children,
+          tabs,
+          coverage: {
+            spaces: 1,
+            tabs: tabs.length,
+            leaves: children.length,
+            agents,
+            shells: children.length - agents,
+            status,
+          },
+        },
+      ];
     });
-    return spaces.length ? [{ ...host, spaces }] : [];
+    if (!spaces.length) return [];
+    const coverage = {
+      spaces: spaces.length,
+      tabs: 0,
+      leaves: 0,
+      agents: 0,
+      shells: 0,
+      status: emptyStatusCounts(),
+    };
+    for (const space of spaces) {
+      for (const key of ["tabs", "leaves", "agents", "shells"] as const)
+        coverage[key] += space.coverage[key];
+      for (const key of Object.keys(
+        coverage.status,
+      ) as (keyof typeof coverage.status)[])
+        coverage.status[key] += space.coverage.status[key];
+    }
+    return [{ ...host, spaces, coverage }];
   });
   const spaces = hosts.flatMap((host) => host.spaces);
   const leaves = spaces.flatMap((space) => space.children);
@@ -831,14 +1120,17 @@ export function worldObjectForWatches(
       ...space.children,
     ]),
   ]);
-  return {
-    ...world,
-    hosts,
-    spaces,
-    leaves,
-    nodes,
-    nodeById: new Map(nodes.map((node) => [node.id, node])),
-  };
+  return worldObjectForHosts(
+    {
+      ...world,
+      hosts,
+      spaces,
+      leaves,
+      nodes,
+      nodeById: new Map(nodes.map((node) => [node.id, node])),
+    },
+    hosts.map((host) => host.connectionId),
+  );
 }
 
 export function worldObjectWithWatches(

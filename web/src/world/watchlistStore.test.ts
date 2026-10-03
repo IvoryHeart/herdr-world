@@ -16,6 +16,45 @@ function response(revision: number, terminalId = "terminal-a") {
 }
 
 describe("WorldWatchlistStore", () => {
+  test("colliding watched terminals remain separately qualified and one mutation carries only its captured owner", async () => {
+    const records = ["alpha", "beta"].map((connection_id) => ({
+      connection_id,
+      connection_generation: 7,
+      terminal_id: "shared",
+      label: `Synthetic ${connection_id}`,
+    }));
+    const calls: Array<{ method: string; params?: Record<string, unknown> }> =
+      [];
+    const store = new WorldWatchlistStore({
+      call: async (method, params) => {
+        calls.push({ method, params });
+        return { revision: 1, records };
+      },
+      onControl: () => () => undefined,
+      onStatus: () => () => undefined,
+    });
+    await store.refresh();
+    expect(store.get().records.map((record) => record.connectionId)).toEqual([
+      "alpha",
+      "beta",
+    ]);
+    expect(
+      await store.mutate("world.watchlist.pin", {
+        connectionId: "beta",
+        generation: 7,
+        terminalId: "shared",
+        label: "Synthetic beta",
+      }),
+    ).toBe(true);
+    expect(
+      calls.find((call) => call.method === "world.watchlist.pin")?.params,
+    ).toMatchObject({
+      connection_id: "beta",
+      connection_generation: 7,
+      terminal_id: "shared",
+    });
+    expect(store.get().records).toHaveLength(2);
+  });
   test("ignores an older reply until reconnect permits a restarted service revision", async () => {
     const resolvers: Array<(value: unknown) => void> = [];
     let status: (value: "connecting" | "connected" | "disconnected") => void =

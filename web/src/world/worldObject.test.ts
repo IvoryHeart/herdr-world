@@ -2,10 +2,109 @@ import { describe, expect, test } from "bun:test";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import {
   buildWorldObject,
+  prepareWorldObject,
   taskSummarySessionFingerprint,
   worldObjectForConnection,
+  worldObjectForHosts,
+  worldObjectForWatches,
   worldObjectId,
 } from "./worldObject";
+
+test("aggregate indexing yields and retires before indexing every dense leaf", async () => {
+  const owner = connection("alpha");
+  const pane = owner.snapshot!.panes[0]!;
+  owner.snapshot!.panes = Array.from({ length: 4096 }, (_, index) => ({
+    ...pane,
+    pane_id: `pane-${index}`,
+    terminal_id: `terminal-${index}`,
+  }));
+  const slices: { checkpoint: string; count: number }[] = [];
+  let current = true;
+  expect(
+    await prepareWorldObject([owner], () => current, {
+      yieldTask: async (checkpoint, count) => {
+        if (checkpoint !== "host-batch") slices.push({ checkpoint, count });
+        if (checkpoint === "node-batch") current = false;
+      },
+    }),
+  ).toBeNull();
+  expect(slices).toEqual([
+    { checkpoint: "host", count: 1 },
+    { checkpoint: "node-batch", count: 256 },
+  ]);
+});
+
+test("dense host construction yields and cancels before allocating every leaf", async () => {
+  const owner = connection("construction");
+  const pane = owner.snapshot!.panes[0]!;
+  let constructed = 0;
+  owner.snapshot!.panes = Array.from({ length: 4096 }, (_, index) => ({
+    ...pane,
+    pane_id: `construction-${index}`,
+    terminal_id: `construction-terminal-${index}`,
+    get agent() {
+      constructed += 1;
+      return "synthetic";
+    },
+  }));
+  let current = true;
+  const batches: number[] = [];
+  const prepared = await prepareWorldObject([owner], () => current, {
+    yieldTask: async (checkpoint, count) => {
+      if (checkpoint === "host-batch") {
+        batches.push(count);
+        if (constructed > 0) current = false;
+      }
+    },
+  });
+  expect(prepared).toBeNull();
+  expect(constructed).toBeGreaterThan(0);
+  expect(constructed).toBeLessThan(4096);
+  expect(batches.length).toBeGreaterThan(0);
+  expect(Math.max(...batches)).toBeLessThanOrEqual(256);
+  // Cancellation must not publish an incomplete host in the semantic cache.
+  expect(buildWorldObject([owner]).leaves).toHaveLength(4096);
+});
+
+test("chunked aggregate indexing preserves complete ordered topology and stale hosts", async () => {
+  const alpha = connection("alpha");
+  const beta = connection("beta", { stale: true, actionable: false });
+  const pane = alpha.snapshot!.panes[0]!;
+  alpha.snapshot!.panes = Array.from({ length: 1024 }, (_, index) => ({
+    ...pane,
+    pane_id: `dense-pane-${index}`,
+    terminal_id: `dense-terminal-${index}`,
+  }));
+  const expected = buildWorldObject([beta, alpha]);
+  const prepared = await prepareWorldObject([beta, alpha], undefined, {
+    yieldTask: async () => {},
+  });
+
+  expect(prepared).not.toBeNull();
+  expect(prepared!.hosts.map(({ id }) => id)).toEqual(
+    expected.hosts.map(({ id }) => id),
+  );
+  expect(prepared!.spaces.map(({ id }) => id)).toEqual(
+    expected.spaces.map(({ id }) => id),
+  );
+  expect(prepared!.leaves.map(({ id }) => id)).toEqual(
+    expected.leaves.map(({ id }) => id),
+  );
+  expect(prepared!.nodes.map(({ id }) => id)).toEqual(
+    expected.nodes.map(({ id }) => id),
+  );
+  expect(prepared!.coverage).toEqual(expected.coverage);
+  expect(prepared).toEqual(expected);
+  expect(
+    prepared!.hosts.find(({ connectionId }) => connectionId === "beta")?.stale,
+  ).toBe(true);
+  expect(prepared!.nodeById.size).toBe(expected.nodeById.size);
+  for (const node of expected.nodes) {
+    expect(prepared!.nodeById.get(node.id)).toBe(
+      prepared!.nodes.find((item) => item.id === node.id),
+    );
+  }
+});
 
 function connection(
   connectionId: string,
@@ -72,6 +171,81 @@ function connection(
 }
 
 describe("WorldObject", () => {
+  test("Pinned only intersects Hosts and recomputes matching coverage instead of reporting unrelated observations", () => {
+    const aggregate = buildWorldObject(
+      [connection("alpha"), connection("beta")],
+      "alpha",
+    );
+    const filtered = worldObjectForHosts(aggregate, ["beta"]);
+    const pinned = worldObjectForWatches(filtered, [
+      { connectionId: "alpha", generation: 4, terminalId: "shared-terminal" },
+      { connectionId: "beta", generation: 4, terminalId: "shell-terminal" },
+    ]);
+    expect(pinned.leaves.map((leaf) => leaf.connectionId)).toEqual(["beta"]);
+    expect(pinned.coverage).toMatchObject({
+      spaces: 1,
+      leaves: 1,
+      agents: 0,
+      shells: 1,
+    });
+    expect(pinned.hosts[0]!.coverage.leaves).toBe(1);
+    expect(pinned.spaces[0]!.coverage.leaves).toBe(1);
+    expect(filtered.coverage.agents).toBe(1);
+    expect(aggregate.coverage.agents).toBe(2);
+  });
+  test("current ready hosts admit independent actions without an operational host selection", () => {
+    for (const focused of [null, "alpha", "beta"]) {
+      const world = buildWorldObject(
+        [connection("alpha"), connection("beta")],
+        focused,
+      );
+      expect(world.spaces.map(({ actionable }) => actionable)).toEqual([
+        true,
+        true,
+      ]);
+      expect(
+        world.leaves.every(
+          ({ capabilities }) =>
+            capabilities.openTerminal &&
+            capabilities.files &&
+            capabilities.changes,
+        ),
+      ).toBe(true);
+      expect(new Set(world.leaves.map(({ id }) => id)).size).toBe(4);
+    }
+  });
+
+  test("aggregate admission rejects only stale or replaced owners while retaining their qualified roots", () => {
+    const world = buildWorldObject(
+      [
+        connection("alpha"),
+        connection("beta", { stale: true, actionable: false }),
+        connection("gamma", { generation: 5, snapshotGeneration: 4 }),
+        connection("offline", {
+          state: "disconnected",
+          snapshot: null,
+          snapshotGeneration: null,
+          actionable: false,
+        }),
+      ],
+      null,
+    );
+    expect(world.hosts).toHaveLength(4);
+    expect(
+      world.leaves
+        .filter(({ actionable }) => actionable)
+        .map(({ connectionId }) => connectionId),
+    ).toEqual(["alpha", "alpha"]);
+    expect(
+      world.hosts.find(({ connectionId }) => connectionId === "offline")
+        ?.spaces,
+    ).toEqual([]);
+    expect(
+      world.leaves
+        .filter(({ connectionId }) => connectionId !== "alpha")
+        .every(({ actionable }) => !actionable),
+    ).toBe(true);
+  });
   test("projects deterministic host-space-agent-or-terminal hierarchy", () => {
     const world = buildWorldObject(
       [connection("local"), connection("remote")],
@@ -96,11 +270,11 @@ describe("WorldObject", () => {
       nativeId: "shared-pane",
       hostState: "ready-inactive",
       selectedHost: false,
-      actionable: false,
+      actionable: true,
       capabilities: {
         activateHost: true,
-        openTerminal: false,
-        openSpaces: false,
+        openTerminal: true,
+        openSpaces: true,
       },
     });
     expect(world.hosts[0]).toMatchObject({

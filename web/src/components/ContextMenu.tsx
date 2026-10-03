@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Workspace } from "../types";
-import { store, useStoreSelector } from "../store";
+import { useOperationalStore, useStoreSelector } from "../store";
 import {
   clearTerminalComposerDrafts,
   terminalComposerCloseWarning,
@@ -74,6 +74,7 @@ export function ContextMenu({
   onReviewChanges?: (workspace: Workspace) => void;
   onClose: () => void;
 }) {
+  const store = useOperationalStore();
   const workspaces = useStoreSelector((state) => state.workspaces);
   const activeConnectionId = useStoreSelector(
     (state) => state.activeConnectionId,
@@ -82,6 +83,8 @@ export function ContextMenu({
     (state) => state.connectionGeneration,
   );
   const panes = useStoreSelector((state) => state.panes);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   const ref = useRef<HTMLDivElement>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [openWorktreeWorkspaceId, setOpenWorktreeWorkspaceId] = useState<
@@ -96,6 +99,15 @@ export function ContextMenu({
   const [lifecycleWorkspaceId, setLifecycleWorkspaceId] = useState<
     string | null
   >(null);
+
+  useEffect(() => {
+    setDialog(null);
+    setOpenWorktreeWorkspaceId(null);
+    setWorktreeHooksWorkspaceId(null);
+    setAutoSyncWorkspaceId(null);
+    setLifecycleWorkspaceId(null);
+    closeRef.current();
+  }, [activeConnectionId, connectionGeneration]);
 
   useEffect(() => {
     if (!state) return;

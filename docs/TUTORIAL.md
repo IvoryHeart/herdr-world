@@ -256,13 +256,12 @@ as reliable alerts.
 Browsers share Herdr events, not all fonts, drafts, pins, or shortcuts.
 Connection controls can pause your browser or others.
 
-**Profiles are shared; each browser selects its displayed connection.** Office,
-Tree, Graph, their counts, and search all follow that selection. Switching profiles
-replaces the visible host everywhere and retires the outgoing host's Inspector and
-terminal contexts. Other configured hosts remain observed in the background, but are
-not mixed into the selected host's rooms or hierarchy. Editing
-a profile affects others' connection lists. There is no per-person read-only
-role: do not share a workspace URL like a document link.
+**Profiles are shared; each browser saves its own Hosts filter.** Office, Tree,
+Graph, their counts, and search initially show all hosts and follow that filter.
+Changing the filter preserves open Inspectors and the owners of pending operations.
+Manage connections controls lifecycle separately; global creation confirms one
+destination. Editing a profile affects others' connection lists. There is no
+per-person read-only role: do not share a workspace URL like a document link.
 
 ## 4. Remote access: choose the right connection
 

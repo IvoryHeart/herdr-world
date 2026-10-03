@@ -70,6 +70,23 @@ an explicit use of the existing managed-connection workflow.
   requests and terminals from the outgoing lease, and admits new operations only after the target
   host and runtime generation are current
 
+#### Scenario: Filter changes during a request
+- **WHEN** a host filter changes while a resource request or terminal operation is pending
+- **THEN** its target and validity remain bound to its original runtime and resource
+
+#### Scenario: World connection is lost
+- **WHEN** the browser loses the World transport or authenticated session
+- **THEN** all operational contexts become non-actionable until newly admitted, and old responses
+  and buffered input cannot enter replacement contexts
+
+#### Scenario: Mutation acknowledgement is lost
+- **WHEN** a mutation may have reached Herdr but its acknowledgement is lost during disconnect
+- **THEN** World reports an uncertain outcome without automatically replaying the mutation
+
+#### Scenario: Scoped HTTP reply arrives late
+- **WHEN** a file or upload response arrives after its owning runtime generation retires
+- **THEN** it cannot populate or act on a current context on that or another host
+
 ## ADDED Requirements
 
 ### Requirement: Managed connection catalogue

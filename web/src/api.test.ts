@@ -5,6 +5,7 @@ import {
   logoutBrowserSession,
   parseConnectionSummary,
 } from "./api";
+import { connectionHttpPath, connectionHttpResource } from "./connectionHttp";
 
 const originalWebSocket = globalThis.WebSocket;
 const originalFetch = globalThis.fetch;
@@ -13,6 +14,824 @@ const originalLocation = Object.getOwnPropertyDescriptor(
   "location",
 );
 const testBridges: Bridge[] = [];
+
+describe("simultaneous qualified runtime admission", () => {
+  function setup(
+    decode?: (parts: string[], signal: AbortSignal) => Promise<unknown>,
+    admission = false,
+  ) {
+    class Socket extends HangingWebSocket {
+      static instance: Socket;
+      sent: Array<Record<string, any>> = [];
+      constructor() {
+        super();
+        Socket.instance = this;
+        this.readyState = HangingWebSocket.OPEN;
+      }
+      send(raw = "") {
+        this.sent.push(JSON.parse(raw));
+      }
+      receive(message: object) {
+        this.onmessage?.({ data: JSON.stringify(message) } as MessageEvent);
+      }
+    }
+    installBrowserGlobals(Socket as unknown as typeof WebSocket);
+    const bridge = decode
+      ? new Bridge(1000, 1000, decode)
+      : createTestBridge(1000);
+    if (decode) testBridges.push(bridge);
+    bridge.connect();
+    const socket = Socket.instance;
+    socket.receive({
+      hello: true,
+      bridge_protocol_version: 2,
+      default_connection_id: "alpha",
+      capabilities: {
+        connection_id: true,
+        connection_scoped_http: true,
+        connection_runtime_generation: true,
+        world_snapshot_chunks: true,
+        world_snapshot_chunk_admission: admission,
+      },
+    });
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 7 },
+      { id: "beta", generation: 3 },
+    ]);
+    return { bridge, socket, currentSocket: () => Socket.instance };
+  }
+
+  test.each([false, true])(
+    "snapshot credit progresses beside input with starved background tasks and retirement=%j",
+    async (retire) => {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "scheduler",
+      );
+      const admissionTurn = Promise.withResolvers<void>();
+      Object.defineProperty(globalThis, "scheduler", {
+        configurable: true,
+        value: {
+          postTask: (_task: () => void, { priority }: { priority: string }) =>
+            priority === "background"
+              ? new Promise<void>(() => {})
+              : admissionTurn.promise,
+        },
+      });
+      try {
+        const { bridge, socket } = setup(undefined, true);
+        const snapshot = bridge.call("world.snapshot", {});
+        void snapshot.catch(() => {});
+        expect(socket.sent[0]!.accept_world_snapshot_chunk_admission).toBe(
+          true,
+        );
+        const id = socket.sent[0]!.id;
+        for (let index = 0; index < 4; index++)
+          socket.receive({
+            id,
+            world_snapshot_chunk: { index, total: 5, data: " " },
+          });
+        expect(
+          socket.sent.filter((frame) => frame.world_snapshot_admitted),
+        ).toHaveLength(0);
+        const input = bridge
+          .connection("beta", 3)
+          .call("terminal.input", { terminal_id: "same", data: "eA==" });
+        socket.receive({
+          id: socket.sent[1]!.id,
+          connection_id: "beta",
+          connection_generation: 3,
+          result: { ok: true },
+        });
+        expect(await input).toEqual({ ok: true });
+        if (retire) bridge.disconnect();
+        admissionTurn.resolve();
+        await Promise.resolve();
+        expect(
+          socket.sent.filter((frame) => frame.world_snapshot_admitted),
+        ).toEqual(
+          retire ? [] : [{ world_snapshot_admitted: { id, index: 3 } }],
+        );
+        if (!retire)
+          socket.receive({
+            id,
+            world_snapshot_chunk: {
+              index: 4,
+              total: 5,
+              data: '{"connections":[]}',
+            },
+          });
+        if (retire) await expect(snapshot).rejects.toThrow();
+        else expect(await snapshot).toEqual({ connections: [] });
+      } finally {
+        admissionTurn.resolve();
+        if (descriptor)
+          Object.defineProperty(globalThis, "scheduler", descriptor);
+        else delete (globalThis as any).scheduler;
+      }
+    },
+  );
+
+  test("deferred snapshot decoding admits sibling ACKs and retires before old publication", async () => {
+    const held = Promise.withResolvers<unknown>();
+    let signal: AbortSignal | undefined;
+    const { bridge, socket } = setup((_parts, captured) => {
+      signal = captured;
+      return held.promise;
+    });
+    let published = false;
+    const snapshot = bridge.call("world.snapshot", {}).then((value) => {
+      published = true;
+      return value;
+    });
+    void snapshot.catch(() => {});
+    socket.receive({
+      id: socket.sent[0]!.id,
+      world_snapshot_chunk: { index: 0, total: 1, data: '{"connections":[]}' },
+    });
+    const input = bridge
+      .connection("beta", 3)
+      .call("terminal.input", { terminal_id: "same", data: "eA==" });
+    socket.receive({
+      id: socket.sent[1]!.id,
+      connection_id: "beta",
+      connection_generation: 3,
+      result: { ok: true },
+    });
+    expect(await input).toEqual({ ok: true });
+    expect(published).toBe(false);
+    expect(signal?.aborted).toBe(false);
+    bridge.disconnect();
+    expect(signal?.aborted).toBe(true);
+    held.resolve({ connections: [] });
+    await expect(snapshot).rejects.toThrow();
+    await Promise.resolve();
+    expect(published).toBe(false);
+  });
+
+  test("decode failure rejects only its owning snapshot and leaves a sibling global request usable", async () => {
+    const held = Promise.withResolvers<unknown>();
+    const { bridge, socket } = setup(() => held.promise);
+    const snapshot = bridge.call("world.snapshot", {});
+    void snapshot.catch(() => {});
+    const ping = bridge.call("bridge.ping");
+    void ping.catch(() => {});
+    socket.receive({
+      id: socket.sent[0]!.id,
+      world_snapshot_chunk: { index: 0, total: 1, data: "{}" },
+    });
+    held.reject(Error("malformed decode"));
+    await expect(snapshot).rejects.toThrow("malformed decode");
+    socket.receive({ id: socket.sent[1]!.id, result: { ok: true } });
+    expect(await ping).toEqual({ ok: true });
+  });
+
+  test("snapshot timeout cancels decode without retiring a healthy sibling", async () => {
+    const held = Promise.withResolvers<unknown>();
+    let signal: AbortSignal | undefined;
+    const { bridge, socket } = setup((_parts, captured) => {
+      signal = captured;
+      return held.promise;
+    });
+    const snapshot = bridge.call("world.snapshot", {}, 5);
+    void snapshot.catch(() => {});
+    socket.receive({
+      id: socket.sent[0]!.id,
+      world_snapshot_chunk: { index: 0, total: 1, data: "{}" },
+    });
+    await expect(snapshot).rejects.toThrow("timeout");
+    expect(signal?.aborted).toBe(true);
+    held.resolve({ connections: [] });
+    const input = bridge
+      .connection("beta", 3)
+      .call("terminal.input", { terminal_id: "same", data: "eA==" });
+    socket.receive({
+      id: socket.sent[1]!.id,
+      connection_id: "beta",
+      connection_generation: 3,
+      result: { ok: true },
+    });
+    expect(await input).toEqual({ ok: true });
+  });
+
+  test.each([
+    { world_snapshot_chunk: { index: 0, total: 1, data: "{}" } },
+    { result: { connections: [] } },
+    { error: { message: "late failure" } },
+    { world_snapshot_chunk: null },
+  ])(
+    "a conflicting reply during decode retires the original job: %j",
+    async (conflict) => {
+      const held = Promise.withResolvers<unknown>();
+      let signal: AbortSignal | undefined;
+      let jobs = 0;
+      const { bridge, socket } = setup((_parts, captured) => {
+        signal = captured;
+        jobs++;
+        return held.promise;
+      });
+      let published = false;
+      const snapshot = bridge.call("world.snapshot", {}).then((value) => {
+        published = true;
+        return value;
+      });
+      void snapshot.catch(() => {});
+      const id = socket.sent[0]!.id;
+      socket.receive({
+        id,
+        world_snapshot_chunk: { index: 0, total: 1, data: "{}" },
+      });
+      socket.receive({ id, ...conflict });
+      await expect(snapshot).rejects.toThrow();
+      expect(jobs).toBe(1);
+      expect(signal?.aborted).toBe(true);
+      held.resolve({ connections: [] });
+      await Promise.resolve();
+      expect(published).toBe(false);
+      const ping = bridge.call("bridge.ping");
+      socket.receive({ id: socket.sent[1]!.id, result: { ok: true } });
+      expect(await ping).toEqual({ ok: true });
+    },
+  );
+
+  test("bounded aggregate chunks allow sibling acknowledgements before admission", async () => {
+    const { bridge, socket } = setup();
+    let admitted = false;
+    const snapshot = bridge.call("world.snapshot", {}).then((value) => {
+      admitted = true;
+      return value;
+    });
+    void snapshot.catch(() => {});
+    const id = socket.sent[0]!.id;
+    const wire = JSON.stringify({ revision: 1, connections: [] });
+    const middle = Math.floor(wire.length / 2);
+    socket.receive({
+      id,
+      world_snapshot_chunk: { index: 0, total: 2, data: wire.slice(0, middle) },
+    });
+    const input = bridge
+      .connection("beta", 3)
+      .call("terminal.input", { terminal_id: "same", data: "eA==" });
+    socket.receive({
+      id: socket.sent[1]!.id,
+      connection_id: "beta",
+      connection_generation: 3,
+      result: { ok: true },
+    });
+    expect(await input).toEqual({ ok: true });
+    expect(admitted).toBe(false);
+    socket.receive({
+      id,
+      world_snapshot_chunk: { index: 1, total: 2, data: wire.slice(middle) },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(admitted).toBe(true);
+    expect(await snapshot).toEqual({ revision: 1, connections: [] });
+  });
+
+  test.each([
+    { index: 1, total: 2, data: "{}" },
+    { index: 0, total: 4097, data: "{}" },
+    { index: 0, total: 1, data: "x".repeat(65537) },
+    { index: 0, total: 1, data: "invalid-json" },
+  ])("malformed aggregate chunks fail closed", async (chunk) => {
+    const { bridge, socket } = setup();
+    const snapshot = bridge.call("world.snapshot", {});
+    socket.receive({ id: socket.sent[0]!.id, world_snapshot_chunk: chunk });
+    await expect(snapshot).rejects.toThrow();
+    expect(bridge.connection("beta", 3).isCurrent()).toBe(true);
+  });
+
+  test("disconnect retires partially assembled aggregate and suppresses its final chunk", async () => {
+    const { bridge, socket } = setup();
+    let published = false;
+    const snapshot = bridge.call("world.snapshot", {}).then((value) => {
+      published = true;
+      return value;
+    });
+    const id = socket.sent[0]!.id;
+    socket.receive({
+      id,
+      world_snapshot_chunk: { index: 0, total: 2, data: '{"revision":' },
+    });
+    bridge.disconnect();
+    await expect(snapshot).rejects.toThrow("paused");
+    socket.receive({
+      id,
+      world_snapshot_chunk: { index: 1, total: 2, data: "1}" },
+    });
+    expect(published).toBe(false);
+  });
+
+  test("authentication loss retires all explicit clients without downstream dispatch", async () => {
+    const { bridge, socket, currentSocket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const beta = bridge.connection("beta", 3);
+    const pending = Promise.allSettled([
+      alpha.call("pane.read", { pane_id: "same" }),
+      beta.call("pane.read", { pane_id: "same" }),
+    ]);
+    Object.assign(location, { replace() {} });
+    globalThis.fetch = (() =>
+      Promise.resolve(
+        new Response(null, { status: 204 }),
+      )) as unknown as typeof fetch;
+    socket.onclose?.({ code: 4001 });
+    expect((await pending).map((result) => result.status)).toEqual([
+      "rejected",
+      "rejected",
+    ]);
+    expect(alpha.isCurrent()).toBe(false);
+    expect(beta.isCurrent()).toBe(false);
+    expect(currentSocket()).toBe(socket);
+    await expect(beta.call("pane.read", { pane_id: "same" })).rejects.toThrow();
+    expect(socket.sent).toHaveLength(2);
+  });
+
+  test("two explicit clients dispatch colliding pane IDs and admit reversed replies over one transport", async () => {
+    const { bridge, socket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const beta = bridge.connection("beta", 3);
+    const results = Promise.allSettled([
+      alpha.call("pane.read", { pane_id: "same" }),
+      beta.call("pane.read", { pane_id: "same" }),
+    ]);
+    expect(socket.sent).toHaveLength(2);
+    expect(
+      socket.sent.map(({ connection_id, connection_generation, params }) => ({
+        connection_id,
+        connection_generation,
+        params,
+      })),
+    ).toEqual([
+      {
+        connection_id: "alpha",
+        connection_generation: 7,
+        params: { pane_id: "same" },
+      },
+      {
+        connection_id: "beta",
+        connection_generation: 3,
+        params: { pane_id: "same" },
+      },
+    ]);
+    bridge.setActiveConnection("beta");
+    for (const request of [...socket.sent].reverse()) {
+      socket.receive({
+        ...request,
+        method: undefined,
+        params: undefined,
+        result: { owner: request.connection_id },
+      });
+    }
+    expect(await results).toEqual([
+      { status: "fulfilled", value: { owner: "alpha" } },
+      { status: "fulfilled", value: { owner: "beta" } },
+    ]);
+  });
+
+  test("runtime-owned listeners reject sibling and retired streams and release their subscriptions", () => {
+    const { bridge, socket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const received: string[] = [];
+    const releases = [
+      bridge.onEvent(() => received.push("event"), alpha),
+      bridge.onTerminal(() => received.push("terminal"), alpha),
+      bridge.onTerminalClipboard(() => received.push("clipboard"), alpha),
+      bridge.onPopup(() => received.push("popup"), alpha),
+      bridge.onTerminalClosed(() => received.push("closed"), alpha),
+    ];
+    const push = (connection_id: string, connection_generation: number) => {
+      for (const payload of [
+        { event: "pane.updated", data: { pane_id: "same" } },
+        {
+          terminal: {
+            terminal_id: "same",
+            width: 80,
+            height: 24,
+            full: true,
+            bytes: "",
+          },
+        },
+        { terminal_clipboard: { terminal_id: "same", data: "YQ==" } },
+        { popup: null },
+        { terminal_closed: { terminal_id: "same" } },
+      ])
+        socket.receive({ connection_id, connection_generation, ...payload });
+    };
+    push("beta", 3);
+    expect(received).toEqual([]);
+    bridge.setActiveConnection("beta");
+    push("alpha", 7);
+    expect(received).toEqual([
+      "event",
+      "terminal",
+      "clipboard",
+      "popup",
+      "closed",
+    ]);
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 8 },
+      { id: "beta", generation: 3 },
+    ]);
+    push("alpha", 8);
+    expect(received).toHaveLength(5);
+    releases.forEach((release) => release());
+    expect(alpha.acceptsServerGeneration(7)).toBe(false);
+  });
+
+  test("qualified HTTP decoding checks both response identity and delayed body admission", async () => {
+    const { bridge } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const body = Promise.withResolvers<string>();
+    const decoding = Promise.withResolvers<void>();
+    const requests: Array<{ path: string; init?: RequestInit }> = [];
+    globalThis.fetch = (async (path: string, init?: RequestInit) => {
+      requests.push({ path, init });
+      return new Response("synthetic", {
+        headers: {
+          "X-Herdr-Connection-Id": "alpha",
+          "X-Herdr-Connection-Generation": "7",
+        },
+      });
+    }) as unknown as typeof fetch;
+    const pending = connectionHttpResource(
+      alpha,
+      "/file/download?workspace_id=same",
+      async () => {
+        decoding.resolve();
+        return body.promise;
+      },
+    );
+    await decoding.promise;
+    expect(requests[0].path).toBe(
+      "/api/connections/alpha/file/download?workspace_id=same&connection_generation=7",
+    );
+    expect(requests[0].init).toMatchObject({
+      credentials: "same-origin",
+      redirect: "error",
+    });
+    bridge.setActiveConnection("beta");
+    bridge.setConnectionRuntimeGenerations([{ id: "beta", generation: 3 }]);
+    body.resolve("retired file");
+    await expect(pending).rejects.toThrow(
+      "connection runtime generation is unavailable",
+    );
+    await expect(
+      connectionHttpResource(alpha, "/file/download", (response) =>
+        response.text(),
+      ),
+    ).rejects.toThrow();
+    expect(requests).toHaveLength(1);
+  });
+
+  test("same-generation catalogue on a new transport cannot revive an old explicit client", async () => {
+    const { bridge, currentSocket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    bridge.disconnect();
+    bridge.connect();
+    currentSocket().receive({
+      hello: true,
+      bridge_protocol_version: 2,
+      default_connection_id: "alpha",
+      capabilities: { connection_runtime_generation: true },
+    });
+    bridge.setConnectionRuntimeGenerations([{ id: "alpha", generation: 7 }]);
+    expect(alpha.isCurrent()).toBe(false);
+    expect(bridge.connection("alpha", 7).isCurrent()).toBe(true);
+    await expect(
+      alpha.call("terminal.input", { terminal_id: "same", data: "x" }),
+    ).rejects.toThrow();
+    expect(currentSocket().sent).toEqual([]);
+  });
+
+  test("retiring alpha rejects its pending work immediately while beta remains admitted", async () => {
+    const { bridge, socket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const pending = alpha.call("pane.read", { pane_id: "same" });
+    const outcome = pending.then(
+      () => "published",
+      () => "retired",
+    );
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 8 },
+      { id: "beta", generation: 3 },
+    ]);
+    // Drain promise reactions without waiting for the RPC timeout.
+    await Promise.resolve();
+    expect(
+      await Promise.race([outcome, Promise.resolve("still pending")]),
+    ).toBe("retired");
+    const request = socket.sent[0];
+    socket.receive({
+      id: request.id,
+      connection_id: "alpha",
+      connection_generation: 7,
+      result: { obsolete: true },
+    });
+    expect(await outcome).toBe("retired");
+    expect(alpha.isCurrent()).toBe(false);
+    expect(bridge.connection("beta", 3).isCurrent()).toBe(true);
+  });
+
+  test("an unavailable catalogue entry retires only its own requests even without a generation change", async () => {
+    const { bridge, socket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const beta = bridge.connection("beta", 3);
+    const alphaOutcome = alpha
+      .call("pane.read", { pane_id: "same" })
+      .catch((error) => error);
+    const betaOutcome = beta.call("pane.read", { pane_id: "same" });
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 7, state: "error" },
+      { id: "beta", generation: 3, state: "ready" },
+    ]);
+    expect(alpha.isCurrent()).toBe(false);
+    expect(beta.isCurrent()).toBe(true);
+    const request = socket.sent[1];
+    socket.receive({
+      id: request.id,
+      connection_id: "beta",
+      connection_generation: 3,
+      result: "beta",
+    });
+    expect(await alphaOutcome).toBeInstanceOf(Error);
+    expect(await betaOutcome).toBe("beta");
+  });
+
+  test("lost input acknowledgement reports uncertainty and never sends another request", async () => {
+    const { bridge, socket } = setup();
+    const outcome = bridge
+      .connection("alpha", 7)
+      .call("terminal.input", { terminal_id: "same", data: "x" })
+      .catch((error) => error);
+    bridge.disconnect();
+    expect((await outcome).message).toContain("outcome is uncertain");
+    expect(socket.sent).toHaveLength(1);
+  });
+
+  test("restoring readiness with the same server generation cannot revive a retired lease", async () => {
+    const { bridge, socket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    bridge.setConnectionRuntimeGenerations([{ id: "beta", generation: 3 }]);
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 7 },
+      { id: "beta", generation: 3 },
+    ]);
+    expect(alpha.isCurrent()).toBe(false);
+    await expect(
+      alpha.call("terminal.input", { terminal_id: "same", data: "x" }),
+    ).rejects.toThrow();
+    expect(bridge.connection("alpha", 7).isCurrent()).toBe(true);
+    expect(socket.sent).toEqual([]);
+  });
+
+  test("HTTP response retirement cancels its body before decoding", async () => {
+    const { bridge } = setup();
+    const response = Promise.withResolvers<Response>();
+    let cancelled = false;
+    let decoded = false;
+    globalThis.fetch = (() => response.promise) as unknown as typeof fetch;
+    const pending = connectionHttpResource(
+      bridge.connection("alpha", 7),
+      "/file/download",
+      async () => {
+        decoded = true;
+        return "file";
+      },
+    );
+    bridge.setConnectionRuntimeGenerations([{ id: "beta", generation: 3 }]);
+    response.resolve(
+      new Response(
+        new ReadableStream({
+          cancel() {
+            cancelled = true;
+          },
+        }),
+      ),
+    );
+    await expect(pending).rejects.toThrow(
+      "connection runtime generation is unavailable",
+    );
+    expect(decoded).toBe(false);
+    expect(cancelled).toBe(true);
+  });
+
+  test("HTTP body decoding remains on its owning host after another host gains focus", async () => {
+    const { bridge } = setup();
+    const body = Promise.withResolvers<string>();
+    const decoding = Promise.withResolvers<void>();
+    globalThis.fetch = (async () =>
+      new Response("file", {
+        headers: {
+          "X-Herdr-Connection-Id": "alpha",
+          "X-Herdr-Connection-Generation": "7",
+        },
+      })) as unknown as typeof fetch;
+    const pending = connectionHttpResource(
+      bridge.connection("alpha", 7),
+      "/file/download",
+      async () => {
+        decoding.resolve();
+        return body.promise;
+      },
+    );
+    await decoding.promise;
+    bridge.setActiveConnection("beta");
+    body.resolve("alpha file");
+    expect(await pending).toBe("alpha file");
+  });
+
+  test("HTTP replies with missing or sibling identity cannot enter a qualified decoder", async () => {
+    const { bridge } = setup();
+    const responseHeaders: Array<Record<string, string>> = [
+      {},
+      { "X-Herdr-Connection-Id": "beta", "X-Herdr-Connection-Generation": "7" },
+      {
+        "X-Herdr-Connection-Id": "alpha",
+        "X-Herdr-Connection-Generation": "8",
+      },
+    ];
+    for (const headers of responseHeaders) {
+      let decoded = false;
+      let cancelled = false;
+      globalThis.fetch = (async () =>
+        new Response(
+          new ReadableStream({
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers },
+        )) as unknown as typeof fetch;
+      await expect(
+        connectionHttpResource(
+          bridge.connection("alpha", 7),
+          "/file/download",
+          async () => {
+            decoded = true;
+            return "file";
+          },
+        ),
+      ).rejects.toThrow("response connection identity mismatch");
+      expect(decoded).toBe(false);
+      expect(cancelled).toBe(true);
+    }
+  });
+
+  test("uncatalogued, missing-generation and obsolete explicit clients never dispatch or default-route", async () => {
+    const { bridge, socket } = setup();
+    for (const client of [
+      bridge.connection("unknown", 7),
+      bridge.connection("alpha"),
+      bridge.connection("alpha", 6),
+    ]) {
+      expect(client.isCurrent()).toBe(false);
+      await expect(
+        client.call("terminal.input", { terminal_id: "same", data: "x" }),
+      ).rejects.toThrow();
+    }
+    expect(socket.sent).toEqual([]);
+  });
+
+  test("HTTP mutation acknowledgement loss reports uncertainty without replay", async () => {
+    const { bridge } = setup();
+    const paths: string[] = [];
+    globalThis.fetch = (async (path: string) => {
+      paths.push(path);
+      throw new Error("synthetic transport loss");
+    }) as unknown as typeof fetch;
+    await expect(
+      connectionHttpResource(
+        bridge.connection("beta", 3),
+        "/file/delete",
+        (response) => response.json(),
+        { method: "POST" },
+      ),
+    ).rejects.toThrow("outcome is uncertain");
+    expect(paths).toEqual([
+      "/api/connections/beta/file/delete?connection_generation=3",
+    ]);
+  });
+
+  test("a delayed HTTP body stays usable across focus changes and retires only with its host", async () => {
+    const { bridge } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const body = Promise.withResolvers<string>();
+    const published: string[] = [];
+    const response = body.promise.then((text) => {
+      if (alpha.isCurrent()) published.push(text);
+    });
+    expect(connectionHttpPath("alpha", "/file-download", 7)).toBe(
+      "/api/connections/alpha/file-download?connection_generation=7",
+    );
+    bridge.setActiveConnection("beta");
+    body.resolve("alpha file");
+    await response;
+    expect(published).toEqual(["alpha file"]);
+    bridge.setConnectionRuntimeGenerations([{ id: "beta", generation: 3 }]);
+    expect(alpha.isCurrent()).toBe(false);
+  });
+
+  test("an old-generation reply cannot publish after catalogue replacement", async () => {
+    const { bridge, socket } = setup();
+    const outcome = bridge
+      .connection("alpha", 7)
+      .call("pane.read", { pane_id: "same" })
+      .then(
+        () => "published",
+        () => "retired",
+      );
+    const request = socket.sent[0];
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 8 },
+      { id: "beta", generation: 3 },
+    ]);
+    socket.receive({
+      id: request.id,
+      connection_id: "alpha",
+      connection_generation: 7,
+      result: { text: "obsolete" },
+    });
+    expect(await outcome).toBe("retired");
+  });
+
+  test("qualified pushes drop retired alpha streams and preserve beta streams with equal IDs", () => {
+    const { bridge, socket } = setup();
+    const received: string[] = [];
+    bridge.onEvent((msg) => received.push(`event:${msg.connection_id}`));
+    bridge.onTerminal((msg) => received.push(`terminal:${msg.connection_id}`));
+    bridge.onTerminalClipboard((msg) =>
+      received.push(`clipboard:${msg.connection_id}`),
+    );
+    bridge.onPopup((msg) => received.push(`popup:${msg.connection_id}`));
+    bridge.onTerminalClosed((msg) =>
+      received.push(`closed:${msg.connection_id}`),
+    );
+    bridge.setConnectionRuntimeGenerations([
+      { id: "alpha", generation: 8 },
+      { id: "beta", generation: 3 },
+    ]);
+    for (const [connection_id, connection_generation] of [
+      ["alpha", 7],
+      ["beta", 3],
+    ] as const) {
+      for (const payload of [
+        { event: "pane.updated", data: { pane_id: "same" } },
+        {
+          terminal: {
+            terminal_id: "same",
+            width: 80,
+            height: 24,
+            full: true,
+            bytes: "",
+          },
+        },
+        { terminal_clipboard: { terminal_id: "same", data: "YQ==" } },
+        {
+          popup: {
+            terminal_id: "same",
+            title: "Synthetic",
+            width: null,
+            height: null,
+          },
+        },
+        { terminal_closed: { terminal_id: "same" } },
+      ])
+        socket.receive({ connection_id, connection_generation, ...payload });
+    }
+    expect(received).toEqual([
+      "event:beta",
+      "terminal:beta",
+      "clipboard:beta",
+      "popup:beta",
+      "closed:beta",
+    ]);
+  });
+
+  test("lost mutation acknowledgements invalidate clients without replay on a new transport", async () => {
+    const { bridge, socket, currentSocket } = setup();
+    const alpha = bridge.connection("alpha", 7);
+    const outcome = alpha
+      .call("terminal.input", { terminal_id: "same", data: "x" })
+      .then(
+        () => "acknowledged",
+        () => "uncertain",
+      );
+    bridge.disconnect();
+    expect(await outcome).toBe("uncertain");
+    bridge.connect();
+    const replacement = currentSocket();
+    expect(replacement).not.toBe(socket);
+    sendHello(replacement, "alpha");
+    expect(replacement.sent).toEqual([]);
+    expect(
+      socket.sent.filter((request) => request.method === "terminal.input"),
+    ).toHaveLength(1);
+    expect(alpha.isCurrent()).toBe(false);
+  });
+});
 
 class HangingWebSocket {
   static readonly CONNECTING = 0;
@@ -762,7 +1581,7 @@ describe("bridge connection lifecycle", () => {
     await expect(response).rejects.toThrow("response connection_id mismatch");
   });
 
-  test("invalidates pending scoped clients across an active switch", async () => {
+  test("invalidates pending legacy active clients across an active switch", async () => {
     class ManualWebSocket extends HangingWebSocket {
       static instance: ManualWebSocket;
       sent: string[] = [];
@@ -797,7 +1616,7 @@ describe("bridge connection lifecycle", () => {
     );
   });
 
-  test("invalidates pending work across a same-ID client generation change", async () => {
+  test("invalidates legacy active work across a same-ID client generation change", async () => {
     class ManualWebSocket extends HangingWebSocket {
       static instance: ManualWebSocket;
       sent: string[] = [];

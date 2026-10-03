@@ -7,6 +7,80 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Hosts now filters an aggregate Office, Tree and Graph view instead of selecting
+  one operational host. Manage connections remains separate. Open Inspectors,
+  terminals and resources retain their qualified host across filter and focus
+  changes; global creation confirms a single destination.
+
+### Added
+
+- Concurrent local/SSH terminal and Inspector contexts over one World origin,
+  host-local retirement, qualified notification reveal, fair bounded multi-host
+  projection and observation, full-observation paged search, honest coverage and
+  cross-host window arrangements with independent restore baselines.
+
+- Added "Promoted to CEO", a 62-second animated film about Herdr World, to the website.
+  It plays in the browser with a synthesized soundtrack and no video download.
+
+- Added `agent:await` for foreground agent commands with bounded output, private
+  logs and preserved exit codes, plus repo-local Herdr Workflows operating guidance.
+
+### Changed
+
+- Terminal input with a lost acknowledgement reports its original host and an
+  uncertain outcome, with refresh-before-retry guidance and no replay.
+- Large aggregate updates share the World socket in bounded reply chunks, and
+  dense scene controls render progressively to keep host input responsive.
+- Saved Hosts filters survive the initial connection handshake until a valid
+  catalogue arrives. Large snapshots decode off the browser's main thread;
+  unchanged terminal surfaces and offscreen scenes avoid redundant drawing.
+- Dense aggregate indexing yields between bounded batches and preserves complete
+  coverage totals. Office limits reception painting to the visible horizontal
+  region while retaining every host in its semantic overview. Streaming output
+  preserves another terminal's keyboard focus.
+- Dense host construction also yields and cancels within a host. Office reuses
+  qualified pane devices across its scene and complete roster, and newer
+  Inspector control focus supersedes queued terminal refocusing.
+  Expired aggregate observations yield between hosts to admit terminal input.
+  Snapshot decoding admits one host payload at a time so socket acknowledgements
+  can interleave with observation work.
+  Negotiated snapshot transport waits for browser admission after each bounded
+  chunk batch, preventing bulk replies from queuing ahead of terminal input.
+  Progressive Tree admission reuses unchanged spaces instead of rendering
+  every admitted subtree again on each batch.
+- Graph overview keeps every node and semantic target while deferring unreadably
+  small canvas text until zoomed in.
+- Office constructs and paints its visible scene across cancellable task turns,
+  admitting matching layout controls through ordinary tasks after painting.
+  Its canvas and text textures follow the visible viewport and device resolution
+  while retaining the complete layout and two-axis navigation.
+- Removed the homepage film introduction so the video leads directly from the
+  navigation into the product content.
+- Removed CEO Mode from the homepage navigation and added a full-screen film
+  control. The film now shows the full website URL and a one-shot npm command.
+- Styled the homepage, film, and social preview cards as Herdr.World.
+- Put the "Promoted to CEO" film first on the homepage, with a Home navigation
+  link. Its play overlay and controls now clear during playback.
+- Turned the product hero screenshot into a carousel of the six showcase views.
+- Moved installation closer to the top of the homepage and showed Homebrew,
+  npm, and standalone commands together.
+- Refreshed the website and README screenshots with the 0.2.0 interface, including
+  readable Files, Changes, and agent History examples.
+
+### Fixed
+
+- Preserved server error details for rejected resource requests and showed failed
+  file and session downloads without reopening them on another path.
+- Kept worktree results focused through metadata refreshes while respecting newer
+  browser selections, and prevented duplicate workspace creation submissions.
+- Reported observed watch counts when another filtered host is unavailable.
+- Prevented Office animation from starving large aggregate refreshes while
+  another host remains interactive. Removed redundant transport and decoder
+  timer turns while preserving bounded batches and one-host admission.
+- Kept the film's 16:9 picture from stretching in portrait fullscreen playback.
+
 ## [0.2.0] - 2026-10-02
 
 ### Highlights since 0.1.1

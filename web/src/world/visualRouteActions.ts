@@ -93,7 +93,7 @@ export function resolveVisualRouteActionTarget(
   ) {
     return { node: null, reason: "The selected item is no longer available." };
   }
-  if (!node.selectedHost || !node.actionable) {
+  if (!node.actionable || node.stale) {
     return { node: null, reason: "The selected item is no longer available." };
   }
   return { node, reason: null };

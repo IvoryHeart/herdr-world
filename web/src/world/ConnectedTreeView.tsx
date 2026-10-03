@@ -1,5 +1,6 @@
 import { ChevronRight, SquareTerminal } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -18,8 +19,9 @@ import {
   type WorldTreeProjection,
   type WorldTreeSpace,
 } from "./treeProjection";
+import { WorldSearchResults } from "./WorldSearchResults";
+import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import type { WorldObject, WorldObjectNode } from "./worldObject";
-import { WorldViewToolbar } from "./WorldViewToolbar";
 
 export type WorldNodeAnchors = Record<string, OfficeCanvasAnchor>;
 
@@ -66,6 +68,49 @@ export default function ConnectedTreeView({
   const visibleHosts = searchActive
     ? projection.hosts.filter((host) => matches.has(host.source.id))
     : projection.hosts;
+  const [renderProgress, setRenderProgress] = useState<{
+    projection: WorldTreeProjection;
+    limit: number;
+  } | null>(null);
+  const renderLimit =
+    renderProgress?.projection === projection ? renderProgress.limit : 4;
+  const roundRobinSpaces: WorldTreeSpace[] = [];
+  for (
+    let index = 0;
+    visibleHosts.some((host) => index < host.spaces.length);
+    index++
+  )
+    for (const host of visibleHosts)
+      if (host.spaces[index]) roundRobinSpaces.push(host.spaces[index]!);
+  const immediateSpaces = new Set(
+    roundRobinSpaces.slice(0, renderLimit).map((space) => space.source.id),
+  );
+  for (const space of roundRobinSpaces) {
+    if (
+      space.source.id === selectedId ||
+      space.children.some(
+        (leaf) =>
+          leaf.id === selectedId ||
+          leaf.id === inlineInspectorNodeId ||
+          conversationNodeIds.includes(leaf.id),
+      )
+    )
+      immediateSpaces.add(space.source.id);
+  }
+  const pendingSpaces = roundRobinSpaces.filter(
+    (space) => !immediateSpaces.has(space.source.id),
+  ).length;
+  const presentedHosts = visibleHosts.map((host) => ({
+    ...host,
+    spaces: host.spaces.filter((space) => immediateSpaces.has(space.source.id)),
+  }));
+  useEffect(() => {
+    if (!pendingSpaces) return;
+    const frame = requestAnimationFrame(() =>
+      setRenderProgress({ projection, limit: renderLimit + 4 }),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [projection, renderLimit, pendingSpaces]);
   const inlineAncestorIds = useMemo(() => {
     if (!inlineInspectorNodeId) return new Set<string>();
     const node = world.nodeById.get(inlineInspectorNodeId);
@@ -101,15 +146,18 @@ export default function ConnectedTreeView({
     writeTreePreferences(worldLocalStorage, { collapsedIds: [...collapsed] });
   }, [collapsed]);
 
-  const toggle = (id: string) => {
-    if (searchActive) return;
-    setCollapsed((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  const toggle = useCallback(
+    (id: string) => {
+      if (searchActive) return;
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+    },
+    [searchActive],
+  );
 
   const reportAnchors = useCallback(() => {
     const root = rootRef.current;
@@ -181,11 +229,13 @@ export default function ConnectedTreeView({
       viewLabel="Tree"
       query={query}
       onQueryChange={setQuery}
+      onSubmit={() => {
+        const match = worldSearchMatches(world, query)[0];
+        if (match) onSelect(match.id);
+      }}
       resultLabel={
-        searchActive
-          ? visibleHosts.length
-            ? `${matches.size} matching items`
-            : "No matches"
+        query.trim()
+          ? `${worldSearchMatches(world, query).length} matching observed items`
           : undefined
       }
     />
@@ -194,7 +244,15 @@ export default function ConnectedTreeView({
   return (
     <>
       {toolbarPortal ? createPortal(toolbar, toolbarPortal) : toolbar}
-      <div ref={rootRef} className="world-connected-tree-shell">
+      <WorldSearchResults world={world} query={query} onSelect={onSelect} />
+      <div
+        ref={rootRef}
+        className="world-connected-tree-shell"
+        aria-busy={pendingSpaces > 0}
+      >
+        {pendingSpaces ? (
+          <p role="status">Rendering {pendingSpaces} more observed spaces.</p>
+        ) : null}
         {projection.omittedHostCount ||
         projection.omittedSpaceCount ||
         projection.coverage.omittedLeaves ? (
@@ -206,49 +264,63 @@ export default function ConnectedTreeView({
         ) : null}
         {visibleHosts.length ? (
           <>
-            <div
-              className="world-connected-tree"
-              role="tree"
-              aria-label="Connected World hierarchy"
-            >
-              {visibleHosts.map((host) => (
-                <VisualHost
-                  key={host.source.id}
-                  host={host}
-                  matches={matches}
-                  searchActive={searchActive}
-                  collapsed={collapsed}
-                  selectedId={selectedId}
-                  inlineInspectorNodeId={compact ? null : inlineInspectorNodeId}
-                  forcedExpandedIds={inlineAncestorIds}
-                  onToggle={toggle}
-                  onSelect={onSelect}
-                  onOpenTerminal={onOpenTerminal}
-                  onInlineInspectorPortalChange={onInlineInspectorPortalChange}
-                />
-              ))}
-            </div>
-            <ul
-              className="world-tree-outline"
-              aria-label="World hierarchy outline"
-            >
-              {visibleHosts.map((host) => (
-                <SemanticHost
-                  key={host.source.id}
-                  host={host}
-                  matches={matches}
-                  searchActive={searchActive}
-                  collapsed={collapsed}
-                  selectedId={selectedId}
-                  inlineInspectorNodeId={compact ? inlineInspectorNodeId : null}
-                  forcedExpandedIds={inlineAncestorIds}
-                  onToggle={toggle}
-                  onSelect={onSelect}
-                  onOpenTerminal={onOpenTerminal}
-                  onInlineInspectorPortalChange={onInlineInspectorPortalChange}
-                />
-              ))}
-            </ul>
+            {!compact && (
+              <div
+                className="world-connected-tree"
+                role="tree"
+                aria-label="Connected World hierarchy"
+              >
+                {presentedHosts.map((host) => (
+                  <VisualHost
+                    key={host.source.id}
+                    host={host}
+                    matches={matches}
+                    searchActive={searchActive}
+                    collapsed={collapsed}
+                    selectedId={selectedId}
+                    inlineInspectorNodeId={
+                      compact ? null : inlineInspectorNodeId
+                    }
+                    forcedExpandedIds={inlineAncestorIds}
+                    onToggle={toggle}
+                    onSelect={onSelect}
+                    onOpenTerminal={onOpenTerminal}
+                    onInlineInspectorPortalChange={
+                      onInlineInspectorPortalChange
+                    }
+                  />
+                ))}
+              </div>
+            )}
+            {compact && (
+              <div role="tree" aria-label="Connected World hierarchy">
+                <ul
+                  className="world-tree-outline"
+                  aria-label="World hierarchy outline"
+                >
+                  {presentedHosts.map((host) => (
+                    <SemanticHost
+                      key={host.source.id}
+                      host={host}
+                      matches={matches}
+                      searchActive={searchActive}
+                      collapsed={collapsed}
+                      selectedId={selectedId}
+                      inlineInspectorNodeId={
+                        compact ? inlineInspectorNodeId : null
+                      }
+                      forcedExpandedIds={inlineAncestorIds}
+                      onToggle={toggle}
+                      onSelect={onSelect}
+                      onOpenTerminal={onOpenTerminal}
+                      onInlineInspectorPortalChange={
+                        onInlineInspectorPortalChange
+                      }
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
           </>
         ) : (
           <div className="world-empty">
@@ -293,7 +365,7 @@ function VisualHost({ host, ...props }: { host: WorldTreeHost } & BranchProps) {
       {expanded && (spaces.length > 0 || host.omittedSpaceCount > 0) ? (
         <div className="world-connected-tree-spaces" role="group">
           {spaces.map((space) => (
-            <VisualSpace key={space.source.id} space={space} {...props} />
+            <MemoVisualSpace key={space.source.id} space={space} {...props} />
           ))}
           {host.omittedSpaceCount ? (
             <p className="world-connected-tree-overflow">
@@ -436,7 +508,7 @@ function SemanticHost({
       {expanded ? (
         <ul>
           {shownSpaces(host, props.matches).map((space) => (
-            <SemanticSpace key={space.source.id} space={space} {...props} />
+            <MemoSemanticSpace key={space.source.id} space={space} {...props} />
           ))}
           {host.omittedSpaceCount ? (
             <li className="is-overflow">
@@ -525,6 +597,9 @@ function SemanticNode({
           data-world-node-anchor={node.id}
           aria-pressed={selectedId === node.id}
           onClick={() => onSelect(node.id)}
+          onDoubleClick={() => {
+            if (leaf && node.actionable) onOpenTerminal(node.id);
+          }}
         >
           <NodeIcon node={node} />
           <span>
@@ -566,16 +641,17 @@ export function connectedTreeMatches(
       addHost(matches, host);
       continue;
     }
-    for (const space of host.spaces) {
-      if (nodeSearchText(space.source).includes(query)) {
+    for (const space of host.source.spaces) {
+      if (nodeSearchText(space).includes(query)) {
         matches.add(host.source.id);
-        addSpace(matches, space);
+        matches.add(space.id);
+        for (const leaf of space.children) matches.add(leaf.id);
         continue;
       }
       for (const leaf of space.children) {
         if (nodeSearchText(leaf).includes(query)) {
           matches.add(host.source.id);
-          matches.add(space.source.id);
+          matches.add(space.id);
           matches.add(leaf.id);
         }
       }
@@ -586,12 +662,10 @@ export function connectedTreeMatches(
 
 function addHost(matches: Set<string>, host: WorldTreeHost) {
   matches.add(host.source.id);
-  for (const space of host.spaces) addSpace(matches, space);
-}
-
-function addSpace(matches: Set<string>, space: WorldTreeSpace) {
-  matches.add(space.source.id);
-  for (const leaf of space.children) matches.add(leaf.id);
+  for (const space of host.source.spaces) {
+    matches.add(space.id);
+    for (const leaf of space.children) matches.add(leaf.id);
+  }
 }
 
 function shownSpaces(host: WorldTreeHost, matches: ReadonlySet<string> | null) {
@@ -691,3 +765,6 @@ function elementAnchor(
           : "right";
   return { x, y, visible, edge };
 }
+
+const MemoVisualSpace = memo(VisualSpace);
+const MemoSemanticSpace = memo(SemanticSpace);

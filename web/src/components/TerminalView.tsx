@@ -1,26 +1,4 @@
-import { createPortal } from "react-dom";
-import {
-  createReviewAnnotation,
-  MAX_QUOTE_LENGTH,
-  terminalAnnotationTitle,
-  type TerminalReviewAnnotation,
-} from "../annotations";
-import {
-  WORKSPACE_ANNOTATION_REQUEST_EVENT,
-  type WorkspaceAnnotationRequest,
-} from "../workspaceResource";
-import {
-  AnnotationComposerPopover,
-  type AnnotationComposerDraft,
-} from "./AnnotationComposerPopover";
-import { isMobileLayout, LAYOUT_CHANGE_EVENT } from "../layoutPreferences";
-import { TERMINAL_FONT_FAMILY, terminalFontOptions } from "../appearance";
-import { detectShortcutPlatform } from "../shortcutBindings";
-import {
-  getShortcutSnapshot,
-  shortcutMatches,
-  terminalLinkModifierMatches,
-} from "../shortcutPreferences";
+import { runTerminalInput, sendTerminalInput } from "../terminalInput";
 import {
   ClipboardAddon,
   type ClipboardSelectionType,
@@ -31,8 +9,8 @@ import type { IBufferRange, ITheme } from "@xterm/xterm";
 import { Terminal } from "@xterm/xterm";
 import {
   Columns2,
-  Keyboard,
   Grid2X2,
+  Keyboard,
   Maximize2,
   Minimize2,
   Rows2,
@@ -47,8 +25,32 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
+import {
+  createReviewAnnotation,
+  MAX_QUOTE_LENGTH,
+  type TerminalReviewAnnotation,
+  terminalAnnotationTitle,
+} from "../annotations";
+import { TERMINAL_FONT_FAMILY, terminalFontOptions } from "../appearance";
+import { isMobileLayout, LAYOUT_CHANGE_EVENT } from "../layoutPreferences";
+import { detectShortcutPlatform } from "../shortcutBindings";
+import {
+  getShortcutSnapshot,
+  shortcutMatches,
+  terminalLinkModifierMatches,
+} from "../shortcutPreferences";
+import {
+  WORKSPACE_ANNOTATION_REQUEST_EVENT,
+  type WorkspaceAnnotationRequest,
+} from "../workspaceResource";
+import {
+  type AnnotationComposerDraft,
+  AnnotationComposerPopover,
+} from "./AnnotationComposerPopover";
 import "@xterm/xterm/css/xterm.css";
-import { bridge, type ConnectionClient } from "../api";
+import { bridge, type ConnectionClient, type TerminalPush } from "../api";
+import { directoryPreviewName } from "../filesystemPaths";
 import { mobileTerminalShortcutExecution } from "../mobileTerminalShortcutAction";
 import {
   defaultMobileTerminalShortcutRows,
@@ -59,11 +61,11 @@ import {
   mobileTerminalShortcutOption,
 } from "../mobileTerminalShortcuts";
 import { activePaneIdForSnapshot, paneCanClose } from "../paneJump";
-import { HerdrSetupCard } from "./HerdrSetupCard";
 import {
+  store as applicationStore,
   shallowEqual,
-  store,
   terminalNavigationLoading,
+  useOperationalStore,
   useStoreSelector,
 } from "../store";
 import {
@@ -85,18 +87,19 @@ import {
   terminalPushMatches,
 } from "../terminalConnection";
 import {
-  type ResolvedTerminalFile,
-  TerminalFileResolutionCache,
-} from "../terminalFileLinks";
-import {
   TerminalEndpointPresentation,
   terminalMouseUsesSelection,
 } from "../terminalEndpointPresentation";
+import {
+  type ResolvedTerminalFile,
+  TerminalFileResolutionCache,
+} from "../terminalFileLinks";
 import {
   terminalFocusBlockedByOverlay,
   terminalPointerShouldBlurInput,
   terminalTouchShouldDismissInput,
 } from "../terminalFocus";
+import { TerminalHistorySelection } from "../terminalHistorySelection";
 import { uploadTerminalImage } from "../terminalImageUpload";
 import {
   isTerminalImeCommittedInputType,
@@ -110,22 +113,11 @@ import {
   terminalMobileTextareaEdit,
 } from "../terminalIme";
 import { terminalShortcutSequence } from "../terminalKeys";
-import { TerminalHistorySelection } from "../terminalHistorySelection";
-import {
-  TerminalTouchSelection,
-  terminalSelectedText,
-} from "../terminalTouchSelection";
 import {
   registerTerminalLinkProvider,
   type TerminalResolvedLink,
   type TerminalTouchLink,
 } from "../terminalLinkProvider";
-import {
-  TerminalFileLinkMenu,
-  type TerminalFileLinkMenuState,
-} from "./TerminalFileLinkMenu";
-import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
-import { directoryPreviewName } from "../filesystemPaths";
 import { sanitizeTerminalHttpUrl, terminalFileUriPath } from "../terminalLinks";
 import {
   createTerminalPasteRunner,
@@ -133,10 +125,6 @@ import {
   terminalPasteInputText,
   terminalPasteRequest,
 } from "../terminalPaste";
-import {
-  isWorkspacePathDrag,
-  workspacePathFromDrag,
-} from "../workspacePathDrag";
 import {
   readTerminalRecoveryReloadAt,
   shouldArmTerminalRecoveryResume,
@@ -159,9 +147,23 @@ import {
 } from "../terminalScroll";
 import { TerminalSelectionDragGuard } from "../terminalSelectionGuard";
 import { applyTerminalTheme } from "../terminalThemes";
+import {
+  TerminalTouchSelection,
+  terminalSelectedText,
+} from "../terminalTouchSelection";
+import {
+  isWorkspacePathDrag,
+  workspacePathFromDrag,
+} from "../workspacePathDrag";
 import { paneHasAgentHistory } from "./agentSession";
+import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
+import { HerdrSetupCard } from "./HerdrSetupCard";
 import { ConfirmDialog, MessageDialog } from "./ModalDialogs";
 import { TerminalComposer } from "./TerminalComposer";
+import {
+  TerminalFileLinkMenu,
+  type TerminalFileLinkMenuState,
+} from "./TerminalFileLinkMenu";
 import "./TerminalView.css";
 
 function focusTerminalEndpoint(
@@ -171,8 +173,8 @@ function focusTerminalEndpoint(
   if (
     !terminalId ||
     !client.isCurrent() ||
-    !store
-      .get()
+    !applicationStore
+      .getConnection(client.connectionId)
       .endpointAvailability[terminalId]?.methods.includes("pane.focus")
   )
     return;
@@ -196,21 +198,13 @@ function b64toText(b64: string): string | null {
     return null;
   }
 }
-function bytesToB64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
 
 function sendBytes(
   client: ConnectionClient,
   bytes: Uint8Array,
   terminalId: string,
 ) {
-  return client.call("terminal.input", {
-    terminal_id: terminalId,
-    data: bytesToB64(bytes),
-  });
+  return sendTerminalInput(client, bytes, terminalId);
 }
 
 const CLIPBOARD_READ_TIMEOUT_MS = 2000;
@@ -321,11 +315,13 @@ export function TerminalView({
   onAgentHistoryOpenChange?: (open: boolean) => void;
   onOpenWorkspaceFile?: (request: TerminalWorkspaceFileRequest) => void;
 }) {
+  const store = useOperationalStore();
   const s = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
       defaultConnectionId: state.defaultConnectionId,
-      connectionGeneration: state.connectionGeneration,
+      connectionGeneration:
+        state.serverRuntimeGeneration ?? state.connectionGeneration,
       connectionPaused: state.connectionPaused,
       connections: state.connections,
       layout: state.layout,
@@ -350,11 +346,19 @@ export function TerminalView({
     s.connections.find(
       (connection) => connection.id === terminalIdentity.connectionId,
     )?.generation ?? null;
-  const connectionClient = useMemo(
-    () =>
-      bridge.connection(terminalIdentity.connectionId, serverRuntimeGeneration),
-    [serverRuntimeGeneration, terminalIdentity],
-  );
+  const connectionClient = useMemo(() => {
+    void s.status;
+    void s.terminalAttachEpoch;
+    return bridge.connection(
+      terminalIdentity.connectionId,
+      serverRuntimeGeneration,
+    );
+  }, [
+    serverRuntimeGeneration,
+    terminalIdentity,
+    s.status,
+    s.terminalAttachEpoch,
+  ]);
   const connectionScopeKey = terminalConnectionKey(terminalIdentity);
   const terminalFileResolutionCache = useMemo(
     () =>
@@ -586,39 +590,57 @@ export function TerminalView({
   useLayoutEffect(() => {
     paneLayoutRef.current = s.layout;
   }, [s.layout]);
-  const focusTerminalSoon = useCallback(() => {
-    if (
-      !isActivePaneRef.current ||
-      composerOpenRef.current ||
-      touchSelectionRef.current?.active === true
-    )
-      return;
-    if (shouldAvoidVirtualKeyboard()) return;
-    requestAnimationFrame(() => {
-      window.setTimeout(() => {
-        if (
-          !connectionClient.isCurrent() ||
-          !isActivePaneRef.current ||
-          composerOpenRef.current ||
-          touchSelectionRef.current?.active === true ||
-          shouldAvoidVirtualKeyboard()
-        )
-          return;
-        const term = termRef.current;
-        const bounds = container?.getBoundingClientRect();
-        if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
-        const active = document.activeElement;
-        const activeElement = active instanceof HTMLElement ? active : null;
-        const activeIsTerminalInput = !!activeElement?.closest(".xterm");
-        if (!term || (isEditableElement(active) && !activeIsTerminalInput))
-          return;
-        // Streaming frames must not steal focus from an open popover, dialog,
-        // or menu: moving focus out of an overlay dismisses it.
-        if (terminalFocusBlockedByOverlay(activeElement, document)) return;
-        term.focus();
-      }, 0);
-    });
-  }, [connectionClient, container]);
+  const focusTerminalSoon = useCallback(
+    (preserveOtherTerminal = false) => {
+      if (
+        !isActivePaneRef.current ||
+        composerOpenRef.current ||
+        touchSelectionRef.current?.active === true
+      )
+        return;
+      if (shouldAvoidVirtualKeyboard()) return;
+      requestAnimationFrame(() => {
+        window.setTimeout(() => {
+          if (
+            !connectionClient.isCurrent() ||
+            !isActivePaneRef.current ||
+            composerOpenRef.current ||
+            touchSelectionRef.current?.active === true ||
+            shouldAvoidVirtualKeyboard()
+          )
+            return;
+          const term = termRef.current;
+          const bounds = container?.getBoundingClientRect();
+          if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+          const active = document.activeElement;
+          const activeElement = active instanceof HTMLElement ? active : null;
+          const activeIsTerminalInput = !!activeElement?.closest(".xterm");
+          const focusedOwner = activeElement?.closest<HTMLElement>(
+            "[data-terminal-owner]",
+          )?.dataset.terminalOwner;
+          if (
+            activeIsTerminalInput &&
+            focusedOwner &&
+            focusedOwner !== connectionClient.connectionId
+          )
+            return;
+          if (
+            preserveOtherTerminal &&
+            activeIsTerminalInput &&
+            !container?.contains(activeElement)
+          )
+            return;
+          if (!term || (isEditableElement(active) && !activeIsTerminalInput))
+            return;
+          // Streaming frames must not steal focus from an open popover, dialog,
+          // or menu: moving focus out of an overlay dismisses it.
+          if (terminalFocusBlockedByOverlay(activeElement, document)) return;
+          term.focus();
+        }, 0);
+      });
+    },
+    [connectionClient, container],
+  );
   const focusEndpoint = useCallback(() => {
     focusTerminalEndpoint(connectionClient, paneTerminalIdRef.current);
   }, [connectionClient]);
@@ -762,7 +784,7 @@ export function TerminalView({
         })
         .catch(() => {});
     },
-    [connectionClient],
+    [connectionClient, store],
   );
   const preventShortcutFocus = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -794,7 +816,7 @@ export function TerminalView({
         path,
       });
     },
-    [connectionClient, terminalIdentity],
+    [connectionClient, terminalIdentity, store],
   );
 
   const resolveTerminalFilePaths = useCallback(
@@ -928,10 +950,13 @@ export function TerminalView({
         }
       });
     });
-    const invalidateLinks = () => {
+    const invalidateLinks = (redraw = true) => {
       retireTouchLink();
       linkRevisionRef.current++;
-      term.refresh(0, term.rows - 1);
+      // Missing native link identity still retires every action token. An
+      // identical self-contained surface needs no DOM repaint unless a visible
+      // link decoration must be invalidated.
+      if (redraw || oscHover !== null) term.refresh(0, term.rows - 1);
     };
     const fit = new FitAddon();
     const clipboardProvider = createTerminalClipboardProvider({
@@ -1125,7 +1150,14 @@ export function TerminalView({
       term.clearSelection();
       endpointPresentation.cancelSelection();
     });
-    const off = bridge.onTerminal((t) => {
+    let repaint: TerminalPush | null = null;
+    let repaintTask: number | null = null;
+    const cancelRepaint = () => {
+      if (repaintTask !== null) cancelAnimationFrame(repaintTask);
+      repaintTask = null;
+      repaint = null;
+    };
+    const presentFrame = (t: TerminalPush) => {
       // A mount owns exactly one connection generation. Drop frames from an
       // inactive connection or a prior terminal attach before touching xterm.
       if (
@@ -1140,7 +1172,8 @@ export function TerminalView({
       }
       const text = b64toText(t.bytes);
       if (text === null) return;
-      if (!t.link_frame || t.link_frame !== latestLinkFrame) invalidateLinks();
+      if (!t.link_frame || t.link_frame !== latestLinkFrame)
+        invalidateLinks(endpointPresentation.displayedFrame?.text !== text);
       linkReadyRef.current = true;
       latestEndpointText =
         typeof t.mouse_reporting === "boolean" ? text : undefined;
@@ -1178,7 +1211,37 @@ export function TerminalView({
           });
         });
       }
-      focusTerminalSoon();
+      focusTerminalSoon(true);
+    };
+    const off = bridge.onTerminal((frame) => {
+      if (
+        !terminalPushMatches(
+          terminalIdentity,
+          connectionClient,
+          desiredTerminalRef.current,
+          frame,
+        )
+      )
+        return;
+      attachWatchdogRef.current?.markFrame();
+      if (typeof frame.mouse_reporting === "boolean") {
+        // Native endpoint repaints replace the whole viewport. Keep one latest
+        // repaint per mounted owner, rather than decoding every noisy burst.
+        repaint = frame;
+        if (repaintTask === null)
+          repaintTask = requestAnimationFrame(() => {
+            const latest = repaint;
+            repaint = null;
+            repaintTask = null;
+            if (latest) presentFrame(latest);
+          });
+      } else {
+        // Legacy byte streams are ordered increments and cannot be dropped.
+        const prior = repaint;
+        cancelRepaint();
+        if (prior) presentFrame(prior);
+        presentFrame(frame);
+      }
     });
     const offClipboard = bridge.onTerminalClipboard((clipboard) => {
       if (
@@ -1210,6 +1273,7 @@ export function TerminalView({
       invalidateLinks();
       linkReadyRef.current = false;
       setFileLinkMenu(null);
+      cancelRepaint();
       store.setTerminalEndpoint(connectionClient, closed.terminal_id, null);
       // Herdr closes the direct attach when another client takes the
       // terminal over (or its stream dies). Re-attach, but bound takeover
@@ -1332,7 +1396,9 @@ export function TerminalView({
       imeCommitGuard.beginIndependentInput();
       if (destinationPaneId) {
         const request = terminalPasteRequest(destinationPaneId, text);
-        await connectionClient.call(request.method, request.params);
+        await runTerminalInput(connectionClient, () =>
+          connectionClient.call(request.method, request.params),
+        );
         return;
       }
       const activeTerm = termRef.current;
@@ -2607,6 +2673,7 @@ export function TerminalView({
       ] as const)
         container.removeEventListener(event, blockMobileMouse, true);
       off();
+      cancelRepaint();
       selectionChange.dispose();
       selectionResize.dispose();
       endpointPresentation.dispose();
@@ -2709,6 +2776,7 @@ export function TerminalView({
     };
   }, [
     closeTerminalInput,
+    store,
     connectionClient,
     container,
     fitVisibleTerminal,
@@ -2911,6 +2979,7 @@ export function TerminalView({
       );
   }, [
     container,
+    store,
     fitVisibleTerminal,
     focusTerminalSoon,
     pane?.terminal_id,
@@ -2988,7 +3057,7 @@ export function TerminalView({
       window.removeEventListener("pageshow", onForegroundEvent);
       window.removeEventListener("focus", onForegroundEvent);
     };
-  }, []);
+  }, [store]);
 
   const submitTerminalComposer = async (text: string, submit: boolean) => {
     const targetPaneId = paneIdRef.current;
@@ -3341,6 +3410,8 @@ export function TerminalView({
                 detail: {
                   connectionId: connectionClient.connectionId,
                   generation: connectionClient.generation,
+                  runtimeGeneration:
+                    connectionClient.serverRuntimeGeneration ?? undefined,
                   workspaceId: source.workspace_id,
                   annotation,
                 },
@@ -3353,7 +3424,11 @@ export function TerminalView({
       />
       <div className="terminal-shell">
         <div className="terminal-main">
-          <div ref={containerRef} className="terminal-view" />
+          <div
+            ref={containerRef}
+            className="terminal-view"
+            data-terminal-owner={connectionClient.connectionId}
+          />
           {touchHandles.length === 0 && !composerOpen && isActivePane ? (
             <div
               className="terminal-mobile-input-actions"

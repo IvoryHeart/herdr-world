@@ -13,7 +13,7 @@ import type {
 } from "../components/WindowArrangementMenu";
 import { requestCloseTab } from "../components/TabBar";
 import { useLayoutPreferences } from "../layoutPreferences";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
 import { type FloatingTerminalGeometry } from "./floatingTerminalGeometry";
 import { SpacesTabWindow } from "./SpacesTabWindow";
 import {
@@ -69,6 +69,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   resumeTab: (tabId: string) => void;
   onSpacesWindowLayerReady: (element: HTMLDivElement | null) => void;
 } {
+  const store = useOperationalStore();
   const snapshot = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
@@ -398,7 +399,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     scrollX,
     scrollY,
     layer,
-    context?.activeTabId,
+    context,
     entries,
     stage.height,
     contentHeight,
@@ -656,7 +657,12 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                 zIndex={zIndex}
                 onRaise={() => raiseSpacesTabWindow(tab.tab_id)}
                 onFocus={() => onFocusSpacesTabWindow(tab.tab_id, null)}
-                onClose={() => requestCloseTab(tab.tab_id)}
+                onClose={() =>
+                  requestCloseTab(tab.tab_id, {
+                    connectionId: snapshot.activeConnectionId,
+                    runtimeGeneration: snapshot.serverRuntimeGeneration ?? -1,
+                  })
+                }
                 onGeometryChange={(next) => onGeometryChange(tab.tab_id, next)}
                 onPortalChange={(element) => {
                   const key = portalKey(tab.tab_id);

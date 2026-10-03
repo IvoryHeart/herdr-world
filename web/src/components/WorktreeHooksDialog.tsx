@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { store } from "../store";
+import { useOperationalStore } from "../store";
 import { useConnectionClient } from "../useConnectionClient";
 import { CloseButton } from "./CloseButton";
 import "./WorktreeHooksDialog.css";
@@ -34,6 +34,7 @@ export function WorktreeHooksDialog({
   workspaceId?: string;
   onClose: () => void;
 }) {
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const [info, setInfo] = useState<WorktreeHookInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -44,7 +45,7 @@ export function WorktreeHooksDialog({
     open,
     workspaceId ?? null,
     connectionClient.connectionId,
-    connectionClient.generation,
+    connectionClient.serverRuntimeGeneration ?? connectionClient.generation,
   ]);
   const priorScopeKeyRef = useRef(scopeKey);
   const scopeVersionRef = useRef(0);

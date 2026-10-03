@@ -16,10 +16,10 @@ export function WorldTopbarStatus({
       host.hostState === "active" || host.hostState === "ready-inactive",
   ).length;
   const stale = world.hosts.filter((host) => host.stale).length;
-  const agentCount = world.leaves.filter(
-    (leaf) => leaf.kind === "agent",
+  const unknown = world.hosts.filter(
+    (host) => !host.connection.snapshot,
   ).length;
-  const summary = `${selectedHostLabel} · ${ready} ready · ${world.spaces.length} spaces · ${agentCount} agents${stale ? ` · ${stale} stale` : ""}${runtime.error ? " · World error" : ""}`;
+  const summary = `${selectedHostLabel} · ${ready} ready · ${world.coverage.spaces} observed spaces · ${world.coverage.agents} observed agents${stale ? ` · ${stale} stale` : ""}${unknown ? ` · ${unknown} hosts unobserved; counts unknown` : ""}${runtime.error ? " · World error" : ""}`;
   return (
     <div
       className="world-topbar-status"
@@ -28,7 +28,10 @@ export function WorldTopbarStatus({
       title={summary}
     >
       <span className="world-live-dot" data-status={runtime.status} />
-      <span className="world-selected-host">{selectedHostLabel}</span>
+      <span className="world-selected-host">
+        {world.coverage.agents} observed agents · {world.coverage.spaces} spaces
+        {unknown ? ` · ${unknown} unknown hosts` : ""}
+      </span>
       {stale ? <span className="world-stale-count">{stale} stale</span> : null}
       {runtime.error ? (
         <span className="world-runtime-error" title={runtime.error}>
@@ -50,11 +53,11 @@ export function WorldConnectionRequired({
       aria-labelledby="world-connection-title"
     >
       <img src="/herdr-world-logo.svg" alt="" width="68" height="68" />
-      <p className="world-eyebrow">Connection required</p>
-      <h2 id="world-connection-title">Choose a Herdr host first</h2>
+      <p className="world-eyebrow">Welcome to Herdr World</p>
+      <h2 id="world-connection-title">Add a connection profile</h2>
       <p>
-        Office, Tree and Graph keep your selected host stable. Choose or add a
-        connection before opening a visual view.
+        Connect a local or SSH Herdr runtime to observe it in Office, Tree and
+        Graph.
       </p>
       <ConnectionSwitcher />
       {status !== "connected" ? <small>World service: {status}</small> : null}
