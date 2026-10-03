@@ -132,6 +132,21 @@ describe("latestTurnReceipt", () => {
     expect(receipt?.duration_ms).toBeNull();
   });
 
+  test("drops harness wrapper tags but keeps paragraphs", () => {
+    const receipt = latestTurnReceipt(
+      file,
+      trajectory([
+        {
+          source: "user",
+          message: '<pasted_content id="a1">Review   the plan</pasted_content>',
+        },
+        { source: "agent", message: "First point.\n\n\n\nSecond point." },
+      ]),
+    );
+    expect(receipt?.ask).toBe("Review the plan");
+    expect(receipt?.report).toBe("First point.\n\nSecond point.");
+  });
+
   test("returns null for an empty session", () => {
     expect(latestTurnReceipt(file, trajectory([]))).toBeNull();
   });

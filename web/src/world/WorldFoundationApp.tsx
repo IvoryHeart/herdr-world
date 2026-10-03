@@ -79,6 +79,7 @@ import WorldInspectorConversationView from "./WorldInspectorConversation";
 import { listenForInspectorWindowRaise } from "./inspectorWindowFocus";
 import { WorldConnectionRequired, WorldTopbarStatus } from "./WorldStatus";
 import { HandoffQueue } from "./HandoffQueue";
+import { DeskView } from "./DeskView";
 import { useConnectionClient } from "../useConnectionClient";
 import {
   defaultFloatingTerminalGeometry,
@@ -158,11 +159,18 @@ const OfficeObservabilityDialog = lazyWithReload("world-observability", () =>
   })),
 );
 
-export type WorldView = "spaces" | "office" | "tree" | "graph";
+export type WorldView = "desk" | "spaces" | "office" | "tree" | "graph";
 
 const SELECTED_CONNECTION_KEY = "worldSelectedConnection";
-const WORLD_VIEWS: readonly WorldView[] = ["office", "spaces", "tree", "graph"];
+const WORLD_VIEWS: readonly WorldView[] = [
+  "desk",
+  "office",
+  "spaces",
+  "tree",
+  "graph",
+];
 const WORLD_VIEW_PATHS: Record<WorldView, string> = {
+  desk: "/desk",
   spaces: "/spaces",
   office: "/office",
   tree: "/tree",
@@ -285,14 +293,15 @@ function inspectorViewportBounds() {
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
     ? (value as WorldView)
-    : "office";
+    : "desk";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
   if (pathname === "/spaces") return "spaces";
   if (pathname === "/tree") return "tree";
   if (pathname === "/graph") return "graph";
-  return "office";
+  if (pathname === "/office") return "office";
+  return "desk";
 }
 
 export function worldSelectionIsCurrent(
@@ -451,7 +460,7 @@ export default function WorldFoundationApp() {
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
     () => {
       const initial = initialView();
-      return initial === "spaces" ? "office" : initial;
+      return initial === "spaces" ? "desk" : initial;
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
@@ -715,6 +724,7 @@ export default function WorldFoundationApp() {
               onVisualActionExtensionReady={setVisualActionExtension}
               viewToolbarPortal={viewToolbarPortal}
               onGoToSpaces={() => setView("spaces")}
+              onGoToDesk={() => setView("desk")}
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
@@ -804,6 +814,7 @@ function WorldControlPlane({
   onVisualActionExtensionReady,
   viewToolbarPortal,
   onGoToSpaces,
+  onGoToDesk,
 }: {
   view: Exclude<WorldView, "spaces">;
   active: boolean;
@@ -831,6 +842,7 @@ function WorldControlPlane({
   onVisualActionExtensionReady(extension: CommandExtension): void;
   viewToolbarPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
+  onGoToDesk(): void;
 }) {
   const runtime = useWorldRuntime();
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
@@ -3083,7 +3095,9 @@ function WorldControlPlane({
                 }
               >
                 <WorldViewErrorBoundary key={view}>
-                  {view === "office" ? (
+                  {view === "desk" ? (
+                    <DeskView world={world} onOpenTerminal={openTerminalById} />
+                  ) : view === "office" ? (
                     <Suspense
                       fallback={
                         <div className="world-view-loading">
@@ -3141,12 +3155,13 @@ function WorldControlPlane({
               </Suspense>
             ) : null}
           </section>
-          {active ? (
+          {active && view !== "desk" ? (
             <HandoffQueue
               world={world}
               client={handoffClient}
               portal={viewToolbarPortal}
               onOpenTerminal={openTerminalById}
+              onOpenDesk={onGoToDesk}
             />
           ) : null}
           {contextRailInspector &&

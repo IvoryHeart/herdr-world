@@ -5,6 +5,18 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
+- **Desk** is the default view. It organizes the selected host's agents by what
+  they need from you rather than where they run:
+  - **Needs you** lists blocked agents, oldest first, with the question and choices
+    read from the agent's screen.
+  - **To review** lists finished turns with your request, the agent's closing
+    report, how long it ran, its tool calls and the files it edited, all read from
+    the session transcript. **Mark reviewed** (`E`) clears a turn in this browser.
+  - **In flight** lists working agents with their current request and a live line
+    from each terminal. Quiet agents collapse below.
+  - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
+    answer, review, or watch. Other managed hosts appear as summary chips.
+  - The same queue is available from **Handoffs** in Office, Tree, and Graph.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
 - **Office**, **Tree**, and **Graph** show one selected local or SSH Herdr profile

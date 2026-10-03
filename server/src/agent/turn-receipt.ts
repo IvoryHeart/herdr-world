@@ -37,8 +37,15 @@ export type TurnReceipt = {
   files_truncated: boolean;
 };
 
+// Harnesses wrap pasted or injected text in XML-like tags; keep the words.
+const WRAPPER_TAG = /<\/?[a-z][\w-]*(?:\s[^<>]*)?>/gi;
+
 function clip(value: string, max: number) {
-  const text = value.trim();
+  const text = value
+    .replace(WRAPPER_TAG, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
   const points = [...text];
   return points.length > max ? `${points.slice(0, max - 1).join("")}…` : text;
 }

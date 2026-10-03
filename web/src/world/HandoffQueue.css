@@ -275,3 +275,15 @@
     max-height: calc(100vh - 76px);
   }
 }
+.world-handoffs-desk {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--accent, #79a6ff);
+  border-radius: 6px;
+  color: var(--accent, #79a6ff);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
