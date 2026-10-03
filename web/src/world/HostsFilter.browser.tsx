@@ -40,6 +40,7 @@ const creation = Promise.withResolvers<unknown>();
 let watchAdmissionOld = false;
 let downloadPublications = 0;
 let syntheticFileDeleted = false;
+const retiredMutation = Promise.withResolvers<Response>();
 let mutationRequests = 0;
 let uploadRequests = 0;
 const downloadRequests: string[] = [];
@@ -687,6 +688,97 @@ async function operationalScenario() {
     await waitFor(
       () => !!document.querySelector(".connection-manager-modal"),
       "The host menu did not expose connection management",
+    );
+    return;
+  }
+  if (
+    operation === "file-delete-retirement" ||
+    operation === "file-upload-retirement"
+  ) {
+    leaf("beta")!.click();
+    await frame();
+    await invokeCommand("visual-files");
+    await waitFor(
+      () => !!document.querySelector('button[aria-label="File actions"]'),
+      "retiring mutation file actions",
+    );
+    if (operation === "file-delete-retirement") {
+      document
+        .querySelector<HTMLButtonElement>('button[aria-label="File actions"]')!
+        .click();
+      await waitFor(() => !!namedButton("Delete file"), "retiring delete menu");
+      namedButton("Delete file")!.click();
+      await waitFor(
+        () => !!namedButton("Delete"),
+        "retiring delete confirmation",
+      );
+      namedButton("Delete")!.click();
+    } else {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(["synthetic"], "synthetic.txt"));
+      document.querySelector(".file-tree")!.dispatchEvent(
+        new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: transfer,
+        }),
+      );
+    }
+    await frame();
+    check(
+      mutationRequests === 1,
+      "retiring mutation was not submitted exactly once",
+    );
+    flushSync(() => {
+      const state = store.get();
+      __storeTesting.replaceState({
+        ...state,
+        connections: state.connections.map((connection) =>
+          connection.id === "beta"
+            ? { ...connection, generation: 8 }
+            : connection,
+        ),
+      });
+    });
+    await frame();
+    const readsBefore = dispatches.filter(
+      (call) => call.method === "file.list",
+    ).length;
+    retiredMutation.resolve(
+      Response.json(
+        { error: "The owning runtime retired" },
+        {
+          status: 409,
+          headers: {
+            "X-Herdr-Connection-Id": "beta",
+            "X-Herdr-Connection-Generation": "7",
+            "X-Herdr-Request-Outcome": "uncertain",
+          },
+        },
+      ),
+    );
+    await waitFor(
+      () =>
+        store.get().notice?.message ===
+        (operation === "file-delete-retirement"
+          ? "Delete outcome is uncertain"
+          : "Upload outcome is uncertain"),
+      "retired mutation lost its uncertainty notice",
+    );
+    check(
+      store
+        .get()
+        .notice?.detail?.includes(
+          "A file change on Synthetic beta may have completed",
+        ) === true,
+      "retired mutation notice lost the owning host",
+    );
+    await frame();
+    check(
+      mutationRequests === 1 &&
+        dispatches.filter((call) => call.method === "file.list").length ===
+          readsBefore,
+      "retired mutation replayed or refreshed a replacement context",
     );
     return;
   }
@@ -1499,6 +1591,37 @@ async function run() {
   worldLocalStorage.setItem("worldSelectedConnection", "beta");
   history.replaceState(null, "", "/tree");
   initializeLayoutPreferences();
+  if (
+    operation === "file-delete-retirement" ||
+    operation === "file-upload-retirement"
+  ) {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = Object.assign(
+      (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+          location.href,
+        );
+        if (
+          url.pathname.endsWith("/file/delete") ||
+          url.pathname.endsWith("/file/upload")
+        ) {
+          mutationRequests++;
+          check(
+            url.pathname.includes("/beta/file/") &&
+              url.searchParams.get("connection_generation") === "7",
+            "retiring mutation lost its qualified owner",
+          );
+          return retiredMutation.promise;
+        }
+        return originalFetch(input, init);
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+  }
   if (operation === "file-mutation-interruption") {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = Object.assign(
@@ -1720,6 +1843,8 @@ async function run() {
         return {
           entries:
             operation === "file-download-error" ||
+            operation === "file-delete-retirement" ||
+            operation === "file-upload-retirement" ||
             (operation === "file-mutation-interruption" &&
               !syntheticFileDeleted)
               ? [

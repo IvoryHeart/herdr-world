@@ -36,6 +36,8 @@ const cases = [
       "global-creation-retry",
       "file-download-error",
       "file-mutation-interruption",
+      "file-delete-retirement",
+      "file-upload-retirement",
       "global-creation-retirement",
       "notifications",
       "shortcut",

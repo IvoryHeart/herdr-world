@@ -76,7 +76,10 @@ Server dispatch remains authoritative and checks current leases and capabilities
 Retain legacy omitted-ID compatibility only for existing legacy clients; new World
 operations must explicitly qualify both connection and generation. Do not replay
 terminal input or automatically retry ambiguous mutations after a disconnect. Report
-an uncertain outcome and refresh the exact target before the user retries.
+an uncertain outcome naming the owning host even when its runtime has already retired. Refresh
+only an admitted exact target; retirement must not trigger reads against a replacement or another
+host. A connection- and generation-matched server uncertainty marker is recognized before local
+retirement checks, while resources and definite outcomes retain their normal publication fences.
 
 ### Promote session partitions into operational contexts
 
@@ -199,3 +202,12 @@ path still relies on the global host. Rollback deploys the prior build and resto
 the old selector behavior without rewriting connection profiles; version new browser
 preferences so older builds can ignore them. Open windows are browser-session state
 and must be re-admitted after either upgrade or rollback.
+
+### Extend the delivered Desk baseline
+
+The selected-host Desk change from #154 is synchronized and archived separately in #167 before
+this change extends it. The full MODIFIED `Desk attention triage` and `Bounded Desk observation`
+requirements replace that baseline in both this delta and the current world-surfaces spec. Desk
+triages the host filter with qualified reads, independent host queues and fair global bounds of
+40 receipts and 16 screens. Hosts outside the filter remain non-actionable summaries; explicitly
+revealing and acting on their agents remains [issue #163](https://github.com/IvoryHeart/herdr-world/issues/163).

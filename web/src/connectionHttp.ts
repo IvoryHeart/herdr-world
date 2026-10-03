@@ -35,37 +35,36 @@ export async function connectionHttpResource<T>(
     }
     throw error;
   }
+  const ownsResponse =
+    response.headers.get("X-Herdr-Connection-Id") === client.connectionId &&
+    response.headers.get("X-Herdr-Connection-Generation") ===
+      String(client.serverRuntimeGeneration);
+  const markedUncertain =
+    method !== "GET" &&
+    method !== "HEAD" &&
+    ownsResponse &&
+    response.headers.get("X-Herdr-Request-Outcome") === "uncertain";
+  // A retired lease cannot publish resources, but its qualified mutation outcome
+  // still belongs to the user who submitted it.
+  if (markedUncertain) {
+    throw new UncertainRequestError(
+      `HTTP ${method}`,
+      await rejectionMessage(response),
+    );
+  }
   try {
     assertCurrent();
   } catch (error) {
     await response.body?.cancel();
     throw error;
   }
-  if (
-    response.headers.get("X-Herdr-Connection-Id") !== client.connectionId ||
-    response.headers.get("X-Herdr-Connection-Generation") !==
-      String(client.serverRuntimeGeneration)
-  ) {
+  if (!ownsResponse) {
     await response.body?.cancel();
     throw new Error("response connection identity mismatch");
   }
   if (!response.ok) {
-    let message = `resource request failed: ${response.status}`;
-    try {
-      const payload = (await response.json()) as { error?: unknown } | null;
-      if (payload && typeof payload.error === "string" && payload.error)
-        message = payload.error;
-    } catch {
-      // Preserve the status when its explanation cannot be decoded.
-    }
+    const message = await rejectionMessage(response);
     assertCurrent();
-    if (
-      method !== "GET" &&
-      method !== "HEAD" &&
-      response.headers.get("X-Herdr-Request-Outcome") === "uncertain"
-    ) {
-      throw new UncertainRequestError(`HTTP ${method}`, message);
-    }
     throw new Error(message);
   }
   let resource: T;
@@ -84,6 +83,18 @@ export async function connectionHttpResource<T>(
   }
   assertCurrent();
   return resource;
+}
+
+async function rejectionMessage(response: Response): Promise<string> {
+  const fallback = `resource request failed: ${response.status}`;
+  try {
+    const payload = (await response.json()) as { error?: unknown } | null;
+    if (payload && typeof payload.error === "string" && payload.error)
+      return payload.error;
+  } catch {
+    // Preserve the status when its explanation cannot be decoded.
+  }
+  return fallback;
 }
 
 export function connectionHttpPath(

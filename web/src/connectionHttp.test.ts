@@ -146,6 +146,84 @@ test.each(["GET", "POST", "DELETE"])(
   },
 );
 
+test.each(["POST", "DELETE", "GET"])(
+  "%s preserves only qualified mutation uncertainty after retirement",
+  async (method) => {
+    const previousFetch = globalThis.fetch;
+    try {
+      for (const [id, generation] of [
+        ["alpha", "7"],
+        ["beta", "7"],
+        ["alpha", "8"],
+      ]) {
+        let current = true;
+        globalThis.fetch = (async () => {
+          current = false;
+          return Response.json(
+            { error: "The owning runtime retired" },
+            {
+              status: 409,
+              headers: {
+                "X-Herdr-Connection-Id": id!,
+                "X-Herdr-Connection-Generation": generation!,
+                "X-Herdr-Request-Outcome": "uncertain",
+              },
+            },
+          );
+        }) as unknown as typeof fetch;
+        const error = await connectionHttpResource(
+          { ...owner, isCurrent: () => current },
+          "/file/delete",
+          (response) => response.json(),
+          { method },
+        ).catch((error: unknown) => error);
+        expect(error).toBeInstanceOf(Error);
+        if (method !== "GET" && id === "alpha" && generation === "7") {
+          expect(error).toBeInstanceOf(UncertainRequestError);
+          expect((error as Error).message).toContain(
+            "The owning runtime retired",
+          );
+        } else expect(error).not.toBeInstanceOf(UncertainRequestError);
+      }
+    } finally {
+      globalThis.fetch = previousFetch;
+    }
+  },
+);
+
+test("retirement during a marked rejection body preserves uncertainty", async () => {
+  const previousFetch = globalThis.fetch;
+  let current = true;
+  const response = Response.json(
+    { error: "Synthetic retired mutation" },
+    {
+      status: 409,
+      headers: {
+        "X-Herdr-Connection-Id": "alpha",
+        "X-Herdr-Connection-Generation": "7",
+        "X-Herdr-Request-Outcome": "uncertain",
+      },
+    },
+  );
+  const json = response.json.bind(response);
+  response.json = async () => {
+    current = false;
+    return json();
+  };
+  globalThis.fetch = (async () => response) as unknown as typeof fetch;
+  try {
+    const error = await connectionHttpResource(
+      { ...owner, isCurrent: () => current },
+      "/file/upload",
+      (reply) => reply.json(),
+      { method: "POST" },
+    ).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(UncertainRequestError);
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 describe("connection-scoped HTTP paths", () => {
   test("encodes one valid nontrivial connection path segment", () => {
     expect(connectionHttpPath("alpha:remote-1", "/upload-image")).toBe(

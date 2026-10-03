@@ -118,7 +118,9 @@ A replaced or unavailable runtime SHALL invalidate only its own old contexts and
 World transport disconnect or authentication loss SHALL invalidate all operational contexts.
 Late replies, events, HTTP resources and terminal frames SHALL NOT update a replacement context.
 World SHALL NOT replay terminal input or automatically retry a mutation with an uncertain outcome
-across a disconnect; it SHALL report uncertainty and re-observe the exact target before a user retry.
+across a disconnect; it SHALL report uncertainty naming the owning host even after browser-observed
+runtime retirement. It SHALL re-observe only a currently admitted exact target before a user retry,
+without redirecting a refresh to a replacement runtime or another host.
 
 #### Scenario: Colliding native identifiers
 - **WHEN** two hosts contain the same native pane identifier and both have open operational contexts
@@ -157,6 +159,14 @@ across a disconnect; it SHALL report uncertainty and re-observe the exact target
 #### Scenario: Mutation acknowledgement is lost
 - **WHEN** a mutation may have reached Herdr but its acknowledgement is lost during disconnect
 - **THEN** World reports an uncertain outcome without automatically replaying the mutation
+
+#### Scenario: Qualified mutation uncertainty after browser-observed retirement
+
+- **WHEN** a Delete or Upload response carries an uncertainty marker matching the captured connection
+  ID and runtime generation after the browser has already retired that runtime
+- **THEN** World retains a host-level notice that the file change may have completed, without replaying
+  the mutation or refreshing a replacement context, while mismatched responses and read-only resources
+  remain fenced
 
 #### Scenario: Scoped HTTP reply arrives late
 - **WHEN** a file or upload response arrives after its owning runtime generation retires

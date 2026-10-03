@@ -170,8 +170,9 @@ visible if that focus fails.
 
 ### Requirement: Common view navigation
 
-The native World shell SHALL offer Spaces, Office, Tree and Graph once each and SHALL keep rendered
-view, browser history and canonical paths `/spaces`, `/office`, `/tree` and `/graph` consistent.
+The native World shell SHALL offer Desk, Spaces, Office, Tree and Graph once each and SHALL keep
+rendered view, browser history and canonical paths `/desk`, `/spaces`, `/office`, `/tree` and `/graph`
+consistent. The World root and unknown paths SHALL resolve to Desk.
 The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
 Hosts filter; a muted aggregate health indicator with the bounded space/agent/stale summary
 in its accessible label and tooltip SHALL remain in that top bar. The shell SHALL provide one shared view-control slot there: Office, Tree and
@@ -179,15 +180,16 @@ Graph SHALL place search in it, and Graph SHALL additionally place Fit and zoom 
 NOT stack a second view-navigation, Visual Control Plane status bar or view-local search/zoom header
 above the application stage.
 The inherited Spaces workspace navigator, focused tab strip and review-annotations control SHALL
-remain the common frame around Spaces, Office, Tree and Graph. Changing views SHALL replace only the
+remain the common frame around Desk, Spaces, Office, Tree and Graph. Changing views SHALL replace only the
 center surface. Graph SHALL not place a second workspace hierarchy beside that common navigator on
 desktop. Inspector-created review drafts SHALL remain visible and editable through the same
 workspace-qualified annotation panel in every view. Selecting a workspace or pane through either
 the navigator or the focused tab strip SHALL resolve through the same qualified World selection
 path and update the docked Inspector only after exact focus succeeds.
-Office SHALL be the primary default surface when managed profiles exist; Spaces SHALL
-remain the first-class operational workspace and profile-management surface rather than being
-removed or embedded into Office.
+Desk SHALL be the primary default surface after a valid managed profile is selected. Office, Tree
+and Graph SHALL remain spatial views of the same topology, and Spaces SHALL remain the first-class
+operational workspace and profile-management surface rather than being removed or embedded into
+another view.
 The common shell SHALL expose Manage connections separately from its Hosts filter using the
 existing managed catalogue. Every operational workspace or Inspector SHALL identify its owning host
 and state. The common navigator SHALL group workspaces by host within the filter; an already-open
@@ -204,14 +206,14 @@ SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those in
 
 #### Scenario: Use the single application top bar
 
-- **WHEN** a user changes among Office, Spaces, Tree and Graph
+- **WHEN** a user changes among Desk, Office, Spaces, Tree and Graph
 - **THEN** the view selector, version, aggregate health summary, Hosts filter, Manage connections, applicable
   search/Fit/zoom controls and shell tools remain in one top bar and the selected view receives all
   remaining vertical workspace
 
 #### Scenario: Use the common workspace frame
 
-- **WHEN** a user changes among Spaces, Office, Tree and Graph with the current host filter
+- **WHEN** a user changes among Desk, Spaces, Office, Tree and Graph with the current host filter
 - **THEN** the same workspace navigator, focused tab context and annotations control remain
   available while only the center presentation changes and Graph adds no competing desktop outline
 
@@ -230,9 +232,9 @@ SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those in
 
 #### Scenario: Open World with a managed profile
 
-- **WHEN** a user opens the World root with at least one managed profile
-- **THEN** World opens Office as the primary surface and keeps Spaces available through the same
-  navigation and shell
+- **WHEN** a user opens the World root with a valid restored or default managed profile
+- **THEN** World opens Desk as the primary surface and keeps Office, Tree, Graph and Spaces
+  available through the same navigation and shell
 
 ### Requirement: Native World shell
 
@@ -1106,6 +1108,123 @@ unresolved watches SHALL not expose operational actions.
 - **THEN** the snapshot still admits its valid watches and the view reports its
   presentation omission without calling it missing
 
+### Requirement: Desk attention triage
+
+Desk SHALL present every current actionable agent within the host filter by what it needs from the
+operator. Needs you SHALL list blocked agents, oldest wait first, with the question read from the
+bottom of the agent's visible screen. To review SHALL list done agents, idle agents whose latest turn
+ended within 12 hours, and agents this browser observed stop working within 12 hours, each with its
+turn receipt or, without one, its latest screen lines. In flight SHALL list working agents with their
+current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards and
+rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
+writes to the terminal, otherwise the harness, and SHALL show its harness, model, workspace, tab and
+working folder when known. Every card and row SHALL identify its owning host.
+Desk SHALL offer three modes and SHALL open on Now for each browser session: Now (the lanes above),
+Agents (every current actionable agent within the host filter, agents recently opened from the Desk first, then
+workspaces, grouped by workspace identity and ordered by their most recently active agent) and
+Reviewed (each agent's latest stop that the operator marked reviewed, newest first and reopenable,
+while that agent remains idle or done). Older stops are not retained. One search SHALL filter every
+mode by agent name, thread title, harness, workspace, tab, folder, request and report. Marking a
+stop reviewed SHALL offer an immediate undo.
+On wide screens, opening an agent from the Desk SHALL show its existing Inspector docked beside the
+Desk as a reading pane, with the lanes folded into one prioritized queue. Moving through the queue
+with J and K SHALL show the next agent in the reading pane without moving keyboard focus out of
+the queue, Enter SHALL move focus into its terminal, and Esc SHALL close the pane. On narrow screens
+the Inspector SHALL open full screen instead.
+Receipts, full reports and screen reads SHALL target each leaf's immutable connection ID and runtime
+generation. Every card's primary action SHALL open the existing terminal Inspector for that exact
+connection-qualified pane. Desk SHALL NOT send terminal input, answer approvals, assign tasks or run
+lifecycle commands itself. Review marks SHALL apply to one stop of one agent session and SHALL remain
+unavailable until a receipt has been read for the agent's present state; when no receipt can be read
+for that state, the stop SHALL become markable without one. Keyboard shortcuts (J and K to move, Enter to
+open, E to mark reviewed) SHALL apply only while focus is on the Desk or the page itself, SHALL NOT
+replace the native activation of a focused control, and SHALL act on the card that holds keyboard
+focus: focusing any control in a card makes it the active card, J and K move keyboard focus with the
+highlight, and focus stays on the same agent while lanes reorder.
+Within the shared shell, Desk SHALL participate in the shell Actions menu, window arrangements of the
+Inspectors it opens, and view-local failure isolation. On wide screens it SHALL select the agent shown
+in its reading pane only to dock that agent's Inspector; other selection-driven behavior
+(visual-route Action targets, the shared view-control search and watched visual projection) SHALL
+NOT apply to it. Managed hosts outside the filter
+SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
+pane and agent session across host filter and operational focus changes, so they never carry over
+to another session or a same-named pane on another host.
+
+#### Scenario: Answer a blocked agent
+
+- **WHEN** an agent within the host filter is blocked on an approval
+- **THEN** its Needs you card shows the approval question and choices from its screen, and Answer
+  opens that pane's terminal Inspector without sending any input
+
+#### Scenario: Review a finished turn
+
+- **WHEN** an agent finishes a turn
+- **THEN** its card moves from In flight to To review with the request, closing report, duration,
+  tool calls and edited files, and marking it reviewed hides only that stop
+
+#### Scenario: Return to a reviewed stop
+
+- **WHEN** an operator marks a stop reviewed and later wants it back
+- **THEN** Undo restores it immediately, and while the agent stays idle or done, Reviewed lists that
+  stop with its receipt and a Reopen action
+
+#### Scenario: Find the agent worked with recently
+
+- **WHEN** an operator searches for words from an agent's thread title, tab, folder or request, or
+  opens Agents
+- **THEN** the matching agents appear with those identifying details, with agents recently opened
+  from the Desk listed first, and selecting one opens its terminal Inspector
+
+#### Scenario: Work through the queue beside a reading pane
+
+- **WHEN** an operator on a wide screen opens a card and then presses J
+- **THEN** the agent's Inspector stays docked beside a one-column queue and shows the next agent,
+  while keyboard focus stays in the queue until Enter moves it into that terminal
+
+#### Scenario: Keys aimed at other controls
+
+- **WHEN** a keyboard user presses Enter on a focused button or in the top bar while Desk is shown
+- **THEN** that control activates normally and no terminal Inspector opens
+
+#### Scenario: Colliding agent panes on filtered hosts
+
+- **WHEN** two filtered hosts expose the same native pane ID
+- **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
+  stop does not mark the other host's stop reviewed
+
+### Requirement: Bounded Desk observation
+
+Desk SHALL partition and count every current actionable agent within the host filter. It SHALL read receipts for at most 40 agents
+and visible screens for at most 16 panes globally, choosing blocked, then done, working and idle agents
+first. Capacity SHALL be shared fairly among hosts within each urgency tier, with independent per-host
+queues. Failed or retired hosts SHALL NOT redirect reads to another host or prevent healthy hosts
+from being read. Pending reads SHALL retain active admission until settlement; status, activity and
+visibility refreshes SHALL coalesce queued work without overlapping reads of the same kind on one host.
+Receipts SHALL refresh on a status or activity change and every 20 seconds; screens SHALL refresh
+every 4 seconds. Reads SHALL stop while the page is hidden, including reads already queued, and resume when it is
+shown. Receipts and
+screen excerpts SHALL be keyed by connection, runtime generation, pane and agent session, so a
+replaced session never shows the previous session's text and a refresh does not remove a shown
+receipt.
+
+#### Scenario: More agents than the read bound
+
+- **WHEN** a host has 40 idle agents and one blocked agent
+- **THEN** the blocked agent appears in Needs you and is among the agents whose screens and receipts
+  are read
+
+#### Scenario: A Desk read completes after host retirement
+
+- **WHEN** a receipt, full report or screen read completes after its runtime is retired
+- **THEN** its result is not published and healthy hosts remain independently readable
+
+
+#### Scenario: Slow Desk host alongside a healthy host
+
+- **WHEN** a filtered host's receipt or screen read remains pending
+- **THEN** another host's receipts, review controls and screen polling progress independently,
+  and equally urgent hosts share the bounded read admission fairly
+
 ## ADDED Requirements
 
 ### Requirement: Persist host filters without operational side effects
@@ -1225,34 +1344,3 @@ cannot be opened without resolving to a colliding entity on another runtime or s
 #### Scenario: Follow a stale notification
 - **WHEN** a notification's runtime generation or agent session has been replaced
 - **THEN** World reports the original target as unavailable and does not open its replacement
-
-
-### Requirement: Aggregate Desk triage
-
-Desk SHALL remain the default view and SHALL triage current actionable agents from the host filter.
-Its receipts, full reports and screen reads SHALL target each leaf's immutable connection ID and
-runtime generation. Failed or retired hosts SHALL NOT redirect reads to another host or prevent
-healthy hosts from being read. Receipt and screen reads SHALL retain their global bounds of 40 and
-16 agents respectively, with fair capacity among equally urgent hosts and independent
-per-host queues. Pending reads SHALL retain active admission until settlement; refreshes and
-visibility changes SHALL coalesce queued work without overlapping reads on the same host. Review marks, observed stops and recent opens SHALL use connection,
-runtime, pane and agent session identities across host filter and operational focus changes.
-Hosts outside the filter SHALL remain read-only aggregate summaries.
-
-#### Scenario: Colliding agent panes on filtered hosts
-
-- **WHEN** two filtered hosts expose the same native pane ID
-- **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
-  stop does not mark the other host's stop reviewed
-
-#### Scenario: A Desk read completes after host retirement
-
-- **WHEN** a receipt, full report or screen read completes after its runtime is retired
-- **THEN** its result is not published and healthy hosts remain independently readable
-
-
-#### Scenario: Slow Desk host alongside a healthy host
-
-- **WHEN** a filtered host's receipt or screen read remains pending
-- **THEN** another host's receipts, review controls and screen polling progress independently,
-  and equally urgent hosts share the bounded read admission fairly

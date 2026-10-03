@@ -345,6 +345,12 @@ function FileExplorerContent({
 }) {
   const workspaces = useStoreSelector((state) => state.workspaces);
   const connectionClient = useConnectionClient();
+  const hostLabel = useStoreSelector(
+    (state) =>
+      state.connections.find(
+        (connection) => connection.id === connectionClient.connectionId,
+      )?.label ?? connectionClient.connectionId,
+  );
   const focusedWorkspace = workspaces.find((w) => w.focused);
   const workspace = workspaceId
     ? workspaces.find((w) => w.workspace_id === workspaceId)
@@ -1126,8 +1132,13 @@ function FileExplorerContent({
         autoDismissMs: 5000,
       });
     } catch (e) {
-      if (!runtimeContextIsCurrent(requestContext)) return;
       if (e instanceof UncertainRequestError) {
+        store.notify({
+          kind: "error",
+          message: "Delete outcome is uncertain",
+          detail: `A file change on ${hostLabel} may have completed. ${e.message}`,
+        });
+        if (!runtimeContextIsCurrent(requestContext)) return;
         clearDeletedPreview(entry);
         invalidateFilePreviewCache(
           connectionClient,
@@ -1138,13 +1149,12 @@ function FileExplorerContent({
         await loadDirectory(parentDirectoryPath(entry.path), true);
         if (!runtimeContextIsCurrent(requestContext)) return;
         void loadGitStatus(true);
+        return;
       }
+      if (!runtimeContextIsCurrent(requestContext)) return;
       store.notify({
         kind: "error",
-        message:
-          e instanceof UncertainRequestError
-            ? "Delete outcome is uncertain"
-            : "Delete failed",
+        message: "Delete failed",
         detail: (e as Error).message,
       });
     } finally {
@@ -1198,7 +1208,6 @@ function FileExplorerContent({
           ),
         ),
       );
-      if (!runtimeContextIsCurrent(requestContext)) return;
       const failures = results.filter(
         (result): result is PromiseRejectedResult =>
           result.status === "rejected",
@@ -1208,6 +1217,7 @@ function FileExplorerContent({
           (result) => result.reason instanceof UncertainRequestError,
         ) ?? failures[0];
       if (failed) throw failed.reason;
+      if (!runtimeContextIsCurrent(requestContext)) return;
       if (directory) {
         updateCache({ expanded: new Set(expanded).add(directory) });
       }
@@ -1230,8 +1240,13 @@ function FileExplorerContent({
         autoDismissMs: 5000,
       });
     } catch (e) {
-      if (!runtimeContextIsCurrent(requestContext)) return;
       if (e instanceof UncertainRequestError) {
+        store.notify({
+          kind: "error",
+          message: "Upload outcome is uncertain",
+          detail: `A file change on ${hostLabel} may have completed. ${e.message}`,
+        });
+        if (!runtimeContextIsCurrent(requestContext)) return;
         await loadDirectory(directory, true);
         if (!runtimeContextIsCurrent(requestContext)) return;
         invalidateUploadedPreviews(
@@ -1240,13 +1255,12 @@ function FileExplorerContent({
           ),
         );
         void loadGitStatus(true);
+        return;
       }
+      if (!runtimeContextIsCurrent(requestContext)) return;
       store.notify({
         kind: "error",
-        message:
-          e instanceof UncertainRequestError
-            ? "Upload outcome is uncertain"
-            : "Upload failed",
+        message: "Upload failed",
         detail: (e as Error).message,
       });
     } finally {

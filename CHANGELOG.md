@@ -44,7 +44,8 @@ are optional because the merged PR history records their source.
 - Inspector tab shortcuts restore the destination tab's selected pane and refresh
   unobserved panes. File preview and Changes cache invalidation follows runtime
   generations even when browser transport epochs differ. Mutations whose response
-  is withheld after runtime retirement report an uncertain outcome; retirement
+  is withheld after runtime retirement retain an uncertain-outcome notice naming
+  the owning host even if the browser has already observed retirement; retirement
   after successful response decoding remains a stale-context error.
 
 - Mobile top-bar controls use icons for Hosts, view selection, Actions and Menu,
