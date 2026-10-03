@@ -339,38 +339,60 @@ async function operationalScenario() {
         "The initial host's terminal did not enter the mobile session view",
       );
     }
+    const spaceId = worldObjectId("beta", "space", "shared");
     const room = () =>
       [
         ...document.querySelectorAll<HTMLButtonElement>(
-          '.world-semantic-target[data-kind="room"]',
+          requestedView === "office"
+            ? '.world-semantic-target[data-kind="room"]'
+            : requestedView === "graph"
+              ? "[data-graph-node-anchor]"
+              : "[data-world-node-anchor]",
         ),
       ].find(
         (element) =>
-          element.dataset.targetKey ===
-          worldObjectId("beta", "space", "shared"),
+          (element.dataset.targetKey ??
+            element.dataset.graphNodeAnchor ??
+            element.dataset.worldNodeAnchor) === spaceId,
+      );
+    const filesVisible = () =>
+      [
+        ...document.querySelectorAll<HTMLElement>(
+          '.workspace-inspector[data-view="files"]',
+        ),
+      ].some(
+        (inspector) =>
+          inspector.textContent?.includes("Synthetic beta") &&
+          !!inspector.getBoundingClientRect().width,
       );
     await waitFor(
       () => !!room() && !room()!.disabled,
-      "The Office workspace room did not become interactive",
+      "The workspace did not become interactive",
     );
     room()!.click();
     await waitFor(
-      () => calls.includes("attached:beta"),
-      "The Office room did not open its owning host's terminal",
+      () => filesVisible() && calls.includes("resource:beta"),
+      "The workspace did not open its owning host's Files Inspector",
     );
-    if (window.innerWidth <= 720) {
-      await waitFor(
-        () =>
-          [...document.querySelectorAll(".workspace-inspector")].some(
-            (inspector) =>
-              inspector.textContent?.includes("Synthetic beta") &&
-              !!inspector
-                .querySelector(".terminal-main")
-                ?.getBoundingClientRect().width,
-          ),
-        "The mobile Office room left its terminal in a hidden floating Inspector",
-      );
-    }
+    check(
+      !calls.includes("attached:beta"),
+      "Clicking a workspace unexpectedly attached its first terminal",
+    );
+    leaf("beta")!.click();
+    await waitFor(
+      () => calls.includes("attached:beta"),
+      "Clicking the workspace's agent did not open its terminal",
+    );
+    await frame();
+    await waitFor(
+      () => !!room() && !room()!.disabled,
+      "The workspace controls did not finish rendering after terminal selection",
+    );
+    room()!.click();
+    await waitFor(
+      filesVisible,
+      "Returning to the workspace did not restore its Files Inspector",
+    );
     check(
       store.get().activeConnectionId === "alpha",
       "The Office room changed the Spaces owner",
@@ -413,8 +435,10 @@ async function operationalScenario() {
       }
       row.click();
       await waitFor(
-        () => calls.includes("attached:beta"),
-        "Selecting an unvisited host's workspace did not open its terminal",
+        () =>
+          calls.includes("resource:beta") &&
+          !!document.querySelector('.workspace-inspector[data-view="files"]'),
+        "Selecting an unvisited host's workspace did not open Files",
       );
       await frame();
       check(

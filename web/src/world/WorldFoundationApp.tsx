@@ -65,7 +65,6 @@ import {
   type WorldLeafObject,
   type WorldObject,
   type WorldObjectNode,
-  type WorldSpaceObject,
   worldObjectForHosts,
   worldObjectForWatches,
   worldObjectWithWatches,
@@ -418,33 +417,6 @@ export function worldIntentInitialView(
   if (preferred && views.includes(preferred)) return preferred;
   if (views.includes("terminal")) return "terminal";
   return views[0] ?? null;
-}
-
-export function worldWorkspaceTerminalTarget(
-  space: WorldSpaceObject,
-  selectedPaneId?: string | null,
-  selectedTabId?: string,
-): WorldLeafObject | null {
-  const leaves = space.children.filter(
-    (leaf) =>
-      leaf.actionable &&
-      leaf.capabilities.openTerminal &&
-      leaf.connectionId === space.connectionId &&
-      leaf.generation === space.generation &&
-      leaf.workspaceId === space.nativeId,
-  );
-  const tabId =
-    selectedTabId ??
-    space.workspace.active_tab_id ??
-    space.tabs.find((tab) => tab.focused)?.tab_id;
-  return (
-    leaves.find((leaf) => leaf.nativeId === selectedPaneId) ??
-    leaves.find((leaf) => leaf.tabId === tabId && leaf.focused) ??
-    leaves.find((leaf) => leaf.tabId === tabId) ??
-    leaves.find((leaf) => leaf.focused) ??
-    leaves[0] ??
-    null
-  );
 }
 
 export function worldSnapshotPriorityForNode(
@@ -2203,18 +2175,14 @@ function WorldControlPlane({
     signal?: AbortSignal,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
-    const selected = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
-    const session = selected
-      ? connectionSnapshot(store.get(), selected.connectionId)
-      : null;
-    const next =
-      selected?.kind === "space" && requestedView === null
-        ? (worldWorkspaceTerminalTarget(
-            selected,
-            session?.selectedPaneId,
-            session?.browserNavigation.tabIds[selected.nativeId],
-          ) ?? selected)
-        : selected;
+    const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
+    const inspectorView =
+      requestedView ??
+      (next?.kind === "space"
+        ? "files"
+        : next?.capabilities.openTerminal
+          ? "terminal"
+          : null);
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
     setIntentError(null);
@@ -2261,15 +2229,15 @@ function WorldControlPlane({
         if (!currentExisting) return false;
         const currentDockedInspectorId = dockedInspectorIdRef.current;
         setSelection(next);
-        const observed = conversationFor(next, requestedView);
+        const observed = conversationFor(next, inspectorView);
         if (!observed) return false;
         const reconciled = reconcileWorldInspectorConversation(
           currentExisting,
           observed,
         );
         const admitted =
-          requestedView && reconciled.availableViews.includes(requestedView)
-            ? { ...reconciled, view: requestedView }
+          inspectorView && reconciled.availableViews.includes(inspectorView)
+            ? { ...reconciled, view: inspectorView }
             : reconciled;
         if (
           worldInspectorWindowId(currentExisting) !== currentDockedInspectorId
@@ -2329,7 +2297,7 @@ function WorldControlPlane({
       }
       return true;
     }
-    const conversation = conversationFor(next, requestedView);
+    const conversation = conversationFor(next, inspectorView);
     if (!conversation) return false;
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
@@ -2526,19 +2494,8 @@ function WorldControlPlane({
   }, [active, activeInspectorId]);
   const selectNode = (id: string, signal?: AbortSignal) => {
     if (signal?.aborted) return Promise.resolve(false);
-    const selected = world.nodeById.get(id);
-    const session = selected
-      ? connectionSnapshot(store.get(), selected.connectionId)
-      : null;
-    const node =
-      selected?.kind === "space"
-        ? (worldWorkspaceTerminalTarget(
-            selected,
-            session?.selectedPaneId,
-            session?.browserNavigation.tabIds[selected.nativeId],
-          ) ?? selected)
-        : selected;
-    const nodeId = node?.id ?? id;
+    const node = world.nodeById.get(id);
+    const nodeId = id;
     if (
       view === "office" &&
       officeInspectorPresentation === "floating" &&

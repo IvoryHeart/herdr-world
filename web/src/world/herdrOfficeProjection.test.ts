@@ -9,6 +9,62 @@ import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 
 describe("Pixel Office projection", () => {
+  test("selecting an admitted terminal preserves desk, device and standing-agent positions", () => {
+    const tabs = Array.from({ length: 3 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.flatMap((entry) =>
+          Array.from({ length: 3 }, (_, index) =>
+            pane(entry.tab_id, "working", `Synthetic ${index}`, index),
+          ),
+        ),
+      ),
+    ]);
+    const positions = (selectedId: string | null) => {
+      const room = projectWorldOffice(world, 1, selectedId).rooms[0]!;
+      return {
+        desks: room.desks.map(({ key, paneDevices }) => ({
+          key,
+          devices: paneDevices.map(({ key }) => key),
+        })),
+        agents: room.roomAgents.map(({ key }) => key),
+      };
+    };
+    const before = positions(null);
+    for (const leaf of world.leaves) expect(positions(leaf.id)).toEqual(before);
+  });
+
+  test("revealing an omitted pane preserves bounded device order", () => {
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        [tab("shared", 1)],
+        Array.from({ length: 6 }, (_, index) =>
+          pane("shared", "working", `Synthetic ${index}`, index),
+        ),
+      ),
+    ]);
+    const before = projectWorldOffice(world, 1);
+    const beforeKeys = new Set(
+      before.rooms[0]!.desks[0]!.paneDevices.map(({ nodeId }) => nodeId),
+    );
+    const selected = world.leaves.find(({ id }) => !beforeKeys.has(id))!;
+    const office = projectWorldOffice(world, 1, selected.id);
+    const devices = office.rooms[0]!.desks[0]!.paneDevices;
+    expect(devices.some(({ nodeId }) => nodeId === selected.id)).toBe(true);
+    const admitted = new Set(devices.map(({ key }) => key));
+    expect(devices.map(({ key }) => key)).toEqual(
+      before.paneRoster
+        .filter(({ device }) => admitted.has(device.key))
+        .map(({ device }) => device.key),
+    );
+    expect(devices).toHaveLength(OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk);
+  });
+
   test("terminal and room selections preserve the positions of admitted workspaces", () => {
     const world = buildWorldObject(
       ["alpha", "beta", "gamma"].map((id) =>

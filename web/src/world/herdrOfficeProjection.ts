@@ -287,31 +287,24 @@ export function projectWorldOffice(
       ? prepared.roster[prepared.agentIndex.get(selectedId) ?? -1]?.agent
       : undefined;
   const rooms = presentedRooms.map((entry) => {
-    const desks = [...entry.desks]
-      .sort(
-        (left, right) =>
-          Number(right.tabRef.nativeId === selectedLeaf?.tabId) -
-          Number(left.tabRef.nativeId === selectedLeaf?.tabId),
-      )
-      .slice(0, OFFICE_PRESENTATION_BOUNDS.desksPerRoom)
-      .map((desk) => {
-        const devices = projectPaneDevices(entry.source.children, desk)
-          .slice()
-          .sort(
-            (left, right) =>
-              Number(right.nodeId === selectedId) -
-              Number(left.nodeId === selectedId),
-          )
-          .slice(0, OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk);
-        return {
-          ...desk,
-          paneDevices: devices,
-          omittedPaneCount: Math.max(
-            0,
-            desk.observedPaneCount - devices.length,
-          ),
-        };
-      });
+    const desks = boundedWithPriority(
+      entry.desks,
+      OFFICE_PRESENTATION_BOUNDS.desksPerRoom,
+      (desk) =>
+        entry.source.id === selectedSpaceId &&
+        desk.tabRef.nativeId === selectedLeaf?.tabId,
+    ).map((desk) => {
+      const devices = boundedWithPriority(
+        projectPaneDevices(entry.source.children, desk),
+        OFFICE_PRESENTATION_BOUNDS.paneDevicesPerDesk,
+        (device) => device.nodeId === selectedId,
+      );
+      return {
+        ...desk,
+        paneDevices: devices,
+        omittedPaneCount: Math.max(0, desk.observedPaneCount - devices.length),
+      };
+    });
     const seated = new Set(
       desks.flatMap(({ occupantAgentKey }) =>
         occupantAgentKey ? [occupantAgentKey] : [],
@@ -325,16 +318,14 @@ export function projectWorldOffice(
           ? ("seated" as const)
           : ("standing" as const),
       }))
-      .sort(
-        (left, right) =>
-          selectedFirst(left, right) || compareRoomAgents(left, right, desks),
-      );
+      .sort((left, right) => compareRoomAgents(left, right, desks));
     return {
       ...entry.room,
       desks,
-      roomAgents: roomAgents.slice(
-        0,
+      roomAgents: boundedWithPriority(
+        roomAgents,
         OFFICE_PRESENTATION_BOUNDS.roomAgentsPerRoom,
+        (agent) => agent.key === selectedId,
       ),
       omittedDeskCount: Math.max(0, entry.source.coverage.tabs - desks.length),
       omittedAgentCount: Math.max(
