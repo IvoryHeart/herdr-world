@@ -3090,7 +3090,11 @@ function WorldControlPlane({
               >
                 <WorldViewErrorBoundary key={view}>
                   {view === "desk" ? (
-                    <DeskView world={world} onOpenTerminal={openTerminalById} />
+                    <DeskView
+                      world={world}
+                      aggregate={aggregateWorld}
+                      onOpenTerminal={openTerminalById}
+                    />
                   ) : view === "office" ? (
                     <Suspense
                       fallback={

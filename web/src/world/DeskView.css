@@ -175,6 +175,10 @@
   border-radius: 9px;
   background: var(--bg, #0e1116);
 }
+.desk-card:focus-visible {
+  outline: 2px solid var(--lane);
+  outline-offset: 2px;
+}
 .desk-card.is-focused {
   border-color: var(--lane);
   box-shadow: 0 0 0 1px var(--lane);

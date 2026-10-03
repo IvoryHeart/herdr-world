@@ -11,6 +11,11 @@ const CHROME =
   /\?\s*for shortcuts|esc to cancel|ctrl\+[a-z] to|shift\+tab to|context (left|\d+% used)|weekly \d+% left|tokens? used|f\d to view|for agents|^\s*[⎿└]?\s*tip:|update installed|restart to update|^\s*[↑↓]\s?\d|\$\d+\.\d+ \(|\(auto\)|^\s*~?\/\S*( \([^)]*\))?\s*$/i;
 const INPUT_PROMPT = /^\s*(?:[›❯>]|│\s*[›❯>])(?:\s|$)/;
 
+/** Read live, not narrowed: visibility changes while reads are awaited. */
+function pageHidden() {
+  return document.visibilityState === "hidden";
+}
+
 function textOf(result: unknown): string | null {
   if (!result || typeof result !== "object") return null;
   const record = result as Record<string, unknown>;
@@ -108,12 +113,14 @@ export function usePaneScreens(
       if (timer !== undefined) window.clearTimeout(timer);
       timer = undefined;
       // A hidden page reads nothing; it refreshes as soon as it is shown.
-      if (document.visibilityState === "hidden") {
+      if (pageHidden()) {
         if (!cancelled) timer = window.setTimeout(run, POLL_MS);
         return;
       }
       for (const leaf of targets) {
         if (cancelled || !client.isCurrent()) return;
+        // Stop reading as soon as the page is hidden; showing it resumes.
+        if (pageHidden()) break;
         const identity = screenIdentity(leaf);
         try {
           const result = await client.call(

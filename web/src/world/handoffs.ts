@@ -63,6 +63,61 @@ export function pollingTargets(
     .map(({ leaf }) => leaf);
 }
 
+/**
+ * Records stops this browser observed: an agent session that was working and
+ * is not any more. Stops belong to one agent session in one runtime, so a
+ * replacement session in the same terminal starts without its predecessor's
+ * stop. `previous` (last seen status per identity) is updated in place.
+ */
+export function advanceObservedStops(
+  stops: ReadonlyMap<string, number>,
+  previous: Map<string, string>,
+  leaves: readonly WorldLeafObject[],
+  now: number,
+): { stops: Map<string, number>; changed: boolean } {
+  let changed = false;
+  const next = new Map(stops);
+  const current = new Map(
+    leaves.map((leaf) => [leaf.id, receiptIdentity(leaf)]),
+  );
+  for (const leaf of leaves) {
+    const identity = receiptIdentity(leaf);
+    const before = previous.get(identity);
+    if (before === "working" && leaf.status !== "working") {
+      next.set(identity, now);
+      changed = true;
+    } else if (leaf.status === "working" && next.delete(identity)) {
+      changed = true;
+    }
+    previous.set(identity, leaf.status);
+  }
+  const live = new Set(current.values());
+  for (const key of [...next.keys()]) {
+    const leafId = stopLeafId(key);
+    if (leafId !== null && current.has(leafId) && !live.has(key)) {
+      next.delete(key);
+      changed = true;
+    }
+  }
+  for (const key of [...previous.keys()])
+    if (!live.has(key)) previous.delete(key);
+  for (const [key, at] of next)
+    if (now - at > IDLE_WINDOW_MS && next.delete(key)) changed = true;
+  return { stops: next, changed };
+}
+
+/** The terminal (leaf) id inside a `receiptIdentity`, or null if malformed. */
+function stopLeafId(identity: string): string | null {
+  try {
+    const value = JSON.parse(identity);
+    return Array.isArray(value) && typeof value[2] === "string"
+      ? value[2]
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The agent session a receipt describes. */
 export function receiptIdentity(leaf: WorldLeafObject) {
   return JSON.stringify([
@@ -226,6 +281,9 @@ export function useTurnReceipts(
     void (async () => {
       for (const leaf of queue) {
         if (cancelled || !client.isCurrent()) return;
+        // A page hidden mid-queue stops reading; unread agents stay due and
+        // are read when it is shown again.
+        if (document.visibilityState === "hidden") return;
         const identity = receiptIdentity(leaf);
         const trigger = receiptTrigger(leaf);
         if (!leaf.pane.agent) {
@@ -237,16 +295,14 @@ export function useTurnReceipts(
           continue;
         }
         try {
-          const result = await client.call("agent_turn.get", {
-            pane_id: leaf.pane.pane_id,
-            workspace_id: leaf.pane.workspace_id,
-            tab_id: leaf.pane.tab_id,
-            agent: leaf.pane.agent,
-          });
-          const turn = (result as { turn?: unknown } | null)?.turn;
+          const result = await client.call("agent_turn.get", turnRequest(leaf));
           if (cancelled || !client.isCurrent()) return;
           fetched.current.set(identity, trigger);
           due.current.delete(identity);
+          // Only the session this card shows may publish a receipt to it; the
+          // next observation names the replacement session.
+          if (!answersSession(result, leaf)) continue;
+          const turn = (result as { turn?: unknown } | null)?.turn;
           setReceipts((current) =>
             new Map(current).set(
               identity,
@@ -345,7 +401,7 @@ export function useHandledTurns(connectionId: string) {
 }
 
 function stopsKey(connectionId: string) {
-  return `handoffs.stops.v1.${connectionId}`;
+  return `handoffs.stops.v2.${connectionId}`;
 }
 
 /**
@@ -377,24 +433,13 @@ export function useObservedStops(
     }
   }, [connectionId]);
   const statusKey = leaves
-    .map((leaf) => `${leaf.id}=${leaf.status}`)
+    .map((leaf) => `${receiptIdentity(leaf)}=${leaf.status}`)
     .join("\n");
   useEffect(() => {
     const now = Date.now();
-    let changed = false;
-    const next = new Map(stops);
-    for (const leaf of leaves) {
-      const before = previous.current.get(leaf.id);
-      if (before === "working" && leaf.status !== "working") {
-        next.set(leaf.id, now);
-        changed = true;
-      } else if (leaf.status === "working" && next.delete(leaf.id)) {
-        changed = true;
-      }
-      previous.current.set(leaf.id, leaf.status);
-    }
-    for (const [id, at] of next)
-      if (now - at > IDLE_WINDOW_MS && next.delete(id)) changed = true;
+    const result = advanceObservedStops(stops, previous.current, leaves, now);
+    const next = result.stops;
+    const changed = result.changed;
     if (!changed) return;
     setStops(next);
     try {
@@ -412,17 +457,47 @@ export function useObservedStops(
 }
 
 /** Fetches one agent's complete closing report for reading in full. */
-export async function fetchFullReport(
-  client: ConnectionClient,
-  leaf: WorldLeafObject,
-): Promise<string | null> {
-  const result = await client.call("agent_turn.get", {
+/** The request for one agent's latest turn, qualified by its session. */
+function turnRequest(leaf: WorldLeafObject, fullReport = false) {
+  return {
     pane_id: leaf.pane.pane_id,
     workspace_id: leaf.pane.workspace_id,
     tab_id: leaf.pane.tab_id,
     agent: leaf.pane.agent,
-    full_report: true,
-  });
+    ...(leaf.agentSessionFingerprint
+      ? { agent_session_fingerprint: leaf.agentSessionFingerprint }
+      : {}),
+    ...(fullReport ? { full_report: true } : {}),
+  };
+}
+
+/** Whether a turn response belongs to the agent session the caller shows. */
+export function answersSession(result: unknown, leaf: WorldLeafObject) {
+  const response = result as {
+    session_changed?: unknown;
+    agent_session_fingerprint?: unknown;
+  } | null;
+  if (!response || response.session_changed === true) return false;
+  return (
+    !leaf.agentSessionFingerprint ||
+    response.agent_session_fingerprint === leaf.agentSessionFingerprint
+  );
+}
+
+/**
+ * Fetches the complete closing report of the stop a card shows. A newer stop
+ * or another session yields nothing, so a card never pairs one stop's request
+ * and files with another stop's report.
+ */
+export async function fetchFullReport(
+  client: ConnectionClient,
+  leaf: WorldLeafObject,
+  expectedTurnId: string,
+): Promise<string | null> {
+  const result = await client.call("agent_turn.get", turnRequest(leaf, true));
+  if (!answersSession(result, leaf)) return null;
   const turn = (result as { turn?: unknown } | null)?.turn;
-  return isReceipt(turn) ? turn.report : null;
+  return isReceipt(turn) && turn.turn_id === expectedTurnId
+    ? turn.report
+    : null;
 }

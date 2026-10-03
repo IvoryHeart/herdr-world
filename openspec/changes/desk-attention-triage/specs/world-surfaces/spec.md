@@ -15,13 +15,16 @@ lifecycle commands itself. Review marks SHALL apply to one stop of one agent ses
 unavailable until a receipt has been read for the agent's present state; when no receipt can be read
 for that state, the stop SHALL become markable without one. Keyboard shortcuts (J and K to move, Enter to
 open, E to mark reviewed) SHALL apply only while focus is on the Desk or the page itself, SHALL NOT
-replace the native activation of a focused control, and SHALL keep focus on the same agent while
-lanes reorder.
+replace the native activation of a focused control, and SHALL act on the card that holds keyboard
+focus: focusing any control in a card makes it the active card, J and K move keyboard focus with the
+highlight, and focus stays on the same agent while lanes reorder.
 Within the shared shell, Desk SHALL participate in the shell Actions menu, window arrangements of the
 Inspectors it opens, and view-local failure isolation. It SHALL NOT establish a visual selection, so
 selection-driven behavior (visual-route Action targets, the shared view-control search, watched
 visual projection and the docked selection Inspector) SHALL NOT apply to it. Other managed hosts
-SHALL appear only as non-actionable summaries.
+SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks and
+observed stops SHALL be scoped to the agent session and runtime generation, so they never carry over
+to another session in the same terminal.
 
 #### Scenario: Answer a blocked agent
 
@@ -43,12 +46,17 @@ SHALL appear only as non-actionable summaries.
 ### Requirement: Bounded turn receipts
 
 The service SHALL answer `agent_turn.get` for an exact pane and agent session by deriving the latest
-turn from the session transcript it already resolves for Agent History, without storing it. A turn
+turn from the session transcript it already resolves for Agent History, without storing it. When the
+caller names the session fingerprint it shows, the service SHALL return no receipt if the pane runs
+another session before or after the read, and the browser SHALL publish a receipt or complete report
+only for the session and stop that its card shows. Stop identities SHALL name the session file, not
+only its file name. A turn
 SHALL consist of the steps after the latest user message. The receipt SHALL carry at most 600
 characters of the request, at most 2,400 characters of the closing agent message (up to 32,000 when
 the complete report is requested, with truncation reported), start and end times from agent steps,
-tool-call and command counts and at most 24 edited file paths. Projection placeholders and trailing
-system records SHALL NOT become the report, extend the duration or change the stop's identity.
+tool-call and command counts and at most 24 edited file paths. Projection placeholders (such as
+reasoning and usage records) and trailing system records SHALL NOT become the report, extend the
+duration or change the stop's identity.
 
 #### Scenario: A hook record arrives after a reviewed stop
 
@@ -60,7 +68,8 @@ system records SHALL NOT become the report, extend the duration or change the st
 Desk SHALL partition and count every admitted agent. It SHALL read receipts for at most 40 agents
 and visible screens for at most 16 panes, choosing blocked, then done, working and idle agents first.
 Receipts SHALL refresh on a status or activity change and every 20 seconds; screens SHALL refresh
-every 4 seconds. Reads SHALL stop while the page is hidden and resume when it is shown. Receipts and
+every 4 seconds. Reads SHALL stop while the page is hidden, including reads already queued, and resume when it is
+shown. Receipts and
 screen excerpts SHALL be keyed by connection, runtime generation, pane and agent session, so a
 replaced session never shows the previous session's text and a refresh does not remove a shown
 receipt.

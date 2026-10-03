@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ConnectionClient } from "../api";
 import { useConnectionClient } from "../useConnectionClient";
 import {
   fetchFullReport,
@@ -6,6 +7,7 @@ import {
   IDLE_WINDOW_MS,
   isRecent,
   operationalAgents,
+  receiptIdentity,
   receiptEndedAt,
   type ReceiptState,
   type TurnReceipt,
@@ -39,10 +41,12 @@ function handoffId(
   receipt: TurnReceipt | null,
   stoppedAt: number | undefined,
 ) {
-  return (
-    receipt?.turn_id ??
-    `${leaf.id}|${leaf.agentSessionFingerprint ?? ""}|${stoppedAt ?? leaf.lastActivityAt ?? ""}`
-  );
+  // Scoped to the agent session and runtime, so marking one agent's stop can
+  // never hide another session's stop with a matching turn id.
+  return JSON.stringify([
+    receiptIdentity(leaf),
+    receipt?.turn_id ?? `stop:${stoppedAt ?? leaf.lastActivityAt ?? ""}`,
+  ]);
 }
 
 function where(leaf: WorldLeafObject) {
@@ -76,7 +80,7 @@ export function partitionDesk(
     // waits until the receipt matches the agent's present state.
     const { receipt, current } = receiptFor(leaf);
     const pending = !current;
-    const stoppedAt = stops.get(leaf.id);
+    const stoppedAt = stops.get(receiptIdentity(leaf));
     const id = handoffId(leaf, receipt, stoppedAt);
     const since =
       receiptEndedAt(receipt) ?? stoppedAt ?? leaf.lastActivityAt ?? null;
@@ -138,7 +142,8 @@ type Elsewhere = {
   working: number;
 };
 
-function elsewhere(world: WorldObject): Elsewhere[] {
+/** Read-only summaries of managed hosts other than the selected one. */
+export function otherHostSummaries(world: WorldObject): Elsewhere[] {
   const hosts = new Map<string, Elsewhere>();
   for (const leaf of world.leaves) {
     if (leaf.kind !== "agent" || leaf.selectedHost) continue;
@@ -227,14 +232,27 @@ export function focusIndexOf(
   return index >= 0 ? index : Math.max(0, Math.min(fallback, order.length - 1));
 }
 
-export function DeskView({
-  world,
-  onOpenTerminal,
-}: {
+export function DeskView(props: {
   world: WorldObject;
+  aggregate?: WorldObject;
   onOpenTerminal(id: string): Promise<void>;
 }) {
   const client = useConnectionClient();
+  return <DeskBoard {...props} client={client} />;
+}
+
+/** The Desk for one selected-host connection client. */
+export function DeskBoard({
+  world,
+  aggregate,
+  client,
+  onOpenTerminal,
+}: {
+  world: WorldObject;
+  aggregate?: WorldObject;
+  client: ConnectionClient;
+  onOpenTerminal(id: string): Promise<void>;
+}) {
   const now = useNow(10_000);
   const agents = useMemo(() => operationalAgents(world), [world]);
   const receiptFor = useTurnReceipts(agents, client);
@@ -267,13 +285,15 @@ export function DeskView({
           leaf.status === "blocked" ||
           leaf.status === "working" ||
           leaf.status === "done" ||
-          stops.has(leaf.id),
+          stops.has(receiptIdentity(leaf)),
       ),
     [agents, stops],
   );
   const screens = usePaneScreens(screenTargets, client);
   const order = [...needs, ...shownReview, ...working];
-  const others = elsewhere(world);
+  // Other hosts come from the aggregate observation, never the selected-host
+  // projection, and are summaries only.
+  const others = otherHostSummaries(aggregate ?? world);
   const hostLabel =
     world.hosts.find((host) => host.selectedHost)?.label ?? "this host";
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
@@ -317,7 +337,14 @@ export function DeskView({
       const move = (step: number) => {
         const next =
           order[Math.min(order.length - 1, Math.max(0, focusIndex + step))];
-        if (next) setFocusedId(next.leaf.id);
+        if (!next) return;
+        setFocusedId(next.leaf.id);
+        // Keep DOM focus on the highlighted card so Enter and E act on it.
+        rootRef.current
+          ?.querySelector<HTMLElement>(
+            `[data-desk-card="${CSS.escape(next.leaf.id)}"]`,
+          )
+          ?.focus({ preventScroll: true });
       };
       if (action === "next") {
         event.preventDefault();
@@ -364,7 +391,11 @@ export function DeskView({
       <li
         key={leaf.id}
         className={`desk-card is-${item.lane}${item.handled ? " is-handled" : ""}${isFocused ? " is-focused" : ""}`}
-        onMouseEnter={() => setFocusedId(leaf.id)}
+        data-desk-card={leaf.id}
+        tabIndex={-1}
+        // The active card follows keyboard and pointer focus, never hover.
+        onFocus={() => setFocusedId(leaf.id)}
+        onPointerDown={() => setFocusedId(leaf.id)}
       >
         <div className="desk-card-head">
           <span className="desk-card-name">{agentName(leaf)}</span>
@@ -420,7 +451,7 @@ export function DeskView({
                     receipt.report_truncated &&
                     !fullReports.has(item.handoffId)
                   )
-                    void fetchFullReport(client, leaf)
+                    void fetchFullReport(client, leaf, receipt.turn_id)
                       .then((full) => {
                         if (full)
                           setFullReports((current) =>

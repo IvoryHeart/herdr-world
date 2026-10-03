@@ -1,8 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { deskShortcut, focusIndexOf, partitionDesk } from "./DeskView";
 import {
+  deskShortcut,
+  focusIndexOf,
+  otherHostSummaries,
+  partitionDesk,
+} from "./DeskView";
+import {
+  advanceObservedStops,
+  answersSession,
   operationalAgents,
   pollingTargets,
+  receiptIdentity,
   receiptAfterError,
   receiptAfterRead,
   receiptStateOf,
@@ -59,9 +67,11 @@ describe("partitionDesk", () => {
         leaf("unknown", "unknown"),
       ],
       (agent) => ({ receipt: receipts.get(agent.id) ?? null, current: true }),
-      new Set(["turn-seen"]),
+      new Set([
+        JSON.stringify([receiptIdentity(leaf("seen", "done")), "turn-seen"]),
+      ]),
       NOW,
-      new Map([["observed", NOW - 60_000]]),
+      new Map([[receiptIdentity(leaf("observed", "idle")), NOW - 60_000]]),
     );
     expect(lanes.needs.map((item) => item.leaf.id)).toEqual([
       "blocked-early",
@@ -259,5 +269,104 @@ describe("receipt currency", () => {
       receipt: null,
       current: true,
     });
+  });
+});
+
+describe("observed stops", () => {
+  const session = (fingerprint: string, status: WorldLeafObject["status"]) =>
+    ({
+      ...leaf("terminal", status),
+      connectionId: "local",
+      generation: 1,
+      agentSessionFingerprint: fingerprint,
+    }) as WorldLeafObject;
+
+  test("a replacement session does not inherit its predecessor's stop", () => {
+    const previous = new Map<string, string>();
+    let stops = advanceObservedStops(
+      new Map(),
+      previous,
+      [session("A", "working")],
+      NOW,
+    ).stops;
+    stops = advanceObservedStops(
+      stops,
+      previous,
+      [session("A", "idle")],
+      NOW,
+    ).stops;
+    expect(stops.size).toBe(1);
+    const replaced = advanceObservedStops(
+      stops,
+      previous,
+      [session("B", "idle")],
+      NOW + 1,
+    );
+    expect(replaced.stops.size).toBe(0);
+    const lanes = partitionDesk(
+      [session("B", "idle")],
+      () => ({ receipt: null, current: true }),
+      new Set(),
+      NOW + 1,
+      replaced.stops,
+    );
+    expect(lanes.review).toHaveLength(0);
+  });
+});
+
+describe("turn responses", () => {
+  const shown = { agentSessionFingerprint: "a".repeat(64) } as WorldLeafObject;
+
+  test("only the shown session may publish a receipt", () => {
+    expect(
+      answersSession(
+        { agent_session_fingerprint: "a".repeat(64), turn: null },
+        shown,
+      ),
+    ).toBe(true);
+    expect(
+      answersSession(
+        { agent_session_fingerprint: "b".repeat(64), turn: null },
+        shown,
+      ),
+    ).toBe(false);
+    expect(answersSession({ session_changed: true, turn: null }, shown)).toBe(
+      false,
+    );
+  });
+});
+
+describe("other-host summaries", () => {
+  test("summarize agents on hosts other than the selected one", () => {
+    const remote = (id: string, status: WorldLeafObject["status"]) =>
+      ({
+        ...leaf(id, status),
+        selectedHost: false,
+        connectionId: "build-vm",
+        hostLabel: "build-vm",
+        stale: false,
+      }) as WorldLeafObject;
+    const local = {
+      ...leaf("here", "blocked"),
+      selectedHost: true,
+    } as WorldLeafObject;
+    const summaries = otherHostSummaries({
+      leaves: [
+        local,
+        remote("r1", "blocked"),
+        remote("r2", "done"),
+        remote("r3", "working"),
+      ],
+    } as unknown as WorldObject);
+    expect(summaries).toEqual([
+      {
+        connectionId: "build-vm",
+        label: "build-vm",
+        stale: false,
+        needs: 1,
+        done: 1,
+        working: 1,
+      },
+    ]);
   });
 });
