@@ -18,24 +18,49 @@ export type TurnReceipt = {
   files_truncated: boolean;
 };
 
-const MAX_AGENTS = 40;
+// Receipt and screen reads are bounded; triage itself always covers every agent.
+export const MAX_POLLED_AGENTS = 40;
 const REFRESH_MS = 20_000;
 const HANDLED_LIMIT = 500;
 // An idle agent hands something back only right after its turn; older idle
 // sessions are history, not work waiting for review.
 export const IDLE_WINDOW_MS = 12 * 60 * 60_000;
 
-/** Agents on the selected host that can be acted on now. */
+/** Every agent on the selected host that can be acted on now. */
 export function operationalAgents(world: WorldObject): WorldLeafObject[] {
-  return world.leaves
-    .filter(
-      (leaf) =>
-        leaf.kind === "agent" &&
-        leaf.selectedHost &&
-        leaf.actionable &&
-        !leaf.stale,
+  return world.leaves.filter(
+    (leaf) =>
+      leaf.kind === "agent" &&
+      leaf.selectedHost &&
+      leaf.actionable &&
+      !leaf.stale,
+  );
+}
+
+const ATTENTION_ORDER: Record<string, number> = {
+  blocked: 0,
+  done: 1,
+  working: 2,
+  idle: 3,
+};
+
+/**
+ * The agents whose transcripts and screens are read, most urgent first, so a
+ * bounded read never hides an agent that is waiting on the operator.
+ */
+export function pollingTargets(
+  leaves: readonly WorldLeafObject[],
+  limit = MAX_POLLED_AGENTS,
+): WorldLeafObject[] {
+  return leaves
+    .map((leaf, index) => ({ leaf, index }))
+    .sort(
+      (left, right) =>
+        (ATTENTION_ORDER[left.leaf.status] ?? 4) -
+          (ATTENTION_ORDER[right.leaf.status] ?? 4) || left.index - right.index,
     )
-    .slice(0, MAX_AGENTS);
+    .slice(0, limit)
+    .map(({ leaf }) => leaf);
 }
 
 export function receiptRequestKey(leaf: WorldLeafObject) {
@@ -100,7 +125,8 @@ export function useTurnReceipts(
     () => new Map(),
   );
   const [tick, setTick] = useState(0);
-  const requestKeys = leaves.map(receiptRequestKey).join("\n");
+  const targets = pollingTargets(leaves);
+  const requestKeys = targets.map(receiptRequestKey).join("\n");
 
   useEffect(() => setReceipts(new Map()), [client.connectionId]);
   useEffect(() => {
@@ -110,7 +136,7 @@ export function useTurnReceipts(
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      for (const leaf of leaves) {
+      for (const leaf of targets) {
         if (cancelled || !client.isCurrent()) return;
         if (!leaf.pane.agent) continue;
         const key = receiptRequestKey(leaf);

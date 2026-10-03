@@ -51,7 +51,7 @@ describe("latestTurnReceipt", () => {
       ]),
     );
     expect(receipt).toMatchObject({
-      turn_id: "example.jsonl:2..7",
+      turn_id: "example.jsonl:2..6",
       ask: "Add retry backoff",
       report: "Added backoff; tests pass.",
       started_at: at(10),
@@ -106,6 +106,32 @@ describe("latestTurnReceipt", () => {
     );
     expect(first?.turn_id).not.toBe(second?.turn_id);
     expect(second?.report).toBe("Pushed.");
+  });
+
+  test("keeps a stop's id across later system records", () => {
+    const stop: Omit<AtifStep, "step_id">[] = [
+      { source: "user", message: "Summarize", timestamp: at(0) },
+      { source: "agent", message: "Done.", timestamp: at(1) },
+    ];
+    const reviewed = latestTurnReceipt(file, trajectory(stop));
+    const withHook = latestTurnReceipt(
+      file,
+      trajectory([
+        ...stop,
+        { source: "system", message: "hook", timestamp: at(9) },
+      ]),
+    );
+    const resumed = latestTurnReceipt(
+      file,
+      trajectory([
+        ...stop,
+        { source: "system", message: "hook", timestamp: at(9) },
+        { source: "agent", message: "One more thing.", timestamp: at(10) },
+      ]),
+    );
+    expect(withHook?.turn_id).toBe(reviewed?.turn_id);
+    expect(withHook?.ended_at).toBe(reviewed?.ended_at);
+    expect(resumed?.turn_id).not.toBe(reviewed?.turn_id);
   });
 
   test("bounds long text and file lists", () => {

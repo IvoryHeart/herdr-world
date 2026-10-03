@@ -286,7 +286,7 @@ export function DeskView({
   const card = (item: Item) => {
     const index = order.indexOf(item);
     const { leaf, receipt } = item;
-    const screen = screens.get(leaf.id) ?? "";
+    const screen = screens(leaf) ?? "";
     const isFocused = index === Math.min(focus, order.length - 1);
     const ask = receipt?.ask ?? leaf.taskSummary ?? null;
     const age = item.since ? formatSpan(now - item.since) : null;

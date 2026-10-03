@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { partitionDesk } from "./DeskView";
-import type { TurnReceipt } from "./handoffs";
-import { activityFromScreen, questionFromScreen } from "./paneScreen";
+import {
+  operationalAgents,
+  pollingTargets,
+  type TurnReceipt,
+} from "./handoffs";
+import {
+  activityFromScreen,
+  questionFromScreen,
+  screenIdentity,
+} from "./paneScreen";
+import type { WorldObject } from "./worldObject";
 import type { WorldLeafObject } from "./worldObject";
 
 const NOW = Date.UTC(2026, 0, 1, 12);
@@ -113,5 +122,47 @@ describe("pane screens", () => {
       "  └ 2 pass",
       "• Working (12s • esc to interrupt)",
     ]);
+  });
+});
+
+describe("agents beyond the polling limit", () => {
+  const admitted = (id: string, status: WorldLeafObject["status"]) =>
+    ({
+      ...leaf(id, status),
+      selectedHost: true,
+      actionable: true,
+      stale: false,
+    }) as WorldLeafObject;
+  const leaves = [
+    ...Array.from({ length: 40 }, (_, index) =>
+      admitted(`idle-${index}`, "idle"),
+    ),
+    admitted("waiting", "blocked"),
+  ];
+
+  test("keep a blocked agent in triage and poll it first", () => {
+    const agents = operationalAgents({ leaves } as unknown as WorldObject);
+    expect(agents).toHaveLength(41);
+    const lanes = partitionDesk(agents, () => null, new Set(), NOW);
+    expect(lanes.needs.map((item) => item.leaf.id)).toEqual(["waiting"]);
+    expect(pollingTargets(agents)[0]?.id).toBe("waiting");
+    expect(pollingTargets(agents)).toHaveLength(40);
+  });
+});
+
+describe("screen identity", () => {
+  const pane = (fingerprint: string, generation = 1) =>
+    ({
+      ...leaf("pane", "blocked"),
+      connectionId: "local",
+      generation,
+      agentSessionFingerprint: fingerprint,
+      pane: { pane_id: "w1:p1" },
+    }) as WorldLeafObject;
+
+  test("changes when the session or runtime generation is replaced", () => {
+    expect(screenIdentity(pane("a"))).toBe(screenIdentity(pane("a")));
+    expect(screenIdentity(pane("b"))).not.toBe(screenIdentity(pane("a")));
+    expect(screenIdentity(pane("a", 2))).not.toBe(screenIdentity(pane("a")));
   });
 });

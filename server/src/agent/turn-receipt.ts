@@ -122,9 +122,11 @@ export function latestTurnReceipt(
     : null;
   return {
     // A blocked agent can resume within the same user turn, so the id also
-    // names the latest step: each stop is a separate handoff to review.
+    // names the agent's latest step: each stop is a separate handoff. Trailing
+    // system records (hooks, resumes) are bookkeeping and must not reopen a
+    // reviewed stop.
     turn_id: `${stableMessageId(file.path, askStep?.step_id ?? -1)}..${
-      turn.at(-1)?.step_id ?? "start"
+      turn.findLast((step) => step.source === "agent")?.step_id ?? "start"
     }`,
     ask: askStep ? clip(askStep.message, MAX_ASK_CHARS) : null,
     report: fullReport === null ? null : clip(fullReport, reportChars),
