@@ -267,6 +267,19 @@ describe("receipt currency", () => {
     expect(state.current).toBe(false);
   });
 
+  test("failed refreshes of an unchanged stop keep its receipt and review identity", () => {
+    const trigger = receiptTrigger(agent("done"));
+    const reviewed = receiptAfterRead(receipt("same-stop", 5), trigger);
+    const settled = receiptAfterError(
+      receiptAfterError(reviewed, trigger, 1),
+      trigger,
+      2,
+    );
+    const state = receiptStateOf(settled, agent("done"), true);
+    expect(state.receipt?.turn_id).toBe("same-stop");
+    expect(state.current).toBe(true);
+  });
+
   test("a second failure for the same state settles as no receipt, not an older stop", () => {
     const previous = receiptAfterRead(
       receipt("earlier", 5),

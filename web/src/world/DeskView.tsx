@@ -542,7 +542,37 @@ export function DeskBoard({
       (card ?? rootRef.current)?.focus({ preventScroll: true });
     });
   };
+  // Whether keyboard focus was last inside the Desk. If whatever held it is
+  // removed, focus falls to the page body without any event; the effect
+  // below returns it to the Desk so it stays inside the terminal focus guard.
+  const focusWasInDesk = useRef(false);
+  useEffect(() => {
+    const track = (event: FocusEvent) => {
+      focusWasInDesk.current =
+        rootRef.current?.contains(event.target as Node) === true;
+    };
+    document.addEventListener("focusin", track);
+    return () => document.removeEventListener("focusin", track);
+  }, []);
+  useEffect(() => {
+    if (
+      focusWasInDesk.current &&
+      (document.activeElement === document.body ||
+        document.activeElement === null)
+    )
+      focusCard(focusedId);
+  });
   const toggleReviewed = (item: Item) => {
+    // Marking (or reopening) moves the item out of the list the operator is
+    // looking at, removing any control in it that held focus. Move focus to
+    // its neighbour explicitly: browsers do not fire blur for removed nodes.
+    const index = order.findIndex((entry) => entry.leaf.id === item.leaf.id);
+    const neighbour =
+      index >= 0 ? (order[index + 1] ?? order[index - 1]) : undefined;
+    if (rootRef.current?.contains(document.activeElement)) {
+      setFocusedId(neighbour?.leaf.id ?? null);
+      focusCard(neighbour?.leaf.id ?? null);
+    }
     mark(item.handoffId, !item.handled);
     setToast(
       item.handled ? null : { id: item.handoffId, name: agentName(item.leaf) },
@@ -644,7 +674,6 @@ export function DeskBoard({
         const neighbour = order[focusIndex + 1] ?? order[focusIndex - 1];
         setFocusedId(neighbour?.leaf.id ?? null);
         toggleReviewed(focused.item);
-        focusCard(neighbour?.leaf.id ?? null);
       }
     };
     window.addEventListener("keydown", onKeyDown);
@@ -1119,6 +1148,8 @@ export function DeskBoard({
             onClick={() => {
               mark(toast.id, false);
               setToast(null);
+              // The toast (and this button) leaves the page.
+              focusCard(focusedId);
             }}
           >
             Undo
@@ -1129,6 +1160,7 @@ export function DeskBoard({
             onClick={() => {
               setToast(null);
               setMode("reviewed");
+              focusCard(null);
             }}
           >
             See reviewed

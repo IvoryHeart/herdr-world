@@ -253,6 +253,34 @@ async function run() {
     previewed.length === 0,
     `Esc cancelled the pending preview (previewed: ${previewed.join(",")})`,
   );
+  // Clicking Mark reviewed removes its card (and the focused button); focus
+  // must stay inside the guarded Desk without relying on a blur event.
+  const markTarget = [
+    ...document.querySelectorAll<HTMLElement>("[data-desk-card]"),
+  ].find((element) => element.querySelector("button:not(.is-primary)"));
+  const markButton = markTarget?.querySelector<HTMLButtonElement>(
+    "button:not(.is-primary)",
+  );
+  check(Boolean(markButton), "a review card offers Mark reviewed");
+  markButton?.focus();
+  markButton?.click();
+  await settle(200);
+  check(
+    Boolean(document.activeElement?.closest(".desk")) &&
+      terminalFocusBlockedByOverlay(document.activeElement, document),
+    `focus stayed in the Desk after clicking Mark reviewed (active: ${document.activeElement?.tagName})`,
+  );
+  const undoButton = [
+    ...document.querySelectorAll<HTMLButtonElement>(".desk-toast button"),
+  ].find((button) => button.textContent === "Undo");
+  undoButton?.focus();
+  undoButton?.click();
+  await settle(200);
+  check(
+    Boolean(document.activeElement?.closest(".desk")),
+    `focus stayed in the Desk after clicking Undo (active: ${document.activeElement?.tagName})`,
+  );
+
   // Marking with E keeps focus inside the guarded Desk.
   const reviewCard = card("gamma") ?? card("alpha");
   reviewCard?.focus();

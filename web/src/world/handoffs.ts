@@ -164,6 +164,9 @@ export function receiptAfterError(
   failures = 1,
 ): StoredReceipt {
   if (!previous) return { receipt: null, trigger };
+  // The stored receipt was read for this same state: the stop has not
+  // changed, so keep it (and its review identity) while reads fail.
+  if (previous.trigger === trigger) return previous;
   // A second failure for the same state means the agent has become
   // unreadable (for example, a rotated transcript). Settle as "no receipt" so
   // the stop can be marked under its own observed identity: reusing the last
