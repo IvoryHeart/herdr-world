@@ -9,8 +9,10 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
-- Put the "Promoted to CEO" film first on the homepage, with a shorter introduction
-  and Home and CEO Mode navigation links. Its play overlay and controls now clear
+- Removed the homepage film introduction so the video leads directly from the
+  navigation into the product content.
+- Put the "Promoted to CEO" film first on the homepage, with Home and CEO Mode
+  navigation links. Its play overlay and controls now clear
   during playback.
 - Turned the product hero screenshot into a carousel of the six showcase views.
 - Moved installation closer to the homepage introduction and showed Homebrew,

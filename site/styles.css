@@ -1754,12 +1754,8 @@
   }
 
   .section.film-section {
-    padding-top: 64px;
+    padding-top: 112px;
     padding-bottom: 36px;
-  }
-
-  .film-section .section-heading {
-    margin-bottom: 36px;
   }
 
   .film-card {
