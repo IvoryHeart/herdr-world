@@ -363,10 +363,9 @@ describe("WorldSnapshotService", () => {
     "alpha",
     [""],
     [3],
-    ["unknown"],
     Array.from({ length: 129 }, (_, index) => `host-${index}`),
   ])(
-    "rejects malformed, unknown or unbounded host scheduling hints before acquiring leases: %j",
+    "rejects malformed or unbounded host scheduling hints before acquiring leases: %j",
     async (hint) => {
       let acquired = 0;
       const service = new WorldSnapshotService<Runtime>({
@@ -386,6 +385,80 @@ describe("WorldSnapshotService", () => {
       expect(acquired).toBe(0);
     },
   );
+
+  test("deleted host hints do not prevent healthy aggregate observation", async () => {
+    const acquired: string[] = [];
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => [status("healthy")],
+      readyRuntimeLease: (id) => {
+        acquired.push(id);
+        return {
+          connectionId: id,
+          generation: 1,
+          runtime: runtime(id),
+          isCurrent: () => true,
+        };
+      },
+    });
+    const result = await service.snapshot({
+      priority_connection_ids: ["deleted", "healthy"],
+      priorities: [
+        { connection_id: "deleted", workspace_id: "shared-workspace" },
+      ],
+    });
+    expect(acquired).toEqual(["healthy"]);
+    expect(result.connections[0]?.snapshot?.workspaces).toHaveLength(1);
+  });
+
+  test("overlapping browser priorities only promote queued owners", async () => {
+    const ids = ["hold-a", "hold-b", "hold-c", "hold-d", "background", "open"];
+    const release = deferred<void>();
+    const admitted = deferred<void>();
+    const hosts = new Map(
+      ids.map((id) => [
+        id,
+        {
+          herdr: {
+            async call(method: string) {
+              if (
+                method === "workspace.list" &&
+                (id === "open" || id === "background")
+              )
+                admitted.resolve();
+              if (id.startsWith("hold-")) await release.promise;
+              return runtime(id).herdr.call(method);
+            },
+          },
+        },
+      ]),
+    );
+    const service = new WorldSnapshotService<Runtime>({
+      list: () => ids.map((id) => status(id)),
+      readyRuntimeLease: (id) => ({
+        connectionId: id,
+        generation: 1,
+        runtime: hosts.get(id)!,
+        isCurrent: () => true,
+      }),
+    });
+    const first = service.snapshot();
+    const tabA = service.snapshot({ priority_connection_ids: ["open"] });
+    const tabB = service.snapshot({ priority_connection_ids: ["hold-a"] });
+    // Inspect admission through actual reads, not private queue internals.
+    const starts: string[] = [];
+    for (const id of ["open", "background"]) {
+      const host = hosts.get(id)!;
+      const call = host.herdr.call;
+      host.herdr.call = async (method) => {
+        if (method === "workspace.list") starts.push(id);
+        return call(method);
+      };
+    }
+    release.resolve();
+    await admitted.promise;
+    await Promise.all([first, tabA, tabB]);
+    expect(starts).toEqual(["open", "background"]);
+  });
 
   test("several open-context hosts are scheduled before stalled peers while retaining bounded background work", async () => {
     const ids = Array.from({ length: 12 }, (_, index) => `host-${index}`);

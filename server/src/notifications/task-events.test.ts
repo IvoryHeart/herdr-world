@@ -142,7 +142,7 @@ test("moving a pane across workspaces cannot carry unconfirmed cached agent-sess
   expect(tracker.captureAgentSession("w1", "replacement-pane")).toBeUndefined();
 });
 
-test("a partial status event without session identity cannot claim a cached session still owns the task", () => {
+test("status-only working and completion packets retain the last confirmed owning session", () => {
   const events: TaskEvent[] = [];
   const tracker = createTaskEventTracker((task) => events.push(task));
   tracker.reconcilePaneList(
@@ -154,8 +154,41 @@ test("a partial status event without session identity cannot claim a cached sess
     data: { ...pane, agent_status: "done" },
   });
   expect(events).toHaveLength(1);
-  expect(events[0]?.agentSessionId).toBeUndefined();
+  expect(events[0]?.agentSessionId).toBe("synthetic-original");
+  expect(tracker.captureAgentSession("w1", "p1")).toBe("synthetic-original");
+});
+
+test("a reported replacement session stays unconfirmed until pane reconciliation", () => {
+  const events: TaskEvent[] = [];
+  const tracker = createTaskEventTracker((event) => events.push(event));
+  tracker.reconcilePaneList(
+    {
+      panes: [
+        {
+          ...pane,
+          agent_status: "idle",
+          agent_session: { value: "synthetic-original" },
+        },
+      ],
+    },
+    0,
+  );
+  tracker.handleHerdrEvent(event("working"));
+  expect(tracker.captureAgentSession("w1", "p1")).toBe("synthetic-original");
+  tracker.handleHerdrEvent({
+    event: "pane.agent_status_changed",
+    data: { ...pane, agent_session: { value: "synthetic-new" } },
+  });
   expect(tracker.captureAgentSession("w1", "p1")).toBeUndefined();
+  tracker.handleHerdrEvent(event("blocked"));
+  expect(events).toHaveLength(0);
+  tracker.reconcilePaneList(
+    { panes: [{ ...pane, agent_session: { value: "synthetic-new" } }] },
+    tracker.beginPaneList(),
+  );
+  expect(tracker.captureAgentSession("w1", "p1")).toBe("synthetic-new");
+  tracker.handleHerdrEvent(event("done"));
+  expect(events.at(-1)?.agentSessionId).toBe("synthetic-new");
 });
 
 test("malformed runtime session metadata never becomes a qualified notification identity", () => {

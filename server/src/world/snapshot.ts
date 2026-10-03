@@ -454,8 +454,11 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
   }
 
   async snapshot(params?: unknown): Promise<WorldSnapshotResult> {
-    const { priorities, selectedConnectionId, priorityConnectionIds } =
-      parseSnapshotParameters(params);
+    const {
+      priorities: requestedPriorities,
+      selectedConnectionId,
+      priorityConnectionIds,
+    } = parseSnapshotParameters(params);
     // The profile store bounds the managed catalogue. Preserve that complete
     // candidate set here so each view can apply its own relevance-aware bound.
     const statuses = this.registry.list();
@@ -466,14 +469,14 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       throw new Error("unknown selected World connection");
     }
     const managedIds = new Set(statuses.map(({ id }) => id));
+    const priorities = requestedPriorities.filter((priority) =>
+      managedIds.has(priority.connection_id),
+    );
     const priorityIds = new Set([
-      ...priorityConnectionIds,
+      ...priorityConnectionIds.filter((id) => managedIds.has(id)),
       ...(selectedConnectionId ? [selectedConnectionId] : []),
       ...priorities.map((priority) => priority.connection_id),
     ]);
-    for (const id of priorityIds)
-      if (!managedIds.has(id))
-        throw new Error("unknown World priority connection");
     for (const cachedId of this.cache.keys()) {
       if (!managedIds.has(cachedId)) this.cache.delete(cachedId);
     }
@@ -621,8 +624,8 @@ export class WorldSnapshotService<Runtime extends RuntimeWithHerdr> {
       existing.lease.runtime === lease.runtime &&
       existing.lease.isCurrent()
     ) {
-      if (existing.state === "queued" && existing.selected !== selected) {
-        existing.selected = selected;
+      if (existing.state === "queued" && selected && !existing.selected) {
+        existing.selected = true;
         this.drain();
       }
       return existing;

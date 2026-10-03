@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bridge, type ConnectionClient } from "./api";
+import { bridge, type ConnectionClient, UncertainRequestError } from "./api";
 import {
   __storeTesting,
   operationalStore,
@@ -719,6 +719,200 @@ describe("independent qualified operational sessions", () => {
     });
   });
 
+  test.each(["single", "batch", "repo"])(
+    "retired %s Git mutations preserve owning-host uncertainty without replay",
+    async (kind) => {
+      await withIndependentClients(async (calls, held) => {
+        const connection = bridge.connection;
+        const sent = Promise.withResolvers<void>();
+        let submitted = 0;
+        bridge.connection = ((id, generation) => {
+          const client = connection(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (
+                method === "git.file_action" ||
+                method === "git.repo_action"
+              ) {
+                calls.push({ host: id!, method });
+                if (kind === "batch" && ++submitted === 1) return {};
+                sent.resolve();
+                return held.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        const entry = { path: "synthetic.txt", size: 1, mtime_ms: 1 };
+        const pending =
+          kind === "single"
+            ? owned.runGitFileAction("same-workspace", "stage", entry)
+            : kind === "batch"
+              ? owned.runGitFileActionBatch("same-workspace", "stage", [
+                  entry,
+                  { ...entry, path: "second.txt" },
+                  { ...entry, path: "third.txt" },
+                ])
+              : owned.runGitRepoAction(
+                  "same-workspace",
+                  "discard_all_unstaged",
+                );
+        await sent.promise;
+        const before = store.get();
+        __storeTesting.replaceState({
+          ...before,
+          connections: before.connections.map((owner) =>
+            owner.id === "beta"
+              ? { ...owner, generation: 2, label: "Replacement" }
+              : owner,
+          ),
+        });
+        const count = calls.length;
+        held.reject(
+          new UncertainRequestError(
+            "git mutation",
+            "Synthetic runtime retired",
+          ),
+        );
+        expect(await pending).toBeUndefined();
+        expect(store.get().notice?.message).toBe("Action outcome is uncertain");
+        expect(store.get().notice?.detail).toContain(
+          "A change on Beta may have completed",
+        );
+        expect(store.get().notice?.detail).not.toContain("Replacement");
+        if (kind === "batch")
+          expect(store.get().notice?.detail).toContain(
+            "1 of 3 files completed",
+          );
+        expect(calls.length).toBe(count);
+        expect(store.get().activeConnectionId).toBe("alpha");
+        expect(store.get().error).toBeNull();
+      });
+    },
+  );
+
+  test.each(["definite", "uncertain"])(
+    "%s workspace focus failure stops the popup command chain",
+    async (kind) => {
+      await withIndependentClients(async (calls) => {
+        const connection = bridge.connection;
+        bridge.connection = ((id, generation) => ({
+          ...connection(id, generation),
+          call: async (method: string) => {
+            calls.push({ host: id!, method });
+            if (method === "popup.close") throw new Error("popup_not_open");
+            if (method === "workspace.focus")
+              throw kind === "uncertain"
+                ? new UncertainRequestError(method, "Synthetic focus failure")
+                : new Error("Synthetic focus failure");
+            return {};
+          },
+        })) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        expect(
+          await owned.togglePluginPopup(
+            "synthetic-plugin",
+            "synthetic-action",
+            { workspace_id: "same-workspace" },
+          ),
+        ).toBeUndefined();
+        expect(calls.map((call) => call.method)).toEqual([
+          "popup.close",
+          "workspace.focus",
+        ]);
+        expect(store.get().notice?.message).toBe(
+          kind === "uncertain"
+            ? "Action outcome is uncertain"
+            : "Plugin action failed",
+        );
+        expect(store.get().notice?.detail).toContain("Beta");
+      });
+    },
+  );
+
+  test("qualified fire-and-forget commands handle failures with owning-host feedback", async () => {
+    await withIndependentClients(async () => {
+      const connection = bridge.connection;
+      bridge.connection = ((id, generation) => ({
+        ...connection(id, generation),
+        call: async () => {
+          throw new Error("Synthetic workspace command failed");
+        },
+      })) as typeof bridge.connection;
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      for (const pending of [
+        () => owned.renameWorkspace("same-workspace", "Synthetic name"),
+        () => owned.closeWorkspace("same-workspace"),
+      ]) {
+        expect(await pending()).toBeUndefined();
+        expect(owned.get().error).toBe("Synthetic workspace command failed");
+        expect(store.get().notice).toMatchObject({
+          kind: "error",
+          message: "Command failed",
+          detail: "Beta: Synthetic workspace command failed",
+        });
+        expect(store.get().error).toBeNull();
+      }
+    });
+  });
+
+  test("qualified pull retains progress, output and handled failure feedback", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      const connection = bridge.connection;
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) =>
+            method === "git.pull" ? held.promise : client.call(method, params),
+        };
+      }) as typeof bridge.connection;
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const pending = owned.gitPullWorkspace("same-workspace");
+      expect(store.get().notice?.message).toBe("Running git pull");
+      expect(store.get().notice?.loading).toBe(true);
+      held.resolve({ stdout: "Synthetic pull output", stderr: "" });
+      await pending;
+      expect(store.get().notice).toMatchObject({
+        kind: "success",
+        message: "Git pull completed",
+        detail: "Synthetic pull output",
+      });
+      bridge.connection = ((id, generation) => ({
+        ...connection(id, generation),
+        call: async () => {
+          throw new Error("Synthetic pull conflict");
+        },
+      })) as typeof bridge.connection;
+      const failed = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      expect(await failed.gitPullWorkspace("same-workspace")).toBeUndefined();
+      expect(store.get().notice).toMatchObject({
+        kind: "error",
+        message: "Git pull failed",
+      });
+      expect(store.get().notice?.detail).toContain("Synthetic pull conflict");
+      expect(failed.get().error).toBe("Synthetic pull conflict");
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
   test("captured worktree and destructive commands stay on beta and reject its replacement without replay", async () => {
     await withIndependentClients(async (calls) => {
       const owned = operationalStore({
@@ -751,8 +945,8 @@ describe("independent qualified operational sessions", () => {
       ).rejects.toThrow();
       await expect(
         owned.renameWorkspace("same-workspace", "Replacement must stay intact"),
-      ).rejects.toThrow();
-      await expect(owned.closeTab("same-tab")).rejects.toThrow();
+      ).resolves.toBeUndefined();
+      await expect(owned.closeTab("same-tab")).resolves.toBeUndefined();
       expect(calls.length).toBe(count);
       expect(store.get().activeConnectionId).toBe("alpha");
     });
@@ -1113,7 +1307,7 @@ describe("independent qualified operational sessions", () => {
         ),
       });
       const before = calls.length;
-      await expect(alpha.zoomPane("same-pane")).rejects.toThrow();
+      await expect(alpha.zoomPane("same-pane")).resolves.toBeUndefined();
       expect(calls).toHaveLength(before);
     });
   });

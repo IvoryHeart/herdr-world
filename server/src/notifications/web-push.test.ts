@@ -685,7 +685,6 @@ test.each([
         pane_id: "p1",
         workspace_id: "w1",
         agent_status: "blocked",
-        agent_session: { value: "synthetic-original" },
       },
     });
     const payload = JSON.parse(await sent.promise);

@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import { ContextMenu } from "../components/ContextMenu";
 import { WorktreeOpenDialog } from "../components/WorktreeOpenDialog";
 import { initializeLayoutPreferences } from "../layoutPreferences";
 import {
@@ -37,6 +38,7 @@ const watches: Array<{
   label: string;
 }> = [];
 const creation = Promise.withResolvers<unknown>();
+const gitPull = Promise.withResolvers<unknown>();
 let watchAdmissionOld = false;
 let downloadPublications = 0;
 let syntheticFileDeleted = false;
@@ -1092,6 +1094,64 @@ async function operationalScenario() {
     );
     return;
   }
+  if (operation === "context-menu-pull-failure") {
+    const element = document.createElement("div");
+    document.body.append(element);
+    const menu = createRoot(element);
+    try {
+      flushSync(() =>
+        menu.render(
+          <OperationalContext.Provider
+            value={{ connectionId: "beta", runtimeGeneration: 7 }}
+          >
+            <ContextMenu
+              state={{ x: 20, y: 60, workspace }}
+              pinnedWorkspaceKeys={new Set()}
+              onPinnedChange={() => {}}
+              onClose={() => {}}
+            />
+          </OperationalContext.Provider>,
+        ),
+      );
+      await waitFor(
+        () => !!namedButton("Pull from Git"),
+        "context menu pull action",
+      );
+      namedButton("Pull from Git")!.click();
+      await waitFor(
+        () => document.body.textContent?.includes("Running git pull") === true,
+        "visible pull progress",
+      );
+      check(
+        dispatches
+          .filter((call) => call.method === "git.pull")
+          .every(
+            (call) => call.connectionId === "beta" && call.generation === 7,
+          ),
+        "context menu pull lost owning host",
+      );
+      gitPull.reject(new Error("Synthetic pull conflict"));
+      await waitFor(
+        () =>
+          document.body.textContent?.includes("Git pull failed") === true &&
+          document.body.textContent.includes("Synthetic pull conflict"),
+        "visible context-menu pull failure",
+      );
+      check(
+        store.get().activeConnectionId === "alpha",
+        "failed pull changed another host's focus",
+      );
+      check(
+        store.get().sessionsByConnectionId.beta?.error ===
+          "Synthetic pull conflict",
+        "failed pull omitted owning-host error",
+      );
+    } finally {
+      menu.unmount();
+      element.remove();
+    }
+    return;
+  }
   if (operation === "worktree") {
     const element = document.createElement("div");
     document.body.append(element);
@@ -1834,6 +1894,8 @@ async function run() {
         return creation.promise;
       if (method === "workspace.create" && operation === "global-creation")
         return creation.promise;
+      if (method === "git.pull" && operation === "context-menu-pull-failure")
+        return gitPull.promise;
       if (method === "file.list") {
         calls.push(`resource:${id}`);
         if (id === "alpha") {

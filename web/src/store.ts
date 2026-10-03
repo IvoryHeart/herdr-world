@@ -8,6 +8,7 @@ import {
 import { withAgentActivity } from "./agentOrder";
 import {
   bridge,
+  UncertainRequestError,
   type ConnectionClient,
   type ConnectionStatus,
   type ConnectionSummary,
@@ -2183,6 +2184,9 @@ async function action<T>(
         client: options.client,
       }
     : captureConnectionLease();
+  const hostLabel =
+    state.connections.find((owner) => owner.id === activeLease.connectionId)
+      ?.label ?? activeLease.connectionId;
   let outcome = await attempt(activeLease);
   // A focus action fired while the bridge socket is reconnecting fails before
   // reaching the server, which makes clicks right after returning to the app
@@ -2206,11 +2210,31 @@ async function action<T>(
     if (options.pendingFocusWorkspaceSeq !== undefined) {
       clearPendingFocusWorkspace(options.pendingFocusWorkspaceSeq);
     }
-    if (!leaseIsCurrent(activeLease)) return undefined;
     const error = outcome.error;
+    if (error instanceof UncertainRequestError) {
+      if (leaseIsCurrent(activeLease))
+        setForConnection(activeLease, { error: error.message });
+      set({
+        notice: {
+          kind: "error",
+          message: "Action outcome is uncertain",
+          detail: `A change on ${hostLabel} may have completed. ${options.failureNotice?.(error).detail ?? error.message}`,
+        },
+      });
+      return undefined;
+    }
+    if (!leaseIsCurrent(activeLease)) return undefined;
+    const notice = options.failureNotice?.(error);
     setForConnection(activeLease, {
       error: error.message,
-      notice: options.failureNotice?.(error) ?? state.notice,
+      notice: notice
+        ? {
+            ...notice,
+            detail: options.client
+              ? `${hostLabel}: ${notice.detail ?? error.message}`
+              : notice.detail,
+          }
+        : state.notice,
     });
     return undefined;
   }
@@ -3307,7 +3331,7 @@ export const store = {
     );
   },
 
-  gitPullWorkspace(workspaceId: string) {
+  gitPullWorkspace(workspaceId: string, client?: ConnectionClient) {
     return action(
       async (lease) => {
         setForConnection(lease, {
@@ -3343,6 +3367,7 @@ export const store = {
       },
       {
         refresh: "immediate",
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: "Git pull failed",
@@ -4399,13 +4424,23 @@ export function operationalStore(context: OperationalContext) {
     generation: context.runtimeGeneration,
     client,
   };
-  const call = async (method: string, params: Record<string, unknown>) => {
+  const request = async (method: string, params: Record<string, unknown>) => {
     assertQualifiedLeaseCurrent(context, lease);
     const result = await client.call(method, params);
     assertQualifiedLeaseCurrent(context, lease);
     scheduleRefresh(lease);
     return result;
   };
+  const call = (method: string, params: Record<string, unknown>) =>
+    action(() => request(method, params), {
+      client,
+      refresh: "none",
+      failureNotice: (error) => ({
+        kind: "error",
+        message: "Command failed",
+        detail: error.message,
+      }),
+    });
   const worktreeResult = async <T>(
     pending: Promise<T | undefined>,
   ): Promise<T> => {
@@ -4479,6 +4514,7 @@ export function operationalStore(context: OperationalContext) {
         direction,
         focus: leaseSnapshot(lease).navigationMode !== "browser-local",
       });
+      assertQualifiedLeaseCurrent(context, lease);
       if (browserSelectionIsCurrent(navigation, lease)) {
         adoptBrowserTarget(lease, result);
         if (typeof result?.pane?.pane_id === "string")
@@ -4489,39 +4525,53 @@ export function operationalStore(context: OperationalContext) {
     zoomPane: (paneId: string) => call("pane.zoom", { pane_id: paneId }),
     closePane: (paneId: string) => call("pane.close", { pane_id: paneId }),
     closePopup: () => call("popup.close", {}),
-    togglePluginPopup: async (
+    togglePluginPopup: (
       pluginId: string,
       actionId: string,
       context: Record<string, unknown> = {},
-    ) => {
-      assertQualifiedLeaseCurrent(
-        {
-          connectionId: lease.connectionId,
-          runtimeGeneration: lease.generation,
+    ) =>
+      action(
+        async () => {
+          assertQualifiedLeaseCurrent(
+            {
+              connectionId: lease.connectionId,
+              runtimeGeneration: lease.generation,
+            },
+            lease,
+          );
+          try {
+            await request("popup.close", {});
+            return;
+          } catch (error) {
+            if (!String(error).includes("popup_not_open")) throw error;
+          }
+          assertQualifiedLeaseCurrent(
+            {
+              connectionId: lease.connectionId,
+              runtimeGeneration: lease.generation,
+            },
+            lease,
+          );
+          if (typeof context.workspace_id === "string")
+            await request("workspace.focus", {
+              workspace_id: context.workspace_id,
+            });
+          return request("plugin.action.invoke", {
+            plugin_id: pluginId,
+            action_id: actionId,
+            context,
+          });
         },
-        lease,
-      );
-      try {
-        await call("popup.close", {});
-        return;
-      } catch (error) {
-        if (!String(error).includes("popup_not_open")) throw error;
-      }
-      assertQualifiedLeaseCurrent(
         {
-          connectionId: lease.connectionId,
-          runtimeGeneration: lease.generation,
+          client,
+          refresh: "none",
+          failureNotice: (error) => ({
+            kind: "error",
+            message: "Plugin action failed",
+            detail: error.message,
+          }),
         },
-        lease,
-      );
-      if (typeof context.workspace_id === "string")
-        await call("workspace.focus", { workspace_id: context.workspace_id });
-      return call("plugin.action.invoke", {
-        plugin_id: pluginId,
-        action_id: actionId,
-        context,
-      });
-    },
+      ),
     focusWorkspace: (workspaceId: string) =>
       leaseIsCurrent(lease)
         ? store.focusQualifiedTarget({ ...context, workspaceId, paneId: null })
@@ -4602,7 +4652,7 @@ export function operationalStore(context: OperationalContext) {
       call("tab.rename", { tab_id: tabId, label }),
     closeTab: (tabId: string) => call("tab.close", { tab_id: tabId }),
     gitPullWorkspace: (workspaceId: string) =>
-      call("git.pull", { workspace_id: workspaceId }),
+      store.gitPullWorkspace(workspaceId, client),
     createWorktree: async (workspaceId: string, branch: string) => {
       assertQualifiedLeaseCurrent(context, lease);
       return worktreeResult(store.createWorktree(workspaceId, branch, client));

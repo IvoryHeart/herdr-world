@@ -37,6 +37,14 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Status-only agent updates retain confirmed session identity for notification
+  targets; reported session replacements wait for confirmation. Removed host
+  priority hints no longer block healthy snapshots, and overlapping clients
+  preserve queued host priority.
+- Qualified workspace commands retain visible failure feedback and Git pull
+  progress/output. Git mutation uncertainty remains visible with its original
+  host after retirement, without replay or replacement-context refresh.
+
 - Desk receipt and screen queues run independently by host and share bounded
   read capacity across equally urgent hosts, so slow hosts leave healthy agents
   available for review and live observation.

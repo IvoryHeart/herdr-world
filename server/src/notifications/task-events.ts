@@ -55,12 +55,14 @@ function agentSessionIdentity(pane: Pane): string | undefined {
 /** One tracker per runtime; initial snapshots seed state without notifying. */
 export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
   const panes = new Map<string, Pane>();
+  const unconfirmedPanes = new Set<string>();
   let revision = 0;
   let stopped = false;
   function observe(pane: Pane) {
     const previous = panes.get(pane.pane_id);
     panes.set(pane.pane_id, pane);
     if (
+      unconfirmedPanes.has(pane.pane_id) ||
       !previous ||
       previous.agent_status !== "working" ||
       !compatiblePane(previous, pane)
@@ -84,7 +86,9 @@ export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
   return {
     captureAgentSession(workspaceId: string, paneId: string) {
       const pane = panes.get(paneId);
-      return !stopped && pane?.workspace_id === workspaceId
+      return !stopped &&
+        !unconfirmedPanes.has(paneId) &&
+        pane?.workspace_id === workspaceId
         ? agentSessionIdentity(pane)
         : undefined;
     },
@@ -98,9 +102,14 @@ export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
         const pane = paneInfo(value);
         if (!pane) continue;
         live.add(pane.pane_id);
+        unconfirmedPanes.delete(pane.pane_id);
         observe(pane);
       }
-      for (const id of panes.keys()) if (!live.has(id)) panes.delete(id);
+      for (const id of panes.keys())
+        if (!live.has(id)) {
+          panes.delete(id);
+          unconfirmedPanes.delete(id);
+        }
     },
     handleHerdrEvent(event: unknown) {
       if (stopped) return;
@@ -115,13 +124,18 @@ export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
         const observed =
           previous && compatiblePane(previous, pane)
             ? { ...previous, ...pane }
-            : pane;
-        // Status-only packets cannot confirm that a cached agent session survived.
-        if (!("agent_session" in pane)) delete observed.agent_session;
-        observe(observed);
+            : { ...pane };
+        // Status-only packets retain confirmed identity while the owner still matches.
+        // A reported replacement must be confirmed by the next pane list.
+        if (previous && !compatiblePane(previous, pane)) {
+          delete observed.agent_session;
+          unconfirmedPanes.add(pane.pane_id);
+          panes.set(pane.pane_id, observed);
+        } else observe(observed);
       } else if (name === "pane.closed" || name === "pane.exited") {
         revision++;
         panes.delete(String(data.pane_id));
+        unconfirmedPanes.delete(String(data.pane_id));
       } else if (name === "workspace.closed" || name === "tab.closed") {
         revision++;
         for (const [id, pane] of panes) {
@@ -129,26 +143,33 @@ export function createTaskEventTracker(notify: (event: TaskEvent) => void) {
             name === "workspace.closed"
               ? pane.workspace_id === data.workspace_id
               : pane.tab_id === data.tab_id
-          )
+          ) {
             panes.delete(id);
+            unconfirmedPanes.delete(id);
+          }
         }
       } else if (name === "pane.moved") {
         revision++;
-        const previous = panes.get(String(data.previous_pane_id));
-        panes.delete(String(data.previous_pane_id));
+        const previousId = String(data.previous_pane_id);
+        const previous = panes.get(previousId);
+        const wasUnconfirmed = unconfirmedPanes.delete(previousId);
+        panes.delete(previousId);
         const pane = paneInfo(data.pane);
-        if (pane)
+        if (pane) {
+          if (wasUnconfirmed) unconfirmedPanes.add(pane.pane_id);
           panes.set(
             pane.pane_id,
             previous && compatiblePane(previous, pane)
               ? { ...previous, ...pane }
               : pane,
           );
+        }
       }
     },
     stop() {
       stopped = true;
       panes.clear();
+      unconfirmedPanes.clear();
     },
   };
 }
