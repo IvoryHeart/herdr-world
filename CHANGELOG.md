@@ -30,7 +30,8 @@ are optional because the merged PR history records their source.
 ### Changed
 
 - Mobile top-bar controls use icons for Hosts, view selection, Actions and Menu,
-  with a distinct compass for view selection, a host-count badge on Hosts, and
+  with a distinct compass for view selection, a host-count badge that counts
+  matching runtime endpoints once, and
   aggregate status text hidden.
 
 - Spaces sidebar selections activate the terminal's owning host. Workspaces with

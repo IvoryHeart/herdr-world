@@ -1174,6 +1174,10 @@ async function run() {
   );
   omitNextWorldTopology = true;
   await worldRuntimeStore.refresh();
+  await until(
+    () => !agentTarget("Reviewer"),
+    "omitted notification target committed to the rendered overview",
+  );
   replaceNotificationSessionOnSnapshot = true;
   const snapshotsBeforeReplacement = calls.filter(
     ({ method }) => method === "world.snapshot",

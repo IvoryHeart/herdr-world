@@ -9,6 +9,7 @@ import {
   PopoverTrigger,
 } from "../components/ui/popover";
 import type { HostsFilter } from "./hostsFilter";
+import { hostCount } from "./hostCount";
 
 export function HostsControl({
   connections,
@@ -24,6 +25,7 @@ export function HostsControl({
   const [open, setOpen] = useState(false);
   const [managing, setManaging] = useState(false);
   const openingManager = useRef(false);
+  const count = hostCount(connections);
   return (
     <div className="world-hosts-control connection-switcher">
       <Popover open={open} onOpenChange={setOpen}>
@@ -32,12 +34,12 @@ export function HostsControl({
             type="button"
             className="connection-switcher-trigger"
             aria-label="Hosts"
-            title={`Hosts (${connections.length})`}
+            title={`Hosts (${count})`}
             aria-expanded={open}
           >
             <span className="world-hosts-icon" aria-hidden="true">
               <Server size={16} />
-              <span className="world-hosts-count">{connections.length}</span>
+              <span className="world-hosts-count">{count}</span>
             </span>
             <span className="connection-switcher-label">
               {ids === null ? "All hosts" : `${ids.length} hosts`}
