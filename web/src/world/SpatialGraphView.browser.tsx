@@ -12,9 +12,20 @@ import "./world.css";
 const failures: string[] = [];
 let graphPaintArcs = 0;
 let graphPaintTexts = 0;
+let graphPaintLabels: Array<{ text: string; screenSize: number }> = [];
 const textGraph = CanvasRenderingContext2D.prototype.fillText;
 CanvasRenderingContext2D.prototype.fillText = function (...args) {
-  if (this.canvas.dataset.graphCanvas === "true") graphPaintTexts++;
+  if (this.canvas.dataset.graphCanvas === "true") {
+    graphPaintTexts++;
+    const transform = this.getTransform();
+    graphPaintLabels.push({
+      text: String(args[0]),
+      screenSize:
+        (Number.parseFloat(this.font.match(/[\d.]+px/)?.[0] ?? "0") *
+          Math.hypot(transform.a, transform.b)) /
+        window.devicePixelRatio,
+    });
+  }
   return textGraph.apply(this, args);
 };
 const clearGraph = CanvasRenderingContext2D.prototype.clearRect;
@@ -23,6 +34,7 @@ CanvasRenderingContext2D.prototype.clearRect = function (...args) {
   if (this.canvas.dataset.graphCanvas === "true") {
     graphPaintArcs = 0;
     graphPaintTexts = 0;
+    graphPaintLabels = [];
   }
   return clearGraph.apply(this, args);
 };
@@ -614,8 +626,10 @@ async function run() {
         "Graph overview zoom did not paint",
       );
       check(
-        graphPaintArcs > 0 && graphPaintTexts === 0,
-        "Graph paints unreadably small text in the overview",
+        graphPaintArcs > 0 &&
+          graphPaintLabels.some(({ text }) => text.startsWith("Platform")) &&
+          graphPaintLabels.every(({ screenSize }) => screenSize >= 8.99),
+        "Graph overview lost workspace labels or painted unreadably small text",
       );
       check(
         Object.keys(window.__HERDR_GRAPH_RENDERER__!.publishedNodes).length ===

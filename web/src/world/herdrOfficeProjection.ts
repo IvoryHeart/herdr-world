@@ -266,17 +266,18 @@ export function projectWorldOffice(
   const hostById = new Map(hosts.map((host) => [host.key, host]));
   const allRooms = world.spaces
     .map((space) => projectRoom(space, hostById.get(space.parentId)!))
-    .sort(
-      (left, right) =>
-        Number(right.source.id === selectedSpaceId) -
-          Number(left.source.id === selectedSpaceId) ||
-        compareRooms(left, right),
-    );
+    .sort(compareRooms);
+  const roomCandidates = [...allRooms].sort(
+    (left, right) =>
+      Number(right.source.id === selectedSpaceId) -
+        Number(left.source.id === selectedSpaceId) || compareRooms(left, right),
+  );
+  // Selection reserves bounded capacity; it does not change room placement.
   const presentedRooms = boundedWithPriority(
-    allRooms,
+    roomCandidates,
     OFFICE_PRESENTATION_BOUNDS.rooms,
     ({ host }) => host.selected,
-  );
+  ).sort(compareRooms);
   const presentedRoomKeys = new Set(presentedRooms.map(({ room }) => room.key));
   const prepared = preparedOffice.get(world);
   const allAgents =
@@ -435,13 +436,13 @@ export function projectWorldOffice(
   );
   const deskRoster = prepared
     ? prepared.desks.slice()
-    : allRooms.flatMap((entry) => canonicalRoomRoster(entry).desks);
+    : roomCandidates.flatMap((entry) => canonicalRoomRoster(entry).desks);
   const roster = prepared
     ? prepared.roster.slice()
-    : allRooms.flatMap((entry) => canonicalRoomRoster(entry).agents);
+    : roomCandidates.flatMap((entry) => canonicalRoomRoster(entry).agents);
   const paneRoster = prepared
     ? prepared.panes.slice()
-    : allRooms.flatMap((entry) => canonicalRoomRoster(entry).panes);
+    : roomCandidates.flatMap((entry) => canonicalRoomRoster(entry).panes);
   const agentIndex =
     prepared?.agentIndex ??
     new Map(roster.map((entry, index) => [entry.agent.key, index]));

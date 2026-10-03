@@ -1441,7 +1441,10 @@ function settlePendingFocusWorkspace(seq: number): void {
   set({ pendingFocusWorkspaceSettledAt: Date.now() });
 }
 
-async function refreshNow(lease = captureConnectionLease()) {
+async function refreshNow(
+  lease = captureConnectionLease(),
+  waitForRunning = false,
+) {
   if (
     leaseSnapshot(lease).connectionPaused ||
     leaseSnapshot(lease).status !== "connected" ||
@@ -1452,7 +1455,9 @@ async function refreshNow(lease = captureConnectionLease()) {
   const refreshKey = `${lease.connectionId}:${lease.generation}`;
   if (refreshingConnectionKeys.has(refreshKey)) {
     queuedConnectionKeys.add(refreshKey);
-    return refreshCompletions.get(refreshKey)?.promise;
+    return waitForRunning
+      ? refreshCompletions.get(refreshKey)?.promise
+      : undefined;
   }
   const completion = Promise.withResolvers<void>();
   refreshCompletions.set(refreshKey, completion);
@@ -3022,7 +3027,7 @@ export const store = {
         (workspace) => workspace.workspace_id === target.workspaceId,
       )
     ) {
-      await refreshNow(lease);
+      await refreshNow(lease, true);
     }
     if (
       !current() ||

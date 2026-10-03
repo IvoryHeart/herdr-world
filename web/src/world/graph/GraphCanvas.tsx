@@ -623,7 +623,15 @@ class GraphRenderer {
       context.stroke();
     }
     for (const node of this.#drawOrder)
-      if (graphDrawingIntersects(viewport, node)) this.#drawNode(context, node);
+      if (
+        graphDrawingIntersects(
+          viewport,
+          node,
+          node,
+          Math.max(100, 60 / this.#camera.zoom),
+        )
+      )
+        this.#drawNode(context, node);
     context.restore();
     this.#publishNodes(layout, center);
     this.#emitAnchors(layout, center);
@@ -657,40 +665,43 @@ class GraphRenderer {
           : statusStroke(source.status);
     context.stroke();
     context.setLineDash([]);
-    // Below six screen pixels labels cannot be read. Keep every node, link,
-    // status color and hit target while avoiding tiny glyph submissions.
+    // Identifying labels remain readable in Fit and the overview. Secondary
+    // details can wait until the node is large enough to contain them.
     const detailed = this.#camera.zoom * 9 >= 6;
+    const labelScale = Math.max(1, 1 / this.#camera.zoom);
     context.textAlign = "center";
     context.textBaseline = "middle";
     context.fillStyle = "#e8edf4";
-    if (detailed && (source.kind === "agent" || source.kind === "terminal")) {
-      context.font = "700 11px sans-serif";
+    if (source.kind === "agent" || source.kind === "terminal") {
+      if (detailed) {
+        context.font = "700 11px sans-serif";
+        context.fillText(
+          source.kind === "agent" ? statusSymbol(source.status) : ">_",
+          0,
+          0,
+        );
+      }
+      context.font = `600 ${9 * labelScale}px sans-serif`;
       context.fillText(
-        source.kind === "agent" ? statusSymbol(source.status) : ">_",
+        shortCanvasLabel(context, source.label, 76 * labelScale),
         0,
-        0,
-      );
-      context.font = "600 9px sans-serif";
-      context.fillText(
-        shortCanvasLabel(context, source.label, 76),
-        0,
-        radius + 14,
+        radius + 14 * labelScale,
       );
     } else if (source.kind === "host" || source.kind === "space") {
+      context.font =
+        source.kind === "host"
+          ? `700 ${13 * labelScale}px sans-serif`
+          : `600 ${11 * labelScale}px sans-serif`;
+      context.fillText(
+        shortCanvasLabel(
+          context,
+          source.label,
+          (source.kind === "host" ? 98 : 78) * labelScale,
+        ),
+        0,
+        detailed ? -5 : 0,
+      );
       if (detailed) {
-        context.font =
-          source.kind === "host"
-            ? "700 13px sans-serif"
-            : "600 11px sans-serif";
-        context.fillText(
-          shortCanvasLabel(
-            context,
-            source.label,
-            source.kind === "host" ? 98 : 78,
-          ),
-          0,
-          -5,
-        );
         context.fillStyle = "#9da7b4";
         context.font = "500 8px sans-serif";
         context.fillText(

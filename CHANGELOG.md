@@ -29,6 +29,8 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Office keeps admitted workspace rooms in a stable order when terminals are
+  selected. Graph retains readable node labels when Fit zooms out.
 - Hosts adds collapsible groups around the existing workspace navigator, retaining
   its agent layouts, worktrees and context menus. The host filter opens above the
   toolbar with connection management, and workspace/room selections open terminals

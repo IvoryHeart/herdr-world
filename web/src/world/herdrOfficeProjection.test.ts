@@ -9,6 +9,34 @@ import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
 
 describe("Pixel Office projection", () => {
+  test("terminal and room selections preserve the positions of admitted workspaces", () => {
+    const world = buildWorldObject(
+      ["alpha", "beta", "gamma"].map((id) =>
+        connection(id, [tab("shared", 1)], [pane("shared", "working", id)]),
+      ),
+    );
+    const expected = projectWorldOffice(world, 1).rooms.map(({ key }) => key);
+    for (const selected of [...world.spaces, ...world.leaves]) {
+      expect(
+        projectWorldOffice(world, 1, selected.id).rooms.map(({ key }) => key),
+      ).toEqual(expected);
+    }
+  });
+
+  test("revealing an omitted room retains the stable order of admitted rooms", () => {
+    const world = buildWorldObject(
+      Array.from({ length: 9 }, (_, index) => boundedConnection(index)),
+    );
+    const selected = world.spaces[world.spaces.length - 1]!;
+    const office = projectWorldOffice(world, 1, selected.id);
+    expect(office.rooms.some(({ key }) => key === selected.id)).toBe(true);
+    const admitted = new Set(office.rooms.map(({ key }) => key));
+    expect(office.rooms.map(({ key }) => key)).toEqual(
+      world.spaces.filter(({ id }) => admitted.has(id)).map(({ id }) => id),
+    );
+    expect(office.rooms).toHaveLength(OFFICE_PRESENTATION_BOUNDS.rooms);
+  });
+
   test("prepared scenes reuse qualified pane devices from the complete roster", async () => {
     const world = buildWorldObject([
       connection(
