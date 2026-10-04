@@ -286,6 +286,7 @@ export function AgentSessionPreviewDialog({
                         pane,
                         summary.session?.value || summary.path,
                         connectionClient,
+                        summary.session?.value,
                       )
                     }
                   >
@@ -293,7 +294,13 @@ export function AgentSessionPreviewDialog({
                   </button>
                   <button
                     type="button"
-                    onClick={() => downloadSession(pane, connectionClient)}
+                    onClick={() =>
+                      downloadSession(
+                        pane,
+                        connectionClient,
+                        summary.session?.value,
+                      )
+                    }
                   >
                     Export raw
                   </button>

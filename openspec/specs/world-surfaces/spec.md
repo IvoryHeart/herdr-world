@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Keep Spaces, Office, Tree and Graph as native presentations over one qualified all-host projection,
-one selected operational host, one docked plus independently managed floating Inspectors and one terminal owner. See
-[knowledge map](../../../docs/knowledge-map.md) for source and historical rationale.
+Keep Spaces, Office, Tree and Graph as native presentations over one filtered aggregate,
+independent qualified operational contexts, one docked Inspector and floating Inspectors,
+and exclusive ownership of each qualified terminal.
 
 ## Requirements
 
@@ -17,24 +17,20 @@ exactly once as an agent or terminal child of its owning space. Equal native ide
 different connections SHALL remain distinct. A pane SHALL retain stable terminal-backed identity
 when its agent classification, label, status or focus changes.
 
-Spaces, Office, Tree and Graph SHALL consume the same connection and generation identities. The
-Spaces terminal workspace SHALL remain mounted while another view is visible so changing views
-does not create another application or competing runtime store. Selection SHALL not itself mutate
-Herdr or change the selected connection.
+Desk, Spaces, Office, Tree and Graph SHALL consume the same connection and generation identities and
+reuse shell-owned Inspector resources and terminal ownership. Selection SHALL not itself mutate
+Herdr. All managed hosts SHALL be observed independently of the browser's view filter.
 
-The runtime store and shared WorldObject SHALL retain every managed host, including current
-ready-inactive hosts and explicitly stale cached topology. Office, Tree and Graph, their visible
-counts and their search SHALL consume only the selected host's projection until the operational
-client supports simultaneous active hosts. The shell SHALL restore a valid last/default managed
-profile as the selected operational host or present the existing connection workflow before showing
-a visual view when no managed profile is selected. View navigation SHALL not change that selection.
+Desk, Office, Tree and Graph SHALL present the aggregate filtered by All hosts or an explicit set of
+managed hosts. Counts and search SHALL use the same filter and distinguish current, stale and
+omitted observations. Every managed host in scope SHALL retain a qualified root, including offline
+hosts without children. A host filter SHALL NOT connect, disconnect, select an operational runtime,
+retire an open context or change an in-flight operation's target.
 
-Terminal, Spaces, Inspector, room and launcher actions SHALL be available only when their target
-belongs to the selected host and its current runtime generation. Switching the selected connection
-SHALL retire the outgoing presentation and replace it with the incoming host rather than leaving
-disabled foreign rooms, nodes or leaves in the view. Any transient retained read-only context SHALL
-offer a clearly labelled Switch now action; entity selection or an attempted operation SHALL NOT
-switch hosts implicitly.
+Terminal, Spaces, Inspector, room and launcher actions SHALL use their captured owning connection,
+current generation and entity identity with current capability and resource admission. They SHALL
+be available across compatible ready hosts without a global operational-host selection. Stale or
+unavailable targets SHALL explain their state without falling back to another host.
 
 #### Scenario: Move between Spaces and a visual view
 
@@ -50,29 +46,31 @@ switch hosts implicitly.
 
 #### Scenario: No managed host is selected
 
-- **WHEN** the shell cannot restore a selected profile from the managed catalogue
-- **THEN** World presents the existing connection workflow before Office, Tree or Graph and does
-  not invent an operational host
+- **WHEN** no managed profiles exist
+- **THEN** World presents connection onboarding without inventing a host
+
+#### Scenario: Open an unavailable catalogue
+
+- **WHEN** profiles exist but none is ready
+- **THEN** the overview retains their health and explicitly stale cached topology with actions disabled
 
 #### Scenario: Inspect an entity on a ready-inactive host
 
-- **WHEN** two managed hosts have current topology and one is the selected operational host
-- **THEN** the runtime retains both qualified observations while Office, Tree, Graph, visible counts
-  and search contain only the selected host
+- **WHEN** two managed hosts have current topology and All hosts is in effect
+- **THEN** views, counts and search include both qualified subtrees and their admitted actions
+  require no host activation
 
 #### Scenario: Explicitly activate an observed host
 
-- **WHEN** a user selects another managed host through the connection selector or invokes Switch now
-  from a transient retained context
-- **THEN** World uses the existing selected-connection lifecycle, retires the outgoing host's
-  scoped visual, terminal and resource contexts, replaces every visual projection with the incoming
-  host and enables actions only after the new host and generation are current
+- **WHEN** a user filters to one host while Inspectors on two hosts are open
+- **THEN** the overview narrows, both contexts retain their targets and validity, and the excluded
+  Inspector is labelled outside the filter without a false visual connector
 
 #### Scenario: Active host changes during an Office action
 
-- **WHEN** the active connection or runtime generation changes while an Office entity is opening
-- **THEN** the action is rejected before dispatch or before reporting success and never targets a
-  colliding workspace on the newly active host
+- **WHEN** the owning generation changes while an Office entity is opening
+- **THEN** the obsolete action cannot dispatch or report success for a replacement context and
+  never targets a colliding workspace on another host
 
 #### Scenario: Switch views with an open terminal
 
@@ -97,7 +95,7 @@ switch hosts implicitly.
 
 - **WHEN** two managed hosts report equal workspace, pane or terminal identifiers
 - **THEN** the hierarchy contains distinct connection-qualified subtrees and an action is admitted
-  only after its entity's owning connection is the selected operational host
+  only against its entity's current owning connection and generation
 
 #### Scenario: Two hosts contain equal space and terminal identifiers
 
@@ -196,13 +194,13 @@ It SHALL also expose view-wide window arrangements independently of entity selec
 right-side Roamgate-derived Actions command menu SHALL retain its original shell commands and add
 target actions, Pin, Unpin, Pinned only and arrangements in visual views, without a duplicate
 view-toolbar Actions control; the view toolbar SHALL keep search available.
-Target actions SHALL reuse the shared Inspector and selected-connection focus path; they SHALL NOT use
+Target actions SHALL reuse the shared Inspector and explicit owning-context focus path; they SHALL NOT use
 hidden Spaces focus, create another terminal owner, send terminal input, assign tasks or control
 an agent lifecycle. A missing or unavailable target SHALL explain why no target action can run.
 
 Before dispatch, Actions SHALL validate the captured connection ID, runtime generation, entity
-identity and current selected entity against the selected-host projection. Changing selection,
-host or generation, or losing the current observation, SHALL invalidate the capture and prevent
+identity and current selected entity against current qualified target admission. Changing the
+selected entity or its generation, or losing target admission, SHALL invalidate the capture and prevent
 an action from falling through to a colliding entity or hidden Spaces state. Go to Spaces SHALL
 focus the exact validated target before changing the visible view and SHALL leave the visual view
 visible if that focus fails.
@@ -228,11 +226,11 @@ visible if that focus fails.
 
 - **WHEN** a user chooses Go to Spaces for a current space or pane
 - **THEN** World focuses that qualified target before Spaces becomes visible without changing the
-  selected host or creating a pane
+  host filter or creating a pane
 
 #### Scenario: The capture retires before dispatch
 
-- **WHEN** selection, selected host, runtime generation or observed entity changes while Actions
+- **WHEN** the selected entity, its runtime generation or its current target admission changes while Actions
   is open
 - **THEN** World invalidates the capture, reports that target actions are unavailable, and performs no target action
 
@@ -242,7 +240,7 @@ The native World shell SHALL offer Desk, Spaces, Office, Tree and Graph once eac
 rendered view, browser history and canonical paths `/desk`, `/spaces`, `/office`, `/tree` and `/graph`
 consistent. The World root and unknown paths SHALL resolve to Desk.
 The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
-machine selector; a muted selected-host/runtime indicator with the bounded space/agent/stale summary
+Hosts filter; a muted aggregate health indicator with the bounded space/agent/stale summary
 in its accessible label and tooltip SHALL remain in that top bar. The shell SHALL provide one shared view-control slot there: Office, Tree and
 Graph SHALL place search in it, and Graph SHALL additionally place Fit and zoom in it. World SHALL
 NOT stack a second view-navigation, Visual Control Plane status bar or view-local search/zoom header
@@ -258,9 +256,10 @@ Desk SHALL be the primary default surface after a valid managed profile is selec
 and Graph SHALL remain spatial views of the same topology, and Spaces SHALL remain the first-class
 operational workspace and profile-management surface rather than being removed or embedded into
 another view.
-The existing Spaces connection selector SHALL remain the profile-management surface; visual World
-views SHALL not introduce a second host catalogue and SHALL persistently identify the selected
-operational host and its state.
+The common shell SHALL expose Manage connections separately from its Hosts filter using the
+existing managed catalogue. Every operational workspace or Inspector SHALL identify its owning host
+and state. The common navigator SHALL group workspaces by host within the filter; an already-open
+workspace outside that filter SHALL retain its labelled context.
 Office room alignment, long-title treatment, Inspector presentation and optional observability
 configuration SHALL live in the common settings menu on desktop, compact and Zen layouts. Office
 SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those infrequent controls.
@@ -269,18 +268,18 @@ SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those in
 
 - **WHEN** a user selects Tree, selects Graph and then navigates Back
 - **THEN** the URL and rendered view return to Tree while the same shell retains terminal and
-  Inspector ownership and the same selected host
+  Inspector ownership and each context's owning host
 
 #### Scenario: Use the single application top bar
 
 - **WHEN** a user changes among Desk, Office, Spaces, Tree and Graph
-- **THEN** the view selector, version, selected-host/runtime summary, machine selector, applicable
+- **THEN** the view selector, version, aggregate health summary, Hosts filter, Manage connections, applicable
   search/Fit/zoom controls and shell tools remain in one top bar and the selected view receives all
   remaining vertical workspace
 
 #### Scenario: Use the common workspace frame
 
-- **WHEN** a user changes among Desk, Spaces, Office, Tree and Graph for the selected host
+- **WHEN** a user changes among Desk, Spaces, Office, Tree and Graph with the current host filter
 - **THEN** the same workspace navigator, focused tab context and annotations control remain
   available while only the center presentation changes and Graph adds no competing desktop outline
 
@@ -294,8 +293,8 @@ SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those in
 #### Scenario: Manage a host
 
 - **WHEN** a user needs to add, edit, test, connect or remove a profile from a visual World view
-- **THEN** opening Spaces exposes the existing managed connection workflow without another product
-  or profile store
+- **THEN** Manage connections exposes the existing workflow from the common shell without changing
+  the current view, filter or unrelated contexts
 
 #### Scenario: Open World with a managed profile
 
@@ -318,17 +317,17 @@ SHALL not embed or launch a separately branded Roamgate application.
 
 #### Scenario: Use the Inspector without leaving a visual view
 
-- **WHEN** a user selects an actionable space or pane on the selected operational host in Office,
+- **WHEN** a user selects an actionable space or pane on any admitted managed host in Office,
   Tree or Graph and opens Files, Changes or Agent History
 - **THEN** the selected visual view remains visible and the shell-owned Inspector uses only that
   entity's owning connection, runtime generation, workspace and optional pane context
 
 #### Scenario: Activate a host from a visual view
 
-- **WHEN** an outgoing read-only context remains briefly visible after its host becomes inactive and
-  the user invokes Switch now
-- **THEN** the shell changes and revalidates the selected host through its existing connection
-  lifecycle without treating the original entity selection as an operation
+- **WHEN** a stale context explains its host is disconnected and the user reconnects it through
+  Manage connections
+- **THEN** only that runtime reconnects and newly opened resources require current target admission,
+  without retiring other hosts or replaying the stale action
 
 ### Requirement: Bounded World view composition
 
@@ -346,9 +345,9 @@ overflow on the application page.
 
 #### Scenario: Search Office from the common header
 
-- **WHEN** a user searches the selected host from Office and chooses a matching entity
+- **WHEN** a user searches the filtered aggregate from Office and chooses a matching entity
 - **THEN** World selects that exact qualified entity without adding an Office stage toolbar or
-  changing hosts
+  changing connection lifecycle or the host filter
 
 #### Scenario: Select a stale entity
 
@@ -403,9 +402,9 @@ Changes. A non-agent terminal pane SHALL expose Files, Changes and Terminal. Age
 appear only for an admitted agent session. Selecting a host SHALL retain bounded host detail and
 activation state without inventing workspace resources.
 
-Every Inspector SHALL expose generation-fenced resources only for the selected operational host. A
-transient outgoing or stale selection MAY retain a bounded read-only identity and SHALL use an
-explicit Switch now control when its saved host can be selected, without opening live resources. An actionable entity SHALL NOT
+Every Inspector SHALL expose generation-fenced resources only for its own admitted connection. A
+stale selection MAY retain a bounded read-only identity and SHALL explain its unavailable state
+and offer connection management when applicable, without opening live resources. An actionable entity SHALL NOT
 retain a separate floating profile card. Missing metadata SHALL remain absent rather than inferred.
 Authoritative cost, input-token, output-token or similar observations MAY appear in the compact
 identity area only when the provider qualifies them to that exact agent session; unavailable or
@@ -419,10 +418,10 @@ representation SHALL focus its existing Inspector instead of creating a duplicat
 
 Each Inspector SHALL remain visually connected to its represented agent, desk or hierarchy node
 whenever that exact qualified anchor is visible. Opening or focusing an Inspector SHALL not change
-the selected host. World SHALL admit identity and resource content together after qualified pane
+the host filter or another context's target. World SHALL admit identity and resource content together after qualified pane
 focus; a delayed or rejected focus SHALL never show a new identity over another entity's resources.
-Explicit host switching SHALL retire every outgoing Inspector and terminal context through the
-existing connection lifecycle.
+Changing the host filter SHALL preserve Inspector and terminal contexts. Runtime retirement SHALL
+retire only contexts owned by that connection and generation.
 
 #### Scenario: Open a terminal-capable Inspector
 
@@ -462,7 +461,7 @@ existing connection lifecycle.
 #### Scenario: Open rich agent context
 
 - **WHEN** the user changes among Files, Changes and Agent History in two actionable agent
-  Inspectors on the selected operational host
+  Inspectors on different ready managed hosts
 - **THEN** each Inspector retains its own tab and resource selection for the exact qualified
   workspace and session while reusing the shell's existing resource implementations
 
@@ -470,7 +469,7 @@ existing connection lifecycle.
 
 - **WHEN** the user selects an actionable space or non-agent terminal pane in Office, Tree or Graph
 - **THEN** the same overlay presents its compact qualified identity and applicable shell-owned
-  Files, Changes or Terminal tabs without fabricating Agent History or changing the selected host
+  Files, Changes or Terminal tabs without fabricating Agent History or changing the host filter
 
 #### Scenario: Inspect an agent with qualified observations
 
@@ -481,9 +480,9 @@ existing connection lifecycle.
 
 #### Scenario: Inspect an agent on an inactive host
 
-- **WHEN** a host switch leaves a transient read-only selection from the outgoing host
-- **THEN** the detail context says that the user must switch hosts to activate the view and offers
-  Switch now without opening terminal or Inspector resources
+- **WHEN** an open Inspector belongs to a current ready host excluded by the overview filter
+- **THEN** its qualified checkout resources remain usable and its identity indicates it is outside
+  the filter, without changing its host or agent session
 
 #### Scenario: Change selection while focus is delayed or rejected
 
@@ -551,10 +550,9 @@ NOT force unrelated rows to that width.
 
 #### Scenario: Switch between hosts with unequal rooms
 
-- **WHEN** several managed hosts expose workspaces with different tab counts and title lengths and
-  the user changes the selected host
-- **THEN** Office replaces the complete scene with the selected host's reception and content-sized
-  work rooms without merging identities, clipping required headers or using equal-width cards
+- **WHEN** several filtered managed hosts expose workspaces with different tab counts and title lengths
+- **THEN** Office groups content-sized rooms under clearly identified hosts, preserving each room's
+  qualified identity and required headers without equalizing unrelated rooms
 
 #### Scenario: Compare the retained Pixel Office fixture
 
@@ -763,7 +761,7 @@ distinct, nonduplicated semantic targets.
 
 #### Scenario: Create a seat in a room
 
-- **WHEN** the selected host advertises the required capability and the user invokes the next desk
+- **WHEN** the room's owning host advertises the required capability and the user invokes the next desk
   action
 - **THEN** World uses the admitted launcher path for that room, shows the desk only after Herdr
   admits the resulting tab and pane, retains the live Office instance across that topology update,
@@ -774,7 +772,7 @@ distinct, nonduplicated semantic targets.
 
 - **WHEN** the user cancels seat creation or the launcher fails before Herdr admits a new pane
 - **THEN** Office preserves the prior selection, focused Inspector context and every existing
-  qualified conversation window for the selected host without detaching or redirecting input
+  qualified conversation window across admitted hosts without detaching or redirecting input
 
 #### Scenario: Mixed-state agents share a tab or exceed the desk bound
 
@@ -852,7 +850,7 @@ When a terminal window receives focus, World SHALL raise it above every other vi
 
 ### Requirement: Close all terminal windows from view menus
 
-The arrangement menu and the shared Actions menu SHALL each offer the same accessible action to close all terminal windows. The action SHALL dismiss World terminal presentations without closing Herdr panes or tabs, ending terminal processes or sessions, or changing the selected host. It SHALL be available independently of visual entity selection. Its scope and reopen behavior SHALL follow the Close all clauses in the modified Arrange existing terminal windows requirement.
+The arrangement menu and the shared Actions menu SHALL each offer the same accessible action to close all terminal windows. The action SHALL dismiss World terminal presentations without closing Herdr panes or tabs, ending terminal processes or sessions, or changing the host filter or connection lifecycle. It SHALL be available independently of visual entity selection. Its scope and reopen behavior SHALL follow the Close all clauses in the modified Arrange existing terminal windows requirement.
 
 #### Scenario: Close every presented terminal window
 - **WHEN** a user invokes Close all terminal windows from either menu while multiple terminal windows are open
@@ -886,9 +884,9 @@ Graph SHALL provide accessible controls to rotate its arrangement 90 degrees lef
 
 The shared tab bar SHALL offer one keyboard- and pointer-accessible arrangement control with labelled visual choices for Single, Cascade, Columns, Rows, Grid and Restore positions. On desktop the control SHALL sit at the right edge of the tab bar; on mobile it SHALL appear inside the existing ellipsis-expanded floating controls, including when the tab strip is hidden for one tab. The shared shell Actions command menu SHALL expose the same view-wide arrangement choices and unavailable reasons in every view. Each choice MAY be given a configurable keyboard shortcut, with none assigned by default; invoking an assigned shortcut SHALL follow the same availability and Restore rules without sending terminal input. The shell's existing shortcut defaults and numbered Actions order SHALL remain unchanged. Single SHALL show one active window fitted to the available stage, except while a Spaces workspace is suspended by Close all terminal windows. In Spaces, the eligible terminal windows SHALL be the already open Herdr tabs of the focused workspace, including tabs that Single currently hides; choosing another arrangement SHALL present those tabs together without creating new Herdr tabs, panes or sessions. Selecting a tab or focusing a Spaces terminal window SHALL make that tab active. Each visible Spaces tab window SHALL present that tab's Herdr-reported split or zoom layout in Single and multiwindow arrangements, with the tab window owning each pane it presents. The one Spaces Inspector SHALL follow only the active tab and selected pane; it SHALL remain a separate resource surface outside the arranged terminal windows. If its Terminal resource is selected, it SHALL show an actionable focus affordance for the active tab window without attaching a second terminal or changing the selected resource tab.
 
-In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation on the selected host, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while suspending terminal presentations in other conversations that remain open under the existing dock and floating admission rules. In particular, ordinary selection of B while A is docked SHALL still close A before admitting B; Single SHALL NOT retain A as a hidden extra Inspector or change the one-docked-Inspector rule. World SHALL admit distinct floating Inspectors without a fixed presentation-count cap; this SHALL NOT change Spaces' existing tab admission. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT itself create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the selected host or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
+In Office, Tree and Graph, an arrangement SHALL include every currently visible Inspector conversation across managed hosts, including the docked Inspector and a Tree inline Inspector. It SHALL reposition only conversations that are open when invoked. Single SHALL show the active Inspector while suspending terminal presentations in other conversations that remain open under the existing dock and floating admission rules. In particular, ordinary selection of B while A is docked SHALL still close A before admitting B; Single SHALL NOT retain A as a hidden extra Inspector or change the one-docked-Inspector rule. World SHALL admit distinct floating Inspectors without a fixed presentation-count cap; this SHALL NOT change Spaces' existing tab admission. All four views SHALL use the same arrangement choices and geometry rules over their current window sets. Arranging SHALL NOT itself create or close Herdr tabs, panes, terminal sessions, Inspectors or connections, change the host filter, connection lifecycle or resource tab, or send terminal input. Hidden visual Inspectors SHALL remain hidden and unmodified while Spaces is visible, and hidden Spaces tab windows SHALL remain unmodified in a visual view.
 
-Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible windows at invocation. A later new tab or Inspector SHALL use its normal opening presentation until another multiwindow arrangement is chosen. Single SHALL follow the active tab or Inspector, including a newly admitted one, while hiding only other windows that remain open under normal selection rules. A Spaces workspace suspended by Close all terminal windows SHALL remain unpresented when the user navigates away and returns to that workspace in the same runtime generation. Selecting an existing tab SHALL clear its suspension and show that tab in Single; explicitly choosing an arrangement SHALL clear suspension and present all eligible tabs in the requested layout. Closing all in a visual view SHALL close every open Inspector conversation on the selected host, including conversations hidden by Single or compact layout, so those conversations cannot reappear through a later arrangement or viewport change. Close all SHALL leave the underlying Herdr tabs, panes, terminal processes and sessions open and SHALL NOT change the selected host. Open all terminal windows SHALL admit one Inspector for each actionable terminal tab on the selected host that is not already presented, without focusing or creating Herdr tabs or sessions. It SHALL preserve existing Inspector conversations and arrange the resulting set in scrollable Grid when usable, including when Single was active.
+Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible windows at invocation. A later new tab or Inspector SHALL use its normal opening presentation until another multiwindow arrangement is chosen. Single SHALL follow the active tab or Inspector, including a newly admitted one, while hiding only other windows that remain open under normal selection rules. A Spaces workspace suspended by Close all terminal windows SHALL remain unpresented when the user navigates away and returns to that workspace in the same runtime generation. Selecting an existing tab SHALL clear its suspension and show that tab in Single; explicitly choosing an arrangement SHALL clear suspension and present all eligible tabs in the requested layout. Closing all in a visual view SHALL close every open Inspector conversation across managed hosts, including conversations hidden by Single or compact layout, so those conversations cannot reappear through a later arrangement or viewport change. Close all SHALL leave the underlying Herdr tabs, panes, terminal processes and sessions open and SHALL NOT change the host filter or connection lifecycle. Open all terminal windows SHALL admit one Inspector for each actionable terminal tab within the current host filter that is not already presented, without focusing or creating Herdr tabs or sessions. It SHALL preserve existing Inspector conversations and arrange the resulting set in scrollable Grid when usable, including when Single was active.
 
 #### Scenario: Use Single in Spaces
 
@@ -953,18 +951,18 @@ Cascade, Columns, Rows and Grid SHALL be one-time actions on the eligible window
 #### Scenario: Close all visual Inspectors, including hidden conversations
 
 - **WHEN** Close all terminal windows is invoked in Office, Tree or Graph while one conversation is visible and another is hidden by Single or compact layout
-- **THEN** all open Inspector conversations on the selected host close, no conversation reappears after changing arrangement or returning to desktop, and Herdr tabs, panes, processes and sessions remain open
+- **THEN** all open Inspector conversations across managed hosts close, no conversation reappears after changing arrangement or returning to desktop, and Herdr tabs, panes, processes and sessions remain open
 
 #### Scenario: Open all selected-host terminals
 
 - **WHEN** the user chooses Open all terminal windows in Office, Tree or Graph
-- **THEN** one Inspector window opens for every actionable terminal tab on the selected host that lacks a window, existing Inspector conversations remain open, the resulting set uses scrollable Grid when usable, and no Herdr tab, pane, process or session is created or closed
+- **THEN** one Inspector window opens for every actionable terminal tab within the current host filter that lacks a window, existing Inspector conversations remain open, the resulting set uses scrollable Grid when usable, and no Herdr tab, pane, process or session is created or closed
 
 ### Requirement: Fit and restore window arrangements
 
 Columns SHALL place the current windows side by side, and Rows SHALL place them top to bottom, without overlap. They SHALL shrink windows evenly below their normal floating minimum when needed, then scroll horizontally for Columns or vertically for Rows at the usable tiled minimum. They SHALL mount only nearby windows and terminal presentations, and focusing an offscreen window SHALL scroll it into view. Grid SHALL place two windows side by side, three as one full-height column beside two stacked windows, and four in separate corners. With more than four windows, Grid SHALL tile every eligible window in a count-based rectangular layout. Its column count SHALL be the smaller of the ceiling of the square root of the window count and the number of usable-width tiles that fit the stage; additional rows SHALL scroll vertically at no less than the usable tiled minimum height. Six SHALL form a 3×2 grid and sixteen a 4×4 grid when those shapes fit the stage, without floating overflow layers. Grid SHALL mount only nearby window shells and terminal presentations; focusing an offscreen window SHALL scroll it into view. Cascade SHALL use the normal viewport-fitted default floating-window size, shrinking all windows equally only when needed to fit its diagonal offsets, and SHALL keep older title regions visible behind newer windows. When a further offset would make a window smaller than its usable minimum, Cascade SHALL repeat the diagonal in another vertically scrollable stage, mount only nearby presentations, and scroll an offscreen focused window into view. Each arrangement SHALL use the available stage below the tab bar and outside the visible Spaces Inspector dock, with balanced stage insets at supported UI scales and reachable title, close and dock controls. Scrollable visual arrangements SHALL expose a visible scrollbar on the applicable axis and clip their Inspector windows at the available stage, so offscreen windows cannot cover shell controls or receive pointer input beyond the stage. A tiled window SHALL retain its usable compact minimum during explicit resize. An option that cannot fit every eligible window at usable width SHALL be unavailable with an explanation and SHALL leave current geometry unchanged.
 
-At the first arrangement of an eligible window set, World SHALL capture its previous presentation and each window's available prior geometry, including the Spaces Single state or an Inspector's dock/inline state. Restore positions SHALL return every still-open participating instance to that captured presentation and geometry without reopening a closed instance, changing the current active tab/pane or moving an instance that has never participated. Restoring Spaces' original Single presentation SHALL show its currently active tab unless that workspace remains suspended by Close all terminal windows. A Tree inline return SHALL use its exact leaf if that leaf is still visible, and otherwise use the normal docked overlay. Explicit drag, resize, dock and close actions SHALL continue to work after arranging. Viewport changes SHALL keep title controls reachable; a compact layout SHALL keep only one active usable window and preserve desktop arrangement positions for return to desktop. A selected-host or runtime-generation change SHALL discard the prior live arrangement and restore snapshot with the retired windows. Spaces and visual views SHALL retain their respective window placement while inactive without arranging each other's hidden windows. Spaces SHALL keep tab-window placement separate for each focused workspace and SHALL detach the old workspace's terminal presentations when focus changes to another workspace.
+At the first arrangement of an eligible window set, World SHALL capture its previous presentation and each window's available prior geometry, including the Spaces Single state or an Inspector's dock/inline state. Restore positions SHALL return every still-open participating instance to that captured presentation and geometry without reopening a closed instance, changing the current active tab/pane or moving an instance that has never participated. Restoring Spaces' original Single presentation SHALL show its currently active tab unless that workspace remains suspended by Close all terminal windows. A Tree inline return SHALL use its exact leaf if that leaf is still visible, and otherwise use the normal docked overlay. Explicit drag, resize, dock and close actions SHALL continue to work after arranging. Viewport changes SHALL keep title controls reachable; a compact layout SHALL keep only one active usable window and preserve desktop arrangement positions for return to desktop. A runtime-generation change SHALL remove only that runtime's retired windows from the arrangement and restore snapshot; other participants SHALL remain recoverable. A host filter change SHALL preserve the arrangement and restore snapshot. Spaces and visual views SHALL retain their respective window placement while inactive without arranging each other's hidden windows. Spaces SHALL keep tab-window placement separate for each focused workspace and SHALL detach the old workspace's terminal presentations when focus changes to another workspace.
 
 Maximize SHALL temporarily present a window over the available stage while preserving its other arrangement participants. It SHALL capture the complete prior presentation context and geometry, including dock or inline placement, arrangement membership, tile geometry and order. The window's Restore control SHALL return it to that captured presentation. If Restore positions is invoked while a window is maximized, all still-open participants SHALL return to the captured arrangement baseline and the maximize snapshot SHALL be cleared; an individual Restore action SHALL NOT reapply superseded geometry.
 
@@ -1065,8 +1063,9 @@ Maximize SHALL temporarily present a window over the available stage while prese
 
 #### Scenario: Switch host after arranging
 
-- **WHEN** a user switches the selected host or its runtime generation changes with arranged Inspectors open
-- **THEN** retired conversations and their restore snapshot cannot reposition or reopen an Inspector for the replacement host or generation
+- **WHEN** one runtime generation changes with arranged Inspectors open on several hosts
+- **THEN** only that runtime's retired conversations are removed, Restore cannot reopen them for a
+  replacement generation, and other hosts retain their placement and restore history
 
 #### Scenario: Maximize and restore a docked Inspector
 
@@ -1149,7 +1148,8 @@ Office, Tree and Graph SHALL open qualified agents, occupied desks and terminal 
 Inspector conversations backed by the shell's existing resource and terminal/session owners.
 Selecting the same qualified entity through another representation SHALL focus its existing
 Inspector instead of creating a competing resource context or terminal attachment. Every open
-conversation SHALL belong to the one selected operational host and its current runtime generation.
+conversation SHALL belong to its own admitted managed connection and current runtime generation;
+conversations on several hosts SHALL be usable concurrently.
 World SHALL use the current Roamgate-derived terminal, Files, Changes and Agent History components
 and existing bridge connection; it SHALL NOT carry or synchronize replacement implementations from
 Herdr Web. Retained World window code MAY provide presentation around the complete Inspector
@@ -1190,18 +1190,18 @@ contained. The resize affordance SHALL present a compact corner bracket while re
 accessible drag target.
 
 Conversation identity and validity SHALL be qualified by connection and runtime generation inside
-the existing selected-connection browser lease. Opening another window or navigating among Office,
-Tree and Graph SHALL NOT detach, redirect or duplicate conversations while that host and generation
-remain selected. A failed, stale or bounded aggregate observation SHALL NOT retire an already open
-Inspector while its focused connection lease remains current and its tab or workspace remains in the
-focused Herdr list. Absence from a focused list that began before the Inspector opened SHALL NOT
-retire it. A focused list begun after admission that confirms removal, or a generation change,
+independent connection leases over the World browser transport. Opening another window, changing
+filters or navigating among Office, Tree and Graph SHALL NOT detach, redirect or duplicate
+conversations while their own leases remain current. A failed, stale or bounded aggregate observation SHALL NOT retire an already open
+Inspector while its owning connection lease remains current and its tab or workspace remains in the
+owning runtime's Herdr list. Absence from an owning-runtime list that began before the Inspector opened SHALL NOT
+retire it. An owning-runtime list begun after admission that confirms removal, or a generation change,
 SHALL retire that conversation. Selecting Spaces SHALL suspend every visual Inspector presentation
 so the native Spaces workspace is unobstructed and SHALL transfer the exact selected terminal presentation only
 after its visual owner detaches. The retained visual conversation state SHALL be restored when the
-user returns to a visual view. Explicitly activating another host SHALL retire every outgoing visual
-and Spaces terminal mount before the replacement becomes operational; World SHALL NOT retain
-simultaneous terminal conversations from several hosts in this change. All conversations SHALL use
+user returns to a visual view. Opening a context on another host SHALL preserve unrelated visual and Spaces context state.
+Changing the focused Spaces workspace SHALL detach its outgoing terminal presentations without
+retiring retained visual conversations on other workspaces or hosts. All conversations SHALL use
 the one World browser WebSocket and existing terminal owner.
 
 Mounted-but-hidden Spaces SHALL NOT keep a competing terminal attachment for a terminal currently
@@ -1288,13 +1288,13 @@ tab window before a visual Inspector can attach that qualified pane.
 
 #### Scenario: Explicitly switch hosts with conversations open
 
-- **WHEN** a user explicitly activates another host while one or more conversations are open
-- **THEN** World retires every outgoing conversation before admitting the new selected-host lease
-  and never redirects input to a colliding terminal on the replacement host
+- **WHEN** the user opens an admitted floating Inspector on another host
+- **THEN** both hosts' conversations retain independent resources, terminal ownership and input
+  routing without global host activation
 
 #### Scenario: Selected conversation host reconnects
 
-- **WHEN** the selected host reconnects while one or more conversations are open
+- **WHEN** one owning host reconnects while one or more conversations are open
 - **THEN** World retires every conversation from the replaced generation and enables a new
   attachment only after the current generation is admitted
 
@@ -1317,17 +1317,18 @@ relationships. Tree SHALL support search with complete ancestor context, indepen
 disclosure, selection, the shared entity context and qualified actions. The connected presentation
 currently used by the foundation checkpoint's Graph view SHALL become Tree; an indented list SHALL
 serve only as an equivalent compact or assistive presentation rather than the primary desktop view.
-Tree SHALL bound presentation to the one selected host, 128 spaces and 16 leaves per presented space,
+Tree SHALL bound presentation to the filtered host roots, 128 spaces total and 16 leaves per presented space,
 using the same relevance priority as Graph. Both its connected and semantic presentations SHALL
 consume that one bounded projection and report exact omitted host, space and leaf counts globally
-and at the affected branch; search SHALL operate only over the honestly presented projection. The
+and at the affected branch; search SHALL operate over the filtered admitted observation and reveal a chosen omitted result
+within the same rendering bounds, with exact search-result omission reporting. The
 selected actionable leaf SHALL be able to expand in place as Tree's single inline Inspector dock,
 with the leaf card remaining its contextual header and the shared resource surface appearing below
 it in both the connected desktop and equivalent compact hierarchy.
 
 #### Scenario: Scan an unequal selected-host hierarchy
 
-- **WHEN** the selected host contains spaces with different numbers of leaves
+- **WHEN** filtered hosts contain spaces with different numbers of leaves
 - **THEN** Tree keeps each branch visibly connected to its exact parent without dangling lines or
   equalizing unrelated branches
 
@@ -1345,7 +1346,7 @@ it in both the connected desktop and equivalent compact hierarchy.
 
 #### Scenario: Tree exceeds its presentation capacity
 
-- **WHEN** a dense unequal selected-host hierarchy exceeds Tree's global-space or per-space leaf bounds
+- **WHEN** a dense unequal multi-host hierarchy exceeds Tree's global-space or per-space leaf bounds
 - **THEN** Tree prioritizes selected, focused and attention-requiring entities, renders neither
   presentation outside the shared bounds, and reports exact global and affected-branch omissions
 
@@ -1358,7 +1359,7 @@ independent disclosure, selection, the
 shared entity context, saved camera and node positions, visible status changes and live terminal
 conversation connectors. Status-only updates SHALL NOT reset settled positions or camera state.
 
-Graph SHALL bound presentation to the one selected host, 128 spaces and 16 leaves per presented space,
+Graph SHALL bound presentation to the filtered host roots, 128 spaces total and 16 leaves per presented space,
 with exact overflow reporting and priority for focused, working, blocked and detected-agent nodes.
 It SHALL provide an equivalent semantic hierarchy and SHALL pause or release animation, observers,
 listeners and retained layout work when hidden or unmounted.
@@ -1366,8 +1367,8 @@ listeners and retained layout work when hidden or unmounted.
 #### Scenario: Equal native identifiers exist on two hosts
 
 - **WHEN** two hosts expose the same workspace, pane or terminal identifier
-- **THEN** Graph presents only the selected host and switching hosts replaces it with distinct
-  qualified nodes rather than reusing or connecting the other host's identities
+- **THEN** Graph presents distinct qualified nodes under their owning filtered host roots without
+  merging identities or connecting entities across runtime ancestry
 
 #### Scenario: Live status changes on a settled graph
 
@@ -1459,7 +1460,7 @@ claim current watch classification.
 ### Requirement: Watched visual projection
 
 Office, Tree and Graph SHALL offer accessible Pin, Unpin and browser-local Pinned
-only controls in the shell Actions menu. Pinned only retains selected-host hierarchy context and filters
+only controls in the shell Actions menu. Pinned only retains filtered multi-host hierarchy context and filters
 search within that set. Tree and Graph SHALL prioritize watched leaves while
 retaining their 16-child presentation bound; unavailable, stale, missing or
 unresolved watches SHALL not expose operational actions.
@@ -1470,9 +1471,127 @@ unresolved watches SHALL not expose operational actions.
 - **THEN** the snapshot still admits its valid watches and the view reports its
   presentation omission without calling it missing
 
+### Requirement: Persist host filters without operational side effects
+
+The common shell SHALL offer All hosts and an explicit nonempty set of managed hosts as view
+filters, independently of connection management and operation targets. All hosts SHALL be the
+initial scope. World SHALL restore an explicitly saved filter on reload, prune removed profile
+identities and restore All hosts with an explanation if no saved identity remains. A legacy
+operational-host preference SHALL NOT silently become a restrictive filter. Filter changes SHALL
+preserve open contexts, their resource state and their pending requests. A selected visual target
+hidden by filtering SHALL no longer supply visual Actions; its open Inspector SHALL retain its
+own independently qualified actions.
+
+#### Scenario: Upgrade from a selected-host browser
+- **WHEN** the browser has an old selected-host preference and no saved multi-host filter
+- **THEN** World starts with All hosts and requires explicit current admission for operational work
+
+#### Scenario: Restore a saved filter
+- **WHEN** a browser reloads with two saved filter identities and one profile has been removed
+- **THEN** it retains the remaining profile in the filter without connecting or disconnecting any host
+
+#### Scenario: Every saved filter identity was removed
+- **WHEN** no identity in a saved filter remains managed
+- **THEN** World restores All hosts and explains the change
+
+#### Scenario: Filter hides the selected visual entity
+- **WHEN** the filter excludes a selected entity with an open Inspector and an open visual Actions menu
+- **THEN** the visual selection/menu capture clears while the Inspector remains usable under its
+  own admitted context and is labelled outside the filter
+
+### Requirement: Search and summarize the filtered aggregate honestly
+
+World search SHALL cover the full admitted observation within the host filter and Pinned only
+scope when enabled, independently of renderer truncation. Results SHALL preserve qualified ancestry,
+use bounded presentation and report omitted matches. Selecting an actionable result SHALL reveal
+its qualified target by reprioritizing the bounded view without changing the host filter or attaching
+a different entity. Observation bounds SHALL remain explicit; search SHALL NOT imply access to
+entities absent from the service's bounded observation.
+
+Counts SHALL identify their filter scope and distinguish observed matches, rendered entities,
+omissions and stale or unavailable coverage. Missing observations SHALL NOT be counted as zero
+agents. Tree and Graph SHALL retain all filtered host roots within the managed catalogue limit,
+at most 128 presented spaces total and 16 leaves per presented space. They SHALL prioritize
+selected, focused, watched and attention-requiring entities, then distribute remaining space
+capacity across hosts before assigning additional capacity to one host.
+
+#### Scenario: Find an entity omitted by rendering
+- **WHEN** a current agent exists in admitted topology but falls beyond a view's rendering bound
+- **THEN** search can return it and choosing it reveals that qualified agent within the same bounds
+  while omission counts account for displaced entities
+
+#### Scenario: Some hosts lack current observations
+- **WHEN** two filtered hosts are current and a third has only stale or unavailable topology
+- **THEN** the summary identifies that coverage and does not present its total as a complete current count
+
+#### Scenario: Dense hosts compete for presentation capacity
+- **WHEN** one filtered host has more than 128 spaces and another has a small workspace set
+- **THEN** priority entities remain favored, remaining capacity is distributed across hosts and
+  exact global and branch omissions explain what was not rendered
+
+#### Scenario: Pinned only across hosts
+- **WHEN** the user enables Pinned only with current watches on two hosts in the filter
+- **THEN** both qualified host branches are eligible regardless of keyboard focus, and filtering
+  out one host changes visibility without removing its watches or open contexts
+
+### Requirement: Explicit destinations and independent command focus
+
+Resource requests, terminal input, popup and clipboard handling, uploads, annotations, launchers,
+worktree operations and workspace mutations SHALL use the owning operational context's captured
+connection, runtime generation and applicable resource/session identity. Window focus SHALL govern
+keyboard command targeting without changing any other context's identity. Hidden Spaces state
+SHALL NOT provide a target to a visual or Inspector command. Unsupported operations SHALL explain
+the missing capability on the target host without blocking compatible hosts.
+
+Creation from an existing room or workspace SHALL inherit its qualified destination. Global creation
+SHALL require a visible destination confirmed at submission; a single-host filter MAY prefill it.
+All hosts SHALL NOT imply broadcasting. Destructive controls SHALL identify the owning host and
+resource before dispatch. Delayed results SHALL update only the still-valid owning resource request.
+
+#### Scenario: Interleave terminal input across hosts
+- **WHEN** terminals on two hosts share native pane IDs and the user alternates keyboard focus
+- **THEN** input, resize and clipboard operations reach only their respective qualified owners,
+  without duplicate attachment or input replay
+
+#### Scenario: Create from a room
+- **WHEN** the user starts creation from a room while another host's terminal has keyboard focus
+- **THEN** the creation destination remains the room's owning host and workspace and is revalidated
+  before dispatch
+
+#### Scenario: Create globally with All hosts
+- **WHEN** the user invokes global creation while All hosts is selected
+- **THEN** a destination is explicitly chosen and shown before submission and exactly one host is targeted
+
+#### Scenario: Destination fails before submission
+- **WHEN** a displayed creation destination disconnects or loses the required capability
+- **THEN** submission fails for that destination without silently choosing another ready host
+
+#### Scenario: Delayed resource after another window gains focus
+- **WHEN** Files or agent History finishes after a different host's window gains focus
+- **THEN** it updates only its original still-valid workspace or agent-session context and cannot
+  populate the newly focused window
+
+### Requirement: Qualified notification navigation across hosts
+
+Opening an agent or task notification SHALL resolve the exact owning connection and current
+resource/session identity before opening a context. An admitted target outside the host filter SHALL
+open with an outside-filter label and an explicit reveal action, without silently changing the
+filter or retiring unrelated contexts. Reveal SHALL intentionally expand the filter to include its
+host and expose the qualified target. Stale, removed or replaced targets SHALL explain why they
+cannot be opened without resolving to a colliding entity on another runtime or session.
+
+#### Scenario: Open an out-of-filter notification
+- **WHEN** a notification names a currently admitted agent outside the host filter
+- **THEN** its context opens under its own host with a reveal action while the filter and other
+  windows remain unchanged
+
+#### Scenario: Follow a stale notification
+- **WHEN** a notification's runtime generation or agent session has been replaced
+- **THEN** World reports the original target as unavailable and does not open its replacement
+
 ### Requirement: Desk attention triage
 
-Desk SHALL present every admitted agent on the selected operational host by what it needs from the
+Desk SHALL present every current actionable agent within the host filter by what it needs from the
 operator. Needs you SHALL list blocked agents, oldest wait first, with the question read from the
 bottom of the agent's visible screen. To review SHALL list done agents, idle agents whose latest turn
 ended within 12 hours, and agents this browser observed stop working within 12 hours, each with its
@@ -1480,9 +1599,9 @@ turn receipt or, without one, its latest screen lines. In flight SHALL list work
 current request and a live screen line. Remaining agents SHALL collapse into a quiet list. Cards and
 rows SHALL name each agent by the name the operator gave Herdr, otherwise the thread title its harness
 writes to the terminal, otherwise the harness, and SHALL show its harness, model, workspace, tab and
-working folder when known.
+working folder when known. Every card and row SHALL identify its owning host.
 Desk SHALL offer three modes and SHALL open on Now for each browser session: Now (the lanes above),
-Agents (every agent on the selected host, agents recently opened from the Desk first, then
+Agents (every current actionable agent within the host filter, agents recently opened from the Desk first, then
 workspaces, grouped by workspace identity and ordered by their most recently active agent) and
 Reviewed (each agent's latest stop that the operator marked reviewed, newest first and reopenable,
 while that agent remains idle or done). Older stops are not retained. One search SHALL filter every
@@ -1493,7 +1612,8 @@ Desk as a reading pane, with the lanes folded into one prioritized queue. Moving
 with J and K SHALL show the next agent in the reading pane without moving keyboard focus out of
 the queue, Enter SHALL move focus into its terminal, and Esc SHALL close the pane. On narrow screens
 the Inspector SHALL open full screen instead.
-Every card's primary action SHALL open the existing terminal Inspector for that exact
+Receipts, full reports and screen reads SHALL target each leaf's immutable connection ID and runtime
+generation. Every card's primary action SHALL open the existing terminal Inspector for that exact
 connection-qualified pane. Desk SHALL NOT send terminal input, answer approvals, assign tasks or run
 lifecycle commands itself. Review marks SHALL apply to one stop of one agent session and SHALL remain
 unavailable until a receipt has been read for the agent's present state; when no receipt can be read
@@ -1506,14 +1626,14 @@ Within the shared shell, Desk SHALL participate in the shell Actions menu, windo
 Inspectors it opens, and view-local failure isolation. On wide screens it SHALL select the agent shown
 in its reading pane only to dock that agent's Inspector; other selection-driven behavior
 (visual-route Action targets, the shared view-control search and watched visual projection) SHALL
-NOT apply to it. Other managed hosts
-SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks and
-observed stops SHALL be scoped to the agent session and runtime generation, so they never carry over
-to another session in the same terminal.
+NOT apply to it. Managed hosts outside the filter
+SHALL appear only as non-actionable summaries drawn from the aggregate observation. Review marks, observed stops and recent opens SHALL be scoped to the connection, runtime generation,
+pane and agent session across host filter and operational focus changes, so they never carry over
+to another session or a same-named pane on another host.
 
 #### Scenario: Answer a blocked agent
 
-- **WHEN** an agent on the selected host is blocked on an approval
+- **WHEN** an agent within the host filter is blocked on an approval
 - **THEN** its Needs you card shows the approval question and choices from its screen, and Answer
   opens that pane's terminal Inspector without sending any input
 
@@ -1547,6 +1667,12 @@ to another session in the same terminal.
 - **WHEN** a keyboard user presses Enter on a focused button or in the top bar while Desk is shown
 - **THEN** that control activates normally and no terminal Inspector opens
 
+#### Scenario: Colliding agent panes on filtered hosts
+
+- **WHEN** two filtered hosts expose the same native pane ID
+- **THEN** Desk triages both agents and reads each host's own receipt and screen, and reviewing one
+  stop does not mark the other host's stop reviewed
+
 ### Requirement: Bounded turn receipts
 
 The service SHALL answer `agent_turn.get` for an exact pane and agent session by deriving the latest
@@ -1569,8 +1695,12 @@ duration or change the stop's identity.
 
 ### Requirement: Bounded Desk observation
 
-Desk SHALL partition and count every admitted agent. It SHALL read receipts for at most 40 agents
-and visible screens for at most 16 panes, choosing blocked, then done, working and idle agents first.
+Desk SHALL partition and count every current actionable agent within the host filter. It SHALL read receipts for at most 40 agents
+and visible screens for at most 16 panes globally, choosing blocked, then done, working and idle agents
+first. Capacity SHALL be shared fairly among hosts within each urgency tier, with independent per-host
+queues. Failed or retired hosts SHALL NOT redirect reads to another host or prevent healthy hosts
+from being read. Pending reads SHALL retain active admission until settlement; status, activity and
+visibility refreshes SHALL coalesce queued work without overlapping reads of the same kind on one host.
 Receipts SHALL refresh on a status or activity change and every 20 seconds; screens SHALL refresh
 every 4 seconds. Reads SHALL stop while the page is hidden, including reads already queued, and resume when it is
 shown. Receipts and
@@ -1583,3 +1713,15 @@ receipt.
 - **WHEN** a host has 40 idle agents and one blocked agent
 - **THEN** the blocked agent appears in Needs you and is among the agents whose screens and receipts
   are read
+
+#### Scenario: A Desk read completes after host retirement
+
+- **WHEN** a receipt, full report or screen read completes after its runtime is retired
+- **THEN** its result is not published and healthy hosts remain independently readable
+
+
+#### Scenario: Slow Desk host alongside a healthy host
+
+- **WHEN** a filtered host's receipt or screen read remains pending
+- **THEN** another host's receipts, review controls and screen polling progress independently,
+  and equally urgent hosts share the bounded read admission fairly

@@ -10,7 +10,54 @@ import {
   invalidateFilePreviewCache,
   prefetchFileExplorerWorkspace,
   requestFilePreview,
+  uploadExplorerFile,
+  deleteExplorerEntry,
 } from "./fileExplorerResources";
+
+describe("qualified file mutations", () => {
+  test.each(["upload", "delete"] as const)(
+    "%s rejects a sibling HTTP acknowledgement",
+    async (operation) => {
+      const previousFetch = globalThis.fetch;
+      const previousWindow = Object.getOwnPropertyDescriptor(
+        globalThis,
+        "window",
+      );
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: { location: { origin: "https://world.example" } },
+      });
+      globalThis.fetch = (async () =>
+        Response.json(
+          { path: "synthetic.txt", size: 1, overwritten: false, type: "file" },
+          {
+            headers: {
+              "X-Herdr-Connection-Id": "beta",
+              "X-Herdr-Connection-Generation": "7",
+            },
+          },
+        )) as unknown as typeof fetch;
+      try {
+        const owner = client("alpha", 7, async () => ({}));
+        const request =
+          operation === "upload"
+            ? uploadExplorerFile(
+                owner,
+                "same-space",
+                "",
+                new File(["synthetic"], "synthetic.txt"),
+              )
+            : deleteExplorerEntry(owner, "same-space", "synthetic.txt");
+        await expect(request).rejects.toThrow();
+      } finally {
+        globalThis.fetch = previousFetch;
+        if (previousWindow)
+          Object.defineProperty(globalThis, "window", previousWindow);
+        else Reflect.deleteProperty(globalThis, "window");
+      }
+    },
+  );
+});
 
 function preview(label: string): FilePreview {
   return {
@@ -104,6 +151,17 @@ describe("file explorer git status", () => {
 });
 
 describe("connection-scoped file prefetch", () => {
+  test("Files cache survives another context's focus generation within the same runtime", () => {
+    const alpha = client("alpha", 7, async () => ({}));
+    const refocusedAlpha = { ...alpha, generation: 19 };
+    const replacementAlpha = { ...refocusedAlpha, serverRuntimeGeneration: 8 };
+    expect(explorerCacheKey(alpha, "same-workspace", false)).toBe(
+      explorerCacheKey(refocusedAlpha, "same-workspace", false),
+    );
+    expect(explorerCacheKey(alpha, "same-workspace", false)).not.toBe(
+      explorerCacheKey(replacementAlpha, "same-workspace", false),
+    );
+  });
   test("a retired prefetch cannot replace or detach its successor", async () => {
     const resolvers: Array<(value: unknown) => void> = [];
     let calls = 0;
@@ -153,6 +211,35 @@ describe("connection-scoped file prefetch", () => {
 });
 
 describe("connection-scoped file previews", () => {
+  test("runtime-generation invalidation retires an in-flight preview when transport epochs differ", async () => {
+    const resolvers: Array<(value: FilePreview) => void> = [];
+    const scopedClient = {
+      ...client(
+        "unequal-preview-epochs",
+        10,
+        () => new Promise<FilePreview>((resolve) => resolvers.push(resolve)),
+      ),
+      serverRuntimeGeneration: 7,
+    };
+    const stale = requestFilePreview("same", "same.txt", {
+      client: scopedClient,
+    });
+    invalidateFilePreviewCache(scopedClient, "same", "same.txt");
+    const fresh = requestFilePreview("same", "same.txt", {
+      client: scopedClient,
+      refresh: true,
+    });
+    expect(fresh).not.toBe(stale);
+    expect(resolvers).toHaveLength(2);
+    resolvers[1]!(preview("after"));
+    await expect(fresh).resolves.toMatchObject({ text: "after" });
+    resolvers[0]!(preview("before"));
+    await expect(stale).rejects.toThrow("file preview request superseded");
+    await expect(
+      requestFilePreview("same", "same.txt", { client: scopedClient }),
+    ).resolves.toMatchObject({ text: "after" });
+  });
+
   test("isolates colliding workspace paths by connection generation", async () => {
     const alpha = client("alpha", 1, async () => preview("alpha"));
     const beta = client("beta", 1, async () => preview("beta"));

@@ -11,7 +11,29 @@ import {
 import type { WorldObject, WorldSpaceObject } from "./worldObject";
 
 describe("Office room actions", () => {
-  test("admits mutations only for the active room's exact host and workspace", () => {
+  test("creation, rename and close inherit a current room even while another host is focused", () => {
+    const alpha = space("alpha", "shared", true, true);
+    const beta = space("beta", "shared", false, true);
+    expect(
+      officeRoomActionCapabilities(
+        worldWith(alpha, beta),
+        room("beta", "shared"),
+      ),
+    ).toEqual({ createSeat: true, rename: true, close: true });
+  });
+  test("a captured room cannot mutate a replacement generation with reused workspace IDs", () => {
+    const replacement = {
+      ...space("beta", "shared", true, true),
+      generation: 2,
+    };
+    expect(
+      officeRoomActionCapabilities(
+        worldWith(replacement),
+        room("beta", "shared"),
+      ),
+    ).toEqual({ createSeat: false, rename: false, close: false });
+  });
+  test("admits mutations for each current room's exact host and workspace", () => {
     const active = space("active", "workspace-a", true, true);
     const inactive = space("inactive", "workspace-b", false, true);
     const world = worldWith(active, inactive);
@@ -21,7 +43,7 @@ describe("Office room actions", () => {
     ).toEqual({ createSeat: true, rename: true, close: true });
     expect(
       officeRoomActionCapabilities(world, room("inactive", "workspace-b")),
-    ).toEqual({ createSeat: false, rename: false, close: false });
+    ).toEqual({ createSeat: true, rename: true, close: true });
   });
 
   test("fails closed for a missing or stale workspace", () => {

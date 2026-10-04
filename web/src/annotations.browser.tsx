@@ -181,11 +181,21 @@ export async function checkAnnotationUX(
   const listeners = new Set<(frame: TerminalPush) => void>();
   const previousOnTerminal = bridge.onTerminal;
   const previousFocusPane = store.focusPane;
+  const previousQualifiedFocus = store.focusQualifiedTarget;
   const previousFocusTab = store.focusTab;
   store.focusTab = async () => {};
   let focusedPane = "";
   store.focusPane = async (id) => {
     focusedPane = id;
+  };
+  store.focusQualifiedTarget = async (target) => {
+    check(
+      target.connectionId === "annotation-test" &&
+        target.runtimeGeneration === client.serverRuntimeGeneration,
+      "Qualified focus must retain the current annotation runtime owner",
+    );
+    focusedPane = target.paneId ?? "";
+    return true;
   };
   bridge.onTerminal = (listener) => {
     listeners.add(listener);
@@ -203,6 +213,16 @@ export async function checkAnnotationUX(
     isCurrent: () => store.get().connectionGeneration === 1,
     acceptsServerGeneration: (generation) => generation === 1,
     call: async (method, params = {}) => {
+      // Tab restoration now observes the owning runtime instead of choosing
+      // the first cached pane. Keep this fixture's topology available to it.
+      if (method === "workspace.list")
+        return {
+          workspaces: store.get().workspaces,
+          navigation_mode: store.get().navigationMode,
+        };
+      if (method === "tab.list") return { tabs: store.get().tabs };
+      if (method === "pane.list") return { panes: store.get().panes };
+      if (method === "pane.layout") return { layout: store.get().layout };
       if (method === "agent_session.get")
         return { status: "ok", stats: { turns: 0, records: 0 } };
       if (method === "agent_history.get")
@@ -1438,6 +1458,9 @@ export async function checkAnnotationUX(
       { ...file, quote: "other();", comment: "Other checkout" },
     ]);
     const switchWorkspace = async (second: boolean) => {
+      const previousDraftText = document.querySelector<HTMLTextAreaElement>(
+        ".annotation-card textarea",
+      )?.value;
       flushSync(() =>
         __storeTesting.replaceState({
           ...store.get(),
@@ -1469,6 +1492,14 @@ export async function checkAnnotationUX(
         }),
       );
       flushSync(() => store.clearNotice());
+      await settle();
+      check(
+        document.querySelector<HTMLTextAreaElement>(".annotation-card textarea")
+          ?.value === previousDraftText,
+        "workspace focus retargeted an open annotation owner",
+      );
+      // Explicitly close and reopen Annotations to choose the newly focused workspace.
+      toggleAnnotations();
       await settle();
       showAnnotations();
       await settle();
@@ -1557,13 +1588,28 @@ export async function checkAnnotationUX(
     client = {
       ...client,
       generation: 2,
+      serverRuntimeGeneration: 2,
+      acceptsServerGeneration: (generation) => generation === 2,
       isCurrent: () => store.get().connectionGeneration === 2,
     };
     flushSync(() => {
-      __storeTesting.replaceState({ ...store.get(), connectionGeneration: 2 });
+      __storeTesting.replaceState({
+        ...store.get(),
+        connectionGeneration: 2,
+        serverRuntimeGeneration: 2,
+        connections: store.get().connections.map((connection) => ({
+          ...connection,
+          generation:
+            connection.id === client.connectionId ? 2 : connection.generation,
+        })),
+      });
       store.clearNotice();
     });
     await settle();
+    check(
+      !document.querySelector(".annotation-panel"),
+      "retired runtime kept an actionable annotation surface open",
+    );
     showAnnotations();
     delivery!.resolve({});
     delivery = null;
@@ -1762,6 +1808,7 @@ export async function checkAnnotationUX(
     container.remove();
     bridge.onTerminal = previousOnTerminal;
     store.focusPane = previousFocusPane;
+    store.focusQualifiedTarget = previousQualifiedFocus;
     store.focusTab = previousFocusTab;
   }
 }

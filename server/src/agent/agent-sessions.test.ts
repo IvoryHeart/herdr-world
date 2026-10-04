@@ -128,6 +128,46 @@ function piAgentCall(path: string): HerdrCall {
   };
 }
 
+test("session exports reject replacement identity before reading a body", async () => {
+  const files = remotePiFiles("synthetic replacement content");
+  let reads = 0;
+  files.readDownloadBody = async () => {
+    reads++;
+    return Buffer.from("replacement");
+  };
+  for (const download of [downloadAgentSessionFile, downloadAgentSessionAtif]) {
+    const response = await download(
+      { pane_id: "p1", agent: "pi", expected_session: "original-session" },
+      piAgentCall(remotePiSessionPath),
+      files,
+    );
+    expect(response.status).toBe(409);
+  }
+  expect(reads).toBe(0);
+});
+
+test("session export body cannot publish after same-pane session replacement", async () => {
+  const files = remotePiFiles("synthetic content");
+  let path = remotePiSessionPath;
+  const entered = Promise.withResolvers<void>();
+  const body = Promise.withResolvers<BodyInit>();
+  files.readDownloadBody = () => {
+    entered.resolve();
+    return body.promise;
+  };
+  const pending = downloadAgentSessionFile(
+    { pane_id: "p1", agent: "pi", expected_session: path },
+    (method, params) => piAgentCall(path)(method, params),
+    files,
+  );
+  await entered.promise;
+  path = "/srv/synthetic/sessions/replacement.jsonl";
+  body.resolve("original content");
+  const response = await pending;
+  expect(response.status).toBe(409);
+  expect(await response.text()).not.toContain("original content");
+});
+
 describe("Pi agent sessions", () => {
   test("reads user and assistant history from an integration-reported session", async () => {
     const path = await createPiSession();

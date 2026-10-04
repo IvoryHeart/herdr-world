@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import type { PublishedOfficeLayout } from "./officeLayout";
 import { officeSemanticTargets } from "./officeSemanticTargets";
+import { yieldWorldTask } from "./worldObject";
 
 export function OfficeSemanticTargetsOverlay({
   layout,
@@ -23,15 +25,44 @@ export function OfficeSemanticTargetsOverlay({
   onActivateDesk(key: string): void;
   onActivateRoom(key: string): void;
 }) {
+  const targets = useMemo(
+    () => officeSemanticTargets(projection, layout),
+    [projection, layout],
+  );
+  const [progress, setProgress] = useState<{
+    targets: typeof targets;
+    limit: number;
+  } | null>(null);
+  const limit = progress?.targets === targets ? progress.limit : 64;
+  const rendered = targets.filter(
+    (target, index) => index < limit || target.key === selectedKey,
+  );
+  const pending = targets.length - rendered.length;
+  useEffect(() => {
+    if (!pending) return;
+    let current = true;
+    // Canvas frames may be delayed by GPU work or browser throttling. Admit
+    // bounded semantic controls through ordinary tasks independently of paint.
+    void yieldWorldTask().then(() => {
+      if (current) setProgress({ targets, limit: limit + 64 });
+    });
+    return () => {
+      current = false;
+    };
+  }, [targets, limit, pending]);
   const interactive =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
   return (
     <div
       className="world-semantic-targets-overlay"
       aria-label="Office scene targets"
+      aria-busy={pending > 0}
       aria-hidden={!interactive}
     >
-      {officeSemanticTargets(projection, layout).map((target) => (
+      {pending ? (
+        <span role="status">Rendering {pending} more observed targets</span>
+      ) : null}
+      {rendered.map((target) => (
         <button
           key={`${target.kind}:${target.key}`}
           className="world-semantic-target"

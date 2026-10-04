@@ -62,6 +62,43 @@ function world(connectionId = "alpha.example", generation = 4) {
 }
 
 describe("visual-route Actions", () => {
+  test("an admitted sibling host's captured action survives another host's command focus", () => {
+    const alpha = world("alpha.example", 4).hosts[0]!.connection;
+    const beta = world("beta.example", 6).hosts[0]!.connection;
+    const aggregate = buildWorldObject([alpha, beta], "alpha.example");
+    const node = aggregate.leaves.find(
+      (leaf) => leaf.connectionId === "beta.example" && leaf.kind === "agent",
+    )!;
+    const target = visualRouteActionTarget(node)!;
+    expect(node.actionable).toBe(true);
+    expect(
+      resolveVisualRouteActionTarget(target, aggregate, {
+        activeConnectionId: "beta.example",
+        runtimeGeneration: 6,
+        selectedId: node.id,
+      }),
+    ).toEqual({ node, reason: null });
+  });
+  test("a captured target is not rebound to colliding native IDs when its own runtime retires", () => {
+    const alpha = world("alpha.example", 4).hosts[0]!.connection;
+    const beta = world("beta.example", 6).hosts[0]!.connection;
+    const before = buildWorldObject([alpha, beta], "alpha.example");
+    const node = before.leaves.find(
+      (leaf) => leaf.connectionId === "beta.example",
+    )!;
+    const target = visualRouteActionTarget(node)!;
+    const replaced = buildWorldObject(
+      [alpha, world("beta.example", 7).hosts[0]!.connection],
+      "alpha.example",
+    );
+    expect(
+      resolveVisualRouteActionTarget(target, replaced, {
+        activeConnectionId: "beta.example",
+        runtimeGeneration: 7,
+        selectedId: node.id,
+      }).node,
+    ).toBeNull();
+  });
   test("captures a qualified agent and admits only its existing actions", () => {
     const projection = world();
     const agent = projection.leaves.find(({ kind }) => kind === "agent")!;

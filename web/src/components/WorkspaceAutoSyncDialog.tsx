@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { store } from "../store";
+import { useOperationalStore } from "../store";
 import { UI_LOCALE } from "../uiLocale";
 import { useConnectionClient } from "../useConnectionClient";
 import { CloseButton } from "./CloseButton";
@@ -31,6 +31,7 @@ export function WorkspaceAutoSyncDialog({
   workspaceId?: string;
   onClose: () => void;
 }) {
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const [info, setInfo] = useState<WorkspaceAutoSyncInfo | null>(null);
   const [loading, setLoading] = useState(false);

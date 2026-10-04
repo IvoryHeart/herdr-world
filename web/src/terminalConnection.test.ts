@@ -7,6 +7,37 @@ import {
 } from "./terminalConnection";
 
 describe("terminal connection lifecycle", () => {
+  test("runtime-owned terminal frames do not depend on the legacy browser focus generation", () => {
+    const client = {
+      generation: 10,
+      isCurrent: () => true,
+      acceptsServerGeneration: (value: unknown) => value === 7,
+    };
+    expect(
+      terminalPushMatches(
+        { connectionId: "alpha", generation: 7 },
+        client,
+        "same",
+        {
+          connection_id: "alpha",
+          connection_generation: 7,
+          terminal_id: "same",
+        },
+      ),
+    ).toBe(true);
+    expect(
+      terminalPushMatches(
+        { connectionId: "alpha", generation: 7 },
+        client,
+        "same",
+        {
+          connection_id: "beta",
+          connection_generation: 7,
+          terminal_id: "same",
+        },
+      ),
+    ).toBe(false);
+  });
   test("dispatches old-connection detach before a switch but skips replacement detach", () => {
     const calls: boolean[] = [];
     const alpha = { connectionId: "alpha", generation: 1 };
@@ -50,7 +81,7 @@ describe("terminal connection lifecycle", () => {
 
   test("drops colliding terminal pushes from inactive connections and stale clients", () => {
     let current = true;
-    const identity = { connectionId: "beta", generation: 4 };
+    const identity = { connectionId: "beta", generation: 9 };
     const client = {
       generation: 4,
       isCurrent: () => current,

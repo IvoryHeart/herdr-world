@@ -4,10 +4,13 @@ import {
   keyboardContextMenuPoint,
   treeKeyboardAction,
 } from "./treeKeyboard";
-import { store, useStoreSelector } from "../store";
+import { useOperationalStore, useStoreSelector } from "../store";
 import type { Pane } from "../types";
 import { agentClass, basename, shortId } from "../utils";
-import { shouldShowAgentStatusLabel } from "./agentSession";
+import {
+  paneHasAgentHistory,
+  shouldShowAgentStatusLabel,
+} from "./agentSession";
 import { AgentStatusIcon } from "./AgentStatusIcon";
 import { observeClampedContextMenu } from "./contextMenuPosition";
 import { TREE_DEPTH_INDENT } from "./treeIndent";
@@ -69,6 +72,7 @@ export function AgentRow({
     onDragEnd: () => void;
   };
 }) {
+  const store = useOperationalStore();
   const tabLabel = useStoreSelector((state) => {
     const label = state.tabs
       .find(
@@ -99,6 +103,7 @@ export function AgentRow({
 
   return (
     <div
+      data-pane-id={pane.pane_id}
       className={`agent-row ${nested ? "is-nested" : "is-standalone"} ${
         selected ? "is-selected" : ""
       } ${pane.focused ? "is-focused" : ""} ${
@@ -200,14 +205,14 @@ export function AgentRow({
         openMenu(e.clientX, e.clientY);
       }}
       title={[pane.pane_id, tabLabel, pane.cwd].filter(Boolean).join(" · ")}
-      aria-label={`${pane.agent ?? "Agent"} pane${tabLabel ? `, tab ${tabLabel}` : ""}, status ${pane.agent_status}`}
+      aria-label={`${pane.agent ?? "Terminal"} pane${tabLabel ? `, tab ${tabLabel}` : ""}, status ${pane.agent_status}`}
     >
       <AgentStatusIcon agent={pane.agent} status={pane.agent_status} />
       <div className="agent-info">
         <div className="agent-title">
           <span className="agent-title-label">
             {nested
-              ? (pane.agent ?? "Agent")
+              ? (pane.agent ?? "Terminal")
               : (workspaceLabel ?? pane.workspace_id)}
             {tabLabel ? <span className="muted"> · {tabLabel}</span> : null}
             {showPaneId ? (
@@ -227,7 +232,7 @@ export function AgentRow({
         </div>
         {!nested ? (
           <div className="agent-sub muted">
-            {pane.agent ?? "Agent"}
+            {pane.agent ?? "Terminal"}
             {pane.cwd ? ` · ${basename(pane.cwd)}` : ""}
           </div>
         ) : null}
@@ -300,7 +305,9 @@ export function AgentContextMenu({
       items: [
         { label: "Open terminal", action: () => onFocus(state.pane) },
         {
-          label: "Browse files at agent CWD",
+          label: paneHasAgentHistory(state.pane)
+            ? "Browse files at agent CWD"
+            : "Browse files at terminal CWD",
           action: () => onBrowseFiles?.(state.pane),
         },
         {
@@ -309,19 +316,23 @@ export function AgentContextMenu({
         },
       ],
     },
-    {
-      label: "Session",
-      items: [
-        {
-          label: "View agent history",
-          action: () => onViewHistory?.(state.pane),
-        },
-        {
-          label: "Export session",
-          action: () => onExportSession(state.pane),
-        },
-      ],
-    },
+    ...(paneHasAgentHistory(state.pane)
+      ? [
+          {
+            label: "Session",
+            items: [
+              {
+                label: "View agent history",
+                action: () => onViewHistory?.(state.pane),
+              },
+              {
+                label: "Export session",
+                action: () => onExportSession(state.pane),
+              },
+            ],
+          },
+        ]
+      : []),
     {
       label: "Pane",
       danger: true,

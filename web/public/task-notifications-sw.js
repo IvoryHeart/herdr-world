@@ -21,7 +21,9 @@ self.addEventListener("push", (event) => {
         typeof target.workspaceId === "string" &&
         target.workspaceId &&
         typeof target.paneId === "string" &&
-        target.paneId;
+        target.paneId &&
+        (target.agentSessionId === undefined ||
+          (typeof target.agentSessionId === "string" && target.agentSessionId));
       await self.registration.showNotification(
         typeof message?.title === "string"
           ? message.title

@@ -5,7 +5,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
 
 ## Visual control plane
 
-- **Desk** is the default view. It organizes the selected host's agents by what
+- **Desk** is the default view. It organizes the filtered hosts' agents by what
   they need from you rather than where they run:
   - **Needs you** lists blocked agents, oldest first, with the question and choices
     read from the agent's screen.
@@ -14,7 +14,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     the session transcript. **Mark reviewed** (`E`) clears a turn in this browser.
   - **In flight** lists working agents with their current request and a live line
     from each terminal. Quiet agents collapse below.
-  - **Agents** lists every agent on the host, those you recently opened from the
+  - **Agents** lists every agent in the host filter, those you recently opened from the
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     stops you marked, newest first, with **Reopen**; marking offers **Undo**.
   - On wide screens, opening a card docks that agent's Inspector (terminal,
@@ -25,13 +25,22 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
     workspace, tab, folder, request and report. Agents are named by the thread
     title their harness writes to the terminal when they have no Herdr name.
   - `J`/`K` move between cards; `Enter` opens the agent's terminal Inspector to
-    answer, review, or watch. Other managed hosts appear as summary chips.
+    answer, review, or watch. Hosts outside the filter appear as summary chips.
 - **Spaces** is the focused operational workspace: terminals, files, changes,
   annotations, worktrees, and Agent History for one selected connection.
-- **Office**, **Tree**, and **Graph** show one selected local or SSH Herdr profile
-  at a time. The service and browser store still observe one host-qualified
-  aggregate, so switching the connection selector replaces the whole view without
-  conflating equal workspace, pane, or terminal IDs from different hosts.
+- **Office**, **Tree**, and **Graph** show the aggregate of local and SSH hosts.
+  **Hosts** defaults to All hosts and persists an explicit host set independently
+  of **Manage connections**. Filtering preserves open resources and terminals;
+  removed saved identities are pruned, with an explained return to All hosts
+  when none remain. Offline hosts keep labelled roots; an empty catalogue offers onboarding.
+- Inspectors and terminals capture their own host, runtime generation and resource
+  identity. Focus and filters cannot retarget them. Global creation confirms one
+  destination; room creation inherits its room. Notifications outside the filter
+  open a labelled Inspector with an explicit Reveal in Hosts action.
+- Search covers observed entities beyond renderer limits and pages matching results.
+  Tree and Graph distribute their 128-space bound across hosts fairly and retain
+  16 leaves per space, with priority for selected, focused, watched and attention
+  targets. Counts distinguish observations, rendering omissions and unavailable coverage.
 - Use **Arrange windows** on the shared tab bar to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or
   restore their previous positions. Spaces arranges the focused workspace's
@@ -46,10 +55,10 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   pane keeps the same Inspector and updates its pane-specific resources. When the
   Spaces Inspector is on Terminal, **Focus tab window** goes to the active tab
   without attaching a second terminal.
-- A failed selected host may retain its last observed topology as visibly stale,
+- A failed host may retain its last observed topology as visibly stale,
   never actionable. Selecting a live entity revalidates its connection generation
   before opening the same terminal or host-specific Inspector context.
-- A slow inactive host does not hold back the selected host: World returns a
+- A slow host does not hold back another host’s controls: World returns a
   complete host list within 20 seconds, marks unfinished host views stale, and
   refreshes them when their observations complete.
 - Office, Tree, and Graph share search in the application top bar; Graph adds Fit
@@ -64,7 +73,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   host, generation or observation change invalidates the open target; Actions
   does not send terminal input, assign tasks or control agents.
 - Pin, Unpin and Pinned only are available in the shared **Actions**, leaving the
-  search field clear. The selected-host summary is a muted top-bar indicator;
+  search field clear. The filtered aggregate summary is a muted top-bar indicator;
   hover or assistive technology exposes its counts.
 - **Pin** a live agent or terminal in Office, Tree, or Graph to keep its exact
   connection-qualified pane in visual triage. Pins are shared by browsers served
@@ -83,10 +92,10 @@ floating or profile-docked terminal conversations. Optional Prometheus data reac
 the Economy board through bounded World-service queries; Office and terminals remain
 independent of that provider.
 
-The delivered foundation covers the selected-host lifecycle and the focused local,
-SSH, desktop and responsive acceptance recorded by the current contract. Expanded
-simultaneous live local-plus-SSH acceptance remains follow-up work tracked in
-[#95](https://github.com/IvoryHeart/herdr-world/issues/95). Browser-federated bridge
+The foundation now admits simultaneous qualified local and SSH contexts. Runtime
+replacement retires only its own windows and pending work; whole-World disconnect
+or authentication loss retires all old leases. Unacknowledged input and mutations
+are never automatically replayed; refresh the exact target before retrying. Browser-federated bridge
 URLs, native Capacitor Android packaging and old visual preference keys are retired;
 the responsive installable PWA is the mobile client.
 

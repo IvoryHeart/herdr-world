@@ -132,6 +132,8 @@ test.skipIf(!chrome)(
           ),
         ),
       ]);
+      if (Array.isArray(observed) && observed.length)
+        console.info("World handoff failure detail", JSON.stringify(observed));
       expect(observed).toEqual([]);
     } finally {
       browser?.kill();

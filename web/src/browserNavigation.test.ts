@@ -1,8 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TerminalView } from "./components/TerminalView";
-import { terminalThemeFor } from "./terminalThemes";
 import {
   browserPaneInDirection,
   emptyBrowserNavigation,
@@ -10,8 +8,10 @@ import {
   projectBrowserNavigation,
   selectBrowserTarget,
 } from "./browserNavigation";
-import type { Pane, PaneLayout, Tab, Workspace } from "./types";
+import { TerminalView } from "./components/TerminalView";
 import type { EndpointAvailability } from "./endpointAvailability";
+import { terminalThemeFor } from "./terminalThemes";
+import type { Pane, PaneLayout, Tab, Workspace } from "./types";
 
 function navigationTopology() {
   const workspaces: Workspace[] = ["a", "b"].map((id, i) => ({
@@ -173,9 +173,10 @@ import {
   activateConnectionState,
   emptyServerSessionState,
   endpointCreationReason,
-  terminalNavigationLoading,
-  store,
+  operationalStore,
   type State,
+  store,
+  terminalNavigationLoading,
 } from "./store";
 import { clearTabLayouts } from "./tabLayout";
 
@@ -255,12 +256,26 @@ async function withBrowserStore(
   } = {
     mode: "browser-local",
   };
-  bridge.connection = ((connectionId = "test") =>
+  bridge.connection = ((
+    connectionId = "test",
+    runtimeGeneration = store
+      .get()
+      .connections.find((connection) => connection.id === connectionId)
+      ?.generation ?? 1,
+  ) =>
     ({
       connectionId,
       generation: 1,
-      serverRuntimeGeneration: 1,
-      isCurrent: () => true,
+      serverRuntimeGeneration: runtimeGeneration,
+      isCurrent: () =>
+        store
+          .get()
+          .connections.some(
+            (connection) =>
+              connection.id === connectionId &&
+              connection.state === "ready" &&
+              connection.generation === runtimeGeneration,
+          ),
       acceptsServerGeneration: () => true,
       call: async (method: string, params: Record<string, unknown> = {}) => {
         calls.push({ method, params });
@@ -355,6 +370,122 @@ function renderTerminalSnapshot() {
 }
 
 describe("store browser-local navigation", () => {
+  test("operational split adopts and remembers its new pane on the owning inactive host", async () => {
+    await withBrowserStore(async (calls) => {
+      const before = store.get();
+      __storeTesting.replaceState({
+        ...before,
+        sessionsByConnectionId: {
+          ...before.sessionsByConnectionId,
+          other: { ...before.sessionsByConnectionId.test },
+        },
+      });
+      const owned = operationalStore({
+        connectionId: "other",
+        runtimeGeneration: 1,
+      });
+      const alphaNavigation = store.get().browserNavigation;
+      await owned.splitPane("a1p", "right");
+      expect(owned.get().selectedPaneId).toBe("a1q");
+      expect(owned.get().browserNavigation.paneIds.a1).toBe("a1q");
+      await owned.focusTab("a2");
+      await owned.focusTab("a1");
+      expect(owned.get().selectedPaneId).toBe("a1q");
+      expect(store.get().activeConnectionId).toBe("test");
+      expect(store.get().browserNavigation).toEqual(alphaNavigation);
+      expect(
+        calls.find((call) => call.method === "pane.split")?.params.focus,
+      ).toBe(false);
+      expect(
+        calls.filter((call) =>
+          /^(workspace|tab|pane)\.focus$/.test(call.method),
+        ),
+      ).toEqual([]);
+    });
+  });
+
+  test("operational focusTab revisits the remembered pane instead of the first native pane", async () => {
+    await withBrowserStore(async () => {
+      const owned = operationalStore({
+        connectionId: "test",
+        runtimeGeneration: 1,
+      });
+      await owned.focusPane("a1q");
+      await owned.focusTab("a2");
+      await owned.focusTab("a1");
+      expect(owned.get().selectedPaneId).toBe("a1q");
+      expect(owned.get().browserNavigation.paneIds.a1).toBe("a1q");
+    });
+  });
+
+  test("operational shared focusTab preserves the native focused pane", async () => {
+    await withBrowserStore(async (_calls, topology, control) => {
+      topology.panes[0].focused = false;
+      topology.panes[1].focused = true;
+      control.mode = "shared";
+      __storeTesting.replaceState({
+        ...store.get(),
+        navigationMode: "shared",
+        panes: topology.panes,
+      });
+      const owned = operationalStore({
+        connectionId: "test",
+        runtimeGeneration: 1,
+      });
+      await owned.focusTab("a1");
+      expect(owned.get().selectedPaneId).toBe("a1q");
+    });
+  });
+
+  test.each(["newer navigation", "ABA navigation", "retirement"] as const)(
+    "a delayed operational split cannot overwrite %s or replay",
+    async (transition) => {
+      await withBrowserStore(async (calls, _topology, control) => {
+        const held = Promise.withResolvers<void>();
+        control.actionWait = (method) =>
+          method === "pane.split" ? held.promise : Promise.resolve();
+        const owned = operationalStore({
+          connectionId: "test",
+          runtimeGeneration: 1,
+        });
+        const pending = owned.splitPane("a1p", "right");
+        // Attach rejection handling before releasing an obsolete mutation.
+        const outcome = pending.then(
+          () => "admitted",
+          () => "retired",
+        );
+        try {
+          if (transition === "retirement") {
+            const before = store.get();
+            __storeTesting.replaceState({
+              ...before,
+              connections: before.connections.map((owner) =>
+                owner.id === "test" ? { ...owner, generation: 2 } : owner,
+              ),
+            });
+          } else {
+            await owned.focusTab("a2");
+            if (transition === "ABA navigation") await owned.focusTab("a1");
+          }
+          const navigation = owned.get().browserNavigation;
+          const selection = owned.get().selectedPaneId;
+          held.resolve();
+          expect(await outcome).toBe(
+            transition === "retirement" ? "retired" : "admitted",
+          );
+          expect(owned.get().browserNavigation).toEqual(navigation);
+          expect(owned.get().selectedPaneId).toBe(selection);
+          expect(
+            calls.filter((call) => call.method === "pane.split"),
+          ).toHaveLength(1);
+        } finally {
+          held.resolve();
+          await outcome;
+        }
+      });
+    },
+  );
+
   test.each(["workspace", "tab", "agent"])(
     "%s selection renders the target pane while its layout is deferred",
     async (route) => {
@@ -608,7 +739,7 @@ describe("store browser-local navigation", () => {
     });
   });
 
-  test("notification activation follows an explicitly moved pane and falls back when closed", async () => {
+  test("notification activation rejects moved or closed panes without fallback", async () => {
     await withBrowserStore(async (calls, topology) => {
       Object.assign(topology.panes[1], { workspace_id: "b", tab_id: "b1" });
       const target = {
@@ -618,8 +749,11 @@ describe("store browser-local navigation", () => {
         paneId: "a1q",
       };
       await store.focusTaskNotificationTarget(target);
-      expect(store.get().browserNavigation.workspaceId).toBe("b");
-      expect(store.get().selectedPaneId).toBe("a1q");
+      expect(store.get().browserNavigation.workspaceId).toBe("a");
+      expect(store.get().selectedPaneId).toBe("a1p");
+      expect(store.get().notice?.message).toBe(
+        "Notification target is unavailable",
+      );
       topology.panes = topology.panes.filter((pane) => pane.pane_id !== "a1q");
       await store.focusTaskNotificationTarget(target);
       expect(store.get().browserNavigation.workspaceId).toBe("a");
@@ -875,6 +1009,13 @@ for (const kind of [
       __storeTesting.replaceState({
         ...activateConnectionState(store.get(), "test", 2),
         serverRuntimeGeneration: 2,
+        connections: store
+          .get()
+          .connections.map((connection) =>
+            connection.id === "test"
+              ? { ...connection, generation: 2 }
+              : connection,
+          ),
       });
       release();
       await pending;
@@ -1010,7 +1151,13 @@ for (const paneId of ["a1p", "closed"]) {
       release();
       await pending;
       await store.refresh();
-      expect(store.get().selectedPaneId).toBe("a1p");
+      expect(store.get().selectedPaneId).toBe(
+        paneId === "closed" ? "a2p" : "a1p",
+      );
+      if (paneId === "closed")
+        expect(store.get().notice?.message).toBe(
+          "Notification target is unavailable",
+        );
     });
   });
 }
@@ -1130,7 +1277,7 @@ test("frontend dispatch and availability track each terminal subset and refresh 
     expect(switched.endpointAvailability).toEqual({});
     expect(
       activateConnectionState(switched, "test", 3).endpointAvailability,
-    ).toEqual({});
+    ).toEqual(advertisementBeforeStaleReply);
     __storeTesting.replaceState({ ...initial, endpointAvailability: {} });
     expect(endpointCreationReason(store.get(), "tab.create", "a")).toContain(
       "loading",

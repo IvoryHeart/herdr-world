@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { bridge, type ConnectionClient } from "./api";
+import { bridge, type ConnectionClient, UncertainRequestError } from "./api";
 import {
   __storeTesting,
+  operationalStore,
   activateConnectionState,
   automaticUpdateChecksEnabledFromStorage,
   bindTaskNotificationActivation,
@@ -30,6 +31,149 @@ import {
   worktreeRemovalCompletionNotice,
 } from "./store";
 import type { Pane } from "./types";
+import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
+import { registerTerminalConnectionDisposer } from "./terminalConnection";
+
+describe("current transport catalogue admission", () => {
+  test("a failed or duplicate-ID refresh preserves the admitted catalogue", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    try {
+      __storeTesting.replaceState(partitionState());
+      bridge.call = (async () => {
+        throw Error("synthetic unavailable list");
+      }) as typeof bridge.call;
+      expect(await store.refreshConnections()).toBe(false);
+      expect(store.get().catalogueReady).toBe(true);
+      bridge.call = (async () => ({
+        connections: [
+          partitionState().connections[0],
+          partitionState().connections[0],
+        ],
+      })) as typeof bridge.call;
+      expect(await store.refreshConnections()).toBe(false);
+      expect(
+        store.get().connections.map((connection) => connection.id),
+      ).toEqual(["alpha", "beta"]);
+      expect(store.get().catalogueReady).toBe(true);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("an old transport reply cannot admit or replace the new catalogue", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    let epoch = bridge.connectionEpoch;
+    Object.defineProperty(bridge, "connectionEpoch", {
+      configurable: true,
+      get: () => epoch,
+    });
+    const old = Promise.withResolvers<any>();
+    const current = Promise.withResolvers<any>();
+    let n = 0;
+    bridge.call = (() =>
+      ++n === 1 ? old.promise : current.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({
+        ...partitionState(),
+        connections: [],
+        catalogueReady: false,
+      });
+      const a = store.refreshConnections();
+      epoch++;
+      const b = store.refreshConnections();
+      old.resolve({ connections: partitionState().connections });
+      expect(await a).toBe(false);
+      expect(store.get().catalogueReady).toBe(false);
+      expect(store.get().connections).toEqual([]);
+      current.resolve({ connections: [] });
+      expect(await b).toBe(true);
+      expect(store.get().catalogueReady).toBe(true);
+      expect(store.get().connections).toEqual([]);
+    } finally {
+      delete (bridge as any).connectionEpoch;
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("reversed same-transport catalogues preserve the newest valid admission", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    const old = Promise.withResolvers<any>();
+    const current = Promise.withResolvers<any>();
+    let n = 0;
+    bridge.call = (() =>
+      ++n === 1 ? old.promise : current.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({
+        ...partitionState(),
+        catalogueReady: false,
+      });
+      const a = store.refreshConnections();
+      const b = store.refreshConnections();
+      current.resolve({ connections: partitionState().connections.slice(1) });
+      await b;
+      old.resolve({ connections: partitionState().connections });
+      await a;
+      expect(store.get().connections.map((c) => c.id)).toEqual(["beta"]);
+      expect(store.get().catalogueReady).toBe(true);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("a delayed initial catalogue stays unready until a successful empty admission", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    const held = Promise.withResolvers<any>();
+    bridge.call = (() => held.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({ ...partitionState(), connections: [] });
+      __storeTesting.markTerminalReattachPending();
+      const request = __storeTesting.refreshBridgeStatus();
+      expect((store.get() as any).catalogueReady).toBe(false);
+      let publications = 0;
+      const unsubscribe = store.subscribe(() => publications++);
+      held.resolve({ connections: [], clients: 0, terminals: [] });
+      await request;
+      unsubscribe();
+      expect((store.get() as any).catalogueReady).toBe(true);
+      expect(publications).toBeGreaterThan(0);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+  test("malformed newer replies cannot suppress a valid earlier catalogue", async () => {
+    const previous = store.get();
+    const call = bridge.call;
+    const first = Promise.withResolvers<any>();
+    const second = Promise.withResolvers<any>();
+    let n = 0;
+    bridge.call = (() =>
+      ++n === 1 ? first.promise : second.promise) as typeof bridge.call;
+    try {
+      __storeTesting.replaceState({ ...partitionState(), connections: [] });
+      __storeTesting.markTerminalReattachPending();
+      const a = __storeTesting.refreshBridgeStatus();
+      const b = __storeTesting.refreshBridgeStatus();
+      second.resolve({ connections: [{ id: "invalid" }] });
+      await b;
+      expect((store.get() as any).catalogueReady).toBe(false);
+      first.resolve({ connections: partitionState().connections });
+      await a;
+      expect(store.get().connections.map((c) => c.id)).toEqual([
+        "alpha",
+        "beta",
+      ]);
+      expect((store.get() as any).catalogueReady).toBe(true);
+    } finally {
+      bridge.call = call;
+      __storeTesting.replaceState(previous);
+    }
+  });
+});
 
 describe("automatic update check preference", () => {
   test("defaults to enabled and honors an explicit disabled value", () => {
@@ -153,6 +297,24 @@ describe("automatic update check preference", () => {
 });
 
 describe("task notification activation", () => {
+  test("notification creation and notice activation retain the original agent session", () => {
+    const source = {
+      ...pane("beta", "done"),
+      agent_session: { value: "synthetic-original" },
+    };
+    const target = taskNotificationTarget("beta", 1, source);
+    expect(target).toMatchObject({ agentSessionId: "synthetic-original" });
+    const notice = {
+      actionConnectionId: "beta",
+      actionRuntimeGeneration: 1,
+      actionWorkspaceId: source.workspace_id,
+      actionPaneId: source.pane_id,
+      actionAgentSessionId: "synthetic-original",
+    };
+    expect(taskNotificationTargetFromNotice(notice)).toMatchObject({
+      agentSessionId: "synthetic-original",
+    });
+  });
   test("closes the system notification, focuses the window, and dispatches its pane target", () => {
     const calls: string[] = [];
     const targets: Array<{
@@ -294,6 +456,7 @@ function partitionState(): State {
   return {
     ...alpha,
     status: "connected",
+    catalogueReady: true,
     connectionPaused: false,
     bridgeStatus: null,
     connections: [
@@ -331,6 +494,897 @@ function partitionState(): State {
     dismissedUpdateVersion: null,
   };
 }
+
+describe("independent qualified operational sessions", () => {
+  async function withIndependentClients(
+    run: (
+      calls: Array<{ host: string; method: string }>,
+      held: ReturnType<typeof Promise.withResolvers<unknown>>,
+    ) => Promise<void>,
+  ) {
+    const previous = store.get();
+    const originalConnection = bridge.connection;
+    const calls: Array<{ host: string; method: string }> = [];
+    const held = Promise.withResolvers<unknown>();
+    const jobs: Promise<unknown>[] = [];
+    bridge.connection = ((connectionId = "alpha", runtimeGeneration = 1) => ({
+      connectionId,
+      generation: store.get().connectionGeneration,
+      serverRuntimeGeneration: runtimeGeneration,
+      isCurrent: () =>
+        store
+          .get()
+          .connections.some(
+            (entry) =>
+              entry.id === connectionId &&
+              entry.state === "ready" &&
+              entry.generation === runtimeGeneration,
+          ),
+      acceptsServerGeneration: (value: unknown) => value === runtimeGeneration,
+      call: async (method: string) => {
+        calls.push({ host: connectionId, method });
+        if (method === "workspace.focus") {
+          const job = held.promise;
+          jobs.push(job);
+          return job;
+        }
+        if (method === "pane.get") return { pane: pane(connectionId, "idle") };
+        if (method === "agent_session.get")
+          return {
+            status: "ok",
+            pane_id: "same-pane",
+            agent: connectionId,
+            session: { value: "synthetic-replacement-session" },
+            path: "/synthetic/session",
+          };
+        if (method === "workspace.list")
+          return { workspaces: session(connectionId).workspaces };
+        if (method === "tab.list") return { tabs: session(connectionId).tabs };
+        if (method === "pane.list")
+          return { panes: session(connectionId).panes };
+        return {};
+      },
+    })) as typeof bridge.connection;
+    try {
+      __storeTesting.replaceState(partitionState());
+      await run(calls, held);
+    } finally {
+      held.resolve({});
+      await Promise.allSettled(jobs);
+      bridge.connection = originalConnection;
+      __storeTesting.replaceState(previous);
+    }
+  }
+
+  test.each(
+    ["create", "open", "open-from-cwd"].flatMap((operation) =>
+      [false, true].map((superseded) => ({ operation, superseded })),
+    ),
+  )(
+    "worktree navigation survives metadata refresh without overriding newer selection: %j",
+    async ({ operation, superseded }) => {
+      await withIndependentClients(async (_calls, held) => {
+        const snapshot = store.get();
+        const navigation = {
+          revision: 10,
+          workspaceId: "same-workspace",
+          tabIds: { "same-workspace": "same-tab" },
+          paneIds: { "same-tab": "same-pane" },
+        };
+        __storeTesting.replaceState({
+          ...snapshot,
+          sessionsByConnectionId: {
+            ...snapshot.sessionsByConnectionId,
+            beta: {
+              ...snapshot.sessionsByConnectionId.beta!,
+              navigationMode: "browser-local",
+              browserNavigation: navigation,
+            },
+          },
+        });
+        const connection = bridge.connection;
+        bridge.connection = ((id, generation) => {
+          const client = connection(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params: Record<string, unknown>) => {
+              const result = await client.call(method, params);
+              if (method === "worktree.create" || method === "worktree.open")
+                return held.promise;
+              if (method === "workspace.list")
+                return {
+                  navigation_mode: "browser-local",
+                  workspaces: [
+                    ...session("beta").workspaces,
+                    {
+                      ...session("beta").workspaces[0]!,
+                      workspace_id: "created-workspace",
+                      active_tab_id: "created-tab",
+                    },
+                  ],
+                };
+              if (method === "tab.list")
+                return {
+                  tabs: [
+                    ...session("beta").tabs,
+                    {
+                      ...session("beta").tabs[0]!,
+                      workspace_id: "created-workspace",
+                      tab_id: "created-tab",
+                    },
+                  ],
+                };
+              if (method === "pane.list")
+                return {
+                  panes: [
+                    ...session("beta").panes,
+                    {
+                      ...pane("beta", "idle"),
+                      workspace_id: "created-workspace",
+                      tab_id: "created-tab",
+                      pane_id: "created-pane",
+                      terminal_id: "created-terminal",
+                    },
+                  ],
+                };
+              return result;
+            },
+          };
+        }) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        const pending =
+          operation === "create"
+            ? owned.createWorktree("same-workspace", "synthetic-branch")
+            : operation === "open"
+              ? owned.openWorktree("same-workspace", "synthetic-branch")
+              : owned.openWorktreeFromCwd(
+                  "/synthetic/repository",
+                  "synthetic-branch",
+                );
+        void pending.catch(() => {});
+        await owned.refresh();
+        expect(owned.get().browserNavigation).not.toBe(navigation);
+        expect(owned.get().browserNavigation.revision).toBe(10);
+        if (superseded) {
+          const current = store.get();
+          __storeTesting.replaceState({
+            ...current,
+            sessionsByConnectionId: {
+              ...current.sessionsByConnectionId,
+              beta: {
+                ...current.sessionsByConnectionId.beta!,
+                browserNavigation: {
+                  ...owned.get().browserNavigation,
+                  revision: 11,
+                },
+              },
+            },
+          });
+        }
+        held.resolve({
+          root_pane: {
+            workspace_id: "created-workspace",
+            tab_id: "created-tab",
+            pane_id: "created-pane",
+          },
+        });
+        await pending;
+        expect(owned.get().browserNavigation.workspaceId).toBe(
+          superseded ? "same-workspace" : "created-workspace",
+        );
+        expect(store.get().activeConnectionId).toBe("alpha");
+      });
+    },
+  );
+
+  test("a worktree reply from a retired owner cannot report successful completion or replay", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const connection = bridge.connection;
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, ...args: unknown[]) => {
+            const result = await client.call(
+              method,
+              ...(args as [Record<string, unknown>]),
+            );
+            return method === "worktree.open" ? held.promise : result;
+          },
+        };
+      }) as typeof bridge.connection;
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const pending = owned.openWorktree(
+        "same-workspace",
+        "/synthetic/checkout",
+      );
+      const snapshot = store.get();
+      __storeTesting.replaceState({
+        ...snapshot,
+        connections: snapshot.connections.map((owner) =>
+          owner.id === "beta" ? { ...owner, generation: 2 } : owner,
+        ),
+      });
+      held.resolve({ workspace_id: "same-workspace" });
+      await expect(pending).rejects.toThrow();
+      expect(calls.filter((call) => call.method === "worktree.open")).toEqual([
+        { host: "beta", method: "worktree.open" },
+      ]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  test.each(["single", "batch", "repo"])(
+    "retired %s Git mutations preserve owning-host uncertainty without replay",
+    async (kind) => {
+      await withIndependentClients(async (calls, held) => {
+        const connection = bridge.connection;
+        const sent = Promise.withResolvers<void>();
+        let submitted = 0;
+        bridge.connection = ((id, generation) => {
+          const client = connection(id, generation);
+          return {
+            ...client,
+            call: async (method: string, params?: Record<string, unknown>) => {
+              if (
+                method === "git.file_action" ||
+                method === "git.repo_action"
+              ) {
+                calls.push({ host: id!, method });
+                if (kind === "batch" && ++submitted === 1) return {};
+                sent.resolve();
+                return held.promise;
+              }
+              return client.call(method, params);
+            },
+          };
+        }) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        const entry = { path: "synthetic.txt", size: 1, mtime_ms: 1 };
+        const pending =
+          kind === "single"
+            ? owned.runGitFileAction("same-workspace", "stage", entry)
+            : kind === "batch"
+              ? owned.runGitFileActionBatch("same-workspace", "stage", [
+                  entry,
+                  { ...entry, path: "second.txt" },
+                  { ...entry, path: "third.txt" },
+                ])
+              : owned.runGitRepoAction(
+                  "same-workspace",
+                  "discard_all_unstaged",
+                );
+        await sent.promise;
+        const before = store.get();
+        __storeTesting.replaceState({
+          ...before,
+          connections: before.connections.map((owner) =>
+            owner.id === "beta"
+              ? { ...owner, generation: 2, label: "Replacement" }
+              : owner,
+          ),
+        });
+        const count = calls.length;
+        held.reject(
+          new UncertainRequestError(
+            "git mutation",
+            "Synthetic runtime retired",
+          ),
+        );
+        expect(await pending).toBeUndefined();
+        expect(store.get().notice?.message).toBe("Action outcome is uncertain");
+        expect(store.get().notice?.detail).toContain(
+          "A change on Beta may have completed",
+        );
+        expect(store.get().notice?.detail).not.toContain("Replacement");
+        if (kind === "batch")
+          expect(store.get().notice?.detail).toContain(
+            "1 of 3 files completed",
+          );
+        expect(calls.length).toBe(count);
+        expect(store.get().activeConnectionId).toBe("alpha");
+        expect(store.get().error).toBeNull();
+      });
+    },
+  );
+
+  test.each(["definite", "uncertain"])(
+    "%s workspace focus failure stops the popup command chain",
+    async (kind) => {
+      await withIndependentClients(async (calls) => {
+        const connection = bridge.connection;
+        bridge.connection = ((id, generation) => ({
+          ...connection(id, generation),
+          call: async (method: string) => {
+            calls.push({ host: id!, method });
+            if (method === "popup.close") throw new Error("popup_not_open");
+            if (method === "workspace.focus")
+              throw kind === "uncertain"
+                ? new UncertainRequestError(method, "Synthetic focus failure")
+                : new Error("Synthetic focus failure");
+            return {};
+          },
+        })) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        expect(
+          await owned.togglePluginPopup(
+            "synthetic-plugin",
+            "synthetic-action",
+            { workspace_id: "same-workspace" },
+          ),
+        ).toBeUndefined();
+        expect(calls.map((call) => call.method)).toEqual([
+          "popup.close",
+          "workspace.focus",
+        ]);
+        expect(store.get().notice?.message).toBe(
+          kind === "uncertain"
+            ? "Action outcome is uncertain"
+            : "Plugin action failed",
+        );
+        expect(store.get().notice?.detail).toContain("Beta");
+      });
+    },
+  );
+
+  test.each(["skipped", "incomplete"])(
+    "temporary workspace %s removal retains qualified cleanup failures",
+    async (kind) => {
+      await withIndependentClients(async (calls) => {
+        const connection = bridge.connection;
+        bridge.connection = ((id, generation) => ({
+          ...connection(id, generation),
+          call: async (method: string) => {
+            calls.push({ host: id!, method });
+            throw new Error("Synthetic temporary workspace close failure");
+          },
+        })) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        await expect(
+          removeTemporaryWorkspaceSafely({
+            workspaceId: "temporary",
+            temporary: true,
+            remove: async () =>
+              kind === "skipped" ? { skipped_remove: true } : undefined,
+            close: async (id) => {
+              await owned.closeWorkspaceOrThrow(id);
+            },
+          }),
+        ).rejects.toThrow("Synthetic temporary workspace close failure");
+        expect(calls).toEqual([{ host: "beta", method: "workspace.close" }]);
+        expect(store.get().activeConnectionId).toBe("alpha");
+      });
+    },
+  );
+
+  test("qualified fire-and-forget commands handle failures with owning-host feedback", async () => {
+    await withIndependentClients(async () => {
+      const connection = bridge.connection;
+      bridge.connection = ((id, generation) => ({
+        ...connection(id, generation),
+        call: async () => {
+          throw new Error("Synthetic workspace command failed");
+        },
+      })) as typeof bridge.connection;
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      for (const pending of [
+        () => owned.renameWorkspace("same-workspace", "Synthetic name"),
+        () => owned.closeWorkspace("same-workspace"),
+      ]) {
+        expect(await pending()).toBeUndefined();
+        expect(owned.get().error).toBe("Synthetic workspace command failed");
+        expect(store.get().notice).toMatchObject({
+          kind: "error",
+          message: "Command failed",
+          detail: "Beta: Synthetic workspace command failed",
+        });
+        expect(store.get().error).toBeNull();
+      }
+    });
+  });
+
+  test("qualified pull retains progress, output and handled failure feedback", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      const connection = bridge.connection;
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) =>
+            method === "git.pull" ? held.promise : client.call(method, params),
+        };
+      }) as typeof bridge.connection;
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const pending = owned.gitPullWorkspace("same-workspace");
+      expect(store.get().notice?.message).toBe("Running git pull");
+      expect(store.get().notice?.loading).toBe(true);
+      held.resolve({ stdout: "Synthetic pull output", stderr: "" });
+      await pending;
+      expect(store.get().notice).toMatchObject({
+        kind: "success",
+        message: "Git pull completed",
+        detail: "Synthetic pull output",
+      });
+      bridge.connection = ((id, generation) => ({
+        ...connection(id, generation),
+        call: async () => {
+          throw new Error("Synthetic pull conflict");
+        },
+      })) as typeof bridge.connection;
+      const failed = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      expect(await failed.gitPullWorkspace("same-workspace")).toBeUndefined();
+      expect(store.get().notice).toMatchObject({
+        kind: "error",
+        message: "Git pull failed",
+      });
+      expect(store.get().notice?.detail).toContain("Synthetic pull conflict");
+      expect(failed.get().error).toBe("Synthetic pull conflict");
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  test("captured worktree and destructive commands stay on beta and reject its replacement without replay", async () => {
+    await withIndependentClients(async (calls) => {
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      await owned.openWorktree("same-workspace", "/synthetic/checkout");
+      await owned.renameWorkspace("same-workspace", "Synthetic renamed");
+      await owned.closeTab("same-tab");
+      expect(
+        calls
+          .filter((call) =>
+            ["worktree.open", "workspace.rename", "tab.close"].includes(
+              call.method,
+            ),
+          )
+          .map((call) => call.host),
+      ).toEqual(["beta", "beta", "beta"]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      const snapshot = store.get();
+      __storeTesting.replaceState({
+        ...snapshot,
+        connections: snapshot.connections.map((owner) =>
+          owner.id === "beta" ? { ...owner, generation: 2 } : owner,
+        ),
+      });
+      const count = calls.length;
+      await expect(
+        owned.openWorktree("same-workspace", "/synthetic/checkout"),
+      ).rejects.toThrow();
+      await expect(
+        owned.renameWorkspace("same-workspace", "Replacement must stay intact"),
+      ).resolves.toBeUndefined();
+      await expect(owned.closeTab("same-tab")).resolves.toBeUndefined();
+      expect(calls.length).toBe(count);
+      expect(store.get().activeConnectionId).toBe("alpha");
+    });
+  });
+
+  test("opening a cold host waits for its already running topology refresh", async () => {
+    await withIndependentClients(async (_calls, held) => {
+      held.resolve({});
+      const connection = bridge.connection;
+      const topology = Promise.withResolvers<unknown>();
+      let first = true;
+      bridge.connection = ((...args: Parameters<typeof bridge.connection>) => {
+        const client = connection(...args);
+        return {
+          ...client,
+          call: async (method: string, params = {}) => {
+            if (method === "workspace.list" && first) {
+              first = false;
+              return topology.promise;
+            }
+            return client.call(method, params);
+          },
+        };
+      }) as typeof bridge.connection;
+      const snapshot = partitionState();
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: {
+          ...snapshot.sessionsByConnectionId,
+          beta: emptyServerSessionState(1),
+        },
+      });
+      const owned = operationalStore({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+      });
+      const refresh = owned.refresh();
+      const focused = store.focusQualifiedTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+      });
+      try {
+        topology.resolve({
+          workspaces: snapshot.sessionsByConnectionId.beta.workspaces,
+          navigation_mode: "browser-local",
+        });
+        expect(await focused).toBe(true);
+        expect(owned.get().selectedPaneId).toBe("same-pane");
+        expect(store.get().activeConnectionId).toBe("alpha");
+      } finally {
+        topology.resolve({ workspaces: [] });
+        await refresh;
+        bridge.connection = connection;
+      }
+    });
+  });
+
+  test("focuses a ready sibling host's colliding pane without replacing another session", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const snapshot = partitionState();
+      const beta = {
+        ...snapshot.sessionsByConnectionId.beta,
+        navigationMode: "browser-local" as const,
+      };
+      __storeTesting.replaceState({
+        ...snapshot,
+        sessionsByConnectionId: { ...snapshot.sessionsByConnectionId, beta },
+      });
+      const alphaBefore = structuredClone(
+        store.get().sessionsByConnectionId.alpha,
+      );
+      held.resolve({});
+      expect(
+        await store.focusQualifiedTarget({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+          workspaceId: "same-workspace",
+          paneId: "same-pane",
+        }),
+      ).toBe(true);
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "pane.get",
+        ),
+      ).toBe(true);
+      expect(calls.some((call) => call.host === "alpha")).toBe(false);
+      expect(store.get().sessionsByConnectionId.alpha).toEqual(alphaBefore);
+      expect(store.get().sessionsByConnectionId.beta.selectedPaneId).toBe(
+        "same-pane",
+      );
+    });
+  });
+  test("notification navigation retains a sibling owner's context without activating it globally", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const before = structuredClone(store.get().sessionsByConnectionId.alpha);
+      const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+      await store.focusTaskNotificationTarget(target);
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "pane.get",
+        ),
+      ).toBe(true);
+      expect(calls.some((call) => call.host === "alpha")).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(store.get().sessionsByConnectionId.alpha).toEqual(before);
+    });
+  });
+  test("a queued notification cannot focus a replacement session after its original lookup was admitted", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const connection = bridge.connection;
+      const focusStarted = Promise.withResolvers<void>();
+      const sessionRead = Promise.withResolvers<void>();
+      let identity = "synthetic-original";
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) => {
+            if (method === "workspace.focus") focusStarted.resolve();
+            if (method === "agent_session.get") {
+              const captured = identity;
+              sessionRead.resolve();
+              return { session: { value: captured } };
+            }
+            const result = await client.call(method, params);
+            return method === "pane.get"
+              ? {
+                  ...result,
+                  pane: { ...result.pane, agent_session: { value: identity } },
+                }
+              : result;
+          },
+        };
+      }) as typeof bridge.connection;
+      const first = store.focusQualifiedTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      await focusStarted.promise;
+      const notification = store.focusTaskNotificationTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: "same-pane",
+        agentSessionId: identity,
+      });
+      await sessionRead.promise;
+      identity = "synthetic-replacement";
+      held.resolve({});
+      await first;
+      expect(await notification).toBe(false);
+      expect(calls.filter((call) => call.method === "workspace.focus")).toEqual(
+        [{ host: "beta", method: "workspace.focus" }],
+      );
+      expect(calls.some((call) => call.method === "tab.focus")).toBe(false);
+      expect(store.get().notice?.message).toBe(
+        "Notification target is unavailable",
+      );
+    });
+  });
+  test("browser-observed completion without an original session remains visible without a replacement target", async () => {
+    await withIndependentClients(async () => {
+      const connection = bridge.connection;
+      let status = "working";
+      bridge.connection = ((id, generation) => {
+        const client = connection(id, generation);
+        return {
+          ...client,
+          call: async (method: string, params?: Record<string, unknown>) =>
+            method === "pane.list"
+              ? { panes: [pane("alpha", status)] }
+              : client.call(method, params),
+        };
+      }) as typeof bridge.connection;
+      __storeTesting.replaceState({
+        ...store.get(),
+        taskNotificationsEnabled: true,
+        taskNotificationTransport: "push",
+      });
+      await store.refresh();
+      status = "done";
+      await store.refresh();
+      expect(store.get().notice?.message).toBe("Task completed");
+      expect(store.get().notice?.actionPaneId).toBeUndefined();
+      expect(store.get().notice?.detail).toContain(
+        "session identity is unavailable",
+      );
+    });
+  });
+  test("a missing creation capability on beta does not block an independently admitted alpha creation", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const before = store.get();
+      const beta = {
+        ...before.sessionsByConnectionId.beta,
+        navigationMode: "browser-local" as const,
+        browserNavigation: {
+          revision: 1,
+          workspaceId: "same-workspace",
+          tabIds: { "same-workspace": "same-tab" },
+          paneIds: { "same-tab": "same-pane" },
+        },
+        endpointAvailability: {
+          "same-terminal": { methods: ["pane.focus"], capabilities: [] },
+        },
+      };
+      __storeTesting.replaceState({
+        ...before,
+        sessionsByConnectionId: { ...before.sessionsByConnectionId, beta },
+      });
+      await expect(
+        store.createQualifiedTab(
+          { connectionId: "beta", runtimeGeneration: 1 },
+          "same-workspace",
+        ),
+      ).rejects.toThrow("tab.create");
+      expect(
+        calls.some(
+          (call) => call.host === "beta" && call.method === "tab.create",
+        ),
+      ).toBe(false);
+      await store.createQualifiedTab(
+        { connectionId: "alpha", runtimeGeneration: 1 },
+        "same-workspace",
+      );
+      expect(calls.filter((call) => call.method === "tab.create")).toEqual([
+        { host: "alpha", method: "tab.create" },
+      ]);
+    });
+  });
+  test("a notification cannot navigate to a reused pane in a different workspace", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      const target = taskNotificationTarget("beta", 1, {
+        ...pane("beta", "done"),
+        workspace_id: "retired-workspace",
+      });
+      await store.focusTaskNotificationTarget(target);
+      expect(
+        calls.filter(
+          (call) =>
+            call.method === "workspace.focus" || call.method === "tab.focus",
+        ),
+      ).toEqual([]);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(store.get().notice?.kind === "error" || !!store.get().error).toBe(
+        true,
+      );
+    });
+  });
+  test("a session-qualified notification cannot open a replacement agent session in the same pane", async () => {
+    await withIndependentClients(async (calls, held) => {
+      held.resolve({});
+      // Additive target identity; the wire spelling may evolve with the
+      // producer, but losing the captured session must never admit its successor.
+      const target = {
+        ...taskNotificationTarget("beta", 1, pane("beta", "done")),
+        agentSessionId: "synthetic-original-session",
+      };
+      await store.focusTaskNotificationTarget(target);
+      expect(
+        calls.some(
+          (call) =>
+            call.method === "workspace.focus" || call.method === "tab.focus",
+        ),
+      ).toBe(false);
+      expect(store.get().activeConnectionId).toBe("alpha");
+      expect(store.get().notice?.kind === "error" || !!store.get().error).toBe(
+        true,
+      );
+    });
+  });
+  test.each(["disconnected", "error"] as const)(
+    "notification admission rejects a %s owner even when its generation is unchanged",
+    (state) => {
+      const snapshot = partitionState();
+      const target = taskNotificationTarget("beta", 1, pane("beta", "done"));
+      expect(
+        taskNotificationTargetIsCurrent(
+          {
+            connections: snapshot.connections.map((connection) =>
+              connection.id === "beta" ? { ...connection, state } : connection,
+            ),
+          },
+          target,
+        ),
+      ).toBe(false);
+    },
+  );
+
+  test("a stalled focus on alpha does not serialize independent beta focus behind it", async () => {
+    await withIndependentClients(async (calls, held) => {
+      const alpha = store.focusQualifiedTarget({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      const beta = store.focusQualifiedTarget({
+        connectionId: "beta",
+        runtimeGeneration: 1,
+        workspaceId: "same-workspace",
+        paneId: null,
+      });
+      try {
+        // Flush the existing async focus dispatch chain, without a timeout or status loop.
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(
+          calls
+            .filter((call) => call.method === "workspace.focus")
+            .map((call) => call.host)
+            .sort(),
+        ).toEqual(["alpha", "beta"]);
+      } finally {
+        held.resolve({});
+        await Promise.allSettled([alpha, beta]);
+      }
+    });
+  });
+
+  test("captured operational commands and endpoint publication stay on alpha after beta focus", async () => {
+    await withIndependentClients(async (calls) => {
+      const alpha = operationalStore({
+        connectionId: "alpha",
+        runtimeGeneration: 1,
+      });
+      __storeTesting.replaceState(
+        activateConnectionState(store.get(), "beta", 11),
+      );
+      await alpha.zoomPane("same-pane");
+      expect(calls.filter((call) => call.method === "pane.zoom")).toEqual([
+        { host: "alpha", method: "pane.zoom" },
+      ]);
+      const client = bridge.connection("alpha", 1);
+      store.setTerminalEndpoint(client, "same-terminal", {
+        methods: ["pane.focus"],
+        capabilities: [],
+      });
+      expect(
+        alpha.get().endpointAvailability["same-terminal"]?.methods,
+      ).toContain("pane.focus");
+      expect(store.get().endpointAvailability["same-terminal"]).toBeUndefined();
+      const current = store.get();
+      __storeTesting.replaceState({
+        ...current,
+        connections: current.connections.map((connection) =>
+          connection.id === "alpha"
+            ? { ...connection, generation: 2 }
+            : connection,
+        ),
+      });
+      const before = calls.length;
+      await expect(alpha.zoomPane("same-pane")).resolves.toBeUndefined();
+      expect(calls).toHaveLength(before);
+    });
+  });
+
+  test.each(["replacement", "removal"] as const)(
+    "catalogue %s retires beta terminal presenters without detaching alpha",
+    async (transition) => {
+      const previous = store.get();
+      const disposals: Array<{ host: string; remote: boolean }> = [];
+      const releaseAlpha = registerTerminalConnectionDisposer(
+        { connectionId: "alpha", generation: 1 },
+        (remote) => disposals.push({ host: "alpha", remote }),
+      );
+      const releaseBeta = registerTerminalConnectionDisposer(
+        { connectionId: "beta", generation: 1 },
+        (remote) => disposals.push({ host: "beta", remote }),
+      );
+      try {
+        const snapshot = partitionState();
+        __storeTesting.replaceState(snapshot);
+        __storeTesting.applyCatalog(
+          transition === "removal"
+            ? snapshot.connections.filter((entry) => entry.id !== "beta")
+            : snapshot.connections.map((entry) =>
+                entry.id === "beta" ? { ...entry, generation: 2 } : entry,
+              ),
+          "alpha",
+        );
+        expect(disposals).toEqual([{ host: "beta", remote: false }]);
+        expect(store.get().sessionsByConnectionId.alpha.panes).toEqual(
+          snapshot.sessionsByConnectionId.alpha.panes,
+        );
+        if (transition === "removal")
+          expect(store.get().sessionsByConnectionId.beta).toBeUndefined();
+        else expect(store.get().sessionsByConnectionId.beta.panes).toEqual([]);
+      } finally {
+        releaseAlpha();
+        releaseBeta();
+        __storeTesting.replaceState(previous);
+      }
+    },
+  );
+});
 
 describe("Git folder actions", () => {
   test.each([
@@ -905,9 +1959,15 @@ describe("connection-partitioned store state", () => {
 
         const pending = mutation.run();
         await started.promise;
-        __storeTesting.replaceState(
-          activateConnectionState(partitionState(), "beta", 11),
-        );
+        const replaced = partitionState();
+        __storeTesting.replaceState({
+          ...replaced,
+          connections: replaced.connections.map((connection) =>
+            connection.id === "alpha"
+              ? { ...connection, generation: 2 }
+              : connection,
+          ),
+        });
         gate.resolve();
 
         await expect(pending).rejects.toThrow("selected host changed");
@@ -973,7 +2033,7 @@ describe("connection-partitioned store state", () => {
     );
   });
 
-  test("opens unchanged-generation notifications but rejects replaced targets", async () => {
+  test("rejects disconnected and replaced notification owners without selecting a host", async () => {
     const originalConnection = bridge.connection;
     const originalSetActiveConnection = bridge.setActiveConnection;
     let activeConnectionId = "beta";
@@ -1009,12 +2069,8 @@ describe("connection-partitioned store state", () => {
         status: "disconnected",
       });
       await store.focusTaskNotificationTarget(target);
-      expect(store.get().activeConnectionId).toBe("alpha");
-      expect(calls).toEqual([
-        "alpha:pane.get",
-        "alpha:workspace.focus",
-        "alpha:tab.focus",
-      ]);
+      expect(store.get().activeConnectionId).toBe("beta");
+      expect(calls).toEqual([]);
 
       calls.length = 0;
       activeConnectionId = "beta";
@@ -1840,6 +2896,34 @@ describe("agent activity refresh", () => {
 });
 
 describe("Herdr task notifications", () => {
+  test("browser completion observation does not invent a transition across reused workspace or session identities", () => {
+    const tracker = new TaskCompletionTracker();
+    const original = {
+      ...pane("beta", "working"),
+      agent_session: { value: "synthetic-original" },
+    };
+    expect(tracker.update("beta", [original])).toEqual([]);
+    expect(
+      tracker.update("beta", [
+        {
+          ...original,
+          workspace_id: "replacement-workspace",
+          agent_status: "done",
+        },
+      ]),
+    ).toEqual([]);
+    tracker.reset("beta");
+    tracker.update("beta", [original]);
+    expect(
+      tracker.update("beta", [
+        {
+          ...original,
+          agent_status: "done",
+          agent_session: { value: "synthetic-replacement" },
+        },
+      ]),
+    ).toEqual([]);
+  });
   const herdrEvent = (data: Record<string, unknown>, connection = "alpha") => ({
     connection_id: connection,
     connection_generation: 1,
@@ -1866,6 +2950,7 @@ describe("Herdr task notifications", () => {
         body: "",
         workspace_id: "w1",
         pane_id: "w1:p2",
+        agent_session_id: "synthetic-session-original",
       }),
     ).toEqual({
       kind: "blocked",
@@ -1874,6 +2959,7 @@ describe("Herdr task notifications", () => {
       body: null,
       workspaceId: "w1",
       paneId: "w1:p2",
+      agentSessionId: "synthetic-session-original",
     });
     expect(parseHerdrTaskNotification({ kind: "update", title: "x" })).toBe(
       null,
@@ -1891,6 +2977,27 @@ describe("Herdr task notifications", () => {
         capabilities: { herdr_task_notifications: true },
       }),
     ).toBe(true);
+  });
+  test("a relayed notification with unknown original session stays visible without a replacement action", () => {
+    try {
+      __storeTesting.replaceState(enabledState());
+      __storeTesting.handleHerdrEvent(
+        herdrEvent({
+          kind: "completed",
+          title: "Synthetic task finished",
+          workspace_id: "w1",
+          pane_id: "w1:p9",
+          session_identity_unavailable: true,
+        }),
+      );
+      expect(store.get().notice?.message).toBe("Synthetic task finished");
+      expect(store.get().notice?.actionPaneId).toBeUndefined();
+      expect(store.get().notice?.detail).toContain(
+        "session identity is unavailable",
+      );
+    } finally {
+      __storeTesting.replaceState(partitionState());
+    }
   });
 
   test("shows Herdr's text with a pane action, or none for pane-less alerts", () => {
@@ -1932,7 +3039,7 @@ describe("Herdr task notifications", () => {
     }
   });
 
-  test("respects the toggle, per-kind preferences and the active connection", () => {
+  test("respects preferences and retains a sibling notification's owning runtime", () => {
     const event = herdrEvent({
       kind: "blocked",
       title: "claude needs attention",
@@ -1952,7 +3059,10 @@ describe("Herdr task notifications", () => {
       }
       __storeTesting.replaceState(enabledState());
       __storeTesting.handleHerdrEvent({ ...event, connection_id: "beta" });
-      expect(store.get().notice).toBeNull();
+      expect(store.get().notice).toMatchObject({
+        actionConnectionId: "beta",
+        actionRuntimeGeneration: 1,
+      });
     } finally {
       __storeTesting.replaceState(partitionState());
     }

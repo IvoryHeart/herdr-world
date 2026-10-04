@@ -1,10 +1,14 @@
 import { worldLocalStorage } from "../browserStorage";
 import type { ConnectionClient } from "../api";
-import { connectionHttpPath } from "../connectionHttp";
+import { connectionHttpResource } from "../connectionHttp";
 import { connectionStorageKey } from "../connectionStorage";
 import { gitDiffCode, type GitDiffCode } from "../gitDiffStatus";
 import { retireGitDiffSummaryResource } from "../gitDiffSummaryStore";
-import { connectionClientScopeKey } from "../useConnectionClient";
+import {
+  connectionClientScopeKey,
+  connectionClientScopeGeneration,
+  type ConnectionClientScope,
+} from "../useConnectionClient";
 import type {
   FileExplorerEntry,
   FileExplorerList,
@@ -76,7 +80,7 @@ let previewResourceRevision = 0;
 export const FILE_SHOW_HIDDEN_PREFIX = "fileExplorerShowHidden:";
 
 export function explorerRuntimeContextKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId?: string,
   resourceKey = workspaceId,
 ) {
@@ -89,7 +93,7 @@ export function explorerRuntimeContextKey(
 }
 
 export function explorerCacheKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId?: string,
   showHidden = false,
   resourceKey = workspaceId,
@@ -119,7 +123,7 @@ function retireExplorerCache(key: string) {
 }
 
 export function clearFileExplorerResourceCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   resourceKey: string,
   storage: Pick<Storage, "removeItem"> = worldLocalStorage,
 ) {
@@ -147,7 +151,7 @@ function emptyExplorerCache(): FileExplorerCache {
 }
 
 export function readExplorerCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId?: string,
   showHidden = false,
   resourceKey = workspaceId,
@@ -171,7 +175,7 @@ export function readExplorerCache(
 }
 
 export function writeExplorerCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string | undefined,
   showHidden: boolean,
   patch: Partial<FileExplorerCache>,
@@ -190,7 +194,7 @@ export function writeExplorerCache(
 }
 
 export function filePreviewCacheKey(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string | undefined,
   path: string,
 ) {
@@ -266,7 +270,7 @@ function previewCacheKeyParts(key: string) {
 }
 
 export function invalidateFilePreviewCache(
-  client: Pick<ConnectionClient, "connectionId" | "generation">,
+  client: ConnectionClientScope,
   workspaceId: string,
   path: string,
   recursive = false,
@@ -277,7 +281,7 @@ export function invalidateFilePreviewCache(
     if (
       !parts ||
       parts.connectionId !== client.connectionId ||
-      parts.generation !== client.generation ||
+      parts.generation !== connectionClientScopeGeneration(client) ||
       parts.workspaceId !== workspaceId
     ) {
       continue;
@@ -569,42 +573,26 @@ export async function uploadExplorerFile(
   directory: string,
   file: File,
 ) {
-  if (!client.isCurrent()) throw new Error("connection changed during upload");
-  const url = new URL(
-    connectionHttpPath(
-      client.connectionId,
-      "/file/upload",
-      client.serverRuntimeGeneration,
-    ),
-    window.location.origin,
-  );
-  if (url.origin !== window.location.origin)
-    throw new Error("invalid upload origin");
-  url.searchParams.set("workspace_id", workspaceId);
-  url.searchParams.set("directory", directory);
-  url.searchParams.set("filename", file.name);
-  const response = await fetch(url, {
-    method: "POST",
-    body: file,
+  const query = new URLSearchParams({
+    workspace_id: workspaceId,
+    directory,
+    filename: file.name,
   });
-  const text = await response.text();
-  if (!client.isCurrent()) throw new Error("connection changed during upload");
-  let payload: any;
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { error: text };
-  }
-  if (!response.ok) {
-    throw new Error(
-      payload?.error || text || `upload failed ${response.status}`,
-    );
-  }
-  return payload as {
-    path: string;
-    size: number;
-    overwritten: boolean;
-  };
+  return connectionHttpResource(
+    client,
+    `/file/upload?${query}`,
+    async (response) => {
+      const payload: unknown = await response.json();
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as { path?: unknown }).path !== "string"
+      )
+        throw new Error("invalid file upload response");
+      return payload as { path: string; size: number; overwritten: boolean };
+    },
+    { method: "POST", body: file },
+  );
 }
 
 export async function deleteExplorerEntry(
@@ -612,37 +600,22 @@ export async function deleteExplorerEntry(
   workspaceId: string,
   path: string,
 ) {
-  if (!client.isCurrent()) throw new Error("connection changed during delete");
-  const url = new URL(
-    connectionHttpPath(
-      client.connectionId,
-      "/file/delete",
-      client.serverRuntimeGeneration,
-    ),
-    window.location.origin,
+  const query = new URLSearchParams({ workspace_id: workspaceId, path });
+  return connectionHttpResource(
+    client,
+    `/file/delete?${query}`,
+    async (response) => {
+      const payload: unknown = await response.json();
+      if (
+        !payload ||
+        typeof payload !== "object" ||
+        typeof (payload as { path?: unknown }).path !== "string"
+      )
+        throw new Error("invalid file delete response");
+      return payload as { path: string; type: FileExplorerEntry["type"] };
+    },
+    { method: "POST" },
   );
-  if (url.origin !== window.location.origin)
-    throw new Error("invalid delete origin");
-  url.searchParams.set("workspace_id", workspaceId);
-  url.searchParams.set("path", path);
-  const response = await fetch(url, { method: "POST" });
-  const text = await response.text();
-  if (!client.isCurrent()) throw new Error("connection changed during delete");
-  let payload: any;
-  try {
-    payload = text ? JSON.parse(text) : {};
-  } catch {
-    payload = { error: text };
-  }
-  if (!response.ok) {
-    throw new Error(
-      payload?.error || text || `delete failed ${response.status}`,
-    );
-  }
-  return payload as {
-    path: string;
-    type: FileExplorerEntry["type"];
-  };
 }
 
 export function prefetchFileExplorerWorkspace(

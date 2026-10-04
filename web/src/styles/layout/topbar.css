@@ -207,8 +207,30 @@
   }
 }
 
+.menu-button-icon {
+  display: none;
+}
+
 /* Keep mobile styling in sync with the saved layout and URL override. */
 :where(html[data-layout="mobile"]) {
+  .menu-button-label,
+  .command-trigger > span,
+  .command-trigger > svg:last-child {
+    display: none;
+  }
+  .menu-button-icon {
+    display: block;
+  }
+  .topbar .menu-button,
+  .topbar .command-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+  }
+
   .topbar {
     /* Anchor the opaque header for iOS standalone scroll-edge handling. */
     position: sticky;

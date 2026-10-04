@@ -233,7 +233,10 @@ export function publishConnectionHttpResponse(
     return withConnectionResponseHeader(
       Response.json(
         { error: CONNECTION_CHANGED_DURING_REQUEST },
-        { status: 409 },
+        {
+          status: 409,
+          headers: { "X-Herdr-Request-Outcome": "uncertain" },
+        },
       ),
       lease.connectionId,
       lease.generation,

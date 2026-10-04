@@ -27,26 +27,88 @@ authentication, health, and updates.
 React owns presentation and browser-local preferences. xterm displays Herdr's
 server-rendered output rather than reconstructing a PTY in the bridge.
 
-Spaces keeps one selected connection for operational work. The bridge-global
+Spaces keeps one focused qualified workspace; visual Inspectors retain independent
+operational contexts across ready connections. The bridge-global
 `world.snapshot` path reads bounded topology from every ready runtime. The browser
 qualifies that data by connection and generation into one WorldObject used by Office,
 Tree, and Graph. Aggregate observation is never mutation authority: opening a terminal,
-Files, Changes, or Agent History revalidates and switches to the exact owning runtime.
-The browser sends its selected connection as a scheduling hint in the global snapshot
-request. The service attempts that host first, reserves one of four observation slots
-from inactive-host work, and returns the complete managed-host catalogue within a
+Files, Changes, or Agent History revalidates the captured owning runtime without
+changing another context. The browser sends bounded deduplicated open-context host
+hints (or visible hosts when no contexts are open) in the global snapshot request.
+The service rotates priority and background work, preserves background progress
+within four observation slots, releases an unused priority reservation, and returns the complete managed-host catalogue within a
 20-second response deadline. Unfinished hosts expose only stale, non-actionable cached
 topology or no children. Per-host work is shared across overlapping requests; a late
 result enters the cache only for its original current runtime generation and triggers
 a coalesced refresh when its observed data changes. A current result may be reused for
 15 seconds unless that host receives an explicit topology invalidation. The browser
-still has one selected operational host and one World WebSocket.
+uses one World WebSocket with a transport epoch independent of runtime generations.
+Host filters affect overview visibility only. Context-bound selectors and commands
+read and update connection partitions in the existing store. Each terminal has one
+qualified presenter; Spaces/visual handoffs detach before admitting the new presenter.
+Workspace resources preserve checkout identity, while agent resources additionally
+validate session identity. Missing original notification session identity is visible
+but non-navigable. Runtime retirement removes only matching arrangement participants
+and restore baselines; filters leave these intact. Global creation names one host.
 In a bounded synthetic 64-profile case with one current selected host and 63 stalled
 hosts, the partial response was 16,090 serialized bytes; an immediate repeated
 request started no additional Herdr calls while inactive fetches remained in flight.
 This is a partial-response measurement, not a maximum payload size. Each fully
 observed host still has its existing 512-workspace, 2,048-tab and 4,096-pane/agent
 record caps, so payload size grows with actual topology across the 64-profile limit.
+
+Large aggregate replies negotiate bounded chunks on the same World WebSocket.
+Scoped acknowledgements can interleave between chunks; partial responses belong to
+the pending global request and are discarded on transport retirement. Older clients
+retain the ordinary reply format. Large negotiated replies decode in isolated,
+bounded browser worker jobs; host-sized messages admit the complete decoded result
+across tasks. Sending the raw strings to the worker still incurs a measured
+main-thread clone. Transport retirement and timeout cancel the owning job.
+Server serialization remains atomic; dense acceptance measures
+input through receipt, decode, preparation and rendering.
+
+Persisted Hosts filters reconcile only after a validated catalogue is admitted on
+the current transport. Socket readiness alone is insufficient: a delayed initial
+list preserves saved IDs, while a successful empty list removes them. Old transport,
+malformed and superseded list replies cannot confer catalogue readiness.
+
+The production-transport browser fixture exercises all 64 profile roots with a
+40,629,895-byte dense snapshot, two qualified terminals and 320 full terminal
+repaints per second. Independently timed trusted input continues through receipt,
+parsing, preparation, rendering and a refresh with three stalled observations at
+the default 20-second response deadline. Tree, Graph and Office are checked at
+1440px and 390px against engineering budgets of p95 intended-input-to-acknowledgement
+below 200ms and maximum below 500ms. Intended-to-sent drift and sent-to-ACK delay are
+reported separately. Passing local samples do not replace the exact-head CI gate;
+prior CI exceeded these budgets. Atomic work and perceptible tails remain. This is
+synthetic transport and rendering acceptance, not a live network latency guarantee.
+
+Tree and Graph reuse unchanged semantic branches during progressive mounting.
+Graph caches draw order and conservatively culls offscreen nodes and edges while
+retaining full geometry and crossing links. Office paints the current and adjacent
+viewports, independently of distant room heights; complete rosters still support
+search and reveal. Identical terminal surfaces retire unqualified link actions
+without repainting unchanged rows unless a link decoration needs invalidation.
+
+Terminal input failures publish a bounded notice for the captured original owner,
+including after retirement. Ambiguous input is never replayed. The user must refresh
+and verify that exact terminal before deciding whether to retry.
+
+Dense browser observations decode each owner and prepare qualified host models,
+Office rooms and complete semantic rosters in cooperative background tasks before
+publishing. Cached roster indices let bounded scene changes update presentation
+flags without reconstructing discarded rooms or losing full-observation search.
+Transport and runtime identities are checked
+again after preparation; a retired host becomes non-actionable without discarding
+healthy siblings. Tree mounts its active responsive layout in fair batches, retaining
+open resource ancestry immediately and showing pending presentation explicitly.
+Graph and Office scene controls likewise admit bounded batches. Canvas animation
+leaves ordinary socket tasks turns between paints; overview work cannot replace a
+captured operational owner.
+Streaming terminal output preserves keyboard focus in another mounted terminal.
+Self-contained native repaints retain the newest frame per animation turn; legacy
+incremental output remains ordered and complete. Both paths recheck the captured
+owner before presentation, including when a frame was queued before retirement.
 
 Office observability is optional and separate from Herdr runtime authority. The World
 service validates one credential-free Prometheus base URL, issues only fixed bounded
@@ -230,17 +292,18 @@ replacement, and post-ready transport exit invalidate leases before publishing
 status. Starts/stops are serialized, shutdown is bounded, and one failed runtime
 does not block management or healthy connections.
 
-Browser mount keys, caches, local storage, notification targets, and asynchronous
-actions are connection-scoped. Switching connections retires the browser lease;
-same-ID runtime replacement clears active and inactive cached sessions before
-resource IDs can be reused.
+Browser mount keys, caches, notifications and asynchronous actions carry their
+connection and runtime generation. Focus changes preserve independent leases;
+same-ID runtime replacement clears only that connection's cached sessions before
+resource IDs can be reused. World transport loss or authentication failure retires
+all old clients. Ambiguous input or mutations are not queued or replayed.
 
-The runtime store retains qualified snapshots for every managed connection, but
-the current Roamgate-derived client has one operational connection lease. Office,
-Tree, Graph, their visible counts, and their shared search therefore receive a
-selected-host WorldObject projection. Switching the connection selector retires
-the outgoing visual/Inspector contexts before replacing the entire projection;
-inactive-host rooms or nodes are not mixed into the active view.
+The runtime store retains every managed host. Hosts filters Office, Tree, Graph,
+the navigator, counts and search without changing lifecycle or open contexts.
+Tree and Graph share fair 128-space admission and 16 leaves per space, preserving
+priority ancestry; paged search uses full admitted observations. Offline roots and
+exact stale/unknown/omitted coverage remain visible. Outside-filter Inspectors retain
+their owned commands and labels, with connectors only to visible exact anchors.
 
 ## Workspace resource ownership
 

@@ -1,9 +1,11 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { Application } from "pixi.js";
 import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
 import { WORLD_OBSERVABILITY_UPDATED_EVENT } from "../workspaceResource";
 import { OfficeCompactTargetChooser } from "./OfficeCompactTargetChooser";
+import { OfficeSemanticTargetsOverlay } from "./OfficeRoomActionsOverlay";
 import { OFFICE_PREFERENCES_KEY } from "./officePreferences";
 import { projectWorldOffice } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
@@ -12,6 +14,22 @@ import PixelOfficeView from "./PixelOfficeView";
 import "./world.css";
 
 const failures: string[] = [];
+let maximumTextRasterScale = 0;
+const scaleCanvas = CanvasRenderingContext2D.prototype.scale;
+CanvasRenderingContext2D.prototype.scale = function (x, y) {
+  maximumTextRasterScale = Math.max(maximumTextRasterScale, x, y);
+  return scaleCanvas.call(this, x, y);
+};
+let ordinaryTasksDuringScene = 0;
+const paintOffice = Application.prototype.render;
+Application.prototype.render = function () {
+  if (window.__HERDR_WORLD_RENDERER__?.ready === false)
+    setTimeout(() => {
+      if (window.__HERDR_WORLD_RENDERER__?.ready === false)
+        ordinaryTasksDuringScene++;
+    }, 0);
+  return paintOffice.call(this);
+};
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
@@ -211,6 +229,15 @@ async function run() {
       () => window.__HERDR_WORLD_RENDERER__?.ready === true,
       "Pixel Office renderer did not become ready",
     );
+    check(
+      ordinaryTasksDuringScene > 0,
+      "Office completes scene construction and painting without admitting an ordinary task",
+    );
+    check(
+      maximumTextRasterScale >= 1 &&
+        maximumTextRasterScale <= Math.min(2, window.devicePixelRatio || 1),
+      "Office text textures exceed the canvas device resolution",
+    );
     await waitFor(
       () => host.querySelector(".world-semantic-target") !== null,
       "Pixel Office overlays did not become ready",
@@ -226,6 +253,81 @@ async function run() {
       "Initial Office room creation remained disabled after the scene rendered",
     );
     const diagnostics = window.__HERDR_WORLD_RENDERER__!;
+    const officeScroll = host.querySelector<HTMLElement>(
+      ".world-stage-scroll",
+    )!;
+    const officeCanvas = host.querySelector<HTMLCanvasElement>(
+      "canvas[data-office-canvas='true']",
+    )!;
+    check(
+      officeCanvas.width <=
+        officeScroll.clientWidth * Math.min(2, window.devicePixelRatio || 1),
+      "Office allocates an offscreen horizontal canvas beyond its visible viewport",
+    );
+    const progressHost = document.body.appendChild(
+      document.createElement("div"),
+    );
+    const progressRoot = createRoot(progressHost);
+    const progressProjection = projectWorldOffice(
+      buildWorldObject(
+        Array.from({ length: 9 }, (_, index) =>
+          connection(
+            `progress-${index}`,
+            "Progress",
+            `progress-space-${index}`,
+            ["working", "working", "working", "working"],
+          ),
+        ),
+      ),
+      1,
+    );
+    const progressLayout = {
+      ...diagnostics.publishedLayout!,
+      rooms: progressProjection.rooms.map((_, index) => ({
+        ...diagnostics.publishedLayout!.rooms[0]!,
+        index,
+        y: index * 500,
+      })),
+    };
+    const requestFrame = window.requestAnimationFrame;
+    const cancelFrame = window.cancelAnimationFrame;
+    let heldFrame = 1_000_000;
+    const heldFrames = new Map<number, FrameRequestCallback>();
+    window.requestAnimationFrame = (callback) => {
+      heldFrames.set(++heldFrame, callback);
+      return heldFrame;
+    };
+    window.cancelAnimationFrame = (id) => {
+      if (!heldFrames.delete(id)) cancelFrame(id);
+    };
+    try {
+      progressRoot.render(
+        <OfficeSemanticTargetsOverlay
+          layout={progressLayout}
+          projection={progressProjection}
+          renderedRevision={progressLayout.layoutRevision}
+          selectedKey={null}
+          onSelect={() => {}}
+          onActivateAgent={() => {}}
+          onActivateDesk={() => {}}
+          onActivateRoom={() => {}}
+        />,
+      );
+      await settle();
+      await settle();
+      check(
+        progressHost
+          .querySelector('[aria-label="Office scene targets"]')
+          ?.getAttribute("aria-busy") === "false",
+        "Office target readiness depends on canvas animation frames",
+      );
+    } finally {
+      progressRoot.unmount();
+      progressHost.remove();
+      window.requestAnimationFrame = requestFrame;
+      window.cancelAnimationFrame = cancelFrame;
+      for (const callback of heldFrames.values()) callback(performance.now());
+    }
     const rendersBeforeObservation = diagnostics.sceneRenders;
     await fetch("/release-metrics", { method: "POST" });
     window.dispatchEvent(new Event(WORLD_OBSERVABILITY_UPDATED_EVENT));

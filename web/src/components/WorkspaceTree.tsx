@@ -1,6 +1,7 @@
 import { worldLocalStorage } from "../browserStorage";
-import { shallowEqual, store, useStoreSelector } from "../store";
-import type { GitStatusSummary, Pane, Workspace } from "../types";
+import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
+import type { GitStatusSummary, Pane, Tab, Workspace } from "../types";
+import { projectBrowserNavigation } from "../browserNavigation";
 import { shortId } from "../utils";
 import {
   clearTerminalComposerDrafts,
@@ -196,6 +197,8 @@ function GitStatusBadges({
 export function WorkspaceTree({
   agentsFirst = false,
   focusOnSelect = true,
+  includeTerminals = false,
+  observedTopology,
   onSelect,
   onBrowseFiles,
   onReviewChanges,
@@ -206,6 +209,8 @@ export function WorkspaceTree({
 }: {
   agentsFirst?: boolean;
   focusOnSelect?: boolean;
+  includeTerminals?: boolean;
+  observedTopology?: { workspaces: Workspace[]; tabs: Tab[]; panes: Pane[] };
   onSelect?: (workspace: Workspace) => void;
   onBrowseFiles?: (workspace: Workspace) => void;
   onReviewChanges?: (workspace: Workspace) => void;
@@ -214,12 +219,14 @@ export function WorkspaceTree({
   onReviewChangesForAgent?: (pane: Pane) => void;
   onViewAgentHistory?: (pane: Pane) => void;
 }) {
-  const s = useStoreSelector(
+  const session = useStoreSelector(
     (state) => ({
       activeConnectionId: state.activeConnectionId,
       connectionGeneration: state.connectionGeneration,
       lastRefresh: state.lastRefresh,
       layout: state.layout,
+      navigationMode: state.navigationMode,
+      browserNavigation: state.browserNavigation,
       panes: state.panes,
       selectedPaneId: state.selectedPaneId,
       status: state.status,
@@ -228,6 +235,22 @@ export function WorkspaceTree({
     }),
     shallowEqual,
   );
+  // Aggregate navigation can show a host before its operational cache is warm.
+  // Commands still use the immutable lease supplied by OperationalContext.
+  const s = observedTopology
+    ? {
+        ...session,
+        ...(session.navigationMode === "browser-local"
+          ? projectBrowserNavigation(
+              session.browserNavigation,
+              observedTopology.workspaces,
+              observedTopology.tabs,
+              observedTopology.panes,
+            )
+          : observedTopology),
+      }
+    : session;
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const agentOrderStorageKey = connectionStorageKey(
     s.activeConnectionId,
@@ -274,6 +297,17 @@ export function WorkspaceTree({
     string | null
   >(null);
   const lastPrunedWorkspaceRefresh = useRef(0);
+  useEffect(() => {
+    setMenu(null);
+    setAgentMenu(null);
+    setPendingClosePane(null);
+    setDraggedWorkspaceId(null);
+    setWorkspaceDropTarget(null);
+    setDraggedAgentPaneId(null);
+    setAgentDropTarget(null);
+    setCreateOpen(false);
+    setLifecycleWorkspaceId(null);
+  }, [s.activeConnectionId, s.connectionGeneration]);
   const pinsStorageKey = connectionStorageKey(
     s.activeConnectionId,
     WORKSPACE_PINS_STORAGE_KEY,
@@ -296,8 +330,8 @@ export function WorkspaceTree({
   const collapsedWorktreeGroupSet = new Set(collapsedWorktreeGroupKeys);
   const activePaneId = activePaneIdForSnapshot(s) ?? null;
   const agentsByWorkspace = useMemo(
-    () => groupAgentPanesByWorkspace(s.panes),
-    [s.panes],
+    () => groupAgentPanesByWorkspace(s.panes, includeTerminals),
+    [s.panes, includeTerminals],
   );
   const tabCountsByWorkspace = useMemo(() => {
     const counts = new Map<string, number>();
@@ -313,13 +347,15 @@ export function WorkspaceTree({
         workspace.number,
       ]),
     );
-    return s.panes.filter(paneHasAgentHistory).sort((left, right) => {
-      const workspaceOrder =
-        (workspaceNumbers.get(left.workspace_id) ?? 0) -
-        (workspaceNumbers.get(right.workspace_id) ?? 0);
-      return workspaceOrder || left.pane_id.localeCompare(right.pane_id);
-    });
-  }, [s.panes, s.workspaces]);
+    return s.panes
+      .filter((pane) => includeTerminals || paneHasAgentHistory(pane))
+      .sort((left, right) => {
+        const workspaceOrder =
+          (workspaceNumbers.get(left.workspace_id) ?? 0) -
+          (workspaceNumbers.get(right.workspace_id) ?? 0);
+        return workspaceOrder || left.pane_id.localeCompare(right.pane_id);
+      });
+  }, [s.panes, s.workspaces, includeTerminals]);
   const agentPanes = useMemo(
     () =>
       sortAgentPanes(
@@ -387,14 +423,20 @@ export function WorkspaceTree({
     }
     lastPrunedWorkspaceRefresh.current = s.lastRefresh;
     setPinnedWorkspaceKeys((current) => {
-      const next = pruneClosedWorkspacePreferenceKeys(current, s.workspaces);
+      const next = pruneClosedWorkspacePreferenceKeys(
+        current,
+        session.workspaces,
+      );
       return stringArraysEqual(current, next) ? current : next;
     });
     setCollapsedWorktreeGroupKeys((current) => {
-      const next = pruneClosedWorkspacePreferenceKeys(current, s.workspaces);
+      const next = pruneClosedWorkspacePreferenceKeys(
+        current,
+        session.workspaces,
+      );
       return stringArraysEqual(current, next) ? current : next;
     });
-  }, [s.lastRefresh, s.status, s.workspaces]);
+  }, [s.lastRefresh, s.status, session.workspaces]);
   useEffect(() => {
     const onStorage = (event: StorageEvent) => {
       if (event.key === pinsStorageKey) {
@@ -922,6 +964,7 @@ function WorkspaceRow({
   onContextMenu: (w: Workspace, x: number, y: number) => void;
   workspaceDrag?: WorkspaceDragProps;
 }) {
+  const store = useOperationalStore();
   const children = childrenByParent.get(w.workspace_id) ?? [];
   const agents = agentsByWorkspace.get(w.workspace_id) ?? [];
   const tabCount = tabCountsByWorkspace.get(w.workspace_id) ?? 0;

@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
-import type { ConnectionClient } from "../api";
-import { pollingTargets } from "./handoffs";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  deskClient,
+  DeskReadQueues,
+  deskScope,
+  deskHostGroups,
+  pollingTargets,
+  type DeskClients,
+} from "./handoffs";
 import type { WorldLeafObject } from "./worldObject";
 
 const MAX_PANES = 16;
@@ -91,80 +97,102 @@ export function screenIdentity(leaf: WorldLeafObject) {
  */
 export function usePaneScreens(
   leaves: WorldLeafObject[],
-  client: ConnectionClient,
+  clients: DeskClients,
 ) {
   const [screens, setScreens] = useState<Map<string, string>>(() => new Map());
+  const queues = useMemo(() => new DeskReadQueues(MAX_PANES), []);
   const targets = pollingTargets(leaves, MAX_PANES);
   const targetKey = targets
     .map((leaf) => `${screenIdentity(leaf)}:${leaf.status}`)
     .join("\n");
 
-  useEffect(() => setScreens(new Map()), [client.connectionId]);
+  const clientScope = deskScope(clients);
+
+  useEffect(() => setScreens(new Map()), [clientScope]);
   useEffect(() => {
     let cancelled = false;
-    let timer: number | undefined;
     const live = new Set(targets.map(screenIdentity));
     // Drop text for identities that are no longer polled.
     setScreens((current) => {
       const kept = new Map([...current].filter(([key]) => live.has(key)));
       return kept.size === current.size ? current : kept;
     });
-    const poll = async () => {
-      if (timer !== undefined) window.clearTimeout(timer);
-      timer = undefined;
-      // A hidden page reads nothing; it refreshes as soon as it is shown.
-      if (pageHidden()) {
-        if (!cancelled) timer = window.setTimeout(run, POLL_MS);
-        return;
-      }
-      for (const leaf of targets) {
-        if (cancelled || !client.isCurrent()) return;
-        // Stop reading as soon as the page is hidden; showing it resumes.
-        if (pageHidden()) break;
-        const identity = screenIdentity(leaf);
-        try {
-          const result = await client.call(
-            "pane.read",
-            { pane_id: leaf.pane.pane_id, source: "visible", strip_ansi: true },
-            8_000,
-          );
-          const text = textOf(result);
-          // A read that finishes after the polled set changed belongs to an
-          // identity this effect no longer serves.
-          if (cancelled || text === null) continue;
-          setScreens((current) =>
-            current.get(identity) === text
-              ? current
-              : new Map(current).set(identity, text),
-          );
-        } catch {
-          // A pane that cannot be read keeps its last screen until it can.
+    const runners = deskHostGroups(targets).map((group) => {
+      let timer: number | undefined;
+      let polling = false;
+      const poll = async () => {
+        if (timer !== undefined) window.clearTimeout(timer);
+        timer = undefined;
+        // A hidden page reads nothing; it refreshes as soon as it is shown.
+        if (pageHidden()) {
+          if (!cancelled) timer = window.setTimeout(run, POLL_MS);
+          return;
         }
-      }
-      if (!cancelled) timer = window.setTimeout(run, POLL_MS);
-    };
+        for (const leaf of group) {
+          if (cancelled) return;
+          const client = deskClient(clients, leaf);
+          if (!client) continue;
+          // Stop reading as soon as the page is hidden; showing it resumes.
+          if (pageHidden()) break;
+          const identity = screenIdentity(leaf);
+          try {
+            const result = await client.call(
+              "pane.read",
+              {
+                pane_id: leaf.pane.pane_id,
+                source: "visible",
+                strip_ansi: true,
+              },
+              8_000,
+            );
+            const text = textOf(result);
+            // A read that finishes after the polled set changed belongs to an
+            // identity this effect no longer serves.
+            if (cancelled || !client.isCurrent() || text === null) continue;
+            setScreens((current) =>
+              current.get(identity) === text
+                ? current
+                : new Map(current).set(identity, text),
+            );
+          } catch {
+            // A pane that cannot be read keeps its last screen until it can.
+          }
+        }
+        if (!cancelled) timer = window.setTimeout(run, POLL_MS);
+      };
+      const run = () => {
+        if (polling || cancelled) return;
+        polling = true;
+        queues.enqueue(group[0]!.connectionId, async () => {
+          try {
+            if (!cancelled) await poll();
+          } finally {
+            polling = false;
+          }
+        });
+      };
+      void run();
+      return {
+        resume: () => {
+          if (!pageHidden()) void run();
+        },
+        dispose: () => {
+          if (timer !== undefined) window.clearTimeout(timer);
+        },
+      };
+    });
     const onVisible = () => {
-      if (document.visibilityState === "visible" && !polling) void run();
-    };
-    let polling = false;
-    const run = async () => {
-      polling = true;
-      try {
-        await poll();
-      } finally {
-        polling = false;
-      }
+      for (const runner of runners) runner.resume();
     };
     document.addEventListener("visibilitychange", onVisible);
-    void run();
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisible);
-      if (timer !== undefined) window.clearTimeout(timer);
+      for (const runner of runners) runner.dispose();
     };
     // targetKey captures every identity and status change of the polled panes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, targetKey]);
+  }, [clients, queues, targetKey]);
 
   return useCallback(
     (leaf: WorldLeafObject) => screens.get(screenIdentity(leaf)),

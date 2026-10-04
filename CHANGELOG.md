@@ -7,8 +7,110 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Hosts now filters an aggregate Desk, Office, Tree and Graph view instead of selecting
+  one operational host. Manage connections remains separate. Open Inspectors,
+  terminals and resources retain their qualified host across filter and focus
+  changes; global creation confirms a single destination.
+
+### Added
+
+- Added the Desk, now the default view, with triage across filtered hosts and
+  connection-qualified receipt and screen reads. It sorts agents into Needs you, To review,
+  and In flight. Each card shows the agent's question, report, or live terminal
+  line, and the turn's request, duration, and edited files. The cards support
+  keyboard triage. Agents and Reviewed modes, one search across them, and Undo
+  after marking keep every agent and reviewed stop one step away. On wide
+  screens, agents open in a docked reading pane beside a one-column queue.
+
+- Concurrent local/SSH terminal and Inspector contexts over one World origin,
+  host-local retirement, qualified notification reveal, fair bounded multi-host
+  projection and observation, full-observation paged search, honest coverage and
+  cross-host window arrangements with independent restore baselines.
+
+- Added "Promoted to CEO", a 62-second animated film about Herdr World, to the website.
+  It plays in the browser with a synthesized soundtrack and no video download.
+
+- Added `agent:await` for foreground agent commands with bounded output, private
+  logs and preserved exit codes, plus repo-local Herdr Workflows operating guidance.
+
 ### Changed
 
+- Worktree resource requests expire after twenty-five seconds and are cancelled when their
+  owner is discarded. Retrying Files or Changes preserves the already-open checkout
+  without repeating its opened hook. Qualified workspace reads discard remembered
+  targets that have closed, so the checkout can reopen on the next attempt. Workspace
+  list failures report the failed read without implying a checkout reopen was attempted.
+- Upgrading to the aggregate multi-host Desk resets existing browser-local Desk
+  review marks once because their storage scope and receipt identities change.
+
+- Worktree Files and Changes open the owning visual Inspector without switching
+  unrelated Spaces focus. Temporary-workspace removal retains cleanup failures.
+
+- Status-only agent updates retain confirmed session identity for notification
+  targets; reported session replacements wait for confirmation. Removed host
+  priority hints no longer block healthy snapshots, and overlapping clients
+  preserve queued host priority.
+- Qualified workspace commands retain visible failure feedback and Git pull
+  progress/output. Git mutation uncertainty remains visible with its original
+  host after retirement, without replay or replacement-context refresh.
+
+- Desk receipt and screen queues run independently by host and share bounded
+  read capacity across equally urgent hosts, so slow hosts leave healthy agents
+  available for review and live observation.
+
+- Inspector tab shortcuts restore the destination tab's selected pane and refresh
+  unobserved panes. File preview and Changes cache invalidation follows runtime
+  generations even when browser transport epochs differ. Mutations whose response
+  is withheld after runtime retirement retain an uncertain-outcome notice naming
+  the owning host even if the browser has already observed retirement; retirement
+  after successful response decoding remains a stale-context error.
+
+- Mobile top-bar controls use icons for Hosts, view selection, Actions and Menu,
+  with a distinct compass for view selection, a host-count badge that counts
+  matching runtime endpoints once, and
+  aggregate status text hidden.
+
+- Spaces sidebar selections activate the terminal's owning host. Workspaces with
+  shell terminals can expand in the host navigator even when no agent is running.
+- Host groups and terminal rows keep their established order when selection,
+  focus or agent status changes.
+- Office keeps admitted workspace rooms, desks, pane devices and standing agents
+  in a stable order when terminals are selected. Graph retains readable node
+  labels when Fit zooms out.
+- Hosts adds collapsible groups around the existing workspace navigator, retaining
+  its agent layouts, worktrees and context menus. The host filter opens above the
+  toolbar with connection management. Workspace/room selections open Files;
+  agent, pane and tab selections open terminals on their owning host even before
+  its first operational refresh finishes.
+- Terminal input with a lost acknowledgement reports its original host and an
+  uncertain outcome, with refresh-before-retry guidance and no replay.
+- Large aggregate updates share the World socket in bounded reply chunks, and
+  dense scene controls render progressively to keep host input responsive.
+- Saved Hosts filters survive the initial connection handshake until a valid
+  catalogue arrives. Large snapshots decode off the browser's main thread;
+  unchanged terminal surfaces and offscreen scenes avoid redundant drawing.
+- Dense aggregate indexing yields between bounded batches and preserves complete
+  coverage totals. Office limits reception painting to the visible horizontal
+  region while retaining every host in its semantic overview. Streaming output
+  preserves another terminal's keyboard focus.
+- Dense host construction also yields and cancels within a host. Office reuses
+  qualified pane devices across its scene and complete roster, and newer
+  Inspector control focus supersedes queued terminal refocusing.
+  Expired aggregate observations yield between hosts to admit terminal input.
+  Snapshot decoding admits one host payload at a time so socket acknowledgements
+  can interleave with observation work.
+  Negotiated snapshot transport waits for browser admission after each bounded
+  chunk batch, preventing bulk replies from queuing ahead of terminal input.
+  Progressive Tree admission reuses unchanged spaces instead of rendering
+  every admitted subtree again on each batch.
+- Graph overview keeps every node and semantic target while deferring unreadably
+  small canvas text until zoomed in.
+- Office constructs and paints its visible scene across cancellable task turns,
+  admitting matching layout controls through ordinary tasks after painting.
+  Its canvas and text textures follow the visible viewport and device resolution
+  while retaining the complete layout and two-axis navigation.
 - Removed the homepage film introduction so the video leads directly from the
   navigation into the product content.
 - Removed CEO Mode from the homepage navigation and added a full-screen film
@@ -24,22 +126,21 @@ are optional because the merged PR history records their source.
 
 ### Fixed
 
+- Kept Inspector terminals in sync with keyboard tab navigation and creation,
+  and revealed qualified notification targets omitted from the host overview.
+- Preserved refresh support on the declared browser baseline. Interrupted file
+  mutation responses now report uncertain outcomes and refresh the owning
+  directory; healthy iOS downloads retain their fallback when native sharing fails.
+
+- Preserved server error details for rejected resource requests and showed failed
+  file and session downloads without reopening them on another path.
+- Kept worktree results focused through metadata refreshes while respecting newer
+  browser selections, and prevented duplicate workspace creation submissions.
+- Reported observed watch counts when another filtered host is unavailable.
+- Prevented Office animation from starving large aggregate refreshes while
+  another host remains interactive. Removed redundant transport and decoder
+  timer turns while preserving bounded batches and one-host admission.
 - Kept the film's 16:9 picture from stretching in portrait fullscreen playback.
-
-### Added
-
-- Added the Desk, now the default view. It sorts agents into Needs you, To review,
-  and In flight. Each card shows the agent's question, report, or live terminal
-  line, and the turn's request, duration, and edited files. The cards support
-  keyboard triage. Agents and Reviewed modes, one search across them, and Undo
-  after marking keep every agent and reviewed stop one step away. On wide
-  screens, agents open in a docked reading pane beside a one-column queue.
-
-- Added "Promoted to CEO", a 62-second animated film about Herdr World, to the website.
-  It plays in the browser with a synthesized soundtrack and no video download.
-
-- Added `agent:await` for foreground agent commands with bounded output, private
-  logs and preserved exit codes, plus repo-local Herdr Workflows operating guidance.
 
 ## [0.2.0] - 2026-10-02
 

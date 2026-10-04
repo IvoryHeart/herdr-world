@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { ConnectionClient } from "../api";
 import {
   agentDirectory,
   deskShortcut,
@@ -10,6 +11,9 @@ import {
 import { agentThreadTitle } from "./worldObject";
 import {
   advanceObservedStops,
+  deskClient,
+  DeskReadQueues,
+  fetchFullReport,
   answersSession,
   operationalAgents,
   pollingTargets,
@@ -480,5 +484,147 @@ describe("finding agents", () => {
     ).toBe("Fix mobile viewport layout");
     expect(agentThreadTitle("codex", "codex")).toBeUndefined();
     expect(agentThreadTitle(undefined, "codex")).toBeUndefined();
+  });
+});
+
+describe("aggregate Desk ownership", () => {
+  const owner = {
+    ...leaf("remote-agent", "done"),
+    connectionId: "remote",
+    generation: 7,
+    selectedHost: false,
+    actionable: true,
+    stale: false,
+    pane: { pane_id: "w1:agent", agent: "codex" },
+    agentSessionFingerprint: "a".repeat(64),
+  } as WorldLeafObject;
+
+  test("triage includes filtered non-focused hosts and excludes stale hosts", () => {
+    expect(
+      operationalAgents({
+        leaves: [
+          owner,
+          { ...owner, stale: true },
+          { ...owner, actionable: false },
+        ],
+      } as WorldObject),
+    ).toEqual([owner]);
+  });
+
+  test("bounded reads share capacity between equally urgent hosts", () => {
+    const dense = Array.from({ length: 80 }, (_, index) => ({
+      ...owner,
+      id: `dense-${index}`,
+      connectionId: "dense",
+      status: "blocked" as const,
+    }));
+    const healthy = { ...owner, id: "healthy", status: "blocked" as const };
+    const targets = pollingTargets([...dense, healthy]);
+    expect(targets).toHaveLength(40);
+    expect(targets[1]).toBe(healthy);
+    expect(pollingTargets([...dense, healthy], 16)[1]).toBe(healthy);
+  });
+
+  test("a read cannot borrow another host or runtime's client", () => {
+    const client = {
+      connectionId: "remote",
+      generation: 10,
+      serverRuntimeGeneration: 7,
+      isCurrent: () => true,
+    } as ConnectionClient;
+    expect(deskClient(client, owner)).toBe(client);
+    expect(deskClient({ ...client, connectionId: "local" }, owner)).toBeNull();
+    expect(
+      deskClient({ ...client, serverRuntimeGeneration: 8 }, owner),
+    ).toBeNull();
+    expect(deskClient({ ...client, isCurrent: () => false }, owner)).toBeNull();
+  });
+
+  test("a full report completing after retirement is not published", async () => {
+    let current = true;
+    let finish!: (value: unknown) => void;
+    const result = new Promise<unknown>((resolve) => {
+      finish = resolve;
+    });
+    const client = {
+      connectionId: "remote",
+      generation: 7,
+      serverRuntimeGeneration: 7,
+      isCurrent: () => current,
+      call: () => result,
+    } as unknown as ConnectionClient;
+    const pending = fetchFullReport(() => client, owner, "turn");
+    current = false;
+    finish({
+      agent_session_fingerprint: owner.agentSessionFingerprint,
+      turn: { ...receipt("turn", 1), report: "Retired report" },
+    });
+    expect(await pending).toBeNull();
+  });
+});
+
+describe("Desk read admission across refreshes", () => {
+  test("a held host read coalesces replacements while another host progresses", async () => {
+    const queues = new DeskReadQueues(2);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let done!: () => void;
+    const latest = new Promise<void>((resolve) => {
+      done = resolve;
+    });
+    let healthy!: () => void;
+    const progress = new Promise<void>((resolve) => {
+      healthy = resolve;
+    });
+    const calls: string[] = [];
+    queues.enqueue("slow", async () => {
+      calls.push("held");
+      await held;
+    });
+    await Promise.resolve();
+    queues.enqueue("slow", async () => {
+      calls.push("obsolete");
+    });
+    queues.enqueue("slow", async () => {
+      calls.push("latest");
+      done();
+    });
+    queues.enqueue("healthy", async () => {
+      calls.push("healthy");
+      healthy();
+    });
+    await progress;
+    expect(calls).toEqual(["held", "healthy"]);
+    release();
+    await latest;
+    expect(calls).toEqual(["held", "healthy", "latest"]);
+  });
+
+  test("an obsolete host still consumes active admission until its read settles", async () => {
+    const queues = new DeskReadQueues(1);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let next!: () => void;
+    const progressed = new Promise<void>((resolve) => {
+      next = resolve;
+    });
+    const calls: string[] = [];
+    queues.enqueue("old", async () => {
+      calls.push("old");
+      await held;
+    });
+    queues.enqueue("new", async () => {
+      calls.push("new");
+      next();
+    });
+    await Promise.resolve();
+    expect(calls).toEqual(["old"]);
+    release();
+    await progressed;
+    expect(calls).toEqual(["old", "new"]);
   });
 });

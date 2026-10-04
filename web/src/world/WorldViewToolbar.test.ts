@@ -50,6 +50,33 @@ function connection(
 }
 
 describe("shared World search", () => {
+  test("aggregate search uses complete qualified observations before renderer bounds", () => {
+    const source = connection(
+      "beta",
+      "Synthetic Beta",
+      "Needle late in observation",
+    );
+    const template = source.snapshot!.panes[0]!;
+    source.snapshot!.panes = Array.from({ length: 40 }, (_, index) => ({
+      ...template,
+      pane_id: `pane-${index}`,
+      terminal_id: `terminal-${index}`,
+      focused: false,
+      task_summary:
+        index === 39 ? "Needle late in observation" : "Ordinary work",
+    }));
+    const world = buildWorldObject(
+      [connection("alpha", "Synthetic Alpha", "Other work"), source],
+      "alpha",
+    );
+    const results = worldSearchMatches(world, "needle late");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      connectionId: "beta",
+      nativeId: "pane-39",
+    });
+    expect(world.coverage.leaves).toBe(41);
+  });
   test("searches only the selected-host projection", () => {
     const aggregate = buildWorldObject(
       [

@@ -294,6 +294,15 @@ export async function downloadAgentSessionFile(
     files,
     resolverContext,
   );
+  const expectedSession = rawParams.expected_session;
+  if (
+    expectedSession !== undefined &&
+    expectedSession !== null &&
+    (typeof expectedSession !== "string" ||
+      !expectedSession ||
+      resolved.session?.value !== expectedSession)
+  )
+    return new Response("Agent session changed", { status: 409 });
   if (!resolved.file) {
     return new Response(resolved.detail || "session file unavailable", {
       status: 404,
@@ -301,6 +310,16 @@ export async function downloadAgentSessionFile(
     });
   }
   const body = await files.readDownloadBody(resolved.file.path);
+  if (typeof expectedSession === "string") {
+    const current = await resolveAgentSession(
+      rawParams,
+      herdrCall,
+      files,
+      resolverContext,
+    );
+    if (current.session?.value !== expectedSession)
+      return new Response("Agent session changed", { status: 409 });
+  }
   const isDb = resolved.file.path.endsWith(".db");
   return new Response(body, {
     headers: {
@@ -327,6 +346,15 @@ export async function downloadAgentSessionAtif(
     files,
     resolverContext,
   );
+  const expectedSession = rawParams.expected_session;
+  if (
+    expectedSession !== undefined &&
+    expectedSession !== null &&
+    (typeof expectedSession !== "string" ||
+      !expectedSession ||
+      resolved.session?.value !== expectedSession)
+  )
+    return new Response("Agent session changed", { status: 409 });
   if (!resolved.file) {
     return new Response(resolved.detail || "session file unavailable", {
       status: 404,
@@ -336,6 +364,16 @@ export async function downloadAgentSessionAtif(
   const { trajectory } = cache
     ? await cache.get(resolved)
     : await readSessionProjection(resolved.agent, resolved.file, files);
+  if (typeof expectedSession === "string") {
+    const current = await resolveAgentSession(
+      rawParams,
+      herdrCall,
+      files,
+      resolverContext,
+    );
+    if (current.session?.value !== expectedSession)
+      return new Response("Agent session changed", { status: 409 });
+  }
   return new Response(`${JSON.stringify(trajectory, null, 2)}\n`, {
     headers: {
       "content-type": "application/json; charset=utf-8",

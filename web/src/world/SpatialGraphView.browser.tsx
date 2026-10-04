@@ -10,6 +10,38 @@ import { buildWorldObject, worldObjectForConnection } from "./worldObject";
 import "./world.css";
 
 const failures: string[] = [];
+let graphPaintArcs = 0;
+let graphPaintTexts = 0;
+let graphPaintLabels: Array<{ text: string; screenSize: number }> = [];
+const textGraph = CanvasRenderingContext2D.prototype.fillText;
+CanvasRenderingContext2D.prototype.fillText = function (...args) {
+  if (this.canvas.dataset.graphCanvas === "true") {
+    graphPaintTexts++;
+    const transform = this.getTransform();
+    graphPaintLabels.push({
+      text: String(args[0]),
+      screenSize:
+        (Number.parseFloat(this.font.match(/[\d.]+px/)?.[0] ?? "0") *
+          Math.hypot(transform.a, transform.b)) /
+        window.devicePixelRatio,
+    });
+  }
+  return textGraph.apply(this, args);
+};
+const clearGraph = CanvasRenderingContext2D.prototype.clearRect;
+const arcGraph = CanvasRenderingContext2D.prototype.arc;
+CanvasRenderingContext2D.prototype.clearRect = function (...args) {
+  if (this.canvas.dataset.graphCanvas === "true") {
+    graphPaintArcs = 0;
+    graphPaintTexts = 0;
+    graphPaintLabels = [];
+  }
+  return clearGraph.apply(this, args);
+};
+CanvasRenderingContext2D.prototype.arc = function (...args) {
+  if (this.canvas.dataset.graphCanvas === "true") graphPaintArcs++;
+  return arcGraph.apply(this, args);
+};
 const check = (condition: boolean, message: string) => {
   if (!condition) failures.push(message);
 };
@@ -95,6 +127,7 @@ function graphPrefs() {
   return JSON.parse(
     worldLocalStorage.getItem(GRAPH_PREFERENCES_KEY) ?? "{}",
   ) as {
+    camera?: { zoom: number };
     cameraMode?: string;
     collapsedIds?: string[];
     positions?: Record<string, { x: number; y: number; pinned: boolean }>;
@@ -449,23 +482,17 @@ async function run() {
       );
 
       await pointer(canvas, "pointerdown", rect.right - 12, rect.bottom - 12);
-      await pointer(
-        canvas,
-        "pointermove",
-        rect.right + rect.width,
-        rect.bottom - 12,
-      );
-      await pointer(
-        canvas,
-        "pointerup",
-        rect.right + rect.width,
-        rect.bottom - 12,
-      );
+      await pointer(canvas, "pointermove", rect.right + 5000, rect.bottom - 12);
+      await pointer(canvas, "pointerup", rect.right + 5000, rect.bottom - 12);
       await waitFor(
         () =>
           (window.__HERDR_GRAPH_RENDERER__?.publishedNodes[agent.id]?.screenX ??
             0) > canvas.width,
         "Graph pan did not move the old layout outside the viewport",
+      );
+      check(
+        graphPaintArcs === 0,
+        "Graph repaints wholly offscreen nodes after pan",
       );
 
       arrangeButton.click();
@@ -586,6 +613,42 @@ async function run() {
         "Graph resize work did not coalesce to the latest frame value",
       );
       latest.cancel();
+
+      const overviewFrame = window.__HERDR_GRAPH_RENDERER__!.frames;
+      for (let index = 0; index < 20; index++)
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom out"]')!
+          .click();
+      await waitFor(
+        () =>
+          graphPrefs().camera?.zoom === 0.25 &&
+          window.__HERDR_GRAPH_RENDERER__!.frames > overviewFrame,
+        "Graph overview zoom did not paint",
+      );
+      check(
+        graphPaintArcs > 0 &&
+          graphPaintLabels.some(({ text }) => text.startsWith("Platform")) &&
+          graphPaintLabels.every(({ screenSize }) => screenSize >= 8.99),
+        "Graph overview lost workspace labels or painted unreadably small text",
+      );
+      check(
+        Object.keys(window.__HERDR_GRAPH_RENDERER__!.publishedNodes).length ===
+          4 && selectedSemantic() !== undefined,
+        "Graph overview discarded geometry or semantic targets",
+      );
+      const detailFrame = window.__HERDR_GRAPH_RENDERER__!.frames;
+      for (let index = 0; index < 6; index++)
+        host
+          .querySelector<HTMLButtonElement>('[aria-label="Zoom in"]')!
+          .click();
+      await waitFor(
+        () => window.__HERDR_GRAPH_RENDERER__!.frames > detailFrame,
+        "Graph detail zoom did not paint",
+      );
+      check(
+        graphPaintTexts > 0,
+        "Graph detail zoom did not restore readable text",
+      );
 
       const positionsBeforeRemount = Object.fromEntries(
         Object.entries(window.__HERDR_GRAPH_RENDERER__!.publishedNodes).map(

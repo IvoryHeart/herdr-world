@@ -1,9 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ConnectionClient } from "../api";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { bridge } from "../api";
 import { worldSessionStorage } from "../browserStorage";
-import { useConnectionClient } from "../useConnectionClient";
 import {
   fetchFullReport,
+  deskScope,
+  type DeskClients,
   formatSpan,
   IDLE_WINDOW_MS,
   isRecent,
@@ -52,7 +60,7 @@ function handoffId(
 }
 
 function where(leaf: WorldLeafObject) {
-  return [leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
+  return [leaf.hostLabel, leaf.spaceLabel, leaf.tabLabel, agentFolder(leaf)]
     .filter(Boolean)
     .join(" › ");
 }
@@ -154,10 +162,20 @@ type Elsewhere = {
 };
 
 /** Read-only summaries of managed hosts other than the selected one. */
-export function otherHostSummaries(world: WorldObject): Elsewhere[] {
+export function otherHostSummaries(
+  world: WorldObject,
+  filtered?: WorldObject,
+): Elsewhere[] {
+  const included = filtered
+    ? new Set(filtered.hosts.map((host) => host.connectionId))
+    : null;
   const hosts = new Map<string, Elsewhere>();
   for (const leaf of world.leaves) {
-    if (leaf.kind !== "agent" || leaf.selectedHost) continue;
+    if (
+      leaf.kind !== "agent" ||
+      (included ? included.has(leaf.connectionId) : leaf.selectedHost)
+    )
+      continue;
     const host = hosts.get(leaf.connectionId) ?? {
       connectionId: leaf.connectionId,
       label: leaf.hostLabel,
@@ -371,11 +389,15 @@ export function DeskView(props: {
   onPreview?: ((id: string) => Promise<void>) | null;
   onCloseReading?: () => void;
 }) {
-  const client = useConnectionClient();
+  const client = useCallback(
+    (leaf: WorldLeafObject) =>
+      bridge.connection(leaf.connectionId, leaf.generation),
+    [],
+  );
   return <DeskBoard {...props} client={client} />;
 }
 
-/** The Desk for one selected-host connection client. */
+/** Desk triage follows the host filter; reads retain each leaf's owner. */
 export function DeskBoard({
   world,
   aggregate,
@@ -387,7 +409,7 @@ export function DeskBoard({
 }: {
   world: WorldObject;
   aggregate?: WorldObject;
-  client: ConnectionClient;
+  client: DeskClients;
   onOpenTerminal(id: string): Promise<void>;
   /** The agent shown in the docked reading pane, on wide screens. */
   reading?: string | null;
@@ -397,9 +419,9 @@ export function DeskBoard({
   const now = useNow(10_000);
   const agents = useMemo(() => operationalAgents(world), [world]);
   const receiptFor = useTurnReceipts(agents, client);
-  const { handled, mark } = useHandledTurns(client.connectionId);
-  const stops = useObservedStops(client.connectionId, agents);
-  const { opens, record: recordOpen } = useRecentOpens(client.connectionId);
+  const { handled, mark } = useHandledTurns(deskScope(client));
+  const stops = useObservedStops(deskScope(client), agents);
+  const { opens, record: recordOpen } = useRecentOpens(deskScope(client));
   const [mode, setModeState] = useState<DeskMode>(() => {
     try {
       // The mode lasts for this browser session; a fresh visit triages first.
@@ -499,11 +521,12 @@ export function DeskBoard({
               ].map((leaf) => [leaf.id, { leaf }]),
             ).values(),
           ];
-  // Other hosts come from the aggregate observation, never the selected-host
-  // projection, and are summaries only.
-  const others = otherHostSummaries(aggregate ?? world);
+  // Hosts outside the filter remain read-only aggregate summaries.
+  const others = otherHostSummaries(aggregate ?? world, world);
   const hostLabel =
-    world.hosts.find((host) => host.selectedHost)?.label ?? "this host";
+    world.hosts.length === 1
+      ? world.hosts[0]?.label
+      : `${world.hosts.length} hosts`;
   const oldestWait = needs[0]?.since ? formatSpan(now - needs[0].since) : null;
 
   const previewTimer = useRef<number | undefined>(undefined);

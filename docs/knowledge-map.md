@@ -15,7 +15,7 @@ decisions and are not current operational guidance.
 | --- | --- | --- | --- |
 | Saved local/SSH profiles, runtime leases, reconnects | [Runtime federation](../openspec/specs/runtime-federation/spec.md) | [Connection manager](../server/src/connections/manager.ts), [runtime](../server/src/connections/runtime.ts), [SSH runtime](../server/src/connections/ssh-profile-runtime.ts) | [Manager tests](../server/src/connections/manager.test.ts), [SSH tests](../server/src/connections/ssh-profile-runtime.test.ts), [deployment](DEPLOYMENT.md) |
 | Browser RPC admission, origin, login, HTTP resources | [Bridge access](../openspec/specs/bridge-access/spec.md) | [Service entry](../server/src/index.ts), [browser admission](../server/src/http/browser-admission.ts), [auth](../server/src/http/auth.ts), [browser API](../web/src/api.ts) | [Admission tests](../server/src/http/browser-admission.test.ts), [API tests](../web/src/api.test.ts), [security](../SECURITY.md) |
-| World snapshots and selected-host projection | [Runtime federation](../openspec/specs/runtime-federation/spec.md), [shared presentation](../openspec/specs/world-surfaces/spec.md#requirement-shared-presentation) | [Snapshot service](../server/src/world/snapshot.ts), [runtime store](../web/src/world/runtimeStore.ts), [WorldObject](../web/src/world/worldObject.ts) | [Snapshot tests](../server/src/world/snapshot.test.ts), [runtime-store tests](../web/src/world/runtimeStore.test.ts), [WorldObject tests](../web/src/world/worldObject.test.ts) |
+| World snapshots, aggregate filters and fair projection | [Runtime federation](../openspec/specs/runtime-federation/spec.md), [shared presentation](../openspec/specs/world-surfaces/spec.md#requirement-shared-presentation) | [Snapshot service](../server/src/world/snapshot.ts), [runtime store](../web/src/world/runtimeStore.ts), [snapshot decoder](../web/src/worldSnapshotDecode.ts), [WorldObject](../web/src/world/worldObject.ts) | [Snapshot tests](../server/src/world/snapshot.test.ts), [decoder tests](../web/src/worldSnapshotDecode.test.ts), [runtime-store tests](../web/src/world/runtimeStore.test.ts), [WorldObject tests](../web/src/world/worldObject.test.ts), [production responsiveness](../web/src/world/ProductionContexts.test.ts) |
 | Shared shell, view selection and Inspector routing | [World shell](../openspec/specs/world-surfaces/spec.md#requirement-native-world-shell), [shared detail](../openspec/specs/world-surfaces/spec.md#requirement-shared-entity-detail-drawer) | [World shell](../web/src/world/WorldFoundationApp.tsx), [focused Spaces App](../web/src/App.tsx), [Inspector presentation](../web/src/world/worldTerminalPresentation.ts) | [Shell tests](../web/src/world/WorldFoundationApp.test.ts), [Inspector routes](../web/src/world/README.md#inspector-and-windows) |
 | Desk triage and turn receipts | [Desk change](../openspec/changes/archive/2026-10-03-desk-attention-triage/specs/world-surfaces/spec.md), [handoffs proposal](https://github.com/IvoryHeart/herdr-world/issues/151) | [Desk view](../web/src/world/DeskView.tsx), [receipts, review marks and polling bounds](../web/src/world/handoffs.ts), [screen excerpts](../web/src/world/paneScreen.ts), [turn receipt](../server/src/agent/turn-receipt.ts), [`agent_turn.get`](../server/src/agent/agent-sessions.ts) | [Desk tests](../web/src/world/DeskView.test.ts), [receipt tests](../server/src/agent/turn-receipt.test.ts), [Desk routes](../web/src/world/README.md#desk) |
 | Arranged Inspector pointer and keyboard focus | [Window arrangement](../openspec/specs/world-surfaces/spec.md#requirement-fit-and-restore-window-arrangements) | [World control plane](../web/src/world/WorldFoundationApp.tsx), [floating window](../web/src/world/WorldFloatingTerminal.tsx), [focus listener](../web/src/world/inspectorWindowFocus.ts) | [Terminal handoff browser test](../web/src/world/WorldTerminalHandoff.test.ts) |
@@ -43,11 +43,18 @@ compares generation only when supplied. Legacy HTTP paths have the same default
 route; do not use either omission for new browser work.
 
 The aggregate observation path is read-only: `server/src/world/snapshot.ts` schedules
-at most four per-host observations, prioritizes the selected host, and returns a
+at most four per-host observations, rotates open-context priorities with background
+progress, and returns a
 complete catalogue by its 20-second deadline with unfinished cached hosts stale.
 `web/src/world/runtimeStore.ts` rejects late aggregate responses, and
+negotiated [snapshot admission](../server/src/bridge/world-snapshot-admission.ts)
+bounds unadmitted chunk batches on each browser socket independently of terminal
+replies. Old transports retain the ordinary chunk protocol.
 `web/src/world/worldObject.ts` qualifies every node by connection. Mutations and terminal
-attachments continue through the focused connection store in `web/src/store.ts`.
+attachments use captured operational contexts and independently addressable sessions
+in `web/src/store.ts`. The persisted `hostsFilter.ts` affects visibility only;
+`spaceAdmission.ts` shares Tree/Graph capacity fairly and `WorldSearchResults.tsx`
+pages full-observation matches beyond renderer bounds.
 
 Repository workflow lives in [AGENTS.md](../AGENTS.md) and
 [agent development](agent-development.md). The optional visible-team recipe is

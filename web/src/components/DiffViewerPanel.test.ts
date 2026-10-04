@@ -15,6 +15,23 @@ import {
 } from "./DiffViewerPanel";
 
 describe("connection-scoped diff identity", () => {
+  test("Changes cache is owned by runtime generation rather than browser focus generation", () => {
+    const alpha: ConnectionClient = {
+      connectionId: "alpha",
+      generation: 10,
+      serverRuntimeGeneration: 7,
+      call: async () => ({}),
+      isCurrent: () => true,
+      acceptsServerGeneration: (value) => value === 7,
+    };
+    const replacementAlpha = { ...alpha, serverRuntimeGeneration: 8 };
+    expect(diffCacheKey(alpha, "same-workspace", "working")).toBe(
+      diffCacheKey({ ...alpha, generation: 19 }, "same-workspace", "working"),
+    );
+    expect(diffCacheKey(alpha, "same-workspace", "working")).not.toBe(
+      diffCacheKey(replacementAlpha, "same-workspace", "working"),
+    );
+  });
   test("isolates identical workspace IDs in memory and persistence", () => {
     const alpha = { connectionId: "alpha", generation: 1 };
     const beta = { connectionId: "beta", generation: 1 };

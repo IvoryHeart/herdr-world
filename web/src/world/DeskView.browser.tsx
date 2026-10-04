@@ -302,6 +302,182 @@ async function run() {
     !event.defaultPrevented && opened.length === 1,
     "Enter on a focused button was not taken over by the Desk",
   );
+
+  // Equal native pane IDs on two filtered hosts retain independent reads and marks.
+  const remote = {
+    ...agent("remote-alpha", "d"),
+    selectedHost: false,
+    connectionId: "remote",
+    generation: 7,
+    hostLabel: "Remote",
+    pane: { ...leaves[0].pane },
+  } as WorldLeafObject;
+  const reads: string[] = [];
+  const remoteClient = {
+    ...client,
+    connectionId: "remote",
+    generation: 10,
+    serverRuntimeGeneration: 7,
+    async call(method: string, params?: Record<string, unknown>) {
+      reads.push(`${method}:${params?.pane_id}`);
+      const result = await client.call(method, params);
+      if (method === "agent_turn.get")
+        return {
+          ...(result as object),
+          turn: {
+            ...(result as { turn: object }).turn,
+            report: "Remote closing report",
+          },
+        };
+      return { text: "Remote live screen" };
+    },
+  } as ConnectionClient;
+  const resolve = (leaf: WorldLeafObject) =>
+    leaf.connectionId === "remote" ? remoteClient : client;
+  const filtered = {
+    leaves: [leaves[0], remote, { ...remote, id: "stale", stale: true }],
+    hosts: [
+      { connectionId: "local", label: "Local" },
+      { connectionId: "remote", label: "Remote" },
+    ],
+  } as unknown as WorldObject;
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        world={filtered}
+        client={resolve}
+        onOpenTerminal={async (id) => {
+          opened.push(id);
+        }}
+      />,
+    ),
+  );
+  await settle(500);
+  check(
+    Boolean(card("alpha")) && Boolean(card("remote-alpha")) && !card("stale"),
+    "aggregate Desk triages both filtered hosts and excludes stale agents",
+  );
+  check(
+    card("remote-alpha")?.textContent?.includes("Remote closing report") ===
+      true,
+    "a colliding remote pane publishes only its owner's receipt",
+  );
+  check(
+    reads.includes("agent_turn.get:w1:alpha") &&
+      reads.includes("pane.read:w1:alpha"),
+    "receipt and screen reads use the non-focused host client",
+  );
+  card("alpha")?.focus();
+  press(card("alpha")!, "e");
+  await settle(200);
+  check(
+    !card("alpha") && Boolean(card("remote-alpha")),
+    "reviewing one host's stop does not review a colliding pane on another host",
+  );
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        world={{ ...filtered, leaves: [remote], hosts: [filtered.hosts[1]] }}
+        client={resolve}
+        onOpenTerminal={async (id) => {
+          opened.push(id);
+        }}
+      />,
+    ),
+  );
+  await settle(200);
+  check(
+    Boolean(card("remote-alpha")),
+    "host filtering retains the remote Desk card",
+  );
+
+  localStorage.clear();
+  let releaseSlow!: () => void;
+  const slowRead = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
+  const slowCalls: string[] = [];
+  const slowClient = {
+    ...remoteClient,
+    async call(method: string, params?: Record<string, unknown>) {
+      slowCalls.push(method);
+      await slowRead;
+      return remoteClient.call(method, params);
+    },
+  } as ConnectionClient;
+  const healthyCalls: string[] = [];
+  const healthyClient = {
+    ...client,
+    async call(method: string, params?: Record<string, unknown>) {
+      healthyCalls.push(method);
+      return client.call(method, params);
+    },
+  } as ConnectionClient;
+  const independent = (leaf: WorldLeafObject) =>
+    leaf.connectionId === "remote" ? slowClient : healthyClient;
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        key="slow-host"
+        world={{ ...filtered, leaves: [remote, leaves[0]] }}
+        client={independent}
+        onOpenTerminal={async () => {}}
+      />,
+    ),
+  );
+  await settle(500);
+  check(
+    card("alpha")?.textContent?.includes("Report from alpha") === true,
+    "a slow host does not delay another host's receipt or review controls",
+  );
+  const healthyReview = [
+    ...(card("alpha")?.querySelectorAll<HTMLButtonElement>("button") ?? []),
+  ].find((button) => button.textContent?.startsWith("Mark reviewed"));
+  check(
+    Boolean(healthyReview) && !healthyReview!.disabled,
+    "the healthy host's review control becomes ready while the slow read is pending",
+  );
+  check(
+    healthyCalls.includes("pane.read"),
+    "the healthy host's screen is read while another host is pending",
+  );
+  flushSync(() =>
+    root.render(
+      <DeskBoard
+        key="slow-host"
+        world={{
+          ...filtered,
+          leaves: [{ ...remote, status: "blocked" }, leaves[0]],
+        }}
+        client={independent}
+        onOpenTerminal={async () => {}}
+      />,
+    ),
+  );
+  await settle(200);
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "hidden",
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  Object.defineProperty(document, "visibilityState", {
+    configurable: true,
+    value: "visible",
+  });
+  document.dispatchEvent(new Event("visibilitychange"));
+  await settle(200);
+  check(
+    slowCalls.filter((method) => method === "agent_turn.get").length === 1 &&
+      slowCalls.filter((method) => method === "pane.read").length === 1,
+    "status and visibility changes do not overlap reads on a pending host",
+  );
+  await settle(4400);
+  check(
+    healthyCalls.filter((method) => method === "pane.read").length >= 2,
+    "healthy screen polling continues independently of the slow host",
+  );
+  releaseSlow();
+  await settle(200);
 }
 
 run()

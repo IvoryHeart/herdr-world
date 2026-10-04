@@ -79,7 +79,8 @@ export function terminalPushMatches(
 ): boolean {
   if (
     push.connection_id !== identity.connectionId ||
-    client.generation !== identity.generation ||
+    (push.connection_generation !== undefined &&
+      push.connection_generation !== identity.generation) ||
     !client.isCurrent() ||
     !client.acceptsServerGeneration(push.connection_generation) ||
     !desiredTerminalId

@@ -3,13 +3,12 @@ import { createPortal } from "react-dom";
 import { FolderOpen, GitBranch, RefreshCw, Settings } from "lucide-react";
 import { luckyWorktreeBranchName } from "../luckyName";
 import { useConnectionClient } from "../useConnectionClient";
-import { store, useStoreSelector } from "../store";
+import { useOperationalStore, useStoreSelector } from "../store";
 import type { Workspace, WorktreeList } from "../types";
 import { resolveWorktreeOpenSource, worktreeCreationSource } from "../worktree";
 import {
   type InspectorView,
-  WORKSPACE_INSPECTOR_REQUEST_EVENT,
-  type WorkspaceInspectorRequest,
+  requestWorkspaceInspector,
 } from "../workspaceResource";
 import {
   buildWorktreeLifecycleRows,
@@ -88,6 +87,7 @@ export function WorktreeLifecycleDialog({
   onClose: () => void;
 }) {
   const workspaces = useStoreSelector((state) => state.workspaces);
+  const store = useOperationalStore();
   const connectionClient = useConnectionClient();
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.workspace_id === workspaceId,
@@ -102,6 +102,7 @@ export function WorktreeLifecycleDialog({
   const [listResult, setListResult] = useState<{
     workspaceId: string;
     list: WorktreeList;
+    workspaces: Workspace[];
   } | null>(null);
   const [hooks, setHooks] = useState<WorktreeHookInfo | null>(null);
   const [autoSync, setAutoSync] = useState<
@@ -115,6 +116,11 @@ export function WorktreeLifecycleDialog({
   const [openWorktreeOpen, setOpenWorktreeOpen] = useState(false);
   const [hooksOpen, setHooksOpen] = useState(false);
   const [removeRow, setRemoveRow] = useState<WorktreeLifecycleRow | null>(null);
+  const [openedResourceTargets, setOpenedResourceTargets] = useState<
+    Record<string, string>
+  >({});
+  const openedResourceTargetsRef = useRef<Record<string, string>>({});
+  const resourceAdmissionRef = useRef<AbortController | null>(null);
   const requestId = useRef(0);
   const inFlightLoad = useRef<{
     workspaceId: string;
@@ -123,6 +129,14 @@ export function WorktreeLifecycleDialog({
   const operationRunningRef = useRef(false);
   const operationIdRef = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  const readWorkspaces = useCallback(async (): Promise<Workspace[]> => {
+    const result = await connectionClient.call("workspace.list", {});
+    if (!Array.isArray(result?.workspaces)) {
+      throw new Error("Could not list open workspaces.");
+    }
+    return result.workspaces as Workspace[];
+  }, [connectionClient]);
 
   const load = useCallback(
     async (showLoading: boolean, force = false) => {
@@ -134,19 +148,22 @@ export function WorktreeLifecycleDialog({
         return;
       }
       const currentRequest = ++requestId.current;
+      const rememberedTargets = openedResourceTargetsRef.current;
       if (showLoading) setLoading(true);
       const promise = (async () => {
         try {
-          const worktreeList = (await connectionClient.call("worktree.list", {
-            workspace_id: repositoryWorkspaceId,
-          })) as WorktreeList;
+          const [worktreeListValue, listedWorkspaces] = await Promise.all([
+            connectionClient.call("worktree.list", {
+              workspace_id: repositoryWorkspaceId,
+            }),
+            readWorkspaces(),
+          ]);
+          const worktreeList = worktreeListValue as WorktreeList;
           if (!connectionClient.isCurrent()) return;
-          const repoWorkspaces = store
-            .get()
-            .workspaces.filter(
-              (workspace) =>
-                workspace.worktree?.repo_key === worktreeList.source.repo_key,
-            );
+          const repoWorkspaces = listedWorkspaces.filter(
+            (workspace) =>
+              workspace.worktree?.repo_key === worktreeList.source.repo_key,
+          );
           const [hookResult, ...syncResults] = await Promise.all([
             connectionClient
               .call("settings.worktree_hooks.get", {
@@ -180,7 +197,25 @@ export function WorktreeLifecycleDialog({
           setListResult({
             workspaceId: repositoryWorkspaceId,
             list: worktreeList,
+            workspaces: listedWorkspaces,
           });
+          if (openedResourceTargetsRef.current === rememberedTargets) {
+            const liveIds = new Set(
+              listedWorkspaces.map((workspace) => workspace.workspace_id),
+            );
+            const retained = Object.fromEntries(
+              Object.entries(rememberedTargets).filter(([, id]) =>
+                liveIds.has(id),
+              ),
+            );
+            if (
+              Object.keys(retained).length !==
+              Object.keys(rememberedTargets).length
+            ) {
+              openedResourceTargetsRef.current = retained;
+              setOpenedResourceTargets(retained);
+            }
+          }
           setHooks(hookResult as WorktreeHookInfo);
           setAutoSync(syncByWorkspace);
           setError("");
@@ -212,7 +247,7 @@ export function WorktreeLifecycleDialog({
         }
       }
     },
-    [connectionClient, repositoryWorkspaceId],
+    [connectionClient, readWorkspaces, repositoryWorkspaceId],
   );
 
   useEffect(() => {
@@ -234,6 +269,21 @@ export function WorktreeLifecycleDialog({
       inFlightLoad.current = null;
     };
   }, [load, open, repositoryWorkspaceId]);
+
+  useEffect(() => {
+    openedResourceTargetsRef.current = {};
+    setOpenedResourceTargets({});
+    return () => {
+      resourceAdmissionRef.current?.abort();
+      resourceAdmissionRef.current = null;
+    };
+  }, [
+    open,
+    repositoryWorkspaceId,
+    connectionClient.connectionId,
+    connectionClient.generation,
+    connectionClient.serverRuntimeGeneration,
+  ]);
 
   const list =
     listResult && listResult.workspaceId === repositoryWorkspaceId
@@ -260,13 +310,18 @@ export function WorktreeLifecycleDialog({
   }, [hooksOpen, newWorktreeOpen, onClose, open, openWorktreeOpen, removeRow]);
 
   const rows = useMemo(
-    () => (list ? buildWorktreeLifecycleRows(list, workspaces) : []),
-    [list, workspaces],
+    () =>
+      list
+        ? buildWorktreeLifecycleRows(list, listResult?.workspaces ?? workspaces)
+        : [],
+    [list, listResult, workspaces],
   );
   const configuredHooks = hooks?.hooks
     ? Object.values(hooks.hooks).filter(Boolean).length
     : 0;
-  const openCount = rows.filter((row) => row.workspace).length;
+  const openCount = rows.filter(
+    (row) => row.workspace || openedResourceTargets[row.worktree.path],
+  ).length;
   const changedCount = rows.filter(
     (row) => lifecycleGitChangeCount(row.gitStatus) > 0,
   ).length;
@@ -374,28 +429,74 @@ export function WorktreeLifecycleDialog({
     row: WorktreeLifecycleRow,
     view: InspectorView,
   ) => {
-    const result = await openWorktree(row, true);
-    const targetWorkspaceId = lifecycleOpenedWorkspaceId(result);
-    if (!targetWorkspaceId) {
-      throw new Error(
-        "Herdr opened the checkout without returning a workspace ID.",
-      );
-    }
-    window.dispatchEvent(
-      new CustomEvent<WorkspaceInspectorRequest>(
-        WORKSPACE_INSPECTOR_REQUEST_EVENT,
+    const controller = new AbortController();
+    resourceAdmissionRef.current?.abort();
+    resourceAdmissionRef.current = controller;
+    try {
+      let existingWorkspaceId: string | undefined =
+        row.workspace?.workspace_id ??
+        openedResourceTargetsRef.current[row.worktree.path];
+      if (existingWorkspaceId) {
+        const listedWorkspaces = await readWorkspaces();
+        if (controller.signal.aborted || !connectionClient.isCurrent()) {
+          throw new Error(
+            "The resource request was cancelled before workspace validation completed.",
+          );
+        }
+        if (
+          !listedWorkspaces.some(
+            (workspace) => workspace.workspace_id === existingWorkspaceId,
+          )
+        ) {
+          existingWorkspaceId = undefined;
+          const retained = { ...openedResourceTargetsRef.current };
+          delete retained[row.worktree.path];
+          openedResourceTargetsRef.current = retained;
+          setOpenedResourceTargets(retained);
+        }
+      }
+      const result = existingWorkspaceId
+        ? { workspace: { workspace_id: existingWorkspaceId } }
+        : await openWorktree(row, true);
+      const targetWorkspaceId = lifecycleOpenedWorkspaceId(result);
+      if (!targetWorkspaceId) {
+        throw new Error(
+          "Herdr opened the checkout without returning a workspace ID.",
+        );
+      }
+      if (controller.signal.aborted || !connectionClient.isCurrent()) {
+        throw new Error(
+          "The checkout opened, but its resource request was cancelled.",
+        );
+      }
+      const targets = {
+        ...openedResourceTargetsRef.current,
+        [row.worktree.path]: targetWorkspaceId,
+      };
+      openedResourceTargetsRef.current = targets;
+      setOpenedResourceTargets(targets);
+      const admitted = await requestWorkspaceInspector(
         {
-          detail: {
-            connectionId: connectionClient.connectionId,
-            generation: connectionClient.generation,
-            workspaceId: targetWorkspaceId,
-            view,
-          },
+          connectionId: connectionClient.connectionId,
+          generation: connectionClient.generation,
+          runtimeGeneration:
+            connectionClient.serverRuntimeGeneration ?? undefined,
+          workspaceId: targetWorkspaceId,
+          view,
         },
-      ),
-    );
-    window.setTimeout(onClose, 0);
-    return result;
+        controller.signal,
+      );
+      if (!admitted) {
+        throw new Error(
+          `The checkout is open in a workspace, but its ${view === "files" ? "Files" : "Changes"} view could not be shown. Retry the view to keep the checkout open.`,
+        );
+      }
+      onClose();
+      return result;
+    } finally {
+      if (resourceAdmissionRef.current === controller)
+        resourceAdmissionRef.current = null;
+    }
   };
 
   const removeWorktree = async (row: WorktreeLifecycleRow) => {
@@ -430,7 +531,7 @@ export function WorktreeLifecycleDialog({
             "Connection changed before the temporary workspace could be closed.",
           );
         }
-        await store.closeWorkspace(workspaceId);
+        await store.closeWorkspaceOrThrow(workspaceId);
       },
     });
   };
@@ -616,6 +717,7 @@ export function WorktreeLifecycleDialog({
                     <WorktreeLifecycleRowItem
                       key={rowKey}
                       row={row}
+                      openedWorkspaceId={openedResourceTargets[rowKey]}
                       syncInfo={syncInfo}
                       operationRunning={operationRunning}
                       rowBusy={

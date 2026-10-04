@@ -20,7 +20,13 @@ import { type ActiveDiffSelection } from "../components/DiffViewerPanel";
 import { requestFilePreview } from "../components/fileExplorerResources";
 import type { ActiveFilePreviewSelection } from "../components/FilePreviewContent";
 import { WorkspaceInspectorHost } from "../components/WorkspaceInspectorHost";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  OperationalContext,
+  connectionSnapshot,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
 import type { FileExplorerEntry, GitDiffEntry } from "../types";
 import {
   connectionClientScopeKey,
@@ -67,7 +73,22 @@ const emptyFile = (): ActiveFilePreviewSelection => ({
   error: null,
 });
 
-export default function WorldInspectorConversationView({
+export default function WorldInspectorConversationView(
+  props: Parameters<typeof InspectorResources>[0],
+) {
+  return (
+    <OperationalContext.Provider
+      value={{
+        connectionId: props.conversation.connectionId,
+        runtimeGeneration: props.conversation.runtimeGeneration,
+      }}
+    >
+      <InspectorResources {...props} />
+    </OperationalContext.Provider>
+  );
+}
+
+function InspectorResources({
   conversation,
   target,
   floating,
@@ -275,7 +296,7 @@ export default function WorldInspectorConversationView({
         !workspace ||
         !conversation.availableViews.includes("files") ||
         !store
-          .get()
+          .getConnection(conversation.connectionId)
           .workspaces.some(
             (candidate) => candidate.workspace_id === request.workspaceId,
           ) ||
@@ -283,7 +304,7 @@ export default function WorldInspectorConversationView({
           request,
           conversation,
           connectionClient,
-          store.get().panes,
+          connectionSnapshot(store.get(), conversation.connectionId).panes,
         )
       )
         return;
@@ -392,6 +413,7 @@ export default function WorldInspectorConversationView({
           detail: {
             connectionId: connectionClient.connectionId,
             generation: connectionClient.generation,
+            runtimeGeneration: conversation.runtimeGeneration,
             workspaceId: scope.workspaceId,
             annotation,
           },

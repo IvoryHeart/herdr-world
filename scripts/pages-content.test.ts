@@ -133,14 +133,15 @@ describe("Pages references", () => {
     expect(html).toContain('class="agent-stack"');
   });
 
-  test("describes background multi-host observation with one selected-host visual projection", async () => {
+  test("describes aggregate host views with independently owned resources", async () => {
     const site = await Bun.file(
       new URL("../site/index.html", import.meta.url),
     ).text();
-    expect(site).toContain("projects the selected host");
-    expect(site).toContain("selected host's spaces");
-    expect(site).not.toContain("agents across two Herdr hosts");
-    expect(site).not.toContain("Scan every connected host");
+    expect(site).toContain("one shared view");
+    expect(site).toContain("Hosts filters the overview");
+    expect(site).toContain("host-owned terminals");
+    expect(site).not.toContain("projects the selected host");
+    expect(site).not.toContain("selected host's spaces");
   });
 
   test("social previews and canonical URLs use the production domain", async () => {

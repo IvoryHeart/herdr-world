@@ -1,15 +1,4 @@
 import {
-  shortcutMatches,
-  shortcutTitle,
-  shortcutLabel,
-  useShortcutPreferences,
-  getShortcutSnapshot,
-} from "../shortcutPreferences";
-import { SHORTCUT_NUMBERS, type ShortcutNumber } from "../shortcutBindings";
-import { endpointCreationReason } from "../store";
-import { normalizeSearchText } from "../searchText";
-import { useEffect, useMemo, useState } from "react";
-import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -17,10 +6,10 @@ import {
   ChevronsUpDown,
   FileDiff,
   FileText,
-  FolderPlus,
   FolderOpen,
-  GitCommitHorizontal,
+  FolderPlus,
   GitBranch,
+  GitCommitHorizontal,
   Keyboard,
   LayoutGrid,
   Maximize2,
@@ -29,7 +18,25 @@ import {
   SplitSquareVertical,
   X,
 } from "lucide-react";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import { useEffect, useMemo, useState } from "react";
+import { luckyWorktreeBranchName } from "../luckyName";
+import { normalizeSearchText } from "../searchText";
+import { SHORTCUT_NUMBERS, type ShortcutNumber } from "../shortcutBindings";
+import {
+  getShortcutSnapshot,
+  shortcutLabel,
+  shortcutMatches,
+  shortcutTitle,
+  useShortcutPreferences,
+} from "../shortcutPreferences";
+import {
+  endpointCreationReason,
+  OperationalContext,
+  type OperationalContext as OwnerContext,
+  shallowEqual,
+  useOperationalStore,
+  useStoreSelector,
+} from "../store";
 import {
   clearTerminalComposerDrafts,
   terminalComposerCloseWarning,
@@ -37,12 +44,10 @@ import {
 } from "../terminalComposer";
 import type { FileExplorerEntry, Pane, Tab, Workspace } from "../types";
 import { basename, shortId } from "../utils";
-import { luckyWorktreeBranchName } from "../luckyName";
+import { canCreateWorktree, worktreeCreationSource } from "../worktree";
+import { AgentIcon } from "./AgentIcon";
 import { CreateWorkspaceDialog } from "./CreateWorkspaceDialog";
 import { ConfirmDialog, TextInputDialog } from "./ModalDialogs";
-import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
-import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
-import { AgentIcon } from "./AgentIcon";
 import {
   Command,
   CommandEmpty,
@@ -53,12 +58,13 @@ import {
   CommandShortcut,
 } from "./ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
-import { canCreateWorktree, worktreeCreationSource } from "../worktree";
-import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
 import {
   WINDOW_ARRANGEMENT_CHOICES,
   type WindowArrangementControl,
 } from "./WindowArrangementMenu";
+import { WorktreeHooksDialog } from "./WorktreeHooksDialog";
+import { WorktreeLifecycleDialog } from "./WorktreeLifecycleDialog";
+import { WorktreeOpenDialog } from "./WorktreeOpenDialog";
 
 type TextAction =
   | { type: "rename-workspace"; workspace: Workspace }
@@ -83,6 +89,7 @@ export type ActionGroupDefinition = {
 };
 
 export type CommandExtension = {
+  context?: OwnerContext;
   captureKey: string | null;
   groups: readonly ActionGroupDefinition[];
 };
@@ -241,7 +248,17 @@ export function runCommandNumberShortcut<T>(
   return true;
 }
 
-export function CommandCombobox({
+export function CommandCombobox(
+  props: Parameters<typeof OwnedCommandCombobox>[0],
+) {
+  return (
+    <OperationalContext.Provider value={props.extension?.context ?? null}>
+      <OwnedCommandCombobox {...props} />
+    </OperationalContext.Provider>
+  );
+}
+
+function OwnedCommandCombobox({
   operationalShortcutsEnabled = true,
   onOpenFileExplorer,
   onOpenFile,
@@ -258,6 +275,7 @@ export function CommandCombobox({
   arrangementControl?: WindowArrangementControl;
   extension?: CommandExtension;
 }) {
+  const store = useOperationalStore();
   useShortcutPreferences();
   const s = useStoreSelector(
     (state) => ({
@@ -312,6 +330,19 @@ export function CommandCombobox({
     setPendingClosePane(null);
     setPendingRemoveWorktree(null);
   }, [operationalShortcutsEnabled]);
+
+  useEffect(() => {
+    setOpen(false);
+    setCreateWorkspaceOpen(false);
+    setOpenWorktreeWorkspaceId(null);
+    setWorktreeHooksWorkspaceId(null);
+    setLifecycleWorkspaceId(null);
+    setTextAction(null);
+    setPendingCloseWorkspace(null);
+    setPendingCloseTab(null);
+    setPendingClosePane(null);
+    setPendingRemoveWorktree(null);
+  }, [extension.captureKey, s.activeConnectionId, s.connectionGeneration]);
 
   const composerDraftWarningFor = (paneIds: string[]) =>
     terminalComposerCloseWarning(
@@ -808,7 +839,9 @@ export function CommandCombobox({
       detail: tab.tab_id,
       keywords: ["switch tab", "open tab", "go tab", tabName(tab)],
       run: () =>
-        onSelectTab ? onSelectTab(tab.tab_id) : store.focusTab(tab.tab_id),
+        onSelectTab && !extension.context
+          ? onSelectTab(tab.tab_id)
+          : store.focusTab(tab.tab_id),
     });
   }
   for (const tab of focusedWorkspaceTabs.filter(
@@ -959,13 +992,39 @@ export function CommandCombobox({
       )
     : [];
   const actionGroups: ActionGroupDefinition[] = [
-    { heading: "Current", actions: currentActions },
-    { heading: "Files", actions: fileActions },
-    { heading: "Workspaces", actions: workspaceActions },
-    { heading: "Worktrees", actions: worktreeActions },
-    { heading: "Tabs", actions: tabActions },
-    { heading: "Panes", actions: paneActions },
-    { heading: "Agents", actions: agentActions },
+    ...(!extension.groups.length || extension.context
+      ? [
+          {
+            heading: "Current",
+            actions: extension.groups.length
+              ? currentActions.filter(
+                  (action) =>
+                    ![
+                      "current-file-explorer",
+                      "current-diff-viewer",
+                      "current-agent-history",
+                    ].includes(action.key),
+                )
+              : currentActions,
+          },
+          {
+            heading: "Files",
+            actions: extension.groups.length ? [] : fileActions,
+          },
+          { heading: "Workspaces", actions: workspaceActions },
+          { heading: "Worktrees", actions: worktreeActions },
+          { heading: "Tabs", actions: tabActions },
+          { heading: "Panes", actions: paneActions },
+          { heading: "Agents", actions: agentActions },
+        ]
+      : [
+          {
+            heading: "Workspaces",
+            actions: workspaceActions.filter(
+              (action) => action.key === "create-workspace",
+            ),
+          },
+        ]),
     { heading: "Arrange windows", actions: arrangementActions },
     ...(open && capturedExtension ? capturedExtension : extension).groups.map(
       (group) => ({

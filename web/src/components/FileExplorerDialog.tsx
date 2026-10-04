@@ -1,3 +1,4 @@
+import { UncertainRequestError } from "../api";
 import { worldLocalStorage } from "../browserStorage";
 import {
   type DragEvent,
@@ -344,6 +345,12 @@ function FileExplorerContent({
 }) {
   const workspaces = useStoreSelector((state) => state.workspaces);
   const connectionClient = useConnectionClient();
+  const hostLabel = useStoreSelector(
+    (state) =>
+      state.connections.find(
+        (connection) => connection.id === connectionClient.connectionId,
+      )?.label ?? connectionClient.connectionId,
+  );
   const focusedWorkspace = workspaces.find((w) => w.focused);
   const workspace = workspaceId
     ? workspaces.find((w) => w.workspace_id === workspaceId)
@@ -1006,8 +1013,12 @@ function FileExplorerContent({
       entry.type === "directory"
         ? `${entry.name || "download"}.tar.gz`
         : entry.name || "download";
-    void downloadFileFromUrl({ url: url.toString(), filename }).then(
-      (result) => {
+    void downloadFileFromUrl({
+      url: url.toString(),
+      filename,
+      client: connectionClient,
+    })
+      .then((result) => {
         if (result === "shared" || !connectionClient.isCurrent()) return;
         store.notify({
           kind: "info",
@@ -1015,8 +1026,14 @@ function FileExplorerContent({
           detail: entry.path,
           autoDismissMs: 5000,
         });
-      },
-    );
+      })
+      .catch((error: unknown) => {
+        store.notify({
+          kind: "error",
+          message: "Download failed",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      });
   };
 
   const markDeletePath = (path: string, deleting: boolean) => {
@@ -1115,6 +1132,25 @@ function FileExplorerContent({
         autoDismissMs: 5000,
       });
     } catch (e) {
+      if (e instanceof UncertainRequestError) {
+        store.notify({
+          kind: "error",
+          message: "Delete outcome is uncertain",
+          detail: `A file change on ${hostLabel} may have completed. ${e.message}`,
+        });
+        if (!runtimeContextIsCurrent(requestContext)) return;
+        clearDeletedPreview(entry);
+        invalidateFilePreviewCache(
+          connectionClient,
+          workspace.workspace_id,
+          entry.path,
+          entry.type === "directory",
+        );
+        await loadDirectory(parentDirectoryPath(entry.path), true);
+        if (!runtimeContextIsCurrent(requestContext)) return;
+        void loadGitStatus(true);
+        return;
+      }
       if (!runtimeContextIsCurrent(requestContext)) return;
       store.notify({
         kind: "error",
@@ -1172,12 +1208,16 @@ function FileExplorerContent({
           ),
         ),
       );
-      if (!runtimeContextIsCurrent(requestContext)) return;
-      const failed = results.find(
+      const failures = results.filter(
         (result): result is PromiseRejectedResult =>
           result.status === "rejected",
       );
+      const failed =
+        failures.find(
+          (result) => result.reason instanceof UncertainRequestError,
+        ) ?? failures[0];
       if (failed) throw failed.reason;
+      if (!runtimeContextIsCurrent(requestContext)) return;
       if (directory) {
         updateCache({ expanded: new Set(expanded).add(directory) });
       }
@@ -1200,6 +1240,23 @@ function FileExplorerContent({
         autoDismissMs: 5000,
       });
     } catch (e) {
+      if (e instanceof UncertainRequestError) {
+        store.notify({
+          kind: "error",
+          message: "Upload outcome is uncertain",
+          detail: `A file change on ${hostLabel} may have completed. ${e.message}`,
+        });
+        if (!runtimeContextIsCurrent(requestContext)) return;
+        await loadDirectory(directory, true);
+        if (!runtimeContextIsCurrent(requestContext)) return;
+        invalidateUploadedPreviews(
+          uploadFiles.map((file) =>
+            directory ? `${directory}/${file.name}` : file.name,
+          ),
+        );
+        void loadGitStatus(true);
+        return;
+      }
       if (!runtimeContextIsCurrent(requestContext)) return;
       store.notify({
         kind: "error",

@@ -82,6 +82,8 @@ export interface Pane {
   cwd?: string;
   foreground_cwd?: string;
   agent?: string;
+  /** Captured runtime identity when available; never inferred from a pane ID. */
+  agent_session?: { value?: string };
   /** Optional display-safe agent label supplied by Herdr. */
   display_agent?: string;
   /** Optional model metadata; absent when the runtime does not report it. */

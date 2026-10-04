@@ -58,7 +58,10 @@ export function isWorkspaceInspectorShortcut(
 }
 
 export interface WorkspaceInspectorRequest {
+  onAdmission?: (accepted: boolean) => void;
+  signal?: AbortSignal;
   connectionId: string;
+  runtimeGeneration?: number;
   generation: number;
   workspaceId: string;
   view: InspectorView;
@@ -66,9 +69,52 @@ export interface WorkspaceInspectorRequest {
   availableViews?: InspectorView[];
 }
 
+// Allow the selected-host 20-second observation budget plus admission overhead,
+// while staying inside the browser RPC deadline of 30 seconds.
+export const WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS = 25_000;
+
+/** Cancel retired requests so a timeout cannot publish a resource later. */
+export function requestWorkspaceInspector(
+  request: Omit<WorkspaceInspectorRequest, "onAdmission" | "signal">,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    const controller = new AbortController();
+    let settled = false;
+    const cancel = () => {
+      controller.abort();
+      settle(false);
+    };
+    const timer = window.setTimeout(
+      cancel,
+      WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS,
+    );
+    const settle = (accepted: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (!accepted) controller.abort();
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      resolve(accepted);
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    const event = new CustomEvent<WorkspaceInspectorRequest>(
+      WORKSPACE_INSPECTOR_REQUEST_EVENT,
+      {
+        cancelable: true,
+        detail: { ...request, signal: controller.signal, onAdmission: settle },
+      },
+    );
+    window.dispatchEvent(event);
+    if (!event.defaultPrevented) cancel();
+  });
+}
+
 export interface WorkspaceAnnotationRequest {
   connectionId: string;
   generation: number;
+  runtimeGeneration?: number;
   workspaceId: string;
   annotation: ReviewAnnotation;
 }

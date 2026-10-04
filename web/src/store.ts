@@ -1,27 +1,14 @@
-import { worldLocalStorage, worldSessionStorage } from "./browserStorage";
-import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
 import {
-  prepareTaskNotifications,
-  showTaskNotification,
-} from "./taskNotifications";
+  createContext,
+  useContext,
+  useMemo,
+  useRef,
+  useSyncExternalStore,
+} from "react";
 import { withAgentActivity } from "./agentOrder";
 import {
-  type EndpointAvailability,
-  parseEndpointAdvertisement,
-  parseEndpointAvailability,
-  endpointMethodReason,
-} from "./endpointAvailability";
-import {
-  type BrowserNavigation,
-  emptyBrowserNavigation,
-  selectBrowserTarget,
-  projectBrowserNavigation,
-  projectBrowserLayout,
-  browserPaneInDirection,
-} from "./browserNavigation";
-import { useRef, useSyncExternalStore } from "react";
-import {
   bridge,
+  UncertainRequestError,
   type ConnectionClient,
   type ConnectionStatus,
   type ConnectionSummary,
@@ -30,17 +17,34 @@ import {
   parseConnectionSummary,
 } from "./api";
 import {
-  STARTUP_DEFAULT_CONNECTION_ID,
-  copyStartupProfileStorage,
-} from "./connectionStorage";
-import { disposeTerminalConnection } from "./terminalConnection";
-import { isReconnectRetryableError } from "./reconnectRetry";
-import { publishLastStepCompletion } from "./lastStepCompletionStore";
+  type BrowserNavigation,
+  browserPaneInDirection,
+  emptyBrowserNavigation,
+  projectBrowserLayout,
+  projectBrowserNavigation,
+  selectBrowserTarget,
+} from "./browserNavigation";
+import { worldLocalStorage, worldSessionStorage } from "./browserStorage";
 import {
-  clearTerminalRelayViewports,
-  forgetTerminalRelayViewportsExcept,
-  terminalRelayViewportForTab,
-} from "./terminalResize";
+  copyStartupProfileStorage,
+  STARTUP_DEFAULT_CONNECTION_ID,
+} from "./connectionStorage";
+import {
+  type EndpointAvailability,
+  endpointMethodReason,
+  parseEndpointAdvertisement,
+  parseEndpointAvailability,
+} from "./endpointAvailability";
+import {
+  type GitFileAction,
+  type GitRepoAction,
+  type GitWorkingCounts,
+  gitFileActionLabel,
+  gitFileActionSuccessMessage,
+  gitRepoActionSuccessMessage,
+} from "./gitActions";
+import { publishLastStepCompletion } from "./lastStepCompletionStore";
+import { isReconnectRetryableError } from "./reconnectRetry";
 import {
   clearTabLayouts,
   forgetTabLayoutsExcept,
@@ -48,15 +52,18 @@ import {
   rememberTabLayout,
   tabLayoutFor,
 } from "./tabLayout";
-import type { GitDiffEntry, Pane, PaneLayout, Tab, Workspace } from "./types";
 import {
-  gitFileActionLabel,
-  gitFileActionSuccessMessage,
-  gitRepoActionSuccessMessage,
-  type GitFileAction,
-  type GitRepoAction,
-  type GitWorkingCounts,
-} from "./gitActions";
+  prepareTaskNotifications,
+  showTaskNotification,
+} from "./taskNotifications";
+import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
+import { disposeTerminalConnection } from "./terminalConnection";
+import {
+  clearTerminalRelayViewports,
+  forgetTerminalRelayViewportsExcept,
+  terminalRelayViewportForTab,
+} from "./terminalResize";
+import type { GitDiffEntry, Pane, PaneLayout, Tab, Workspace } from "./types";
 
 export interface ServerSessionState {
   /** ConnectionManager generation that owns every server resource below. */
@@ -89,6 +96,8 @@ export interface State extends ServerSessionState {
   connectionPaused: boolean;
   bridgeStatus: BridgeStatus | null;
   connections: ConnectionSummary[];
+  /** A validated catalogue has been admitted on the current transport. */
+  catalogueReady: boolean;
   defaultConnectionId: string;
   activeConnectionId: string;
   connectionGeneration: number;
@@ -119,6 +128,7 @@ export interface Notice {
   actionRuntimeGeneration?: number;
   actionWorkspaceId?: string;
   actionPaneId?: string;
+  actionAgentSessionId?: string;
   actionClipboardText?: string;
   id?: number;
 }
@@ -221,6 +231,7 @@ export function noticeAutoDismissDelay(notice: Notice): number | null {
 }
 
 export interface TaskNotificationTarget {
+  agentSessionId?: string;
   connectionId: string;
   runtimeGeneration: number;
   workspaceId: string;
@@ -228,6 +239,9 @@ export interface TaskNotificationTarget {
 }
 
 export interface QualifiedFocusTarget {
+  /** Browser-local intent captured before asynchronous notification admission. */
+  navigationRevision?: number;
+  agentSessionId?: string;
   connectionId: string;
   runtimeGeneration: number;
   workspaceId: string;
@@ -255,7 +269,10 @@ export function isTaskNotificationTarget(
     typeof target.workspaceId === "string" &&
     target.workspaceId.length > 0 &&
     typeof target.paneId === "string" &&
-    target.paneId.length > 0
+    target.paneId.length > 0 &&
+    (target.agentSessionId === undefined ||
+      (typeof target.agentSessionId === "string" &&
+        target.agentSessionId.length > 0))
   );
 }
 
@@ -376,6 +393,7 @@ const initial: State = {
     worldLocalStorage.getItem("connectionPaused") === "true",
   bridgeStatus: null,
   connections: [],
+  catalogueReady: false,
   defaultConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
   activeConnectionId: STARTUP_DEFAULT_CONNECTION_ID,
   connectionGeneration: 0,
@@ -456,7 +474,6 @@ export function activateConnectionState(
   );
   const oldSession = {
     ...serverSessionFromState(snapshot),
-    terminalAttachEpoch: snapshot.terminalAttachEpoch + 1,
   };
   const runtimeGeneration =
     snapshot.connections.find((connection) => connection.id === connectionId)
@@ -469,14 +486,12 @@ export function activateConnectionState(
       : emptyServerSessionState(runtimeGeneration);
   const newSession = {
     ...restored,
-    endpointAvailability: {},
     // A restored pending focus outlived its action, so treat it as settled:
     // the next fresh observation decides whether it still applies. Reuse the
     // snapshot timestamp as a stable non-null token; wall-clock time is unused.
     pendingFocusWorkspaceSettledAt: restored.pendingFocusWorkspaceId
       ? (restored.pendingFocusWorkspaceSettledAt ?? restored.lastRefresh)
       : restored.pendingFocusWorkspaceSettledAt,
-    terminalAttachEpoch: restored.terminalAttachEpoch + 1,
   };
   return {
     ...snapshot,
@@ -643,16 +658,17 @@ function set(patch: Partial<State>) {
   emit();
 }
 
-function captureConnectionLease(): StoreConnectionLease {
+function captureConnectionLease(
+  connectionId = state.activeConnectionId,
+): StoreConnectionLease {
   const runtimeGeneration = catalogReadyForConnection
-    ? (state.connections.find(
-        (connection) => connection.id === state.activeConnectionId,
-      )?.generation ?? null)
+    ? (state.connections.find((connection) => connection.id === connectionId)
+        ?.generation ?? null)
     : null;
   return {
-    connectionId: state.activeConnectionId,
-    generation: state.connectionGeneration,
-    client: bridge.connection(state.activeConnectionId, runtimeGeneration),
+    connectionId,
+    generation: runtimeGeneration ?? state.connectionGeneration,
+    client: bridge.connection(connectionId, runtimeGeneration),
   };
 }
 
@@ -667,9 +683,52 @@ export function isStoreConnectionLeaseCurrent(
 }
 
 function leaseIsCurrent(lease: StoreConnectionLease): boolean {
-  return (
-    isStoreConnectionLeaseCurrent(state, lease) && lease.client.isCurrent()
-  );
+  return !state.connectionPaused && lease.client.isCurrent();
+}
+
+export interface OperationalContext {
+  connectionId: string;
+  runtimeGeneration: number;
+}
+export const OperationalContext = createContext<OperationalContext | null>(
+  null,
+);
+const connectionSnapshots = new WeakMap<State, Map<string, State>>();
+
+/** Read a partition without changing Spaces focus or another partition. */
+export function connectionSnapshot(
+  snapshot: State,
+  connectionId: string,
+): State {
+  const cached = connectionSnapshots.get(snapshot) ?? new Map<string, State>();
+  connectionSnapshots.set(snapshot, cached);
+  const existing = cached.get(connectionId);
+  if (existing) return existing;
+  if (snapshot.activeConnectionId === connectionId) {
+    const projected = {
+      ...snapshot,
+      connectionGeneration:
+        snapshot.serverRuntimeGeneration ?? snapshot.connectionGeneration,
+    };
+    cached.set(connectionId, projected);
+    return projected;
+  }
+  const session =
+    snapshot.sessionsByConnectionId[connectionId] ??
+    emptyServerSessionState(null);
+  const projected = {
+    ...snapshot,
+    ...session,
+    activeConnectionId: connectionId,
+    connectionGeneration:
+      session.serverRuntimeGeneration ?? snapshot.connectionGeneration,
+  };
+  cached.set(connectionId, projected);
+  return projected;
+}
+
+function leaseSnapshot(lease: StoreConnectionLease): State {
+  return connectionSnapshot(state, lease.connectionId);
 }
 
 function setForConnection(
@@ -677,7 +736,29 @@ function setForConnection(
   patch: Partial<State>,
 ): boolean {
   if (!leaseIsCurrent(lease)) return false;
-  set(patch);
+  if (lease.connectionId === state.activeConnectionId) set(patch);
+  else {
+    const session = { ...leaseSnapshot(lease) };
+    const sessionPatch: Partial<ServerSessionState> = {};
+    for (const key of SERVER_SESSION_KEYS) {
+      if (key in patch) Object.assign(sessionPatch, { [key]: patch[key] });
+    }
+    const updated = { ...serverSessionFromState(session), ...sessionPatch };
+    updated.recentPaneIds = nextRecentPaneIds(
+      updated.selectedPaneId,
+      updated.recentPaneIds,
+      updated.panes,
+    );
+    state = {
+      ...state,
+      sessionsByConnectionId: {
+        ...state.sessionsByConnectionId,
+        [lease.connectionId]: updated,
+      },
+    };
+    emit();
+    if (patch.notice) set({ notice: patch.notice });
+  }
   return true;
 }
 
@@ -821,8 +902,12 @@ export function numberedCreatedTabRename(
   return { tabId, label: `Tab ${number}` };
 }
 
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+const refreshTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const refreshingConnectionKeys = new Set<string>();
+const refreshCompletions = new Map<
+  string,
+  { promise: Promise<void>; resolve(): void }
+>();
 const queuedConnectionKeys = new Set<string>();
 let initialized = false;
 let catalogRequestSeq = 0;
@@ -830,10 +915,10 @@ let appliedCatalogRequestSeq = 0;
 let catalogReadyForConnection = false;
 let terminalReattachPending = false;
 let connectionRecoveryIntent: "resume" | "reconnect" | null = null;
-let focusActionChain: Promise<unknown> = Promise.resolve();
+const focusActionChains = new Map<string, Promise<unknown>>();
 type PaneStatusTracker = {
   ready: boolean;
-  byId: Map<string, string>;
+  byId: Map<string, { status: string; identity: string }>;
 };
 
 export class TaskCompletionTracker {
@@ -850,7 +935,7 @@ export class TaskCompletionTracker {
   update(connectionId: string, panes: Pane[]): Pane[] {
     const tracker = this.byConnection.get(connectionId) ?? {
       ready: false,
-      byId: new Map<string, string>(),
+      byId: new Map<string, { status: string; identity: string }>(),
     };
     this.byConnection.set(connectionId, tracker);
     const livePaneIds = new Set<string>();
@@ -858,17 +943,24 @@ export class TaskCompletionTracker {
     for (const pane of panes) {
       livePaneIds.add(pane.pane_id);
       const nextStatus = pane.agent_status;
-      const previousStatus = tracker.byId.get(pane.pane_id);
+      const previous = tracker.byId.get(pane.pane_id);
+      const identity = JSON.stringify([
+        pane.workspace_id,
+        pane.tab_id,
+        pane.agent,
+        pane.agent_session?.value,
+      ]);
       if (
         tracker.ready &&
-        previousStatus === "working" &&
+        previous?.identity === identity &&
+        previous.status === "working" &&
         (nextStatus === "done" ||
           nextStatus === "idle" ||
           nextStatus === "blocked")
       ) {
         completed.push(pane);
       }
-      tracker.byId.set(pane.pane_id, nextStatus);
+      tracker.byId.set(pane.pane_id, { status: nextStatus, identity });
     }
     for (const paneId of tracker.byId.keys()) {
       if (!livePaneIds.has(paneId)) tracker.byId.delete(paneId);
@@ -945,7 +1037,14 @@ export function taskNotificationTarget(
   runtimeGeneration: number,
   pane: Pick<Pane, "workspace_id" | "pane_id">,
 ): TaskNotificationTarget {
+  const metadata = pane as typeof pane & {
+    agent_session?: { value?: unknown };
+  };
+  const session = metadata.agent_session?.value;
   return {
+    ...(typeof session === "string" && session
+      ? { agentSessionId: session }
+      : {}),
     connectionId,
     runtimeGeneration,
     workspaceId: pane.workspace_id,
@@ -960,6 +1059,7 @@ export function taskNotificationTargetIsCurrent(
   return snapshot.connections.some(
     (connection) =>
       connection.id === target.connectionId &&
+      connection.state === "ready" &&
       connection.generation === target.runtimeGeneration,
   );
 }
@@ -980,6 +1080,7 @@ export function taskNotificationTargetFromNotice(
     | "actionRuntimeGeneration"
     | "actionWorkspaceId"
     | "actionPaneId"
+    | "actionAgentSessionId"
   >,
 ): TaskNotificationTarget | null {
   const target = {
@@ -987,52 +1088,70 @@ export function taskNotificationTargetFromNotice(
     runtimeGeneration: notice.actionRuntimeGeneration,
     workspaceId: notice.actionWorkspaceId,
     paneId: notice.actionPaneId,
+    ...(notice.actionAgentSessionId
+      ? { agentSessionId: notice.actionAgentSessionId }
+      : {}),
   };
   return isTaskNotificationTarget(target) ? target : null;
 }
 
-function notifyTaskCompleted(pane: Pane, workspaces: Workspace[], tabs: Tab[]) {
+function notifyTaskCompleted(
+  pane: Pane,
+  workspaces: Workspace[],
+  tabs: Tab[],
+  connectionId = state.activeConnectionId,
+) {
   const blocked = pane.agent_status === "blocked";
   if (
     !state.taskNotificationsEnabled ||
     !state.taskNotificationPreferences[blocked ? "blocked" : "completed"]
   )
     return;
-  const runtimeGeneration = state.serverRuntimeGeneration;
+  const runtimeGeneration = connectionSnapshot(
+    state,
+    connectionId,
+  ).serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const body = taskNotificationBody(pane, workspaces, tabs);
   const title = blocked
     ? "Herdr World agent needs input"
     : "Herdr World task completed";
-  const target = taskNotificationTarget(
-    state.activeConnectionId,
-    runtimeGeneration,
-    pane,
-  );
+  const target = taskNotificationTarget(connectionId, runtimeGeneration, pane);
+  const sessionKnown = !pane.agent || Boolean(target.agentSessionId);
+  const detail = sessionKnown
+    ? body
+    : `${body} · Original agent session identity is unavailable; this notification cannot navigate to a replacement.`;
   set({
     notice: {
       kind: blocked ? "info" : "success",
       message: blocked ? "Agent needs input" : "Task completed",
-      detail: body,
-      actionLabel: pane.agent ? "Open agent" : "Open workspace",
-      actionConnectionId: state.activeConnectionId,
-      actionRuntimeGeneration: runtimeGeneration,
-      actionWorkspaceId: pane.workspace_id,
-      actionPaneId: pane.pane_id,
+      detail,
+      ...(sessionKnown
+        ? {
+            actionLabel: pane.agent ? "Open agent" : "Open workspace",
+            actionConnectionId: connectionId,
+            actionRuntimeGeneration: runtimeGeneration,
+            actionWorkspaceId: pane.workspace_id,
+            actionPaneId: pane.pane_id,
+            actionAgentSessionId: target.agentSessionId,
+          }
+        : {}),
       autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
     },
   });
   maybeShowBrowserTaskNotification(
     title,
-    body,
+    detail,
     taskNotificationTag(target),
     target,
-    target,
+    sessionKnown ? target : null,
   );
 }
 
 /** Server-relayed Herdr SemanticNotification (`herdr-world.task_notification`). */
 export interface HerdrTaskNotification {
+  sessionIdentityUnavailable?: true;
+  agentSessionId?: string;
   kind: "completed" | "blocked";
   agent: string;
   title: string;
@@ -1058,6 +1177,12 @@ export function parseHerdrTaskNotification(
     body: optionalEventText(data.body),
     workspaceId: optionalEventText(data.workspace_id),
     paneId: optionalEventText(data.pane_id),
+    ...(data.session_identity_unavailable === true
+      ? { sessionIdentityUnavailable: true as const }
+      : {}),
+    ...(optionalEventText(data.agent_session_id)
+      ? { agentSessionId: optionalEventText(data.agent_session_id)! }
+      : {}),
   };
 }
 
@@ -1081,25 +1206,34 @@ function notifyHerdrTask(
     !state.taskNotificationPreferences[notification.kind]
   )
     return;
-  const runtimeGeneration = state.serverRuntimeGeneration;
+  const runtimeGeneration = connectionSnapshot(
+    state,
+    connectionId,
+  ).serverRuntimeGeneration;
   if (runtimeGeneration === null) return;
   const { workspaceId, paneId } = notification;
   // Someone looking at the pane already sees it; Herdr stays the policy owner.
   if (
     paneId &&
+    connectionId === state.activeConnectionId &&
     paneId === activePaneIdForTaskNotifications(state) &&
     documentIsVisible()
   )
     return;
   const scope = { connectionId, runtimeGeneration };
   const target =
-    workspaceId && paneId
+    workspaceId && paneId && !notification.sessionIdentityUnavailable
       ? taskNotificationTarget(connectionId, runtimeGeneration, {
           workspace_id: workspaceId,
           pane_id: paneId,
+          ...(notification.agentSessionId
+            ? { agent_session: { value: notification.agentSessionId } }
+            : {}),
         })
       : null;
-  const detail = notification.body ?? notification.agent;
+  const detail = notification.sessionIdentityUnavailable
+    ? `${notification.body ?? notification.agent} · Original agent session identity is unavailable; this notification cannot navigate to a replacement.`
+    : (notification.body ?? notification.agent);
   const blocked = notification.kind === "blocked";
   set({
     notice: {
@@ -1113,6 +1247,7 @@ function notifyHerdrTask(
             actionRuntimeGeneration: runtimeGeneration,
             actionWorkspaceId: target.workspaceId,
             actionPaneId: target.paneId,
+            actionAgentSessionId: target.agentSessionId,
           }
         : {}),
       autoDismissMs: TASK_COMPLETED_TOAST_DISMISS_MS,
@@ -1164,14 +1299,27 @@ function notifyCompletedTasks(
   const activePaneId = activePaneIdForTaskNotifications(state);
   for (const pane of completed) {
     if (!leaseIsCurrent(lease)) return;
-    if (pane.pane_id === activePaneId) continue;
-    notifyTaskCompleted(pane, workspaces, tabs);
+    if (
+      lease.connectionId === state.activeConnectionId &&
+      pane.pane_id === activePaneId
+    )
+      continue;
+    notifyTaskCompleted(pane, workspaces, tabs, lease.connectionId);
   }
 }
 
-function enqueueFocusAction<T>(fn: () => Promise<T>): Promise<T> {
-  const task = focusActionChain.then(fn, fn);
-  focusActionChain = task.catch(() => undefined);
+function enqueueFocusAction<T>(
+  fn: () => Promise<T>,
+  connectionId = state.activeConnectionId,
+): Promise<T> {
+  const chain = focusActionChains.get(connectionId) ?? Promise.resolve();
+  const task = chain.then(fn, fn);
+  const settled = task.catch(() => undefined);
+  focusActionChains.set(connectionId, settled);
+  void settled.then(() => {
+    if (focusActionChains.get(connectionId) === settled)
+      focusActionChains.delete(connectionId);
+  });
   return task;
 }
 
@@ -1294,10 +1442,13 @@ function settlePendingFocusWorkspace(seq: number): void {
   set({ pendingFocusWorkspaceSettledAt: Date.now() });
 }
 
-async function refreshNow(lease = captureConnectionLease()) {
+async function refreshNow(
+  lease = captureConnectionLease(),
+  waitForRunning = false,
+) {
   if (
-    state.connectionPaused ||
-    state.status !== "connected" ||
+    leaseSnapshot(lease).connectionPaused ||
+    leaseSnapshot(lease).status !== "connected" ||
     !leaseIsCurrent(lease)
   ) {
     return;
@@ -1305,18 +1456,26 @@ async function refreshNow(lease = captureConnectionLease()) {
   const refreshKey = `${lease.connectionId}:${lease.generation}`;
   if (refreshingConnectionKeys.has(refreshKey)) {
     queuedConnectionKeys.add(refreshKey);
-    return;
+    return waitForRunning
+      ? refreshCompletions.get(refreshKey)?.promise
+      : undefined;
   }
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  const completion = { promise, resolve };
+  refreshCompletions.set(refreshKey, completion);
   refreshingConnectionKeys.add(refreshKey);
   const observationStartedAt = performance.now();
   // Snapshot the pending-focus marker when the fetch actually starts. Only a
   // refresh that began after the focus action settled may declare the focus
   // lost, and only while the marker still belongs to that same attempt.
-  const navigationAtEntry = state.browserNavigation;
-  const endpointAvailabilityAtEntry = state.endpointAvailability;
+  const navigationAtEntry = leaseSnapshot(lease).browserNavigation;
+  const endpointAvailabilityAtEntry = leaseSnapshot(lease).endpointAvailability;
   const pendingFocusAtEntry = {
-    seq: state.pendingFocusWorkspaceSeq,
-    settledAt: state.pendingFocusWorkspaceSettledAt,
+    seq: leaseSnapshot(lease).pendingFocusWorkspaceSeq,
+    settledAt: leaseSnapshot(lease).pendingFocusWorkspaceSettledAt,
   };
   try {
     const [wsRes, tabRes, paneRes, agentRes] = await Promise.all([
@@ -1359,7 +1518,7 @@ async function refreshNow(lease = captureConnectionLease()) {
       Object.assign(
         next,
         projectBrowserNavigation(
-          state.browserNavigation,
+          leaseSnapshot(lease).browserNavigation,
           workspaces,
           tabs,
           panes,
@@ -1367,22 +1526,26 @@ async function refreshNow(lease = captureConnectionLease()) {
       );
     }
     const pendingFocusAtObservation = {
-      seq: state.pendingFocusWorkspaceSeq,
-      settledAt: state.pendingFocusWorkspaceSettledAt,
+      seq: leaseSnapshot(lease).pendingFocusWorkspaceSeq,
+      settledAt: leaseSnapshot(lease).pendingFocusWorkspaceSettledAt,
     };
     if (
-      state.pendingFocusWorkspaceId &&
+      leaseSnapshot(lease).pendingFocusWorkspaceId &&
       workspaces.some(
-        (w) => w.workspace_id === state.pendingFocusWorkspaceId && w.focused,
+        (w) =>
+          w.workspace_id === leaseSnapshot(lease).pendingFocusWorkspaceId &&
+          w.focused,
       )
     ) {
       next.pendingFocusWorkspaceId = null;
       next.pendingFocusWorkspaceSettledAt = null;
     } else if (
-      state.pendingFocusWorkspaceId &&
-      state.pendingFocusWorkspaceSeq === pendingFocusAtEntry.seq &&
+      leaseSnapshot(lease).pendingFocusWorkspaceId &&
+      leaseSnapshot(lease).pendingFocusWorkspaceSeq ===
+        pendingFocusAtEntry.seq &&
       pendingFocusAtEntry.settledAt !== null &&
-      state.pendingFocusWorkspaceSettledAt === pendingFocusAtEntry.settledAt
+      leaseSnapshot(lease).pendingFocusWorkspaceSettledAt ===
+        pendingFocusAtEntry.settledAt
     ) {
       // The focus action settled before this refresh started, yet a fresh
       // observation still does not show the workspace focused: the focus was
@@ -1396,14 +1559,14 @@ async function refreshNow(lease = captureConnectionLease()) {
     // longer belonging to the visible terminal.
     if (
       navigationMode === "shared" &&
-      state.selectedPaneId &&
-      !panes.some((p) => p.pane_id === state.selectedPaneId)
+      leaseSnapshot(lease).selectedPaneId &&
+      !panes.some((p) => p.pane_id === leaseSnapshot(lease).selectedPaneId)
     ) {
       next.selectedPaneId = null;
     }
 
     // Fetch layout for the active tab (needs a pane_id in that tab).
-    const merged = { ...state, ...next } as State;
+    const merged = { ...leaseSnapshot(lease), ...next } as State;
     const activeTabId = pickActiveTabId(merged);
     const aPane =
       panes.find((p) => p.tab_id === activeTabId && p.focused) ??
@@ -1436,8 +1599,10 @@ async function refreshNow(lease = captureConnectionLease()) {
         if (
           navigationMode === "shared" &&
           layout &&
-          state.selectedPaneId &&
-          !layout.panes.some((p) => p.pane_id === state.selectedPaneId)
+          leaseSnapshot(lease).selectedPaneId &&
+          !layout.panes.some(
+            (p) => p.pane_id === leaseSnapshot(lease).selectedPaneId,
+          )
         ) {
           next.selectedPaneId = null;
         }
@@ -1450,7 +1615,7 @@ async function refreshNow(lease = captureConnectionLease()) {
     }
 
     // Never publish a layout fetched for an older browser navigation target.
-    if (navigationAtEntry !== state.browserNavigation) {
+    if (navigationAtEntry !== leaseSnapshot(lease).browserNavigation) {
       queuedConnectionKeys.add(refreshKey);
       return;
     }
@@ -1459,8 +1624,9 @@ async function refreshNow(lease = captureConnectionLease()) {
     // Drop only a stale marker clear, preserving the useful snapshot data.
     if (
       next.pendingFocusWorkspaceId === null &&
-      (state.pendingFocusWorkspaceSeq !== pendingFocusAtObservation.seq ||
-        state.pendingFocusWorkspaceSettledAt !==
+      (leaseSnapshot(lease).pendingFocusWorkspaceSeq !==
+        pendingFocusAtObservation.seq ||
+        leaseSnapshot(lease).pendingFocusWorkspaceSettledAt !==
           pendingFocusAtObservation.settledAt)
     ) {
       delete next.pendingFocusWorkspaceId;
@@ -1468,11 +1634,13 @@ async function refreshNow(lease = captureConnectionLease()) {
     }
     // Close/reattach can replace advertisements while either RPC is pending.
     // Keep that newer slice without discarding useful topology/layout updates.
-    if (endpointAvailabilityAtEntry !== state.endpointAvailability) {
+    if (
+      endpointAvailabilityAtEntry !== leaseSnapshot(lease).endpointAvailability
+    ) {
       delete next.endpointAvailability;
       queuedConnectionKeys.add(refreshKey);
     }
-    const patch = stabilizeRefreshPatch(state, next);
+    const patch = stabilizeRefreshPatch(leaseSnapshot(lease), next);
     if (
       !setForConnection(lease, {
         ...(patch ?? {}),
@@ -1486,28 +1654,53 @@ async function refreshNow(lease = captureConnectionLease()) {
     setForConnection(lease, { error: (error as Error).message });
   } finally {
     refreshingConnectionKeys.delete(refreshKey);
+    refreshCompletions.delete(refreshKey);
+    completion.resolve();
     if (queuedConnectionKeys.delete(refreshKey) && leaseIsCurrent(lease)) {
       void refreshNow(lease);
     }
   }
 }
 
+/** Observe after a focus change, including when an older observation is running. */
+async function refreshAfterCurrent(lease: StoreConnectionLease) {
+  const key = `${lease.connectionId}:${lease.generation}`;
+  const pending = refreshCompletions.get(key)?.promise;
+  if (pending) await pending;
+  if (!leaseIsCurrent(lease)) return;
+  // The old observation may have started its queued successor in finally.
+  const successor = refreshCompletions.get(key)?.promise;
+  if (successor) await successor;
+  else await refreshNow(lease);
+}
+
 function scheduleRefresh(lease = captureConnectionLease()) {
   if (state.connectionPaused || !leaseIsCurrent(lease)) return;
-  if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = setTimeout(() => {
-    refreshTimer = null;
-    if (leaseIsCurrent(lease)) void refreshNow(lease);
-  }, 80);
+  const key = `${lease.connectionId}:${lease.generation}`;
+  const previous = refreshTimers.get(key);
+  if (previous) clearTimeout(previous);
+  refreshTimers.set(
+    key,
+    setTimeout(() => {
+      refreshTimers.delete(key);
+      if (leaseIsCurrent(lease)) void refreshNow(lease);
+    }, 80),
+  );
 }
 
 async function refreshBridgeStatus() {
   if (state.connectionPaused || state.status !== "connected") return;
   const requestSeq = ++catalogRequestSeq;
+  const epoch = bridge.connectionEpoch;
   try {
     const r = await bridge.call("bridge.status");
-    if (state.connectionPaused || state.status !== "connected") return;
-    applyConnectionCatalog(r, requestSeq);
+    if (
+      state.connectionPaused ||
+      state.status !== "connected" ||
+      epoch !== bridge.connectionEpoch
+    )
+      return;
+    applyConnectionCatalog(r, requestSeq, epoch);
     if (rearmTerminalAttachmentsAfterCatalog(catalogReadyForConnection)) {
       scheduleRefresh();
     }
@@ -1628,10 +1821,8 @@ function startUpdatePolling(): Promise<void> {
 }
 
 function stopPolling() {
-  if (refreshTimer) {
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
+  for (const timer of refreshTimers.values()) clearTimeout(timer);
+  refreshTimers.clear();
   if (metadataTimer) {
     clearInterval(metadataTimer);
     metadataTimer = null;
@@ -1662,17 +1853,6 @@ function selectConnectionNow(connectionId: string, refresh = true): boolean {
   ) {
     copyStartupProfileStorage(worldLocalStorage, connectionId);
   }
-  stopPolling();
-  disposeTerminalConnection(
-    {
-      connectionId: state.activeConnectionId,
-      generation: state.connectionGeneration,
-    },
-    true,
-  );
-  clearTerminalRelayViewports();
-  clearTabLayouts();
-  focusActionChain = Promise.resolve();
   const generation = bridge.setActiveConnection(connectionId);
   state = activateConnectionState(state, connectionId, generation);
   emit();
@@ -1697,17 +1877,14 @@ function resetActiveConnectionLease(
   defaultConnectionId: string,
   reconciliation: CatalogSessionReconciliation,
 ) {
-  stopPolling();
   disposeTerminalConnection(
     {
       connectionId: state.activeConnectionId,
-      generation: state.connectionGeneration,
+      generation: state.serverRuntimeGeneration ?? state.connectionGeneration,
     },
     false,
   );
-  clearTerminalRelayViewports();
-  clearTabLayouts();
-  focusActionChain = Promise.resolve();
+
   taskCompletionTracker.reset(state.activeConnectionId);
   const generation = bridge.advanceActiveConnectionGeneration();
   const runtimeGeneration =
@@ -1721,6 +1898,7 @@ function resetActiveConnectionLease(
     connections,
     defaultConnectionId,
     connectionGeneration: generation,
+    catalogueReady: true,
     sessionsByConnectionId: {
       ...reconciliation.sessionsByConnectionId,
       [state.activeConnectionId]: activeSession,
@@ -1782,19 +1960,37 @@ export function mergeConnectionCatalog(
     });
 }
 
-function applyConnectionCatalog(result: unknown, requestSeq: number) {
+function applyConnectionCatalog(
+  result: unknown,
+  requestSeq: number,
+  epoch = bridge.connectionEpoch,
+) {
   if (
+    epoch !== bridge.connectionEpoch ||
+    state.status !== "connected" ||
+    state.connectionPaused ||
     requestSeq < appliedCatalogRequestSeq ||
     !result ||
     typeof result !== "object"
   ) {
-    return;
+    return false;
   }
-  appliedCatalogRequestSeq = requestSeq;
   const catalog = result as {
     default_connection_id?: unknown;
     connections?: unknown;
   };
+  if (
+    !Array.isArray(catalog.connections) ||
+    catalog.connections.some(
+      (value) => parseConnectionSummary(value) === null,
+    ) ||
+    new Set(
+      catalog.connections.map((value) => parseConnectionSummary(value)!.id),
+    ).size !== catalog.connections.length
+  )
+    return false;
+  appliedCatalogRequestSeq = requestSeq;
+  const readinessChanged = !state.catalogueReady;
   const defaultConnectionId =
     typeof catalog.default_connection_id === "string" &&
     catalog.default_connection_id.length > 0
@@ -1811,6 +2007,19 @@ function applyConnectionCatalog(result: unknown, requestSeq: number) {
     (connection) => connection.id === state.activeConnectionId,
   );
   const reconciliation = reconcileConnectionCatalogSessions(state, connections);
+  for (const previous of state.connections) {
+    const next = connections.find((candidate) => candidate.id === previous.id);
+    if (
+      !next ||
+      next.generation !== previous.generation ||
+      (previous.state === "ready" && next.state !== "ready")
+    ) {
+      disposeTerminalConnection(
+        { connectionId: previous.id, generation: previous.generation },
+        false,
+      );
+    }
+  }
   for (const connectionId of reconciliation.invalidatedConnectionIds) {
     taskCompletionTracker.reset(connectionId);
   }
@@ -1820,7 +2029,7 @@ function applyConnectionCatalog(result: unknown, requestSeq: number) {
       defaultConnectionId,
       reconciliation,
     );
-    return;
+    return true;
   }
 
   // Steady-state catalog polls rebuild identical DTOs every tick. Publish
@@ -1849,27 +2058,34 @@ function applyConnectionCatalog(result: unknown, requestSeq: number) {
     !sessionsChanged &&
     defaultConnectionId === state.defaultConnectionId
   ) {
+    if (readinessChanged) set({ catalogueReady: true });
     if (!nextActive) selectConnectionNow(defaultConnectionId);
-    return;
+    return true;
   }
 
   state = {
     ...state,
     ...(reconciliation.activeSession ?? {}),
     connections: stableConnections,
+    catalogueReady: true,
     defaultConnectionId,
     sessionsByConnectionId: stableSessions,
   };
   emit();
   if (!nextActive) selectConnectionNow(defaultConnectionId);
+  return true;
 }
 
 async function refreshConnectionCatalog(): Promise<boolean> {
   if (state.connectionPaused || state.status !== "connected") return false;
   const requestSeq = ++catalogRequestSeq;
+  const epoch = bridge.connectionEpoch;
   try {
-    applyConnectionCatalog(await bridge.call("connections.list"), requestSeq);
-    return catalogReadyForConnection && appliedCatalogRequestSeq >= requestSeq;
+    return applyConnectionCatalog(
+      await bridge.call("connections.list"),
+      requestSeq,
+      epoch,
+    );
   } catch {
     // The catalog is bridge-global and is retried on the next status poll.
     return false;
@@ -1886,7 +2102,22 @@ function rearmTerminalAttachmentsAfterCatalog(catalogReady: boolean): boolean {
     return false;
   }
   terminalReattachPending = false;
-  set({ terminalAttachEpoch: state.terminalAttachEpoch + 1 });
+  const sessionsByConnectionId = Object.fromEntries(
+    Object.entries(state.sessionsByConnectionId).map(([id, session]) => [
+      id,
+      {
+        ...session,
+        terminalAttachEpoch: session.terminalAttachEpoch + 1,
+        endpointAvailability: {},
+      },
+    ]),
+  );
+  state = {
+    ...state,
+    sessionsByConnectionId,
+    terminalAttachEpoch: state.terminalAttachEpoch + 1,
+  };
+  emit();
   return true;
 }
 
@@ -1920,6 +2151,7 @@ async function action<T>(
     pendingFocusWorkspaceSeq?: number;
     failureNotice?: (error: Error) => Notice;
     retryOnReconnect?: boolean;
+    client?: ConnectionClient;
   } = {},
 ): Promise<T | undefined> {
   if (state.connectionPaused) {
@@ -1944,7 +2176,17 @@ async function action<T>(
       (value) => ({ ok: true, value }) as const,
       (error: Error) => ({ ok: false, error }) as const,
     );
-  let activeLease = captureConnectionLease();
+  let activeLease = options.client
+    ? {
+        connectionId: options.client.connectionId,
+        generation:
+          options.client.serverRuntimeGeneration ?? options.client.generation,
+        client: options.client,
+      }
+    : captureConnectionLease();
+  const hostLabel =
+    state.connections.find((owner) => owner.id === activeLease.connectionId)
+      ?.label ?? activeLease.connectionId;
   let outcome = await attempt(activeLease);
   // A focus action fired while the bridge socket is reconnecting fails before
   // reaching the server, which makes clicks right after returning to the app
@@ -1957,7 +2199,7 @@ async function action<T>(
     (await waitForReconnectReady()) &&
     !state.connectionPaused
   ) {
-    activeLease = captureConnectionLease();
+    activeLease = captureConnectionLease(activeLease.connectionId);
     outcome = await attempt(activeLease);
   }
   if (!outcome.ok) {
@@ -1968,11 +2210,31 @@ async function action<T>(
     if (options.pendingFocusWorkspaceSeq !== undefined) {
       clearPendingFocusWorkspace(options.pendingFocusWorkspaceSeq);
     }
-    if (!leaseIsCurrent(activeLease)) return undefined;
     const error = outcome.error;
+    if (error instanceof UncertainRequestError) {
+      if (leaseIsCurrent(activeLease))
+        setForConnection(activeLease, { error: error.message });
+      set({
+        notice: {
+          kind: "error",
+          message: "Action outcome is uncertain",
+          detail: `A change on ${hostLabel} may have completed. ${options.failureNotice?.(error).detail ?? error.message}`,
+        },
+      });
+      return undefined;
+    }
+    if (!leaseIsCurrent(activeLease)) return undefined;
+    const notice = options.failureNotice?.(error);
     setForConnection(activeLease, {
       error: error.message,
-      notice: options.failureNotice?.(error) ?? state.notice,
+      notice: notice
+        ? {
+            ...notice,
+            detail: options.client
+              ? `${hostLabel}: ${notice.detail ?? error.message}`
+              : notice.detail,
+          }
+        : state.notice,
     });
     return undefined;
   }
@@ -1999,8 +2261,6 @@ function qualifiedRuntimeTargetIsCurrent(
   return (
     !state.connectionPaused &&
     state.status === "connected" &&
-    state.activeConnectionId === target.connectionId &&
-    state.serverRuntimeGeneration === target.runtimeGeneration &&
     connection?.state === "ready" &&
     connection.generation === target.runtimeGeneration
   );
@@ -2012,6 +2272,7 @@ function qualifiedLeaseIsCurrent(
 ): boolean {
   return (
     lease.connectionId === target.connectionId &&
+    lease.client.connectionId === target.connectionId &&
     lease.client.acceptsServerGeneration(target.runtimeGeneration) &&
     leaseIsCurrent(lease) &&
     qualifiedRuntimeTargetIsCurrent(target)
@@ -2037,7 +2298,7 @@ async function qualifiedAction<T>(
   fn: (lease: StoreConnectionLease) => Promise<T>,
 ): Promise<T> {
   assertQualifiedLeaseCurrent(target);
-  const lease = captureConnectionLease();
+  const lease = captureConnectionLease(target.connectionId);
   assertQualifiedLeaseCurrent(target, lease);
   const result = await fn(lease);
   assertQualifiedLeaseCurrent(target, lease);
@@ -2150,24 +2411,33 @@ export function worktreeRemovalCompletionNotice(
 function handlePopupPush(push: PopupStatePush) {
   if (
     !state.connectionPaused &&
-    connectionEventIsActive(
-      state,
-      push.connection_id,
-      push.connection_generation,
+    state.connections.some(
+      (connection) =>
+        connection.id === push.connection_id &&
+        connection.state === "ready" &&
+        connection.generation === push.connection_generation,
     )
   ) {
-    set({ popup: push.popup });
+    setForConnection(captureConnectionLease(push.connection_id), {
+      popup: push.popup,
+    });
   }
 }
 
 function handleHerdrEvent(event: HerdrEventMsg) {
   if (
     !state.connectionPaused &&
-    connectionEventIsActive(
+    (connectionEventIsActive(
       state,
       event.connection_id,
       event.connection_generation,
-    )
+    ) ||
+      state.connections.some(
+        (connection) =>
+          connection.id === event.connection_id &&
+          connection.state === "ready" &&
+          connection.generation === event.connection_generation,
+      ))
   ) {
     if (event.event === "herdr-world.task_notification") {
       const notification = parseHerdrTaskNotification(event.data);
@@ -2180,12 +2450,17 @@ function handleHerdrEvent(event: HerdrEventMsg) {
     ) {
       publishLastStepCompletion(event.connection_id, event.data.workspace_id);
     }
-    scheduleRefresh();
+    scheduleRefresh(captureConnectionLease(event.connection_id));
   }
 }
 
-function browserSelectionIsCurrent(navigation: BrowserNavigation) {
-  const current = state.browserNavigation;
+function browserSelectionIsCurrent(
+  navigation: BrowserNavigation,
+  lease?: StoreConnectionLease,
+) {
+  const current = lease
+    ? leaseSnapshot(lease).browserNavigation
+    : state.browserNavigation;
   const workspaceId = navigation.workspaceId;
   const tabId = workspaceId ? navigation.tabIds[workspaceId] : undefined;
   return (
@@ -2238,12 +2513,12 @@ export function useEndpointCreationReason(
   );
 }
 
-function browserCreationSource(workspaceId: string | null) {
+function browserCreationSource(workspaceId: string | null, snapshot = state) {
   const tabId = workspaceId
-    ? state.browserNavigation.tabIds[workspaceId]
+    ? snapshot.browserNavigation.tabIds[workspaceId]
     : undefined;
-  const paneId = tabId ? state.browserNavigation.paneIds[tabId] : undefined;
-  const pane = state.panes.find((pane) => pane.pane_id === paneId);
+  const paneId = tabId ? snapshot.browserNavigation.paneIds[tabId] : undefined;
+  const pane = snapshot.panes.find((pane) => pane.pane_id === paneId);
   return pane
     ? {
         workspace_id: pane.workspace_id,
@@ -2254,47 +2529,52 @@ function browserCreationSource(workspaceId: string | null) {
     : null;
 }
 
-function navigateBrowser(workspaceId: string, tabId?: string, paneId?: string) {
+function navigateBrowser(
+  workspaceId: string,
+  tabId?: string,
+  paneId?: string,
+  lease = captureConnectionLease(),
+) {
   const navigation = selectBrowserTarget(
-    state.browserNavigation,
+    leaseSnapshot(lease).browserNavigation,
     workspaceId,
     tabId,
     paneId,
   );
   const projected = projectBrowserNavigation(
     navigation,
-    state.workspaces,
-    state.tabs,
-    state.panes,
+    leaseSnapshot(lease).workspaces,
+    leaseSnapshot(lease).tabs,
+    leaseSnapshot(lease).panes,
   );
   const activeTabId = projected.browserNavigation.tabIds[workspaceId];
   const nextLayout =
-    state.layout?.tab_id === activeTabId
-      ? state.layout
+    leaseSnapshot(lease).layout?.tab_id === activeTabId
+      ? leaseSnapshot(lease).layout
       : provisionalTabLayout(
           tabLayoutFor(
-            state.activeConnectionId,
-            state.connectionGeneration,
+            leaseSnapshot(lease).activeConnectionId,
+            leaseSnapshot(lease).connectionGeneration,
             activeTabId,
           ),
-          state.panes,
+          leaseSnapshot(lease).panes,
           activeTabId,
         );
-  set({
+  setForConnection(lease, {
     ...projected,
     layout: projectBrowserLayout(nextLayout, projected.selectedPaneId),
     pendingFocusWorkspaceId: null,
     pendingFocusWorkspaceSettledAt: null,
     error: null,
   });
-  return refreshNow();
+  return refreshNow(lease);
 }
 
 /** Adopt an explicit RPC result without requiring it in an older list snapshot. */
 function adoptBrowserTarget(lease: StoreConnectionLease, result: unknown) {
   if (
     !leaseIsCurrent(lease) ||
-    state.navigationMode !== "browser-local" ||
+    leaseSnapshot(lease).navigationMode !== "browser-local" ||
     !result ||
     typeof result !== "object"
   )
@@ -2314,7 +2594,7 @@ function adoptBrowserTarget(lease: StoreConnectionLease, result: unknown) {
   if (typeof workspaceId !== "string") return;
   setForConnection(lease, {
     browserNavigation: selectBrowserTarget(
-      state.browserNavigation,
+      leaseSnapshot(lease).browserNavigation,
       workspaceId,
       typeof tabId === "string" ? tabId : undefined,
       typeof pane?.pane_id === "string" ? pane.pane_id : undefined,
@@ -2329,9 +2609,14 @@ export const store = {
     advertisement: unknown,
   ) {
     if (!client.isCurrent()) return;
-    set({
+    const lease = {
+      connectionId: client.connectionId,
+      generation: client.serverRuntimeGeneration ?? client.generation,
+      client,
+    };
+    setForConnection(lease, {
       endpointAvailability: {
-        ...state.endpointAvailability,
+        ...leaseSnapshot(lease).endpointAvailability,
         [terminalId]: parseEndpointAdvertisement(advertisement),
       },
     });
@@ -2345,6 +2630,8 @@ export const store = {
     );
   },
   get: () => state,
+  getConnection: (connectionId: string) =>
+    connectionSnapshot(state, connectionId),
   subscribe(l: () => void) {
     listeners.add(l);
     return () => listeners.delete(l);
@@ -2367,14 +2654,32 @@ export const store = {
       }
     });
     bridge.onStatus((s) => {
+      if (s !== "connected") {
+        catalogReadyForConnection = false;
+        set({ catalogueReady: false });
+      }
       if (s === "disconnected") {
-        set({ endpointAvailability: {} });
+        for (const connection of state.connections) {
+          disposeTerminalConnection(
+            { connectionId: connection.id, generation: connection.generation },
+            false,
+          );
+        }
+        state = {
+          ...state,
+          sessionsByConnectionId: Object.fromEntries(
+            Object.entries(state.sessionsByConnectionId).map(
+              ([id, session]) => [id, { ...session, endpointAvailability: {} }],
+            ),
+          ),
+        };
+        set({ endpointAvailability: {}, catalogueReady: false });
         catalogReadyForConnection = false;
         terminalReattachPending = true;
         bridge.setConnectionRuntimeGenerations([]);
         clearTerminalRelayViewports();
         clearTabLayouts();
-        focusActionChain = Promise.resolve();
+
         queuedConnectionKeys.clear();
       }
       const completedRecovery =
@@ -2507,6 +2812,7 @@ export const store = {
     bridge.disconnect();
     set({
       connectionPaused: true,
+      catalogueReady: false,
       status: "disconnected",
       connectionGeneration: bridge.clientGeneration,
       bridgeStatus: null,
@@ -2670,19 +2976,31 @@ export const store = {
     workspaceId: string,
     options: { numberedLabel?: boolean } = {},
   ) {
-    const navigation = state.browserNavigation;
+    const navigation = connectionSnapshot(
+      state,
+      target.connectionId,
+    ).browserNavigation;
     return qualifiedAction(target, async (lease) => {
-      const reason = endpointCreationReason(state, "tab.create", workspaceId);
+      const reason = endpointCreationReason(
+        leaseSnapshot(lease),
+        "tab.create",
+        workspaceId,
+      );
       if (reason) throw new Error(reason);
       const result: unknown = await lease.client.call("tab.create", {
         workspace_id: workspaceId,
-        focus: state.navigationMode !== "browser-local",
-        ...(state.navigationMode === "browser-local"
-          ? { browser_source: browserCreationSource(workspaceId) }
+        focus: leaseSnapshot(lease).navigationMode !== "browser-local",
+        ...(leaseSnapshot(lease).navigationMode === "browser-local"
+          ? {
+              browser_source: browserCreationSource(
+                workspaceId,
+                leaseSnapshot(lease),
+              ),
+            }
           : {}),
       });
       assertQualifiedLeaseCurrent(target, lease);
-      if (browserSelectionIsCurrent(navigation)) {
+      if (browserSelectionIsCurrent(navigation, lease)) {
         adoptBrowserTarget(lease, result);
       }
       if (!options.numberedLabel) return result;
@@ -2733,162 +3051,159 @@ export const store = {
   },
 
   async focusQualifiedTarget(target: QualifiedFocusTarget): Promise<boolean> {
-    const targetIsCurrent = () =>
-      state.activeConnectionId === target.connectionId &&
-      state.serverRuntimeGeneration === target.runtimeGeneration &&
-      taskNotificationTargetIsCurrent(state, target);
+    if (!qualifiedRuntimeTargetIsCurrent(target)) return false;
+    const lease = captureConnectionLease(target.connectionId);
+    const navigationRevision = target.navigationRevision;
+    let navigationDispatched = false;
+    const current = () =>
+      qualifiedLeaseIsCurrent(target, lease) &&
+      (navigationRevision === undefined ||
+        navigationDispatched ||
+        leaseSnapshot(lease).navigationMode !== "browser-local" ||
+        leaseSnapshot(lease).browserNavigation.revision === navigationRevision);
     if (
-      !targetIsCurrent() ||
-      !state.workspaces.some(
+      current() &&
+      !leaseSnapshot(lease).workspaces.some(
         (workspace) => workspace.workspace_id === target.workspaceId,
       )
     ) {
+      await refreshNow(lease, true);
+    }
+    if (
+      !current() ||
+      !leaseSnapshot(lease).workspaces.some(
+        (workspace) => workspace.workspace_id === target.workspaceId,
+      )
+    )
       return false;
-    }
-
-    if (state.navigationMode === "browser-local") {
-      if (!target.paneId) {
-        void navigateBrowser(target.workspaceId);
-        return targetIsCurrent();
+    return enqueueFocusAction(async () => {
+      if (!current()) return false;
+      let pane: Pane | null = null;
+      if (target.paneId) {
+        const response = await lease.client.call("pane.get", {
+          pane_id: target.paneId,
+        });
+        pane = response?.pane ?? null;
+        if (
+          !current() ||
+          pane?.pane_id !== target.paneId ||
+          pane.workspace_id !== target.workspaceId ||
+          typeof pane.tab_id !== "string"
+        )
+          return false;
       }
-      const result = await action(
-        async (lease) => {
-          const response = await lease.client.call("pane.get", {
-            pane_id: target.paneId,
-          });
-          const pane = (response?.pane ?? null) as Pane | null;
-          if (
-            !leaseIsCurrent(lease) ||
-            !targetIsCurrent() ||
-            pane?.pane_id !== target.paneId ||
-            pane.workspace_id !== target.workspaceId
-          ) {
-            return null;
-          }
-          return pane;
-        },
-        { refresh: "none", retryOnReconnect: false },
-      );
-      if (!result || !targetIsCurrent()) return false;
-      void navigateBrowser(result.workspace_id, result.tab_id, result.pane_id);
-      return targetIsCurrent() && state.selectedPaneId === target.paneId;
-    }
-
-    const pendingFocusSeq = stampPendingFocusWorkspace(target.workspaceId);
-    const focused = await action(
-      (lease) =>
-        enqueueFocusAction(async () => {
-          if (!leaseIsCurrent(lease) || !targetIsCurrent()) return false;
-          if (!target.paneId) {
-            await lease.client.call("workspace.focus", {
-              workspace_id: target.workspaceId,
-            });
-            return leaseIsCurrent(lease) && targetIsCurrent();
-          }
-
-          const response = await lease.client.call("pane.get", {
-            pane_id: target.paneId,
-          });
-          const pane = (response?.pane ?? null) as Pane | null;
-          if (
-            !leaseIsCurrent(lease) ||
-            !targetIsCurrent() ||
-            pane?.pane_id !== target.paneId ||
-            pane.workspace_id !== target.workspaceId ||
-            typeof pane.tab_id !== "string"
-          ) {
-            return false;
-          }
-          await lease.client.call("workspace.focus", {
-            workspace_id: target.workspaceId,
-          });
-          if (!leaseIsCurrent(lease) || !targetIsCurrent()) return false;
+      if (target.agentSessionId) {
+        const session = await lease.client.call("agent_session.get", {
+          pane_id: target.paneId,
+        });
+        if (
+          !current() ||
+          (session?.session?.value ?? session?.agent_session?.value) !==
+            target.agentSessionId
+        )
+          return false;
+      }
+      if (leaseSnapshot(lease).navigationMode === "browser-local") {
+        navigationDispatched = true;
+        void navigateBrowser(
+          target.workspaceId,
+          pane?.tab_id,
+          pane?.pane_id,
+          lease,
+        );
+      } else {
+        await lease.client.call("workspace.focus", {
+          workspace_id: target.workspaceId,
+        });
+        if (!current()) return false;
+        if (pane) {
           await lease.client.call("tab.focus", { tab_id: pane.tab_id });
-          if (!leaseIsCurrent(lease) || !targetIsCurrent()) return false;
-          setForConnection(lease, { selectedPaneId: target.paneId });
-          return state.selectedPaneId === target.paneId;
-        }),
-      {
-        refresh: "immediate",
-        pendingFocusWorkspaceSeq: pendingFocusSeq,
-        retryOnReconnect: false,
-      },
-    );
-    return focused === true;
+          if (!current()) return false;
+          setForConnection(lease, { selectedPaneId: pane.pane_id });
+        }
+        void refreshNow(lease);
+      }
+      return (
+        current() &&
+        (!target.paneId ||
+          leaseSnapshot(lease).selectedPaneId === target.paneId)
+      );
+    }, target.connectionId).catch((error) => {
+      setForConnection(lease, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    });
   },
 
-  focusTaskNotificationTarget(target: TaskNotificationTarget) {
+  async focusTaskNotificationTarget(target: TaskNotificationTarget) {
+    const unavailable = () =>
+      store.notify({
+        kind: "error",
+        message: "Notification target is unavailable",
+        detail: "The owning runtime, workspace, pane or agent session changed.",
+      });
     if (!taskNotificationTargetIsCurrent(state, target)) {
-      return Promise.resolve(undefined);
+      unavailable();
+      return;
     }
+    const lease = captureConnectionLease(target.connectionId);
+    const navigationRevision = leaseSnapshot(lease).browserNavigation.revision;
     if (
-      target.connectionId !== state.activeConnectionId &&
-      !selectConnectionNow(target.connectionId)
+      !lease ||
+      lease.client.serverRuntimeGeneration !== target.runtimeGeneration
     ) {
-      return Promise.resolve(undefined);
+      unavailable();
+      return;
     }
+    try {
+      const result = await lease.client.call("pane.get", {
+        pane_id: target.paneId,
+      });
+      const pane = result?.pane as Pane | undefined;
+      if (
+        !leaseIsCurrent(lease) ||
+        !pane ||
+        pane.pane_id !== target.paneId ||
+        pane.workspace_id !== target.workspaceId
+      ) {
+        unavailable();
+        return;
+      }
+      if (target.agentSessionId) {
+        const session = await lease.client.call("agent_session.get", {
+          pane_id: target.paneId,
+        });
+        const identity =
+          session?.session?.value ?? session?.agent_session?.value;
+        if (!leaseIsCurrent(lease) || identity !== target.agentSessionId) {
+          unavailable();
+          return;
+        }
+      }
+      const admitted = await store.focusQualifiedTarget({
+        connectionId: target.connectionId,
+        runtimeGeneration: target.runtimeGeneration,
+        workspaceId: target.workspaceId,
+        paneId: target.paneId,
+        agentSessionId: target.agentSessionId,
+        navigationRevision,
+      });
+      if (!admitted) unavailable();
+      return admitted;
+    } catch {
+      unavailable();
+      return;
+    }
+  },
+
+  async activateQualifiedSpacesTarget(target: QualifiedFocusTarget) {
     if (
-      !taskNotificationTargetIsCurrent(state, target) ||
-      state.serverRuntimeGeneration !== target.runtimeGeneration
-    ) {
-      return Promise.resolve(undefined);
-    }
-    if (state.navigationMode === "browser-local") {
-      const navigation = state.browserNavigation;
-      return action(
-        async (lease) => {
-          const result = await lease.client
-            .call("pane.get", { pane_id: target.paneId })
-            .catch(() => null);
-          if (!leaseIsCurrent(lease)) return;
-          if (!browserSelectionIsCurrent(navigation)) return refreshNow(lease);
-          if (result?.pane) adoptBrowserTarget(lease, result);
-          else
-            setForConnection(lease, {
-              browserNavigation: selectBrowserTarget(
-                state.browserNavigation,
-                target.workspaceId,
-              ),
-            });
-          return refreshNow(lease);
-        },
-        { refresh: "none" },
-      );
-    }
-    const pendingFocusSeq = stampPendingFocusWorkspace(target.workspaceId);
-    return action(
-      (lease) =>
-        enqueueFocusAction(async () => {
-          let pane: Pane | null = null;
-          try {
-            const result = await lease.client.call("pane.get", {
-              pane_id: target.paneId,
-            });
-            pane = (result?.pane ?? null) as Pane | null;
-          } catch {
-            // The pane may have closed after the notification was shown.
-          }
-
-          const workspaceId = pane?.workspace_id ?? target.workspaceId;
-          await lease.client.call("workspace.focus", {
-            workspace_id: workspaceId,
-          });
-          if (!pane) return null;
-
-          try {
-            await lease.client.call("tab.focus", { tab_id: pane.tab_id });
-          } catch {
-            // The pane or tab can close between pane.get and tab.focus.
-            return null;
-          }
-          setForConnection(lease, { selectedPaneId: pane.pane_id });
-          return pane;
-        }),
-      {
-        refresh: "immediate",
-        pendingFocusWorkspaceSeq: pendingFocusSeq,
-      },
-    );
+      !(await store.focusQualifiedTarget(target)) ||
+      !qualifiedRuntimeTargetIsCurrent(target)
+    )
+      return false;
+    return selectConnectionNow(target.connectionId, false);
   },
 
   createWorkspace(label?: string, cwd?: string) {
@@ -2928,24 +3243,31 @@ export const store = {
     label?: string,
     cwd?: string,
   ) {
-    const navigation = state.browserNavigation;
+    const navigation = connectionSnapshot(
+      state,
+      target.connectionId,
+    ).browserNavigation;
     return qualifiedAction(target, async (lease) => {
-      const reason = endpointCreationReason(state, "workspace.create");
+      const reason = endpointCreationReason(
+        leaseSnapshot(lease),
+        "workspace.create",
+      );
       if (reason) throw new Error(reason);
       const result = await lease.client.call("workspace.create", {
         label,
         cwd,
-        focus: state.navigationMode !== "browser-local",
-        ...(state.navigationMode === "browser-local"
+        focus: leaseSnapshot(lease).navigationMode !== "browser-local",
+        ...(leaseSnapshot(lease).navigationMode === "browser-local"
           ? {
               browser_source: browserCreationSource(
-                state.browserNavigation.workspaceId,
+                leaseSnapshot(lease).browserNavigation.workspaceId,
+                leaseSnapshot(lease),
               ),
             }
           : {}),
       });
       assertQualifiedLeaseCurrent(target, lease);
-      if (browserSelectionIsCurrent(navigation)) {
+      if (browserSelectionIsCurrent(navigation, lease)) {
         adoptBrowserTarget(lease, result);
       }
       return result;
@@ -3009,7 +3331,7 @@ export const store = {
     );
   },
 
-  gitPullWorkspace(workspaceId: string) {
+  gitPullWorkspace(workspaceId: string, client?: ConnectionClient) {
     return action(
       async (lease) => {
         setForConnection(lease, {
@@ -3045,6 +3367,7 @@ export const store = {
       },
       {
         refresh: "immediate",
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: "Git pull failed",
@@ -3060,6 +3383,7 @@ export const store = {
     workspaceId: string,
     gitAction: GitFileAction,
     entry: Pick<GitDiffEntry, "path" | "old_path" | "mtime_ms" | "size">,
+    client?: ConnectionClient,
   ) {
     const label = gitFileActionLabel(gitAction);
     return action(
@@ -3084,6 +3408,7 @@ export const store = {
       },
       {
         refresh: "immediate",
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: `${label} failed`,
@@ -3098,6 +3423,7 @@ export const store = {
     workspaceId: string,
     gitAction: GitFileAction,
     entries: Pick<GitDiffEntry, "path" | "old_path" | "mtime_ms" | "size">[],
+    client?: ConnectionClient,
   ) {
     const label = gitFileActionLabel(gitAction);
     let completed = 0;
@@ -3130,6 +3456,7 @@ export const store = {
       },
       {
         refresh: "immediate",
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: `${label} failed`,
@@ -3144,6 +3471,7 @@ export const store = {
     workspaceId: string,
     gitAction: GitRepoAction,
     expectedCounts?: Partial<GitWorkingCounts>,
+    client?: ConnectionClient,
   ) {
     return action(
       async (lease) => {
@@ -3163,6 +3491,7 @@ export const store = {
       },
       {
         refresh: "immediate",
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: "Git action failed",
@@ -3173,8 +3502,15 @@ export const store = {
     );
   },
 
-  createWorktree(workspaceId: string, branch: string) {
-    const navigation = state.browserNavigation;
+  createWorktree(
+    workspaceId: string,
+    branch: string,
+    client?: ConnectionClient,
+  ) {
+    const navigation = connectionSnapshot(
+      state,
+      client?.connectionId ?? state.activeConnectionId,
+    ).browserNavigation;
     return action(
       async (lease) => {
         setForConnection(lease, {
@@ -3190,9 +3526,9 @@ export const store = {
         const result = await lease.client.call("worktree.create", {
           workspace_id: workspaceId,
           branch,
-          focus: state.navigationMode !== "browser-local",
+          focus: leaseSnapshot(lease).navigationMode !== "browser-local",
         });
-        if (browserSelectionIsCurrent(navigation))
+        if (browserSelectionIsCurrent(navigation, lease))
           adoptBrowserTarget(lease, result);
         const setupHook = result?.setup_hook as
           | WorktreeHookRunResult
@@ -3221,6 +3557,7 @@ export const store = {
         return result;
       },
       {
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: "Failed to create worktree",
@@ -3230,68 +3567,93 @@ export const store = {
     );
   },
 
-  openWorktree(workspaceId: string, target: string, focus = true) {
-    const navigation = state.browserNavigation;
+  openWorktree(
+    workspaceId: string,
+    target: string,
+    focus = true,
+    client?: ConnectionClient,
+  ) {
+    const navigation = connectionSnapshot(
+      state,
+      client?.connectionId ?? state.activeConnectionId,
+    ).browserNavigation;
     const trimmed = target.trim();
     const locator = trimmed.startsWith("/")
       ? { path: trimmed }
       : { branch: trimmed };
-    return action(async (lease) => {
-      const result = await lease.client.call("worktree.open", {
-        workspace_id: workspaceId,
-        ...locator,
-        focus: focus && state.navigationMode !== "browser-local",
-      });
-      if (focus && browserSelectionIsCurrent(navigation))
-        adoptBrowserTarget(lease, result);
-      const openedHook = result?.opened_hook as
-        | WorktreeHookRunResult
-        | undefined;
-      const openedNotice = openedHook
-        ? summarizeDirectHookResult(openedHook)
-        : null;
-      if (openedNotice) setForConnection(lease, { notice: openedNotice });
-      return result;
-    });
+    return action(
+      async (lease) => {
+        const result = await lease.client.call("worktree.open", {
+          workspace_id: workspaceId,
+          ...locator,
+          focus:
+            focus && leaseSnapshot(lease).navigationMode !== "browser-local",
+        });
+        if (focus && browserSelectionIsCurrent(navigation, lease))
+          adoptBrowserTarget(lease, result);
+        const openedHook = result?.opened_hook as
+          | WorktreeHookRunResult
+          | undefined;
+        const openedNotice = openedHook
+          ? summarizeDirectHookResult(openedHook)
+          : null;
+        if (openedNotice) setForConnection(lease, { notice: openedNotice });
+        return result;
+      },
+      { client },
+    );
   },
 
   // A linked checkout can remain open after its main workspace is closed.
   // Herdr accepts the repository root as the source in that state, allowing
   // the GUI to reopen main without inventing or guessing a workspace ID.
-  openWorktreeFromCwd(cwd: string, target: string, focus = true) {
-    const navigation = state.browserNavigation;
+  openWorktreeFromCwd(
+    cwd: string,
+    target: string,
+    focus = true,
+    client?: ConnectionClient,
+  ) {
+    const navigation = connectionSnapshot(
+      state,
+      client?.connectionId ?? state.activeConnectionId,
+    ).browserNavigation;
     const trimmed = target.trim();
     const locator = trimmed.startsWith("/")
       ? { path: trimmed }
       : { branch: trimmed };
-    return action(async (lease) => {
-      const result = await lease.client.call("worktree.open", {
-        cwd,
-        ...locator,
-        focus: focus && state.navigationMode !== "browser-local",
-      });
-      if (focus && browserSelectionIsCurrent(navigation))
-        adoptBrowserTarget(lease, result);
-      const openedHook = result?.opened_hook as
-        | WorktreeHookRunResult
-        | undefined;
-      const openedNotice = openedHook
-        ? summarizeDirectHookResult(openedHook)
-        : null;
-      if (openedNotice) setForConnection(lease, { notice: openedNotice });
-      return result;
-    });
+    return action(
+      async (lease) => {
+        const result = await lease.client.call("worktree.open", {
+          cwd,
+          ...locator,
+          focus:
+            focus && leaseSnapshot(lease).navigationMode !== "browser-local",
+        });
+        if (focus && browserSelectionIsCurrent(navigation, lease))
+          adoptBrowserTarget(lease, result);
+        const openedHook = result?.opened_hook as
+          | WorktreeHookRunResult
+          | undefined;
+        const openedNotice = openedHook
+          ? summarizeDirectHookResult(openedHook)
+          : null;
+        if (openedNotice) setForConnection(lease, { notice: openedNotice });
+        return result;
+      },
+      { client },
+    );
   },
 
   removeWorktree(
     workspaceId: string,
     force = false,
     workspaceHint?: Workspace,
+    client?: ConnectionClient,
   ) {
     return action(
       async (lease) => {
         const removedWorkspace =
-          state.workspaces.find(
+          leaseSnapshot(lease).workspaces.find(
             (workspace) => workspace.workspace_id === workspaceId,
           ) ?? workspaceHint;
         setForConnection(lease, {
@@ -3329,7 +3691,7 @@ export const store = {
 
         await refreshNow(lease);
         setForConnection(lease, {
-          terminalAttachEpoch: state.terminalAttachEpoch + 1,
+          terminalAttachEpoch: leaseSnapshot(lease).terminalAttachEpoch + 1,
         });
         if (removedWorkspace && typeof window !== "undefined") {
           window.dispatchEvent(
@@ -3366,6 +3728,7 @@ export const store = {
         return result;
       },
       {
+        client,
         failureNotice: (error) => ({
           kind: "error",
           message: "Failed to remove worktree",
@@ -3948,6 +4311,7 @@ export const __storeTesting = {
   markTerminalReattachPending() {
     terminalReattachPending = true;
     catalogReadyForConnection = false;
+    set({ catalogueReady: false });
     bridge.setConnectionRuntimeGenerations([]);
   },
   rearmTerminalAttachmentsAfterCatalog,
@@ -3955,13 +4319,20 @@ export const __storeTesting = {
     stopPolling();
     refreshingConnectionKeys.clear();
     queuedConnectionKeys.clear();
-    focusActionChain = Promise.resolve();
+
     taskCompletionTracker.clear();
-    state = snapshot;
+    state = {
+      ...snapshot,
+      catalogueReady:
+        snapshot.status === "connected" &&
+        !snapshot.connectionPaused &&
+        (snapshot.catalogueReady ?? false),
+    };
     terminalReattachPending = false;
     connectionRecoveryIntent = null;
     catalogReadyForConnection = snapshot.connections.length > 0;
     bridge.setConnectionRuntimeGenerations(snapshot.connections);
+    emit();
   },
   applyCatalog(connections: ConnectionSummary[], defaultConnectionId: string) {
     const requestSeq = ++catalogRequestSeq;
@@ -4014,6 +4385,7 @@ export function useStoreSelector<T>(
   selector: (state: State) => T,
   isEqual: (a: T, b: T) => boolean = Object.is,
 ): T {
+  const context = useContext(OperationalContext);
   const cacheRef = useRef<{
     state: State;
     selector: (state: State) => T;
@@ -4021,7 +4393,10 @@ export function useStoreSelector<T>(
   } | null>(null);
 
   const getSnapshot = () => {
-    const snapshot = store.get();
+    const source = store.get();
+    const snapshot = context
+      ? connectionSnapshot(source, context.connectionId)
+      : source;
     const cache = cacheRef.current;
     if (cache && cache.state === snapshot && cache.selector === selector) {
       return cache.value;
@@ -4036,4 +4411,324 @@ export function useStoreSelector<T>(
   };
 
   return useSyncExternalStore(store.subscribe, getSnapshot);
+}
+
+/** Commands captured by a component's owning runtime, never by sibling focus. */
+export function operationalStore(context: OperationalContext) {
+  const client = bridge.connection(
+    context.connectionId,
+    context.runtimeGeneration,
+  );
+  const lease = {
+    connectionId: context.connectionId,
+    generation: context.runtimeGeneration,
+    client,
+  };
+  const request = async (method: string, params: Record<string, unknown>) => {
+    assertQualifiedLeaseCurrent(context, lease);
+    const result = await client.call(method, params);
+    assertQualifiedLeaseCurrent(context, lease);
+    scheduleRefresh(lease);
+    return result;
+  };
+  const call = (method: string, params: Record<string, unknown>) =>
+    action(() => request(method, params), {
+      client,
+      refresh: "none",
+      failureNotice: (error) => ({
+        kind: "error",
+        message: "Command failed",
+        detail: error.message,
+      }),
+    });
+  const worktreeResult = async <T>(
+    pending: Promise<T | undefined>,
+  ): Promise<T> => {
+    const result = await pending;
+    assertQualifiedLeaseCurrent(context, lease);
+    if (result === undefined)
+      throw new Error(
+        "Worktree operation returned no admitted result. Its outcome may be uncertain; it was not replayed.",
+      );
+    return result;
+  };
+  return {
+    get: () => connectionSnapshot(state, context.connectionId),
+    notify: store.notify,
+    clearNotice: store.clearNotice,
+    setTerminalEndpoint: store.setTerminalEndpoint,
+    refresh: () => refreshNow(lease),
+    terminalScrollReason: (terminalId: string, mouseReporting = false) =>
+      mouseReporting
+        ? null
+        : endpointMethodReason(
+            leaseSnapshot(lease).navigationMode,
+            leaseSnapshot(lease).endpointAvailability[terminalId],
+            "pane.scroll",
+          ),
+    focusPane: (paneId: string) => {
+      if (!leaseIsCurrent(lease)) return Promise.resolve(false);
+      const pane = leaseSnapshot(lease).panes.find(
+        (pane) => pane.pane_id === paneId,
+      );
+      return pane
+        ? store.focusQualifiedTarget({
+            ...context,
+            workspaceId: pane.workspace_id,
+            paneId,
+          })
+        : Promise.resolve(false);
+    },
+    focusPaneDirection: (
+      paneId: string,
+      direction: "left" | "right" | "up" | "down",
+    ) => {
+      assertQualifiedLeaseCurrent(context, lease);
+      const target = browserPaneInDirection(
+        leaseSnapshot(lease).layout,
+        paneId,
+        direction,
+      );
+      if (leaseSnapshot(lease).navigationMode === "browser-local")
+        return target
+          ? store.focusQualifiedTarget({
+              ...context,
+              workspaceId:
+                leaseSnapshot(lease).panes.find(
+                  (pane) => pane.pane_id === target,
+                )?.workspace_id ?? "",
+              paneId: target,
+            })
+          : Promise.resolve(false);
+      return call("pane.focus_direction", { pane_id: paneId, direction });
+    },
+    resizePane: (
+      paneId: string,
+      direction: "left" | "right" | "up" | "down",
+      amount: number,
+    ) => call("pane.resize", { pane_id: paneId, direction, amount }),
+    splitPane: async (paneId: string, direction: "right" | "down") => {
+      const navigation = leaseSnapshot(lease).browserNavigation;
+      const result = await call("pane.split", {
+        target_pane_id: paneId,
+        direction,
+        focus: leaseSnapshot(lease).navigationMode !== "browser-local",
+      });
+      assertQualifiedLeaseCurrent(context, lease);
+      if (browserSelectionIsCurrent(navigation, lease)) {
+        adoptBrowserTarget(lease, result);
+        if (typeof result?.pane?.pane_id === "string")
+          setForConnection(lease, { selectedPaneId: result.pane.pane_id });
+      }
+      return result;
+    },
+    zoomPane: (paneId: string) => call("pane.zoom", { pane_id: paneId }),
+    closePane: (paneId: string) => call("pane.close", { pane_id: paneId }),
+    closePopup: () => call("popup.close", {}),
+    togglePluginPopup: (
+      pluginId: string,
+      actionId: string,
+      context: Record<string, unknown> = {},
+    ) =>
+      action(
+        async () => {
+          assertQualifiedLeaseCurrent(
+            {
+              connectionId: lease.connectionId,
+              runtimeGeneration: lease.generation,
+            },
+            lease,
+          );
+          try {
+            await request("popup.close", {});
+            return;
+          } catch (error) {
+            if (!String(error).includes("popup_not_open")) throw error;
+          }
+          assertQualifiedLeaseCurrent(
+            {
+              connectionId: lease.connectionId,
+              runtimeGeneration: lease.generation,
+            },
+            lease,
+          );
+          if (typeof context.workspace_id === "string")
+            await request("workspace.focus", {
+              workspace_id: context.workspace_id,
+            });
+          return request("plugin.action.invoke", {
+            plugin_id: pluginId,
+            action_id: actionId,
+            context,
+          });
+        },
+        {
+          client,
+          refresh: "none",
+          failureNotice: (error) => ({
+            kind: "error",
+            message: "Plugin action failed",
+            detail: error.message,
+          }),
+        },
+      ),
+    focusWorkspace: (workspaceId: string) =>
+      leaseIsCurrent(lease)
+        ? store.focusQualifiedTarget({ ...context, workspaceId, paneId: null })
+        : Promise.resolve(false),
+    focusTab: (tabId: string) => {
+      if (!leaseIsCurrent(lease)) return Promise.resolve(false);
+      const snapshot = leaseSnapshot(lease);
+      const tab = snapshot.tabs.find((tab) => tab.tab_id === tabId);
+      if (!tab) return Promise.resolve(false);
+      if (snapshot.navigationMode === "browser-local")
+        return navigateBrowser(tab.workspace_id, tabId, undefined, lease).then(
+          async () => {
+            const current = leaseSnapshot(lease);
+            if (
+              leaseIsCurrent(lease) &&
+              !current.panes.some(
+                (pane) =>
+                  pane.tab_id === tabId &&
+                  pane.pane_id === current.selectedPaneId,
+              )
+            )
+              await refreshAfterCurrent(lease);
+            return leaseIsCurrent(lease);
+          },
+        );
+      if (tab.focused && snapshot.layout?.tab_id === tabId) {
+        const pane =
+          snapshot.panes.find(
+            (pane) => pane.tab_id === tabId && pane.focused,
+          ) ??
+          snapshot.panes.find(
+            (pane) =>
+              pane.tab_id === tabId &&
+              pane.pane_id === snapshot.layout?.focused_pane_id,
+          );
+        // Restore current native/layout focus without rebuilding the tab.
+        if (pane)
+          return store.focusQualifiedTarget({
+            ...context,
+            workspaceId: tab.workspace_id,
+            paneId: pane.pane_id,
+          });
+      }
+      return enqueueFocusAction(async () => {
+        if (!leaseIsCurrent(lease)) return false;
+        await lease.client.call("workspace.focus", {
+          workspace_id: tab.workspace_id,
+        });
+        if (!leaseIsCurrent(lease)) return false;
+        await lease.client.call("tab.focus", { tab_id: tabId });
+        if (!leaseIsCurrent(lease)) return false;
+        // Observe the destination layout before replacing the selection;
+        // restoring the current tab must not transiently remove its pane.
+        await refreshAfterCurrent(lease);
+        const layout = leaseSnapshot(lease).layout;
+        if (leaseIsCurrent(lease) && layout?.tab_id === tabId)
+          setForConnection(lease, { selectedPaneId: layout.focused_pane_id });
+        return leaseIsCurrent(lease);
+      }, lease.connectionId);
+    },
+    createTab: (
+      workspaceId: string,
+      options: { numberedLabel?: boolean; label?: string } = {},
+    ) => {
+      assertQualifiedLeaseCurrent(context, lease);
+      return store.createQualifiedTab(context, workspaceId, options);
+    },
+    renameWorkspace: (workspaceId: string, label: string) =>
+      call("workspace.rename", { workspace_id: workspaceId, label }),
+    closeWorkspace: (workspaceId: string) =>
+      call("workspace.close", { workspace_id: workspaceId }),
+    closeWorkspaceOrThrow: (workspaceId: string) =>
+      request("workspace.close", { workspace_id: workspaceId }),
+    moveWorkspace: (workspaceId: string, insertIndex: number) =>
+      call("workspace.move", {
+        workspace_id: workspaceId,
+        insert_index: insertIndex,
+      }),
+    renameTab: (tabId: string, label: string) =>
+      call("tab.rename", { tab_id: tabId, label }),
+    closeTab: (tabId: string) => call("tab.close", { tab_id: tabId }),
+    gitPullWorkspace: (workspaceId: string) =>
+      store.gitPullWorkspace(workspaceId, client),
+    createWorktree: async (workspaceId: string, branch: string) => {
+      assertQualifiedLeaseCurrent(context, lease);
+      return worktreeResult(store.createWorktree(workspaceId, branch, client));
+    },
+    openWorktree: async (workspaceId: string, target: string, focus = true) => {
+      assertQualifiedLeaseCurrent(context, lease);
+      return worktreeResult(
+        store.openWorktree(workspaceId, target, focus, client),
+      );
+    },
+    openWorktreeFromCwd: async (cwd: string, target: string, focus = true) => {
+      assertQualifiedLeaseCurrent(context, lease);
+      return worktreeResult(
+        store.openWorktreeFromCwd(cwd, target, focus, client),
+      );
+    },
+    removeWorktree: async (
+      workspaceId: string,
+      force = false,
+      workspaceHint?: Workspace,
+    ) => {
+      assertQualifiedLeaseCurrent(context, lease);
+      return worktreeResult(
+        store.removeWorktree(workspaceId, force, workspaceHint, client),
+      );
+    },
+    setRepoWorktreeHooksEnabled: (key: string, enabled: boolean) =>
+      call("settings.update_repo", {
+        key,
+        settings: { worktree_hooks_enabled: enabled },
+      }),
+    setWorkspaceAutoSyncEnabled: (workspaceId: string, enabled: boolean) =>
+      call("settings.workspace_auto_sync.update", {
+        workspace_id: workspaceId,
+        enabled,
+      }),
+    setWorkspaceAutoSyncConfigEnabled: (key: string, enabled: boolean) =>
+      call("settings.workspace_auto_sync.update_key", { key, enabled }),
+    createWorkspace: (label?: string, cwd?: string) => {
+      if (!leaseIsCurrent(lease)) return Promise.resolve(false);
+      return store.createQualifiedWorkspace(context, label, cwd);
+    },
+    runGitFileAction: (...args: Parameters<typeof store.runGitFileAction>) =>
+      store.runGitFileAction(args[0], args[1], args[2], client),
+    runGitFileActionBatch: (
+      ...args: Parameters<typeof store.runGitFileActionBatch>
+    ) => store.runGitFileActionBatch(args[0], args[1], args[2], client),
+    runGitRepoAction: (...args: Parameters<typeof store.runGitRepoAction>) =>
+      store.runGitRepoAction(args[0], args[1], args[2], client),
+  };
+}
+
+export function useOperationalStore() {
+  const context = useContext(OperationalContext);
+  const owner = useStoreSelector(
+    (snapshot) => ({
+      connectionId: snapshot.activeConnectionId,
+      runtimeGeneration: snapshot.serverRuntimeGeneration,
+    }),
+    shallowEqual,
+  );
+  const status = useStoreSelector((snapshot) => snapshot.status);
+  const attachEpoch = useStoreSelector(
+    (snapshot) => snapshot.terminalAttachEpoch,
+  );
+  const connectionId = context?.connectionId ?? owner.connectionId;
+  const runtimeGeneration =
+    context?.runtimeGeneration ?? owner.runtimeGeneration;
+  return useMemo(() => {
+    void status;
+    void attachEpoch;
+    return operationalStore({
+      connectionId,
+      runtimeGeneration: runtimeGeneration ?? -1,
+    });
+  }, [connectionId, runtimeGeneration, status, attachEpoch]);
 }

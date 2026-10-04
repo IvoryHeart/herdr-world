@@ -1,7 +1,66 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ConnectionClient } from "../api";
+import { connectionClientScopeGeneration } from "../useConnectionClient";
 import { worldLocalStorage } from "../browserStorage";
 import type { WorldLeafObject, WorldObject } from "./worldObject";
+
+/** Aggregate reads resolve the immutable owner of each observed leaf. */
+export type DeskClients =
+  | ConnectionClient
+  | ((leaf: WorldLeafObject) => ConnectionClient);
+
+export function deskScope(clients: DeskClients): string {
+  return typeof clients === "function" ? "aggregate" : clients.connectionId;
+}
+
+export function deskClient(
+  clients: DeskClients,
+  leaf: WorldLeafObject,
+): ConnectionClient | null {
+  const client = typeof clients === "function" ? clients(leaf) : clients;
+  return client.connectionId === leaf.connectionId &&
+    connectionClientScopeGeneration(client) === leaf.generation &&
+    client.isCurrent()
+    ? client
+    : null;
+}
+
+/** Coalesced host queues retain ownership while an obsolete read settles. */
+export class DeskReadQueues {
+  private readonly hosts = new Map<
+    string,
+    { running: boolean; next: (() => Promise<void>) | null }
+  >();
+  private active = 0;
+
+  constructor(private readonly limit: number) {}
+
+  enqueue(connectionId: string, read: () => Promise<void>) {
+    const host = this.hosts.get(connectionId) ?? { running: false, next: null };
+    host.next = read;
+    this.hosts.set(connectionId, host);
+    this.drain();
+  }
+
+  private drain() {
+    for (const [id, host] of this.hosts) {
+      if (this.active >= this.limit) break;
+      if (host.running || !host.next) continue;
+      const read = host.next;
+      host.next = null;
+      host.running = true;
+      this.active += 1;
+      const settled = () => {
+        host.running = false;
+        this.active -= 1;
+        if (!host.next) this.hosts.delete(id);
+        this.drain();
+      };
+      // Read failures are handled by the caller; settlement always frees admission.
+      void Promise.resolve().then(read).then(settled, settled);
+    }
+  }
+}
 
 /** Mirrors the service's `TurnReceipt` (server/src/agent/turn-receipt.ts). */
 export type TurnReceipt = {
@@ -26,14 +85,10 @@ const HANDLED_LIMIT = 500;
 // sessions are history, not work waiting for review.
 export const IDLE_WINDOW_MS = 12 * 60 * 60_000;
 
-/** Every agent on the selected host that can be acted on now. */
+/** Every agent in the host filter that can be acted on now. */
 export function operationalAgents(world: WorldObject): WorldLeafObject[] {
   return world.leaves.filter(
-    (leaf) =>
-      leaf.kind === "agent" &&
-      leaf.selectedHost &&
-      leaf.actionable &&
-      !leaf.stale,
+    (leaf) => leaf.kind === "agent" && leaf.actionable && !leaf.stale,
   );
 }
 
@@ -52,15 +107,43 @@ export function pollingTargets(
   leaves: readonly WorldLeafObject[],
   limit = MAX_POLLED_AGENTS,
 ): WorldLeafObject[] {
-  return leaves
-    .map((leaf, index) => ({ leaf, index }))
-    .sort(
-      (left, right) =>
-        (ATTENTION_ORDER[left.leaf.status] ?? 4) -
-          (ATTENTION_ORDER[right.leaf.status] ?? 4) || left.index - right.index,
-    )
-    .slice(0, limit)
-    .map(({ leaf }) => leaf);
+  if (limit <= 0) return [];
+  const tiers = new Map<number, WorldLeafObject[]>();
+  for (const leaf of leaves) {
+    const priority = ATTENTION_ORDER[leaf.status] ?? 4;
+    const tier = tiers.get(priority) ?? [];
+    tier.push(leaf);
+    tiers.set(priority, tier);
+  }
+  const admitted: WorldLeafObject[] = [];
+  for (const priority of [...tiers.keys()].sort((a, b) => a - b)) {
+    const hosts = deskHostGroups(tiers.get(priority)!);
+    for (let round = 0; ; round += 1) {
+      let found = false;
+      for (const host of hosts) {
+        const leaf = host[round];
+        if (!leaf) continue;
+        found = true;
+        admitted.push(leaf);
+        if (admitted.length >= limit) return admitted;
+      }
+      if (!found) break;
+    }
+  }
+  return admitted;
+}
+
+/** One serial queue per owner; unrelated hosts may read concurrently. */
+export function deskHostGroups(
+  leaves: readonly WorldLeafObject[],
+): WorldLeafObject[][] {
+  const hosts = new Map<string, WorldLeafObject[]>();
+  for (const leaf of leaves) {
+    const group = hosts.get(leaf.connectionId) ?? [];
+    group.push(leaf);
+    hosts.set(leaf.connectionId, group);
+  }
+  return [...hosts.values()];
 }
 
 /**
@@ -236,7 +319,7 @@ export function useNow(intervalMs = 15_000) {
  */
 export function useTurnReceipts(
   leaves: WorldLeafObject[],
-  client: ConnectionClient,
+  clients: DeskClients,
 ) {
   const [receipts, setReceipts] = useState<Map<string, StoredReceipt>>(
     () => new Map(),
@@ -247,16 +330,19 @@ export function useTurnReceipts(
   const failures = useRef(
     new Map<string, { trigger: string; count: number }>(),
   );
+  const queues = useMemo(() => new DeskReadQueues(MAX_POLLED_AGENTS), []);
   const targets = pollingTargets(leaves);
   const requestKeys = targets
     .map((leaf) => `${receiptIdentity(leaf)}=${receiptTrigger(leaf)}`)
     .join("\n");
 
+  const clientScope = deskScope(clients);
+
   useEffect(() => {
     setReceipts(new Map());
     fetched.current = new Map();
     due.current = new Set();
-  }, [client.connectionId]);
+  }, [clientScope]);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState !== "hidden") setTick((v) => v + 1);
@@ -294,60 +380,69 @@ export function useTurnReceipts(
       );
     });
     let cancelled = false;
-    void (async () => {
-      for (const leaf of queue) {
-        if (cancelled || !client.isCurrent()) return;
-        // A page hidden mid-queue stops reading; unread agents stay due and
-        // are read when it is shown again.
-        if (document.visibilityState === "hidden") return;
-        const identity = receiptIdentity(leaf);
-        const trigger = receiptTrigger(leaf);
-        if (!leaf.pane.agent) {
-          fetched.current.set(identity, trigger);
-          due.current.delete(identity);
-          setReceipts((current) =>
-            new Map(current).set(identity, receiptAfterRead(null, trigger)),
-          );
-          continue;
-        }
-        try {
-          const result = await client.call("agent_turn.get", turnRequest(leaf));
-          if (cancelled || !client.isCurrent()) return;
-          fetched.current.set(identity, trigger);
-          due.current.delete(identity);
-          // Only the session this card shows may publish a receipt to it; the
-          // next observation names the replacement session.
-          failures.current.delete(identity);
-          if (!answersSession(result, leaf)) continue;
-          const turn = (result as { turn?: unknown } | null)?.turn;
-          setReceipts((current) =>
-            new Map(current).set(
-              identity,
-              receiptAfterRead(isReceipt(turn) ? turn : null, trigger),
-            ),
-          );
-        } catch {
+    for (const group of deskHostGroups(queue)) {
+      queues.enqueue(group[0]!.connectionId, async () => {
+        for (const leaf of group) {
           if (cancelled) return;
-          fetched.current.set(identity, trigger);
-          due.current.delete(identity);
-          const failed = failures.current.get(identity);
-          const count = failed?.trigger === trigger ? failed.count + 1 : 1;
-          failures.current.set(identity, { trigger, count });
-          setReceipts((current) =>
-            new Map(current).set(
-              identity,
-              receiptAfterError(current.get(identity), trigger, count),
-            ),
-          );
+          const client = deskClient(clients, leaf);
+          if (!client) continue;
+          // A page hidden mid-queue stops reading; unread agents stay due and
+          // are read when it is shown again.
+          if (document.visibilityState === "hidden") return;
+          const identity = receiptIdentity(leaf);
+          const trigger = receiptTrigger(leaf);
+          if (!leaf.pane.agent) {
+            fetched.current.set(identity, trigger);
+            due.current.delete(identity);
+            setReceipts((current) =>
+              new Map(current).set(identity, receiptAfterRead(null, trigger)),
+            );
+            continue;
+          }
+          try {
+            const result = await client.call(
+              "agent_turn.get",
+              turnRequest(leaf),
+            );
+            if (cancelled) return;
+            if (!client.isCurrent()) continue;
+            fetched.current.set(identity, trigger);
+            due.current.delete(identity);
+            // Only the session this card shows may publish a receipt to it; the
+            // next observation names the replacement session.
+            failures.current.delete(identity);
+            if (!answersSession(result, leaf)) continue;
+            const turn = (result as { turn?: unknown } | null)?.turn;
+            setReceipts((current) =>
+              new Map(current).set(
+                identity,
+                receiptAfterRead(isReceipt(turn) ? turn : null, trigger),
+              ),
+            );
+          } catch {
+            if (cancelled) return;
+            if (!client.isCurrent()) continue;
+            fetched.current.set(identity, trigger);
+            due.current.delete(identity);
+            const failed = failures.current.get(identity);
+            const count = failed?.trigger === trigger ? failed.count + 1 : 1;
+            failures.current.set(identity, { trigger, count });
+            setReceipts((current) =>
+              new Map(current).set(
+                identity,
+                receiptAfterError(current.get(identity), trigger, count),
+              ),
+            );
+          }
         }
-      }
-    })();
+      });
+    }
     return () => {
       cancelled = true;
     };
     // requestKeys captures every identity and trigger; tick marks all due.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, requestKeys, tick]);
+  }, [clients, queues, requestKeys, tick]);
 
   const polled = new Set(targets.map(receiptIdentity));
   // Agents outside the polling bound have no receipt rather than a pending one.
@@ -510,11 +605,14 @@ export function answersSession(result: unknown, leaf: WorldLeafObject) {
  * and files with another stop's report.
  */
 export async function fetchFullReport(
-  client: ConnectionClient,
+  clients: DeskClients,
   leaf: WorldLeafObject,
   expectedTurnId: string,
 ): Promise<string | null> {
+  const client = deskClient(clients, leaf);
+  if (!client) return null;
   const result = await client.call("agent_turn.get", turnRequest(leaf, true));
+  if (!client.isCurrent()) return null;
   if (!answersSession(result, leaf)) return null;
   const turn = (result as { turn?: unknown } | null)?.turn;
   return isReceipt(turn) && turn.turn_id === expectedTurnId

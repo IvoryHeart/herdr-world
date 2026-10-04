@@ -5,8 +5,8 @@
 </p>
 
 A **visual control plane** for [Herdr](https://herdr.dev). Connect local and SSH
-hosts, select one host at a time in Office, Tree, Graph, or Spaces, and open its
-qualified terminals, files, changes, and agent history on desktop or mobile.
+hosts, see their agents together in Desk, Office, Tree or Graph, and use independently
+qualified terminals, files, changes and agent history on desktop or mobile.
 **Requires a running Herdr server.**
 
 ## Screenshots
@@ -15,10 +15,11 @@ qualified terminals, files, changes, and agent history on desktop or mobile.
 
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Office shows the selected host's agent state at a glance. Tree and Graph expose
-the same qualified runtime, while Spaces keeps Herdr's full terminal and
-repository workflow one click away. Switch the host selector to replace the
-whole view; World keeps other managed connections observed in the background.
+Desk is the default view for agent triage across filtered hosts. Office groups agent
+work by host. Tree and Graph show the same filtered aggregate,
+while Spaces keeps one qualified workspace's terminal and repository workflow
+one click away. Hosts defaults to All hosts; filtering changes visibility while
+open Inspectors and pending operations keep their captured owners.
 
 <!-- markdownlint-disable MD033 -->
 
@@ -125,10 +126,11 @@ Click any screenshot to open the full-resolution image.
    `herdr-world` (or `herdr-world.exe` from an extracted Windows archive) and open
    the printed URL.
 
-Use the connection selector to add local sockets or an SSH destination. One World
-service owns every connection; each browser selects one operational host and stays
-on the same World origin. Office, Tree, Graph, visible counts, and search follow
-that selected host until simultaneous active-host interaction is supported.
+Use Manage connections to add local sockets or an SSH destination. One World
+service owns every connection and the browser stays on that World origin. Hosts
+filters Office, Tree, Graph, the navigator, counts and search; it never connects
+or disconnects a profile. Terminals and Inspectors on different ready hosts can
+operate together. Global creation visibly confirms one destination host.
 
 See [deployment](./docs/DEPLOYMENT.md) for checksums, profiles, authentication,
 updates, and services.

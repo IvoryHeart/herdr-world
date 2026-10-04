@@ -5,6 +5,7 @@ import type {
   WorldObject,
   WorldSpaceObject,
 } from "./worldObject";
+import { admitWorldSpaces } from "./spaceAdmission";
 
 export const TREE_PRESENTATION_BOUNDS = Object.freeze({
   hosts: 128,
@@ -58,20 +59,24 @@ export function projectWorldTree(
   const presentedHosts = world.hosts
     .map((host, index): IndexedHost => ({ host, index }))
     .sort((left, right) => compareHosts(left, right, selected.hostId))
-    .slice(0, TREE_PRESENTATION_BOUNDS.hosts);
+    .slice(0, TREE_PRESENTATION_BOUNDS.hosts)
+    .sort((left, right) => left.index - right.index);
   const presentedHostIds = new Set(presentedHosts.map(({ host }) => host.id));
-  const presentedSpaces = world.spaces
-    .flatMap((space, index): IndexedSpace[] => {
-      const hostIndex = world.hosts.findIndex(
-        ({ id }) => id === space.parentId,
-      );
-      const host = hostIndex >= 0 ? world.hosts[hostIndex] : undefined;
-      return host && presentedHostIds.has(host.id)
-        ? [{ host, space, hostIndex, index }]
-        : [];
-    })
-    .sort((left, right) => compareSpaces(left, right, selected.spaceId))
-    .slice(0, TREE_PRESENTATION_BOUNDS.spaces);
+  const presentedSpaces = admitWorldSpaces(
+    world.spaces
+      .flatMap((space, index): IndexedSpace[] => {
+        const hostIndex = world.hosts.findIndex(
+          ({ id }) => id === space.parentId,
+        );
+        const host = hostIndex >= 0 ? world.hosts[hostIndex] : undefined;
+        return host && presentedHostIds.has(host.id)
+          ? [{ host, space, hostIndex, index }]
+          : [];
+      })
+      .sort((left, right) => compareSpaces(left, right, selected.spaceId)),
+    TREE_PRESENTATION_BOUNDS.spaces,
+    selected.spaceId,
+  );
   const spaceById = new Map(
     presentedSpaces.map(
       ({ space }) => [space.id, projectSpace(space, selected.leafId)] as const,
@@ -132,6 +137,7 @@ function projectSpace(
     .map((leaf, index) => ({ leaf, index }))
     .sort((left, right) => compareLeaves(left, right, selectedLeafId))
     .slice(0, TREE_PRESENTATION_BOUNDS.childrenPerSpace)
+    .sort((left, right) => left.index - right.index)
     .map(({ leaf }) => leaf);
   return {
     source: space,
@@ -171,6 +177,8 @@ function compareSpaces(
     Number(right.space.id === selectedSpaceId) -
       Number(left.space.id === selectedSpaceId) ||
     Number(spaceFocused(right.space)) - Number(spaceFocused(left.space)) ||
+    Number(right.space.children.some((leaf) => leaf.watched)) -
+      Number(left.space.children.some((leaf) => leaf.watched)) ||
     Number(spaceNeedsAttention(right.space)) -
       Number(spaceNeedsAttention(left.space)) ||
     agentCount(right.space) - agentCount(left.space) ||

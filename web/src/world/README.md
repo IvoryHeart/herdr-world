@@ -7,6 +7,12 @@ line numbers and CSS ranges change as components move.
 
 ## Desk
 
+Desk follows the aggregate host filter. Receipt and screen reads capture each leaf's
+connection and runtime generation; retirement never reroutes a read. Review marks
+and recent opens use qualified session identities across filter and focus changes.
+Reads use fair bounded admission and independent host queues. Pending reads keep
+their admission across refreshes; queued work coalesces to the latest observation.
+
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Lane routing, ordering or keyboard triage | `partitionDesk` and `DeskView` in [DeskView.tsx](DeskView.tsx); [DeskView.css](DeskView.css) styles `.desk-*`. | [Desk tests](DeskView.test.ts) |

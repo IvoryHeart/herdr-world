@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
+  Compass,
   FolderOpen,
   History,
   LayoutGrid,
@@ -26,9 +27,23 @@ import {
   type WindowArrangementControl,
 } from "../components/WindowArrangementMenu";
 import type { CommandExtension } from "../components/CommandCombobox";
+import { ConfirmDialog } from "../components/ModalDialogs";
 import { shortcutMatches } from "../shortcutPreferences";
+import { createdRootPaneId } from "./officeRoomActions";
+import { paneShortcutAction } from "../paneShortcuts";
+import {
+  adjacentTabId,
+  closeShortcutTarget,
+  tabShortcutAction,
+} from "../tabShortcuts";
 import { lazyWithReload } from "../lazyWithReload";
-import { shallowEqual, store, useStoreSelector } from "../store";
+import {
+  connectionSnapshot,
+  operationalStore,
+  shallowEqual,
+  store,
+  useStoreSelector,
+} from "../store";
 import {
   type InspectorView,
   readInspectorPreferences,
@@ -52,12 +67,15 @@ import {
   type WorldLeafObject,
   type WorldObject,
   type WorldObjectNode,
-  worldObjectForConnection,
+  worldObjectForHosts,
   worldObjectForWatches,
   worldObjectWithWatches,
 } from "./worldObject";
 import { useWorldWatchlist, WorldWatchlistStore } from "./watchlistStore";
 import "./world.css";
+import { useHostsFilter } from "./hostsFilter";
+import { HostsControl } from "./HostsControl";
+import { WorldNavigator } from "./WorldNavigator";
 import type { OfficeCanvasAnchor } from "./PixelOfficeCanvas";
 import {
   readOfficePreferences,
@@ -159,7 +177,6 @@ const OfficeObservabilityDialog = lazyWithReload("world-observability", () =>
 
 export type WorldView = "desk" | "spaces" | "office" | "tree" | "graph";
 
-const SELECTED_CONNECTION_KEY = "worldSelectedConnection";
 const WORLD_VIEWS: readonly WorldView[] = [
   "desk",
   "office",
@@ -316,7 +333,7 @@ export function worldNodeForWorkspaceSurfaceSelection(
   return (
     world.nodes.find((candidate) => {
       if (
-        !candidate.selectedHost ||
+        !candidate.actionable ||
         candidate.connectionId !== selection.connectionId ||
         candidate.generation !== selection.runtimeGeneration
       ) {
@@ -343,7 +360,6 @@ export function worldNodeForInspectorConversation(
 ): WorldObjectNode | null {
   const valid = (node: WorldObjectNode) =>
     node.actionable &&
-    node.selectedHost &&
     node.connectionId === conversation.connectionId &&
     node.generation === conversation.runtimeGeneration &&
     worldInspectorWindowIdForNode(node) ===
@@ -367,7 +383,6 @@ export function worldNodeForInspectorPaneFocus(
       (node) =>
         node.nativeId === paneId &&
         node.actionable &&
-        node.selectedHost &&
         worldInspectorWindowIdForNode(node) === windowId,
     ) ?? null
   );
@@ -496,24 +511,30 @@ export default function WorldFoundationApp() {
     [],
   );
   const topbarRuntime = useWorldRuntime();
+  const [presentedStatusWorld, setPresentedStatusWorld] =
+    useState<WorldObject | null>(null);
   const topbarConnectionId = useStoreSelector(
     (snapshot) => snapshot.activeConnectionId,
   );
+  const conversationConnections = useStoreSelector(
+    (snapshot) => snapshot.connections,
+  );
+  const catalogueReady = useStoreSelector(
+    (snapshot) => snapshot.catalogueReady,
+  );
+  const hostsFilter = useHostsFilter(
+    conversationConnections.map((connection) => connection.id),
+    catalogueReady,
+  );
   const topbarWorld = useMemo(
     () =>
-      worldObjectForConnection(
+      worldObjectForHosts(
         buildWorldObject(topbarRuntime.connections, topbarConnectionId),
-        topbarConnectionId,
+        hostsFilter.ids,
       ),
-    [topbarConnectionId, topbarRuntime.connections],
+    [topbarConnectionId, topbarRuntime.connections, hostsFilter.ids],
   );
-  const activeConversationLease = useStoreSelector(
-    (snapshot) => ({
-      connectionId: snapshot.activeConnectionId,
-      runtimeGeneration: snapshot.serverRuntimeGeneration,
-    }),
-    shallowEqual,
-  );
+  const conversationStatus = useStoreSelector((snapshot) => snapshot.status);
   const workspaceSurfaceInspectorConversation =
     inspectorConversations.find(
       (conversation) =>
@@ -532,7 +553,7 @@ export default function WorldFoundationApp() {
         ),
       );
       const workspace = store
-        .get()
+        .getConnection(conversation.connectionId)
         .workspaces.find(
           (candidate) => candidate.workspace_id === conversation.workspaceId,
         );
@@ -553,13 +574,14 @@ export default function WorldFoundationApp() {
 
   useLayoutEffect(() => {
     const lease =
-      activeConversationLease.connectionId &&
-      activeConversationLease.runtimeGeneration !== null
-        ? {
-            connectionId: activeConversationLease.connectionId,
-            runtimeGeneration: activeConversationLease.runtimeGeneration,
-          }
-        : null;
+      conversationStatus === "connected"
+        ? conversationConnections
+            .filter((connection) => connection.state === "ready")
+            .map((connection) => ({
+              connectionId: connection.id,
+              runtimeGeneration: connection.generation,
+            }))
+        : [];
     const retained = retainWorldInspectorConversations(
       inspectorConversations,
       lease,
@@ -575,7 +597,7 @@ export default function WorldFoundationApp() {
         Object.entries(current).filter(([nodeId]) => retainedIds.has(nodeId)),
       ),
     );
-  }, [activeConversationLease, inspectorConversations]);
+  }, [conversationConnections, conversationStatus, inspectorConversations]);
 
   useEffect(() => {
     worldRuntimeStore.start();
@@ -662,9 +684,75 @@ export default function WorldFoundationApp() {
           shellActionsEnabled
           topbarPortal={topbarPortal}
           visualActionExtension={visualActionExtension}
+          connectionControl={
+            <HostsControl
+              connections={conversationConnections}
+              ids={hostsFilter.ids}
+              explanation={hostsFilter.explanation}
+              onChange={hostsFilter.setIds}
+            />
+          }
+          workspaceNavigator={(onSelectionAdmitted) => (
+            <WorldNavigator
+              world={topbarWorld}
+              onSelect={async (node, requestedView) => {
+                if (node.kind === "host") return;
+                if (view === "spaces") {
+                  if (store.get().activeConnectionId !== node.connectionId)
+                    await activateWorldNodeHost(node);
+                  const resourceView =
+                    requestedView ?? (node.kind === "space" ? "files" : null);
+                  if (resourceView)
+                    await dispatchWorldInspectorRequest(
+                      node,
+                      resourceView,
+                      store,
+                      window,
+                      () => {
+                        if (
+                          store.get().activeConnectionId !== node.connectionId
+                        )
+                          throw new Error(
+                            "The selected host changed while it was opening",
+                          );
+                      },
+                    );
+                  else {
+                    window.dispatchEvent(
+                      new Event(WORKSPACE_INSPECTOR_CLOSE_EVENT),
+                    );
+                    await focusWorldNode(node);
+                    if (store.get().activeConnectionId !== node.connectionId)
+                      throw new Error(
+                        "The selected host changed while it was opening",
+                      );
+                    onSelectionAdmitted();
+                  }
+                  return;
+                }
+                const admitted = await workspaceSurfaceSelectionRef.current?.({
+                  connectionId: node.connectionId,
+                  runtimeGeneration: node.generation,
+                  view: requestedView,
+                  workspaceId:
+                    node.kind === "space" ? node.nativeId : node.workspaceId,
+                  ...(node.kind === "space" ? {} : { paneId: node.nativeId }),
+                });
+                if (admitted) onSelectionAdmitted();
+              }}
+            />
+          )}
           primaryViewControl={
             <div className="world-topbar-control-plane">
-              <label className="world-primary-view-select">
+              <label
+                className="world-primary-view-select"
+                title={`World view: ${view}`}
+              >
+                <Compass
+                  className="world-primary-view-icon"
+                  size={18}
+                  aria-hidden="true"
+                />
                 <select
                   aria-label="World view"
                   value={view}
@@ -681,13 +769,12 @@ export default function WorldFoundationApp() {
                 <>
                   <WorldTopbarStatus
                     runtime={topbarRuntime}
-                    world={topbarWorld}
-                    selectedHostLabel={selectedHostStatusLabel(
-                      topbarWorld.hosts.find(
-                        ({ connectionId }) =>
-                          connectionId === topbarConnectionId,
-                      ) ?? null,
-                    )}
+                    world={presentedStatusWorld ?? topbarWorld}
+                    selectedHostLabel={
+                      hostsFilter.ids === null
+                        ? "All hosts"
+                        : `${hostsFilter.ids.length} selected hosts`
+                    }
                   />
                   <div
                     className="world-view-toolbar-host"
@@ -722,9 +809,13 @@ export default function WorldFoundationApp() {
               onVisualActionExtensionReady={setVisualActionExtension}
               viewToolbarPortal={viewToolbarPortal}
               onGoToSpaces={() => setView("spaces")}
+              onPresentedWorldChange={setPresentedStatusWorld}
             />
           }
           workspaceSurfaceVisible={view !== "spaces"}
+          workspaceSurfaceContext={
+            view !== "spaces" ? visualActionExtension?.context : null
+          }
           arrangementControl={activeArrangementControl}
           spacesTabWindows={spaces.spacesTabWindows}
           onFocusSpacesTabWindow={spaces.onFocusSpacesTabWindow}
@@ -811,6 +902,7 @@ function WorldControlPlane({
   onVisualActionExtensionReady,
   viewToolbarPortal,
   onGoToSpaces,
+  onPresentedWorldChange,
 }: {
   view: Exclude<WorldView, "spaces">;
   active: boolean;
@@ -838,6 +930,7 @@ function WorldControlPlane({
   onVisualActionExtensionReady(extension: CommandExtension): void;
   viewToolbarPortal: HTMLDivElement | null;
   onGoToSpaces(): void;
+  onPresentedWorldChange(world: WorldObject): void;
 }) {
   const runtime = useWorldRuntime();
   const watchlistStore = useMemo(() => new WorldWatchlistStore(bridge), []);
@@ -855,75 +948,19 @@ function WorldControlPlane({
       defaultConnectionId: snapshot.defaultConnectionId,
       runtimeGeneration: snapshot.serverRuntimeGeneration,
       status: snapshot.status,
+      catalogueReady: snapshot.catalogueReady,
     }),
     shallowEqual,
   );
-  const focusedTopology = useStoreSelector(
-    (snapshot) => ({
-      workspaces: snapshot.workspaces,
-      tabs: snapshot.tabs,
-      lastTopologyObservationStartedAt:
-        snapshot.lastTopologyObservationStartedAt,
-      status: snapshot.status,
-      runtimeGeneration: snapshot.serverRuntimeGeneration,
-    }),
-    shallowEqual,
+  const operationalSnapshot = useStoreSelector((snapshot) => snapshot);
+  const hostsFilter = useHostsFilter(
+    connectionSelection.connections.map((connection) => connection.id),
+    connectionSelection.catalogueReady,
   );
-  const selectionRestoredRef = useRef(false);
-  const [selectionRestored, setSelectionRestored] = useState(false);
-
-  useEffect(() => {
-    if (connectionSelection.connections.length === 0) {
-      selectionRestoredRef.current = false;
-      setSelectionRestored(false);
-      return;
-    }
-    if (!selectionRestoredRef.current) {
-      let storedConnectionId: string | null = null;
-      try {
-        storedConnectionId = worldLocalStorage.getItem(SELECTED_CONNECTION_KEY);
-      } catch {
-        // Restricted storage falls back to the managed default/current profile.
-      }
-      const restoredConnectionId = chooseWorldSelectedConnection({
-        activeConnectionId: connectionSelection.activeConnectionId,
-        defaultConnectionId: connectionSelection.defaultConnectionId,
-        storedConnectionId,
-        connections: connectionSelection.connections,
-      });
-      if (
-        restoredConnectionId &&
-        restoredConnectionId !== connectionSelection.activeConnectionId
-      ) {
-        store.selectConnection(restoredConnectionId);
-      }
-      selectionRestoredRef.current = true;
-      setSelectionRestored(true);
-      return;
-    }
-    if (
-      hasValidSelectedConnection(
-        connectionSelection.activeConnectionId,
-        connectionSelection.connections,
-      )
-    ) {
-      try {
-        worldLocalStorage.setItem(
-          SELECTED_CONNECTION_KEY,
-          connectionSelection.activeConnectionId,
-        );
-      } catch {
-        // Selection remains valid for this session when storage is unavailable.
-      }
-    }
-  }, [connectionSelection]);
-
-  const hasSelectedConnection =
-    selectionRestored &&
-    hasValidSelectedConnection(
-      connectionSelection.activeConnectionId,
-      connectionSelection.connections,
-    );
+  const hasSelectedConnection = hasValidSelectedConnection(
+    connectionSelection.activeConnectionId,
+    connectionSelection.connections,
+  );
   const selectedWorldConnection = runtime.connections.find(
     (connection) =>
       connection.connectionId === connectionSelection.activeConnectionId,
@@ -934,25 +971,13 @@ function WorldControlPlane({
     () =>
       buildWorldObject(
         runtime.connections,
-        hasSelectedConnection ? connectionSelection.activeConnectionId : null,
+        connectionSelection.activeConnectionId,
       ),
-    [
-      connectionSelection.activeConnectionId,
-      hasSelectedConnection,
-      runtime.connections,
-    ],
+    [connectionSelection.activeConnectionId, runtime.connections],
   );
   const world = useMemo(
-    () =>
-      worldObjectForConnection(
-        aggregateWorld,
-        hasSelectedConnection ? connectionSelection.activeConnectionId : null,
-      ),
-    [
-      aggregateWorld,
-      connectionSelection.activeConnectionId,
-      hasSelectedConnection,
-    ],
+    () => worldObjectForHosts(aggregateWorld, hostsFilter.ids),
+    [aggregateWorld, hostsFilter.ids],
   );
   const watchedWorld = useMemo(
     () => worldObjectWithWatches(world, watchlist.records),
@@ -965,18 +990,45 @@ function WorldControlPlane({
         : watchedWorld,
     [pinnedOnly, watchedWorld, watchlist.records],
   );
+  useLayoutEffect(
+    () => onPresentedWorldChange(presentedWorld),
+    [onPresentedWorldChange, presentedWorld],
+  );
   const [selection, setSelection] = useState<WorldObjectNode | null>(null);
-  const watchAdmission = runtime.connections.find(
-    ({ connectionId }) =>
-      connectionId === connectionSelection.activeConnectionId,
-  )?.snapshot?.watchAdmission;
-  const watchStatus = watchlist.error
-    ? watchlist.error
-    : !watchlist.verified
+  const watchAdmissions = world.hosts.flatMap((host) =>
+    host.connection.snapshot ? [host.connection.snapshot.watchAdmission] : [],
+  );
+  const unavailableWatchHosts = world.hosts.length - watchAdmissions.length;
+  const unavailableWatchStatus = unavailableWatchHosts
+    ? ` · ${unavailableWatchHosts} ${unavailableWatchHosts === 1 ? "host" : "hosts"} unavailable`
+    : "";
+  const watchCoverage = watchAdmissions.reduce(
+    (counts, admission) => ({
+      registered: counts.registered + (admission?.registered ?? 0),
+      admitted: counts.admitted + (admission?.admitted ?? 0),
+      missing: counts.missing + (admission?.missing ?? 0),
+      unresolved: counts.unresolved + (admission?.unresolved ?? 0),
+      admissionFailed:
+        counts.admissionFailed + (admission?.admissionFailed ?? 0),
+    }),
+    {
+      registered: 0,
+      admitted: 0,
+      missing: 0,
+      unresolved: 0,
+      admissionFailed: 0,
+    },
+  );
+  const watchStatus =
+    watchlist.error ??
+    (!watchlist.verified
       ? "Watches unavailable while disconnected"
-      : !watchAdmission || watchAdmission.revision !== watchlist.revision
-        ? "Watch availability pending"
-        : `${watchAdmission.registered} pinned · ${watchAdmission.admitted} admitted · ${watchAdmission.missing} missing · ${watchAdmission.unresolved} unresolved · ${watchAdmission.admissionFailed} not admitted`;
+      : watchAdmissions.some(
+            (admission) =>
+              !admission || admission.revision !== watchlist.revision,
+          )
+        ? "Watch availability pending for filtered hosts"
+        : `${watchCoverage.registered} pinned in filter · ${watchCoverage.admitted} admitted · ${watchCoverage.missing} missing · ${watchCoverage.unresolved} unresolved · ${watchCoverage.admissionFailed} not admitted${unavailableWatchStatus}`);
   const [officeInspectorPresentation, setOfficeInspectorPresentation] =
     useState<OfficeInspectorPresentation>(
       () => readOfficePreferences(worldLocalStorage).inspectorPresentation,
@@ -1004,6 +1056,7 @@ function WorldControlPlane({
   const [pendingSurfacePriority, setPendingSurfacePriority] =
     useState<WorldRuntimePriority | null>(null);
   const intentRequestRef = useRef(0);
+  const inspectorFocusIntentRef = useRef(0);
   const contextRailRef = useRef<HTMLElement | null>(null);
   const dockedInspectorMoveRef = useRef<DockedInspectorMove | null>(null);
   const [dockedInspectorGeometry, setDockedInspectorGeometry] =
@@ -1071,7 +1124,7 @@ function WorldControlPlane({
   dockedInspectorIdRef.current = dockedInspectorId;
   floatingInspectorPortalsRef.current = floatingInspectorPortals;
   const currentSelection = selection
-    ? (world.nodeById.get(selection.id) ?? null)
+    ? (aggregateWorld.nodeById.get(selection.id) ?? null)
     : null;
   const currentSelectionGeneration = worldSelectionIsCurrent(
     selection,
@@ -1103,10 +1156,7 @@ function WorldControlPlane({
       ),
     [dockedInspectorId, inspectorConversations],
   );
-  const visualLeaseKey = JSON.stringify([
-    connectionSelection.activeConnectionId,
-    connectionSelection.runtimeGeneration,
-  ]);
+  const visualLeaseKey = "world-visual-contexts";
   const arrangementScope =
     visualArrangementState.leaseKey === visualLeaseKey
       ? visualArrangementState.scopes[VISUAL_ARRANGEMENT_SCOPE]
@@ -1296,12 +1346,14 @@ function WorldControlPlane({
       };
   const scrollVisualArrangement = (position: number) =>
     setVisualScrollOffset(Math.max(0, Math.min(visualScrollMax, position)));
+  const visualPlacementMapRef = useRef(visualPlacementMap);
+  visualPlacementMapRef.current = visualPlacementMap;
   useEffect(() => {
     if (!visualScrollActive || !activeInspectorId) {
       visualGridAutoFocusKeyRef.current = null;
       return;
     }
-    const geometry = visualPlacementMap.get(activeInspectorId);
+    const geometry = visualPlacementMapRef.current.get(activeInspectorId);
     if (!geometry) return;
     const key = `${visualLeaseKey}:${arrangementScope?.preset}:${activeInspectorId}`;
     if (visualGridAutoFocusKeyRef.current === key) return;
@@ -1336,10 +1388,10 @@ function WorldControlPlane({
     visualContentWidth,
     visualLeaseKey,
     visualArrangementStage.height,
+    visualArrangementStage.left,
     visualArrangementStage.top,
     visualScrollViewport.height,
     visualScrollViewport.width,
-    visualPlacementMap,
     visualScrollPosition,
   ]);
   const openInspectorIds = visualWindows.map(({ id }) => id);
@@ -1372,6 +1424,9 @@ function WorldControlPlane({
     stage: visualArrangementStage,
   };
   const raiseInspector = useCallback((id: string, pointer = false) => {
+    // Native pointer/focus intent supersedes any older queued terminal focus,
+    // including controls in this same Inspector after a portal move.
+    inspectorFocusIntentRef.current += 1;
     setRaisedInspectorIds((current) =>
       current[current.length - 1] === id
         ? current
@@ -1509,19 +1564,26 @@ function WorldControlPlane({
   dockedInspectorGeometryRef.current = dockedInspectorGeometry;
 
   useLayoutEffect(() => {
-    worldRuntimeStore.setSelectedConnectionId(
-      hasValidSelectedConnection(
-        connectionSelection.activeConnectionId,
-        connectionSelection.connections,
-      )
-        ? connectionSelection.activeConnectionId
-        : null,
+    worldRuntimeStore.setVisibleConnectionIds(
+      world.hosts
+        .filter((host) =>
+          connectionSelection.connections.some(
+            (connection) => connection.id === host.connectionId,
+          ),
+        )
+        .map((host) => host.connectionId),
     );
-  }, [connectionSelection.activeConnectionId, connectionSelection.connections]);
+  }, [world, connectionSelection.connections]);
 
   useLayoutEffect(() => {
-    worldRuntimeStore.setPriorities(snapshotPriorities);
-  }, [snapshotPriorities]);
+    worldRuntimeStore.setPriorities(
+      snapshotPriorities.filter((priority) =>
+        connectionSelection.connections.some(
+          (connection) => connection.id === priority.connectionId,
+        ),
+      ),
+    );
+  }, [snapshotPriorities, connectionSelection.connections]);
 
   useLayoutEffect(() => {
     const layout = worldViewLayoutRef.current;
@@ -1592,14 +1654,18 @@ function WorldControlPlane({
         | "open-all",
     ) => {
       if (command === "open-all") {
-        if (compactArrangement) return;
         const selectedHostLeaves = world.leaves.filter(
           (node) =>
-            node.selectedHost &&
             node.actionable &&
-            node.connectionId === connectionSelection.activeConnectionId &&
-            node.generation === connectionSelection.runtimeGeneration &&
-            node.capabilities.openTerminal,
+            node.capabilities.openTerminal &&
+            store
+              .get()
+              .connections.some(
+                (owner) =>
+                  owner.id === node.connectionId &&
+                  owner.state === "ready" &&
+                  owner.generation === node.generation,
+              ),
         );
         const uniqueTabs = new Map<string, WorldLeafObject>();
         for (const node of selectedHostLeaves) {
@@ -1607,22 +1673,34 @@ function WorldControlPlane({
           const previous = uniqueTabs.get(id);
           if (!previous || node.focused) uniqueTabs.set(id, node);
         }
+        const omitted = Math.max(
+          0,
+          world.hosts.reduce((count, host) => count + host.coverage.tabs, 0) -
+            uniqueTabs.size,
+        );
+        if (omitted > 0)
+          store.notify({
+            kind: "info",
+            message: `Open all omitted ${omitted} observed ${omitted === 1 ? "tab" : "tabs"}`,
+            detail:
+              "Those tabs have no current available terminal target in the Hosts filter.",
+          });
         const current = inspectorConversationsRef.current;
         const openIds = new Set(current.map(worldInspectorWindowId));
         const added: WorldInspectorConversation[] = [];
         const workspaces = new Map(
           world.spaces
-            .filter(
-              (space) =>
-                space.selectedHost &&
-                space.connectionId === connectionSelection.activeConnectionId &&
-                space.generation === connectionSelection.runtimeGeneration,
-            )
-            .map((space) => [space.nativeId, space.workspace]),
+            .filter((space) => space.actionable && !space.stale)
+            .map((space) => [
+              JSON.stringify([space.connectionId, space.nativeId]),
+              space.workspace,
+            ]),
         );
         for (const [id, node] of uniqueTabs) {
           if (openIds.has(id)) continue;
-          const workspace = workspaces.get(node.workspaceId);
+          const workspace = workspaces.get(
+            JSON.stringify([node.connectionId, node.workspaceId]),
+          );
           const context = worldInspectorContext(node);
           if (!workspace || !context) continue;
           const preferences = readInspectorPreferences(
@@ -1795,8 +1873,6 @@ function WorldControlPlane({
       activeInspectorId,
       arrangementScope,
       compactArrangement,
-      connectionSelection.activeConnectionId,
-      connectionSelection.runtimeGeneration,
       dockedInspectorId,
       onDockedInspectorIdChange,
       visualArrangementStage,
@@ -1841,16 +1917,11 @@ function WorldControlPlane({
     if (visualWindows.length === 0) {
       disabledReasons["close-all"] = "No terminal windows are presented.";
     }
-    if (compactArrangement) {
-      disabledReasons["open-all"] = "Available in desktop layout.";
-    } else {
+    {
       const openIds = new Set(visualWindows.map(({ id }) => id));
       const unopened = world.leaves.some(
         (node) =>
-          node.selectedHost &&
           node.actionable &&
-          node.connectionId === connectionSelection.activeConnectionId &&
-          node.generation === connectionSelection.runtimeGeneration &&
           node.capabilities.openTerminal &&
           !openIds.has(worldInspectorWindowIdForNode(node)),
       );
@@ -1870,8 +1941,6 @@ function WorldControlPlane({
     activeInspectorId,
     arrangementScope,
     compactArrangement,
-    connectionSelection.activeConnectionId,
-    connectionSelection.runtimeGeneration,
     selectVisualArrangement,
     visualArrangementStage,
     visualWindows,
@@ -2043,6 +2112,7 @@ function WorldControlPlane({
   const conversationFor = (
     node: WorldObjectNode,
     requestedView: InspectorView | null,
+    candidateWorld = aggregateWorld,
   ) => {
     if (node.kind === "host") return null;
     const view = worldIntentInitialView(node, requestedView);
@@ -2050,9 +2120,17 @@ function WorldControlPlane({
     if (!view || !context) return null;
     const workspaceId =
       node.kind === "space" ? node.nativeId : node.workspaceId;
-    const workspace = store
-      .get()
-      .workspaces.find((candidate) => candidate.workspace_id === workspaceId);
+    const workspace =
+      connectionSnapshot(store.get(), node.connectionId).workspaces.find(
+        (candidate) => candidate.workspace_id === workspaceId,
+      ) ??
+      candidateWorld.spaces.find(
+        (space) =>
+          space.connectionId === node.connectionId &&
+          space.generation === node.generation &&
+          space.nativeId === workspaceId &&
+          space.actionable,
+      )?.workspace;
     if (!workspace) return null;
     const preferences = readInspectorPreferences(
       worldLocalStorage,
@@ -2069,10 +2147,10 @@ function WorldControlPlane({
   };
 
   const focusInspectorTerminal = (windowId: string) => {
+    const focusIntent = ++inspectorFocusIntentRef.current;
     const expected = inspectorConversationsRef.current.find(
       (candidate) => worldInspectorWindowId(candidate) === windowId,
     );
-    const connectionGeneration = store.get().connectionGeneration;
     if (!expected?.paneId) return;
     if (
       document.documentElement.dataset.layout === "mobile" ||
@@ -2081,18 +2159,26 @@ function WorldControlPlane({
       return;
     }
     const attempt = (remaining: number) => {
+      if (inspectorFocusIntentRef.current !== focusIntent) return;
+      if (
+        document.querySelector(
+          '.world-hosts-menu, .command-popover, .modal-backdrop, [role="menu"]',
+        )
+      )
+        return;
       const conversation = inspectorConversationsRef.current.find(
         (candidate) => worldInspectorWindowId(candidate) === windowId,
       );
-      const snapshot = store.get();
+      const snapshot = conversation
+        ? connectionSnapshot(store.get(), conversation.connectionId)
+        : null;
       if (
         !conversation ||
+        !snapshot ||
         conversation.view !== "terminal" ||
         !conversation.paneId ||
         conversation.paneId !== expected.paneId ||
         conversation.terminalId !== expected.terminalId ||
-        snapshot.connectionGeneration !== connectionGeneration ||
-        snapshot.activeConnectionId !== conversation.connectionId ||
         snapshot.serverRuntimeGeneration !== conversation.runtimeGeneration ||
         snapshot.selectedPaneId !== conversation.paneId ||
         !snapshot.panes.some(
@@ -2141,21 +2227,24 @@ function WorldControlPlane({
     focusTarget = true,
     candidateWorld = world,
     signal?: AbortSignal,
+    agentSessionId?: string,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
     const next = id ? (candidateWorld.nodeById.get(id) ?? null) : null;
+    const inspectorView =
+      requestedView ??
+      (next?.kind === "space"
+        ? "files"
+        : next?.capabilities.openTerminal
+          ? "terminal"
+          : null);
     const requestId = intentRequestRef.current + 1;
     intentRequestRef.current = requestId;
     setIntentError(null);
     setSelectedVisualAnchor(null);
     setVisualConversationAnchors(null);
     setInlineReturnNodeId(null);
-    if (
-      !next ||
-      next.kind === "host" ||
-      !next.actionable ||
-      !next.selectedHost
-    ) {
+    if (!next || next.kind === "host" || !next.actionable) {
       setSelection(next);
       if (dockedInspector) {
         onInspectorConversationsChange(
@@ -2183,7 +2272,7 @@ function WorldControlPlane({
       setIntentOpening(true);
       const unbindAbort = bindSelectionIntentAbort(signal, requestId);
       try {
-        if (focusTarget) await focusWorldNode(next);
+        if (focusTarget) await focusWorldNode(next, store, agentSessionId);
         if (signal?.aborted || intentRequestRef.current !== requestId)
           return false;
         const currentConversations = inspectorConversationsRef.current;
@@ -2195,15 +2284,15 @@ function WorldControlPlane({
         if (!currentExisting) return false;
         const currentDockedInspectorId = dockedInspectorIdRef.current;
         setSelection(next);
-        const observed = conversationFor(next, requestedView);
+        const observed = conversationFor(next, inspectorView, candidateWorld);
         if (!observed) return false;
         const reconciled = reconcileWorldInspectorConversation(
           currentExisting,
           observed,
         );
         const admitted =
-          requestedView && reconciled.availableViews.includes(requestedView)
-            ? { ...reconciled, view: requestedView }
+          inspectorView && reconciled.availableViews.includes(inspectorView)
+            ? { ...reconciled, view: inspectorView }
             : reconciled;
         if (
           worldInspectorWindowId(currentExisting) !== currentDockedInspectorId
@@ -2269,12 +2358,12 @@ function WorldControlPlane({
       }
       return true;
     }
-    const conversation = conversationFor(next, requestedView);
+    const conversation = conversationFor(next, inspectorView, candidateWorld);
     if (!conversation) return false;
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);
     try {
-      if (focusTarget) await focusWorldNode(next);
+      if (focusTarget) await focusWorldNode(next, store, agentSessionId);
       if (signal?.aborted || intentRequestRef.current !== requestId)
         return false;
       const currentConversations = inspectorConversationsRef.current;
@@ -2335,13 +2424,13 @@ function WorldControlPlane({
       );
       if (!conversation) return;
       const sibling = worldNodeForInspectorPaneFocus(
-        world,
+        aggregateWorld,
         conversation,
         paneId,
       );
       if (!sibling) return;
       if (windowId === dockedInspectorIdRef.current) {
-        void applySelection(sibling.id);
+        void applySelection(sibling.id, null, true, aggregateWorld);
       } else {
         void focusFloatingInspector(
           conversation,
@@ -2354,15 +2443,156 @@ function WorldControlPlane({
     onInspectorPaneFocusReady(focusPane);
     return () => onInspectorPaneFocusReady(null);
   });
+  const notificationHandlerRef = useRef<
+    (target: import("../taskNotifications").TaskNotificationTarget) => void
+  >(() => {});
+  const [inspectorClose, setInspectorClose] = useState<{
+    conversation: WorldInspectorConversation;
+    operations: ReturnType<typeof operationalStore>;
+    target: { type: "pane" | "tab"; id: string };
+  } | null>(null);
+  notificationHandlerRef.current = (target) => {
+    void store.focusTaskNotificationTarget(target).then((admitted) => {
+      if (!admitted) return;
+      void workspaceSurfaceSelectionHandlerRef.current({
+        ...target,
+        view: "terminal",
+      });
+    });
+  };
+  useEffect(() => {
+    const receive = (event: Event) => {
+      if (active)
+        notificationHandlerRef.current(
+          (
+            event as CustomEvent<
+              import("../taskNotifications").TaskNotificationTarget
+            >
+          ).detail,
+        );
+    };
+    window.addEventListener("herdr-world:visual-notification", receive);
+    return () =>
+      window.removeEventListener("herdr-world:visual-notification", receive);
+  }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    const keydown = (event: KeyboardEvent) => {
+      const conversation =
+        inspectorConversationsRef.current.find(
+          (candidate) =>
+            worldInspectorWindowId(candidate) === activeInspectorId,
+        ) ??
+        inspectorConversationsRef.current.find(
+          (candidate) =>
+            worldInspectorWindowId(candidate) === dockedInspectorIdRef.current,
+        );
+      if (
+        !conversation ||
+        document.querySelector(".modal-backdrop, .command-popover")
+      )
+        return;
+      const element = event.target as HTMLElement | null;
+      if (
+        element?.closest("input, select, [contenteditable=true]") ||
+        (element?.closest("textarea") && !element.closest(".xterm"))
+      )
+        return;
+      const owner = {
+        connectionId: conversation.connectionId,
+        runtimeGeneration: conversation.runtimeGeneration,
+      };
+      const operations = operationalStore(owner);
+      const tabAction = tabShortcutAction(event);
+      const paneAction = paneShortcutAction(event);
+      let action: Promise<unknown> | undefined;
+      if (tabAction === "close" && conversation.tabId) {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = closeShortcutTarget(
+          conversation.tabId,
+          operations.get().panes,
+          conversation.paneId,
+        );
+        if (target) setInspectorClose({ conversation, operations, target });
+        return;
+      } else if (tabAction === "create") {
+        if (event.repeat) return;
+        action = store
+          .createQualifiedTab(owner, conversation.workspaceId, {
+            numberedLabel: true,
+          })
+          .then((result) => {
+            const paneId = createdRootPaneId(result);
+            return paneId
+              ? workspaceSurfaceSelectionHandlerRef.current({
+                  ...owner,
+                  workspaceId: conversation.workspaceId,
+                  paneId,
+                  view: "terminal",
+                })
+              : false;
+          });
+      } else if (tabAction === "previous" || tabAction === "next") {
+        const tabs = operations
+          .get()
+          .tabs.filter((tab) => tab.workspace_id === conversation.workspaceId);
+        const id = adjacentTabId(tabs, conversation.tabId, tabAction);
+        if (id)
+          action = operations.focusTab(id).then(() => {
+            const snapshot = operations.get();
+            const pane = snapshot.panes.find(
+              (candidate) =>
+                candidate.tab_id === id &&
+                candidate.pane_id === snapshot.selectedPaneId,
+            );
+            return pane
+              ? workspaceSurfaceSelectionHandlerRef.current({
+                  ...owner,
+                  workspaceId: conversation.workspaceId,
+                  paneId: pane.pane_id,
+                  view: "terminal",
+                })
+              : false;
+          });
+      } else if (paneAction && conversation.paneId) {
+        if (event.repeat && paneAction.type !== "focus") return;
+        action =
+          paneAction.type === "split"
+            ? operations.splitPane(conversation.paneId, paneAction.direction)
+            : paneAction.type === "zoom"
+              ? operations.zoomPane(conversation.paneId)
+              : operations.focusPaneDirection(
+                  conversation.paneId,
+                  paneAction.direction,
+                );
+      }
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void action.catch((error) =>
+        store.notify({
+          kind: "error",
+          message: "Inspector command failed",
+          detail: String(error),
+        }),
+      );
+    };
+    window.addEventListener("keydown", keydown, true);
+    return () => window.removeEventListener("keydown", keydown, true);
+  }, [active, activeInspectorId]);
   const selectNode = (id: string, signal?: AbortSignal) => {
     if (signal?.aborted) return Promise.resolve(false);
     const node = world.nodeById.get(id);
+    const nodeId = id;
     if (
       view === "office" &&
       officeInspectorPresentation === "floating" &&
+      window.innerWidth > 720 &&
+      document.documentElement.dataset.layout !== "mobile" &&
       node?.kind !== "host" &&
       node?.actionable &&
-      node.selectedHost
+      node.capabilities.openTerminal
     ) {
       const existing = inspectorConversationsRef.current.find(
         (conversation) =>
@@ -2373,7 +2603,7 @@ function WorldControlPlane({
         existing &&
         worldInspectorWindowId(existing) === dockedInspectorIdRef.current
       ) {
-        return applySelection(id, null, true, world, signal);
+        return applySelection(nodeId, null, true, world, signal);
       }
       return openFloatingInspector(node, signal)
         .then(() => true)
@@ -2386,17 +2616,27 @@ function WorldControlPlane({
           return false;
         });
     }
-    return applySelection(id, null, true, world, signal);
+    return applySelection(nodeId, null, true, world, signal);
   };
   const workspaceSurfaceSelectionHandlerRef = useRef<
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
-    const node = worldNodeForWorkspaceSurfaceSelection(world, surfaceSelection);
-    if (node) return applySelection(node.id);
+    if (surfaceSelection.signal?.aborted) return Promise.resolve(false);
+    const node = worldNodeForWorkspaceSurfaceSelection(
+      aggregateWorld,
+      surfaceSelection,
+    );
+    if (node)
+      return applySelection(
+        node.id,
+        surfaceSelection.view ?? null,
+        true,
+        aggregateWorld,
+        surfaceSelection.signal,
+        surfaceSelection.agentSessionId,
+      );
     if (
-      surfaceSelection.connectionId !==
-        connectionSelection.activeConnectionId ||
       runtime.connections.find(
         ({ connectionId }) => connectionId === surfaceSelection.connectionId,
       )?.generation !== surfaceSelection.runtimeGeneration
@@ -2411,11 +2651,9 @@ function WorldControlPlane({
         ...inspectorConversations.map(snapshotPriorityForConversation),
       ])
       .then(() => {
-        const refreshedWorld = worldObjectForConnection(
-          buildWorldObject(
-            worldRuntimeStore.get().connections,
-            connectionSelection.activeConnectionId,
-          ),
+        if (surfaceSelection.signal?.aborted) return false;
+        const refreshedWorld = buildWorldObject(
+          worldRuntimeStore.get().connections,
           connectionSelection.activeConnectionId,
         );
         const refreshedNode = worldNodeForWorkspaceSurfaceSelection(
@@ -2423,7 +2661,14 @@ function WorldControlPlane({
           surfaceSelection,
         );
         return refreshedNode
-          ? applySelection(refreshedNode.id, null, true, refreshedWorld)
+          ? applySelection(
+              refreshedNode.id,
+              surfaceSelection.view ?? null,
+              true,
+              refreshedWorld,
+              surfaceSelection.signal,
+              surfaceSelection.agentSessionId,
+            )
           : false;
       })
       .catch((cause) => {
@@ -2451,17 +2696,27 @@ function WorldControlPlane({
   useEffect(() => {
     // A failed or timed-out aggregate observation cannot prove a tab closed.
     // The focused connection lease still retires windows on host/generation change.
-    if (!hasSelectedConnection || !selectedWorldObservationActionable) return;
     let changed = false;
     const retained = inspectorConversations.flatMap((conversation) => {
-      const current = worldNodeForInspectorConversation(world, conversation);
+      const current = worldNodeForInspectorConversation(
+        aggregateWorld,
+        conversation,
+      );
+      const focusedTopology = connectionSnapshot(
+        operationalSnapshot,
+        conversation.connectionId,
+      );
+      const owner = operationalSnapshot.connections.find(
+        (connection) => connection.id === conversation.connectionId,
+      );
       // The World projection is bounded and can omit an open tab. Only the
       // focused Herdr list can confirm that its tab or workspace is gone.
       const focusedListIsCurrent =
         focusedTopology.status === "connected" &&
         focusedTopology.lastTopologyObservationStartedAt >
           (conversation.focusedListAdmissionAt ?? 0) &&
-        focusedTopology.runtimeGeneration === conversation.runtimeGeneration;
+        focusedTopology.serverRuntimeGeneration ===
+          conversation.runtimeGeneration;
       const stillOpen = conversation.tabId
         ? focusedTopology.tabs.some(
             (tab) =>
@@ -2472,8 +2727,8 @@ function WorldControlPlane({
             (workspace) => workspace.workspace_id === conversation.workspaceId,
           );
       if (
-        selectedWorldConnection?.generation !==
-          conversation.runtimeGeneration ||
+        owner?.generation !== conversation.runtimeGeneration ||
+        owner.state !== "ready" ||
         (focusedListIsCurrent && !stillOpen)
       ) {
         changed = true;
@@ -2548,7 +2803,8 @@ function WorldControlPlane({
     }
   }, [
     dockedInspectorId,
-    focusedTopology,
+    operationalSnapshot,
+    aggregateWorld,
     hasSelectedConnection,
     inspectorConversations,
     onDockedInspectorIdChange,
@@ -2684,7 +2940,7 @@ function WorldControlPlane({
   const dockFloatingInspector = async (
     conversation: WorldInspectorConversation,
   ) => {
-    const target = world.nodeById.get(conversation.nodeId);
+    const target = aggregateWorld.nodeById.get(conversation.nodeId);
     if (!target) {
       closeInspector(conversation);
       return false;
@@ -2750,7 +3006,8 @@ function WorldControlPlane({
     reveal = true,
   ): Promise<boolean> => {
     if (signal?.aborted) return false;
-    const target = selectedNode ?? world.nodeById.get(conversation.nodeId);
+    const target =
+      selectedNode ?? aggregateWorld.nodeById.get(conversation.nodeId);
     if (!target) throw new Error("This Inspector is no longer available");
     const requestId = focusTarget
       ? intentRequestRef.current + 1
@@ -2903,8 +3160,9 @@ function WorldControlPlane({
     (target: VisualRouteActionTarget, action: VisualRouteAction) => {
       const current = shellActionContext.current;
       const resolved = resolveVisualRouteActionTarget(target, current.world, {
-        activeConnectionId: current.activeConnectionId,
-        runtimeGeneration: current.runtimeGeneration,
+        activeConnectionId: target.connectionId,
+        runtimeGeneration:
+          current.world.nodeById.get(target.id)?.generation ?? null,
         selectedId: current.selected?.id ?? null,
       });
       if (
@@ -2925,10 +3183,32 @@ function WorldControlPlane({
       intentRequestRef.current = requestId;
       setIntentError(null);
       setIntentOpening(true);
-      void current
-        .focusWorldNode(node)
-        .then(() => {
+      void store
+        .activateQualifiedSpacesTarget({
+          connectionId: node.connectionId,
+          runtimeGeneration: node.generation,
+          workspaceId:
+            node.kind === "space"
+              ? node.nativeId
+              : node.kind === "host"
+                ? ""
+                : node.workspaceId,
+          paneId:
+            node.kind === "agent" || node.kind === "terminal"
+              ? node.nativeId
+              : null,
+        })
+        .then((focused) => {
+          if (!focused)
+            throw new Error("The Spaces target is no longer available");
           if (intentRequestRef.current !== requestId) return;
+          const owner = store
+            .get()
+            .connections.find(
+              (connection) => connection.id === node.connectionId,
+            );
+          if (owner?.state !== "ready" || owner.generation !== node.generation)
+            return;
           setSelection(node);
           current.onGoToSpaces();
         })
@@ -2947,8 +3227,10 @@ function WorldControlPlane({
   const visualActionExtension = useMemo<CommandExtension>(() => {
     const target = visualRouteActionTarget(selected);
     const resolved = resolveVisualRouteActionTarget(target, world, {
-      activeConnectionId: connectionSelection.activeConnectionId,
-      runtimeGeneration: connectionSelection.runtimeGeneration,
+      activeConnectionId: target?.connectionId ?? "",
+      runtimeGeneration: target
+        ? (world.nodeById.get(target.id)?.generation ?? null)
+        : null,
       selectedId: selected?.id ?? null,
     });
     const labels: Record<VisualRouteAction, string> = {
@@ -3016,8 +3298,11 @@ function WorldControlPlane({
                 target,
                 current.world,
                 {
-                  activeConnectionId: current.activeConnectionId,
-                  runtimeGeneration: current.runtimeGeneration,
+                  activeConnectionId: target?.connectionId ?? "",
+                  runtimeGeneration: target
+                    ? (current.world.nodeById.get(target.id)?.generation ??
+                      null)
+                    : null,
                   selectedId: current.selected?.id ?? null,
                 },
               );
@@ -3054,6 +3339,12 @@ function WorldControlPlane({
         ]
       : [];
     return {
+      context: resolved.node
+        ? {
+            connectionId: resolved.node.connectionId,
+            runtimeGeneration: resolved.node.generation,
+          }
+        : undefined,
       captureKey: resolved.node && target ? JSON.stringify(target) : null,
       groups: [
         { heading: "Visual selection", actions: targetActions },
@@ -3075,8 +3366,6 @@ function WorldControlPlane({
   }, [
     selected,
     world,
-    connectionSelection.activeConnectionId,
-    connectionSelection.runtimeGeneration,
     watchlist.records,
     watchlist.verified,
     watchlist.error,
@@ -3098,7 +3387,31 @@ function WorldControlPlane({
       id="world"
       data-active={active ? "true" : "false"}
     >
-      {!hasSelectedConnection ? (
+      <ConfirmDialog
+        open={inspectorClose !== null}
+        title={`Close Inspector ${inspectorClose?.target.type ?? "tab"}`}
+        message={`Close this ${inspectorClose?.target.type ?? "tab"} on ${inspectorClose?.conversation.hostLabel ?? "the captured host"}?`}
+        confirmLabel="Close"
+        danger
+        onClose={() => setInspectorClose(null)}
+        onConfirm={() => {
+          const captured = inspectorClose;
+          setInspectorClose(null);
+          if (captured)
+            void (
+              captured.target.type === "pane"
+                ? captured.operations.closePane(captured.target.id)
+                : captured.operations.closeTab(captured.target.id)
+            ).catch((error) =>
+              store.notify({
+                kind: "error",
+                message: "Tab close failed",
+                detail: String(error),
+              }),
+            );
+        }}
+      />
+      {connectionSelection.connections.length === 0 ? (
         <WorldConnectionRequired status={connectionSelection.status} />
       ) : (
         <div
@@ -3185,6 +3498,8 @@ function WorldControlPlane({
             ) : null}
           </section>
           {contextRailInspector &&
+          presentedWorld.nodeById.get(contextRailInspector.nodeId)
+            ?.generation === contextRailInspector.runtimeGeneration &&
           visualConversationAnchors?.[contextRailInspector.nodeId] &&
           intentOverlayAnchor ? (
             <Suspense fallback={null}>
@@ -3195,7 +3510,11 @@ function WorldControlPlane({
             </Suspense>
           ) : null}
           {visibleFloatingInspectors.map((conversation) => {
-            const source = visualConversationAnchors?.[conversation.nodeId];
+            const source =
+              presentedWorld.nodeById.get(conversation.nodeId)?.generation ===
+              conversation.runtimeGeneration
+                ? visualConversationAnchors?.[conversation.nodeId]
+                : null;
             const target =
               floatingWindowAnchors[worldInspectorWindowId(conversation)] ??
               null;
@@ -3274,6 +3593,31 @@ function WorldControlPlane({
               className="world-inspector-portal"
               ref={setContextRailInspectorPortal}
             />
+            {contextRailInspector &&
+            !world.hosts.some(
+              (host) => host.connectionId === contextRailInspector.connectionId,
+            ) ? (
+              <p role="status">
+                Outside Hosts filter · {contextRailInspector.hostLabel}
+                <button
+                  type="button"
+                  onClick={() =>
+                    hostsFilter.setIds(
+                      hostsFilter.ids === null
+                        ? null
+                        : [
+                            ...new Set([
+                              ...hostsFilter.ids,
+                              contextRailInspector.connectionId,
+                            ]),
+                          ],
+                    )
+                  }
+                >
+                  Reveal in Hosts
+                </button>
+              </p>
+            ) : null}
             {contextRailInspector && view === "office" ? (
               <button
                 type="button"
@@ -3362,6 +3706,11 @@ function WorldControlPlane({
           <WorldFloatingTerminalWindow
             key={worldInspectorWindowId(conversation)}
             conversation={conversation}
+            outsideFilter={
+              !world.hosts.some(
+                (host) => host.connectionId === conversation.connectionId,
+              )
+            }
             cascadeIndex={index}
             compactActive={
               arrangementScope?.preset
@@ -3573,7 +3922,9 @@ function WorldControlPlane({
             onFocus={
               worldInspectorWindowId(conversation) === dockedInspectorId
                 ? () => {
-                    const target = world.nodeById.get(conversation.nodeId);
+                    const target = aggregateWorld.nodeById.get(
+                      conversation.nodeId,
+                    );
                     if (!target) return;
                     setSelection(target);
                     void applySelection(target.id).catch(() => undefined);
@@ -3642,7 +3993,7 @@ export function selectedHostStatusLabel(
 }
 
 export function shouldCloseWorldInspector(node: WorldObjectNode | null) {
-  return node !== null && (!node.selectedHost || !node.actionable);
+  return node !== null && !node.actionable;
 }
 
 function hostStateLabel(state: WorldObjectNode["hostState"]) {
@@ -3704,7 +4055,7 @@ export async function dispatchWorldInspectorRequest(
     throw new Error(`${view} is not available for this selection`);
   }
   await focusWorldNode(node, focusStore);
-  if (!worldNodeLeaseIsActive(node, focusStore)) {
+  if (!worldNodeLeaseIsCurrent(node, focusStore)) {
     throw new Error("The selected host changed while it was opening");
   }
   const connectionGeneration = focusStore.get().connectionGeneration;
@@ -3732,7 +4083,7 @@ export async function dispatchWorldInspectorRequest(
   );
 }
 
-function worldNodeLeaseIsActive(
+function worldNodeLeaseIsCurrent(
   node: WorldObjectNode,
   focusStore: WorldFocusStore,
 ) {
@@ -3741,8 +4092,6 @@ function worldNodeLeaseIsActive(
     (candidate) => candidate.id === node.connectionId,
   );
   return (
-    snapshot.activeConnectionId === node.connectionId &&
-    snapshot.serverRuntimeGeneration === node.generation &&
     connection?.state === "ready" &&
     connection.generation === node.generation &&
     node.actionable
@@ -3752,12 +4101,10 @@ function worldNodeLeaseIsActive(
 export async function focusWorldNode(
   node: WorldObjectNode,
   focusStore: WorldFocusStore = store,
+  agentSessionId?: string,
 ) {
   const target = workspaceTarget(node);
   if (!target) throw new Error("Select a space, agent, or terminal first");
-  if (focusStore.get().activeConnectionId !== node.connectionId) {
-    throw new Error(`Activate ${node.hostLabel} before opening this item`);
-  }
   const connection = focusStore
     .get()
     .connections.find((candidate) => candidate.id === node.connectionId);
@@ -3769,7 +4116,7 @@ export async function focusWorldNode(
   ) {
     throw new Error("The selected host generation is no longer available");
   }
-  if (!worldNodeLeaseIsActive(node, focusStore)) {
+  if (!worldNodeLeaseIsCurrent(node, focusStore)) {
     throw new Error("The selected host changed while it was opening");
   }
   const focused = await focusStore.focusQualifiedTarget({
@@ -3777,11 +4124,12 @@ export async function focusWorldNode(
     runtimeGeneration: node.generation,
     workspaceId: target.workspaceId,
     paneId: target.paneId,
+    ...(agentSessionId ? { agentSessionId } : {}),
   });
   if (!focused) {
     throw new Error("The selected item could not be focused");
   }
-  if (!worldNodeLeaseIsActive(node, focusStore)) {
+  if (!worldNodeLeaseIsCurrent(node, focusStore)) {
     throw new Error("The selected host changed while it was opening");
   }
 }

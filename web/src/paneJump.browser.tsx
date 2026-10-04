@@ -110,24 +110,39 @@ async function run() {
   outside.style.cssText =
     "position:fixed;left:0;top:0;width:120px;height:30px;z-index:10000";
   document.body.append(outside);
+  const focused: string[] = [];
+  let requestedPaneId = "";
   const client: ConnectionClient = {
     connectionId: "pane-jump-test",
     generation: 1,
     serverRuntimeGeneration: 1,
     isCurrent: () => true,
-    acceptsServerGeneration: () => true,
-    call: async () => ({}),
+    acceptsServerGeneration: (generation) => generation === 1,
+    call: async (method, params = {}) => {
+      if (method === "pane.get") {
+        requestedPaneId = String(params.pane_id);
+        return {
+          pane: store
+            .get()
+            .panes.find((pane) => pane.pane_id === requestedPaneId),
+        };
+      }
+      if (method === "tab.focus") {
+        focused.push(requestedPaneId);
+        outside.focus();
+      }
+      if (method === "workspace.list")
+        return { workspaces: store.get().workspaces };
+      if (method === "tab.list") return { tabs: store.get().tabs };
+      if (method === "pane.list") return { panes: store.get().panes };
+      if (method === "pane.layout") return { layout: store.get().layout };
+      return {};
+    },
   };
   store.init = () => {};
   bridge.connection = () => client;
   bridge.onTerminal = () => () => {};
   bridge.onTerminalClosed = () => () => {};
-  const focused: string[] = [];
-  store.focusPane = async (paneId) => {
-    focused.push(paneId);
-    // Stand in for the destination pane taking focus after a real jump.
-    outside.focus();
-  };
   __storeTesting.replaceState({
     ...store.get(),
     status: "connected",
@@ -214,15 +229,33 @@ async function run() {
   flushSync(() => root.render(<App />));
   try {
     await until(() => document.querySelector(".xterm-helper-textarea"));
-    const terminal = document.querySelector<HTMLTextAreaElement>(
+    let terminal = document.querySelector<HTMLTextAreaElement>(
       ".xterm-helper-textarea",
     )!;
+    const focusTerminal = async () => {
+      await until(() => document.querySelector(".xterm-helper-textarea"));
+      terminal = document.querySelector<HTMLTextAreaElement>(
+        ".xterm-helper-textarea",
+      )!;
+      terminal.focus();
+    };
     const search = () =>
       document.querySelector<HTMLInputElement>(".pane-jump-search");
     for (const platform of ["mac", "windows", "linux"] as const) {
       flushSync(() => selectShortcutPreset(platform));
       for (const reverse of [false, true]) {
-        terminal.focus();
+        flushSync(() =>
+          __storeTesting.replaceState({
+            ...store.get(),
+            selectedPaneId: "w1:p1",
+            recentPaneIds: ["w1:p1", "w1:p2"],
+          }),
+        );
+        await until(() => document.querySelector(".xterm-helper-textarea"));
+        terminal = document.querySelector<HTMLTextAreaElement>(
+          ".xterm-helper-textarea",
+        )!;
+        await focusTerminal();
         const openingModifiers = platform === "mac" ? 2 : 3;
         const heldModifiers = openingModifiers | (reverse ? 8 : 0);
         await key(
@@ -320,7 +353,7 @@ async function run() {
           "A real jump restored focus to the old pane",
         );
       }
-      terminal.focus();
+      await focusTerminal();
       await key("k", "KeyK", 1);
       check(!!search(), `${platform}: Alt+K no longer opens search`);
       await key("k", "KeyK", 1, "keyDown", true);
@@ -342,7 +375,9 @@ async function run() {
         "Alt+K dismissal lost terminal focus",
       );
       await key("k", "KeyK", 1);
-      await input("Input.insertText", { text: "p1" });
+      await input("Input.insertText", {
+        text: store.get().selectedPaneId!.split(":").pop()!,
+      });
       checkSearchAccessibility();
       check(
         document.querySelectorAll(".pane-jump-item").length === 1,
@@ -388,7 +423,7 @@ async function run() {
         document.activeElement === outside,
         "Blur dismissal stole the user's new focus",
       );
-      terminal.focus();
+      await focusTerminal();
       await key("k", "KeyK", platform === "mac" ? 4 : 3);
       await until(() => document.querySelector(".command-popover"));
       check(

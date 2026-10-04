@@ -11,6 +11,7 @@ export function officeSceneSignature({
   observability,
   seatCreationStates = {},
   visibleRoomIndices,
+  visibleReceptionIndices = projection.receptions.map((_, index) => index),
 }: {
   layout: OfficeLayout;
   projection: HerdrOfficeProjection;
@@ -19,7 +20,13 @@ export function officeSceneSignature({
   observability?: OfficeObservability;
   seatCreationStates?: Readonly<Record<string, OfficeCreationActionState>>;
   visibleRoomIndices: readonly number[];
+  visibleReceptionIndices?: readonly number[];
 }) {
+  const visibleReceptionSet = new Set(visibleReceptionIndices);
+  const receptions = projection.receptions.flatMap((reception, index) =>
+    visibleReceptionSet.has(index) ? [reception] : [],
+  );
+  const visibleHostKeys = new Set(receptions.map(({ hostKey }) => hostKey));
   return JSON.stringify({
     selectedKey,
     completionSeenKeys: [...completionSeenKeys].sort(),
@@ -34,9 +41,9 @@ export function officeSceneSignature({
           null,
       ),
     },
-    hosts: projection.hosts,
+    hosts: projection.hosts.filter(({ key }) => visibleHostKeys.has(key)),
     rooms: visibleRoomIndices.map((index) => projection.rooms[index] ?? null),
-    receptions: projection.receptions,
+    receptions,
     barAgents: projection.barAgents,
     coverage: projection.coverage,
     seatCreationStates: Object.fromEntries(

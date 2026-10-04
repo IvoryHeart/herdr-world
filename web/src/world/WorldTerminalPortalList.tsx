@@ -10,7 +10,12 @@ import type { Pane } from "../types";
 import { useVisibleTabLayout } from "../visibleTabLayout";
 import type { WorldTerminalPresentation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
-import { store } from "../store";
+import {
+  OperationalContext,
+  connectionSnapshot,
+  store,
+  useStoreSelector,
+} from "../store";
 import {
   INSPECTOR_TERMINAL_FILE_EVENT,
   type InspectorTerminalFileRequest,
@@ -18,10 +23,6 @@ import {
 
 export default function WorldTerminalPortalList({
   presentations,
-  panes,
-  activeConnectionId,
-  connectionGeneration,
-  runtimeGeneration,
   terminalTheme,
   terminalFontScale,
   mobileShortcuts,
@@ -37,6 +38,7 @@ export default function WorldTerminalPortalList({
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
 }) {
+  const snapshot = useStoreSelector((state) => state);
   const [parking, setParking] = useState<HTMLDivElement | null>(null);
   return (
     <>
@@ -46,15 +48,20 @@ export default function WorldTerminalPortalList({
         aria-hidden="true"
       />
       {presentations.map((presentation) => {
+        const owner = snapshot.connections.find(
+          (connection) => connection.id === presentation.connectionId,
+        );
+        const session = connectionSnapshot(snapshot, presentation.connectionId);
         if (
           (!presentation.portal && !presentation.endpointReadiness) ||
           !presentation.tabId ||
-          presentation.connectionId !== activeConnectionId ||
-          presentation.runtimeGeneration !== runtimeGeneration
+          snapshot.status !== "connected" ||
+          owner?.state !== "ready" ||
+          presentation.runtimeGeneration !== owner.generation
         ) {
           return null;
         }
-        const pane = panes.find(
+        const pane = session.panes.find(
           (candidate) =>
             candidate.pane_id === presentation.paneId &&
             candidate.terminal_id === presentation.terminalId &&
@@ -67,15 +74,22 @@ export default function WorldTerminalPortalList({
             portal={presentation.portal}
             parking={parking}
           >
-            <WorldInspectorTabTerminal
-              presentation={presentation}
-              panes={panes}
-              connectionGeneration={connectionGeneration}
-              terminalTheme={terminalTheme}
-              terminalFontScale={terminalFontScale}
-              mobileShortcuts={mobileShortcuts}
-              mobileSideShortcuts={mobileSideShortcuts}
-            />
+            <OperationalContext.Provider
+              value={{
+                connectionId: presentation.connectionId,
+                runtimeGeneration: presentation.runtimeGeneration,
+              }}
+            >
+              <WorldInspectorTabTerminal
+                presentation={presentation}
+                panes={session.panes}
+                connectionGeneration={presentation.runtimeGeneration}
+                terminalTheme={terminalTheme}
+                terminalFontScale={terminalFontScale}
+                mobileShortcuts={mobileShortcuts}
+                mobileSideShortcuts={mobileSideShortcuts}
+              />
+            </OperationalContext.Provider>
           </WorldTerminalPortalOwner>
         ) : null;
       })}

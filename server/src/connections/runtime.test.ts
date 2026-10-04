@@ -322,6 +322,7 @@ test("herdr notification source relays SemanticNotification and silences the sta
         workspace_id: "w1",
         tab_id: "w1:t1",
         pane_id: "w1:p1",
+        session_identity_unavailable: true,
       },
     });
     // Status transitions no longer produce a second notification.
@@ -424,6 +425,7 @@ test("herdr notification source falls back to agent status on legacy Herdr", asy
           workspace_id: "w1",
           tab_id: "w1:t1",
           pane_id: "w1:p1",
+          session_identity_unavailable: true,
         },
       },
     ]);
