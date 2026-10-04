@@ -7,6 +7,11 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Default update checks read the release version from GitHub API metadata. The
+  manifest remains part of the verified update installation.
+
 ## [0.2.1] - 2026-10-04
 
 ### Breaking Changes
