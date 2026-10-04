@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-04
+
 ### Breaking Changes
 
 - Hosts now filters an aggregate Desk, Office, Tree and Graph view instead of selecting
