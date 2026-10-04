@@ -133,9 +133,7 @@ export function WorktreeLifecycleDialog({
   const readWorkspaces = useCallback(async (): Promise<Workspace[]> => {
     const result = await connectionClient.call("workspace.list", {});
     if (!Array.isArray(result?.workspaces)) {
-      throw new Error(
-        "Could not verify open workspaces. The checkout was not reopened.",
-      );
+      throw new Error("Could not list open workspaces.");
     }
     return result.workspaces as Workspace[];
   }, [connectionClient]);

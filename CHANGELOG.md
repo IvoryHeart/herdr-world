@@ -40,7 +40,8 @@ are optional because the merged PR history records their source.
 - Worktree resource requests expire after twenty-five seconds and are cancelled when their
   owner is discarded. Retrying Files or Changes preserves the already-open checkout
   without repeating its opened hook. Qualified workspace reads discard remembered
-  targets that have closed, so the checkout can reopen on the next attempt.
+  targets that have closed, so the checkout can reopen on the next attempt. Workspace
+  list failures report the failed read without implying a checkout reopen was attempted.
 - Upgrading to the aggregate multi-host Desk resets existing browser-local Desk
   review marks once because their storage scope and receipt identities change.
 
