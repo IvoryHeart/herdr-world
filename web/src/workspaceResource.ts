@@ -69,6 +69,10 @@ export interface WorkspaceInspectorRequest {
   availableViews?: InspectorView[];
 }
 
+// Allow the selected-host 20-second observation budget plus admission overhead,
+// while staying inside the browser RPC deadline of 30 seconds.
+export const WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS = 25_000;
+
 /** Cancel retired requests so a timeout cannot publish a resource later. */
 export function requestWorkspaceInspector(
   request: Omit<WorkspaceInspectorRequest, "onAdmission" | "signal">,
@@ -82,7 +86,10 @@ export function requestWorkspaceInspector(
       controller.abort();
       settle(false);
     };
-    const timer = window.setTimeout(cancel, 10_000);
+    const timer = window.setTimeout(
+      cancel,
+      WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS,
+    );
     const settle = (accepted: boolean) => {
       if (settled) return;
       settled = true;

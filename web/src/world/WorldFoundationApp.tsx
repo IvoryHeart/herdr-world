@@ -2112,6 +2112,7 @@ function WorldControlPlane({
   const conversationFor = (
     node: WorldObjectNode,
     requestedView: InspectorView | null,
+    candidateWorld = aggregateWorld,
   ) => {
     if (node.kind === "host") return null;
     const view = worldIntentInitialView(node, requestedView);
@@ -2123,7 +2124,7 @@ function WorldControlPlane({
       connectionSnapshot(store.get(), node.connectionId).workspaces.find(
         (candidate) => candidate.workspace_id === workspaceId,
       ) ??
-      aggregateWorld.spaces.find(
+      candidateWorld.spaces.find(
         (space) =>
           space.connectionId === node.connectionId &&
           space.generation === node.generation &&
@@ -2283,7 +2284,7 @@ function WorldControlPlane({
         if (!currentExisting) return false;
         const currentDockedInspectorId = dockedInspectorIdRef.current;
         setSelection(next);
-        const observed = conversationFor(next, inspectorView);
+        const observed = conversationFor(next, inspectorView, candidateWorld);
         if (!observed) return false;
         const reconciled = reconcileWorldInspectorConversation(
           currentExisting,
@@ -2357,7 +2358,7 @@ function WorldControlPlane({
       }
       return true;
     }
-    const conversation = conversationFor(next, inspectorView);
+    const conversation = conversationFor(next, inspectorView, candidateWorld);
     if (!conversation) return false;
     setIntentOpening(true);
     const unbindAbort = bindSelectionIntentAbort(signal, requestId);

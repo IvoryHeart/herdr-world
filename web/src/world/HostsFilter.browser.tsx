@@ -14,9 +14,11 @@ import {
   __storeTesting,
   emptyServerSessionState,
   OperationalContext,
+  operationalStore,
   store,
 } from "../store";
 import {
+  WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS,
   WORKSPACE_INSPECTOR_REQUEST_EVENT,
   requestWorkspaceInspector,
   type WorkspaceInspectorRequest,
@@ -80,6 +82,27 @@ const workspace: Workspace = {
   pane_count: operation === "spaces-navigator" ? 2 : 1,
   tab_count: operation === "spaces-navigator" ? 2 : 1,
   agent_status: "idle",
+};
+const coldObservation = Promise.withResolvers<unknown>();
+let resourceWorkspaceOpen = false;
+let resourceValidationFailure = false;
+const separateResourceWorkspace =
+  operation.startsWith("worktree-resource-closed") ||
+  operation === "worktree-resource-validation-failure" ||
+  operation === "worktree-resource-cold";
+const resourceWorkspace: Workspace = {
+  ...workspace,
+  workspace_id: "opened-checkout",
+  focused: false,
+  pane_count: 0,
+  tab_count: 0,
+  worktree: {
+    repo_key: "/synthetic/repo/.git",
+    repo_name: "Synthetic repo",
+    repo_root: "/synthetic/repo",
+    checkout_path: "/synthetic/feature",
+    is_linked_worktree: true,
+  },
 };
 const pane: Pane = {
   pane_id: "shared",
@@ -192,7 +215,12 @@ function snapshot() {
         id === "offline"
           ? null
           : {
-              workspaces: [workspace],
+              workspaces: [
+                workspace,
+                ...(id === "beta" && resourceWorkspaceOpen
+                  ? [resourceWorkspace]
+                  : []),
+              ],
               tabs: fixtureTabs,
               panes: dense && id === "beta" ? densePanes : fixturePanes,
               agents: [],
@@ -421,7 +449,9 @@ async function operationalScenario(unmount: () => void) {
       new Promise<string>((resolve) =>
         setTimeout(
           () => resolve("pending"),
-          operation === "pending-inspector-timeout" ? 12_000 : 1000,
+          operation === "pending-inspector-timeout"
+            ? WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS + 2000
+            : 1000,
         ),
       ),
     ]);
@@ -1258,7 +1288,8 @@ async function operationalScenario(unmount: () => void) {
     operation === "worktree-resource-retirement" ||
     operation === "worktree-resource-disposal" ||
     operation === "worktree-resource-rejection" ||
-    operation === "worktree-resource-timeout"
+    operation === "worktree-resource-timeout" ||
+    separateResourceWorkspace
   ) {
     const element = document.createElement("div");
     document.body.append(element);
@@ -1328,14 +1359,47 @@ async function operationalScenario(unmount: () => void) {
         return;
       }
 
+      if (operation === "worktree-resource-cold") {
+        await new Promise((resolve) => setTimeout(resolve, 10_500));
+        check(
+          !closed &&
+            !!document.querySelector(".lifecycle-operation.is-running"),
+          "cold-host admission gave up before its observation budget",
+        );
+        await new Promise((resolve) => setTimeout(resolve, 7500));
+        coldObservation.resolve(snapshot());
+        await waitFor(
+          () =>
+            dispatches.some(
+              (call) =>
+                call.connectionId === "beta" &&
+                call.method === "file.list" &&
+                call.params.workspace_id === "opened-checkout",
+            ),
+          "cold-host observation did not admit Files for the new checkout",
+        );
+        await waitFor(
+          () => closed,
+          "cold-host admission did not open Files within observation budget",
+        );
+        check(
+          dispatches.filter((call) => call.method === "worktree.open")
+            .length === 1,
+          "cold-host admission reopened the checkout",
+        );
+        return;
+      }
       if (
         operation === "worktree-resource-rejection" ||
+        separateResourceWorkspace ||
         operation === "worktree-resource-timeout"
       ) {
         await waitFor(
           () => !!document.querySelector(".lifecycle-operation.is-failed"),
           "rejected resource admission reports lifecycle failure",
-          operation === "worktree-resource-timeout" ? 12_000 : 3000,
+          operation === "worktree-resource-timeout"
+            ? WORKSPACE_INSPECTOR_ADMISSION_TIMEOUT_MS + 2000
+            : 3000,
         );
         check(
           dispatches.some(
@@ -1371,6 +1435,40 @@ async function operationalScenario(unmount: () => void) {
             ?.textContent?.includes("checkout is open") === true,
           "resource failure did not explain successful checkout opening",
         );
+        if (operation.startsWith("worktree-resource-closed")) {
+          await operationalStore({
+            connectionId: "beta",
+            runtimeGeneration: 7,
+          }).closeWorkspace("opened-checkout");
+          if (operation === "worktree-resource-closed-refresh") {
+            namedButton("Refresh lifecycle status")!.click();
+            await waitFor(
+              () =>
+                document.querySelector(".lifecycle-open-state")?.textContent ===
+                "Closed",
+              "refreshed row retained a closed workspace target",
+            );
+          }
+        }
+        if (operation === "worktree-resource-validation-failure") {
+          resourceValidationFailure = true;
+          namedButton("Files")!.click();
+          await waitFor(
+            () =>
+              document
+                .querySelector(".lifecycle-operation.is-failed")
+                ?.textContent?.includes(
+                  "Synthetic workspace validation failed",
+                ) === true,
+            "cached target validation did not surface failure",
+          );
+          check(
+            dispatches.filter((call) => call.method === "worktree.open")
+              .length === 1,
+            "failed target validation replayed the opened hook",
+          );
+          return;
+        }
         rejectResourceFocus = false;
         if (operation === "worktree-resource-timeout") {
           resourceFocus.resolve(true);
@@ -1388,8 +1486,9 @@ async function operationalScenario(unmount: () => void) {
         await waitFor(() => closed, "Inspector-only retry did not succeed");
         check(
           dispatches.filter((call) => call.method === "worktree.open")
-            .length === 1,
-          "Inspector retry reopened the checkout",
+            .length ===
+            (operation.startsWith("worktree-resource-closed") ? 2 : 1),
+          "Inspector retry did not preserve live targets or reopen a confirmed closed checkout",
         );
         return;
       }
@@ -2109,7 +2208,10 @@ async function run() {
     call: async (method, params = {}) => {
       calls.push(method);
       globals.push({ method, params });
-      if (method === "world.snapshot") return snapshot();
+      if (method === "world.snapshot")
+        return operation === "worktree-resource-cold" && resourceWorkspaceOpen
+          ? coldObservation.promise
+          : snapshot();
       if (method === "world.watchlist.list")
         return { revision: watches.length, records: watches };
       if (method === "world.watchlist.pin") {
@@ -2171,6 +2273,26 @@ async function run() {
         return creation.promise;
       if (method === "workspace.create" && operation === "global-creation")
         return creation.promise;
+      if (method === "workspace.list") {
+        if (resourceValidationFailure && id === "beta")
+          throw new Error("Synthetic workspace validation failed");
+        if (separateResourceWorkspace && id === "beta")
+          return {
+            workspaces: [
+              workspace,
+              ...(resourceWorkspaceOpen ? [resourceWorkspace] : []),
+            ],
+          };
+      }
+      if (
+        method === "workspace.close" &&
+        separateResourceWorkspace &&
+        id === "beta" &&
+        params.workspace_id === "opened-checkout"
+      ) {
+        resourceWorkspaceOpen = false;
+        return {};
+      }
       if (method === "worktree.list" && operation.startsWith("worktree-"))
         return {
           source: {
@@ -2197,6 +2319,10 @@ async function run() {
           operation === "worktree-resource-disposal")
       )
         return lifecycleOpen.promise;
+      if (method === "worktree.open" && separateResourceWorkspace) {
+        resourceWorkspaceOpen = true;
+        return { workspace: resourceWorkspace };
+      }
       if (method === "worktree.open" && operation.startsWith("worktree-"))
         return {
           workspace: { workspace_id: "shared" },
@@ -2291,7 +2417,9 @@ async function run() {
     )
       return resourceFocus.promise;
     if (
-      operation === "worktree-resource-rejection" &&
+      (operation === "worktree-resource-rejection" ||
+        (separateResourceWorkspace &&
+          operation !== "worktree-resource-cold")) &&
       target.connectionId === "beta" &&
       rejectResourceFocus
     )
