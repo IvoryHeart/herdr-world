@@ -336,11 +336,13 @@ export function useTurnReceipts(
     .map((leaf) => `${receiptIdentity(leaf)}=${receiptTrigger(leaf)}`)
     .join("\n");
 
+  const clientScope = deskScope(clients);
+
   useEffect(() => {
     setReceipts(new Map());
     fetched.current = new Map();
     due.current = new Set();
-  }, [deskScope(clients)]);
+  }, [clientScope]);
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState !== "hidden") setTick((v) => v + 1);

@@ -863,6 +863,7 @@ function SpacesTabTerminal({
 }
 
 export type WorkspaceSurfaceSelection = {
+  signal?: AbortSignal;
   agentSessionId?: string;
   view?: InspectorView;
   connectionId: string;
@@ -2304,6 +2305,10 @@ export default function App({
     const handleInspectorRequest = (event: Event) => {
       const detail = (event as CustomEvent<WorkspaceInspectorRequest>).detail;
       if (detail?.onAdmission) event.preventDefault();
+      if (detail?.signal?.aborted) {
+        detail.onAdmission?.(false);
+        return;
+      }
       if (
         detail &&
         hasWorkspaceSurface &&
@@ -2321,6 +2326,7 @@ export default function App({
             workspaceId: detail.workspaceId,
             ...(detail.originPaneId ? { paneId: detail.originPaneId } : {}),
             view: detail.view,
+            signal: detail.signal,
           });
           detail.onAdmission?.(accepted === true);
         })().catch((error) => {
@@ -2351,6 +2357,16 @@ export default function App({
       if (!workspace) {
         pendingInspectorRequestRef.current?.onAdmission?.(false);
         pendingInspectorRequestRef.current = detail;
+        detail.signal?.addEventListener(
+          "abort",
+          () => {
+            if (pendingInspectorRequestRef.current === detail) {
+              pendingInspectorRequestRef.current = null;
+              detail.onAdmission?.(false);
+            }
+          },
+          { once: true },
+        );
         return;
       }
       pendingInspectorRequestRef.current?.onAdmission?.(false);
@@ -2365,11 +2381,14 @@ export default function App({
       WORKSPACE_INSPECTOR_REQUEST_EVENT,
       handleInspectorRequest,
     );
-    return () =>
+    return () => {
       window.removeEventListener(
         WORKSPACE_INSPECTOR_REQUEST_EVENT,
         handleInspectorRequest,
       );
+      pendingInspectorRequestRef.current?.onAdmission?.(false);
+      pendingInspectorRequestRef.current = null;
+    };
   }, [
     connectionClient,
     openInspector,
@@ -2592,6 +2611,7 @@ export default function App({
     if (resourceRuntimeKeyRef.current === resourceUiKey) return;
     resourceRuntimeKeyRef.current = resourceUiKey;
     fileQuickOpenRequestRef.current += 1;
+    pendingInspectorRequestRef.current?.onAdmission?.(false);
     pendingInspectorRequestRef.current = null;
     inspectorReturnFocusRef.current = null;
     commitInspectorState(null);

@@ -59,6 +59,7 @@ export function isWorkspaceInspectorShortcut(
 
 export interface WorkspaceInspectorRequest {
   onAdmission?: (accepted: boolean) => void;
+  signal?: AbortSignal;
   connectionId: string;
   runtimeGeneration?: number;
   generation: number;
@@ -66,6 +67,41 @@ export interface WorkspaceInspectorRequest {
   view: InspectorView;
   originPaneId?: string;
   availableViews?: InspectorView[];
+}
+
+/** Cancel retired requests so a timeout cannot publish a resource later. */
+export function requestWorkspaceInspector(
+  request: Omit<WorkspaceInspectorRequest, "onAdmission" | "signal">,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (signal?.aborted) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    const controller = new AbortController();
+    let settled = false;
+    const cancel = () => {
+      controller.abort();
+      settle(false);
+    };
+    const timer = window.setTimeout(cancel, 10_000);
+    const settle = (accepted: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (!accepted) controller.abort();
+      window.clearTimeout(timer);
+      signal?.removeEventListener("abort", cancel);
+      resolve(accepted);
+    };
+    signal?.addEventListener("abort", cancel, { once: true });
+    const event = new CustomEvent<WorkspaceInspectorRequest>(
+      WORKSPACE_INSPECTOR_REQUEST_EVENT,
+      {
+        cancelable: true,
+        detail: { ...request, signal: controller.signal, onAdmission: settle },
+      },
+    );
+    window.dispatchEvent(event);
+    if (!event.defaultPrevented) cancel();
+  });
 }
 
 export interface WorkspaceAnnotationRequest {

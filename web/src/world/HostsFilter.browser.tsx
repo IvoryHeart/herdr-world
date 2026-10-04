@@ -16,6 +16,11 @@ import {
   OperationalContext,
   store,
 } from "../store";
+import {
+  WORKSPACE_INSPECTOR_REQUEST_EVENT,
+  requestWorkspaceInspector,
+  type WorkspaceInspectorRequest,
+} from "../workspaceResource";
 import { TASK_NOTIFICATION_ACTIVATE_EVENT } from "../taskNotifications";
 import type { Pane, Tab, Workspace } from "../types";
 import { writeHostsFilter } from "./hostsFilter";
@@ -41,6 +46,9 @@ const watches: Array<{
 const creation = Promise.withResolvers<unknown>();
 const gitPull = Promise.withResolvers<unknown>();
 const lifecycleOpen = Promise.withResolvers<unknown>();
+const resourceFocus = Promise.withResolvers<boolean>();
+let rejectResourceFocus = true;
+let observedPendingWorkspace = false;
 let watchAdmissionOld = false;
 let downloadPublications = 0;
 let syntheticFileDeleted = false;
@@ -222,7 +230,7 @@ function snapshot() {
     })),
   };
 }
-function waitFor(condition: () => boolean, message: string) {
+function waitFor(condition: () => boolean, message: string, timeoutMs = 3000) {
   if (condition()) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {
     const observer = new MutationObserver(() => {
@@ -239,7 +247,7 @@ function waitFor(condition: () => boolean, message: string) {
           `${message}; ${document.body.textContent?.slice(-1000)}; ${JSON.stringify(worldRuntimeStore.get())}`,
         ),
       );
-    }, 3000);
+    }, timeoutMs);
     observer.observe(document.body, {
       childList: true,
       subtree: true,
@@ -354,7 +362,97 @@ async function float(id: string) {
   );
   await frame();
 }
-async function operationalScenario() {
+async function operationalScenario(unmount: () => void) {
+  if (operation.startsWith("pending-inspector-")) {
+    const client = bridge.connection("alpha", 7);
+    const request = {
+      connectionId: "alpha",
+      generation: client.generation,
+      workspaceId: "unobserved",
+      view: "files" as const,
+    };
+    const admission = Promise.withResolvers<boolean>();
+    const pending =
+      operation === "pending-inspector-timeout"
+        ? requestWorkspaceInspector(request)
+        : admission.promise;
+    if (operation !== "pending-inspector-timeout") {
+      window.dispatchEvent(
+        new CustomEvent<WorkspaceInspectorRequest>(
+          WORKSPACE_INSPECTOR_REQUEST_EVENT,
+          {
+            cancelable: true,
+            detail: { ...request, onAdmission: admission.resolve },
+          },
+        ),
+      );
+    }
+    await frame();
+    const observeWorkspace = () =>
+      flushSync(() => {
+        observedPendingWorkspace = true;
+        const state = store.get();
+        const workspaces = [
+          ...state.workspaces,
+          { ...workspace, workspace_id: "unobserved", focused: false },
+        ];
+        __storeTesting.replaceState({
+          ...state,
+          workspaces,
+          sessionsByConnectionId: {
+            ...state.sessionsByConnectionId,
+            alpha: { ...state.sessionsByConnectionId.alpha!, workspaces },
+          },
+        });
+      });
+    if (operation === "pending-inspector-unmount") unmount();
+    else if (operation === "pending-inspector-scope")
+      flushSync(() => {
+        const state = store.get();
+        __storeTesting.replaceState({
+          ...state,
+          activeConnectionId: "beta",
+          connectionGeneration: state.connectionGeneration + 1,
+        });
+      });
+    else if (operation === "pending-inspector-delayed") observeWorkspace();
+    const result = await Promise.race([
+      pending,
+      new Promise<string>((resolve) =>
+        setTimeout(
+          () => resolve("pending"),
+          operation === "pending-inspector-timeout" ? 12_000 : 1000,
+        ),
+      ),
+    ]);
+    check(
+      result === (operation === "pending-inspector-delayed"),
+      "pending Inspector admission did not settle with its expected outcome",
+    );
+    if (operation === "pending-inspector-delayed") {
+      await waitFor(
+        () =>
+          dispatches.some(
+            (call) =>
+              call.method === "file.list" &&
+              call.params.workspace_id === "unobserved",
+          ),
+        "observed pending workspace did not open Files",
+      );
+    } else {
+      if (operation === "pending-inspector-timeout") observeWorkspace();
+      await frame();
+      check(
+        !dispatches.some(
+          (call) =>
+            call.method === "file.list" &&
+            call.params.workspace_id === "unobserved",
+        ),
+        "discarded pending Inspector opened a resource later",
+      );
+    }
+    return;
+  }
   if (operation === "spaces-navigator" || operation === "bare-navigator") {
     if (window.innerWidth <= 720) {
       namedButton("Show workspaces")!.click();
@@ -1158,7 +1256,9 @@ async function operationalScenario() {
     operation === "worktree-files" ||
     operation === "worktree-changes" ||
     operation === "worktree-resource-retirement" ||
-    operation === "worktree-resource-rejection"
+    operation === "worktree-resource-disposal" ||
+    operation === "worktree-resource-rejection" ||
+    operation === "worktree-resource-timeout"
   ) {
     const element = document.createElement("div");
     document.body.append(element);
@@ -1183,7 +1283,10 @@ async function operationalScenario() {
       const button = operation === "worktree-changes" ? "Changes" : "Files";
       await waitFor(() => !!namedButton(button), "lifecycle resource button");
       namedButton(button)!.click();
-      if (operation === "worktree-resource-retirement") {
+      if (
+        operation === "worktree-resource-retirement" ||
+        operation === "worktree-resource-disposal"
+      ) {
         await frame();
         check(
           dispatches.some(
@@ -1192,17 +1295,20 @@ async function operationalScenario() {
           ),
           "retirement resource did not submit its open",
         );
-        flushSync(() => {
-          const state = store.get();
-          __storeTesting.replaceState({
-            ...state,
-            connections: state.connections.map((connection) =>
-              connection.id === "beta"
-                ? { ...connection, generation: 8 }
-                : connection,
-            ),
+        if (operation === "worktree-resource-disposal")
+          flushSync(() => dialog.render(null));
+        else
+          flushSync(() => {
+            const state = store.get();
+            __storeTesting.replaceState({
+              ...state,
+              connections: state.connections.map((connection) =>
+                connection.id === "beta"
+                  ? { ...connection, generation: 8 }
+                  : connection,
+              ),
+            });
           });
-        });
         lifecycleOpen.resolve({ workspace: { workspace_id: "shared" } });
         await frame();
         await frame();
@@ -1222,10 +1328,14 @@ async function operationalScenario() {
         return;
       }
 
-      if (operation === "worktree-resource-rejection") {
+      if (
+        operation === "worktree-resource-rejection" ||
+        operation === "worktree-resource-timeout"
+      ) {
         await waitFor(
           () => !!document.querySelector(".lifecycle-operation.is-failed"),
           "rejected resource admission reports lifecycle failure",
+          operation === "worktree-resource-timeout" ? 12_000 : 3000,
         );
         check(
           dispatches.some(
@@ -1249,6 +1359,37 @@ async function operationalScenario() {
         check(
           store.get().activeConnectionId === "alpha",
           "rejected resource admission changed unrelated focus",
+        );
+        check(
+          document.querySelector(".lifecycle-open-state.is-open")
+            ?.textContent === "Open",
+          "successful checkout opening was still shown as closed",
+        );
+        check(
+          document
+            .querySelector(".lifecycle-operation.is-failed")
+            ?.textContent?.includes("checkout is open") === true,
+          "resource failure did not explain successful checkout opening",
+        );
+        rejectResourceFocus = false;
+        if (operation === "worktree-resource-timeout") {
+          resourceFocus.resolve(true);
+          await frame();
+          check(
+            !dispatches.some(
+              (call) =>
+                call.connectionId === "beta" && call.method === "file.list",
+            ),
+            "timed-out visual admission opened Files after focus completed",
+          );
+          check(!closed, "timed-out visual admission closed the dialog late");
+        }
+        namedButton("Files")!.click();
+        await waitFor(() => closed, "Inspector-only retry did not succeed");
+        check(
+          dispatches.filter((call) => call.method === "worktree.open")
+            .length === 1,
+          "Inspector retry reopened the checkout",
         );
         return;
       }
@@ -1982,7 +2123,12 @@ async function run() {
       }
       if (method === "workspace.list")
         return {
-          workspaces: [workspace],
+          workspaces: [
+            workspace,
+            ...(observedPendingWorkspace
+              ? [{ ...workspace, workspace_id: "unobserved", focused: false }]
+              : []),
+          ],
           navigation_mode: coldHost ? "browser-local" : "shared",
         };
       if (method === "pane.list")
@@ -2047,7 +2193,8 @@ async function run() {
         };
       if (
         method === "worktree.open" &&
-        operation === "worktree-resource-retirement"
+        (operation === "worktree-resource-retirement" ||
+          operation === "worktree-resource-disposal")
       )
         return lifecycleOpen.promise;
       if (method === "worktree.open" && operation.startsWith("worktree-"))
@@ -2138,8 +2285,15 @@ async function run() {
   store.focusQualifiedTarget = async (target) => {
     calls.push(`focus:${target.connectionId}`);
     if (
+      operation === "worktree-resource-timeout" &&
+      target.connectionId === "beta" &&
+      rejectResourceFocus
+    )
+      return resourceFocus.promise;
+    if (
       operation === "worktree-resource-rejection" &&
-      target.connectionId === "beta"
+      target.connectionId === "beta" &&
+      rejectResourceFocus
     )
       return false;
     return focusQualifiedTarget(target);
@@ -2242,7 +2396,7 @@ async function run() {
       await frame();
     }
     if (operation !== "filters") {
-      await operationalScenario();
+      await operationalScenario(() => flushSync(() => root.unmount()));
       return;
     }
     for (const id of catalogue)

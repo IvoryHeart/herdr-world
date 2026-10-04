@@ -8,6 +8,12 @@ const chrome =
 
 const cases = [
   ...[1440, 390].flatMap((width) => [
+    ...[
+      "pending-inspector-scope",
+      "pending-inspector-unmount",
+      "pending-inspector-timeout",
+      "pending-inspector-delayed",
+    ].map((operation) => ({ width, operation, view: "spaces" })),
     { width, operation: "spaces-navigator", view: "spaces" },
     { width, operation: "bare-navigator", view: "office" },
   ]),
@@ -47,7 +53,9 @@ const cases = [
       "worktree-files",
       "worktree-changes",
       "worktree-resource-retirement",
+      "worktree-resource-disposal",
       "worktree-resource-rejection",
+      "worktree-resource-timeout",
     ].map((operation) => ({ width, operation, view: "tree" })),
   ),
   ...[

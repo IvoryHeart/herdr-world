@@ -37,6 +37,12 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Worktree resource requests expire after ten seconds and are cancelled when their
+  owner is discarded. Retrying Files or Changes preserves the already-open checkout
+  without repeating its opened hook.
+- Upgrading to the aggregate multi-host Desk resets existing browser-local Desk
+  review marks once because their storage scope and receipt identities change.
+
 - Worktree Files and Changes open the owning visual Inspector without switching
   unrelated Spaces focus. Temporary-workspace removal retains cleanup failures.
 

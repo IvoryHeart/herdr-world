@@ -2621,6 +2621,7 @@ function WorldControlPlane({
     (selection: WorkspaceSurfaceSelection) => Promise<boolean>
   >(() => Promise.resolve(false));
   workspaceSurfaceSelectionHandlerRef.current = (surfaceSelection) => {
+    if (surfaceSelection.signal?.aborted) return Promise.resolve(false);
     const node = worldNodeForWorkspaceSurfaceSelection(
       aggregateWorld,
       surfaceSelection,
@@ -2631,7 +2632,7 @@ function WorldControlPlane({
         surfaceSelection.view ?? null,
         true,
         aggregateWorld,
-        undefined,
+        surfaceSelection.signal,
         surfaceSelection.agentSessionId,
       );
     if (
@@ -2649,6 +2650,7 @@ function WorldControlPlane({
         ...inspectorConversations.map(snapshotPriorityForConversation),
       ])
       .then(() => {
+        if (surfaceSelection.signal?.aborted) return false;
         const refreshedWorld = buildWorldObject(
           worldRuntimeStore.get().connections,
           connectionSelection.activeConnectionId,
@@ -2663,7 +2665,7 @@ function WorldControlPlane({
               surfaceSelection.view ?? null,
               true,
               refreshedWorld,
-              undefined,
+              surfaceSelection.signal,
               surfaceSelection.agentSessionId,
             )
           : false;

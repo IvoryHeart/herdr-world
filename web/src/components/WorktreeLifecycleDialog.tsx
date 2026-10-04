@@ -8,8 +8,7 @@ import type { Workspace, WorktreeList } from "../types";
 import { resolveWorktreeOpenSource, worktreeCreationSource } from "../worktree";
 import {
   type InspectorView,
-  WORKSPACE_INSPECTOR_REQUEST_EVENT,
-  type WorkspaceInspectorRequest,
+  requestWorkspaceInspector,
 } from "../workspaceResource";
 import {
   buildWorktreeLifecycleRows,
@@ -116,6 +115,10 @@ export function WorktreeLifecycleDialog({
   const [openWorktreeOpen, setOpenWorktreeOpen] = useState(false);
   const [hooksOpen, setHooksOpen] = useState(false);
   const [removeRow, setRemoveRow] = useState<WorktreeLifecycleRow | null>(null);
+  const [openedResourceTargets, setOpenedResourceTargets] = useState<
+    Record<string, string>
+  >({});
+  const resourceAdmissionRef = useRef<AbortController | null>(null);
   const requestId = useRef(0);
   const inFlightLoad = useRef<{
     workspaceId: string;
@@ -235,6 +238,20 @@ export function WorktreeLifecycleDialog({
       inFlightLoad.current = null;
     };
   }, [load, open, repositoryWorkspaceId]);
+
+  useEffect(() => {
+    setOpenedResourceTargets({});
+    return () => {
+      resourceAdmissionRef.current?.abort();
+      resourceAdmissionRef.current = null;
+    };
+  }, [
+    open,
+    repositoryWorkspaceId,
+    connectionClient.connectionId,
+    connectionClient.generation,
+    connectionClient.serverRuntimeGeneration,
+  ]);
 
   const list =
     listResult && listResult.workspaceId === repositoryWorkspaceId
@@ -375,38 +392,52 @@ export function WorktreeLifecycleDialog({
     row: WorktreeLifecycleRow,
     view: InspectorView,
   ) => {
-    const result = await openWorktree(row, true);
-    const targetWorkspaceId = lifecycleOpenedWorkspaceId(result);
-    if (!targetWorkspaceId) {
-      throw new Error(
-        "Herdr opened the checkout without returning a workspace ID.",
-      );
-    }
-    let acknowledge!: (accepted: boolean) => void;
-    const admission = new Promise<boolean>((resolve) => {
-      acknowledge = resolve;
-    });
-    const event = new CustomEvent<WorkspaceInspectorRequest>(
-      WORKSPACE_INSPECTOR_REQUEST_EVENT,
-      {
-        cancelable: true,
-        detail: {
+    const controller = new AbortController();
+    resourceAdmissionRef.current?.abort();
+    resourceAdmissionRef.current = controller;
+    try {
+      const existingWorkspaceId =
+        row.workspace?.workspace_id ?? openedResourceTargets[row.worktree.path];
+      const result = existingWorkspaceId
+        ? { workspace: { workspace_id: existingWorkspaceId } }
+        : await openWorktree(row, true);
+      const targetWorkspaceId = lifecycleOpenedWorkspaceId(result);
+      if (!targetWorkspaceId) {
+        throw new Error(
+          "Herdr opened the checkout without returning a workspace ID.",
+        );
+      }
+      if (controller.signal.aborted || !connectionClient.isCurrent()) {
+        throw new Error(
+          "The checkout opened, but its resource request was cancelled.",
+        );
+      }
+      setOpenedResourceTargets((targets) => ({
+        ...targets,
+        [row.worktree.path]: targetWorkspaceId,
+      }));
+      const admitted = await requestWorkspaceInspector(
+        {
           connectionId: connectionClient.connectionId,
           generation: connectionClient.generation,
           runtimeGeneration:
             connectionClient.serverRuntimeGeneration ?? undefined,
           workspaceId: targetWorkspaceId,
           view,
-          onAdmission: acknowledge,
         },
-      },
-    );
-    window.dispatchEvent(event);
-    if (!event.defaultPrevented || !(await admission)) {
-      throw new Error("The workspace resource could not be opened. Try again.");
+        controller.signal,
+      );
+      if (!admitted) {
+        throw new Error(
+          `The checkout is open in a workspace, but its ${view === "files" ? "Files" : "Changes"} view could not be shown. Retry the view to keep the checkout open.`,
+        );
+      }
+      onClose();
+      return result;
+    } finally {
+      if (resourceAdmissionRef.current === controller)
+        resourceAdmissionRef.current = null;
     }
-    onClose();
-    return result;
   };
 
   const removeWorktree = async (row: WorktreeLifecycleRow) => {
@@ -627,6 +658,7 @@ export function WorktreeLifecycleDialog({
                     <WorktreeLifecycleRowItem
                       key={rowKey}
                       row={row}
+                      openedWorkspaceId={openedResourceTargets[rowKey]}
                       syncInfo={syncInfo}
                       operationRunning={operationRunning}
                       rowBusy={

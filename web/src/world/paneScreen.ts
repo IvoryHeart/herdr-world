@@ -106,7 +106,9 @@ export function usePaneScreens(
     .map((leaf) => `${screenIdentity(leaf)}:${leaf.status}`)
     .join("\n");
 
-  useEffect(() => setScreens(new Map()), [deskScope(clients)]);
+  const clientScope = deskScope(clients);
+
+  useEffect(() => setScreens(new Map()), [clientScope]);
   useEffect(() => {
     let cancelled = false;
     const live = new Set(targets.map(screenIdentity));

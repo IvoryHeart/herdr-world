@@ -22,6 +22,7 @@ import {
 export function WorktreeLifecycleRow({
   row,
   syncInfo,
+  openedWorkspaceId,
   operationRunning,
   rowBusy,
   runOperation,
@@ -32,6 +33,7 @@ export function WorktreeLifecycleRow({
 }: {
   row: LifecycleRow;
   syncInfo?: WorkspaceAutoSyncInfo;
+  openedWorkspaceId?: string;
   operationRunning: boolean;
   rowBusy: boolean;
   runOperation: (
@@ -46,6 +48,7 @@ export function WorktreeLifecycleRow({
 }) {
   const store = useOperationalStore();
   const workspace = row.workspace;
+  const openWorkspaceId = workspace?.workspace_id ?? openedWorkspaceId;
   const rowKey = row.worktree.path;
   const title = lifecycleWorktreeTitle(row.worktree);
   const changed = lifecycleGitChangeCount(row.gitStatus);
@@ -60,9 +63,9 @@ export function WorktreeLifecycleRow({
             {row.worktree.is_linked_worktree ? "Linked" : "Main"}
           </span>
           <span
-            className={`lifecycle-open-state ${workspace ? "is-open" : ""}`}
+            className={`lifecycle-open-state ${openWorkspaceId ? "is-open" : ""}`}
           >
-            {workspace ? "Open" : "Closed"}
+            {openWorkspaceId ? "Open" : "Closed"}
           </span>
         </div>
         <code title={row.worktree.path}>{row.worktree.path}</code>
@@ -89,12 +92,12 @@ export function WorktreeLifecycleRow({
       </div>
 
       <div className="lifecycle-row-actions">
-        {workspace ? (
+        {openWorkspaceId ? (
           <button
             type="button"
             className="ghost"
             disabled={operationRunning}
-            onClick={() => onFocus(workspace.workspace_id)}
+            onClick={() => onFocus(openWorkspaceId)}
           >
             <FocusIcon size={14} />
             Focus
@@ -113,12 +116,16 @@ export function WorktreeLifecycleRow({
             Open
           </button>
         )}
-        {!workspace && !row.worktree.is_prunable ? (
+        {!row.worktree.is_prunable ? (
           <>
             <button
               type="button"
               className="ghost"
-              title="Open workspace and browse files"
+              title={
+                openWorkspaceId
+                  ? "Browse workspace files"
+                  : "Open workspace and browse files"
+              }
               disabled={operationRunning}
               onClick={() =>
                 runOperation(rowKey, "Opening Files", () =>
@@ -132,7 +139,11 @@ export function WorktreeLifecycleRow({
             <button
               type="button"
               className="ghost"
-              title="Open workspace and review changes"
+              title={
+                openWorkspaceId
+                  ? "Review workspace changes"
+                  : "Open workspace and review changes"
+              }
               disabled={operationRunning}
               onClick={() =>
                 runOperation(rowKey, "Opening Changes", () =>
