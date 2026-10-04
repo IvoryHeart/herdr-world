@@ -11,6 +11,7 @@ export function officeSceneSignature({
   observability,
   seatCreationStates = {},
   visibleRoomIndices,
+  roomVersions,
   visibleReceptionIndices = projection.receptions.map((_, index) => index),
 }: {
   layout: OfficeLayout;
@@ -20,6 +21,8 @@ export function officeSceneSignature({
   observability?: OfficeObservability;
   seatCreationStates?: Readonly<Record<string, OfficeCreationActionState>>;
   visibleRoomIndices: readonly number[];
+  /** Immutable admitted room identities supplied by the retained renderer. */
+  roomVersions?: readonly number[];
   visibleReceptionIndices?: readonly number[];
 }) {
   const visibleReceptionSet = new Set(visibleReceptionIndices);
@@ -45,7 +48,9 @@ export function officeSceneSignature({
       ),
     },
     hosts: projection.hosts.filter(({ key }) => visibleHostKeys.has(key)),
-    rooms: visibleRoomIndices.map((index) => projection.rooms[index] ?? null),
+    rooms:
+      roomVersions ??
+      visibleRoomIndices.map((index) => projection.rooms[index] ?? null),
     receptions,
     barAgents: projection.barAgents,
     coverage: projection.coverage,

@@ -37,6 +37,25 @@ export async function verifyOfficeRendering(
   };
   try {
     for (const resolution of [1, 2]) {
+      const fractional = new Container();
+      fractional.addChild(
+        ...Array.from({ length: 4 }, () =>
+          new Graphics().rect(0.5, 0.5, 63.8, 63.8).fill(0xabcdef),
+        ),
+      );
+      const admitted = cacheOfficeStaticContent(
+        fractional,
+        new Set(),
+        resolution,
+        65536,
+      );
+      pixels(fractional, resolution);
+      const backing = fractional.renderGroup?.texture?.source;
+      check(
+        !!backing && backing.pixelWidth * backing.pixelHeight <= admitted,
+        "Fractional cache backing exceeded its admitted device-pixel budget",
+      );
+      fractional.destroy({ children: true, context: true });
       for (const origin of [4, 4.5]) {
         const reference = new Graphics();
         const optimized = new Graphics();

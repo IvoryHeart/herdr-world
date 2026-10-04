@@ -28,6 +28,27 @@ their admission across refreshes; queued work coalesces to the latest observatio
 | Canvas drawing, hit targets, camera or drag | `GraphCanvas` and `GraphRenderer` in [graph/GraphCanvas.tsx](graph/GraphCanvas.tsx) own the renderer and pointer work. | [Canvas tests](graph/GraphCanvas.test.ts) |
 | Placement, physics or Arrange | `reconcileGraphLayout`, `stepGraphLayout` and `arrangeGraphLayout` in [graph/graphLayout.ts](graph/graphLayout.ts) own positions; [graph/graphPreferences.ts](graph/graphPreferences.ts) persists camera, collapse and nodes. | [Layout tests](graph/graphLayout.test.ts), [preference tests](graph/graphPreferences.test.ts) |
 
+Graph caches physics topology in [graph/graphSimulation.ts](graph/graphSimulation.ts)
+and uses finite-radius spatial queries with the original force order and law.
+[graph/graphSimulationRunner.ts](graph/graphSimulationRunner.ts) sends geometry to
+one worker with one request in flight; revision fences discard results after
+reconciliation, dragging or disposal. Its fallback yields ordinary tasks. Selection
+and search reuse topology. The renderer caches its bounding rectangle and grid;
+settled pans reuse integer device-pixel translations and repaint exposed strips.
+Fractional-device translations, zoom, rotation, resize and state changes redraw.
+Individual translucent edges retain their original compositing order. Browser
+regressions compare cached and full paints at DPR 1/2 (two channel levels of
+antialiasing tolerance) and exercise reduced-motion settlement after typing.
+
+[worldFrameScheduler.ts](worldFrameScheduler.ts) shares one task/rAF queue across
+canvas clients, prioritizes state over motion, and yields after eight milliseconds
+of client work. Hidden/offscreen clients retain pending work without painting;
+reduced motion excludes decorative requests. A shared terminal quiet signal stops
+physics advancement and decorative animation while typing. Geometry needed for
+Inspector anchors remains available; per-node debug snapshots are published only
+when `window.__HERDR_WORLD_RENDERER_DEBUG__` is enabled. The `"counters"` mode
+collects acceptance counters without allocating debug node snapshots.
+
 ## Office
 
 | Task | Open these owners | Focused evidence |
@@ -45,13 +66,23 @@ resources. Static runs are cached in painter order around animated nodes, so
 characters and monitor/status effects keep moving without repainting every piece
 of furniture. Subtrees beneath translucent ancestors keep per-primitive opacity
 instead of being flattened. The cache admits at most four viewport areas of device pixels;
-individual targets are bounded to 2048 pixels per axis. Pixi owns pooled backing
+fractional bounds are rounded outward before resolution and power-of-two backing
+size admission. Individual targets are bounded to 2048 pixels per axis. Pixi owns pooled backing
 textures. Renderer teardown releases layer resources and renderer-owned floor
 textures. Fractional floor origins retain vector tile edges for identical coverage.
+[officeArtwork.ts](officeArtwork.ts) shares immutable furniture GraphicsContexts
+with explicit reference ownership; the last consumer releases the context.
+Selection projections reuse equivalent room references, while overflowing rooms
+rerun bounded admission when selection changes or clears. Room versions make
+retained-layer signatures independent of full topology serialization. Qualified
+presentation-key aliases are indexed during cooperative preparation, so connector
+and selection renders do not rescan the complete pane roster.
 
 `OfficeScenePreparation` uses Pixi's preparation hooks in batches of at most 64
 nodes or four milliseconds, yielding ordinary tasks between batches. Each batch
-checks renderer lifetime and scene revision. Animation waits for prepared scenes,
+checks renderer lifetime and scene revision. These protected preparation hooks
+are tied to pinned Pixi 8.22.0: rerun preparation/cancellation and backing-size
+regressions when changing that pin. Animation waits for prepared scenes,
 stops for hidden documents or reduced motion, and resumes on visibility/preference
 changes. Terminal key, input and paste events defer decorative frames until a
 180 ms quiet interval; state updates and scrolling still paint independently of
@@ -60,19 +91,35 @@ working agents, checking that motion resumes when terminal typing stops.
 
 `OfficeSemanticTargetsOverlay` admits controls by ordered qualified identity;
 refreshed labels, geometry, permissions and callbacks remain current without
-remounting unchanged controls or losing keyboard focus. Office subscribes only to
+remounting unchanged controls or losing keyboard focus. Memoized control batches
+admit 16 controls per task without reconciling earlier controls. One native
+`inert` subtree flag gates readiness without updating every button; callback
+guards also reject programmatic activation before the scene is ready. Office subscribes only to
 the endpoint-creation inputs it consumes; room actions resolve through the
 qualified World index and still validate host, generation and native identity.
 
 Use `bun run test ./web/src/world/ProductionContexts.test.ts --test-name-pattern
 'office'` for the synthetic desktop/mobile transport workload. Keep native key
-scheduling, cold initialization, aggregate refresh and the strict p95 <200 ms /
-maximum <500 ms acknowledgement budgets. On Linux, repeat with `taskset -c
+scheduling, cold initialization, aggregate refresh and the strict Office/Graph p95
+<150 ms / maximum <450 ms acknowledgement budgets (tightened from 200/500 ms).
+These are regression ceilings, not optimization targets: preserve them as future
+graphics and animation are added, and lower them when repeated measurements
+demonstrate headroom. Do not relax the limits or exclude slow phases to make a
+change pass. On Linux, repeat with `taskset -c
 <cpu-a>,<cpu-b>` after checking the CPU/core mapping: separate cores and sibling
 logical CPUs measure different contention conditions. Run cases sequentially and
 report every run; affinity is a stress proxy, not a model of CI hardware. The
 canvas fixture also checks pixel equivalence, painter order, motion, retained
-controls and cleanup.
+controls and cleanup. For timing investigation, set `WORLD_TRACE_PREFIX` to a
+private temporary path; `WORLD_TIMINGS_ONLY=1` keeps acknowledgement/phase and
+Long Animation Frame evidence without the overhead of a full Chrome trace.
+
+Keep the existing text and character resources: BitmapText and a combined
+character atlas were measured and rejected because glyph/atlas preparation
+increased cold-start latency on the constrained workload. Lowering animation
+cadence or regrouping translucent paths would change presentation and is not a
+substitute for reducing work. A full OffscreenCanvas migration is unnecessary
+for the current workload; physics already runs off the main thread.
 
 ## Tree
 

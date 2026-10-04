@@ -1,3 +1,4 @@
+window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { verifyOfficeRendering } from "./officeRendering.browser";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -323,12 +324,11 @@ async function run() {
           onActivateRoom={() => {}}
         />,
       );
-      await settle();
-      await settle();
-      check(
-        progressHost
-          .querySelector('[aria-label="Office scene targets"]')
-          ?.getAttribute("aria-busy") === "false",
+      await waitFor(
+        () =>
+          progressHost
+            .querySelector('[aria-label="Office scene targets"]')
+            ?.getAttribute("aria-busy") === "false",
         "Office target readiness depends on canvas animation frames",
       );
       const beforeRefresh = [
@@ -372,6 +372,35 @@ async function run() {
       check(
         selectedAfterRefresh === focused.dataset.targetKey,
         "Retained Office control used a stale callback",
+      );
+      progressRoot.render(
+        <OfficeSemanticTargetsOverlay
+          layout={progressLayout}
+          projection={progressProjection}
+          renderedRevision={0}
+          selectedKey={null}
+          onSelect={() => {
+            selectedAfterRefresh = "unready";
+          }}
+          onActivateAgent={() => {
+            selectedAfterRefresh = "unready";
+          }}
+          onActivateDesk={() => {}}
+          onActivateRoom={() => {}}
+        />,
+      );
+      await settle();
+      const unready = progressHost.querySelector<HTMLElement>(
+        ".world-semantic-targets-overlay",
+      )!;
+      focused.blur();
+      focused.focus();
+      focused.click();
+      check(
+        unready.inert &&
+          document.activeElement !== focused &&
+          selectedAfterRefresh !== "unready",
+        `Unprepared Office controls accept focus or activation: inert=${unready.inert}, focused=${document.activeElement === focused}, callback=${selectedAfterRefresh === "unready"}`,
       );
       mutations.disconnect();
     } finally {

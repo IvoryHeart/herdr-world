@@ -28,6 +28,7 @@ import "./world.css";
 const view = new URL(location.href).searchParams.get("view")!;
 const traceEnabled = new URL(location.href).searchParams.has("trace");
 const failures: string[] = [];
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 document.addEventListener("securitypolicyviolation", (event) => {
   if (event.violatedDirective.startsWith("worker-src"))
     failures.push("production policy blocked snapshot decoder");
@@ -102,6 +103,35 @@ JSON.parse = function (
 let phase: string | null = null,
   paints = 0,
   notices = 0;
+const frameStalls: {
+  phase: string | null;
+  startAt: number;
+  durationMs: number;
+  blockingMs: number;
+  source: string;
+}[] = [];
+if (PerformanceObserver.supportedEntryTypes.includes("long-animation-frame")) {
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const frame = entry as PerformanceEntry & {
+        blockingDuration?: number;
+        scripts?: { duration: number; sourceFunctionName?: string }[];
+      };
+      const script = [...(frame.scripts ?? [])].sort(
+        (a, b) => b.duration - a.duration,
+      )[0];
+      frameStalls.push({
+        phase,
+        startAt: performance.timeOrigin + frame.startTime,
+        durationMs: frame.duration,
+        blockingMs: frame.blockingDuration ?? 0,
+        source: script?.sourceFunctionName ?? "render/layout",
+      });
+    }
+    frameStalls.sort((a, b) => b.durationMs - a.durationMs);
+    frameStalls.length = Math.min(5, frameStalls.length);
+  }).observe({ type: "long-animation-frame" });
+}
 let receivedFrames = 0,
   presentedFrames = 0;
 bridge.onTerminal((frame) => {
@@ -714,17 +744,36 @@ async function run() {
       );
       phase = null;
       if (
-        view === "office" &&
-        new URL(location.href).searchParams.get("entry") === "animated"
+        (view === "office" &&
+          new URL(location.href).searchParams.get("entry") === "animated") ||
+        (view === "graph" && scene.querySelector("canvas[data-graph-canvas]"))
       ) {
-        const beforeResume = window.__HERDR_WORLD_RENDERER__?.frames ?? 0;
-        // Renderer diagnostics do not mutate DOM; the DOM-based waitFor helper
-        // cannot observe autonomous motion. Allow the quiet timer and four paints.
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        await frames(4);
+        const renderedFrames = () =>
+          (view === "office"
+            ? window.__HERDR_WORLD_RENDERER__
+            : window.__HERDR_GRAPH_RENDERER__
+          )?.frames ?? 0;
+        const beforeResume = renderedFrames();
+        // Observe an actual resumed frame: a fixed number of browser rAFs can
+        // precede Pixi's timer/rAF pair on a busy renderer. This wait starts only
+        // after all timed input acknowledgements and does not exclude any keys.
+        await new Promise<void>((resolve) => {
+          let frame = 0;
+          const deadline = setTimeout(() => {
+            cancelAnimationFrame(frame);
+            resolve();
+          }, 1000);
+          const observe = () => {
+            if (renderedFrames() > beforeResume) {
+              clearTimeout(deadline);
+              resolve();
+            } else frame = requestAnimationFrame(observe);
+          };
+          frame = requestAnimationFrame(observe);
+        });
         check(
-          (window.__HERDR_WORLD_RENDERER__?.frames ?? 0) > beforeResume,
-          "Office animation did not resume after terminal input",
+          renderedFrames() > beforeResume,
+          `${view} animation did not resume after terminal input`,
         );
       }
     }
@@ -744,6 +793,7 @@ async function run() {
       cloneAdmissions,
       bridgeReplies,
       phases,
+      frameStalls,
       paints,
       notices,
       receivedFrames,

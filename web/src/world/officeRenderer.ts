@@ -62,8 +62,15 @@ import {
 import { cacheOfficeStaticContent } from "./officeStaticCache";
 import { OfficeScenePreparation } from "./officeScenePreparation";
 import { OfficeFloorTextures } from "./officeFloorTextures";
+import { worldRendererCountersEnabled } from "./worldRendererDebug";
+import { officeArtwork } from "./officeArtwork";
 import { officeSceneSignature } from "./officeSceneSignature";
 import { yieldWorldTask } from "./worldObject";
+import {
+  registerWorldFrames,
+  worldMotionPreference,
+  type WorldFrames,
+} from "./worldFrameScheduler";
 import { OFFICE_SCENE_DESTROY_OPTIONS } from "./officeRendererResources";
 import type { OfficeObservability } from "./officeObservability";
 import type { OfficeCreationActionState } from "./officeRoomActions";
@@ -267,12 +274,18 @@ export async function createOfficeRenderer(
     }
   >();
   let fontRevision = 0;
+  const roomVersions = new WeakMap<OfficeRoom, number>();
+  let nextRoomVersion = 0;
+  const roomVersion = (room: OfficeRoom) => {
+    let version = roomVersions.get(room);
+    if (version === undefined)
+      roomVersions.set(room, (version = ++nextRoomVersion));
+    return version;
+  };
   let cachedPixels = 0;
   const layerPixels = new WeakMap<Container, number>();
   const scrollElement = element.closest<HTMLElement>(".world-stage-scroll");
-  const motionPreference = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  );
+  const motionPreference = worldMotionPreference();
   let reducedMotion = motionPreference.matches;
 
   try {
@@ -314,57 +327,18 @@ export async function createOfficeRenderer(
   // Explicit ordinary-task turns between paints admit queued socket replies.
   // A frame-rate cap alone still leaves the automatic rAF chain ahead of input.
   app.ticker.maxFPS = 0;
-  let animationTimer: ReturnType<typeof setTimeout> | null = null;
-  let animationFrame: number | null = null;
-  let inputTimer: ReturnType<typeof setTimeout> | null = null;
+  let animationWork: WorldFrames | null = null;
   diagnostics.interactionPaused = false;
-  const cancelAnimation = () => {
-    if (animationTimer !== null) clearTimeout(animationTimer);
-    if (animationFrame !== null) cancelAnimationFrame(animationFrame);
-    animationTimer = null;
-    animationFrame = null;
-  };
+  const cancelAnimation = () => animationWork?.cancel();
   const scheduleAnimation = () => {
     if (
-      disposed ||
-      !sceneComplete ||
-      reducedMotion ||
-      document.hidden ||
-      !animated.length ||
-      inputTimer !== null ||
-      animationTimer !== null ||
-      animationFrame !== null
+      !disposed &&
+      sceneComplete &&
+      !reducedMotion &&
+      !document.hidden &&
+      animated.length
     )
-      return;
-    animationTimer = setTimeout(() => {
-      animationTimer = null;
-      if (disposed) return;
-      animationFrame = requestAnimationFrame((now) => {
-        animationFrame = null;
-        if (disposed) return;
-        if (
-          sceneComplete &&
-          !reducedMotion &&
-          !document.hidden &&
-          animated.length
-        )
-          app.ticker.update(now);
-        scheduleAnimation();
-      });
-    }, 16);
-  };
-  const onTerminalInput = (event: Event) => {
-    if (!(event.target instanceof Element) || !event.target.closest(".xterm"))
-      return;
-    cancelAnimation();
-    diagnostics.interactionPaused = true;
-    if (inputTimer !== null) clearTimeout(inputTimer);
-    inputTimer = setTimeout(() => {
-      inputTimer = null;
-      if (disposed) return;
-      diagnostics.interactionPaused = false;
-      scheduleAnimation();
-    }, 180);
+      animationWork?.request("motion");
   };
   officeDebug("renderer:pixi-ready");
   const canvas = app.canvas;
@@ -466,10 +440,23 @@ export async function createOfficeRenderer(
   };
   app.canvas.addEventListener("dblclick", onCanvasDoubleClick);
   diagnostics.activeListeners += 3;
-  for (const type of ["keydown", "beforeinput", "paste"]) {
-    document.addEventListener(type, onTerminalInput, true);
-  }
-  diagnostics.activeListeners += 3;
+  animationWork = registerWorldFrames(
+    element,
+    (now) => {
+      if (
+        !disposed &&
+        sceneComplete &&
+        !reducedMotion &&
+        !document.hidden &&
+        animated.length
+      )
+        app.ticker.update(now);
+      scheduleAnimation();
+    },
+    (paused) => {
+      diagnostics.interactionPaused = paused;
+    },
+  );
 
   const reportSceneFailure = (error: unknown) => {
     diagnostics.lastError =
@@ -512,6 +499,9 @@ export async function createOfficeRenderer(
       observability: currentObservability,
       seatCreationStates: currentSeatCreationStates,
       visibleRoomIndices: visibleRooms.map(({ index }) => index),
+      roomVersions: visibleRooms.map(({ index }) =>
+        roomVersion(currentProjection.rooms[index]!),
+      ),
       visibleReceptionIndices: visibleReceptions.map(({ index }) => index),
     });
     if (sceneSignature === lastSceneSignature) {
@@ -648,8 +638,10 @@ export async function createOfficeRenderer(
       return;
     if (
       !(await paintSlice(
-        drawLayer("hallways", JSON.stringify(layout), (parent) =>
-          drawHallways(parent, layout),
+        drawLayer(
+          "hallways",
+          layout.inputDigest ?? JSON.stringify(layout),
+          (parent) => drawHallways(parent, layout),
         ),
       ))
     )
@@ -669,7 +661,7 @@ export async function createOfficeRenderer(
       const signature = JSON.stringify([
         fontRevision,
         rect,
-        room,
+        roomVersion(room),
         currentProjection.hosts.find(({ key }) => key === room.hostKey),
         currentSelectedKey && keys.has(currentSelectedKey)
           ? currentSelectedKey
@@ -708,8 +700,13 @@ export async function createOfficeRenderer(
     // Preserve the original painter order, including roads above room edges.
     if (
       !(await paintSlice(
-        drawLayer("roads", JSON.stringify([layout, visibleRooms]), (parent) =>
-          drawRoomRoads(parent, layout, visibleRooms),
+        drawLayer(
+          "roads",
+          JSON.stringify([
+            layout.inputDigest ?? layout,
+            visibleRooms.map(({ index }) => index),
+          ]),
+          (parent) => drawRoomRoads(parent, layout, visibleRooms),
         ),
         true,
       ))
@@ -969,9 +966,7 @@ export async function createOfficeRenderer(
     scheduleAnimation();
   } catch (error) {
     cancelAnimation();
-    if (inputTimer !== null) clearTimeout(inputTimer);
-    for (const type of ["keydown", "beforeinput", "paste"])
-      document.removeEventListener(type, onTerminalInput, true);
+    animationWork?.dispose();
     observer.disconnect();
     motionPreference.removeEventListener("change", onMotionChange);
     document.removeEventListener("visibilitychange", onVisibilityChange);
@@ -995,7 +990,7 @@ export async function createOfficeRenderer(
     diagnostics.activeObservers = Math.max(0, diagnostics.activeObservers - 1);
     diagnostics.activeListeners = Math.max(
       0,
-      diagnostics.activeListeners - (scrollElement ? 10 : 9),
+      diagnostics.activeListeners - (scrollElement ? 7 : 6),
     );
     throw error;
   }
@@ -1041,9 +1036,7 @@ export async function createOfficeRenderer(
       }
       disposed = true;
       cancelAnimation();
-      if (inputTimer !== null) clearTimeout(inputTimer);
-      for (const type of ["keydown", "beforeinput", "paste"])
-        document.removeEventListener(type, onTerminalInput, true);
+      animationWork?.dispose();
       const ownsCanvas = element.contains(canvas);
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
@@ -1080,7 +1073,7 @@ export async function createOfficeRenderer(
       );
       diagnostics.activeListeners = Math.max(
         0,
-        diagnostics.activeListeners - (scrollElement ? 10 : 9),
+        diagnostics.activeListeners - (scrollElement ? 7 : 6),
       );
       diagnostics.canvases = document.querySelectorAll(
         "canvas[data-office-canvas='true']",
@@ -2926,24 +2919,27 @@ function drawDesk(
   selected = false,
   showMonitor = true,
 ) {
-  const desk = new Graphics();
-  desk.ellipse(x + 24, y + 30, 30, 6).fill({ color: 0x000000, alpha: 0.22 });
-  desk.roundRect(x, y, 48, 26, 3).fill(0x765b38);
-  desk.roundRect(x + 2, y + 2, 44, 22, 2).fill(0xae8b5d);
-  if (showMonitor) {
-    desk
-      .roundRect(x + 14, y + 10, 21, 13, 2)
-      .fill(blendColor(accent, 0x101722, 0.7));
-    desk
-      .roundRect(x + 16, y + 12, 17, 8, 1)
-      .fill(working ? 0x347d86 : 0x172131);
-  }
-  desk.rect(x + 1, y + 24, 46, 2).fill({ color: accent, alpha: 0.78 });
-  if (selected) {
-    desk
-      .roundRect(x - 3, y - 3, 54, 32, 5)
-      .stroke({ width: 2, color: 0xffffff, alpha: 0.92 });
-  }
+  const desk = officeArtwork(
+    `desk:${accent}:${working}:${selected}:${showMonitor}`,
+    (desk) => {
+      desk.ellipse(24, 30, 30, 6).fill({ color: 0x000000, alpha: 0.22 });
+      desk.roundRect(0, 0, 48, 26, 3).fill(0x765b38);
+      desk.roundRect(2, 2, 44, 22, 2).fill(0xae8b5d);
+      if (showMonitor) {
+        desk
+          .roundRect(14, 10, 21, 13, 2)
+          .fill(blendColor(accent, 0x101722, 0.7));
+        desk.roundRect(16, 12, 17, 8, 1).fill(working ? 0x347d86 : 0x172131);
+      }
+      desk.rect(1, 24, 46, 2).fill({ color: accent, alpha: 0.78 });
+      if (selected) {
+        desk
+          .roundRect(-3, -3, 54, 32, 5)
+          .stroke({ width: 2, color: 0xffffff, alpha: 0.92 });
+      }
+    },
+  );
+  desk.position.set(x, y);
   parent.addChild(desk);
   if (working && showMonitor) {
     const glow = new Graphics();
@@ -2963,11 +2959,15 @@ function drawDesk(
 }
 
 function drawPlant(parent: Container, x: number, y: number, accent: number) {
-  const plant = new Graphics();
-  plant.roundRect(x - 6, y, 12, 8, 2).fill(0xa65c46);
-  plant.circle(x, y - 4, 7).fill(blendColor(accent, 0x4f956f, 0.7));
-  plant.circle(x - 5, y - 7, 4).fill(0x5b9c78);
-  plant.circle(x + 5, y - 7, 4).fill(0x69aa85);
+  const plant = officeArtwork(`plant:${accent}`, (plant) => {
+    const x = 0,
+      y = 0;
+    plant.roundRect(x - 6, y, 12, 8, 2).fill(0xa65c46);
+    plant.circle(x, y - 4, 7).fill(blendColor(accent, 0x4f956f, 0.7));
+    plant.circle(x - 5, y - 7, 4).fill(0x5b9c78);
+    plant.circle(x + 5, y - 7, 4).fill(0x69aa85);
+  });
+  plant.position.set(x, y);
   parent.addChild(plant);
 }
 
@@ -2983,13 +2983,17 @@ function addSign(
   onActivate?: (key: string) => void,
   textSize = 10,
 ) {
-  const background = new Graphics();
-  background.roundRect(x, y, width, 19, 4).fill(color);
-  background.roundRect(x, y, width, 19, 4).stroke({
-    width: 1,
-    color: blendColor(color, 0xffffff, 0.32),
-    alpha: 0.72,
+  const background = officeArtwork(`sign:${color}:${width}`, (background) => {
+    const x = 0,
+      y = 0;
+    background.roundRect(x, y, width, 19, 4).fill(color);
+    background.roundRect(x, y, width, 19, 4).stroke({
+      width: 1,
+      color: blendColor(color, 0xffffff, 0.32),
+      alpha: 0.72,
+    });
   });
+  background.position.set(x, y);
   if (key && onSelect) {
     makeInteractive(background, key, onSelect, onActivate);
   }
@@ -3211,31 +3215,33 @@ function blendColor(from: number, to: number, amount: number) {
 }
 
 function ensureDiagnostics(): OfficeRendererDiagnostics {
-  if (!window.__HERDR_WORLD_RENDERER__) {
-    window.__HERDR_WORLD_RENDERER__ = {
-      mounts: 0,
-      destroys: 0,
-      activeApplications: 0,
-      activeTickers: 0,
-      activeObservers: 0,
-      activeListeners: 0,
-      canvases: 0,
-      frames: 0,
-      sceneRenders: 0,
-      sceneSkips: 0,
-      layerBuilds: 0,
-      layerReuses: 0,
-      ready: false,
-      reducedMotion: false,
-      interactionPaused: false,
-      lastError: null,
-      animation: { characters: 0, monitors: 0, statuses: 0 },
-      layout: null,
-      publishedLayout: null,
-      completionMarkers: 0,
-    };
-  }
-  return window.__HERDR_WORLD_RENDERER__;
+  const enabled = worldRendererCountersEnabled();
+  if (enabled && window.__HERDR_WORLD_RENDERER__)
+    return window.__HERDR_WORLD_RENDERER__;
+  const diagnostics: OfficeRendererDiagnostics = {
+    mounts: 0,
+    destroys: 0,
+    activeApplications: 0,
+    activeTickers: 0,
+    activeObservers: 0,
+    activeListeners: 0,
+    canvases: 0,
+    frames: 0,
+    sceneRenders: 0,
+    sceneSkips: 0,
+    layerBuilds: 0,
+    layerReuses: 0,
+    ready: false,
+    reducedMotion: false,
+    interactionPaused: false,
+    lastError: null,
+    animation: { characters: 0, monitors: 0, statuses: 0 },
+    layout: null,
+    publishedLayout: null,
+    completionMarkers: 0,
+  };
+  if (enabled) window.__HERDR_WORLD_RENDERER__ = diagnostics;
+  return diagnostics;
 }
 
 async function loadTexture(url: string) {
@@ -3295,30 +3301,36 @@ function drawPaneDevice(
   laptop.hitArea = new Rectangle(-12, -12, 24, 24);
   const associated = occupied;
   const color = device.stale ? 0x79869a : associated ? 0x67d6c0 : 0x8d9aae;
-  const art = new Graphics();
-  if (primary) {
-    art
-      .roundRect(-10, -10, 20, 15, 2)
-      .fill(0x243247)
-      .stroke({
-        width: selectedKey === device.key ? 2 : 1,
-        color: selectedKey === device.key ? 0xffffff : color,
-      });
-    art
-      .roundRect(-8, -8, 16, 10, 1)
-      .fill({ color, alpha: associated ? 0.72 : 0.3 });
-    art.poly([-10, 5, 10, 5, 12, 9, -12, 9]).fill(0x52647a);
-    art.rect(-5, 6, 10, 1).fill(0x263244);
-  } else {
-    art
-      .roundRect(-10.5, -6.5, 21, 13, 2)
-      .fill(0x172131)
-      .stroke({
-        width: selectedKey === device.key ? 2 : 1,
-        color: selectedKey === device.key ? 0xffffff : color,
-      });
-    art.roundRect(-8.5, -4.5, 17, 8, 1).fill(associated ? 0x347d86 : 0x172131);
-  }
+  const art = officeArtwork(
+    `device:${primary}:${color}:${associated}:${selectedKey === device.key}`,
+    (art) => {
+      if (primary) {
+        art
+          .roundRect(-10, -10, 20, 15, 2)
+          .fill(0x243247)
+          .stroke({
+            width: selectedKey === device.key ? 2 : 1,
+            color: selectedKey === device.key ? 0xffffff : color,
+          });
+        art
+          .roundRect(-8, -8, 16, 10, 1)
+          .fill({ color, alpha: associated ? 0.72 : 0.3 });
+        art.poly([-10, 5, 10, 5, 12, 9, -12, 9]).fill(0x52647a);
+        art.rect(-5, 6, 10, 1).fill(0x263244);
+      } else {
+        art
+          .roundRect(-10.5, -6.5, 21, 13, 2)
+          .fill(0x172131)
+          .stroke({
+            width: selectedKey === device.key ? 2 : 1,
+            color: selectedKey === device.key ? 0xffffff : color,
+          });
+        art
+          .roundRect(-8.5, -4.5, 17, 8, 1)
+          .fill(associated ? 0x347d86 : 0x172131);
+      }
+    },
+  );
   laptop.addChild(art);
   if (primary) {
     const number = label(String(paneCount), {

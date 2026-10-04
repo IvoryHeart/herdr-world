@@ -41,7 +41,11 @@ are optional because the merged PR history records their source.
   bounded tasks, and retains semantic controls across equivalent refreshes.
   PixiJS 8.22 keeps animation, selection and scrolling responsive while preserving
   the established scene. Decorative motion yields briefly to terminal typing;
-  hidden, idle and reduced-motion scenes stop autonomous paints.
+  hidden, idle and reduced-motion scenes stop autonomous paints. Shared furniture
+  geometry and stable selection projections further reduce refresh work. Graph
+  physics runs in a worker with spatial queries, cached drawing and a shared
+  visibility/input-aware frame scheduler. Office and Graph input regression budgets are
+  tightened to p95 below 150 ms and worst case below 450 ms.
 
 - Worktree resource requests expire after twenty-five seconds and are cancelled when their
   owner is discarded. Retrying Files or Changes preserves the already-open checkout

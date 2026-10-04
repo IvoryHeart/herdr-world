@@ -49,6 +49,23 @@ test("oversized logical floors are never allocated as cached textures", () => {
   root.destroy({ children: true, context: true });
 });
 
+test("fractional extrema are rounded before backing-size admission", () => {
+  for (const [size, budget] of [
+    [63.8, 4096],
+    [2047.8, 1e9],
+  ]) {
+    const root = new Container();
+    root.addChild(
+      ...Array.from({ length: 4 }, () =>
+        new Graphics().rect(0.5, 0.5, size, size).fill(0),
+      ),
+    );
+    expect(cacheOfficeStaticContent(root, new Set(), 1, budget)).toBe(0);
+    expect(root.isCachedAsTexture).toBe(false);
+    root.destroy({ children: true, context: true });
+  }
+});
+
 test("translucent room ancestors retain per-primitive opacity", () => {
   const staleRoom = new Container({ alpha: 0.68 });
   const layer = staleRoom.addChild(new Container());

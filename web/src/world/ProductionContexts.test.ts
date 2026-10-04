@@ -56,6 +56,7 @@ test.skipIf(!chrome).each(
     let stalledResponseVerified = false;
     const admission = new WorldSnapshotAdmission();
     const diagnostic = Boolean(Bun.env.WORLD_TRACE_PREFIX);
+    const traceTimeline = diagnostic && Bun.env.WORLD_TIMINGS_ONLY !== "1";
     const serviceTasks: { stage: string; beginAt: number; endAt: number }[] =
       [];
     const serviceInputs: {
@@ -176,6 +177,13 @@ test.skipIf(!chrome).each(
       }[];
       bridgeReplies: { id: string; beganAt: number; completedAt: number }[];
       phases: Record<string, number>;
+      frameStalls: {
+        phase: string | null;
+        startAt: number;
+        durationMs: number;
+        blockingMs: number;
+        source: string;
+      }[];
       paints: number;
       notices: number;
       receivedFrames: number;
@@ -254,7 +262,7 @@ test.skipIf(!chrome).each(
             action: "start",
             profile: Bun.env.WORLD_PROFILE === "1",
             slowdown: Number(Bun.env.WORLD_CPU_RATE ?? 1),
-            tracePath: Bun.env.WORLD_TRACE_PREFIX
+            tracePath: traceTimeline
               ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-${phase}.json`
               : undefined,
             phase,
@@ -268,7 +276,7 @@ test.skipIf(!chrome).each(
             action: "stop",
             phase: url.searchParams.get("phase")!,
             profile: Bun.env.WORLD_PROFILE === "1",
-            tracePath: Bun.env.WORLD_TRACE_PREFIX
+            tracePath: traceTimeline
               ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-${url.searchParams.get("phase")}.json`
               : undefined,
           });
@@ -617,6 +625,7 @@ test.skipIf(!chrome).each(
               bridgeReplies: observed.bridgeReplies,
               loopDelays,
               phases: observed.phases,
+              frameStalls: observed.frameStalls,
             }),
           );
         console.info(
@@ -642,16 +651,23 @@ test.skipIf(!chrome).each(
                 ...sent.map((input) => input.sentAt - input.dueAt),
               ),
               phases: observed.phases,
+              frameStalls: observed.frameStalls,
               paints: observed.paints,
               receivedFrames: observed.receivedFrames,
               presentedFrames: observed.presentedFrames,
             }),
         );
         // Fixed synthetic Chrome workload budget, not a runtime/network SLA.
-        // Independent review accepts bounded first-paint tails for this fixed
-        // 64-profile workload; retain both percentile and worst-case limits.
-        expect(delays[Math.ceil(delays.length * 0.95) - 1]).toBeLessThan(200);
-        expect(Math.max(...delays)).toBeLessThan(500);
+        // Canvas rendering improvements ratchet both view limits down;
+        // keep cold initialization and refresh tails in both measurements.
+        const latencyBudget =
+          view === "office" || view === "graph"
+            ? { p95: 150, maximum: 450 }
+            : { p95: 200, maximum: 500 };
+        expect(delays[Math.ceil(delays.length * 0.95) - 1]).toBeLessThan(
+          latencyBudget.p95,
+        );
+        expect(Math.max(...delays)).toBeLessThan(latencyBudget.maximum);
         expect(stalledResponseVerified).toBe(true);
         expect(observed.receivedFrames).toBeGreaterThan(500);
         expect(observed.presentedFrames).toBeGreaterThan(10);

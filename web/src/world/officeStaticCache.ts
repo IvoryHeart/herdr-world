@@ -31,7 +31,9 @@ export function cacheOfficeStaticContent(
   let pixels = 0;
   const cache = (container: Container) => {
     if (container.children.length < 4) return false;
-    const bounds = container.getLocalBounds();
+    // Pixi rounds local extrema outward before applying resolution and pooling.
+    // Rounding width alone undercounts fractional origins at power-of-two edges.
+    const bounds = container.getLocalBounds().clone().ceil();
     const width = Math.ceil(bounds.width * resolution);
     const height = Math.ceil(bounds.height * resolution);
     // Power-of-two backing storage is a conservative bound for Pixi's texture pool.

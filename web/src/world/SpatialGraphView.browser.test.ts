@@ -11,9 +11,14 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome).each([1280, 740, 390])(
-  "the spatial Graph preserves interaction and ownership at %ipx",
-  async (width) => {
+test
+  .skipIf(!chrome)
+  .each([
+    ...[1280, 740, 390].map((width) => ({ width, density: 1 })),
+    { width: 1280, density: 2 },
+  ])(
+  "the spatial Graph preserves interaction, pixels and ownership at %j",
+  async ({ width, density }) => {
     const dir = await mkdtemp(join(tmpdir(), "spatial-graph-test-"));
     const assets = new Map<string, Blob>();
     const result = Promise.withResolvers<unknown>();
@@ -72,6 +77,7 @@ test.skipIf(!chrome).each([1280, 740, 390])(
         [
           chrome!,
           "--headless=new",
+          `--force-device-scale-factor=${density}`,
           `--window-size=${width},900`,
           "--disable-background-networking",
           "--no-first-run",

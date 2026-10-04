@@ -1,3 +1,4 @@
+import { preparedOfficePresentationKey } from "./herdrOfficeProjection";
 import type { WorldAgentStatus } from "./worldObject";
 import type {
   HerdrOfficeProjection,
@@ -162,9 +163,11 @@ export function officePresentationKey(
   if (!selectedKey) {
     return null;
   }
+  const prepared = preparedOfficePresentationKey(projection, selectedKey);
+  if (prepared !== undefined) return prepared;
   if (
-    projection.paneRoster?.some(({ device }) => device.key === selectedKey) ||
     projection.roster.some(({ agent }) => agent.key === selectedKey) ||
+    projection.paneRoster?.some(({ device }) => device.key === selectedKey) ||
     projection.deskRoster.some(({ desk }) => desk.key === selectedKey) ||
     projection.roomRoster.some(({ key }) => key === selectedKey) ||
     projection.hosts.some(({ key }) => key === selectedKey)

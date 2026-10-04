@@ -1,3 +1,4 @@
+window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
@@ -476,7 +477,9 @@ function agentTarget(label: string) {
     ),
   ].find(
     (button) =>
-      !button.disabled && button.getAttribute("aria-label")?.includes(label),
+      !button.disabled &&
+      !button.closest("[inert]") &&
+      button.getAttribute("aria-label")?.includes(label),
   );
 }
 

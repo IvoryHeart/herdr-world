@@ -1,4 +1,11 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
@@ -8,6 +15,8 @@ import {
   type OfficeSemanticTarget,
 } from "./officeSemanticTargets";
 import { yieldWorldTask } from "./worldObject";
+
+const OFFICE_CONTROL_BATCH_SIZE = 16;
 
 export function OfficeSemanticTargetsOverlay({
   layout,
@@ -38,31 +47,57 @@ export function OfficeSemanticTargetsOverlay({
     () => JSON.stringify(targets.map(({ kind, key }) => [kind, key])),
     [targets],
   );
+  const batches = useMemo(() => {
+    const result: OfficeSemanticTarget[][] = [];
+    for (
+      let index = 0;
+      index < targets.length;
+      index += OFFICE_CONTROL_BATCH_SIZE
+    )
+      result.push(targets.slice(index, index + OFFICE_CONTROL_BATCH_SIZE));
+    return result;
+  }, [targets]);
   const [progress, setProgress] = useState<{
     identity: string;
     limit: number;
   } | null>(null);
-  const limit = progress?.identity === identity ? progress.limit : 64;
+  const limit =
+    progress?.identity === identity
+      ? progress.limit
+      : OFFICE_CONTROL_BATCH_SIZE;
   const rendered = targets.filter(
     (target, index) => index < limit || target.key === selectedKey,
   );
   const pending = targets.length - rendered.length;
+  const interactive =
+    layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
+  const overlay = useRef<HTMLDivElement>(null);
   const handlers = useRef({
+    interactive,
     onSelect,
     onActivateAgent,
     onActivateDesk,
     onActivateRoom,
   });
-  handlers.current = {
-    onSelect,
-    onActivateAgent,
-    onActivateDesk,
-    onActivateRoom,
-  };
+  useLayoutEffect(() => {
+    // React 18 does not forward the boolean inert attribute. Update the native
+    // subtree flag once, instead of disabling every admitted button.
+    if (overlay.current) overlay.current.inert = !interactive;
+    handlers.current = {
+      interactive,
+      onSelect,
+      onActivateAgent,
+      onActivateDesk,
+      onActivateRoom,
+    };
+  }, [interactive, onSelect, onActivateAgent, onActivateDesk, onActivateRoom]);
   const actions = useMemo(
     () => ({
-      select: (key: string) => handlers.current.onSelect(key),
+      select: (key: string) => {
+        if (handlers.current.interactive) handlers.current.onSelect(key);
+      },
       activate: (key: string, kind: OfficeSemanticTarget["kind"]) => {
+        if (!handlers.current.interactive) return;
         if (kind === "agent") handlers.current.onActivateAgent(key);
         if (kind === "desk" || kind === "pane")
           handlers.current.onActivateDesk(key);
@@ -76,43 +111,77 @@ export function OfficeSemanticTargetsOverlay({
     let current = true;
     // Admit independently of animation frames, which may be browser-throttled.
     void yieldWorldTask().then(() => {
-      if (current) setProgress({ identity, limit: limit + 64 });
+      if (current)
+        setProgress({ identity, limit: limit + OFFICE_CONTROL_BATCH_SIZE });
     });
     return () => {
       current = false;
     };
   }, [identity, limit, pending]);
-  const interactive =
-    layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
   return (
     <div
       className="world-semantic-targets-overlay"
       aria-label="Office scene targets"
       aria-busy={pending > 0}
       aria-hidden={!interactive}
+      ref={overlay}
     >
       {pending ? (
         <span role="status">Rendering {pending} more observed targets</span>
       ) : null}
-      {rendered.map((target) => (
-        <OfficeSemanticButton
-          key={`${target.kind}:${target.key}`}
-          targetKey={target.key}
-          kind={target.kind}
-          label={target.label}
-          canActivate={target.canActivate}
-          x={target.rect.x}
-          y={target.rect.y}
-          width={target.rect.width}
-          height={target.rect.height}
-          selected={selectedKey === target.key}
-          interactive={interactive}
+      {batches.map((batch, index) => (
+        <OfficeSemanticBatch
+          key={index}
+          targets={batch}
+          limit={Math.max(
+            0,
+            Math.min(
+              OFFICE_CONTROL_BATCH_SIZE,
+              limit - index * OFFICE_CONTROL_BATCH_SIZE,
+            ),
+          )}
+          selectedKey={selectedKey}
           actions={actions}
         />
       ))}
     </div>
   );
 }
+
+// Stable batches keep progressive admission from reconciling every previously
+// admitted button. Refreshes still pass current targets through every batch.
+const OfficeSemanticBatch = memo(function OfficeSemanticBatch({
+  targets,
+  limit,
+  selectedKey,
+  actions,
+}: {
+  targets: OfficeSemanticTarget[];
+  limit: number;
+  selectedKey: string | null;
+  actions: {
+    select(key: string): void;
+    activate(key: string, kind: OfficeSemanticTarget["kind"]): void;
+  };
+}) {
+  return targets
+    .filter((target, index) => index < limit || target.key === selectedKey)
+    .map((target) => (
+      <OfficeSemanticButton
+        key={`${target.kind}:${target.key}`}
+        targetKey={target.key}
+        kind={target.kind}
+        label={target.label}
+        canActivate={target.canActivate}
+        x={target.rect.x}
+        y={target.rect.y}
+        width={target.rect.width}
+        height={target.rect.height}
+        selected={selectedKey === target.key}
+        actions={actions}
+      />
+    ));
+});
 
 const OfficeSemanticButton = memo(function OfficeSemanticButton({
   targetKey,
@@ -124,7 +193,6 @@ const OfficeSemanticButton = memo(function OfficeSemanticButton({
   width,
   height,
   selected,
-  interactive,
   actions,
 }: {
   targetKey: string;
@@ -136,7 +204,6 @@ const OfficeSemanticButton = memo(function OfficeSemanticButton({
   width: number;
   height: number;
   selected: boolean;
-  interactive: boolean;
   actions: {
     select(key: string): void;
     activate(key: string, kind: OfficeSemanticTarget["kind"]): void;
@@ -150,7 +217,6 @@ const OfficeSemanticButton = memo(function OfficeSemanticButton({
       data-target-key={targetKey}
       aria-label={label}
       aria-pressed={selected}
-      disabled={!interactive}
       title={label}
       style={{ left: x, top: y, width, height }}
       onClick={() => actions.select(targetKey)}
