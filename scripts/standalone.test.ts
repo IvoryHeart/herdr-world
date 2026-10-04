@@ -1,15 +1,15 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, mkdir, rename, rm } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rename, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import serverPackage from "../server/package.json";
 
-test("standalone serves native assets without ambient config and retains source maps", async () => {
+async function checkStandalone(sourceMaps: boolean) {
   const dir = await mkdtemp(join(tmpdir(), "roamgate-standalone-"));
   const runtimeDir = join(dir, "runtime");
   const overrideDir = join(dir, "override");
-  const binary = join(
+  let binary = join(
     dir,
     process.platform === "win32" ? "roamgate.exe" : "roamgate",
   );
@@ -33,6 +33,16 @@ test("standalone serves native assets without ambient config and retains source 
     await mkdir(join(dir, "src"));
     await mkdir(runtimeDir);
     await mkdir(overrideDir);
+    await Bun.write(
+      join(dir, "package.json"),
+      JSON.stringify({
+        scripts: {
+          compile: serverPackage.scripts.compile,
+          postcompile: serverPackage.scripts.postcompile,
+          "clean:bun-build": serverPackage.scripts["clean:bun-build"],
+        },
+      }),
+    );
     await Bun.write(join(dir, "public/index.html"), "embedded entry");
     await Bun.write(
       join(dir, "public/assets/app-hash.js"),
@@ -86,12 +96,47 @@ try {
 } finally { server.stop(true); }
 `,
     );
-    // Exercise the actual release flags, not a separate test-only build recipe.
+    // Exercise the actual release/debug commands, including postcompile cleanup.
     const build = await run(
-      [process.execPath, ...serverPackage.scripts.compile.split(" ").slice(1)],
+      [
+        process.execPath,
+        "run",
+        "--cwd",
+        dir,
+        "compile",
+        ...(sourceMaps ? ["--sourcemap"] : []),
+      ],
       dir,
     );
     expect(build.code, build.stderr).toBe(0);
+    expect(await Bun.file(join(dir, "roamgate.map")).exists()).toBe(sourceMaps);
+    if (sourceMaps) {
+      const mode = (await stat(binary)).mode & 0o777;
+      const archive = join(dir, "debug.tar");
+      const packed = await run(
+        ["tar", "-C", dir, "-cf", archive, basename(binary), "roamgate.map"],
+        dir,
+      );
+      expect(packed.code, packed.stderr).toBe(0);
+      // Artifact downloads normalize the outer file's permissions to 0644.
+      await chmod(archive, 0o644);
+      const unpackedDir = join(dir, "unpacked-debug");
+      await mkdir(unpackedDir);
+      const unpacked = await run(
+        ["tar", "-C", unpackedDir, "-xf", archive],
+        dir,
+      );
+      expect(unpacked.code, unpacked.stderr).toBe(0);
+      binary = join(unpackedDir, basename(binary));
+      if (process.platform !== "win32") {
+        expect((await stat(binary)).mode & 0o777).toBe(mode);
+        expect(mode & 0o111).not.toBe(0);
+      }
+      expect(await Bun.file(join(unpackedDir, "roamgate.map")).exists()).toBe(
+        true,
+      );
+      await rm(join(unpackedDir, "roamgate.map"));
+    }
     await rename(join(dir, "public"), join(dir, "source-public"));
     await rename(join(dir, "src"), join(dir, "source-src"));
     await rm(join(dir, "roamgate.map"), { force: true });
@@ -132,8 +177,23 @@ try {
     const crash = await run([binary, overrideDir, "--crash"], runtimeDir);
     expect(crash.code).not.toBe(0);
     expect(crash.stderr).toContain("source map probe");
-    expect(crash.stderr).toMatch(/src[\\/]index\.ts:\d+/);
+    if (sourceMaps) {
+      expect(crash.stderr).toMatch(/src[\\/]index\.ts:\d+/);
+    } else {
+      expect(crash.stderr).not.toMatch(/src[\\/]index\.ts:\d+/);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-}, 45_000);
+}
+
+test(
+  "release standalone serves assets without ambient config or source maps",
+  () => checkStandalone(false),
+  45_000,
+);
+test(
+  "debug archive retains executable permissions and embedded source maps",
+  () => checkStandalone(true),
+  45_000,
+);

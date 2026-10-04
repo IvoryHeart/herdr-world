@@ -690,6 +690,23 @@ because Bun's musl binary still dynamically links `libstdc++`/`libgcc_s`.
 Run `./server/roamgate`; `bun run clean` removes generated builds.
 Release packaging/publishing follows [AGENTS.md](../AGENTS.md#release-notes).
 
+Standalone builds omit source maps to keep release downloads smaller. Errors
+report positions in the compiled code rather than the original TypeScript.
+The Release workflow retains a separate `debug-roamgate-<tag>-<target>` CI
+artifact for 30 days, containing a tar archive of the same version built with
+embedded source maps and its `.map` file. Extract the tar before running the
+debug executable; this preserves its executable permissions. These debug
+artifacts are not published to GitHub Releases or used by automatic updates.
+Use the matching debug executable to
+reproduce errors with source-level stack traces.
+
+To build a debug executable locally, first run `bun run build:web`, then
+`bun run --cwd server compile --sourcemap`, or use
+`compile:<target> --sourcemap` for another platform. This replaces the local
+executable with a mapped build; run the normal compile command again before
+packaging a production executable. Merely placing a `.map` file beside a
+map-free executable does not restore source-level stack traces.
+
 ## Troubleshooting
 
 | Symptom | Action |
