@@ -23,12 +23,18 @@ test.skipIf(!chrome).each(
     { view: "tree", entry: "" },
     { view: "graph", entry: "" },
     { view: "office", entry: "" },
+    { view: "office", entry: "animated" },
   ].flatMap((item) => [1440, 390].map((width) => ({ ...item, width }))),
 )(
   "production transport and mounted acceptance: %j",
   async ({ view, entry, width }) => {
     const dir = await mkdtemp(join(tmpdir(), "world-production-contexts-"));
-    const fixture = view === "uncertain" ? null : createDenseSnapshotFixture();
+    const fixture =
+      view === "uncertain"
+        ? null
+        : createDenseSnapshotFixture({
+            workingInitially: entry === "animated",
+          });
     const initialSnapshot = fixture ? await fixture.service.snapshot() : null;
     const payload = initialSnapshot ? JSON.stringify(initialSnapshot) : "";
     const largestHostBytes = initialSnapshot
@@ -249,7 +255,7 @@ test.skipIf(!chrome).each(
             profile: Bun.env.WORLD_PROFILE === "1",
             slowdown: Number(Bun.env.WORLD_CPU_RATE ?? 1),
             tracePath: Bun.env.WORLD_TRACE_PREFIX
-              ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}-${width}-${phase}.json`
+              ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-${phase}.json`
               : undefined,
             phase,
             url: pages.find((page) => page.type === "page")!
@@ -263,7 +269,7 @@ test.skipIf(!chrome).each(
             phase: url.searchParams.get("phase")!,
             profile: Bun.env.WORLD_PROFILE === "1",
             tracePath: Bun.env.WORLD_TRACE_PREFIX
-              ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}-${width}-${url.searchParams.get("phase")}.json`
+              ? `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-${url.searchParams.get("phase")}.json`
               : undefined,
           });
           if (observed.hotspots)
@@ -595,7 +601,7 @@ test.skipIf(!chrome).each(
         );
         if (Bun.env.WORLD_TRACE_PREFIX)
           await Bun.write(
-            `${Bun.env.WORLD_TRACE_PREFIX}-${view}-${width}-inputs.json`,
+            `${Bun.env.WORLD_TRACE_PREFIX}-${view}${entry ? `-${entry}` : ""}-${width}-inputs.json`,
             JSON.stringify({
               sent,
               inputs,
@@ -616,6 +622,7 @@ test.skipIf(!chrome).each(
         console.info(
           "Production dense " +
             view +
+            (entry ? " " + entry : "") +
             " " +
             width +
             "px: " +

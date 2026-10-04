@@ -26,7 +26,10 @@ export function officeSceneSignature({
   const receptions = projection.receptions.flatMap((reception, index) =>
     visibleReceptionSet.has(index) ? [reception] : [],
   );
-  const visibleHostKeys = new Set(receptions.map(({ hostKey }) => hostKey));
+  const visibleHostKeys = new Set([
+    ...receptions.map(({ hostKey }) => hostKey),
+    ...visibleRoomIndices.map((index) => projection.rooms[index]?.hostKey),
+  ]);
   return JSON.stringify({
     selectedKey,
     completionSeenKeys: [...completionSeenKeys].sort(),

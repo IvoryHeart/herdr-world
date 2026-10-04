@@ -37,6 +37,12 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Office reuses unchanged rooms and cached static artwork, prepares graphics in
+  bounded tasks, and retains semantic controls across equivalent refreshes.
+  PixiJS 8.22 keeps animation, selection and scrolling responsive while preserving
+  the established scene. Decorative motion yields briefly to terminal typing;
+  hidden, idle and reduced-motion scenes stop autonomous paints.
+
 - Worktree resource requests expire after twenty-five seconds and are cancelled when their
   owner is discarded. Retrying Files or Changes preserves the already-open checkout
   without repeating its opened hook. Qualified workspace reads discard remembered

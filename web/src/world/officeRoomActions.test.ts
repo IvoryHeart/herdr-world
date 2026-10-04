@@ -56,6 +56,14 @@ describe("Office room actions", () => {
     ).toEqual({ createSeat: false, rename: false, close: false });
   });
 
+  test("room lookup rejects mismatched qualified world identity", () => {
+    const active = space("active", "workspace-a", true, true);
+    const world = worldWith(active);
+    const target = room("active", "workspace-a");
+    expect(officeRoomActionCapabilities(world, target).createSeat).toBe(true);
+    target.workspaceRef.worldId = "missing";
+    expect(officeRoomActionCapabilities(world, target).createSeat).toBe(false);
+  });
   test("resolves an agent or terminal selection back to its room", () => {
     const active = space("active", "workspace-a", true, true);
     const world = worldWith(active);

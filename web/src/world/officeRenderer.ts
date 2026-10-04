@@ -59,12 +59,12 @@ import {
   officeVisibleReceptions,
   officeVisibleRooms,
 } from "./officeVirtualization";
+import { cacheOfficeStaticContent } from "./officeStaticCache";
+import { OfficeScenePreparation } from "./officeScenePreparation";
+import { OfficeFloorTextures } from "./officeFloorTextures";
 import { officeSceneSignature } from "./officeSceneSignature";
 import { yieldWorldTask } from "./worldObject";
-import {
-  destroyOfficeSceneChildren,
-  OFFICE_SCENE_DESTROY_OPTIONS,
-} from "./officeRendererResources";
+import { OFFICE_SCENE_DESTROY_OPTIONS } from "./officeRendererResources";
 import type { OfficeObservability } from "./officeObservability";
 import type { OfficeCreationActionState } from "./officeRoomActions";
 import {
@@ -140,8 +140,11 @@ export type OfficeRendererDiagnostics = {
   frames: number;
   sceneRenders: number;
   sceneSkips: number;
+  layerBuilds: number;
+  layerReuses: number;
   ready: boolean;
   reducedMotion: boolean;
+  interactionPaused: boolean;
   lastError: string | null;
   animation: {
     characters: number;
@@ -254,6 +257,18 @@ export async function createOfficeRenderer(
   let tick = 0;
   let currentFontReady = officeFontReady();
   const animated: AnimatedItem[] = [];
+  const layers = new Map<
+    string,
+    {
+      signature: string;
+      container: Container;
+      ready: boolean;
+      animated: AnimatedItem[];
+    }
+  >();
+  let fontRevision = 0;
+  let cachedPixels = 0;
+  const layerPixels = new WeakMap<Container, number>();
   const scrollElement = element.closest<HTMLElement>(".world-stage-scroll");
   const motionPreference = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
@@ -271,6 +286,8 @@ export async function createOfficeRenderer(
       resolution: Math.min(2, window.devicePixelRatio || 1),
       roundPixels: true,
       preference: "webgl",
+      eventFeatures: { globalMove: false },
+      accessibilityOptions: { activateOnTab: false },
     });
   } catch (error) {
     diagnostics.activeApplications = Math.max(
@@ -299,6 +316,8 @@ export async function createOfficeRenderer(
   app.ticker.maxFPS = 0;
   let animationTimer: ReturnType<typeof setTimeout> | null = null;
   let animationFrame: number | null = null;
+  let inputTimer: ReturnType<typeof setTimeout> | null = null;
+  diagnostics.interactionPaused = false;
   const cancelAnimation = () => {
     if (animationTimer !== null) clearTimeout(animationTimer);
     if (animationFrame !== null) cancelAnimationFrame(animationFrame);
@@ -306,16 +325,46 @@ export async function createOfficeRenderer(
     animationFrame = null;
   };
   const scheduleAnimation = () => {
+    if (
+      disposed ||
+      !sceneComplete ||
+      reducedMotion ||
+      document.hidden ||
+      !animated.length ||
+      inputTimer !== null ||
+      animationTimer !== null ||
+      animationFrame !== null
+    )
+      return;
     animationTimer = setTimeout(() => {
       animationTimer = null;
       if (disposed) return;
       animationFrame = requestAnimationFrame((now) => {
         animationFrame = null;
         if (disposed) return;
-        app.ticker.update(now);
+        if (
+          sceneComplete &&
+          !reducedMotion &&
+          !document.hidden &&
+          animated.length
+        )
+          app.ticker.update(now);
         scheduleAnimation();
       });
     }, 16);
+  };
+  const onTerminalInput = (event: Event) => {
+    if (!(event.target instanceof Element) || !event.target.closest(".xterm"))
+      return;
+    cancelAnimation();
+    diagnostics.interactionPaused = true;
+    if (inputTimer !== null) clearTimeout(inputTimer);
+    inputTimer = setTimeout(() => {
+      inputTimer = null;
+      if (disposed) return;
+      diagnostics.interactionPaused = false;
+      scheduleAnimation();
+    }, 180);
   };
   officeDebug("renderer:pixi-ready");
   const canvas = app.canvas;
@@ -332,6 +381,8 @@ export async function createOfficeRenderer(
   ).length;
   diagnostics.lastError = null;
 
+  const floors = new OfficeFloorTextures();
+  const preparation = new OfficeScenePreparation(app.renderer);
   const textures = await Promise.all(
     CHARACTER_URLS.map((url) => loadTexture(url).catch(() => Texture.EMPTY)),
   );
@@ -342,6 +393,8 @@ export async function createOfficeRenderer(
     const ownsCanvas = element.contains(canvas);
     app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
     destroyTextures(textures);
+    floors.destroy();
+    preparation.destroy();
     if (ownsCanvas) {
       element.replaceChildren();
     }
@@ -413,6 +466,10 @@ export async function createOfficeRenderer(
   };
   app.canvas.addEventListener("dblclick", onCanvasDoubleClick);
   diagnostics.activeListeners += 3;
+  for (const type of ["keydown", "beforeinput", "paste"]) {
+    document.addEventListener(type, onTerminalInput, true);
+  }
+  diagnostics.activeListeners += 3;
 
   const reportSceneFailure = (error: unknown) => {
     diagnostics.lastError =
@@ -459,71 +516,207 @@ export async function createOfficeRenderer(
     });
     if (sceneSignature === lastSceneSignature) {
       diagnostics.sceneSkips += 1;
-      if (sceneComplete) acknowledgeCanvas();
+      if (sceneComplete) {
+        app.render();
+        acknowledgeCanvas();
+      }
       return;
     }
+    cancelAnimation();
     const request = ++sceneRequest;
     sceneComplete = false;
     diagnostics.ready = false;
     const current = () =>
       !disposed && !initializationSignal?.aborted && request === sceneRequest;
-    const paintSlice = async () => {
+    const paintSlice = async (container?: Container, force = false) => {
       if (!current()) return false;
-      app.render();
-      await yieldWorldTask();
+      if (container && !(await preparation.prepareScene(container, current)))
+        return false;
+      if (container) {
+        const pixels = cacheOfficeStaticContent(
+          container,
+          new Set(animated.map(({ node }) => node)),
+          app.renderer.resolution,
+          Math.max(0, 4 * app.canvas.width * app.canvas.height - cachedPixels),
+        );
+        cachedPixels += pixels;
+        layerPixels.set(container, pixels);
+        container.renderable = true;
+        for (const layer of layers.values()) {
+          if (layer.container === container) layer.ready = true;
+        }
+        await yieldWorldTask();
+        if (!current()) return false;
+      }
+      if (container || force) {
+        app.render();
+        await yieldWorldTask();
+      }
       return current();
     };
     lastSceneSignature = sceneSignature;
     diagnostics.sceneRenders += 1;
     animated.splice(0);
-    destroyOfficeSceneChildren(app.stage);
-    drawBackground(app.stage, layout);
-    if (!(await paintSlice())) return;
-    drawCeoReception(
-      app.stage,
+    const wanted = new Set([
+      "background",
+      "ceo",
+      "hallways",
+      "roads",
+      ...visibleRooms.map(
+        ({ index }) => `room:${currentProjection.rooms[index]?.key}`,
+      ),
+    ]);
+    for (const [key, layer] of layers) {
+      if (!wanted.has(key)) {
+        cachedPixels -= layerPixels.get(layer.container) ?? 0;
+        layer.container.destroy(OFFICE_SCENE_DESTROY_OPTIONS);
+        layers.delete(key);
+      }
+    }
+    let layerIndex = 0;
+    const drawLayer = (
+      key: string,
+      signature: string,
+      draw: (container: Container, items: AnimatedItem[]) => void,
+    ) => {
+      let layer = layers.get(key);
+      const changed = !layer || layer.signature !== signature;
+      if (changed) {
+        if (layer) {
+          cachedPixels -= layerPixels.get(layer.container) ?? 0;
+          layer.container.destroy(OFFICE_SCENE_DESTROY_OPTIONS);
+        }
+        layer = {
+          signature,
+          container: new Container(),
+          ready: false,
+          animated: [],
+        };
+        layer.container.renderable = false;
+        draw(layer.container, layer.animated);
+        layers.set(key, layer);
+        app.stage.addChildAt(layer.container, layerIndex);
+        diagnostics.layerBuilds += 1;
+      } else {
+        app.stage.setChildIndex(layer!.container, layerIndex);
+        diagnostics.layerReuses += 1;
+      }
+      layerIndex += 1;
+      layer!.animated.forEach((item, index) => {
+        item.phase = (animated.length + index) * 7;
+      });
+      animated.push(...layer!.animated);
+      return changed || !layer!.ready ? layer!.container : undefined;
+    };
+    if (
+      !(await paintSlice(
+        drawLayer(
+          "background",
+          JSON.stringify([layout.officeWidth, layout.totalHeight]),
+          (parent) => drawBackground(parent, layout),
+        ),
+      ))
+    )
+      return;
+    const ceoSignature = officeSceneSignature({
       layout,
-      currentProjection,
-      currentObservability,
-      currentSelectedKey,
-      textures,
-      animated,
-      select,
-      activateAgent,
-      visibleReceptions,
-    );
-    if (!(await paintSlice())) return;
-    drawHallways(app.stage, layout);
+      projection: currentProjection,
+      selectedKey: currentSelectedKey,
+      observability: currentObservability,
+      visibleRoomIndices: [],
+      visibleReceptionIndices: visibleReceptions.map(({ index }) => index),
+    });
+    if (
+      !(await paintSlice(
+        drawLayer("ceo", `${fontRevision}:${ceoSignature}`, (parent, items) =>
+          drawCeoReception(
+            parent,
+            layout,
+            currentProjection,
+            currentObservability,
+            currentSelectedKey,
+            textures,
+            items,
+            select,
+            activateAgent,
+            visibleReceptions,
+            floors,
+          ),
+        ),
+      ))
+    )
+      return;
+    if (
+      !(await paintSlice(
+        drawLayer("hallways", JSON.stringify(layout), (parent) =>
+          drawHallways(parent, layout),
+        ),
+      ))
+    )
+      return;
     for (const rect of visibleRooms) {
       const room = currentProjection.rooms[rect.index];
-      if (room) {
-        drawRoom(
-          app.stage,
-          room,
-          rect,
-          currentProjection,
-          currentSelectedKey,
-          currentCompletionSeenKeys,
-          textures,
-          animated,
-          select,
-          activateAgent,
-          activateRoom,
-          currentSeatCreationStates[room.key] ?? {
-            visible: false,
-            enabled: false,
-            reason: null,
-          },
-          onNewSeat,
-        );
-      }
-      if (!(await paintSlice())) return;
+      if (!room) continue;
+      const keys = new Set([
+        room.key,
+        ...room.roomAgents.map(({ key }) => key),
+        ...room.desks.flatMap((desk) => [
+          desk.key,
+          ...desk.completionAgentKeys,
+          ...desk.paneDevices.map(({ key }) => key),
+        ]),
+      ]);
+      const signature = JSON.stringify([
+        fontRevision,
+        rect,
+        room,
+        currentProjection.hosts.find(({ key }) => key === room.hostKey),
+        currentSelectedKey && keys.has(currentSelectedKey)
+          ? currentSelectedKey
+          : null,
+        [...currentCompletionSeenKeys].filter((key) => keys.has(key)).sort(),
+        currentSeatCreationStates[room.key],
+      ]);
+      if (
+        !(await paintSlice(
+          drawLayer(`room:${room.key}`, signature, (parent, items) =>
+            drawRoom(
+              parent,
+              room,
+              rect,
+              currentProjection,
+              currentSelectedKey,
+              currentCompletionSeenKeys,
+              textures,
+              items,
+              select,
+              activateAgent,
+              activateRoom,
+              currentSeatCreationStates[room.key] ?? {
+                visible: false,
+                enabled: false,
+                reason: null,
+              },
+              onNewSeat,
+              floors,
+            ),
+          ),
+        ))
+      )
+        return;
     }
-    // Room floors/borders must not cover the road bands between rows and
-    // columns. The road pass uses the resolved outer rectangles, so it is
-    // safe to paint after rooms without entering their mathematical bounds.
-    drawRoomRoads(app.stage, layout, visibleRooms);
-    if (!(await paintSlice())) return;
+    // Preserve the original painter order, including roads above room edges.
+    if (
+      !(await paintSlice(
+        drawLayer("roads", JSON.stringify([layout, visibleRooms]), (parent) =>
+          drawRoomRoads(parent, layout, visibleRooms),
+        ),
+        true,
+      ))
+    )
+      return;
     sceneComplete = true;
+    scheduleAnimation();
     acknowledgeCanvas();
     if (!diagnostics.ready) {
       officeDebug("renderer:scene-ready", {
@@ -710,6 +903,7 @@ export async function createOfficeRenderer(
     }
     const ready = officeFontReady();
     headingWidths.clear();
+    fontRevision += 1;
     currentFontReady = ready;
     lastSceneSignature = null;
     void build(lastWidth || element.clientWidth).catch(reportSceneFailure);
@@ -727,6 +921,7 @@ export async function createOfficeRenderer(
   const onMotionChange = (event: MediaQueryListEvent) => {
     reducedMotion = event.matches;
     diagnostics.reducedMotion = reducedMotion;
+    cancelAnimation();
     if (reducedMotion) {
       for (const item of animated) {
         if (item.kind === "character") {
@@ -736,7 +931,18 @@ export async function createOfficeRenderer(
         }
       }
     }
+    if (sceneComplete) app.render();
+    scheduleAnimation();
   };
+  const onVisibilityChange = () => {
+    cancelAnimation();
+    if (!document.hidden && sceneComplete) {
+      app.render();
+      scheduleAnimation();
+    }
+  };
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  diagnostics.activeListeners += 1;
   motionPreference.addEventListener("change", onMotionChange);
   diagnostics.activeListeners += 1;
 
@@ -763,8 +969,12 @@ export async function createOfficeRenderer(
     scheduleAnimation();
   } catch (error) {
     cancelAnimation();
+    if (inputTimer !== null) clearTimeout(inputTimer);
+    for (const type of ["keydown", "beforeinput", "paste"])
+      document.removeEventListener(type, onTerminalInput, true);
     observer.disconnect();
     motionPreference.removeEventListener("change", onMotionChange);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
     fontSet?.removeEventListener("loadingdone", refreshFontMetrics);
     scrollElement?.removeEventListener("scroll", syncScrollPosition);
     app.canvas.removeEventListener("pointermove", hover);
@@ -775,6 +985,8 @@ export async function createOfficeRenderer(
     app.ticker.remove(ticker);
     app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
     destroyTextures(textures);
+    floors.destroy();
+    preparation.destroy();
     diagnostics.activeApplications = Math.max(
       0,
       diagnostics.activeApplications - 1,
@@ -783,7 +995,7 @@ export async function createOfficeRenderer(
     diagnostics.activeObservers = Math.max(0, diagnostics.activeObservers - 1);
     diagnostics.activeListeners = Math.max(
       0,
-      diagnostics.activeListeners - (scrollElement ? 6 : 5),
+      diagnostics.activeListeners - (scrollElement ? 10 : 9),
     );
     throw error;
   }
@@ -829,12 +1041,16 @@ export async function createOfficeRenderer(
       }
       disposed = true;
       cancelAnimation();
+      if (inputTimer !== null) clearTimeout(inputTimer);
+      for (const type of ["keydown", "beforeinput", "paste"])
+        document.removeEventListener(type, onTerminalInput, true);
       const ownsCanvas = element.contains(canvas);
       if (resizeTimer !== null) {
         window.clearTimeout(resizeTimer);
       }
       observer.disconnect();
       motionPreference.removeEventListener("change", onMotionChange);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       fontSet?.removeEventListener("loadingdone", refreshFontMetrics);
       scrollElement?.removeEventListener("scroll", syncScrollPosition);
       app.canvas.removeEventListener("pointermove", hover);
@@ -845,6 +1061,8 @@ export async function createOfficeRenderer(
       app.ticker.remove(ticker);
       app.destroy(true, OFFICE_SCENE_DESTROY_OPTIONS);
       destroyTextures(textures);
+      floors.destroy();
+      preparation.destroy();
       if (ownsCanvas) {
         element.replaceChildren();
       }
@@ -862,7 +1080,7 @@ export async function createOfficeRenderer(
       );
       diagnostics.activeListeners = Math.max(
         0,
-        diagnostics.activeListeners - (scrollElement ? 6 : 5),
+        diagnostics.activeListeners - (scrollElement ? 10 : 9),
       );
       diagnostics.canvases = document.querySelectorAll(
         "canvas[data-office-canvas='true']",
@@ -1043,6 +1261,7 @@ function drawCeoReception(
     index: number;
     rect: OfficeReceptionRect;
   }[],
+  floors: OfficeFloorTextures,
 ) {
   const band = new Container();
   if (layout.fallbackMessage) {
@@ -1055,7 +1274,7 @@ function drawCeoReception(
   const ceoBlocks = layout.ceoBlocks;
   const ceoRoomRight = layout.ceoRect.x + layout.ceoRect.width;
   const floor = new Graphics();
-  drawTiledFloor(
+  floors.draw(
     floor,
     4,
     4,
@@ -1133,6 +1352,7 @@ function drawCeoReception(
     animated,
     onSelect,
     onActivateAgent,
+    floors,
   );
   stage.addChild(band);
 }
@@ -1838,6 +2058,7 @@ function drawRoom(
   onActivateRoom: (key: string) => void,
   seatCreationState: OfficeCreationActionState,
   onNewSeat: (roomKey: string) => void,
+  floors: OfficeFloorTextures,
 ) {
   const host = projection.hosts.find(({ key }) => key === room.hostKey);
   if (!host) {
@@ -1860,7 +2081,7 @@ function drawRoom(
   const floorB = active
     ? blendColor(theme.floorB, 0x443a2a, 0.32)
     : theme.floorB;
-  drawTiledFloor(
+  floors.draw(
     floor,
     rect.wallRect.x,
     rect.wallRect.y,
@@ -2353,6 +2574,7 @@ function drawAgentBar(
   animated: AnimatedItem[],
   onSelect: (key: string) => void,
   onActivateAgent: (key: string) => void,
+  floors: OfficeFloorTextures,
 ) {
   const x = blocks.agentBarX;
   const y = 4;
@@ -2360,7 +2582,7 @@ function drawAgentBar(
   const height = blocks.agentBarHeight;
   const room = new Container();
   const floor = new Graphics();
-  drawTiledFloor(floor, x, y, width, height, 0x17140f, 0x11100d);
+  floors.draw(floor, x, y, width, height, 0x17140f, 0x11100d);
   floor
     .roundRect(x, y, width, height, 4)
     .stroke({ width: 2, color: 0xb59048, alpha: 0.72 });
@@ -2749,33 +2971,6 @@ function drawPlant(parent: Container, x: number, y: number, accent: number) {
   parent.addChild(plant);
 }
 
-function drawTiledFloor(
-  graphics: Graphics,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  first: number,
-  second: number,
-) {
-  for (let offsetY = 0; offsetY < height; offsetY += OFFICE_GEOMETRY.tile) {
-    for (let offsetX = 0; offsetX < width; offsetX += OFFICE_GEOMETRY.tile) {
-      graphics
-        .rect(
-          x + offsetX,
-          y + offsetY,
-          OFFICE_GEOMETRY.tile,
-          OFFICE_GEOMETRY.tile,
-        )
-        .fill(
-          ((offsetX + offsetY) / OFFICE_GEOMETRY.tile) % 2 === 0
-            ? first
-            : second,
-        );
-    }
-  }
-}
-
 function addSign(
   parent: Container,
   x: number,
@@ -3028,8 +3223,11 @@ function ensureDiagnostics(): OfficeRendererDiagnostics {
       frames: 0,
       sceneRenders: 0,
       sceneSkips: 0,
+      layerBuilds: 0,
+      layerReuses: 0,
       ready: false,
       reducedMotion: false,
+      interactionPaused: false,
       lastError: null,
       animation: { characters: 0, monitors: 0, statuses: 0 },
       layout: null,

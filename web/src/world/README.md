@@ -37,6 +37,43 @@ their admission across refreshes; queued work coalesces to the latest observatio
 | Pixi drawing, assets or room interaction | `createOfficeRenderer` in [officeRenderer.ts](officeRenderer.ts) draws the scene; [officeSemanticTargets.ts](officeSemanticTargets.ts) exposes separate desk, pane and agent targets; [officeRendererResources.ts](officeRendererResources.ts) owns renderer resources; [officeRoomActions.ts](officeRoomActions.ts) resolves room actions. | [Semantic target tests](officeSemanticTargets.test.ts), [Office browser fixture](PixelOfficeCanvas.browser.tsx), [room-action tests](officeRoomActions.test.ts) |
 | Office settings or Economy board | [officePreferences.ts](officePreferences.ts), [officeObservability.ts](officeObservability.ts) and [OfficeObservabilityDialog.tsx](OfficeObservabilityDialog.tsx). | [Preference tests](officePreferences.test.ts), [metrics tests](officeObservability.test.ts) |
 
+### Office rendering performance
+
+Office owns a retained layer per room plus background, reception, hallway and road
+layers. A scene signature selects changes; equivalent layers preserve their GPU
+resources. Static runs are cached in painter order around animated nodes, so
+characters and monitor/status effects keep moving without repainting every piece
+of furniture. Subtrees beneath translucent ancestors keep per-primitive opacity
+instead of being flattened. The cache admits at most four viewport areas of device pixels;
+individual targets are bounded to 2048 pixels per axis. Pixi owns pooled backing
+textures. Renderer teardown releases layer resources and renderer-owned floor
+textures. Fractional floor origins retain vector tile edges for identical coverage.
+
+`OfficeScenePreparation` uses Pixi's preparation hooks in batches of at most 64
+nodes or four milliseconds, yielding ordinary tasks between batches. Each batch
+checks renderer lifetime and scene revision. Animation waits for prepared scenes,
+stops for hidden documents or reduced motion, and resumes on visibility/preference
+changes. Terminal key, input and paste events defer decorative frames until a
+180 ms quiet interval; state updates and scrolling still paint independently of
+animation. The transport fixture covers both initially idle and continuously
+working agents, checking that motion resumes when terminal typing stops.
+
+`OfficeSemanticTargetsOverlay` admits controls by ordered qualified identity;
+refreshed labels, geometry, permissions and callbacks remain current without
+remounting unchanged controls or losing keyboard focus. Office subscribes only to
+the endpoint-creation inputs it consumes; room actions resolve through the
+qualified World index and still validate host, generation and native identity.
+
+Use `bun run test ./web/src/world/ProductionContexts.test.ts --test-name-pattern
+'office'` for the synthetic desktop/mobile transport workload. Keep native key
+scheduling, cold initialization, aggregate refresh and the strict p95 <200 ms /
+maximum <500 ms acknowledgement budgets. On Linux, repeat with `taskset -c
+<cpu-a>,<cpu-b>` after checking the CPU/core mapping: separate cores and sibling
+logical CPUs measure different contention conditions. Run cases sequentially and
+report every run; affinity is a stress proxy, not a model of CI hardware. The
+canvas fixture also checks pixel equivalence, painter order, motion, retained
+controls and cleanup.
+
 ## Tree
 
 | Task | Open these owners | Focused evidence |

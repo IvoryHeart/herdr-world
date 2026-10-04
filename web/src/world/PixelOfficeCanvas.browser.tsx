@@ -1,3 +1,4 @@
+import { verifyOfficeRendering } from "./officeRendering.browser";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Application } from "pixi.js";
@@ -14,6 +15,13 @@ import PixelOfficeView from "./PixelOfficeView";
 import "./world.css";
 
 const failures: string[] = [];
+const motionQueries: MediaQueryList[] = [];
+const matchMedia = window.matchMedia.bind(window);
+window.matchMedia = (query) => {
+  const result = matchMedia(query);
+  if (query === "(prefers-reduced-motion: reduce)") motionQueries.push(result);
+  return result;
+};
 let maximumTextRasterScale = 0;
 const scaleCanvas = CanvasRenderingContext2D.prototype.scale;
 CanvasRenderingContext2D.prototype.scale = function (x, y) {
@@ -21,8 +29,10 @@ CanvasRenderingContext2D.prototype.scale = function (x, y) {
   return scaleCanvas.call(this, x, y);
 };
 let ordinaryTasksDuringScene = 0;
+let officePaints = 0;
 const paintOffice = Application.prototype.render;
 Application.prototype.render = function () {
+  officePaints++;
   if (window.__HERDR_WORLD_RENDERER__?.ready === false)
     setTimeout(() => {
       if (window.__HERDR_WORLD_RENDERER__?.ready === false)
@@ -321,6 +331,49 @@ async function run() {
           ?.getAttribute("aria-busy") === "false",
         "Office target readiness depends on canvas animation frames",
       );
+      const beforeRefresh = [
+        ...progressHost.querySelectorAll<HTMLButtonElement>(
+          ".world-semantic-target",
+        ),
+      ];
+      const focused = beforeRefresh[beforeRefresh.length - 1]!;
+      focused.focus();
+      let removed = 0;
+      const mutations = new MutationObserver((records) => {
+        for (const record of records) removed += record.removedNodes.length;
+      });
+      mutations.observe(progressHost, { childList: true, subtree: true });
+      let selectedAfterRefresh = "";
+      progressRoot.render(
+        <OfficeSemanticTargetsOverlay
+          layout={{ ...progressLayout }}
+          projection={structuredClone(progressProjection)}
+          renderedRevision={progressLayout.layoutRevision}
+          selectedKey={null}
+          onSelect={(key) => {
+            selectedAfterRefresh = key;
+          }}
+          onActivateAgent={() => {}}
+          onActivateDesk={() => {}}
+          onActivateRoom={() => {}}
+        />,
+      );
+      await settle();
+      await settle();
+      check(
+        removed === 0,
+        "Equivalent Office refresh remounted admitted semantic controls",
+      );
+      check(
+        document.activeElement === focused,
+        "Equivalent Office refresh lost keyboard focus",
+      );
+      focused.click();
+      check(
+        selectedAfterRefresh === focused.dataset.targetKey,
+        "Retained Office control used a stale callback",
+      );
+      mutations.disconnect();
     } finally {
       progressRoot.unmount();
       progressHost.remove();
@@ -328,7 +381,17 @@ async function run() {
       window.cancelAnimationFrame = cancelFrame;
       for (const callback of heldFrames.values()) callback(performance.now());
     }
+    const motion = motionQueries[motionQueries.length - 1]!;
+    motion.dispatchEvent(new MediaQueryListEvent("change", { matches: true }));
+    const pausedFrames = diagnostics.frames;
+    await settle();
+    await settle();
+    check(
+      diagnostics.frames === pausedFrames,
+      "Reduced-motion Office keeps an autonomous paint loop running",
+    );
     const rendersBeforeObservation = diagnostics.sceneRenders;
+    const reusedBeforeObservation = diagnostics.layerReuses;
     await fetch("/release-metrics", { method: "POST" });
     window.dispatchEvent(new Event(WORLD_OBSERVABILITY_UPDATED_EVENT));
     await waitFor(
@@ -339,6 +402,77 @@ async function run() {
       diagnostics.sceneRenders > rendersBeforeObservation,
       "The Economy board did not redraw after observability arrived",
     );
+    await waitFor(
+      () => diagnostics.ready,
+      "Office metrics scene did not finish",
+    );
+    check(
+      diagnostics.layerReuses > reusedBeforeObservation,
+      "Economy update rebuilt unrelated Office layers",
+    );
+    check(
+      diagnostics.frames === pausedFrames,
+      "Office state paints restarted reduced-motion animation",
+    );
+    motion.dispatchEvent(new MediaQueryListEvent("change", { matches: false }));
+    await waitFor(
+      () => diagnostics.frames > pausedFrames,
+      "Office animation did not resume",
+    );
+    const hiddenDescriptor = Object.getOwnPropertyDescriptor(
+      document,
+      "hidden",
+    );
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      value: true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+    const hiddenFrames = diagnostics.frames;
+    await settle();
+    await settle();
+    check(
+      diagnostics.frames === hiddenFrames,
+      "Hidden Office kept rendering animation",
+    );
+    if (hiddenDescriptor)
+      Object.defineProperty(document, "hidden", hiddenDescriptor);
+    else delete (document as { hidden?: boolean }).hidden;
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(
+      () => diagnostics.frames > hiddenFrames,
+      "Visible Office animation did not resume",
+    );
+    const typingTarget = document.createElement("textarea");
+    const terminal = document.createElement("div");
+    terminal.className = "xterm";
+    terminal.appendChild(typingTarget);
+    document.body.appendChild(terminal);
+    typingTarget.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, key: "z" }),
+    );
+    const typingFrames = diagnostics.frames;
+    await settle();
+    typingTarget.dispatchEvent(
+      new InputEvent("beforeinput", { bubbles: true, data: "z" }),
+    );
+    await settle();
+    check(
+      diagnostics.interactionPaused && diagnostics.frames === typingFrames,
+      "Decorative Office animation competed with terminal input",
+    );
+    const paintsDuringTyping = officePaints;
+    officeScroll.dispatchEvent(new Event("scroll"));
+    check(
+      officePaints > paintsDuringTyping,
+      "Terminal input blocked an Office scroll paint",
+    );
+
+    await waitFor(
+      () => diagnostics.frames > typingFrames && !diagnostics.interactionPaused,
+      "Office animation did not resume after terminal input",
+    );
+    terminal.remove();
     const layout = diagnostics.publishedLayout;
     const canvas = host.querySelector<HTMLCanvasElement>(
       "canvas[data-office-canvas='true']",
@@ -620,6 +754,7 @@ async function run() {
 }
 
 run()
+  .then(() => verifyOfficeRendering(check))
   .catch((error: unknown) => {
     const diagnostics = window.__HERDR_WORLD_RENDERER__;
     failures.push(

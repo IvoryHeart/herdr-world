@@ -682,6 +682,26 @@ async function run() {
       // a bounded graph simulation window, rather than stopping at first DOM.
       await new Promise((resolve) => setTimeout(resolve, 1000));
       await frames(4);
+      if (view === "office") {
+        const renderer = window.__HERDR_WORLD_RENDERER__;
+        if (new URL(location.href).searchParams.get("entry") === "animated") {
+          check(
+            (renderer?.frames ?? 0) > 0 || renderer?.interactionPaused === true,
+            "Working Office never animated during native typing",
+          );
+          check(
+            (renderer?.animation.characters ?? 0) > 0,
+            "Working Office lost its animated characters",
+          );
+        }
+        phases["office-frames-" + stage] = renderer?.frames ?? 0;
+        phases["office-animated-nodes-" + stage] = renderer
+          ? Object.values(renderer.animation).reduce(
+              (sum, count) => sum + count,
+              0,
+            )
+          : 0;
+      }
       check(anchored, view + " did not publish its selected rendered anchor");
       phases[stage] = performance.now() - began;
       const { count } = await (
@@ -693,6 +713,20 @@ async function run() {
         "Missing admitted input acknowledgement",
       );
       phase = null;
+      if (
+        view === "office" &&
+        new URL(location.href).searchParams.get("entry") === "animated"
+      ) {
+        const beforeResume = window.__HERDR_WORLD_RENDERER__?.frames ?? 0;
+        // Renderer diagnostics do not mutate DOM; the DOM-based waitFor helper
+        // cannot observe autonomous motion. Allow the quiet timer and four paints.
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await frames(4);
+        check(
+          (window.__HERDR_WORLD_RENDERER__?.frames ?? 0) > beforeResume,
+          "Office animation did not resume after terminal input",
+        );
+      }
     }
     root.unmount();
     runtime.stop();

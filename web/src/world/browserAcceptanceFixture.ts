@@ -29,7 +29,7 @@ export class InputDriver {
   }
 }
 
-export function createDenseSnapshotFixture() {
+export function createDenseSnapshotFixture({ workingInitially = false } = {}) {
   const ids = [
     "alpha",
     "beta",
@@ -51,7 +51,7 @@ export function createDenseSnapshotFixture() {
       pane_id: `${workspace_id}:p${index}`,
       terminal_id: `${workspace_id}:p${index}`,
       agent: "codex",
-      agent_status: "idle",
+      agent_status: workingInitially ? "working" : "idle",
     })),
   );
   const stalls = new Map<

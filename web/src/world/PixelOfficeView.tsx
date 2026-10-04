@@ -109,7 +109,23 @@ export default function PixelOfficeView({
       projectWorldOffice(world, Date.now(), selectedId),
     [world, selectedId],
   );
-  const creationSnapshot = useStoreSelector((snapshot) => snapshot);
+  // Terminal frames and unrelated store updates must not reconcile the scene.
+  // These are exactly the inputs read by endpointCreationReason below.
+  const creationSnapshot = useStoreSelector(
+    (snapshot) => snapshot,
+    (previous, next) =>
+      world.hosts.every(({ connectionId }) => {
+        const a = connectionSnapshot(previous, connectionId);
+        const b = connectionSnapshot(next, connectionId);
+        return (
+          a.navigationMode === b.navigationMode &&
+          a.workspaces === b.workspaces &&
+          a.browserNavigation === b.browserNavigation &&
+          a.panes === b.panes &&
+          a.endpointAvailability === b.endpointAvailability
+        );
+      }),
+  );
   const [preferences, setPreferences] = useState(() =>
     readOfficePreferences(worldLocalStorage),
   );
