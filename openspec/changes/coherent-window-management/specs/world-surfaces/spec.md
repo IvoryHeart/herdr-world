@@ -61,7 +61,7 @@ Terminal fitting SHALL use its visible content box and preserve qualified owners
 #### Scenario: Use one floating mobile tab list
 
 - **WHEN** the user expands the mobile ellipsis and opens the second-row Tabs menu
-- **THEN** that menu preserves native tab creation and closure, restores minimized windows, and includes retained windows from other hosts or workspaces; the third row SHALL NOT have a duplicate tab/window list icon
+- **THEN** that menu preserves native tab creation and closure, restores minimized windows, and includes retained windows from other hosts or workspaces; Arrange SHALL sit beside Tabs in the second row; the third row SHALL contain terminal/resource controls without a duplicate tab/window list icon or arranger
 
 ## MODIFIED Requirements
 

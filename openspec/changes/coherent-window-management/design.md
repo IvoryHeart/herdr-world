@@ -26,7 +26,8 @@ adapters for visual Inspector identities and workspace-local Spaces tab identiti
    a bottom row. Mobile hides the redundant tab strip and uses the floating Tabs
    control as its single window-switching entry point, preserving tab creation and
    closure. It restores minimized windows and includes retained windows from other
-   workspaces or hosts without a duplicate list icon in the third row. The composer occupies its own content space. The existing viewport/keyboard adapter
+   workspaces or hosts without a duplicate list icon in the third row. Arrange sits
+   beside Tabs in the second row; the third row contains terminal/resource controls. The composer occupies its own content space. The existing viewport/keyboard adapter
    remains the platform compatibility boundary; geometry is not independently
    corrected in every window. Existing terminal fitting and resize synchronization
    consume the resulting content box.

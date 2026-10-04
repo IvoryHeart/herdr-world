@@ -3753,12 +3753,6 @@ export default function App({
         aria-label="Workspace view switcher"
         aria-hidden={mobileControlsCollapsed}
       >
-        {mobile && !mobileControlsCollapsed && arrangementControl ? (
-          <WindowArrangementMenu
-            control={arrangementControl}
-            showWindowSwitcher={false}
-          />
-        ) : null}
         <button
           type="button"
           className={
@@ -3934,6 +3928,12 @@ export default function App({
             ) : null}
             <span className="mobile-nav-label">Tabs</span>
           </button>
+          {mobile && !mobileControlsCollapsed && arrangementControl ? (
+            <WindowArrangementMenu
+              control={arrangementControl}
+              showWindowSwitcher={false}
+            />
+          ) : null}
           {activeTerminalComposerDraftKey ? (
             <button
               type="button"

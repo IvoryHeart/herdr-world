@@ -218,6 +218,7 @@ export function MobileTabSheet({
                 onClick={() => {
                   entry.onSelect();
                   onClose();
+                  onShowSession();
                 }}
               >
                 <span className="mobile-tab-sheet-name">{entry.label}</span>

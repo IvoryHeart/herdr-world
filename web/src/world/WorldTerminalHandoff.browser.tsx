@@ -2987,6 +2987,40 @@ async function run() {
     !!document.querySelector('.mobile-terminal-tools [aria-label="Show tabs"]'),
     "mobile removed the second-row Tabs menu",
   );
+  check(
+    !!document.querySelector(
+      '.mobile-terminal-tools [aria-label="Arrange windows"]',
+    ),
+    "mobile arrangement must share the second row with Tabs",
+  );
+  check(
+    !document.querySelector(
+      '.mobile-nav[aria-label="Workspace view switcher"] [aria-label="Arrange windows"]',
+    ),
+    "mobile resource row retained the window arranger",
+  );
+  const secondRowButtons = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      ".mobile-terminal-controls button",
+    ),
+  ];
+  secondRowButtons.forEach((button, index) => {
+    const bounds = button.getBoundingClientRect();
+    const previous = secondRowButtons[index - 1]?.getBoundingClientRect();
+    check(
+      !previous || bounds.left >= previous.right,
+      "mobile second-row controls overlap",
+    );
+    check(
+      button.contains(
+        document.elementFromPoint(
+          bounds.left + bounds.width / 2,
+          bounds.top + bounds.height / 2,
+        ),
+      ),
+      "mobile second-row control is obscured",
+    );
+  });
   const mobileControlsToggle = document.querySelector<HTMLButtonElement>(
     ".mobile-controls-toggle",
   )!;

@@ -101,6 +101,7 @@ test.skipIf(!chrome)(
           "show",
           "restore:beta",
           "close",
+          "show",
         ],
         rows: 2,
         minimized: true,

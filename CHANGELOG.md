@@ -44,7 +44,8 @@ are optional because the merged PR history records their source.
   dismisses its presentation while leaving the Herdr tab running. Desktop window
   switching and arrangement controls are always reachable from the top bar.
 - Mobile keeps the ellipsis menu floating, uses the second-row Tabs menu for tab
-  actions and window restoration, removes the duplicate list icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop
+  actions and window restoration with Arrange beside it, removes the duplicate list
+  icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop
   placements survive compact views. Roamgate terminal and pane ownership remain intact.
 
 - Office reuses unchanged rooms and cached static artwork, prepares graphics in

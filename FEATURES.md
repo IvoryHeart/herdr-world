@@ -54,7 +54,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   Tiled windows share resizable dividers. **Open windows** restores minimized windows.
   Window close dismisses presentation; native tab closure remains separate.
 - Mobile shows one active window and preserves desktop positions. Its ellipsis,
-  Tabs controls remain floating; the second-row Tabs menu also restores minimized
+  Tabs controls remain floating; Tabs and Arrange sit together in the second row. Tabs also restores minimized
   windows and retains native tab actions. The duplicate list icon and tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
   view also shows the selected tab's split panes in one window; selecting a sibling

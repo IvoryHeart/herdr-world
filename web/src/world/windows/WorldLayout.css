@@ -126,3 +126,11 @@
   flex: none;
   font-size: inherit;
 }
+
+:where(html[data-layout="mobile"]) {
+  .world-foundation-shell
+    .app:not(.mobile-controls-collapsed)
+    .mobile-terminal-tools {
+    max-width: none;
+  }
+}
