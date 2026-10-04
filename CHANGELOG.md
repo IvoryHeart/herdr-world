@@ -38,7 +38,8 @@ are optional because the merged PR history records their source.
 ### Changed
 
 - Office reuses unchanged rooms and cached static artwork, prepares graphics in
-  bounded tasks, and retains semantic controls across equivalent refreshes.
+  bounded tasks, and retains semantic controls and keyboard focus across topology
+  refreshes. State paints continue during uninterrupted terminal typing.
   PixiJS 8.22 keeps animation, selection and scrolling responsive while preserving
   the established scene. Decorative motion yields briefly to terminal typing;
   hidden, idle and reduced-motion scenes stop autonomous paints. Shared furniture

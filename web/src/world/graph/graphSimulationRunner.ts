@@ -9,13 +9,19 @@ import {
 // inside its body. The worker receives geometry only, never runtime/session data.
 function workerSource() {
   return `const createSimulation = ${createGraphSimulation.toString()};
-let revision = 0, nodes = [], simulation;
+let revision = 0, nodes = [], byId = new Map(), simulation;
 self.onmessage = ({ data }) => {
   if (data.nodes) {
     revision = data.revision; nodes = data.nodes;
+    byId = new Map(nodes.map(node => [node.id, node]));
     simulation = createSimulation(nodes); return;
   }
   if (!simulation || revision !== data.revision) return;
+  if (data.pin) {
+    const node = byId.get(data.pin.id);
+    if (node) Object.assign(node, data.pin, { pinned: true, vx: 0, vy: 0 });
+    return;
+  }
   let alpha = data.alpha;
   do {
     const energy = simulation.step(alpha);
@@ -27,14 +33,16 @@ self.onmessage = ({ data }) => {
 };`;
 }
 
-/** One in-flight physics step; topology/drag generations fence stale replies. */
+/** One in-flight physics step; topology generations fence stale replies. */
 export class GraphSimulationRunner {
   #worker: Worker | null = null;
   #url: string | null = null;
   #nodes: GraphPhysicsNode[] = [];
+  #byId = new Map<string, GraphPhysicsNode>();
   #simulation: ReturnType<typeof createGraphSimulation> | null = null;
   #revision = 0;
   #pending = false;
+  #reheatAlpha = 0;
   #disposed = false;
   #lastRequest = { alpha: 0, settle: false };
 
@@ -61,13 +69,15 @@ export class GraphSimulationRunner {
         )
           return this.#fallback();
         this.#nodes.forEach((node, index) => {
+          // A drag may have advanced since this step began. Pinned positions
+          // remain main-thread authoritative without discarding neighbours.
+          if (node.pinned) return;
           [node.x, node.y, node.vx, node.vy] = data.positions.subarray(
             index * 4,
             index * 4 + 4,
           );
         });
-        this.#pending = false;
-        this.onResult(data.alpha);
+        this.#complete(data.alpha);
       };
       this.#worker.onerror = () => this.#fallback();
     } catch {
@@ -78,7 +88,9 @@ export class GraphSimulationRunner {
   reset(state: GraphLayoutState) {
     this.#revision++;
     this.#pending = false;
+    this.#reheatAlpha = 0;
     this.#nodes = [...state.nodes.values()];
+    this.#byId = new Map(this.#nodes.map((node) => [node.id, node]));
     this.#simulation = null;
     this.#worker?.postMessage({
       revision: this.#revision,
@@ -95,6 +107,16 @@ export class GraphSimulationRunner {
         }),
       ),
     });
+  }
+
+  pin(id: string, x: number, y: number) {
+    if (this.#disposed) return;
+    const node = this.#byId.get(id);
+    if (!node) return;
+    Object.assign(node, { x, y, pinned: true, vx: 0, vy: 0 });
+    // A reply already in transit may have settled before this position changed.
+    this.#reheatAlpha = 0.24;
+    this.#worker?.postMessage({ revision: this.#revision, pin: { id, x, y } });
   }
 
   step(alpha: number, settle = false) {
@@ -115,9 +137,15 @@ export class GraphSimulationRunner {
         const energy = simulation.step(alpha);
         alpha *= energy < 0.08 ? 0.78 : 0.93;
       } while (settle && alpha > 0.015);
-      this.#pending = false;
-      this.onResult(alpha);
+      this.#complete(alpha);
     })();
+  }
+
+  #complete(alpha: number) {
+    this.#pending = false;
+    const nextAlpha = Math.max(alpha, this.#reheatAlpha);
+    this.#reheatAlpha = 0;
+    this.onResult(nextAlpha);
   }
 
   #fallback() {
@@ -136,6 +164,7 @@ export class GraphSimulationRunner {
     this.#revision++;
     this.#fallback();
     this.#nodes = [];
+    this.#byId.clear();
     this.#simulation = null;
   }
 }

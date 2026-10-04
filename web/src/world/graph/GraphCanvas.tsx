@@ -677,25 +677,38 @@ class GraphRenderer {
         context.rect(strip.x, strip.y, strip.width, strip.height);
       context.clip();
     }
-    const backgroundKey = `${this.#width}:${this.#height}:${density}:${this.#camera.x}:${this.#camera.y}:${this.#camera.zoom}`;
-    if (backgroundKey !== this.#backgroundKey) {
-      this.#background ??= document.createElement("canvas");
-      this.#background.width = this.canvas.width;
-      this.#background.height = this.canvas.height;
-      const background = this.#background.getContext("2d")!;
-      background.setTransform(density, 0, 0, density, 0, 0);
-      background.fillStyle = "#0b0e13";
-      background.fillRect(0, 0, this.#width, this.#height);
-      drawGrid(background, this.#width, this.#height, this.#camera);
-      this.#backgroundKey = backgroundKey;
+    if (strips) {
+      // The destination clip limits grid work to the newly exposed strips.
+      // Rebuilding a full offscreen grid on each pan defeats strip reuse.
+      context.fillStyle = "#0b0e13";
+      context.fillRect(0, 0, this.#width, this.#height);
+      drawGrid(context, this.#width, this.#height, this.#camera);
+    } else {
+      const { spacing, offsetX, offsetY } = graphGridPhase(
+        this.#width,
+        this.#height,
+        this.#camera,
+      );
+      const backgroundKey = `${this.#width}:${this.#height}:${density}:${spacing}:${offsetX}:${offsetY}`;
+      if (backgroundKey !== this.#backgroundKey) {
+        this.#background ??= document.createElement("canvas");
+        this.#background.width = this.canvas.width;
+        this.#background.height = this.canvas.height;
+        const background = this.#background.getContext("2d")!;
+        background.setTransform(density, 0, 0, density, 0, 0);
+        background.fillStyle = "#0b0e13";
+        background.fillRect(0, 0, this.#width, this.#height);
+        drawGrid(background, this.#width, this.#height, this.#camera);
+        this.#backgroundKey = backgroundKey;
+      }
+      context.drawImage(
+        this.#background!,
+        0,
+        0,
+        this.canvas.width / density,
+        this.canvas.height / density,
+      );
     }
-    context.drawImage(
-      this.#background!,
-      0,
-      0,
-      this.canvas.width / density,
-      this.canvas.height / density,
-    );
     context.save();
     context.translate(
       this.#width / 2 + this.#camera.x,
@@ -1007,10 +1020,7 @@ class GraphRenderer {
           -this.#rotation,
         );
         this.#settledView = null;
-        node.x += delta.x;
-        node.y += delta.y;
-        node.pinned = true;
-        this.#simulation.reset(this.#layout);
+        this.#simulation.pin(node.id, node.x + delta.x, node.y + delta.y);
         this.#alpha = Math.max(this.#alpha, 0.24);
       }
     }
@@ -1255,16 +1265,33 @@ export function retainedGraphPositions(
   return positions;
 }
 
+export function graphGridPhase(
+  width: number,
+  height: number,
+  camera: GraphCamera,
+) {
+  const spacing = 48 * camera.zoom;
+  const phase = (value: number) => {
+    const offset = ((value % spacing) + spacing) % spacing;
+    // Canonicalize arithmetic noise, including values just below a period.
+    const rounded = Math.round(offset * 1e9) / 1e9;
+    return Math.abs(rounded - spacing) < 1e-9 ? 0 : rounded;
+  };
+  return {
+    spacing,
+    offsetX: phase(width / 2 + camera.x),
+    offsetY: phase(height / 2 + camera.y),
+  };
+}
+
 function drawGrid(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
   camera: GraphCamera,
 ) {
-  const spacing = 48 * camera.zoom;
+  const { spacing, offsetX, offsetY } = graphGridPhase(width, height, camera);
   if (spacing < 12) return;
-  const offsetX = (((width / 2 + camera.x) % spacing) + spacing) % spacing;
-  const offsetY = (((height / 2 + camera.y) % spacing) + spacing) % spacing;
   context.beginPath();
   for (let x = offsetX; x < width; x += spacing) {
     context.moveTo(x, 0);

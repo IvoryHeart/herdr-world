@@ -47,16 +47,6 @@ export function OfficeSemanticTargetsOverlay({
     () => JSON.stringify(targets.map(({ kind, key }) => [kind, key])),
     [targets],
   );
-  const batches = useMemo(() => {
-    const result: OfficeSemanticTarget[][] = [];
-    for (
-      let index = 0;
-      index < targets.length;
-      index += OFFICE_CONTROL_BATCH_SIZE
-    )
-      result.push(targets.slice(index, index + OFFICE_CONTROL_BATCH_SIZE));
-    return result;
-  }, [targets]);
   const [progress, setProgress] = useState<{
     identity: string;
     limit: number;
@@ -65,9 +55,18 @@ export function OfficeSemanticTargetsOverlay({
     progress?.identity === identity
       ? progress.limit
       : OFFICE_CONTROL_BATCH_SIZE;
+  const admitted = useRef(new Set<string>());
   const rendered = targets.filter(
-    (target, index) => index < limit || target.key === selectedKey,
+    (target, index) =>
+      index < limit ||
+      target.key === selectedKey ||
+      admitted.current.has(`${target.kind}:${target.key}`),
   );
+  useLayoutEffect(() => {
+    admitted.current = new Set(
+      rendered.map(({ kind, key }) => `${kind}:${key}`),
+    );
+  });
   const pending = targets.length - rendered.length;
   const interactive =
     layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
@@ -129,18 +128,18 @@ export function OfficeSemanticTargetsOverlay({
       {pending ? (
         <span role="status">Rendering {pending} more observed targets</span>
       ) : null}
-      {batches.map((batch, index) => (
-        <OfficeSemanticBatch
-          key={index}
-          targets={batch}
-          limit={Math.max(
-            0,
-            Math.min(
-              OFFICE_CONTROL_BATCH_SIZE,
-              limit - index * OFFICE_CONTROL_BATCH_SIZE,
-            ),
-          )}
-          selectedKey={selectedKey}
+      {rendered.map((target) => (
+        <OfficeSemanticButton
+          key={`${target.kind}:${target.key}`}
+          targetKey={target.key}
+          kind={target.kind}
+          label={target.label}
+          canActivate={target.canActivate}
+          x={target.rect.x}
+          y={target.rect.y}
+          width={target.rect.width}
+          height={target.rect.height}
+          selected={selectedKey === target.key}
           actions={actions}
         />
       ))}
@@ -148,41 +147,7 @@ export function OfficeSemanticTargetsOverlay({
   );
 }
 
-// Stable batches keep progressive admission from reconciling every previously
-// admitted button. Refreshes still pass current targets through every batch.
-const OfficeSemanticBatch = memo(function OfficeSemanticBatch({
-  targets,
-  limit,
-  selectedKey,
-  actions,
-}: {
-  targets: OfficeSemanticTarget[];
-  limit: number;
-  selectedKey: string | null;
-  actions: {
-    select(key: string): void;
-    activate(key: string, kind: OfficeSemanticTarget["kind"]): void;
-  };
-}) {
-  return targets
-    .filter((target, index) => index < limit || target.key === selectedKey)
-    .map((target) => (
-      <OfficeSemanticButton
-        key={`${target.kind}:${target.key}`}
-        targetKey={target.key}
-        kind={target.kind}
-        label={target.label}
-        canActivate={target.canActivate}
-        x={target.rect.x}
-        y={target.rect.y}
-        width={target.rect.width}
-        height={target.rect.height}
-        selected={selectedKey === target.key}
-        actions={actions}
-      />
-    ));
-});
-
+// Identity keys share one parent so topology insertions preserve DOM and focus.
 const OfficeSemanticButton = memo(function OfficeSemanticButton({
   targetKey,
   kind,

@@ -28,6 +28,7 @@ test("physics replies are single-flight and fenced across reset and disposal", (
     revision: number;
     alpha?: number;
     nodes?: GraphPhysicsNode[];
+    pin?: { id: string; x: number; y: number };
   }[] = [];
   const workers: StubWorker[] = [];
   class StubWorker {
@@ -60,11 +61,11 @@ test("physics replies are single-flight and fenced across reset and disposal", (
     const current = layout();
     runner.reset(current);
     runner.step(1);
-    const reply = (revision: number) =>
+    const reply = (revision: number, alpha = 0.5) =>
       workers[0]!.onmessage!({
         data: {
           revision,
-          alpha: 0.5,
+          alpha,
           positions: new Float64Array([20, 21, 1, 2, 30, 31, 3, 4]),
         },
       });
@@ -76,9 +77,31 @@ test("physics replies are single-flight and fenced across reset and disposal", (
     expect(current.nodes.get("host-0")!.x).toBe(20);
     expect(previous.nodes.get("host-0")!.x).toBe(0);
     runner.step(0.5);
+    const priorMessages = messages.length;
+    for (let index = 0; index < 20; index++)
+      runner.pin("host-0", 100 + index, 200 + index);
+    expect(messages.slice(priorMessages)).toHaveLength(20);
+    expect(
+      messages
+        .slice(priorMessages)
+        .every(
+          (message) =>
+            message.pin &&
+            !message.nodes &&
+            message.revision === messages[2]!.revision,
+        ),
+    ).toBe(true);
+    current.nodes.get("host-1")!.x = 999;
+    reply(messages[2]!.revision, 0);
+    expect(results).toEqual([0.5, 0.24]);
+    expect(current.nodes.get("host-0")!.x).toBe(119);
+    expect(current.nodes.get("host-0")!.y).toBe(219);
+    expect(current.nodes.get("host-0")!.vx).toBe(0);
+    expect(current.nodes.get("host-1")!.x).toBe(30);
+    runner.step(0.5);
     runner.dispose();
-    reply(messages[2]!.revision);
-    expect(results).toEqual([0.5]);
+    reply(messages[2]!.revision, 0);
+    expect(results).toEqual([0.5, 0.24]);
     expect(workers[0]!.terminated).toBe(true);
   } finally {
     runner.dispose();
@@ -103,10 +126,13 @@ test("unavailable workers use yielding physics and disposal cancels queued fallb
     const current = layout();
     runner.reset(current);
     runner.step(1, true);
+    runner.pin("host-0", 125, 225);
     expect(runner.offThread).toBe(false);
     expect(replies).toBe(0);
-    expect(await result.promise).toBeLessThanOrEqual(0.015);
-    expect(current.nodes.get("host-0")!.x).not.toBe(0);
+    expect(await result.promise).toBe(0.24);
+    expect(current.nodes.get("host-0")!.x).toBe(125);
+    expect(current.nodes.get("host-0")!.y).toBe(225);
+    expect(current.nodes.get("host-1")!.x).not.toBe(10);
     runner.step(1);
     runner.dispose();
     await new Promise((resolve) => setTimeout(resolve, 10));

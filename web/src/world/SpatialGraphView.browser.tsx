@@ -760,7 +760,7 @@ async function run() {
       );
       const terminalInput = document.createElement("textarea");
       terminalInput.className = "xterm";
-      host.append(terminalInput);
+      document.body.append(terminalInput);
       const type = () =>
         terminalInput.dispatchEvent(
           new Event("beforeinput", { bubbles: true }),
@@ -773,7 +773,7 @@ async function run() {
           "Graph did not retire before reduced-motion typing check",
         );
         type();
-        typing = setInterval(type, 40);
+        typing = setInterval(type, 10);
         const priorFrames = window.__HERDR_GRAPH_RENDERER__!.frames;
         root.render(<Fixture />);
         await waitFor(

@@ -128,12 +128,13 @@ class WorldFrameScheduler {
   };
 
   setQuiet(quiet: boolean) {
-    if (quiet !== this.quiet) {
-      this.quiet = quiet;
-      for (const client of this.clients) client.onPause?.(!quiet);
-      for (const listener of this.quietListeners) listener(quiet);
-    }
-    this.reschedule();
+    if (quiet === this.quiet) return;
+    this.quiet = quiet;
+    for (const client of this.clients) client.onPause?.(!quiet);
+    for (const listener of this.quietListeners) listener(quiet);
+    // flush rechecks motion eligibility. Keep the existing deadline for state
+    // paints, including on the first input event in a burst.
+    if (quiet) this.schedule();
   }
 
   input = (event: Event) => {

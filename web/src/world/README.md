@@ -32,9 +32,11 @@ Graph caches physics topology in [graph/graphSimulation.ts](graph/graphSimulatio
 and uses finite-radius spatial queries with the original force order and law.
 [graph/graphSimulationRunner.ts](graph/graphSimulationRunner.ts) sends geometry to
 one worker with one request in flight; revision fences discard results after
-reconciliation, dragging or disposal. Its fallback yields ordinary tasks. Selection
+reconciliation or disposal. Dragging sends a single pinned position and preserves
+in-flight neighbour updates. Its fallback yields ordinary tasks. Selection
 and search reuse topology. The renderer caches its bounding rectangle and grid;
-settled pans reuse integer device-pixel translations and repaint exposed strips.
+settled pans reuse integer device-pixel translations and repaint exposed strips,
+including the grid. Full-grid caches use its periodic phase rather than raw pan offsets.
 Fractional-device translations, zoom, rotation, resize and state changes redraw.
 Individual translucent edges retain their original compositing order. Browser
 regressions compare cached and full paints at DPR 1/2 (two channel levels of
@@ -91,8 +93,9 @@ working agents, checking that motion resumes when terminal typing stops.
 
 `OfficeSemanticTargetsOverlay` admits controls by ordered qualified identity;
 refreshed labels, geometry, permissions and callbacks remain current without
-remounting unchanged controls or losing keyboard focus. Memoized control batches
-admit 16 controls per task without reconciling earlier controls. One native
+remounting unchanged controls or losing keyboard focus, including across topology
+insertions and removals. A flat identity-keyed list of memoized buttons admits
+16 controls per task and retains previously admitted identities on refresh. One native
 `inert` subtree flag gates readiness without updating every button; callback
 guards also reject programmatic activation before the scene is ready. Office subscribes only to
 the endpoint-creation inputs it consumes; room actions resolve through the

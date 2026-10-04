@@ -336,7 +336,7 @@ async function run() {
           ".world-semantic-target",
         ),
       ];
-      const focused = beforeRefresh[beforeRefresh.length - 1]!;
+      const focused = beforeRefresh[31]!;
       focused.focus();
       let removed = 0;
       const mutations = new MutationObserver((records) => {
@@ -373,6 +373,44 @@ async function run() {
         selectedAfterRefresh === focused.dataset.targetKey,
         "Retained Office control used a stale callback",
       );
+      const insertedProjection = {
+        ...progressProjection,
+        rooms: [
+          {
+            ...progressProjection.rooms[0]!,
+            key: "inserted-room",
+            desks: [],
+            roomAgents: [],
+          },
+          ...progressProjection.rooms,
+        ],
+      };
+      const insertedLayout = {
+        ...progressLayout,
+        rooms: [
+          ...progressLayout.rooms,
+          { ...progressLayout.rooms[0]!, index: progressLayout.rooms.length },
+        ],
+      };
+      for (const inserted of [true, false]) {
+        progressRoot.render(
+          <OfficeSemanticTargetsOverlay
+            layout={inserted ? insertedLayout : progressLayout}
+            projection={inserted ? insertedProjection : progressProjection}
+            renderedRevision={progressLayout.layoutRevision}
+            selectedKey={null}
+            onSelect={() => {}}
+            onActivateAgent={() => {}}
+            onActivateDesk={() => {}}
+            onActivateRoom={() => {}}
+          />,
+        );
+        await settle();
+        check(
+          document.activeElement === focused && focused.isConnected,
+          `Topology ${inserted ? "insertion" : "removal"} replaced the focused Office control`,
+        );
+      }
       progressRoot.render(
         <OfficeSemanticTargetsOverlay
           layout={progressLayout}

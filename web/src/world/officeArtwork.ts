@@ -18,19 +18,27 @@ export function officeArtwork(
     artwork.set(key, entry);
   }
   entry.references++;
-  const shared = entry;
-  return new (class extends Graphics {
-    override destroy(options?: Parameters<Graphics["destroy"]>[0]) {
-      if (this.destroyed) return;
-      // Scene cleanup owns this instance, but other layers may use its context.
-      super.destroy({
-        ...(typeof options === "object" ? options : { children: options }),
-        context: false,
-      });
-      if (--shared.references === 0) {
-        artwork.delete(key);
-        shared.context.destroy();
-      }
+  return new SharedArtwork(key, entry);
+}
+
+class SharedArtwork extends Graphics {
+  constructor(
+    private readonly artworkKey: string,
+    private readonly shared: { context: GraphicsContext; references: number },
+  ) {
+    super({ context: shared.context });
+  }
+
+  override destroy(options?: Parameters<Graphics["destroy"]>[0]) {
+    if (this.destroyed) return;
+    // Scene cleanup owns this instance, but other layers may use its context.
+    super.destroy({
+      ...(typeof options === "object" ? options : { children: options }),
+      context: false,
+    });
+    if (--this.shared.references === 0) {
+      artwork.delete(this.artworkKey);
+      this.shared.context.destroy();
     }
-  })({ context: entry.context });
+  }
 }

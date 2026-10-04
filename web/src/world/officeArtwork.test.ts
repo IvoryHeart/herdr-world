@@ -13,6 +13,7 @@ test("shared furniture survives layer eviction and releases the last context", (
   const b = officeArtwork("synthetic-desk", draw);
   const context = a.context;
   expect(b.context).toBe(context);
+  expect(Object.getPrototypeOf(b)).toBe(Object.getPrototypeOf(a));
   expect(builds).toBe(1);
   a.destroy({ context: true });
   expect(context.destroyed).toBe(false);
