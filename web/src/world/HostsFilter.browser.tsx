@@ -310,6 +310,22 @@ function namedButton(name: string) {
       name,
   );
 }
+async function retainedWindowCount() {
+  if (document.documentElement.dataset.layout !== "mobile")
+    return Number(
+      document.querySelector(".world-window-switcher-trigger span")
+        ?.textContent ?? 0,
+    );
+  namedButton("Show tabs")!.click();
+  await frame();
+  const count = Number(
+    document.querySelector<HTMLElement>(".mobile-tab-sheet")?.dataset
+      .windowCount ?? 0,
+  );
+  namedButton("Close tab switcher")!.click();
+  await frame();
+  return count;
+}
 function hostCheckbox(id: string) {
   return [
     ...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
@@ -375,11 +391,6 @@ async function float(id: string) {
     target.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   else {
     target.click();
-    await waitFor(
-      () => !!namedButton("Float Inspector"),
-      "Navigator Inspector has no Dock out",
-    );
-    namedButton("Float Inspector")!.click();
   }
   await waitFor(
     () =>
@@ -1183,10 +1194,16 @@ async function operationalScenario(unmount: () => void) {
     view.dispatchEvent(new Event("change", { bubbles: true }));
     await frame();
     check(
-      [
-        ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
-      ].some((element) => element.textContent?.includes("Synthetic alpha")),
-      "Entering beta Spaces retired the unrelated alpha conversation",
+      (await retainedWindowCount()) === 2,
+      "Entering beta Spaces retired an Inspector context",
+    );
+    leaf("alpha")!.click();
+    await waitFor(
+      () =>
+        [
+          ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
+        ].some((element) => element.textContent?.includes("Synthetic alpha")),
+      "Returning from Spaces lost the retained alpha Inspector",
     );
     return;
   }
@@ -1968,8 +1985,9 @@ async function operationalScenario(unmount: () => void) {
       "Compact layout advertised unusable Columns",
     );
     check(
-      document.querySelectorAll(".world-floating-terminal").length === 2,
-      "Unavailable compact arrangement retired contexts",
+      document.querySelectorAll(".world-floating-terminal").length === 1 &&
+        (await retainedWindowCount()) === 2,
+      "Compact arrangement failed to retain both contexts with one usable window",
     );
     return;
   }
@@ -2595,7 +2613,12 @@ async function run() {
       await waitFor(
         () =>
           document.querySelectorAll(".world-floating-terminal").length ===
-          (id === "alpha" ? 1 : 2),
+            (window.innerWidth <= 720 || id === "alpha" ? 1 : 2) &&
+          [
+            ...document.querySelectorAll<HTMLElement>(
+              ".world-floating-terminal",
+            ),
+          ].some((element) => element.textContent?.includes(`Synthetic ${id}`)),
         `Independent ${id} Inspector did not open`,
       );
     }
@@ -2604,9 +2627,23 @@ async function run() {
       "Both qualified terminal contexts did not attach",
     );
     await frame();
-    const alphaInspector = document.querySelectorAll<HTMLElement>(
-      ".world-floating-terminal",
-    )[0]!;
+    if (window.innerWidth <= 720) {
+      document
+        .querySelector<HTMLElement>(
+          `[data-world-node-anchor="${CSS.escape(worldObjectId("alpha", "terminal", "shared"))}"]`,
+        )!
+        .dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      await waitFor(
+        () =>
+          document
+            .querySelector(".world-floating-terminal")
+            ?.textContent?.includes("Synthetic alpha") ?? false,
+        "Compact switch back to the retained alpha Inspector",
+      );
+    }
+    const alphaInspector = [
+      ...document.querySelectorAll<HTMLElement>(".world-floating-terminal"),
+    ].find((element) => element.textContent?.includes("Synthetic alpha"))!;
     await waitFor(
       () =>
         !![
@@ -2669,11 +2706,13 @@ async function run() {
         .join(", ")}`,
     );
     check(
-      document.querySelectorAll(".world-floating-terminal").length === 2,
+      document.querySelectorAll(".world-floating-terminal").length ===
+        (window.innerWidth <= 720 ? 1 : 2) &&
+        (await retainedWindowCount()) === 2,
       "filter retired an admitted Inspector",
     );
     check(
-      /Outside the Hosts filter/.test(alphaInspector.textContent ?? ""),
+      /Outside Hosts filter/.test(alphaInspector.textContent ?? ""),
       "filtered-out Inspector lacks an honest scope label",
     );
     files.resolve({

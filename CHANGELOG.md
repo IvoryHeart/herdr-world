@@ -37,6 +37,16 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Inspectors and arranged Spaces windows now share stable snapping, all-edge resizing,
+  minimize/window switching, maximize/restore and tile dividers. Opening or focusing
+  another window preserves existing placements. Tree uses the same window surface,
+  and the Office Docked preference becomes Snap right. Closing a Spaces window
+  dismisses its presentation while leaving the Herdr tab running. Desktop window
+  switching and arrangement controls are always reachable from the top bar.
+- Mobile keeps the ellipsis menu floating, uses the second-row Tabs menu for tab
+  actions and window restoration, removes the duplicate list icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop
+  placements survive compact views. Roamgate terminal and pane ownership remain intact.
+
 - Office reuses unchanged rooms and cached static artwork, prepares graphics in
   bounded tasks, and retains semantic controls and keyboard focus across topology
   refreshes. State paints continue during uninterrupted terminal typing.

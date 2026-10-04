@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { stopChrome } from "../browserChrome";
+import { stopChrome } from "../../browserChrome";
 
 const chrome =
   Bun.env.CHROME_BIN ||
@@ -13,7 +13,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "Spaces tab window keeps content and chrome focus separate",
+  "shared window frame coordinates resize, snap, minimize, maximize and compact presentation",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "spaces-tab-window-test-"));
     const { promise, resolve } = Promise.withResolvers<unknown>();
@@ -30,7 +30,7 @@ test.skipIf(!chrome)(
         const asset = assets.get(path);
         if (asset) return new Response(asset);
         return new Response(
-          '<head><link rel="stylesheet" href="/SpacesTabWindow.browser.css"></head><body><div id="root"></div><script src="/SpacesTabWindow.browser.js"></script></body>',
+          '<head><link rel="stylesheet" href="/WindowFrame.browser.css"></head><body><div id="root"></div><script src="/WindowFrame.browser.js"></script></body>',
           { headers: { "Content-Type": "text/html" } },
         );
       },
@@ -39,7 +39,7 @@ test.skipIf(!chrome)(
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const build = await Bun.build({
-        entrypoints: [join(import.meta.dir, "SpacesTabWindow.browser.tsx")],
+        entrypoints: [join(import.meta.dir, "WindowFrame.browser.tsx")],
         outdir: dir,
         target: "browser",
       });
@@ -69,7 +69,7 @@ test.skipIf(!chrome)(
         }),
         new Promise<never>((_, reject) => {
           timer = setTimeout(
-            () => reject(new Error("Spaces tab window browser test timed out")),
+            () => reject(new Error("Window frame browser test timed out")),
             30_000,
           );
         }),

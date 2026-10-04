@@ -1,0 +1,128 @@
+/* World owns shell geometry. Keep the Roamgate-derived standalone App rules
+   intact so future source merges retain a narrow presentation boundary. */
+.desk.has-reading {
+  padding-right: calc(50% + 12px);
+}
+.world-spaces-window-surface {
+  inset: 0;
+}
+.world-foundation-shell .world-intent-connector {
+  z-index: 29;
+}
+.world-managed-window.world-floating-terminal {
+  position: absolute;
+  border: 1px solid var(--shell-border);
+  border-radius: 10px;
+  background: var(--shell-panel);
+  box-shadow: 0 12px 36px #0005;
+  overflow: visible;
+}
+.world-managed-window.world-floating-terminal.is-active {
+  border-color: var(--accent);
+}
+.world-managed-window.spaces-tab-window {
+  overflow: visible;
+}
+.world-window-layer {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--shell-panel);
+}
+.world-window-layer::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.world-window-layer::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border: 2px solid var(--shell-panel);
+  border-radius: 6px;
+}
+.world-window-layer::-webkit-scrollbar-track {
+  background: var(--shell-panel);
+}
+.world-managed-window .workspace-inspector-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 6px 8px;
+}
+.world-managed-window .workspace-inspector-head > .workspace-inspector-tabs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+}
+.world-managed-window .workspace-inspector-head > .world-window-controls {
+  grid-column: 2;
+  grid-row: 1;
+}
+.world-managed-window .workspace-inspector-tabs > button {
+  flex: 1;
+  min-width: 0;
+  padding: 4px;
+}
+.world-managed-window .workspace-inspector-identity {
+  min-height: 32px;
+}
+.world-managed-window .workspace-inspector-repo {
+  font-size: 9px;
+}
+.world-managed-window .workspace-inspector-path {
+  display: none;
+}
+.world-managed-window .workspace-inspector-agent-avatar {
+  grid-row: 1 / 3;
+}
+.world-managed-window .world-window-content > .pane-layout,
+.world-managed-window .world-window-content > .pane-layout-single,
+.world-managed-window .world-window-content > .pane-switcher-layout,
+.world-managed-window .world-window-content > .terminal-shell {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+:where(html[data-layout="mobile"]) {
+  .world-foundation-shell {
+    height: var(--app-height, var(--app-viewport-height, 100dvh));
+    padding-bottom: var(--keyboard-inset-content, 0px);
+    box-sizing: border-box;
+    transform: translateY(var(--app-viewport-offset-top, 0px));
+  }
+  .world-foundation-shell .world-spaces-layer > .app {
+    height: 100%;
+    min-height: 0;
+    padding-bottom: 0;
+    transform: none;
+  }
+  .world-foundation-shell .app > .body {
+    min-height: 0;
+  }
+  .world-foundation-shell .tabbar,
+  .world-foundation-shell .world-intent-connector {
+    display: none;
+  }
+  /* The ellipsis and its expanded controls keep the inherited floating
+     placement; they must not consume a permanent row of mobile content. */
+  .world-foundation-shell .workspace-inspector-head {
+    min-width: 0;
+  }
+}
+
+.world-window-scope {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--shell-border);
+}
+.world-window-scope > span {
+  flex: 1;
+  min-width: 0;
+}
+.world-window-scope > button {
+  flex: none;
+  font-size: inherit;
+}

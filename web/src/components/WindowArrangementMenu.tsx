@@ -1,3 +1,7 @@
+import {
+  WindowSwitcher,
+  type WindowSwitcherEntry,
+} from "../world/windows/WindowSwitcher";
 import { LayoutGrid, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -14,6 +18,7 @@ export type WindowArrangementCommand =
   | "open-all";
 
 export type WindowArrangementControl = {
+  windows?: readonly WindowSwitcherEntry[];
   activePreset: TerminalWindowArrangementPreset | null;
   disabledReasons: Partial<Record<WindowArrangementCommand, string>>;
   onSelect: (command: WindowArrangementCommand) => void;
@@ -75,8 +80,10 @@ export const WINDOW_ARRANGEMENT_CHOICES: readonly {
 
 export function WindowArrangementMenu({
   control,
+  showWindowSwitcher = true,
 }: {
   control: WindowArrangementControl;
+  showWindowSwitcher?: boolean;
 }) {
   useShortcutPreferences();
   const [open, setOpen] = useState(false);
@@ -172,6 +179,9 @@ export function WindowArrangementMenu({
 
   return (
     <>
+      {showWindowSwitcher && control.windows ? (
+        <WindowSwitcher entries={control.windows} />
+      ) : null}
       <button
         ref={triggerRef}
         type="button"

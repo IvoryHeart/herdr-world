@@ -102,3 +102,13 @@
     font-size: 13px;
   }
 }
+
+.mobile-tab-sheet-section {
+  padding: 6px 10px 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mobile-tab-sheet-focus > small {
+  margin-left: auto;
+  color: var(--muted);
+}

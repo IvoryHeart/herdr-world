@@ -1,3 +1,4 @@
+import type { ManagedWindowControls } from "./windows/WindowControls";
 import {
   Suspense,
   useCallback,
@@ -100,6 +101,7 @@ function InspectorResources({
   onDockIn,
   onFocus,
   onResourceFocus,
+  windowControls,
   onWindowMaximize,
   windowMaximized = false,
   onTerminalPortalChange,
@@ -115,6 +117,7 @@ function InspectorResources({
   onDockIn?(): void;
   onFocus?(): void;
   onResourceFocus(): void;
+  windowControls?: ManagedWindowControls;
   onWindowMaximize?(): void;
   windowMaximized?: boolean;
   onTerminalPortalChange(element: HTMLDivElement | null): void;
@@ -493,6 +496,7 @@ function InspectorResources({
             onViewChange={changeView}
             onDockChange={changeDock}
             onExpandedChange={changeExpanded}
+            windowControls={windowControls}
             onWindowMaximize={onWindowMaximize}
             windowMaximized={windowMaximized}
             onDockOut={floating ? undefined : onDockOut}

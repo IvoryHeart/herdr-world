@@ -897,6 +897,7 @@ export default function App({
   arrangementControl,
   onFocusSpacesTabWindow,
   spacesWindowsSuspended = false,
+  presentedSpacesTabId,
   onSelectSpacesTab,
   onSpacesWindowLayerReady,
   onInspectorVisibilityChange,
@@ -926,6 +927,7 @@ export default function App({
   arrangementControl?: WindowArrangementControl;
   onFocusSpacesTabWindow?: (tabId: string, paneId: string | null) => void;
   spacesWindowsSuspended?: boolean;
+  presentedSpacesTabId?: string | null;
   onSelectSpacesTab?: (tabId: string) => void;
   onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
   onInspectorVisibilityChange?: (open: boolean) => void;
@@ -1142,6 +1144,14 @@ export default function App({
   const resourceRuntimeKeyRef = useRef(resourceUiKey);
   const focusedWorkspace = s.workspaces.find((w) => w.focused);
   const activeSpacesTabId =
+    (presentedSpacesTabId &&
+    s.tabs.some(
+      (tab) =>
+        tab.tab_id === presentedSpacesTabId &&
+        tab.workspace_id === focusedWorkspace?.workspace_id,
+    )
+      ? presentedSpacesTabId
+      : null) ??
     focusedWorkspace?.active_tab_id ??
     s.tabs.find(
       (tab) =>
@@ -3656,6 +3666,9 @@ export default function App({
         )}
       </div>
       <div className="topbar-actions">
+        {!mobile && arrangementControl ? (
+          <WindowArrangementMenu control={arrangementControl} />
+        ) : null}
         <div className="topbar-command-group">
           <CommandCombobox
             key={`${resourceUiKey}:commands`}
@@ -3741,7 +3754,10 @@ export default function App({
         aria-hidden={mobileControlsCollapsed}
       >
         {mobile && !mobileControlsCollapsed && arrangementControl ? (
-          <WindowArrangementMenu control={arrangementControl} />
+          <WindowArrangementMenu
+            control={arrangementControl}
+            showWindowSwitcher={false}
+          />
         ) : null}
         <button
           type="button"
@@ -3864,6 +3880,7 @@ export default function App({
         <MobileTabSheet
           key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:mobile-tabs`}
           open={mobile && mobileTabSheetOpen}
+          windows={arrangementControl?.windows}
           onClose={() => setMobileTabSheetOpen(false)}
           onShowSession={activateTerminalSurface}
           onSelectTab={focusExplicitTab}
@@ -3905,7 +3922,7 @@ export default function App({
             aria-label="Show tabs"
             aria-pressed={mobileTabSheetOpen}
             tabIndex={mobileControlsCollapsed ? -1 : 0}
-            disabled={!tabWorkspace}
+            disabled={!tabWorkspace && !arrangementControl?.windows?.length}
             onPointerDown={blurActiveInput}
             onClick={() => setMobileTabSheetOpen((open) => !open)}
           >
@@ -4186,7 +4203,6 @@ export default function App({
               onSelectTab={
                 operationalShortcutsEnabled ? onSelectSpacesTab : undefined
               }
-              arrangementControl={arrangementControl}
             />
           </OperationalContext.Provider>
           <div

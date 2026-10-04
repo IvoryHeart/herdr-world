@@ -24,6 +24,8 @@ const tab: Tab = {
 };
 __storeTesting.replaceState({
   ...store.get(),
+  activeConnectionId: "alpha",
+  serverRuntimeGeneration: 7,
   workspaces: [workspace],
   tabs: [tab],
   panes: [],
@@ -35,6 +37,24 @@ document.body.append(host);
 createRoot(host).render(
   <MobileTabSheet
     open
+    windows={[
+      {
+        id: "alpha-window",
+        tab: { connectionId: "alpha", runtimeGeneration: 7, tabId: "one" },
+        label: "One · Alpha",
+        active: false,
+        minimized: true,
+        onSelect: () => events.push("restore:alpha"),
+      },
+      {
+        id: "beta-window",
+        tab: { connectionId: "beta", runtimeGeneration: 7, tabId: "one" },
+        label: "One · Beta",
+        active: false,
+        minimized: true,
+        onSelect: () => events.push("restore:beta"),
+      },
+    ]}
     onClose={() => events.push("close")}
     onShowSession={() => events.push("show")}
     onSelectTab={(id) => {
@@ -51,10 +71,26 @@ setTimeout(() => {
   );
   button?.click();
   setTimeout(() => {
+    const rows = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".mobile-tab-sheet-focus",
+      ),
+    ];
+    const minimized = rows.every((row) =>
+      row.textContent?.includes("Minimized"),
+    );
+    rows[1]?.click();
     void fetch("/result", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ button: Boolean(button), events }),
+      body: JSON.stringify({
+        button: Boolean(button),
+        events,
+        rows: rows.length,
+        minimized,
+        hasClose: !!document.querySelector('[aria-label="Close One"]'),
+        hasNew: !!document.querySelector(".mobile-tab-sheet-new"),
+      }),
     });
   }, 50);
 }, 50);

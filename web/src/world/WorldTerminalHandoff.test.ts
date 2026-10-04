@@ -12,10 +12,11 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "World keeps navigator, docked, floating, and terminal identities aligned",
+  "World keeps navigator, managed windows, and terminal identities aligned",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "world-terminal-handoff-"));
     const assets = new Map<string, Blob>();
+    const captureDir = Bun.env.WORLD_WINDOW_CAPTURE_DIR;
     const result = Promise.withResolvers<unknown>();
     const publicDir = join(import.meta.dir, "..", "..", "public");
     const server = Bun.serve({
@@ -26,6 +27,65 @@ test.skipIf(!chrome)(
         if (path === "/result" && request.method === "POST") {
           result.resolve(await request.json());
           return new Response("ok");
+        }
+        if (path === "/capture/desktop" || path === "/capture/mobile") {
+          if (captureDir) {
+            const [port] = (
+              await readFile(join(dir, "profile", "DevToolsActivePort"), "utf8")
+            ).split("\n");
+            const targets = (await (
+              await fetch(`http://127.0.0.1:${port}/json/list`)
+            ).json()) as { type: string; webSocketDebuggerUrl: string }[];
+            const target = targets.find((target) => target.type === "page")!;
+            const socket = new WebSocket(target.webSocketDebuggerUrl);
+            await new Promise<void>((resolve, reject) => {
+              socket.onopen = () => resolve();
+              socket.onerror = () =>
+                reject(new Error("Screenshot browser connection failed"));
+            });
+            let id = 0;
+            const command = (
+              method: string,
+              params: Record<string, unknown> = {},
+            ) =>
+              new Promise<Record<string, string>>((resolve, reject) => {
+                const current = ++id;
+                const receive = (event: MessageEvent) => {
+                  const message = JSON.parse(String(event.data));
+                  if (message.id !== current) return;
+                  socket.removeEventListener("message", receive);
+                  if (message.error) reject(new Error(message.error.message));
+                  else resolve(message.result);
+                };
+                socket.addEventListener("message", receive);
+                socket.send(JSON.stringify({ id: current, method, params }));
+              });
+            try {
+              if (path.endsWith("mobile")) {
+                await command("Emulation.setDeviceMetricsOverride", {
+                  width: 390,
+                  height: 844,
+                  deviceScaleFactor: 1,
+                  mobile: false,
+                });
+                await Bun.sleep(200);
+              }
+              const screenshot = await command("Page.captureScreenshot", {
+                format: "png",
+              });
+              await Bun.write(
+                join(captureDir, `${path.split("/").pop()}.png`),
+                Buffer.from(screenshot.data!, "base64"),
+              );
+              if (path.endsWith("mobile")) {
+                await command("Emulation.clearDeviceMetricsOverride");
+                await Bun.sleep(200);
+              }
+            } finally {
+              socket.close();
+            }
+          }
+          return new Response(null, { status: 204 });
         }
         const asset = assets.get(path);
         if (asset) return new Response(asset);
@@ -105,6 +165,7 @@ test.skipIf(!chrome)(
         [
           chrome!,
           "--headless=new",
+          ...(captureDir ? ["--remote-debugging-port=0"] : []),
           "--window-size=1440,1000",
           "--enable-webgl",
           "--use-angle=swiftshader",

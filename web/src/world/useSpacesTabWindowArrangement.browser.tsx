@@ -107,6 +107,25 @@ async function run() {
     ),
     "Columns must portal both existing tabs",
   );
+  windows()
+    .find((element) => element.dataset.tabId === "one")!
+    .querySelector<HTMLButtonElement>('[aria-label="Minimize First window"]')
+    ?.click();
+  await settle();
+  if (
+    hook().arrangementControl.windows?.find((entry) => entry.id === "one")
+      ?.minimized
+  ) {
+    layout.setMobile(true);
+    await settle();
+    check(
+      hook().presentedTabId === "two" && !hook().suspended,
+      "compact Spaces resurrected the minimized active tab",
+    );
+    layout.setMobile(false);
+    hook().resumeTab("one");
+    await settle();
+  } else check(false, "First window minimize control missing");
   const firstWidth = windows()[0]?.style.width;
   const openTabsBeforeCloseAll = mock.snapshot().tabs.length;
   hook().arrangementControl.onSelect("close-all");
@@ -351,18 +370,31 @@ async function run() {
   );
 
   document
-    .querySelector<HTMLButtonElement>('button[aria-label="Close Third tab"]')
+    .querySelector<HTMLButtonElement>('button[aria-label="Close Third window"]')
     ?.click();
   check(
     await until(
-      () => windows().length === 2 && mock.calls.requestCloseTab.length === 1,
+      () => windows().length === 2 && mock.calls.requestCloseTab.length === 0,
     ),
-    "closing a tab must request confirmation and prune its window",
+    "closing a window must dismiss only its presentation",
   );
   check(
     mock.calls.closeTab.length === 0,
     "window close must not bypass confirmation",
   );
+  check(
+    mock.snapshot().tabs.some((tab) => tab.tab_id === "three"),
+    "dismissed window must retain its Herdr tab",
+  );
+  hook().resumeTab("three");
+  check(
+    await until(() => windows().length === 3),
+    "explicit tab selection must reopen a dismissed window",
+  );
+  mock.set({
+    tabs: mock.snapshot().tabs.filter((tab) => tab.tab_id !== "three"),
+  });
+  await settle();
   hook().arrangementControl.onSelect("restore");
   check(
     await until(() => windows().length === 0),
@@ -391,7 +423,9 @@ async function run() {
     "new tabs must reach the Spaces window registry before Grid",
   );
   hook().arrangementControl.onSelect("grid");
-  const gridLayer = document.querySelector<HTMLElement>("#stage");
+  const gridLayer = document.querySelector<HTMLElement>(
+    ".world-spaces-window-surface",
+  );
   check(
     await until(
       () =>
