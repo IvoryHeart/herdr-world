@@ -44,6 +44,10 @@ const cases = [
       "shortcut",
       "focus-tab",
       "worktree",
+      "worktree-files",
+      "worktree-changes",
+      "worktree-resource-retirement",
+      "worktree-resource-rejection",
     ].map((operation) => ({ width, operation, view: "tree" })),
   ),
   ...[

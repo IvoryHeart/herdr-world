@@ -37,6 +37,9 @@ are optional because the merged PR history records their source.
 
 ### Changed
 
+- Worktree Files and Changes open the owning visual Inspector without switching
+  unrelated Spaces focus. Temporary-workspace removal retains cleanup failures.
+
 - Status-only agent updates retain confirmed session identity for notification
   targets; reported session replacements wait for confirmation. Removed host
   priority hints no longer block healthy snapshots, and overlapping clients

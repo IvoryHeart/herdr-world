@@ -154,8 +154,9 @@ Extend the optional scheduling input to a validated, bounded set of connection I
 from open contexts and the view filter. IDs grant scheduling priority only. Retain
 the existing single-ID hint as a compatibility shorthand.
 
-Deduplicate priority IDs, reject malformed/unknown IDs and rotate within priority
-classes. Reserve background progress when unprioritized ready hosts exist. Observe
+Deduplicate priority IDs, reject malformed or oversized scheduling hints, and retain strict
+validation of the legacy selected-connection hint. Ignore well-formed unknown scheduling identities
+for removed profiles and rotate within priority classes. Reserve background progress when unprioritized ready hosts exist. Observe
 each completed host independently; no control operation waits for an all-host
 refresh. A partial aggregate response alone does not retire an admitted live
 Inspector whose current owning runtime still confirms its target.

@@ -58,7 +58,9 @@ export function isWorkspaceInspectorShortcut(
 }
 
 export interface WorkspaceInspectorRequest {
+  onAdmission?: (accepted: boolean) => void;
   connectionId: string;
+  runtimeGeneration?: number;
   generation: number;
   workspaceId: string;
   view: InspectorView;

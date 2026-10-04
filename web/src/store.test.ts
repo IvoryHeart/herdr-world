@@ -31,6 +31,7 @@ import {
   worktreeRemovalCompletionNotice,
 } from "./store";
 import type { Pane } from "./types";
+import { removeTemporaryWorkspaceSafely } from "./worktreeLifecycle";
 import { registerTerminalConnectionDisposer } from "./terminalConnection";
 
 describe("current transport catalogue admission", () => {
@@ -834,6 +835,39 @@ describe("independent qualified operational sessions", () => {
             : "Plugin action failed",
         );
         expect(store.get().notice?.detail).toContain("Beta");
+      });
+    },
+  );
+
+  test.each(["skipped", "incomplete"])(
+    "temporary workspace %s removal retains qualified cleanup failures",
+    async (kind) => {
+      await withIndependentClients(async (calls) => {
+        const connection = bridge.connection;
+        bridge.connection = ((id, generation) => ({
+          ...connection(id, generation),
+          call: async (method: string) => {
+            calls.push({ host: id!, method });
+            throw new Error("Synthetic temporary workspace close failure");
+          },
+        })) as typeof bridge.connection;
+        const owned = operationalStore({
+          connectionId: "beta",
+          runtimeGeneration: 1,
+        });
+        await expect(
+          removeTemporaryWorkspaceSafely({
+            workspaceId: "temporary",
+            temporary: true,
+            remove: async () =>
+              kind === "skipped" ? { skipped_remove: true } : undefined,
+            close: async (id) => {
+              await owned.closeWorkspaceOrThrow(id);
+            },
+          }),
+        ).rejects.toThrow("Synthetic temporary workspace close failure");
+        expect(calls).toEqual([{ host: "beta", method: "workspace.close" }]);
+        expect(store.get().activeConnectionId).toBe("alpha");
       });
     },
   );

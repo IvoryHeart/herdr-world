@@ -2303,12 +2303,44 @@ export default function App({
   useEffect(() => {
     const handleInspectorRequest = (event: Event) => {
       const detail = (event as CustomEvent<WorkspaceInspectorRequest>).detail;
+      if (detail?.onAdmission) event.preventDefault();
+      if (
+        detail &&
+        hasWorkspaceSurface &&
+        onWorkspaceSurfaceSelect &&
+        detail.runtimeGeneration !== undefined
+      ) {
+        if (detail.generation !== bridge.clientGeneration) {
+          detail.onAdmission?.(false);
+          return;
+        }
+        void (async () => {
+          const accepted = await onWorkspaceSurfaceSelect({
+            connectionId: detail.connectionId,
+            runtimeGeneration: detail.runtimeGeneration!,
+            workspaceId: detail.workspaceId,
+            ...(detail.originPaneId ? { paneId: detail.originPaneId } : {}),
+            view: detail.view,
+          });
+          detail.onAdmission?.(accepted === true);
+        })().catch((error) => {
+          detail.onAdmission?.(false);
+          store.notify({
+            kind: "error",
+            message: "Could not open workspace resource",
+            detail: error instanceof Error ? error.message : String(error),
+          });
+        });
+        return;
+      }
+
       if (
         !detail ||
         detail.connectionId !== connectionClient.connectionId ||
         detail.generation !== connectionClient.generation ||
         !connectionClient.isCurrent()
       ) {
+        detail?.onAdmission?.(false);
         return;
       }
       const workspace = store
@@ -2317,14 +2349,17 @@ export default function App({
           (candidate) => candidate.workspace_id === detail.workspaceId,
         );
       if (!workspace) {
+        pendingInspectorRequestRef.current?.onAdmission?.(false);
         pendingInspectorRequestRef.current = detail;
         return;
       }
+      pendingInspectorRequestRef.current?.onAdmission?.(false);
       pendingInspectorRequestRef.current = null;
       openInspector(detail.view, detail.workspaceId, {
         originPaneId: detail.originPaneId,
         availableViews: detail.availableViews,
       });
+      detail.onAdmission?.(true);
     };
     window.addEventListener(
       WORKSPACE_INSPECTOR_REQUEST_EVENT,
@@ -2335,7 +2370,12 @@ export default function App({
         WORKSPACE_INSPECTOR_REQUEST_EVENT,
         handleInspectorRequest,
       );
-  }, [connectionClient, openInspector]);
+  }, [
+    connectionClient,
+    openInspector,
+    hasWorkspaceSurface,
+    onWorkspaceSurfaceSelect,
+  ]);
   useEffect(() => {
     const handleInspectorClose = () => closeInspector();
     window.addEventListener(
@@ -2426,6 +2466,7 @@ export default function App({
       pending.generation !== connectionClient.generation
     ) {
       pendingInspectorRequestRef.current = null;
+      pending.onAdmission?.(false);
       return;
     }
     if (
@@ -2440,6 +2481,7 @@ export default function App({
       originPaneId: pending.originPaneId,
       availableViews: pending.availableViews,
     });
+    pending.onAdmission?.(true);
   }, [connectionClient, openInspector, s.workspaces]);
   useEffect(() => {
     const handleWorktreeRemoved = (event: Event) => {

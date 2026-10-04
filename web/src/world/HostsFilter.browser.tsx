@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient } from "../api";
 import { worldLocalStorage } from "../browserStorage";
+import { WorktreeLifecycleDialog } from "../components/WorktreeLifecycleDialog";
 import { ContextMenu } from "../components/ContextMenu";
 import { WorktreeOpenDialog } from "../components/WorktreeOpenDialog";
 import { initializeLayoutPreferences } from "../layoutPreferences";
@@ -39,6 +40,7 @@ const watches: Array<{
 }> = [];
 const creation = Promise.withResolvers<unknown>();
 const gitPull = Promise.withResolvers<unknown>();
+const lifecycleOpen = Promise.withResolvers<unknown>();
 let watchAdmissionOld = false;
 let downloadPublications = 0;
 let syntheticFileDeleted = false;
@@ -1152,6 +1154,135 @@ async function operationalScenario() {
     }
     return;
   }
+  if (
+    operation === "worktree-files" ||
+    operation === "worktree-changes" ||
+    operation === "worktree-resource-retirement" ||
+    operation === "worktree-resource-rejection"
+  ) {
+    const element = document.createElement("div");
+    document.body.append(element);
+    const dialog = createRoot(element);
+    let closed = false;
+    try {
+      flushSync(() =>
+        dialog.render(
+          <OperationalContext.Provider
+            value={{ connectionId: "beta", runtimeGeneration: 7 }}
+          >
+            <WorktreeLifecycleDialog
+              open
+              workspaceId="shared"
+              onClose={() => {
+                closed = true;
+              }}
+            />
+          </OperationalContext.Provider>,
+        ),
+      );
+      const button = operation === "worktree-changes" ? "Changes" : "Files";
+      await waitFor(() => !!namedButton(button), "lifecycle resource button");
+      namedButton(button)!.click();
+      if (operation === "worktree-resource-retirement") {
+        await frame();
+        check(
+          dispatches.some(
+            (call) =>
+              call.connectionId === "beta" && call.method === "worktree.open",
+          ),
+          "retirement resource did not submit its open",
+        );
+        flushSync(() => {
+          const state = store.get();
+          __storeTesting.replaceState({
+            ...state,
+            connections: state.connections.map((connection) =>
+              connection.id === "beta"
+                ? { ...connection, generation: 8 }
+                : connection,
+            ),
+          });
+        });
+        lifecycleOpen.resolve({ workspace: { workspace_id: "shared" } });
+        await frame();
+        await frame();
+        check(
+          dispatches.filter((call) => call.method === "worktree.open")
+            .length === 1,
+          "retired worktree open was replayed",
+        );
+        check(
+          !dispatches.some(
+            (call) =>
+              call.connectionId === "beta" && call.method === "file.list",
+          ),
+          "retired worktree opened a replacement resource",
+        );
+        check(!closed, "retired worktree resource falsely reported success");
+        return;
+      }
+
+      if (operation === "worktree-resource-rejection") {
+        await waitFor(
+          () => !!document.querySelector(".lifecycle-operation.is-failed"),
+          "rejected resource admission reports lifecycle failure",
+        );
+        check(
+          dispatches.some(
+            (call) =>
+              call.connectionId === "beta" && call.method === "worktree.open",
+          ),
+          "resource rejection did not follow a successful worktree open",
+        );
+        check(
+          calls.includes("focus:beta"),
+          "resource rejection did not attempt qualified focus",
+        );
+        check(!closed, "rejected resource admission closed its dialog");
+        check(
+          !dispatches.some(
+            (call) =>
+              call.connectionId === "beta" && call.method === "file.list",
+          ),
+          "rejected resource admission opened Files",
+        );
+        check(
+          store.get().activeConnectionId === "alpha",
+          "rejected resource admission changed unrelated focus",
+        );
+        return;
+      }
+      const method =
+        operation === "worktree-files" ? "file.list" : "git.diff_summary";
+      await waitFor(
+        () =>
+          dispatches.some(
+            (call) => call.connectionId === "beta" && call.method === method,
+          ),
+        "worktree resource opens owning visual Inspector",
+      );
+      check(
+        dispatches
+          .filter(
+            (call) => call.method === "worktree.open" || call.method === method,
+          )
+          .every(
+            (call) => call.connectionId === "beta" && call.generation === 7,
+          ),
+        "lifecycle resource lost owning runtime",
+      );
+      check(
+        store.get().activeConnectionId === "alpha",
+        "lifecycle resource changed unrelated Spaces focus",
+      );
+      await frame();
+      check(closed, "admitted lifecycle resource did not close its dialog");
+    } finally {
+      dialog.unmount();
+      element.remove();
+    }
+    return;
+  }
   if (operation === "worktree") {
     const element = document.createElement("div");
     document.body.append(element);
@@ -1894,6 +2025,40 @@ async function run() {
         return creation.promise;
       if (method === "workspace.create" && operation === "global-creation")
         return creation.promise;
+      if (method === "worktree.list" && operation.startsWith("worktree-"))
+        return {
+          source: {
+            repo_key: "/synthetic/repo/.git",
+            repo_name: "Synthetic repo",
+            repo_root: "/synthetic/repo",
+            source_checkout_path: "/synthetic/repo",
+            source_workspace_id: "shared",
+          },
+          worktrees: [
+            {
+              path: "/synthetic/feature",
+              branch: "synthetic-feature",
+              is_bare: false,
+              is_detached: false,
+              is_prunable: false,
+              is_linked_worktree: true,
+            },
+          ],
+        };
+      if (
+        method === "worktree.open" &&
+        operation === "worktree-resource-retirement"
+      )
+        return lifecycleOpen.promise;
+      if (method === "worktree.open" && operation.startsWith("worktree-"))
+        return {
+          workspace: { workspace_id: "shared" },
+          root_pane: {
+            workspace_id: "shared",
+            pane_id: "shared",
+            tab_id: "shared",
+          },
+        };
       if (method === "git.pull" && operation === "context-menu-pull-failure")
         return gitPull.promise;
       if (method === "file.list") {
@@ -1972,6 +2137,11 @@ async function run() {
   const focusQualifiedTarget = store.focusQualifiedTarget;
   store.focusQualifiedTarget = async (target) => {
     calls.push(`focus:${target.connectionId}`);
+    if (
+      operation === "worktree-resource-rejection" &&
+      target.connectionId === "beta"
+    )
+      return false;
     return focusQualifiedTarget(target);
   };
   bridge.call = client.call;

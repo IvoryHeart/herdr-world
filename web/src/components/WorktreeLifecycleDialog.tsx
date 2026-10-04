@@ -382,20 +382,30 @@ export function WorktreeLifecycleDialog({
         "Herdr opened the checkout without returning a workspace ID.",
       );
     }
-    window.dispatchEvent(
-      new CustomEvent<WorkspaceInspectorRequest>(
-        WORKSPACE_INSPECTOR_REQUEST_EVENT,
-        {
-          detail: {
-            connectionId: connectionClient.connectionId,
-            generation: connectionClient.generation,
-            workspaceId: targetWorkspaceId,
-            view,
-          },
+    let acknowledge!: (accepted: boolean) => void;
+    const admission = new Promise<boolean>((resolve) => {
+      acknowledge = resolve;
+    });
+    const event = new CustomEvent<WorkspaceInspectorRequest>(
+      WORKSPACE_INSPECTOR_REQUEST_EVENT,
+      {
+        cancelable: true,
+        detail: {
+          connectionId: connectionClient.connectionId,
+          generation: connectionClient.generation,
+          runtimeGeneration:
+            connectionClient.serverRuntimeGeneration ?? undefined,
+          workspaceId: targetWorkspaceId,
+          view,
+          onAdmission: acknowledge,
         },
-      ),
+      },
     );
-    window.setTimeout(onClose, 0);
+    window.dispatchEvent(event);
+    if (!event.defaultPrevented || !(await admission)) {
+      throw new Error("The workspace resource could not be opened. Try again.");
+    }
+    onClose();
     return result;
   };
 
@@ -431,7 +441,7 @@ export function WorktreeLifecycleDialog({
             "Connection changed before the temporary workspace could be closed.",
           );
         }
-        await store.closeWorkspace(workspaceId);
+        await store.closeWorkspaceOrThrow(workspaceId);
       },
     });
   };

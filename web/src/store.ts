@@ -4643,6 +4643,8 @@ export function operationalStore(context: OperationalContext) {
       call("workspace.rename", { workspace_id: workspaceId, label }),
     closeWorkspace: (workspaceId: string) =>
       call("workspace.close", { workspace_id: workspaceId }),
+    closeWorkspaceOrThrow: (workspaceId: string) =>
+      request("workspace.close", { workspace_id: workspaceId }),
     moveWorkspace: (workspaceId: string, insertIndex: number) =>
       call("workspace.move", {
         workspace_id: workspaceId,

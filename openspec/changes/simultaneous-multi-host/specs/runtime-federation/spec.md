@@ -94,10 +94,13 @@ ready hosts. Each completed host SHALL be admitted independently; unfinished hos
 explicitly stale, non-actionable cached topology or no child topology. A ready host's control
 operations SHALL NOT wait for aggregate observation of unrelated hosts.
 
-Scheduling hints SHALL be validated as managed connection identities, SHALL NOT grant operation
+Scheduling hints SHALL be validated for syntax and bounded size, SHALL NOT grant operation
 authority and SHALL NOT change connection lifecycle or view filters. The existing single selected-host
 hint SHALL remain accepted as a compatibility shorthand for one priority connection. Repeated hints
-SHALL be deduplicated and malformed or unknown identities SHALL be rejected without default routing.
+SHALL be deduplicated. Malformed hints and malformed or unknown `selected_connection_id` values SHALL
+be rejected without default routing. Well-formed unknown identities in `priority_connection_ids`
+and `priorities[].connection_id` SHALL be ignored so removed profiles cannot block healthy aggregate
+observation.
 
 #### Scenario: Many inactive hosts are slow
 - **WHEN** open-context hosts respond promptly while other ready hosts stall
@@ -110,8 +113,13 @@ SHALL be deduplicated and malformed or unknown identities SHALL be rejected with
   hosts remain independently observed
 
 #### Scenario: Selected-host hint is invalid
-- **WHEN** a request supplies a malformed or unknown priority connection identity
+- **WHEN** a request supplies a malformed scheduling hint or a malformed or unknown
+  `selected_connection_id`
 - **THEN** World rejects the hint without selecting a default or routing an operation
+
+#### Scenario: Scheduling hints name a removed profile
+- **WHEN** a well-formed priority connection or entity hint names a profile no longer in the catalogue
+- **THEN** World ignores that hint and observes healthy managed hosts without fallback routing
 
 #### Scenario: Priority hosts keep invalidating
 - **WHEN** priority hosts continuously request refresh while unprioritized ready hosts await observation
