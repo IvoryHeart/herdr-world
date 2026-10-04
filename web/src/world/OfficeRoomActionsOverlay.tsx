@@ -1,10 +1,22 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { OFFICE_GEOMETRY, deskAnchor } from "./officeGeometry";
 import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
 import type { PublishedOfficeLayout } from "./officeLayout";
-import { officeSemanticTargets } from "./officeSemanticTargets";
+import {
+  officeSemanticTargets,
+  type OfficeSemanticTarget,
+} from "./officeSemanticTargets";
 import { yieldWorldTask } from "./worldObject";
+
+const OFFICE_CONTROL_BATCH_SIZE = 16;
 
 export function OfficeSemanticTargetsOverlay({
   layout,
@@ -29,69 +41,156 @@ export function OfficeSemanticTargetsOverlay({
     () => officeSemanticTargets(projection, layout),
     [projection, layout],
   );
+  // Admission follows qualified identities, not the allocation of a new snapshot.
+  // Labels, actions and geometry still come from the current projection.
+  const identity = useMemo(
+    () => JSON.stringify(targets.map(({ kind, key }) => [kind, key])),
+    [targets],
+  );
   const [progress, setProgress] = useState<{
-    targets: typeof targets;
+    identity: string;
     limit: number;
   } | null>(null);
-  const limit = progress?.targets === targets ? progress.limit : 64;
+  const limit =
+    progress?.identity === identity
+      ? progress.limit
+      : OFFICE_CONTROL_BATCH_SIZE;
+  const admitted = useRef(new Set<string>());
   const rendered = targets.filter(
-    (target, index) => index < limit || target.key === selectedKey,
+    (target, index) =>
+      index < limit ||
+      target.key === selectedKey ||
+      admitted.current.has(`${target.kind}:${target.key}`),
   );
+  useLayoutEffect(() => {
+    admitted.current = new Set(
+      rendered.map(({ kind, key }) => `${kind}:${key}`),
+    );
+  });
   const pending = targets.length - rendered.length;
+  const interactive =
+    layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
+  const overlay = useRef<HTMLDivElement>(null);
+  const handlers = useRef({
+    interactive,
+    onSelect,
+    onActivateAgent,
+    onActivateDesk,
+    onActivateRoom,
+  });
+  useLayoutEffect(() => {
+    // React 18 does not forward the boolean inert attribute. Update the native
+    // subtree flag once, instead of disabling every admitted button.
+    if (overlay.current) overlay.current.inert = !interactive;
+    handlers.current = {
+      interactive,
+      onSelect,
+      onActivateAgent,
+      onActivateDesk,
+      onActivateRoom,
+    };
+  }, [interactive, onSelect, onActivateAgent, onActivateDesk, onActivateRoom]);
+  const actions = useMemo(
+    () => ({
+      select: (key: string) => {
+        if (handlers.current.interactive) handlers.current.onSelect(key);
+      },
+      activate: (key: string, kind: OfficeSemanticTarget["kind"]) => {
+        if (!handlers.current.interactive) return;
+        if (kind === "agent") handlers.current.onActivateAgent(key);
+        if (kind === "desk" || kind === "pane")
+          handlers.current.onActivateDesk(key);
+        if (kind === "room") handlers.current.onActivateRoom(key);
+      },
+    }),
+    [],
+  );
   useEffect(() => {
     if (!pending) return;
     let current = true;
-    // Canvas frames may be delayed by GPU work or browser throttling. Admit
-    // bounded semantic controls through ordinary tasks independently of paint.
+    // Admit independently of animation frames, which may be browser-throttled.
     void yieldWorldTask().then(() => {
-      if (current) setProgress({ targets, limit: limit + 64 });
+      if (current)
+        setProgress({ identity, limit: limit + OFFICE_CONTROL_BATCH_SIZE });
     });
     return () => {
       current = false;
     };
-  }, [targets, limit, pending]);
-  const interactive =
-    layout.layoutRevision > 0 && layout.layoutRevision === renderedRevision;
+  }, [identity, limit, pending]);
   return (
     <div
       className="world-semantic-targets-overlay"
       aria-label="Office scene targets"
       aria-busy={pending > 0}
       aria-hidden={!interactive}
+      ref={overlay}
     >
       {pending ? (
         <span role="status">Rendering {pending} more observed targets</span>
       ) : null}
       {rendered.map((target) => (
-        <button
+        <OfficeSemanticButton
           key={`${target.kind}:${target.key}`}
-          className="world-semantic-target"
-          type="button"
-          data-kind={target.kind}
-          data-target-key={target.key}
-          aria-label={target.label}
-          aria-pressed={selectedKey === target.key}
-          disabled={!interactive}
-          title={target.label}
-          style={{
-            left: target.rect.x,
-            top: target.rect.y,
-            width: target.rect.width,
-            height: target.rect.height,
-          }}
-          onClick={() => onSelect(target.key)}
-          onDoubleClick={() => {
-            if (!target.canActivate) return;
-            if (target.kind === "agent") onActivateAgent(target.key);
-            if (target.kind === "desk" || target.kind === "pane")
-              onActivateDesk(target.key);
-            if (target.kind === "room") onActivateRoom(target.key);
-          }}
+          targetKey={target.key}
+          kind={target.kind}
+          label={target.label}
+          canActivate={target.canActivate}
+          x={target.rect.x}
+          y={target.rect.y}
+          width={target.rect.width}
+          height={target.rect.height}
+          selected={selectedKey === target.key}
+          actions={actions}
         />
       ))}
     </div>
   );
 }
+
+// Identity keys share one parent so topology insertions preserve DOM and focus.
+const OfficeSemanticButton = memo(function OfficeSemanticButton({
+  targetKey,
+  kind,
+  label,
+  canActivate,
+  x,
+  y,
+  width,
+  height,
+  selected,
+  actions,
+}: {
+  targetKey: string;
+  kind: OfficeSemanticTarget["kind"];
+  label: string;
+  canActivate: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  selected: boolean;
+  actions: {
+    select(key: string): void;
+    activate(key: string, kind: OfficeSemanticTarget["kind"]): void;
+  };
+}) {
+  return (
+    <button
+      className="world-semantic-target"
+      type="button"
+      data-kind={kind}
+      data-target-key={targetKey}
+      aria-label={label}
+      aria-pressed={selected}
+      title={label}
+      style={{ left: x, top: y, width, height }}
+      onClick={() => actions.select(targetKey)}
+      onDoubleClick={() => {
+        if (canActivate) actions.activate(targetKey, kind);
+      }}
+    />
+  );
+});
 
 export function OfficeRoomActionsOverlay({
   layout,

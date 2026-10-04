@@ -28,6 +28,7 @@ import "./world.css";
 const view = new URL(location.href).searchParams.get("view")!;
 const traceEnabled = new URL(location.href).searchParams.has("trace");
 const failures: string[] = [];
+window.__HERDR_WORLD_RENDERER_DEBUG__ = "counters";
 document.addEventListener("securitypolicyviolation", (event) => {
   if (event.violatedDirective.startsWith("worker-src"))
     failures.push("production policy blocked snapshot decoder");
@@ -102,6 +103,35 @@ JSON.parse = function (
 let phase: string | null = null,
   paints = 0,
   notices = 0;
+const frameStalls: {
+  phase: string | null;
+  startAt: number;
+  durationMs: number;
+  blockingMs: number;
+  source: string;
+}[] = [];
+if (PerformanceObserver.supportedEntryTypes.includes("long-animation-frame")) {
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      const frame = entry as PerformanceEntry & {
+        blockingDuration?: number;
+        scripts?: { duration: number; sourceFunctionName?: string }[];
+      };
+      const script = [...(frame.scripts ?? [])].sort(
+        (a, b) => b.duration - a.duration,
+      )[0];
+      frameStalls.push({
+        phase,
+        startAt: performance.timeOrigin + frame.startTime,
+        durationMs: frame.duration,
+        blockingMs: frame.blockingDuration ?? 0,
+        source: script?.sourceFunctionName ?? "render/layout",
+      });
+    }
+    frameStalls.sort((a, b) => b.durationMs - a.durationMs);
+    frameStalls.length = Math.min(5, frameStalls.length);
+  }).observe({ type: "long-animation-frame" });
+}
 let receivedFrames = 0,
   presentedFrames = 0;
 bridge.onTerminal((frame) => {
@@ -682,6 +712,26 @@ async function run() {
       // a bounded graph simulation window, rather than stopping at first DOM.
       await new Promise((resolve) => setTimeout(resolve, 1000));
       await frames(4);
+      if (view === "office") {
+        const renderer = window.__HERDR_WORLD_RENDERER__;
+        if (new URL(location.href).searchParams.get("entry") === "animated") {
+          check(
+            (renderer?.frames ?? 0) > 0 || renderer?.interactionPaused === true,
+            "Working Office never animated during native typing",
+          );
+          check(
+            (renderer?.animation.characters ?? 0) > 0,
+            "Working Office lost its animated characters",
+          );
+        }
+        phases["office-frames-" + stage] = renderer?.frames ?? 0;
+        phases["office-animated-nodes-" + stage] = renderer
+          ? Object.values(renderer.animation).reduce(
+              (sum, count) => sum + count,
+              0,
+            )
+          : 0;
+      }
       check(anchored, view + " did not publish its selected rendered anchor");
       phases[stage] = performance.now() - began;
       const { count } = await (
@@ -693,6 +743,39 @@ async function run() {
         "Missing admitted input acknowledgement",
       );
       phase = null;
+      if (
+        (view === "office" &&
+          new URL(location.href).searchParams.get("entry") === "animated") ||
+        (view === "graph" && scene.querySelector("canvas[data-graph-canvas]"))
+      ) {
+        const renderedFrames = () =>
+          (view === "office"
+            ? window.__HERDR_WORLD_RENDERER__
+            : window.__HERDR_GRAPH_RENDERER__
+          )?.frames ?? 0;
+        const beforeResume = renderedFrames();
+        // Observe an actual resumed frame: a fixed number of browser rAFs can
+        // precede Pixi's timer/rAF pair on a busy renderer. This wait starts only
+        // after all timed input acknowledgements and does not exclude any keys.
+        await new Promise<void>((resolve) => {
+          let frame = 0;
+          const deadline = setTimeout(() => {
+            cancelAnimationFrame(frame);
+            resolve();
+          }, 1000);
+          const observe = () => {
+            if (renderedFrames() > beforeResume) {
+              clearTimeout(deadline);
+              resolve();
+            } else frame = requestAnimationFrame(observe);
+          };
+          frame = requestAnimationFrame(observe);
+        });
+        check(
+          renderedFrames() > beforeResume,
+          `${view} animation did not resume after terminal input`,
+        );
+      }
     }
     root.unmount();
     runtime.stop();
@@ -710,6 +793,7 @@ async function run() {
       cloneAdmissions,
       bridgeReplies,
       phases,
+      frameStalls,
       paints,
       notices,
       receivedFrames,

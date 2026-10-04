@@ -26,7 +26,7 @@ import {
   OfficeSemanticTargetsOverlay,
 } from "./OfficeRoomActionsOverlay";
 import {
-  projectWorldOffice,
+  createOfficeProjector,
   type OfficeAgent,
   type HerdrOfficeProjection,
 } from "./herdrOfficeProjection";
@@ -60,6 +60,7 @@ import {
   writeCompletionSeen,
 } from "./completionSeenState";
 import { preferredOfficeConnectorAnchor } from "./worldConnectorGeometry";
+import { officeCreationInputsEqual } from "./officeCreationInputs";
 
 type RoomDialog =
   | {
@@ -104,12 +105,17 @@ export default function PixelOfficeView({
     anchors: Record<string, OfficeCanvasAnchor> | null,
   ): void;
 }) {
+  const projectOffice = useMemo(createOfficeProjector, []);
   const office = useMemo(
-    (): HerdrOfficeProjection =>
-      projectWorldOffice(world, Date.now(), selectedId),
-    [world, selectedId],
+    (): HerdrOfficeProjection => projectOffice(world, Date.now(), selectedId),
+    [world, selectedId, projectOffice],
   );
-  const creationSnapshot = useStoreSelector((snapshot) => snapshot);
+  // Terminal frames and unrelated store updates must not reconcile the scene.
+  // These are exactly the inputs read by endpointCreationReason below.
+  const creationSnapshot = useStoreSelector(
+    (snapshot) => snapshot,
+    (previous, next) => officeCreationInputsEqual(previous, next, world.hosts),
+  );
   const [preferences, setPreferences] = useState(() =>
     readOfficePreferences(worldLocalStorage),
   );

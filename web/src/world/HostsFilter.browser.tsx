@@ -683,7 +683,7 @@ async function operationalScenario(unmount: () => void) {
           !!inspector.getBoundingClientRect().width,
       );
     await waitFor(
-      () => !!room() && !room()!.disabled,
+      () => !!room() && !room()!.disabled && !room()!.closest("[inert]"),
       "The workspace did not become interactive",
     );
     room()!.click();
@@ -702,7 +702,7 @@ async function operationalScenario(unmount: () => void) {
     );
     await frame();
     await waitFor(
-      () => !!room() && !room()!.disabled,
+      () => !!room() && !room()!.disabled && !room()!.closest("[inert]"),
       "The workspace controls did not finish rendering after terminal selection",
     );
     room()!.click();

@@ -1,9 +1,14 @@
+window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { StrictMode, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { worldLocalStorage } from "../browserStorage";
 import type { Pane, Tab, Workspace } from "../types";
 import SpatialGraphView from "./SpatialGraphView";
 import { LatestFrameValue } from "./graph/GraphCanvas";
+import {
+  registerWorldFrames,
+  worldMotionPreference,
+} from "./worldFrameScheduler";
 import { GRAPH_PREFERENCES_KEY } from "./graph/graphPreferences";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject, worldObjectForConnection } from "./worldObject";
@@ -532,6 +537,61 @@ async function run() {
         graphPrefs().cameraMode === "manual",
         "Arrange changed the Graph camera mode",
       );
+      check(
+        window.__HERDR_GRAPH_RENDERER__!.physicsWorker,
+        "Graph physics fell back to the browser main thread",
+      );
+      for (const [dx, dy] of [
+        [7, 3],
+        [-5, -9],
+        [4.5, 0],
+      ]) {
+        const frameBeforePan = window.__HERDR_GRAPH_RENDERER__!.frames;
+        await pointer(canvas, "pointerdown", rect.right - 12, rect.bottom - 12);
+        await pointer(
+          canvas,
+          "pointermove",
+          rect.right - 12 + dx!,
+          rect.bottom - 12 + dy!,
+        );
+        await pointer(
+          canvas,
+          "pointerup",
+          rect.right - 12 + dx!,
+          rect.bottom - 12 + dy!,
+        );
+        await waitFor(
+          () => window.__HERDR_GRAPH_RENDERER__!.frames > frameBeforePan,
+          "Settled Graph pan did not paint",
+        );
+        const context = canvas.getContext("2d")!;
+        const retainedPixels = context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        ).data;
+        const frameBeforeRedraw = window.__HERDR_GRAPH_RENDERER__!.frames;
+        window.__HERDR_GRAPH_RENDERER__!.redraw!();
+        await waitFor(
+          () => window.__HERDR_GRAPH_RENDERER__!.frames > frameBeforeRedraw,
+          "Full Graph reference redraw did not paint",
+        );
+        const referencePixels = context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        ).data;
+        // Integer translations can differ by two channel levels at antialiased
+        // edges because Canvas recomputes floating-point path coverage.
+        check(
+          retainedPixels.every(
+            (value, index) => Math.abs(value - referencePixels[index]!) <= 2,
+          ),
+          "Reusing a settled Graph frame changed its appearance",
+        );
+      }
       fitButton.click();
       await waitFor(
         () => graphPrefs().cameraMode === "fit",
@@ -685,6 +745,60 @@ async function run() {
             restored.pinned,
           "Graph remount changed an arranged position",
         );
+      }
+      // Keep the shared scheduler alive while a fresh reduced-motion Graph
+      // mounts during typing. Its deferred layout must resume after quiet.
+      const keeper = registerWorldFrames(host, () => {});
+      const motion = worldMotionPreference();
+      const priorMatches = motion.matches;
+      Object.defineProperty(motion, "matches", {
+        configurable: true,
+        value: true,
+      });
+      motion.dispatchEvent(
+        new MediaQueryListEvent("change", { matches: true }),
+      );
+      const terminalInput = document.createElement("textarea");
+      terminalInput.className = "xterm";
+      document.body.append(terminalInput);
+      const type = () =>
+        terminalInput.dispatchEvent(
+          new Event("beforeinput", { bubbles: true }),
+        );
+      let typing: ReturnType<typeof setInterval> | undefined;
+      try {
+        root.render(null);
+        await waitFor(
+          () => window.__HERDR_GRAPH_RENDERER__?.activeRenderers === 0,
+          "Graph did not retire before reduced-motion typing check",
+        );
+        type();
+        typing = setInterval(type, 10);
+        const priorFrames = window.__HERDR_GRAPH_RENDERER__!.frames;
+        root.render(<Fixture />);
+        await waitFor(
+          () => window.__HERDR_GRAPH_RENDERER__!.frames > priorFrames,
+          "Reduced-motion Graph did not paint state during typing",
+        );
+        const typingFrames = window.__HERDR_GRAPH_RENDERER__!.frames;
+        clearInterval(typing);
+        await waitFor(
+          () =>
+            window.__HERDR_GRAPH_RENDERER__!.frames > typingFrames &&
+            window.__HERDR_GRAPH_RENDERER__!.activeAnimationFrames === 0,
+          "Reduced-motion Graph did not resume and settle after terminal quiet",
+        );
+      } finally {
+        clearInterval(typing);
+        terminalInput.remove();
+        Object.defineProperty(motion, "matches", {
+          configurable: true,
+          value: priorMatches,
+        });
+        motion.dispatchEvent(
+          new MediaQueryListEvent("change", { matches: priorMatches }),
+        );
+        keeper.dispose();
       }
     }
   } finally {

@@ -4,11 +4,110 @@ import {
   OFFICE_PRESENTATION_BOUNDS,
   projectWorldOffice,
   prepareWorldOffice,
+  createOfficeProjector,
 } from "./herdrOfficeProjection";
 import type { WorldRuntimeConnection } from "./runtimeStore";
 import { buildWorldObject } from "./worldObject";
+import { officePresentationKey } from "./officeSelection";
 
 describe("Pixel Office projection", () => {
+  test("prepared presentation lookup matches complete roster resolution and canonical-key priority", async () => {
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        [tab("shared", 1)],
+        [
+          pane("shared", "working", "Builder", 0),
+          pane("shared", "idle", undefined, 1),
+        ],
+      ),
+    ]);
+    const reference = projectWorldOffice(world, 1);
+    const keys = [
+      ...world.nodes.map(({ id }) => id),
+      ...reference.paneRoster.map(({ device }) => device.key),
+      ...reference.deskRoster.map(({ desk }) => desk.key),
+      "unknown",
+      null,
+    ];
+    const expected = keys.map((key) => officePresentationKey(reference, key));
+    await prepareWorldOffice(world);
+    const prepared = projectWorldOffice(world, 1);
+    expect(keys.map((key) => officePresentationKey(prepared, key))).toEqual(
+      expected,
+    );
+    // Prove the hot path cannot regress to scanning the complete pane roster.
+    prepared.paneRoster = new Proxy(prepared.paneRoster, {
+      get() {
+        throw Error("unexpected roster scan");
+      },
+    });
+    expect(keys.map((key) => officePresentationKey(prepared, key))).toEqual(
+      expected,
+    );
+  });
+  test("selection overlays reuse topology without changing admission or roster order", async () => {
+    const tabs = Array.from({ length: 3 }, (_, index) =>
+      tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.flatMap((entry) =>
+          Array.from({ length: 6 }, (_, index) =>
+            pane(
+              entry.tab_id,
+              index < 4 ? "working" : index === 4 ? "blocked" : "idle",
+              `Synthetic ${index}`,
+              index,
+            ),
+          ),
+        ),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    const project = createOfficeProjector();
+    const initial = project(world, 1, null);
+    const admitted = initial.rooms[0]!.roomAgents[0]!.key;
+    const selected = project(world, 2, admitted);
+    expect(selected.rooms).toBe(initial.rooms);
+    expect(selected).toEqual(projectWorldOffice(world, 2, admitted));
+    for (const node of world.nodes) {
+      expect(project(world, 3, node.id)).toEqual(
+        projectWorldOffice(world, 3, node.id),
+      );
+      expect(project(world, 4, null)).toEqual(
+        projectWorldOffice(world, 4, null),
+      );
+    }
+  });
+  test("selection reuse restores bounded desks and promotes admitted agents' omitted desks", async () => {
+    const tabs = Array.from(
+      { length: OFFICE_PRESENTATION_BOUNDS.desksPerRoom + 2 },
+      (_, index) => tab(`tab-${index}`, index + 1),
+    );
+    const world = buildWorldObject([
+      connection(
+        "alpha",
+        tabs,
+        tabs.map((entry, index) =>
+          pane(entry.tab_id, "working", `Synthetic ${index}`, index),
+        ),
+      ),
+    ]);
+    await prepareWorldOffice(world);
+    const project = createOfficeProjector();
+    project(world, 1, null);
+    for (const node of world.nodes) {
+      expect(project(world, 2, node.id)).toEqual(
+        projectWorldOffice(world, 2, node.id),
+      );
+      expect(project(world, 3, null)).toEqual(
+        projectWorldOffice(world, 3, null),
+      );
+    }
+  });
   test("selecting an admitted terminal preserves desk, device and standing-agent positions", () => {
     const tabs = Array.from({ length: 3 }, (_, index) =>
       tab(`tab-${index}`, index + 1),

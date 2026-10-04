@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   graphViewportBounds,
+  graphGridPhase,
   graphDrawingIntersects,
   hitGraphNode,
 } from "./GraphCanvas";
@@ -92,4 +93,24 @@ describe("Graph canvas hit testing", () => {
       ),
     ).toBe(second);
   });
+});
+
+test("grid cache phase repeats across positive and negative pans without hiding real motion", () => {
+  const camera = { x: 0.1, y: -0.3, zoom: 0.7 };
+  const original = graphGridPhase(801, 603, camera);
+  for (const periods of [-100, -1, 1, 100]) {
+    expect(
+      graphGridPhase(801, 603, {
+        ...camera,
+        x: camera.x + periods * 48 * camera.zoom,
+        y: camera.y - periods * 48 * camera.zoom,
+      }),
+    ).toEqual(original);
+  }
+  expect(
+    graphGridPhase(801, 603, { ...camera, x: camera.x + 0.25 }),
+  ).not.toEqual(original);
+  expect(graphGridPhase(801, 603, { ...camera, zoom: 0.8 })).not.toEqual(
+    original,
+  );
 });

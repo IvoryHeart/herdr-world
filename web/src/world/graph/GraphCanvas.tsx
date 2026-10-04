@@ -1,3 +1,15 @@
+import { graphPanStrips } from "./graphPanStrips";
+import {
+  registerWorldFrames,
+  terminalInputIsQuiet,
+  subscribeTerminalQuiet,
+  type WorldFrames,
+} from "../worldFrameScheduler";
+import {
+  worldRendererDebugEnabled,
+  worldRendererCountersEnabled,
+} from "../worldRendererDebug";
+import { GraphSimulationRunner } from "./graphSimulationRunner";
 import {
   forwardRef,
   useEffect,
@@ -12,7 +24,6 @@ import {
   graphNodeRadius,
   reconcileGraphLayout,
   savedGraphPositions,
-  stepGraphLayout,
 } from "./graphLayout";
 import type { GraphLayoutNode, GraphLayoutState } from "./graphLayout";
 import type {
@@ -74,6 +85,8 @@ export function graphDrawingIntersects(
 }
 
 type GraphRendererDiagnostics = {
+  physicsWorker: boolean;
+  redraw?: () => void;
   mounts: number;
   destroys: number;
   activeRenderers: number;
@@ -266,8 +279,23 @@ class GraphRenderer {
   #width = 1;
   #height = 1;
   #alpha = 0;
-  #frameDelay: number | null = null;
-  #frame: number | null = null;
+  readonly #frames: WorldFrames;
+  readonly #simulation: GraphSimulationRunner;
+  readonly #unsubscribeQuiet: () => void;
+  readonly #debug = worldRendererDebugEnabled();
+  #projection: WorldGraphProjection | null = null;
+  #canvasRect: DOMRect | null = null;
+  #background: HTMLCanvasElement | null = null;
+  #backgroundKey = "";
+  #settledFrame: HTMLCanvasElement | null = null;
+  #settledView: {
+    x: number;
+    y: number;
+    zoom: number;
+    rotation: number;
+    revision: number;
+  } | null = null;
+  #paintRevision = 0;
   #pointer: PointerInteraction | null = null;
   #disposed = false;
   #hidden = document.visibilityState === "hidden";
@@ -297,6 +325,27 @@ class GraphRenderer {
     this.#diagnostics.canvases += 1;
     this.#diagnostics.ready = true;
     this.#diagnostics.paused = this.#hidden;
+    this.#frames = registerWorldFrames(host, this.#tick, (paused) => {
+      this.#diagnostics.paused = paused || this.#hidden;
+      if (paused) this.#diagnostics.activeAnimationFrames = 0;
+    });
+    this.#simulation = new GraphSimulationRunner((alpha) => {
+      if (this.#disposed) return;
+      this.#alpha = alpha <= 0.015 ? 0 : alpha;
+      this.#diagnostics.physicsWorker = this.#simulation.offThread;
+      this.#settledView = null;
+      this.#requestFrame(this.#frames.reducedMotion ? "state" : "motion");
+    });
+    this.#diagnostics.physicsWorker = this.#simulation.offThread;
+    this.#unsubscribeQuiet = subscribeTerminalQuiet((quiet) => {
+      if (quiet && this.#alpha > 0.015 && this.#frames.reducedMotion)
+        this.#requestFrame();
+    });
+    if (this.#debug)
+      this.#diagnostics.redraw = () => {
+        this.#settledView = null;
+        this.#requestFrame();
+      };
     this.#resizeValues = new LatestFrameValue(({ width, height }) => {
       if (this.#disposed) return;
       this.#diagnostics.resizeFrames += 1;
@@ -323,7 +372,9 @@ class GraphRenderer {
     canvas.addEventListener("wheel", this.#onWheel, { passive: false });
     canvas.addEventListener("dblclick", this.#onDoubleClick);
     document.addEventListener("visibilitychange", this.#onVisibilityChange);
-    this.#diagnostics.activeListeners += 7;
+    window.addEventListener("scroll", this.#invalidateRect, true);
+    window.addEventListener("resize", this.#invalidateRect);
+    this.#diagnostics.activeListeners += 9;
     const rect = host.getBoundingClientRect();
     this.#resize(Math.max(1, rect.width), Math.max(1, rect.height));
   }
@@ -357,33 +408,40 @@ class GraphRenderer {
     selectedId: string | null,
     matchedIds: ReadonlySet<string> | null,
   ) {
-    this.#projectionNodeIds = new Set(projection.nodes.map(({ id }) => id));
-    this.#nodeParentIds = new Map(
-      projection.nodes.flatMap((node) =>
-        node.parentId ? ([[node.id, node.parentId]] as const) : [],
-      ),
-    );
-    this.#savedPositions = retainedGraphPositions(
-      this.#savedPositions,
-      null,
-      this.#projectionNodeIds,
-    );
-    const reconciled = reconcileGraphLayout(
-      this.#layout,
-      projection,
-      collapsedIds,
-      this.#savedPositions,
-    );
-    this.#layout = reconciled.state;
-    this.#drawOrder = [...this.#layout.nodes.values()].sort(
-      (left, right) => nodeRank(left.kind) - nodeRank(right.kind),
-    );
+    this.#paintRevision++;
+    const topologyInputsChanged =
+      this.#projection !== projection || this.#collapsedIds !== collapsedIds;
+    if (topologyInputsChanged) {
+      this.#projectionNodeIds = new Set(projection.nodes.map(({ id }) => id));
+      this.#nodeParentIds = new Map(
+        projection.nodes.flatMap((node) =>
+          node.parentId ? ([[node.id, node.parentId]] as const) : [],
+        ),
+      );
+      this.#savedPositions = retainedGraphPositions(
+        this.#savedPositions,
+        null,
+        this.#projectionNodeIds,
+      );
+      const reconciled = reconcileGraphLayout(
+        this.#layout,
+        projection,
+        collapsedIds,
+        this.#savedPositions,
+      );
+      this.#layout = reconciled.state;
+      this.#drawOrder = [...this.#layout.nodes.values()].sort(
+        (left, right) => nodeRank(left.kind) - nodeRank(right.kind),
+      );
+      this.#simulation.reset(this.#layout);
+      if (reconciled.topologyChanged) this.#alpha = 1;
+      this.#projection = projection;
+    }
     this.#collapsedIds = collapsedIds;
     this.#selectedId = selectedId;
     this.#matchedIds = matchedIds;
-    this.#diagnostics.nodes = this.#layout.nodes.size;
-    this.#diagnostics.links = this.#layout.edges.length;
-    if (reconciled.topologyChanged) this.#alpha = 1;
+    this.#diagnostics.nodes = this.#layout!.nodes.size;
+    this.#diagnostics.links = this.#layout!.edges.length;
     this.#anchorSignature = "";
     this.#requestFrame();
   }
@@ -422,7 +480,9 @@ class GraphRenderer {
 
   arrange() {
     if (!this.#layout) return;
+    this.#settledView = null;
     arrangeGraphLayout(this.#layout);
+    this.#simulation.reset(this.#layout);
     const bounds = this.#rotatedBounds();
     this.#camera = this.#centeredCamera(
       bounds,
@@ -490,6 +550,9 @@ class GraphRenderer {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#cancelFrame();
+    this.#frames.dispose();
+    this.#unsubscribeQuiet();
+    this.#simulation.dispose();
     this.#resizeValues.cancel();
     this.#resizeObserver?.disconnect();
     this.canvas.removeEventListener("pointerdown", this.#onPointerDown);
@@ -502,6 +565,11 @@ class GraphRenderer {
     this.#pointer = null;
     this.#layout?.nodes.clear();
     this.#layout = null;
+    if (this.#background) this.#background.width = this.#background.height = 0;
+    if (this.#settledFrame)
+      this.#settledFrame.width = this.#settledFrame.height = 0;
+    this.#background = this.#settledFrame = null;
+    this.#settledView = null;
     this.canvas.width = 0;
     this.canvas.height = 0;
     this.#onAnchorsChange?.(null);
@@ -509,19 +577,24 @@ class GraphRenderer {
     this.#diagnostics.destroys += 1;
     this.#diagnostics.activeRenderers -= 1;
     this.#diagnostics.canvases -= 1;
-    this.#diagnostics.activeListeners -= 7;
+    window.removeEventListener("scroll", this.#invalidateRect, true);
+    window.removeEventListener("resize", this.#invalidateRect);
+    this.#diagnostics.activeListeners -= 9;
     if (this.#resizeObserver) this.#diagnostics.activeObservers -= 1;
     this.#diagnostics.ready = this.#diagnostics.activeRenderers > 0;
     this.#diagnostics.paused = false;
     this.#diagnostics.nodes = 0;
     this.#diagnostics.links = 0;
     this.#diagnostics.publishedNodes = {};
+    this.#diagnostics.redraw = undefined;
   }
 
   #resize(width: number, height: number) {
     const nextWidth = Math.max(1, Math.round(width));
     const nextHeight = Math.max(1, Math.round(height));
     if (nextWidth === this.#width && nextHeight === this.#height) return;
+    this.#canvasRect = null;
+    this.#settledView = null;
     this.#width = nextWidth;
     this.#height = nextHeight;
     const density = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
@@ -533,52 +606,43 @@ class GraphRenderer {
     this.#requestFrame();
   }
 
-  #requestFrame() {
-    if (
-      this.#disposed ||
-      this.#hidden ||
-      this.#frame !== null ||
-      this.#frameDelay !== null
-    )
-      return;
-    // A dense canvas must leave ordinary socket tasks a turn between paints.
-    this.#frameDelay = window.setTimeout(() => {
-      this.#frameDelay = null;
-      if (this.#disposed || this.#hidden) return;
-      this.#frame = window.requestAnimationFrame(this.#tick);
-      this.#diagnostics.activeAnimationFrames += 1;
-    }, 16);
+  #requestFrame(kind: "state" | "motion" = "state") {
+    if (this.#disposed || this.#hidden) return;
+    this.#diagnostics.activeAnimationFrames =
+      kind === "motion" && !this.#frames.motionAllowed ? 0 : 1;
+    this.#frames.request(kind);
   }
 
   #cancelFrame() {
-    if (this.#frameDelay !== null) {
-      window.clearTimeout(this.#frameDelay);
-      this.#frameDelay = null;
-    }
-    if (this.#frame === null) return;
-    window.cancelAnimationFrame(this.#frame);
-    this.#frame = null;
-    this.#diagnostics.activeAnimationFrames -= 1;
+    this.#frames.cancel();
+    this.#diagnostics.activeAnimationFrames = 0;
   }
 
   #tick = () => {
-    this.#frame = null;
-    this.#diagnostics.activeAnimationFrames -= 1;
+    this.#diagnostics.activeAnimationFrames = 0;
     if (this.#disposed || this.#hidden) return;
-    if (this.#layout && this.#alpha > 0.015) {
-      const energy = stepGraphLayout(this.#layout, this.#alpha);
-      this.#alpha *= energy < 0.08 ? 0.78 : 0.93;
-    } else {
-      this.#alpha = 0;
-    }
-    if (this.#alpha <= 0.015) {
+    if (this.#layout && this.#alpha > 0.015 && terminalInputIsQuiet()) {
+      this.#diagnostics.activeAnimationFrames = 1;
+      this.#simulation.step(this.#alpha, this.#frames.reducedMotion);
+    } else if (this.#alpha <= 0.015) {
       this.#alpha = 0;
       if (this.#fitWhenSettled && this.#layout?.nodes.size) this.fit();
     }
     this.#draw();
     this.#diagnostics.frames += 1;
-    if (this.#alpha > 0.015) this.#requestFrame();
+    // Keep a pending request while typing; the shared quiet signal resumes it.
+    if (this.#alpha > 0.015 && !terminalInputIsQuiet())
+      this.#requestFrame("motion");
   };
+
+  #invalidateRect = () => {
+    this.#canvasRect = null;
+    this.#requestFrame();
+  };
+
+  #rect() {
+    return (this.#canvasRect ??= this.canvas.getBoundingClientRect());
+  }
 
   #draw() {
     const context = this.#context;
@@ -586,10 +650,65 @@ class GraphRenderer {
     if (!context || !layout) return;
     const density = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
     context.setTransform(density, 0, 0, density, 0, 0);
+    const previous = this.#settledView;
+    const dx = previous ? this.#camera.x - previous.x : 0;
+    const dy = previous ? this.#camera.y - previous.y : 0;
+    const strips =
+      this.#alpha === 0 &&
+      previous &&
+      previous.revision === this.#paintRevision &&
+      previous.zoom === this.#camera.zoom &&
+      previous.rotation === this.#rotation
+        ? graphPanStrips(this.#width, this.#height, dx, dy, density)
+        : null;
     context.clearRect(0, 0, this.#width, this.#height);
-    context.fillStyle = "#0b0e13";
-    context.fillRect(0, 0, this.#width, this.#height);
-    drawGrid(context, this.#width, this.#height, this.#camera);
+    if (strips && this.#settledFrame)
+      context.drawImage(
+        this.#settledFrame,
+        dx,
+        dy,
+        this.canvas.width / density,
+        this.canvas.height / density,
+      );
+    context.save();
+    if (strips) {
+      context.beginPath();
+      for (const strip of strips)
+        context.rect(strip.x, strip.y, strip.width, strip.height);
+      context.clip();
+    }
+    if (strips) {
+      // The destination clip limits grid work to the newly exposed strips.
+      // Rebuilding a full offscreen grid on each pan defeats strip reuse.
+      context.fillStyle = "#0b0e13";
+      context.fillRect(0, 0, this.#width, this.#height);
+      drawGrid(context, this.#width, this.#height, this.#camera);
+    } else {
+      const { spacing, offsetX, offsetY } = graphGridPhase(
+        this.#width,
+        this.#height,
+        this.#camera,
+      );
+      const backgroundKey = `${this.#width}:${this.#height}:${density}:${spacing}:${offsetX}:${offsetY}`;
+      if (backgroundKey !== this.#backgroundKey) {
+        this.#background ??= document.createElement("canvas");
+        this.#background.width = this.canvas.width;
+        this.#background.height = this.canvas.height;
+        const background = this.#background.getContext("2d")!;
+        background.setTransform(density, 0, 0, density, 0, 0);
+        background.fillStyle = "#0b0e13";
+        background.fillRect(0, 0, this.#width, this.#height);
+        drawGrid(background, this.#width, this.#height, this.#camera);
+        this.#backgroundKey = backgroundKey;
+      }
+      context.drawImage(
+        this.#background!,
+        0,
+        0,
+        this.canvas.width / density,
+        this.canvas.height / density,
+      );
+    }
     context.save();
     context.translate(
       this.#width / 2 + this.#camera.x,
@@ -597,12 +716,20 @@ class GraphRenderer {
     );
     context.scale(this.#camera.zoom, this.#camera.zoom);
     const center = this.#graphCenter();
-    const viewport = graphViewportBounds(
-      this.#width,
-      this.#height,
-      this.#camera,
-      center,
-      this.#rotation,
+    const viewports = (
+      strips ?? [{ x: 0, y: 0, width: this.#width, height: this.#height }]
+    ).map((rect) =>
+      graphViewportBounds(
+        rect.width,
+        rect.height,
+        {
+          ...this.#camera,
+          x: this.#camera.x + (this.#width - rect.width) / 2 - rect.x,
+          y: this.#camera.y + (this.#height - rect.height) / 2 - rect.y,
+        },
+        center,
+        this.#rotation,
+      ),
     );
     context.translate(center.x, center.y);
     context.rotate((this.#rotation * Math.PI) / 2);
@@ -612,7 +739,14 @@ class GraphRenderer {
       const target = layout.nodes.get(edge.targetId);
       if (!source || !target) continue;
       if (
-        !graphDrawingIntersects(viewport, source, target, 2 / this.#camera.zoom)
+        !viewports.some((viewport) =>
+          graphDrawingIntersects(
+            viewport,
+            source,
+            target,
+            2 / this.#camera.zoom,
+          ),
+        )
       )
         continue;
       context.beginPath();
@@ -624,15 +758,29 @@ class GraphRenderer {
     }
     for (const node of this.#drawOrder)
       if (
-        graphDrawingIntersects(
-          viewport,
-          node,
-          node,
-          Math.max(100, 60 / this.#camera.zoom),
+        viewports.some((viewport) =>
+          graphDrawingIntersects(
+            viewport,
+            node,
+            node,
+            Math.max(100, 60 / this.#camera.zoom),
+          ),
         )
       )
         this.#drawNode(context, node);
     context.restore();
+    context.restore();
+    if (this.#alpha === 0) {
+      this.#settledFrame ??= document.createElement("canvas");
+      this.#settledFrame.width = this.canvas.width;
+      this.#settledFrame.height = this.canvas.height;
+      this.#settledFrame.getContext("2d")!.drawImage(this.canvas, 0, 0);
+      this.#settledView = {
+        ...this.#camera,
+        rotation: this.#rotation,
+        revision: this.#paintRevision,
+      };
+    }
     this.#publishNodes(layout, center);
     this.#emitAnchors(layout, center);
   }
@@ -744,7 +892,7 @@ class GraphRenderer {
   }
 
   #point(event: { clientX: number; clientY: number }) {
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.#rect();
     const scaleX = rect.width / this.#width;
     const scaleY = rect.height / this.#height;
     const rotated = {
@@ -844,7 +992,7 @@ class GraphRenderer {
   #onPointerMove = (event: PointerEvent) => {
     const pointer = this.#pointer;
     if (!pointer || pointer.pointerId !== event.pointerId) return;
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.#rect();
     const dx = (event.clientX - pointer.lastX) / (rect.width / this.#width);
     const dy = (event.clientY - pointer.lastY) / (rect.height / this.#height);
     pointer.lastX = event.clientX;
@@ -871,9 +1019,8 @@ class GraphRenderer {
           { x: 0, y: 0 },
           -this.#rotation,
         );
-        node.x += delta.x;
-        node.y += delta.y;
-        node.pinned = true;
+        this.#settledView = null;
+        this.#simulation.pin(node.id, node.x + delta.x, node.y + delta.y);
         this.#alpha = Math.max(this.#alpha, 0.24);
       }
     }
@@ -912,7 +1059,7 @@ class GraphRenderer {
 
   #onWheel = (event: WheelEvent) => {
     event.preventDefault();
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.#rect();
     this.#zoomAt(
       this.#camera.zoom * Math.exp(-event.deltaY * 0.0015),
       (event.clientX - rect.left) / (rect.width / this.#width) -
@@ -954,6 +1101,7 @@ class GraphRenderer {
   };
 
   #publishNodes(layout: GraphLayoutState, center: { x: number; y: number }) {
+    if (!this.#debug) return;
     const published: GraphRendererDiagnostics["publishedNodes"] = {};
     for (const node of layout.nodes.values()) {
       const rotated = this.#rotatedPoint(node.x, node.y, center);
@@ -972,7 +1120,7 @@ class GraphRenderer {
 
   #emitAnchors(layout: GraphLayoutState, center: { x: number; y: number }) {
     if (!this.#onAnchorsChange) return;
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.#rect();
     const scaleX = rect.width / this.#width;
     const scaleY = rect.height / this.#height;
     const anchors: Record<string, OfficeCanvasAnchor> = {};
@@ -1078,26 +1226,29 @@ export function hitGraphNode(
 }
 
 function graphRendererDiagnostics() {
-  if (!window.__HERDR_GRAPH_RENDERER__) {
-    window.__HERDR_GRAPH_RENDERER__ = {
-      mounts: 0,
-      destroys: 0,
-      activeRenderers: 0,
-      activeAnimationFrames: 0,
-      activeObservers: 0,
-      activeListeners: 0,
-      canvases: 0,
-      frames: 0,
-      resizeObservations: 0,
-      resizeFrames: 0,
-      ready: false,
-      paused: false,
-      nodes: 0,
-      links: 0,
-      publishedNodes: {},
-    };
-  }
-  return window.__HERDR_GRAPH_RENDERER__;
+  const enabled = worldRendererCountersEnabled();
+  if (enabled && window.__HERDR_GRAPH_RENDERER__)
+    return window.__HERDR_GRAPH_RENDERER__;
+  const diagnostics: GraphRendererDiagnostics = {
+    physicsWorker: false,
+    mounts: 0,
+    destroys: 0,
+    activeRenderers: 0,
+    activeAnimationFrames: 0,
+    activeObservers: 0,
+    activeListeners: 0,
+    canvases: 0,
+    frames: 0,
+    resizeObservations: 0,
+    resizeFrames: 0,
+    ready: false,
+    paused: false,
+    nodes: 0,
+    links: 0,
+    publishedNodes: {},
+  };
+  if (enabled) window.__HERDR_GRAPH_RENDERER__ = diagnostics;
+  return diagnostics;
 }
 
 export function retainedGraphPositions(
@@ -1114,16 +1265,33 @@ export function retainedGraphPositions(
   return positions;
 }
 
+export function graphGridPhase(
+  width: number,
+  height: number,
+  camera: GraphCamera,
+) {
+  const spacing = 48 * camera.zoom;
+  const phase = (value: number) => {
+    const offset = ((value % spacing) + spacing) % spacing;
+    // Canonicalize arithmetic noise, including values just below a period.
+    const rounded = Math.round(offset * 1e9) / 1e9;
+    return Math.abs(rounded - spacing) < 1e-9 ? 0 : rounded;
+  };
+  return {
+    spacing,
+    offsetX: phase(width / 2 + camera.x),
+    offsetY: phase(height / 2 + camera.y),
+  };
+}
+
 function drawGrid(
   context: CanvasRenderingContext2D,
   width: number,
   height: number,
   camera: GraphCamera,
 ) {
-  const spacing = 48 * camera.zoom;
+  const { spacing, offsetX, offsetY } = graphGridPhase(width, height, camera);
   if (spacing < 12) return;
-  const offsetX = (((width / 2 + camera.x) % spacing) + spacing) % spacing;
-  const offsetY = (((height / 2 + camera.y) % spacing) + spacing) % spacing;
   context.beginPath();
   for (let x = offsetX; x < width; x += spacing) {
     context.moveTo(x, 0);

@@ -1,3 +1,4 @@
+import { createGraphSimulation } from "./graphSimulation";
 import type { SavedGraphPosition } from "./graphPreferences";
 import type {
   WorldGraphEdge,
@@ -79,93 +80,18 @@ export function reconcileGraphLayout(
   };
 }
 
+const simulations = new WeakMap<
+  GraphLayoutState,
+  ReturnType<typeof createGraphSimulation>
+>();
+
 export function stepGraphLayout(state: GraphLayoutState, alpha: number) {
-  const hosts = [...state.nodes.values()].filter(({ kind }) => kind === "host");
-  const spaces = [...state.nodes.values()].filter(
-    ({ kind }) => kind === "space",
-  );
-  const childrenByParent = new Map<string, GraphLayoutNode[]>();
-  for (const node of state.nodes.values()) {
-    if (node.kind === "host" || !node.parentId) continue;
-    const children = childrenByParent.get(node.parentId) ?? [];
-    children.push(node);
-    childrenByParent.set(node.parentId, children);
+  let simulation = simulations.get(state);
+  if (!simulation) {
+    simulation = createGraphSimulation([...state.nodes.values()]);
+    simulations.set(state, simulation);
   }
-
-  for (let leftIndex = 0; leftIndex < hosts.length; leftIndex += 1) {
-    const left = hosts[leftIndex];
-    if (!left) continue;
-    if (!left.pinned) {
-      left.vx += -left.x * 0.0007 * alpha;
-      left.vy += -left.y * 0.0007 * alpha;
-    }
-    for (
-      let rightIndex = leftIndex + 1;
-      rightIndex < hosts.length;
-      rightIndex += 1
-    ) {
-      const right = hosts[rightIndex];
-      if (right) repel(left, right, 620, 4, alpha);
-    }
-  }
-
-  for (let leftIndex = 0; leftIndex < spaces.length; leftIndex += 1) {
-    const left = spaces[leftIndex];
-    if (!left) continue;
-    for (const host of hosts) {
-      if (left.parentId !== host.id) repel(left, host, 260, 2, alpha);
-    }
-    for (
-      let rightIndex = leftIndex + 1;
-      rightIndex < spaces.length;
-      rightIndex += 1
-    ) {
-      const right = spaces[rightIndex];
-      if (right) repel(left, right, 150, 1.8, alpha);
-    }
-  }
-
-  for (const [parentId, children] of childrenByParent) {
-    const parent = state.nodes.get(parentId);
-    if (!parent) continue;
-    for (let index = 0; index < children.length; index += 1) {
-      const child = children[index];
-      if (!child) continue;
-      if (!child.pinned) {
-        spring(child, parent, child.kind === "space" ? 180 : 105, 0.028, alpha);
-      }
-      for (
-        let otherIndex = index + 1;
-        otherIndex < children.length;
-        otherIndex += 1
-      ) {
-        const other = children[otherIndex];
-        if (other) {
-          repel(child, other, child.kind === "space" ? 120 : 58, 1.5, alpha);
-        }
-      }
-    }
-  }
-
-  let energy = 0;
-  for (const node of state.nodes.values()) {
-    if (node.pinned) {
-      node.vx = 0;
-      node.vy = 0;
-      continue;
-    }
-    node.vx *= 0.82;
-    node.vy *= 0.82;
-    const speed = Math.hypot(node.vx, node.vy);
-    if (speed > 14) {
-      node.vx = (node.vx / speed) * 14;
-      node.vy = (node.vy / speed) * 14;
-    }
-    node.x += node.vx;
-    node.y += node.vy;
-    energy += Math.abs(node.vx) + Math.abs(node.vy);
-  }
-  return energy;
+  return simulation.step(alpha);
 }
 
 export function arrangeGraphLayout(state: GraphLayoutState) {
@@ -377,52 +303,4 @@ function compareEdgeIds(left: string[], right: string[]) {
     left[1]?.localeCompare(right[1] ?? "") ||
     0
   );
-}
-
-function repel(
-  left: GraphLayoutNode,
-  right: GraphLayoutNode,
-  distance: number,
-  strength: number,
-  alpha: number,
-) {
-  let dx = right.x - left.x;
-  let dy = right.y - left.y;
-  let length = Math.hypot(dx, dy);
-  if (length < 0.01) {
-    dx = stableFraction(left.id) - 0.5;
-    dy = stableFraction(right.id) - 0.5;
-    length = Math.max(0.01, Math.hypot(dx, dy));
-  }
-  if (length >= distance) return;
-  const force = ((distance - length) / distance) * strength * alpha;
-  const x = (dx / length) * force;
-  const y = (dy / length) * force;
-  if (!left.pinned) {
-    left.vx -= x;
-    left.vy -= y;
-  }
-  if (!right.pinned) {
-    right.vx += x;
-    right.vy += y;
-  }
-}
-
-function spring(
-  node: GraphLayoutNode,
-  parent: GraphLayoutNode,
-  distance: number,
-  strength: number,
-  alpha: number,
-) {
-  const dx = parent.x - node.x;
-  const dy = parent.y - node.y;
-  const length = Math.max(0.01, Math.hypot(dx, dy));
-  const force = (length - distance) * strength * alpha;
-  node.vx += (dx / length) * force;
-  node.vy += (dy / length) * force;
-  if (!parent.pinned) {
-    parent.vx -= (dx / length) * force * 0.18;
-    parent.vy -= (dy / length) * force * 0.18;
-  }
 }

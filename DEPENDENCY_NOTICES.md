@@ -143,8 +143,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | @types/babel__generator | 7.27.0 | MIT |
 | @types/babel__template | 7.4.4 | MIT |
 | @types/babel__traverse | 7.28.0 | MIT |
-| @types/css-font-loading-module | 0.0.12 | MIT |
-| @types/earcut | 2.1.4 | MIT |
+| @types/earcut | 3.0.0 | MIT |
 | @types/estree | 1.0.9 | MIT |
 | @types/hast | 3.0.5 | MIT |
 | @types/mdast | 4.0.4 | MIT |
@@ -200,7 +199,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | diff | 8.0.4 | BSD-3-Clause |
 | diff | 9.0.0 | BSD-3-Clause |
 | diff2html | 3.4.56 | MIT |
-| earcut | 2.2.4 | ISC |
+| earcut | 3.2.4 | ISC |
 | ecdsa-sig-formatter | 1.0.11 | Apache-2.0 |
 | electron-to-chromium | 1.5.436 | ISC |
 | elkjs | 0.11.1 | EPL-2.0 |
@@ -218,6 +217,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | gensync | 1.0.0-beta.2 | MIT |
 | get-east-asian-width | 1.7.0 | MIT |
 | get-nonce | 1.0.1 | MIT |
+| gifuct-js | 2.1.2 | MIT |
 | glob-parent | 5.1.2 | ISC |
 | hast-util-to-html | 9.0.5 | MIT |
 | hast-util-whitespace | 3.0.0 | MIT |
@@ -235,6 +235,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | isexe | 2.0.0 | ISC |
 | ismobilejs | 1.1.1 | MIT |
 | js-base64 | 3.9.2 | BSD-3-Clause |
+| js-binary-schema-parser | 2.0.3 | MIT |
 | js-tokens | 4.0.0 | MIT |
 | jsesc | 3.1.0 | MIT |
 | json5 | 2.2.3 | MIT |
@@ -268,12 +269,12 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | oniguruma-to-es | 4.3.6 | MIT |
 | ora | 9.4.1 | MIT |
 | oxlint | 1.85.0 | MIT |
-| parse-svg-path | 0.1.2 | MIT |
+| parse-svg-path | 0.2.0 | MIT |
 | path-key | 3.1.1 | MIT |
 | picocolors | 1.1.1 | ISC |
 | picomatch | 2.3.2 | MIT |
 | picomatch | 4.0.7 | MIT |
-| pixi.js | 8.3.4 | MIT |
+| pixi.js | 8.22.0 | MIT |
 | postcss | 8.5.23 | MIT |
 | property-information | 7.2.0 | MIT |
 | queue-microtask | 1.2.3 | MIT |
@@ -305,6 +306,7 @@ are reproduced in `DEPENDENCY_LICENSES.md`.
 | stringify-entities | 4.0.4 | MIT |
 | strip-ansi | 7.2.0 | MIT |
 | style-mod | 4.1.3 | MIT |
+| tiny-lru | 11.4.7 | BSD-3-Clause |
 | tinyglobby | 0.2.17 | MIT |
 | to-regex-range | 5.0.1 | MIT |
 | trim-lines | 3.0.1 | MIT |

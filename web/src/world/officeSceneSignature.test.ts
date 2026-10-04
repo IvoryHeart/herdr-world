@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 const it = test;
 import { OFFICE_PRESENTATION_BOUNDS } from "./herdrOfficeProjection";
-import type { HerdrOfficeProjection } from "./herdrOfficeProjection";
+import type {
+  HerdrOfficeProjection,
+  OfficeRoom,
+} from "./herdrOfficeProjection";
 import { resolveOfficeLayout } from "./officeGeometry";
 import { officeSceneSignature } from "./officeSceneSignature";
 
@@ -137,6 +140,20 @@ describe("officeSceneSignature", () => {
 
     scene.receptions[0]!.key = "visible changed";
     expect(makeSignature()).not.toBe(first);
+
+    // A host can own a visible room while its reception is outside the viewport.
+    scene.rooms = [{ hostKey: "distant-host" } as OfficeRoom];
+    const roomSignature = () =>
+      officeSceneSignature({
+        layout,
+        projection: scene,
+        selectedKey: null,
+        visibleRoomIndices: [0],
+        visibleReceptionIndices: [0],
+      });
+    const priorRoom = roomSignature();
+    scene.hosts[1]!.displayLabel = "Renamed room host";
+    expect(roomSignature()).not.toBe(priorRoom);
   });
 
   it("changes when completion markers become seen", () => {

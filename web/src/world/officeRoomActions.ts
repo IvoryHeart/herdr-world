@@ -43,15 +43,14 @@ export function officeSpaceForRoom(
   world: WorldObject,
   room: Pick<OfficeRoom, "hostKey" | "workspaceRef">,
 ): WorldSpaceObject | null {
-  return (
-    world.spaces.find(
-      (space) =>
-        space.parentId === room.hostKey &&
-        space.connectionId === room.workspaceRef.connectionId &&
-        space.generation === room.workspaceRef.generation &&
-        space.nativeId === room.workspaceRef.nativeId,
-    ) ?? null
-  );
+  const space = world.nodeById.get(room.workspaceRef.worldId);
+  return space?.kind === "space" &&
+    space.parentId === room.hostKey &&
+    space.connectionId === room.workspaceRef.connectionId &&
+    space.generation === room.workspaceRef.generation &&
+    space.nativeId === room.workspaceRef.nativeId
+    ? space
+    : null;
 }
 
 export function officeRoomActionCapabilities(
