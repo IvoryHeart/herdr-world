@@ -164,3 +164,16 @@ To capture the synthetic desktop and 390 px mobile fixture, set
 | [App.tsx](../App.tsx) | `App` owns the focused Spaces shell and Inspector resource host; `SpacesTabTerminal` renders its tab terminal; `terminalPresentationTarget` resolves terminal presentation; the lazy `WorkspaceInspectorHost` and `WorldTerminalPortalList` imports lead to resource and portal owners. |
 | [store.ts](../store.ts) | `activateConnectionState` and `reconcileConnectionCatalogSessions` retire or restore focused session state; `refreshNow` refreshes focused topology; `selectConnectionNow` switches host; `qualifiedAction` gates downstream operations by the current connection lease. |
 | [world.css](world.css) | `.world-foundation-*` and `.world-view-toolbar-*` frame the shell; `.world-inspector-*`, `.world-intent-*` and `.world-floating-*` style Inspector/window presentation. Search the `Retained Pixel Office canvas` comment and `.world-canvas-*`, `.world-room-*`, `.world-completion-*`, `.world-observability-*` for Office beyond its `.world-office-*` shell; `.world-connected-tree-*`/`.world-tree-*` and `.world-spatial-graph-*` style Tree and Graph. |
+
+## Shared creation
+
+Office is the root and invalid-route default; `/desk` remains explicit. The common
+Actions menu creates a workspace on a confirmed host or a tab in the selected
+workspace in Office, Desk, Tree and Graph. Native Spaces controls share the store
+operations. Eight displayed Office desks are a projection bound, not a tab limit.
+
+| Task | Open these owners | Focused evidence |
+| --- | --- | --- |
+| Captured sources, duplicate suppression and progress | [creationRequests.ts](../creationRequests.ts), `prepareQualifiedCreation`, `createQualifiedTab` and `createQualifiedWorkspace` in [store.ts](../store.ts) | [Creation store tests](../worldCreation.test.ts), [Shared creation browser matrix](SharedViewCreation.test.ts) |
+| Browser attachment ownership and presentation handoffs | [TerminalView.tsx](../components/TerminalView.tsx), source demand merging in [App.tsx](../App.tsx), [WorldTerminalPortalList.tsx](WorldTerminalPortalList.tsx) | [Creation store tests](../worldCreation.test.ts), [Terminal handoff tests](WorldTerminalHandoff.test.ts) |
+| Created-terminal admission and newer Inspector intent | `creationCompletion` in [WorldFoundationApp.tsx](WorldFoundationApp.tsx), [createdTerminalAdmission.ts](createdTerminalAdmission.ts) | [Admission tests](createdTerminalAdmission.test.ts), [Shared creation browser matrix](SharedViewCreation.test.ts) |

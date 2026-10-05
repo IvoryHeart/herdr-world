@@ -419,6 +419,7 @@ function session(
 ): ServerSessionState {
   return {
     ...emptyServerSessionState(runtimeGeneration),
+    lastRefresh: 1,
     workspaces: [
       {
         workspace_id: "same-workspace",
@@ -1890,7 +1891,7 @@ describe("connection-partitioned store state", () => {
     expect(tracker.update("alpha", [pane("alpha", "done")])).toEqual([]);
   });
 
-  test("fences every Office room mutation before dispatch and after completion", async () => {
+  test("fences room mutations and preserves acknowledged creation after runtime retirement", async () => {
     const previousState = store.get();
     const originalConnection = bridge.connection;
     const target = { connectionId: "alpha", runtimeGeneration: 1 };
@@ -1970,7 +1971,14 @@ describe("connection-partitioned store state", () => {
         });
         gate.resolve();
 
-        await expect(pending).rejects.toThrow("selected host changed");
+        if (
+          mutation.method === "tab.create" ||
+          mutation.method === "workspace.create"
+        ) {
+          expect(await pending).toEqual({});
+        } else {
+          await expect(pending).rejects.toThrow("selected host changed");
+        }
         expect(calls).toEqual([
           { connectionId: "alpha", method: mutation.method },
         ]);

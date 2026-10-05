@@ -1,5 +1,6 @@
 import {
   memo,
+  Fragment,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -303,26 +304,31 @@ export function OfficeRoomActionsOverlay({
         const anchor = full
           ? { x: rect.x + rect.width / 2, deskY: rect.y + rect.height - 40 }
           : deskAnchor(rect, room.desks.length);
+        const reason = createSeatReason(room.key);
         return (
-          <button
-            key={`${room.key}:new-seat`}
-            className={`world-new-seat-canvas-action${full ? " world-new-seat-canvas-action-full" : ""}`}
-            type="button"
-            aria-label={
-              full
-                ? `${room.accessibleLabel ?? room.displayLabel} room full`
-                : `New seat in ${room.accessibleLabel ?? room.displayLabel}`
-            }
-            title={
-              full
-                ? `${room.accessibleLabel ?? room.displayLabel} is full`
-                : (createSeatReason(room.key) ??
-                  `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`)
-            }
-            disabled={!layoutReady || full || !canCreateSeat(room.key)}
-            style={{ left: anchor.x - 25, top: anchor.deskY }}
-            onClick={() => onCreateSeat(room.key)}
-          />
+          <Fragment key={`${room.key}:new-seat`}>
+            <button
+              className={`world-new-seat-canvas-action${full ? " world-new-seat-canvas-action-full" : ""}`}
+              type="button"
+              aria-label={`New seat in ${room.accessibleLabel ?? room.displayLabel}`}
+              title={
+                createSeatReason(room.key) ??
+                `Start a new seat in ${room.accessibleLabel ?? room.displayLabel}`
+              }
+              disabled={!layoutReady || !canCreateSeat(room.key)}
+              style={{ left: anchor.x - 25, top: anchor.deskY }}
+              onClick={() => onCreateSeat(room.key)}
+            />
+            {reason ? (
+              <span
+                className="world-creation-reason"
+                role="status"
+                style={{ left: anchor.x - 90, top: anchor.deskY + 48 }}
+              >
+                {reason}
+              </span>
+            ) : null}
+          </Fragment>
         );
       })}
       {showCreateRoom(selectedRoomKey) ? (
@@ -340,6 +346,15 @@ export function OfficeRoomActionsOverlay({
           <Plus size={24} aria-hidden="true" />
           <span>NEW ROOM</span>
         </button>
+      ) : null}
+      {createRoomReason(selectedRoomKey) ? (
+        <span
+          className="world-creation-reason"
+          role="status"
+          style={{ left: layout.officeWidth / 2 - 90, top: roomBottom + 60 }}
+        >
+          {createRoomReason(selectedRoomKey)}
+        </span>
       ) : null}
     </div>
   );

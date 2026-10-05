@@ -15,11 +15,14 @@ qualified terminals, files, changes and agent history on desktop or mobile.
 
 [![Office view showing the selected Herdr host and its agents][desktop-office]][desktop-office]
 
-Desk is the default view for agent triage across filtered hosts. Office groups agent
-work by host. Tree and Graph show the same filtered aggregate,
+Office is the default view and groups agent work by host. Desk supports agent
+triage across filtered hosts. Tree and Graph show the same filtered aggregate,
 while Spaces keeps one qualified workspace's terminal and repository workflow
 one click away. Hosts defaults to All hosts; filtering changes visibility while
-open Inspectors and pending operations keep their captured owners.
+open Inspectors and pending operations keep their captured owners. Use Actions →
+New workspace or New tab in any visual view; Office also provides New room and
+New seat controls. Creation prepares its source terminal and opens the result in
+the current view, including for another ready host and rooms with eight displayed desks.
 
 <!-- markdownlint-disable MD033 -->
 

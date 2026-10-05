@@ -1,3 +1,4 @@
+import { useCreationProgress } from "../creationRequests";
 import {
   ArrowDown,
   ArrowLeft,
@@ -275,6 +276,7 @@ function OwnedCommandCombobox({
   arrangementControl?: WindowArrangementControl;
   extension?: CommandExtension;
 }) {
+  useCreationProgress();
   const store = useOperationalStore();
   useShortcutPreferences();
   const s = useStoreSelector(

@@ -1,3 +1,7 @@
+import {
+  useCreationProgress,
+  creationFailureMessage,
+} from "../creationRequests";
 import { useContext, useEffect, useRef, useState } from "react";
 import { luckyWorkspaceName } from "../luckyName";
 import {
@@ -14,13 +18,20 @@ export function CreateWorkspaceDialog({
   open,
   initialName,
   initialCwd,
+  initialDestination,
   onClose,
 }: {
   open: boolean;
   initialName?: string;
   initialCwd?: string;
+  initialDestination?: {
+    connectionId: string;
+    runtimeGeneration: number;
+    sourceWorkspaceId?: string;
+  };
   onClose: () => void;
 }) {
+  useCreationProgress();
   const inherited = useContext(OperationalContext);
   const snapshot = useStoreSelector((state) => state);
   const [destination, setDestination] = useState<{
@@ -30,8 +41,8 @@ export function CreateWorkspaceDialog({
   const ready = snapshot.connections.filter(
     (connection) => connection.state === "ready",
   );
-  const destinationSource = useRef({ ready, inherited });
-  destinationSource.current = { ready, inherited };
+  const destinationSource = useRef({ ready, inherited, initialDestination });
+  destinationSource.current = { ready, inherited, initialDestination };
   const current =
     destination &&
     ready.some(
@@ -44,6 +55,11 @@ export function CreateWorkspaceDialog({
     : endpointCreationReason(
         connectionSnapshot(snapshot, destination!.connectionId),
         "workspace.create",
+        destination!.connectionId === initialDestination?.connectionId &&
+          destination!.runtimeGeneration ===
+            initialDestination.runtimeGeneration
+          ? initialDestination.sourceWorkspaceId
+          : undefined,
       );
   const [label, setLabel] = useState("");
   const [cwd, setCwd] = useState("");
@@ -56,7 +72,11 @@ export function CreateWorkspaceDialog({
 
   useEffect(() => {
     if (!open) return;
-    const { ready, inherited } = destinationSource.current;
+    const { ready, inherited, initialDestination } = destinationSource.current;
+    if (initialDestination) {
+      setDestination(initialDestination);
+      return;
+    }
     const owner =
       ready.find((connection) => connection.id === inherited?.connectionId) ??
       ready[0];
@@ -95,12 +115,20 @@ export function CreateWorkspaceDialog({
         destination,
         label.trim() || undefined,
         cwd.trim() || undefined,
+        {
+          sourceWorkspaceId:
+            destination.connectionId === initialDestination?.connectionId &&
+            destination.runtimeGeneration ===
+              initialDestination.runtimeGeneration
+              ? initialDestination.sourceWorkspaceId
+              : undefined,
+        },
       );
       onClose();
     } catch (error) {
       store.notify({
         kind: "error",
-        message: "Workspace creation failed",
+        message: creationFailureMessage(error, "Workspace"),
         detail: String(error),
       });
     } finally {

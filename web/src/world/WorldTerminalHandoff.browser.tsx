@@ -1,3 +1,8 @@
+import { subscribeCreations } from "../creationRequests";
+const creationPhases: string[] = [];
+subscribeCreations((event) =>
+  creationPhases.push(`${event.id}:${event.phase}`),
+);
 window.__HERDR_WORLD_RENDERER_DEBUG__ = true;
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -52,7 +57,7 @@ async function until(
     await settle();
   }
   throw new Error(
-    `Timed out: ${typeof message === "function" ? message() : message}; mode=${store.get().navigationMode}; browser=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; owners=${document.querySelectorAll(".world-terminal-owner").length}; parking=${document.querySelectorAll(".world-terminal-parking").length}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
+    `Timed out: ${typeof message === "function" ? message() : message}; titles=${JSON.stringify([...document.querySelectorAll(".world-managed-window")].map((e) => [e.getAttribute("aria-label"), e.className, e.querySelector("[data-pane-id]")?.getAttribute("data-pane-id")]))}; phases=${JSON.stringify(creationPhases)}; notice=${JSON.stringify(store.get().notice)}; mode=${store.get().navigationMode}; browser=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; owners=${document.querySelectorAll(".world-terminal-owner").length}; parking=${document.querySelectorAll(".world-terminal-parking").length}; inspectors=${document.querySelectorAll(".workspace-inspector").length}; rail=${document.querySelector(".world-context-rail")?.className}; text=${document.body.textContent?.slice(-1200)}; calls=${JSON.stringify(calls.slice(-12))}`,
   );
 }
 
@@ -2083,6 +2088,11 @@ async function run() {
     ({ method, params }) =>
       method === "pane.get" && params.pane_id === "created-pane-3",
   ).length;
+  const sharedDeadlineFocusGate = Promise.withResolvers<void>();
+  delayedPaneGet = {
+    paneId: "created-pane-3",
+    promise: sharedDeadlineFocusGate.promise,
+  };
   createSeatButton?.click();
   await until(
     () =>
@@ -2090,11 +2100,6 @@ async function run() {
       seatCreatesBeforeClick + 1,
     "Office seat creation",
   );
-  const sharedDeadlineFocusGate = Promise.withResolvers<void>();
-  delayedPaneGet = {
-    paneId: "created-pane-3",
-    promise: sharedDeadlineFocusGate.promise,
-  };
   await worldRuntimeStore.refresh();
   await until(
     () =>
@@ -2111,8 +2116,7 @@ async function run() {
   );
   await until(
     () =>
-      store.get().notice?.message ===
-      "Seat created, but Inspector focus failed",
+      store.get().notice?.message === "Tab created, but Inspector focus failed",
     "created-seat admission deadline",
   );
   check(
@@ -3227,11 +3231,17 @@ async function run() {
     "compact World Inspector Files view before Spaces",
   );
   const terminalAttachesBeforeSpaces = calls.filter(
-    ({ method }) => method === "terminal.attach",
+    ({ method, params }) =>
+      method === "terminal.attach" &&
+      params.terminal_id === "reviewer-terminal",
   ).length;
   const terminalDetachesBeforeSpaces = calls.filter(
-    ({ method }) => method === "terminal.detach",
+    ({ method, params }) =>
+      method === "terminal.detach" &&
+      params.terminal_id === "reviewer-terminal",
   ).length;
+  const reviewerWasAttached =
+    terminalAttachesBeforeSpaces > terminalDetachesBeforeSpaces;
   viewSelect.value = "spaces";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
   await until(
@@ -3280,16 +3290,23 @@ async function run() {
     "visible Spaces did not present its native selected terminal",
   );
   check(
-    calls.filter(({ method }) => method === "terminal.attach").length >
-      terminalAttachesBeforeSpaces &&
-      calls.filter(({ method }) => method === "terminal.detach").length >
-        terminalDetachesBeforeSpaces &&
+    calls.filter(
+      ({ method, params }) =>
+        method === "terminal.attach" &&
+        params.terminal_id === "reviewer-terminal",
+    ).length ===
+      terminalAttachesBeforeSpaces + (reviewerWasAttached ? 0 : 1) &&
+      calls.filter(
+        ({ method, params }) =>
+          method === "terminal.detach" &&
+          params.terminal_id === "reviewer-terminal",
+      ).length === terminalDetachesBeforeSpaces &&
       calls.some(
         ({ method, params }) =>
           method === "terminal.attach" &&
           params.terminal_id === "reviewer-terminal",
       ),
-    "Spaces handoff did not transfer the selected terminal presentation",
+    "Spaces handoff did not reuse a live source or attach an absent source exactly once",
   );
   viewSelect.value = "graph";
   viewSelect.dispatchEvent(new Event("change", { bubbles: true }));

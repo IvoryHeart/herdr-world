@@ -7,7 +7,8 @@ import type {
   MobileTerminalSideShortcuts,
 } from "../mobileTerminalShortcuts";
 import type { Pane } from "../types";
-import { useVisibleTabLayout } from "../visibleTabLayout";
+import { useVisibleTabLayoutState } from "../visibleTabLayout";
+import type { TerminalWorkspaceFileRequest } from "../components/TerminalView";
 import type { WorldTerminalPresentation } from "./worldTerminalPresentation";
 import { worldInspectorWindowId } from "./worldTerminalPresentation";
 import {
@@ -27,6 +28,7 @@ export default function WorldTerminalPortalList({
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
+  spacesControls,
 }: {
   presentations: readonly WorldTerminalPresentation[];
   panes: readonly Pane[];
@@ -37,6 +39,13 @@ export default function WorldTerminalPortalList({
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
+  spacesControls?: {
+    composerOpen: boolean;
+    onComposerOpenChange(open: boolean): void;
+    agentHistoryOpen: boolean;
+    onAgentHistoryOpenChange(open: boolean): void;
+    onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
+  };
 }) {
   const snapshot = useStoreSelector((state) => state);
   const [parking, setParking] = useState<HTMLDivElement | null>(null);
@@ -88,6 +97,7 @@ export default function WorldTerminalPortalList({
                 terminalFontScale={terminalFontScale}
                 mobileShortcuts={mobileShortcuts}
                 mobileSideShortcuts={mobileSideShortcuts}
+                spacesControls={spacesControls}
               />
             </OperationalContext.Provider>
           </WorldTerminalPortalOwner>
@@ -105,6 +115,7 @@ function WorldInspectorTabTerminal({
   terminalFontScale,
   mobileShortcuts,
   mobileSideShortcuts,
+  spacesControls,
 }: {
   presentation: WorldTerminalPresentation & { tabId: string };
   panes: readonly Pane[];
@@ -113,16 +124,22 @@ function WorldInspectorTabTerminal({
   terminalFontScale: number;
   mobileShortcuts: MobileTerminalShortcutRows;
   mobileSideShortcuts: MobileTerminalSideShortcuts;
+  spacesControls?: Parameters<
+    typeof WorldTerminalPortalList
+  >[0]["spacesControls"];
 }) {
-  const layout = useVisibleTabLayout(
+  const { layout, error } = useVisibleTabLayoutState(
     presentation.workspaceId,
     presentation.tabId,
   );
   const [composerOpen, setComposerOpen] = useState(false);
   const [agentHistoryOpen, setAgentHistoryOpen] = useState(false);
+  const spaces =
+    presentation.presentationKind === "spaces" ? spacesControls : undefined;
   return (
     <TabTerminalPaneLayout
       layout={layout}
+      unavailableMessage={error ?? undefined}
       panes={panes.filter(
         (pane) =>
           pane.workspace_id === presentation.workspaceId &&
@@ -136,11 +153,17 @@ function WorldInspectorTabTerminal({
       terminalFontScale={terminalFontScale}
       mobileShortcuts={mobileShortcuts}
       mobileSideShortcuts={mobileSideShortcuts}
-      composerOpen={composerOpen}
-      onComposerOpenChange={setComposerOpen}
-      agentHistoryOpen={agentHistoryOpen}
-      onAgentHistoryOpenChange={setAgentHistoryOpen}
+      composerOpen={spaces?.composerOpen ?? composerOpen}
+      onComposerOpenChange={spaces?.onComposerOpenChange ?? setComposerOpen}
+      agentHistoryOpen={spaces?.agentHistoryOpen ?? agentHistoryOpen}
+      onAgentHistoryOpenChange={
+        spaces?.onAgentHistoryOpenChange ?? setAgentHistoryOpen
+      }
       onOpenWorkspaceFile={(request) => {
+        if (spaces) {
+          spaces.onOpenWorkspaceFile(request);
+          return;
+        }
         const event = new CustomEvent<InspectorTerminalFileRequest>(
           INSPECTOR_TERMINAL_FILE_EVENT,
           {

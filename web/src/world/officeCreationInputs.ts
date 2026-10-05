@@ -18,7 +18,8 @@ export function officeCreationInputsEqual(
       a.workspaces === b.workspaces &&
       a.browserNavigation === b.browserNavigation &&
       a.panes === b.panes &&
-      a.endpointAvailability === b.endpointAvailability
+      a.endpointAvailability === b.endpointAvailability &&
+      a.terminalAttachments === b.terminalAttachments
     );
   });
 }

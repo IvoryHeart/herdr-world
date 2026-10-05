@@ -57,6 +57,7 @@ export type WorldTerminalPresentation = Pick<
   terminalId: string;
   portal: Element | null;
   endpointReadiness?: boolean;
+  presentationKind?: "spaces";
   onFocusPane?: (paneId: string) => void;
 };
 

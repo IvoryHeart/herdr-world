@@ -14,6 +14,7 @@ import {
   hasValidSelectedConnection,
   moveDockedInspectorGeometry,
   parseWorldView,
+  reconcileObservedInspectors,
   selectedHostStatusLabel,
   shouldRecordVisualInspectorGeometry,
   retainWorldFloatingTerminals,
@@ -234,18 +235,18 @@ describe("World view preference", () => {
     expect(parseWorldView("graph")).toBe("graph");
     expect(parseWorldView("spaces")).toBe("spaces");
     expect(parseWorldView("desk")).toBe("desk");
-    expect(parseWorldView("legacy-world")).toBe("desk");
-    expect(parseWorldView(null)).toBe("desk");
+    expect(parseWorldView("legacy-world")).toBe("office");
+    expect(parseWorldView(null)).toBe("office");
   });
 
   test("maps canonical paths without accepting arbitrary routes", () => {
-    expect(worldViewFromPath("/")).toBe("desk");
+    expect(worldViewFromPath("/")).toBe("office");
     expect(worldViewFromPath("/desk")).toBe("desk");
     expect(worldViewFromPath("/spaces")).toBe("spaces");
     expect(worldViewFromPath("/office")).toBe("office");
     expect(worldViewFromPath("/tree")).toBe("tree");
     expect(worldViewFromPath("/graph")).toBe("graph");
-    expect(worldViewFromPath("/other")).toBe("desk");
+    expect(worldViewFromPath("/other")).toBe("office");
   });
 
   test("resolves each current top-tab owner independently of ambient focus with colliding IDs", () => {
@@ -1647,4 +1648,19 @@ describe("World view preference", () => {
     expect(appShouldHandleGlobalShortcut(false, keyboardEvent)).toBe(false);
     expect(appShouldHandleGlobalShortcut(true, keyboardEvent)).toBe(true);
   });
+});
+
+test("observation reconciliation preserves concurrently admitted and explicitly changed Inspectors", () => {
+  const old = inspectorConversation(1);
+  const added = inspectorConversation(2);
+  const refreshed = { ...old, label: "Refreshed" };
+  expect(reconcileObservedInspectors([old, added], [old], [refreshed])).toEqual(
+    [refreshed, added],
+  );
+  const explicit = { ...old, view: "files" as const };
+  expect(reconcileObservedInspectors([explicit, added], [old], [])).toEqual([
+    explicit,
+    added,
+  ]);
+  expect(reconcileObservedInspectors([old, added], [old], [])).toEqual([added]);
 });
