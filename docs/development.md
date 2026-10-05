@@ -28,6 +28,11 @@ bun run build:site            # landing page/tutorial
 bun run check                 # complete PR candidate
 ```
 
+The test wrapper runs files in parallel using up to eight available CPUs.
+Three isolated browser suites also run up to two cases concurrently. Set
+`HERDR_TEST_PARALLEL` to choose a default worker count, or pass Bun's
+`--parallel=N` flag to override it for one run.
+
 `bun run check` validates dependency notices, formatting, lint, all types/tests,
 production frontend/server builds and OpenSpec contracts. Generated output belongs in
 ignored directories and must not be committed.

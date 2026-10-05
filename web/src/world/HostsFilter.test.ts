@@ -94,7 +94,7 @@ const cases = [
     ),
   ),
 ];
-test.skipIf(!chrome).each(cases)(
+test.skipIf(!chrome).concurrent.each(cases)(
   "the shell preserves qualified operational targets: %j",
   async ({ width, operation, view }) => {
     const dir = await mkdtemp(join(tmpdir(), "world-hosts-filter-"));

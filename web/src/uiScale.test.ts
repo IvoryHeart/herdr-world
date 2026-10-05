@@ -16,7 +16,7 @@ const chrome =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
-test.skipIf(!chrome).each([
+test.skipIf(!chrome).concurrent.each([
   [1300, 1, "uiScale", 800, 100],
   [500, 1.25, "uiScale", 800, 100],
   [1300, 1, "paneJump", 800, 100],

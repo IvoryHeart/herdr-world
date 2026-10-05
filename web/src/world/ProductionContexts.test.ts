@@ -15,7 +15,7 @@ import { createDenseSnapshotFixture } from "./browserAcceptanceFixture";
 const chrome =
   Bun.env.CHROME_BIN || Bun.which("google-chrome") || Bun.which("chromium");
 
-test.skipIf(!chrome).each(
+test.skipIf(!chrome).concurrent.each(
   [
     { view: "uncertain", entry: "typing" },
     { view: "uncertain", entry: "fallback" },

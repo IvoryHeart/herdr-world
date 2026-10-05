@@ -7,6 +7,10 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Test files run in bounded parallel workers. Isolated browser acceptance cases also run concurrently.
+
 ## [0.2.2] - 2026-10-05
 
 ### Fixed
