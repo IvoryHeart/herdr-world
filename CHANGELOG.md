@@ -7,6 +7,8 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-05
+
 ### Fixed
 
 - Office is the default view. New seat and New room prepare the correct browser-owned
