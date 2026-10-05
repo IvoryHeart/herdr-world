@@ -1,3 +1,8 @@
+import {
+  useCreationProgress,
+  creationPendingReason,
+  creationFailureMessage,
+} from "../creationRequests";
 import { WorldSearchResults } from "./WorldSearchResults";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -46,9 +51,6 @@ import {
 import type { WorldObject } from "./worldObject";
 import { WorldViewToolbar, worldSearchMatches } from "./WorldViewToolbar";
 import {
-  CREATED_PANE_ADMISSION_TIMEOUT_MS,
-  createdPaneAdmissionRetryDelay,
-  createdRootPaneId,
   officeCreationActionState,
   officeRoomActionCapabilities,
   officeRoomKeyForSelection,
@@ -74,15 +76,6 @@ type RoomDialog =
       label: string;
       owner: { connectionId: string; runtimeGeneration: number };
     };
-
-type PendingCreatedPane = {
-  action: "Room" | "Seat";
-  connectionId: string;
-  generation: number;
-  paneId: string;
-  attempt: number;
-  deadlineAt: number;
-};
 
 export default function PixelOfficeView({
   world,
@@ -112,6 +105,7 @@ export default function PixelOfficeView({
   );
   // Terminal frames and unrelated store updates must not reconcile the scene.
   // These are exactly the inputs read by endpointCreationReason below.
+  const creationProgress = useCreationProgress();
   const creationSnapshot = useStoreSelector(
     (snapshot) => snapshot,
     (previous, next) => officeCreationInputsEqual(previous, next, world.hosts),
@@ -120,14 +114,10 @@ export default function PixelOfficeView({
     readOfficePreferences(worldLocalStorage),
   );
   const preferencesRef = useRef(preferences);
-  const onOpenTerminalRef = useRef(onOpenTerminal);
-  const worldRef = useRef(world);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [layout, setLayout] = useState<PublishedOfficeLayout | null>(null);
   const [renderedRevision, setRenderedRevision] = useState(0);
   const [roomDialog, setRoomDialog] = useState<RoomDialog | null>(null);
-  const [pendingCreatedPane, setPendingCreatedPane] =
-    useState<PendingCreatedPane | null>(null);
   const [completionSeen, setCompletionSeen] = useState(() =>
     readCompletionSeen(worldLocalStorage),
   );
@@ -142,15 +132,6 @@ export default function PixelOfficeView({
     [query, world],
   );
   preferencesRef.current = preferences;
-  onOpenTerminalRef.current = onOpenTerminal;
-  worldRef.current = world;
-  const pendingCreatedPaneLeaseCurrent =
-    pendingCreatedPane === null ||
-    world.hosts.some(
-      (host) =>
-        host.connectionId === pendingCreatedPane.connectionId &&
-        host.generation === pendingCreatedPane.generation,
-    );
 
   useEffect(() => {
     let disposed = false;
@@ -263,107 +244,6 @@ export default function PixelOfficeView({
       : [];
   });
 
-  useEffect(() => {
-    if (!pendingCreatedPane) return;
-    let cancelled = false;
-    let finished = false;
-    let retryTimer: number | null = null;
-    let deadlineTimer: number | null = null;
-    const focusAbort = new AbortController();
-    const samePending = (current: PendingCreatedPane | null) =>
-      current?.connectionId === pendingCreatedPane.connectionId &&
-      current.generation === pendingCreatedPane.generation &&
-      current.paneId === pendingCreatedPane.paneId &&
-      current.deadlineAt === pendingCreatedPane.deadlineAt;
-    const clearPending = () =>
-      setPendingCreatedPane((current) =>
-        samePending(current) ? null : current,
-      );
-    const failFocus = (detail: string) => {
-      if (cancelled || finished) return;
-      finished = true;
-      focusAbort.abort();
-      clearPending();
-      store.notify({
-        kind: "error",
-        message: `${pendingCreatedPane.action} created, but Inspector focus failed`,
-        detail,
-      });
-    };
-    const retryFocus = (detail: string) => {
-      if (cancelled || finished) return;
-      const delay = createdPaneAdmissionRetryDelay(
-        pendingCreatedPane.deadlineAt,
-        Date.now(),
-      );
-      if (delay === null) {
-        failFocus(detail);
-        return;
-      }
-      retryTimer = window.setTimeout(
-        () =>
-          setPendingCreatedPane((current) => {
-            if (!current || !samePending(current)) return current;
-            return { ...current, attempt: current.attempt + 1 };
-          }),
-        delay,
-      );
-    };
-    const deadlineDelay = pendingCreatedPane.deadlineAt - Date.now();
-    if (deadlineDelay <= 0) {
-      failFocus(
-        "The created terminal was not admitted within the World snapshot window.",
-      );
-      return undefined;
-    }
-    if (!pendingCreatedPaneLeaseCurrent) {
-      failFocus("The selected host or runtime changed before admission.");
-      return undefined;
-    }
-    deadlineTimer = window.setTimeout(
-      () =>
-        failFocus(
-          "The created terminal was not admitted within the World snapshot window.",
-        ),
-      deadlineDelay,
-    );
-    const pane = worldRef.current.leaves.find(
-      (leaf) =>
-        leaf.connectionId === pendingCreatedPane.connectionId &&
-        leaf.nativeId === pendingCreatedPane.paneId &&
-        leaf.generation === pendingCreatedPane.generation,
-    );
-    if (!pane) {
-      retryFocus(
-        "The created terminal was not admitted within the World snapshot window.",
-      );
-    } else {
-      try {
-        void Promise.resolve(
-          onOpenTerminalRef.current(pane.id, focusAbort.signal),
-        ).then(
-          () => {
-            if (cancelled || finished) return;
-            finished = true;
-            clearPending();
-          },
-          (cause: unknown) => {
-            if (cancelled) return;
-            retryFocus(cause instanceof Error ? cause.message : String(cause));
-          },
-        );
-      } catch (cause) {
-        retryFocus(cause instanceof Error ? cause.message : String(cause));
-      }
-    }
-    return () => {
-      cancelled = true;
-      focusAbort.abort();
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-      if (deadlineTimer !== null) window.clearTimeout(deadlineTimer);
-    };
-  }, [pendingCreatedPane, pendingCreatedPaneLeaseCurrent]);
-
   const roomForKey = (roomKey: string | null) =>
     roomKey
       ? (office.rooms.find(
@@ -387,20 +267,29 @@ export default function PixelOfficeView({
             officeCreationActionState(
               admitted,
               admitted
-                ? endpointCreationReason(
-                    connectionSnapshot(
-                      creationSnapshot,
-                      room.workspaceRef.connectionId,
-                    ),
-                    "tab.create",
+                ? (creationPendingReason(
+                    {
+                      connectionId: room.workspaceRef.connectionId,
+                      runtimeGeneration: room.workspaceRef.generation,
+                    },
+                    "tab",
                     room.workspaceRef.nativeId,
-                  )
+                    creationProgress,
+                  ) ??
+                    endpointCreationReason(
+                      connectionSnapshot(
+                        creationSnapshot,
+                        room.workspaceRef.connectionId,
+                      ),
+                      "tab.create",
+                      room.workspaceRef.nativeId,
+                    ))
                 : null,
             ),
           ];
         }),
       ) as Record<string, OfficeCreationActionState>,
-    [creationSnapshot, office.rooms, world],
+    [creationSnapshot, creationProgress, office.rooms, world],
   );
   const seatCreationState = (roomKey: string) =>
     seatCreationStates[roomKey] ?? officeCreationActionState(false, null);
@@ -441,32 +330,6 @@ export default function PixelOfficeView({
     if (!room) return false;
     return officeRoomActionCapabilities(world, room)[action];
   };
-  const rememberCreatedPane = (
-    action: PendingCreatedPane["action"],
-    connectionId: string,
-    generation: number,
-    result: unknown,
-  ) => {
-    const paneId = createdRootPaneId(result);
-    if (paneId) {
-      setPendingCreatedPane({
-        action,
-        connectionId,
-        generation,
-        paneId,
-        attempt: 0,
-        // Aggregate observation may legitimately occupy its full 20s server
-        // deadline; leave a small delivery/render grace before reporting failure.
-        deadlineAt: Date.now() + CREATED_PANE_ADMISSION_TIMEOUT_MS,
-      });
-    } else {
-      store.notify({
-        kind: "error",
-        message: `${action} created, but Inspector focus failed`,
-        detail: "Herdr did not return the created terminal identity.",
-      });
-    }
-  };
   const reportRoomActionFailure = (action: string, cause: unknown) => {
     store.notify({
       kind: "error",
@@ -478,7 +341,7 @@ export default function PixelOfficeView({
     const room = roomForKey(roomKey);
     if (!room || !canCreateSeat(roomKey)) return;
     try {
-      const result = await store.createQualifiedTab(
+      await store.createQualifiedTab(
         {
           connectionId: room.workspaceRef.connectionId,
           runtimeGeneration: room.observedGeneration,
@@ -486,40 +349,12 @@ export default function PixelOfficeView({
         room.workspaceRef.nativeId,
         { numberedLabel: true },
       );
-      rememberCreatedPane(
-        "Seat",
-        room.workspaceRef.connectionId,
-        room.observedGeneration,
-        result,
-      );
     } catch (cause) {
-      reportRoomActionFailure("Seat creation", cause);
-    }
-  };
-  const submitCreateRoom = async (label: string) => {
-    const selectedHost = world.hosts.find(
-      (host) =>
-        host.connectionId === roomDialog?.owner?.connectionId &&
-        host.generation === roomDialog.owner.runtimeGeneration,
-    );
-    if (!selectedHost || !canCreateRoom(roomDialog?.roomKey ?? null)) return;
-    setRoomDialog(null);
-    try {
-      const result = await store.createQualifiedWorkspace(
-        {
-          connectionId: selectedHost.connectionId,
-          runtimeGeneration: selectedHost.generation,
-        },
-        label.trim() || undefined,
-      );
-      rememberCreatedPane(
-        "Room",
-        selectedHost.connectionId,
-        selectedHost.generation,
-        result,
-      );
-    } catch (cause) {
-      reportRoomActionFailure("Room creation", cause);
+      store.notify({
+        kind: "error",
+        message: creationFailureMessage(cause, "Tab"),
+        detail: String(cause),
+      });
     }
   };
   const submitRenameRoom = async (label: string) => {
@@ -786,16 +621,17 @@ export default function PixelOfficeView({
           />
         ) : null}
         <CreateWorkspaceDialog
-          open={roomDialog?.mode === "create" && roomDialog.roomKey === null}
+          open={roomDialog?.mode === "create"}
+          initialDestination={
+            roomDialog?.owner
+              ? {
+                  ...roomDialog.owner,
+                  sourceWorkspaceId: roomForKey(roomDialog.roomKey)
+                    ?.workspaceRef.nativeId,
+                }
+              : undefined
+          }
           onClose={() => setRoomDialog(null)}
-        />
-        <TextInputDialog
-          open={roomDialog?.mode === "create" && roomDialog.roomKey !== null}
-          title="Create room"
-          label="Room name"
-          submitLabel="Create"
-          onClose={() => setRoomDialog(null)}
-          onSubmit={(label) => void submitCreateRoom(label)}
         />
         <TextInputDialog
           open={roomDialog?.mode === "rename"}

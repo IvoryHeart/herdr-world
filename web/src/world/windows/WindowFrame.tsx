@@ -49,7 +49,7 @@ export function WindowFrame({
   active: boolean;
   compact: boolean;
   zIndex: number;
-  onRaise(): void;
+  onRaise(explicit?: boolean): void;
   onPlace(rect: Rect): void;
   onSnap(target: SnapTarget): void;
   onMaximize(): void;
@@ -116,7 +116,7 @@ export function WindowFrame({
     let gesture: Gesture | null = null;
     const begin = (event: PointerEvent) => {
       if (event.button !== 0 || !(event.target instanceof Element)) return;
-      latest.current.onRaise();
+      latest.current.onRaise(true);
       if (event.target.closest(".xterm"))
         latest.current.onTerminalActivate?.(
           event.target.closest<HTMLElement>("[data-pane-id]")?.dataset.paneId ??
@@ -251,7 +251,7 @@ export function WindowFrame({
       if (!event.key.startsWith("Arrow")) return;
       event.preventDefault();
       event.stopPropagation();
-      latest.current.onRaise();
+      latest.current.onRaise(true);
       const n = event.shiftKey ? 1 : 16;
       const dx =
         event.key === "ArrowLeft" ? -n : event.key === "ArrowRight" ? n : 0;

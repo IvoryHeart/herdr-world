@@ -184,6 +184,7 @@ function browserState(): State {
   const topology = navigationTopology();
   const session = {
     ...emptyServerSessionState(1),
+    lastRefresh: 1,
     navigationMode: "browser-local" as const,
     endpointAvailability: Object.fromEntries(
       topology.panes.map((pane) => [
@@ -207,6 +208,17 @@ function browserState(): State {
     ),
     layout: navigationLayout(topology.panes[0], topology.panes),
   };
+  // These navigation-only fixtures model already attached browser sources.
+  session.terminalAttachments = Object.fromEntries(
+    topology.panes.map((pane, index) => [
+      pane.terminal_id,
+      {
+        attempt: index + 1,
+        ready: true,
+        advertisement: session.endpointAvailability[pane.terminal_id],
+      },
+    ]),
+  );
   return {
     ...store.get(),
     ...session,
@@ -1247,6 +1259,7 @@ test("frontend dispatch and availability track each terminal subset and refresh 
         },
         "b1p-terminal": { methods: [], capabilities: [] },
       },
+      terminalAttachments: {},
     });
     expect(endpointCreationReason(store.get(), "tab.create", "a")).toBeNull();
     expect(endpointCreationReason(store.get(), "workspace.create")).toContain(
@@ -1269,6 +1282,17 @@ test("frontend dispatch and availability track each terminal subset and refresh 
     await store.createWorkspace("blocked");
     await store.createTab("b");
     expect(calls.some((call) => call.method.endsWith(".create"))).toBe(false);
+    const advertisement = store.get().endpointAvailability["a1p-terminal"];
+    const attempt = store.beginTerminalAttachment(
+      bridge.connection(),
+      "a1p-terminal",
+    );
+    store.completeTerminalAttachment(
+      bridge.connection(),
+      "a1p-terminal",
+      attempt,
+      advertisement,
+    );
     await store.createTab("a");
     expect(calls.filter((call) => call.method === "tab.create")).toHaveLength(
       1,
@@ -1278,10 +1302,13 @@ test("frontend dispatch and availability track each terminal subset and refresh 
     expect(
       activateConnectionState(switched, "test", 3).endpointAvailability,
     ).toEqual(advertisementBeforeStaleReply);
-    __storeTesting.replaceState({ ...initial, endpointAvailability: {} });
-    expect(endpointCreationReason(store.get(), "tab.create", "a")).toContain(
-      "loading",
-    );
+    __storeTesting.replaceState({
+      ...initial,
+      endpointAvailability: {},
+      terminalAttachments: {},
+    });
+    // A cold source is preparable; ownership is still required at dispatch.
+    expect(endpointCreationReason(store.get(), "tab.create", "a")).toBeNull();
     await store.refresh();
     expect(endpointCreationReason(store.get(), "tab.create", "a")).toBeNull();
   });
@@ -1318,6 +1345,7 @@ for (const transition of [
           ...store.get(),
           layout: null,
           endpointAvailability: control.endpointAvailability,
+          terminalAttachments: {},
         });
         const navigation = store.get().browserNavigation;
         topology.workspaces[0] = {
@@ -1385,11 +1413,9 @@ for (const transition of [
           expect(store.get().layout?.tab_id).toBe("a1");
           expect(store.get().workspaces[0].label).toBe("fresh topology");
           expect(endpointCreationReason(store.get(), "tab.create", "a")).toBe(
-            newer === null
-              ? "Endpoint availability is loading. Open the source terminal and wait for it to connect."
-              : transition === "complete-to-reduced"
-                ? "Herdr endpoint does not advertise tab.create"
-                : null,
+            transition === "complete-to-reduced"
+              ? "Herdr endpoint does not advertise tab.create"
+              : null,
           );
           await queuedEntered.promise;
           expect(

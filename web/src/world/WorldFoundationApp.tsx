@@ -1,4 +1,15 @@
 import {
+  subscribeCreations,
+  useCreationProgress,
+  creationPendingReason,
+  creationFailureMessage,
+  type CreationEvent,
+} from "../creationRequests";
+import {
+  admitCreatedTerminal,
+  createdTerminalIdentity,
+} from "./createdTerminalAdmission";
+import {
   floatingTerminalGeometryId,
   readFloatingTerminalGeometry,
   writeFloatingTerminalGeometry,
@@ -40,8 +51,8 @@ import {
 } from "../components/WindowArrangementMenu";
 import type { CommandExtension } from "../components/CommandCombobox";
 import { ConfirmDialog } from "../components/ModalDialogs";
+import { CreateWorkspaceDialog } from "../components/CreateWorkspaceDialog";
 import { shortcutMatches } from "../shortcutPreferences";
-import { createdRootPaneId } from "./officeRoomActions";
 import { paneShortcutAction } from "../paneShortcuts";
 import {
   adjacentTabId,
@@ -51,6 +62,7 @@ import {
 import { lazyWithReload } from "../lazyWithReload";
 import {
   connectionSnapshot,
+  endpointCreationReason,
   operationalStore,
   shallowEqual,
   store,
@@ -271,15 +283,16 @@ export function moveDockedInspectorGeometry(
 export function parseWorldView(value: unknown): WorldView {
   return WORLD_VIEWS.includes(value as WorldView)
     ? (value as WorldView)
-    : "desk";
+    : "office";
 }
 
 export function worldViewFromPath(pathname: string): WorldView {
+  if (pathname === "/desk") return "desk";
   if (pathname === "/spaces") return "spaces";
   if (pathname === "/tree") return "tree";
   if (pathname === "/graph") return "graph";
   if (pathname === "/office") return "office";
-  return "desk";
+  return "office";
 }
 
 export function worldSelectionIsCurrent(
@@ -432,11 +445,12 @@ function initialView() {
 
 export default function WorldFoundationApp() {
   const [view, setViewState] = useState<WorldView>(initialView);
+  const creationIntentRevision = useRef(0);
   const spaces = useSpacesTabWindowArrangement(view === "spaces");
   const [visualView, setVisualView] = useState<Exclude<WorldView, "spaces">>(
     () => {
       const initial = initialView();
-      return initial === "spaces" ? "desk" : initial;
+      return initial === "spaces" ? "office" : initial;
     },
   );
   const [topbarPortal, setTopbarPortal] = useState<HTMLElement | null>(null);
@@ -509,6 +523,7 @@ export default function WorldFoundationApp() {
     (nextView: InspectorView) => {
       const conversation = workspaceSurfaceInspectorConversation;
       if (!conversation?.availableViews.includes(nextView)) return;
+      creationIntentRevision.current++;
       setInspectorConversations((current) =>
         current.map((candidate) =>
           worldInspectorWindowId(candidate) ===
@@ -753,6 +768,7 @@ export default function WorldFoundationApp() {
             <WorldControlPlane
               view={visualView}
               active={view !== "spaces"}
+              creationIntentRevision={creationIntentRevision}
               inspectorConversations={inspectorConversations}
               dockedInspectorId={dockedInspectorId}
               onDockedInspectorIdChange={setDockedInspectorId}
@@ -858,6 +874,7 @@ export default function WorldFoundationApp() {
 }
 
 function WorldControlPlane({
+  creationIntentRevision,
   view,
   active,
   inspectorConversations,
@@ -874,13 +891,18 @@ function WorldControlPlane({
   onGoToSpaces,
   onPresentedWorldChange,
 }: {
+  creationIntentRevision: { current: number };
   view: Exclude<WorldView, "spaces">;
   active: boolean;
   inspectorConversations: readonly WorldInspectorConversation[];
   dockedInspectorId: string | null;
   onDockedInspectorIdChange(windowId: string | null): void;
   onInspectorConversationsChange(
-    conversations: WorldInspectorConversation[],
+    conversations:
+      | WorldInspectorConversation[]
+      | ((
+          current: WorldInspectorConversation[],
+        ) => WorldInspectorConversation[]),
   ): void;
   onInspectorTerminalPortal(
     windowId: string,
@@ -1026,7 +1048,8 @@ function WorldControlPlane({
   }, []);
   const [pendingSurfacePriority, setPendingSurfacePriority] =
     useState<WorldRuntimePriority | null>(null);
-  const intentRequestRef = useRef(0);
+  const intentRequestRef = creationIntentRevision;
+  const creationProgress = useCreationProgress();
   const inspectorFocusIntentRef = useRef(0);
   const contextRailRef = useRef<HTMLElement | null>(null);
   const [floatingInspectorPortals, setFloatingInspectorPortals] = useState<
@@ -1342,6 +1365,7 @@ function WorldControlPlane({
         active: input.id === activeInspectorId,
         minimized: managedWindows.windows[input.id]?.minimized ?? false,
         onSelect: () => {
+          intentRequestRef.current++;
           windowCommand({ type: "focus", id: input.id });
           const conversation = inspectorConversationsRef.current.find(
             (candidate) => worldInspectorWindowId(candidate) === input.id,
@@ -1359,6 +1383,7 @@ function WorldControlPlane({
     windowInputs,
     managedWindows,
     activeInspectorId,
+    intentRequestRef,
     selectVisualArrangement,
     windowCommand,
     aggregateWorld,
@@ -1732,21 +1757,10 @@ function WorldControlPlane({
         return;
       } else if (tabAction === "create") {
         if (event.repeat) return;
-        action = store
-          .createQualifiedTab(owner, conversation.workspaceId, {
-            numberedLabel: true,
-          })
-          .then((result) => {
-            const paneId = createdRootPaneId(result);
-            return paneId
-              ? workspaceSurfaceSelectionHandlerRef.current({
-                  ...owner,
-                  workspaceId: conversation.workspaceId,
-                  paneId,
-                  view: "terminal",
-                })
-              : false;
-          });
+        action = store.createQualifiedTab(owner, conversation.workspaceId, {
+          numberedLabel: true,
+          sourcePaneId: conversation.paneId ?? undefined,
+        });
       } else if (tabAction === "previous" || tabAction === "next") {
         const tabs = operations
           .get()
@@ -1994,7 +2008,9 @@ function WorldControlPlane({
           onInspectorTerminalPortal(worldInspectorWindowId(conversation), null);
         }
       }
-      onInspectorConversationsChange(retained);
+      onInspectorConversationsChange((current) =>
+        reconcileObservedInspectors(current, inspectorConversations, retained),
+      );
       if (dockedInspectorId && !retainedIds.has(dockedInspectorId)) {
         onDockedInspectorIdChange(null);
       }
@@ -2017,6 +2033,7 @@ function WorldControlPlane({
     }
   }, [
     dockedInspectorId,
+    intentRequestRef,
     operationalSnapshot,
     aggregateWorld,
     hasSelectedConnection,
@@ -2118,9 +2135,13 @@ function WorldControlPlane({
     if (contextRailInspector) closeInspector(contextRailInspector);
   };
 
-  const openTerminalById = async (id: string, signal?: AbortSignal) => {
+  const openTerminalById = async (
+    id: string,
+    signal?: AbortSignal,
+    candidateWorld = world,
+  ) => {
     if (signal?.aborted) throw new Error("Terminal activation was superseded");
-    const node = world.nodeById.get(id);
+    const node = candidateWorld.nodeById.get(id);
     if (!node) throw new Error("This terminal is no longer available");
     try {
       const existing = inspectorConversationsRef.current.find(
@@ -2138,7 +2159,9 @@ function WorldControlPlane({
               worldInspectorWindowId(existing) ===
                 dockedInspectorIdRef.current)))
       ) {
-        if (!(await applySelection(id, "terminal", true, world, signal))) {
+        if (
+          !(await applySelection(id, "terminal", true, candidateWorld, signal))
+        ) {
           throw new Error("This terminal could not be opened");
         }
         return;
@@ -2151,7 +2174,132 @@ function WorldControlPlane({
     }
   };
 
+  const creationFocus = useRef(new Map<number, { intent: number }>());
+  const creationAdmissions = useRef(new Set<AbortController>());
+  const creationOpener = useRef(openTerminalById);
+  creationOpener.current = openTerminalById;
+  const creationCompletion = useRef<(event: CreationEvent) => void>(() => {});
+  creationCompletion.current = (event) => {
+    if (event.phase === "started") {
+      creationFocus.current.set(event.id, {
+        intent: intentRequestRef.current,
+      });
+      return;
+    }
+    if (event.phase === "dispatching") return;
+    const captured = creationFocus.current.get(event.id);
+    creationFocus.current.delete(event.id);
+    // Presentation follows the current view; ownership and intent stay captured.
+    if (event.phase !== "created" || !captured || !active) return;
+    const identity = createdTerminalIdentity(event.result);
+    const paneId = identity?.paneId;
+    const title = event.kind === "tab" ? "Tab" : "Workspace";
+    if (!identity || !paneId) {
+      store.notify({
+        kind: "error",
+        message: `${title} created, but Inspector focus failed`,
+        detail: "Herdr did not return the created terminal identity.",
+      });
+      return;
+    }
+    const preserveNamingNotice =
+      store.get().notice?.message === "Tab created, but naming failed";
+    if (!preserveNamingNotice)
+      store.notify({
+        kind: "success",
+        message: `${title} created; opening terminal…`,
+        loading: true,
+      });
+    const noticeId = store.get().notice?.id;
+    let expectedIntent = captured.intent;
+    const admission = new AbortController();
+    creationAdmissions.current.add(admission);
+    const latestWorld = () =>
+      buildWorldObject(
+        worldRuntimeStore.get().connections,
+        store.get().activeConnectionId,
+      );
+    const exactNode = () =>
+      latestWorld().leaves.find(
+        (node) =>
+          node.connectionId === event.connectionId &&
+          node.generation === event.runtimeGeneration &&
+          node.nativeId === paneId &&
+          node.terminalId === identity.terminalId &&
+          node.workspaceId === identity.workspaceId &&
+          node.tabId === identity.tabId,
+      );
+    void admitCreatedTerminal({
+      signal: admission.signal,
+      subscribe: (listener) => {
+        const offWorld = worldRuntimeStore.subscribe(listener);
+        const offStore = store.subscribe(listener);
+        return () => {
+          offWorld();
+          offStore();
+        };
+      },
+      current: () => {
+        const snapshot = store.get();
+        const host = snapshot.connections.find(
+          (connection) => connection.id === event.connectionId,
+        );
+        const node = exactNode();
+        return {
+          available: Boolean(node?.actionable && !node.stale),
+          observation: `${worldRuntimeStore.get().observedAt}:${connectionSnapshot(snapshot, event.connectionId).lastRefresh}`,
+          invalidReason:
+            intentRequestRef.current !== expectedIntent
+              ? "A newer Inspector selection superseded automatic focus."
+              : snapshot.status !== "connected" ||
+                  host?.state !== "ready" ||
+                  host.generation !== event.runtimeGeneration
+                ? "The owning host or runtime changed before terminal admission."
+                : undefined,
+        };
+      },
+      open: async (signal) => {
+        const node = exactNode();
+        if (!node)
+          throw new Error("The created terminal is no longer available.");
+        // The opener advances intent before synchronous browser navigation publishes.
+        expectedIntent = intentRequestRef.current + 1;
+        const opening = creationOpener.current(node.id, signal, latestWorld());
+        expectedIntent = intentRequestRef.current;
+        await opening;
+      },
+      observe: () => worldRuntimeStore.refresh(),
+    })
+      .then(() => {
+        if (!preserveNamingNotice && store.get().notice?.id === noticeId)
+          store.clearNotice();
+      })
+      .catch((error) => {
+        if (!admission.signal.aborted)
+          store.notify({
+            kind: "error",
+            message: `${title} created, but Inspector focus failed`,
+            detail: String(error),
+          });
+      })
+      .finally(() => creationAdmissions.current.delete(admission));
+  };
+  useEffect(() => {
+    const unsubscribe = subscribeCreations((event) =>
+      creationCompletion.current(event),
+    );
+    const focus = creationFocus.current;
+    const admissions = creationAdmissions.current;
+    return () => {
+      unsubscribe();
+      focus.clear();
+      for (const admission of admissions) admission.abort();
+      admissions.clear();
+    };
+  }, []);
+
   const closeInspector = (conversation: WorldInspectorConversation) => {
+    intentRequestRef.current++;
     const remaining = inspectorConversationsRef.current.filter(
       (candidate) =>
         worldInspectorWindowId(candidate) !==
@@ -2255,15 +2403,23 @@ function WorldControlPlane({
     onDockedInspectorIdChange(null);
   };
 
+  const selectedLeaseCurrent =
+    selected &&
+    connectionSelection.connections.some(
+      (owner) =>
+        owner.id === selected.connectionId &&
+        owner.state === "ready" &&
+        owner.generation === selected.generation,
+    );
   useEffect(() => {
     if (
       selected &&
-      (!currentSelectionGeneration || shouldCloseWorldInspector(selected))
+      (!selectedLeaseCurrent || shouldCloseWorldInspector(selected))
     ) {
       intentRequestRef.current += 1;
       setIntentOpening(false);
     }
-  }, [currentSelectionGeneration, selected]);
+  }, [selectedLeaseCurrent, selected, intentRequestRef]);
 
   const showSelectionProfile = Boolean(
     selected &&
@@ -2359,8 +2515,15 @@ function WorldControlPlane({
           if (intentRequestRef.current === requestId) setIntentOpening(false);
         });
     },
-    [],
+    [intentRequestRef],
   );
+  const [workspaceCreationOpen, setWorkspaceCreationOpen] = useState(false);
+  const [workspaceCreationDestination, setWorkspaceCreationDestination] =
+    useState<{
+      connectionId: string;
+      runtimeGeneration: number;
+      sourceWorkspaceId?: string;
+    }>();
   const visualActionExtension = useMemo<CommandExtension>(() => {
     const target = visualRouteActionTarget(selected);
     const resolved = resolveVisualRouteActionTarget(target, world, {
@@ -2405,6 +2568,115 @@ function WorldControlPlane({
               run: () => {},
             },
           ];
+    const workspaceId =
+      resolved.node?.kind === "space"
+        ? resolved.node.nativeId
+        : resolved.node && resolved.node.kind !== "host"
+          ? resolved.node.workspaceId
+          : undefined;
+    const creationActions = [
+      {
+        key: "visual-new-workspace",
+        icon: <LayoutGrid size={15} />,
+        title: "New workspace",
+        detail: "Confirm a destination host",
+        keywords: ["new", "create", "workspace", "room"],
+        disabledReason: operationalSnapshot.connections.some(
+          (connection) => connection.state === "ready",
+        )
+          ? null
+          : "No destination host is ready.",
+        run: () => {
+          setWorkspaceCreationDestination(
+            resolved.node
+              ? {
+                  connectionId: resolved.node.connectionId,
+                  runtimeGeneration: resolved.node.generation,
+                  sourceWorkspaceId: workspaceId,
+                }
+              : undefined,
+          );
+          setWorkspaceCreationOpen(true);
+        },
+      },
+      {
+        key: "visual-new-tab",
+        icon: <Terminal size={15} />,
+        title: "New tab",
+        detail: resolved.node
+          ? visualRouteTargetLabel(resolved.node)
+          : "Select a workspace, agent or terminal",
+        keywords: ["new", "create", "tab", "desk", "seat"],
+        disabledReason:
+          resolved.node && workspaceId
+            ? (creationPendingReason(
+                {
+                  connectionId: resolved.node.connectionId,
+                  runtimeGeneration: resolved.node.generation,
+                },
+                "tab",
+                workspaceId,
+                creationProgress,
+              ) ??
+              endpointCreationReason(
+                connectionSnapshot(
+                  operationalSnapshot,
+                  resolved.node.connectionId,
+                ),
+                "tab.create",
+                workspaceId,
+                resolved.node.kind === "agent" ||
+                  resolved.node.kind === "terminal"
+                  ? resolved.node.nativeId
+                  : undefined,
+              ))
+            : (resolved.reason ??
+              "Select a workspace, agent or terminal first."),
+        run: () => {
+          const current = shellActionContext.current;
+          const checked = resolveVisualRouteActionTarget(
+            target,
+            current.world,
+            {
+              activeConnectionId: target?.connectionId ?? "",
+              runtimeGeneration: target?.runtimeGeneration ?? null,
+              selectedId: current.selected?.id ?? null,
+            },
+          );
+          if (!checked.node || checked.node.kind === "host") {
+            setIntentError(checked.reason ?? "Select a workspace first.");
+            return;
+          }
+          const workspaceId =
+            checked.node.kind === "space"
+              ? checked.node.nativeId
+              : checked.node.workspaceId;
+          void store
+            .createQualifiedTab(
+              {
+                connectionId: checked.node.connectionId,
+                runtimeGeneration: checked.node.generation,
+              },
+              workspaceId,
+              {
+                numberedLabel: true,
+                sourcePaneId:
+                  checked.node.kind === "agent" ||
+                  checked.node.kind === "terminal"
+                    ? checked.node.nativeId
+                    : undefined,
+              },
+            )
+            .catch((error) =>
+              store.notify({
+                kind: "error",
+                message: creationFailureMessage(error, "Tab"),
+                detail: String(error),
+              }),
+            );
+        },
+      },
+    ];
     const pinNode =
       resolved.node &&
       (resolved.node.kind === "agent" || resolved.node.kind === "terminal")
@@ -2484,6 +2756,7 @@ function WorldControlPlane({
         : undefined,
       captureKey: resolved.node && target ? JSON.stringify(target) : null,
       groups: [
+        { heading: "Create", actions: creationActions },
         { heading: "Visual selection", actions: targetActions },
         {
           heading: "Pinned panes",
@@ -2501,6 +2774,8 @@ function WorldControlPlane({
       ],
     };
   }, [
+    operationalSnapshot,
+    creationProgress,
     selected,
     world,
     watchlist.records,
@@ -2524,6 +2799,11 @@ function WorldControlPlane({
       id="world"
       data-active={active ? "true" : "false"}
     >
+      <CreateWorkspaceDialog
+        open={workspaceCreationOpen}
+        initialDestination={workspaceCreationDestination}
+        onClose={() => setWorkspaceCreationOpen(false)}
+      />
       <ConfirmDialog
         open={inspectorClose !== null}
         title={`Close Inspector ${inspectorClose?.target.type ?? "tab"}`}
@@ -2739,7 +3019,8 @@ function WorldControlPlane({
                       node ?? undefined,
                     ).catch(() => undefined);
                   }}
-                  onRaise={() => {
+                  onRaise={(explicit) => {
+                    if (explicit) intentRequestRef.current++;
                     inspectorFocusIntentRef.current += 1;
                     windowCommand({ type: "raise", id: entry.id });
                   }}
@@ -2835,6 +3116,8 @@ function WorldControlPlane({
               )
             }
             onChange={(change) => {
+              if (change.view && change.view !== conversation.view)
+                intentRequestRef.current++;
               const next = inspectorConversationsRef.current.map((candidate) =>
                 worldInspectorWindowId(candidate) ===
                 worldInspectorWindowId(conversation)
@@ -2874,6 +3157,7 @@ function WorldControlPlane({
                 }),
             }}
             onResourceFocus={() => {
+              intentRequestRef.current++;
               const id = worldInspectorWindowId(conversation);
               raiseInspector(id);
               revealInspector(id);
@@ -3109,4 +3393,30 @@ export async function activateWorldNodeHost(
   ) {
     throw new Error("The host changed while it was being activated");
   }
+}
+
+/** Apply observed metadata only to the conversations present when it was read. */
+export function reconcileObservedInspectors(
+  current: readonly WorldInspectorConversation[],
+  observed: readonly WorldInspectorConversation[],
+  retained: readonly WorldInspectorConversation[],
+) {
+  const before = new Map(
+    observed.map((conversation) => [
+      worldInspectorWindowId(conversation),
+      conversation,
+    ]),
+  );
+  const after = new Map(
+    retained.map((conversation) => [
+      worldInspectorWindowId(conversation),
+      conversation,
+    ]),
+  );
+  return current.flatMap((conversation) => {
+    const id = worldInspectorWindowId(conversation);
+    if (before.get(id) !== conversation) return [conversation];
+    const replacement = after.get(id);
+    return replacement ? [replacement] : [];
+  });
 }

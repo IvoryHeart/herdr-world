@@ -210,6 +210,7 @@ export function TabTerminalPaneLayout({
   onAgentHistoryOpenChange,
   onOpenWorkspaceFile,
   excludedPaneIds = new Set(),
+  retainedPaneIds = new Set(),
 }: {
   layout: PaneLayout | null;
   unavailableMessage?: string;
@@ -228,6 +229,7 @@ export function TabTerminalPaneLayout({
   onAgentHistoryOpenChange: (open: boolean) => void;
   onOpenWorkspaceFile: (request: TerminalWorkspaceFileRequest) => void;
   excludedPaneIds?: ReadonlySet<string>;
+  retainedPaneIds?: ReadonlySet<string>;
 }) {
   const store = useOperationalStore();
   const onFocusPane =
@@ -262,116 +264,40 @@ export function TabTerminalPaneLayout({
     );
   };
 
-  if (layout && visiblePanes.length === 0 && excludedPaneIds.size > 0) {
-    return (
-      <div className="terminal-empty" role="status">
-        This terminal remains open in its World Inspector.
-      </div>
-    );
-  }
-
-  if (!layout || visiblePanes.length === 0) {
-    return (
-      <div className="terminal-empty" role="status">
-        {unavailableMessage ?? "Loading tab layout…"}
-      </div>
-    );
-  }
-
-  if (layout.zoomed || visiblePanes.length <= 1) {
-    return (
-      <div
-        className="pane-layout-single"
-        data-pane-id={activePaneId ?? undefined}
-        onPointerDownCapture={() => {
-          if (activePaneId && activePaneId !== selectedPaneId)
-            onFocusPane(activePaneId);
-        }}
-      >
-        <TerminalView
-          key={mountKeyForPane(activePaneId)}
-          paneId={activePaneId ?? undefined}
-          terminalTheme={terminalTheme}
-          terminalFontScale={terminalFontScale}
-          mobileShortcuts={mobileShortcuts}
-          mobileSideShortcuts={mobileSideShortcuts}
-          composerOpen={composerOpen}
-          onComposerOpenChange={onComposerOpenChange}
-          agentHistoryOpen={agentHistoryOpen}
-          onAgentHistoryOpenChange={onAgentHistoryOpenChange}
-          onOpenWorkspaceFile={onOpenWorkspaceFile}
-        />
-      </div>
-    );
-  }
-
-  if (mobile && activePaneId) {
-    const activeIndex = Math.max(
-      0,
-      visiblePanes.findIndex((lp) => lp.pane_id === activePaneId),
-    );
-    const previousPane =
-      visiblePanes[
-        (activeIndex - 1 + visiblePanes.length) % visiblePanes.length
-      ];
-    const nextPane = visiblePanes[(activeIndex + 1) % visiblePanes.length];
-    return (
-      <div className="pane-switcher-layout" aria-label="Terminal pane switcher">
-        <div className="pane-switcher">
-          <button
-            type="button"
-            className="pane-switcher-button"
-            aria-label="Previous pane"
-            data-pane-id={previousPane.pane_id}
-            tabIndex={-1}
-            onPointerDown={blurActiveInput}
-            onClick={() => onFocusPane(previousPane.pane_id)}
-          >
-            <ChevronLeft size={15} />
-          </button>
-          <div className="pane-switcher-label">
-            <strong>
-              Pane {activeIndex + 1} / {visiblePanes.length}
-            </strong>
-            <span>{paneTitle(activePaneId, panes)}</span>
-          </div>
-          <button
-            type="button"
-            className="pane-switcher-button"
-            aria-label="Next pane"
-            data-pane-id={nextPane.pane_id}
-            tabIndex={-1}
-            onPointerDown={blurActiveInput}
-            onClick={() => onFocusPane(nextPane.pane_id)}
-          >
-            <ChevronRight size={15} />
-          </button>
-        </div>
-        <TerminalView
-          key={mountKeyForPane(activePaneId)}
-          paneId={activePaneId}
-          terminalTheme={terminalTheme}
-          terminalFontScale={terminalFontScale}
-          mobileShortcuts={mobileShortcuts}
-          mobileSideShortcuts={mobileSideShortcuts}
-          composerOpen={composerOpen}
-          onComposerOpenChange={onComposerOpenChange}
-          agentHistoryOpen={agentHistoryOpen}
-          onAgentHistoryOpenChange={onAgentHistoryOpenChange}
-          onOpenWorkspaceFile={onOpenWorkspaceFile}
-        />
-      </div>
-    );
-  }
-
-  const area = layout.area;
+  const splitLayout = Boolean(
+    layout && !layout.zoomed && !mobile && visiblePanes.length > 1,
+  );
+  const paneSwitcher = Boolean(
+    layout &&
+      !layout.zoomed &&
+      mobile &&
+      visiblePanes.length > 1 &&
+      activePaneId,
+  );
+  const activeIndex = Math.max(
+    0,
+    visiblePanes.findIndex((pane) => pane.pane_id === activePaneId),
+  );
+  const previousPane =
+    visiblePanes[(activeIndex - 1 + visiblePanes.length) % visiblePanes.length];
+  const nextPane = visiblePanes[(activeIndex + 1) % visiblePanes.length];
+  const mountedPanes = panes.filter(
+    (pane) =>
+      !excludedPaneIds.has(pane.pane_id) &&
+      (retainedPaneIds.has(pane.pane_id) ||
+        (splitLayout
+          ? visiblePanes.some((visible) => visible.pane_id === pane.pane_id)
+          : pane.pane_id === activePaneId)),
+  );
+  const empty = !layout || visiblePanes.length === 0;
+  const area = layout?.area ?? { x: 0, y: 0, width: 1, height: 1 };
   const areaWidth = Math.max(1, area.width);
   const areaHeight = Math.max(1, area.height);
   const startPaneResize = (
     e: React.PointerEvent<HTMLDivElement>,
     split: PaneLayoutSplitSnapshot,
   ) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !layout) return;
     const container = layoutRef.current;
     if (!container) return;
     e.preventDefault();
@@ -433,30 +359,118 @@ export function TabTerminalPaneLayout({
     window.addEventListener("pointercancel", cancel, true);
   };
 
+  // Keep every demanded terminal in this one keyed list. Switching visibility,
+  // mobile mode or zoom changes its cell, never its TerminalView owner.
   return (
-    <div ref={layoutRef} className="pane-layout" aria-label="Terminal panes">
-      {visiblePanes.map((layoutPane) => {
-        const rect = layoutPane.rect;
-        const isActive = layoutPane.pane_id === activePaneId;
+    <div
+      ref={layoutRef}
+      className={
+        empty
+          ? "terminal-empty"
+          : splitLayout
+            ? "pane-layout"
+            : paneSwitcher
+              ? "pane-switcher-layout"
+              : "pane-layout-single"
+      }
+      aria-label={
+        paneSwitcher
+          ? "Terminal pane switcher"
+          : splitLayout
+            ? "Terminal panes"
+            : undefined
+      }
+      data-pane-id={
+        !empty && !splitLayout && !paneSwitcher
+          ? (activePaneId ?? undefined)
+          : undefined
+      }
+      onPointerDownCapture={() => {
+        if (
+          !splitLayout &&
+          !paneSwitcher &&
+          activePaneId &&
+          activePaneId !== selectedPaneId
+        )
+          onFocusPane(activePaneId);
+      }}
+    >
+      {empty ? (
+        <div role="status">
+          {layout && excludedPaneIds.size > 0
+            ? "This terminal remains open in its World Inspector."
+            : (unavailableMessage ?? "Loading tab layout…")}
+        </div>
+      ) : null}
+      {paneSwitcher && previousPane && nextPane ? (
+        <div className="pane-switcher">
+          <button
+            type="button"
+            className="pane-switcher-button"
+            aria-label="Previous pane"
+            data-pane-id={previousPane.pane_id}
+            tabIndex={-1}
+            onPointerDown={blurActiveInput}
+            onClick={() => onFocusPane(previousPane.pane_id)}
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <div className="pane-switcher-label">
+            <strong>
+              Pane {activeIndex + 1} / {visiblePanes.length}
+            </strong>
+            <span>{paneTitle(activePaneId!, panes)}</span>
+          </div>
+          <button
+            type="button"
+            className="pane-switcher-button"
+            aria-label="Next pane"
+            data-pane-id={nextPane.pane_id}
+            tabIndex={-1}
+            onPointerDown={blurActiveInput}
+            onClick={() => onFocusPane(nextPane.pane_id)}
+          >
+            <ChevronRight size={15} />
+          </button>
+        </div>
+      ) : null}
+      {mountedPanes.map((pane) => {
+        const layoutPane = visiblePanes.find(
+          (visible) => visible.pane_id === pane.pane_id,
+        );
+        const isActive = pane.pane_id === activePaneId;
+        const shown =
+          !empty && Boolean(layoutPane) && (splitLayout || isActive);
+        const rect = splitLayout && shown ? layoutPane?.rect : undefined;
         return (
           <div
-            key={mountKeyForPane(layoutPane.pane_id)}
-            className={`pane-layout-cell ${isActive ? "is-active" : ""}`}
-            data-pane-id={layoutPane.pane_id}
-            style={{
-              left: `${rectPercent(rect.x, area.x, areaWidth)}%`,
-              top: `${rectPercent(rect.y, area.y, areaHeight)}%`,
-              width: `${(rect.width / areaWidth) * 100}%`,
-              height: `${(rect.height / areaHeight) * 100}%`,
-            }}
+            key={mountKeyForPane(pane.pane_id)}
+            className={
+              splitLayout
+                ? `pane-layout-cell ${isActive ? "is-active" : ""}`
+                : "pane-layout-cell-single"
+            }
+            data-pane-id={pane.pane_id}
+            aria-hidden={!shown || undefined}
+            style={
+              !shown
+                ? { display: "none" }
+                : rect
+                  ? {
+                      left: `${rectPercent(rect.x, area.x, areaWidth)}%`,
+                      top: `${rectPercent(rect.y, area.y, areaHeight)}%`,
+                      width: `${(rect.width / areaWidth) * 100}%`,
+                      height: `${(rect.height / areaHeight) * 100}%`,
+                    }
+                  : undefined
+            }
             onPointerDownCapture={() => {
-              if (layoutPane.pane_id !== selectedPaneId)
-                onFocusPane(layoutPane.pane_id);
+              if (splitLayout && pane.pane_id !== selectedPaneId)
+                onFocusPane(pane.pane_id);
             }}
           >
             <TerminalView
-              key={mountKeyForPane(layoutPane.pane_id)}
-              paneId={layoutPane.pane_id}
+              paneId={pane.pane_id}
               terminalTheme={terminalTheme}
               terminalFontScale={terminalFontScale}
               showMobileKeys={isActive}
@@ -471,32 +485,34 @@ export function TabTerminalPaneLayout({
           </div>
         );
       })}
-      {layout.splits.map((split) => {
-        const horizontal = split.direction === "right";
-        const boundary = splitBoundaryFromPaneRects(layout.panes, split);
-        return (
-          <div
-            key={split.id}
-            className={`pane-resize-handle ${horizontal ? "is-vertical" : "is-horizontal"}`}
-            style={
-              horizontal
-                ? {
-                    left: `${rectPercent(boundary, area.x, areaWidth)}%`,
-                    top: `${rectPercent(split.rect.y, area.y, areaHeight)}%`,
-                    height: `${(split.rect.height / areaHeight) * 100}%`,
-                  }
-                : {
-                    top: `${rectPercent(boundary, area.y, areaHeight)}%`,
-                    left: `${rectPercent(split.rect.x, area.x, areaWidth)}%`,
-                    width: `${(split.rect.width / areaWidth) * 100}%`,
-                  }
-            }
-            onPointerDown={(event) => startPaneResize(event, split)}
-            role="separator"
-            aria-orientation={horizontal ? "vertical" : "horizontal"}
-          />
-        );
-      })}
+      {splitLayout &&
+        layout &&
+        layout.splits.map((split) => {
+          const horizontal = split.direction === "right";
+          const boundary = splitBoundaryFromPaneRects(layout.panes, split);
+          return (
+            <div
+              key={split.id}
+              className={`pane-resize-handle ${horizontal ? "is-vertical" : "is-horizontal"}`}
+              style={
+                horizontal
+                  ? {
+                      left: `${rectPercent(boundary, area.x, areaWidth)}%`,
+                      top: `${rectPercent(split.rect.y, area.y, areaHeight)}%`,
+                      height: `${(split.rect.height / areaHeight) * 100}%`,
+                    }
+                  : {
+                      top: `${rectPercent(boundary, area.y, areaHeight)}%`,
+                      left: `${rectPercent(split.rect.x, area.x, areaWidth)}%`,
+                      width: `${(split.rect.width / areaWidth) * 100}%`,
+                    }
+              }
+              onPointerDown={(event) => startPaneResize(event, split)}
+              role="separator"
+              aria-orientation={horizontal ? "vertical" : "horizontal"}
+            />
+          );
+        })}
     </div>
   );
 }

@@ -2168,19 +2168,15 @@ function drawRoom(
     );
   });
   if (seatCreationState.visible) {
-    if (room.desks.length < OFFICE_GEOMETRY.desksPerRoom) {
-      drawNewSeatAction(
-        parent,
-        room,
-        rect,
-        room.desks.length,
-        theme.accent,
-        seatCreationState.enabled,
-        onNewSeat,
-      );
-    } else {
-      drawFullRoomAction(parent, rect, theme.accent);
-    }
+    drawNewSeatAction(
+      parent,
+      room,
+      rect,
+      room.desks.length,
+      theme.accent,
+      seatCreationState.enabled,
+      onNewSeat,
+    );
   }
 
   const overflow: string[] = [];
@@ -2238,7 +2234,14 @@ function drawNewSeatAction(
   enabled: boolean,
   onNewSeat: (roomKey: string) => void,
 ) {
-  const anchor = deskAnchor(rect, index);
+  const anchor =
+    index >= OFFICE_GEOMETRY.desksPerRoom
+      ? {
+          x: rect.x + rect.width / 2,
+          deskY: rect.y + rect.height - 40,
+          nameY: rect.y + rect.height - 12,
+        }
+      : deskAnchor(rect, index);
   const action = new Container();
   action.label = room.key;
   action.eventMode = "static";
@@ -2279,28 +2282,6 @@ function drawNewSeatAction(
   hint.position.set(anchor.x, anchor.nameY + 7);
   action.addChild(hint);
   parent.addChild(action);
-}
-
-function drawFullRoomAction(
-  parent: Container,
-  rect: OfficeRoomRect,
-  accent: number,
-) {
-  const x = rect.x + rect.width / 2;
-  const y = rect.y + rect.height - 40;
-  const plate = new Graphics();
-  plate
-    .roundRect(x - 25, y, 50, 27, 5)
-    .fill({ color: accent, alpha: 0.04 })
-    .stroke({ width: 1, color: accent, alpha: 0.38 });
-  parent.addChild(plate);
-  const plus = label("+", { size: 19, color: 0x9c947f, anchor: 0.5 });
-  plus.alpha = 0.62;
-  plus.position.set(x, y + 13);
-  parent.addChild(plus);
-  const hint = label("ROOM FULL", { size: 7, color: 0x8e958a, anchor: 0.5 });
-  hint.position.set(x, y + 35);
-  parent.addChild(hint);
 }
 
 function drawTabDesk(

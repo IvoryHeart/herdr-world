@@ -176,6 +176,11 @@ test.skipIf(!chrome).each(cases)(
           );
         }),
       ]);
+      if (Array.isArray(observed) && observed.length)
+        console.info(
+          "Hosts filter failures",
+          JSON.stringify(observed).slice(0, 1800),
+        );
       expect(observed).toEqual([]);
     } finally {
       clearTimeout(timeout);

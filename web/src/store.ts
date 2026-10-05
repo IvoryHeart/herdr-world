@@ -31,6 +31,7 @@ import {
 } from "./connectionStorage";
 import {
   type EndpointAvailability,
+  type EndpointAdvertisement,
   endpointMethodReason,
   parseEndpointAdvertisement,
   parseEndpointAvailability,
@@ -59,6 +60,14 @@ import {
 import { syncTaskPush, type TaskNotificationPreferences } from "./taskPush";
 import { disposeTerminalConnection } from "./terminalConnection";
 import {
+  coordinateCreation,
+  retainCreationSource,
+  creationPendingReason,
+  creationFailureMessage,
+  useCreationProgress,
+  type CreationSource,
+} from "./creationRequests";
+import {
   clearTerminalRelayViewports,
   forgetTerminalRelayViewportsExcept,
   terminalRelayViewportForTab,
@@ -70,6 +79,15 @@ export interface ServerSessionState {
   serverRuntimeGeneration: number | null;
   navigationMode: "browser-local" | "shared";
   endpointAvailability: EndpointAvailability;
+  /** Current browser attachment attempts; runtime advertisements are not ownership. */
+  terminalAttachments: Record<
+    string,
+    {
+      attempt: number;
+      ready: boolean;
+      advertisement?: EndpointAdvertisement | null;
+    }
+  >;
   browserNavigation: BrowserNavigation;
   workspaces: Workspace[];
   tabs: Tab[];
@@ -197,6 +215,7 @@ export function emptyServerSessionState(
     serverRuntimeGeneration,
     navigationMode: "shared",
     endpointAvailability: {},
+    terminalAttachments: {},
     browserNavigation: emptyBrowserNavigation(),
     workspaces: [],
     tabs: [],
@@ -421,6 +440,7 @@ const SERVER_SESSION_KEYS: Array<keyof ServerSessionState> = [
   "serverRuntimeGeneration",
   "navigationMode",
   "endpointAvailability",
+  "terminalAttachments",
   "browserNavigation",
   "workspaces",
   "tabs",
@@ -442,6 +462,7 @@ function serverSessionFromState(snapshot: State): ServerSessionState {
     serverRuntimeGeneration: snapshot.serverRuntimeGeneration,
     navigationMode: snapshot.navigationMode,
     endpointAvailability: snapshot.endpointAvailability,
+    terminalAttachments: snapshot.terminalAttachments,
     browserNavigation: snapshot.browserNavigation,
     workspaces: snapshot.workspaces,
     tabs: snapshot.tabs,
@@ -1356,6 +1377,7 @@ const REFRESH_SLICE_KEYS = [
   "endpointAvailability",
 ] as const;
 const REFRESH_SCALAR_KEYS = [
+  "serverRuntimeGeneration",
   "navigationMode",
   "error",
   "pendingFocusWorkspaceId",
@@ -1398,7 +1420,9 @@ export function stabilizeRefreshPatch(
     changed = true;
   };
   for (const key of REFRESH_SCALAR_KEYS) adoptScalar(key);
-  if (!changed) return null;
+  // A first/reconnect observation establishes hydration even when cached
+  // topology is identical. Subsequent unchanged observations stay silent.
+  if (!changed && snapshot.lastRefresh) return null;
   patch.lastRefresh = next.lastRefresh ?? Date.now();
   return patch;
 }
@@ -1504,6 +1528,7 @@ async function refreshNow(
     const navigationMode =
       wsRes?.navigation_mode === "browser-local" ? "browser-local" : "shared";
     const next: Partial<State> = {
+      serverRuntimeGeneration: lease.generation,
       navigationMode,
       endpointAvailability: parseEndpointAvailability(
         wsRes?.endpoint_availability,
@@ -2109,6 +2134,8 @@ function rearmTerminalAttachmentsAfterCatalog(catalogReady: boolean): boolean {
         ...session,
         terminalAttachEpoch: session.terminalAttachEpoch + 1,
         endpointAvailability: {},
+        terminalAttachments: {},
+        lastRefresh: 0,
       },
     ]),
   );
@@ -2116,6 +2143,8 @@ function rearmTerminalAttachmentsAfterCatalog(catalogReady: boolean): boolean {
     ...state,
     sessionsByConnectionId,
     terminalAttachEpoch: state.terminalAttachEpoch + 1,
+    terminalAttachments: {},
+    lastRefresh: 0,
   };
   emit();
   return true;
@@ -2479,46 +2508,89 @@ export function endpointCreationReason(
     | "browserNavigation"
     | "panes"
     | "endpointAvailability"
+    | "terminalAttachments"
+    | "activeConnectionId"
+    | "serverRuntimeGeneration"
   >,
   method: "tab.create" | "workspace.create",
   workspaceId = snapshot.browserNavigation.workspaceId,
+  sourcePaneId?: string,
 ): string | null {
+  const pending = creationPendingReason(
+    {
+      connectionId: snapshot.activeConnectionId,
+      runtimeGeneration: snapshot.serverRuntimeGeneration,
+    },
+    method === "tab.create" ? "tab" : "workspace",
+    workspaceId,
+  );
+  if (pending) return pending;
   if (snapshot.navigationMode === "shared") return null;
   // Empty bootstrap deliberately uses the validated control API, not an endpoint.
   if (method === "workspace.create" && snapshot.workspaces.length === 0)
     return null;
-  const tabId = workspaceId
-    ? snapshot.browserNavigation.tabIds[workspaceId]
-    : undefined;
-  const paneId = tabId ? snapshot.browserNavigation.paneIds[tabId] : undefined;
-  const pane = snapshot.panes.find((pane) => pane.pane_id === paneId);
-  const advertisement = pane
-    ? snapshot.endpointAvailability[pane.terminal_id]
-    : null;
-  return (
-    endpointMethodReason(
-      snapshot.navigationMode,
-      advertisement,
-      "pane.focus",
-    ) ?? endpointMethodReason(snapshot.navigationMode, advertisement, method)
+  const source = browserCreationSource(
+    workspaceId ?? null,
+    snapshot,
+    sourcePaneId,
   );
+  const pane = snapshot.panes.find((pane) => pane.pane_id === source?.pane_id);
+  const advertisement = pane
+    ? (snapshot.terminalAttachments[pane.terminal_id]?.advertisement ??
+      snapshot.endpointAvailability[pane.terminal_id])
+    : null;
+  if (advertisement) {
+    const reason =
+      endpointMethodReason(
+        snapshot.navigationMode,
+        advertisement,
+        "pane.focus",
+      ) ?? endpointMethodReason(snapshot.navigationMode, advertisement, method);
+    if (reason) return reason;
+  }
+  if (!source)
+    return "No current source terminal is available in this workspace.";
+  const attachment = snapshot.terminalAttachments[source.terminal_id];
+  return attachment && !attachment.ready
+    ? "Endpoint availability is loading. Preparing the source terminal."
+    : null;
 }
 
 export function useEndpointCreationReason(
   method: "tab.create" | "workspace.create",
   workspaceId?: string,
 ) {
+  useCreationProgress();
   return useStoreSelector((snapshot) =>
     endpointCreationReason(snapshot, method, workspaceId),
   );
 }
 
-function browserCreationSource(workspaceId: string | null, snapshot = state) {
+function browserCreationSource(
+  workspaceId: string | null,
+  snapshot: Pick<State, "browserNavigation" | "panes"> = state,
+  sourcePaneId?: string,
+) {
   const tabId = workspaceId
     ? snapshot.browserNavigation.tabIds[workspaceId]
     : undefined;
   const paneId = tabId ? snapshot.browserNavigation.paneIds[tabId] : undefined;
-  const pane = snapshot.panes.find((pane) => pane.pane_id === paneId);
+  const preferred = sourcePaneId
+    ? snapshot.panes.find(
+        (pane) =>
+          pane.pane_id === sourcePaneId && pane.workspace_id === workspaceId,
+      )
+    : undefined;
+  if (sourcePaneId && !preferred) return null;
+  const pane =
+    preferred ??
+    snapshot.panes.find(
+      (pane) =>
+        pane.pane_id === paneId &&
+        pane.workspace_id === workspaceId &&
+        pane.tab_id === tabId,
+    ) ??
+    snapshot.panes.find((pane) => pane.workspace_id === workspaceId);
   return pane
     ? {
         workspace_id: pane.workspace_id,
@@ -2527,6 +2599,156 @@ function browserCreationSource(workspaceId: string | null, snapshot = state) {
         terminal_id: pane.terminal_id,
       }
     : null;
+}
+
+async function prepareQualifiedCreation(
+  target: QualifiedRuntimeTarget,
+  lease: StoreConnectionLease,
+  method: "tab.create" | "workspace.create",
+  sourceWorkspaceId?: string,
+  sourcePaneId?: string,
+) {
+  let snapshot = leaseSnapshot(lease);
+  if (
+    snapshot.serverRuntimeGeneration !== target.runtimeGeneration ||
+    !snapshot.lastRefresh ||
+    snapshot.error
+  ) {
+    await refreshAfterCurrent(lease);
+    assertQualifiedLeaseCurrent(target, lease);
+    snapshot = leaseSnapshot(lease);
+    if (
+      snapshot.serverRuntimeGeneration !== target.runtimeGeneration ||
+      !snapshot.lastRefresh ||
+      snapshot.error
+    )
+      throw new Error(
+        snapshot.error ??
+          "The destination host's navigation mode is not available yet.",
+      );
+  }
+  if (snapshot.navigationMode === "shared")
+    return { browserLocal: false, source: null, release: () => {} };
+  if (method === "workspace.create" && snapshot.workspaces.length === 0)
+    return { browserLocal: true, source: null, release: () => {} };
+  const workspaceId =
+    sourceWorkspaceId ??
+    snapshot.browserNavigation.workspaceId ??
+    snapshot.workspaces[0]?.workspace_id ??
+    null;
+  const nativeSource = browserCreationSource(
+    workspaceId,
+    snapshot,
+    sourcePaneId,
+  );
+  if (!nativeSource)
+    throw new Error(
+      "No current source terminal is available in the destination workspace.",
+    );
+  const source: CreationSource = { ...nativeSource, ...target };
+  const advertisement = snapshot.endpointAvailability[source.terminal_id];
+  if (advertisement) {
+    const reason =
+      endpointMethodReason("browser-local", advertisement, "pane.focus") ??
+      endpointMethodReason("browser-local", advertisement, method);
+    if (reason) throw new Error(reason);
+  }
+  const release = retainCreationSource(source);
+  let attachmentAttempt: number | undefined;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let unsubscribe = () => {};
+      const timer = setTimeout(
+        () =>
+          finish(
+            new Error(
+              "Source terminal preparation timed out; nothing was created.",
+            ),
+          ),
+        20_000,
+      );
+      function finish(error?: Error) {
+        clearTimeout(timer);
+        unsubscribe();
+        if (error) reject(error);
+        else resolve();
+      }
+      function check() {
+        if (!qualifiedLeaseIsCurrent(target, lease))
+          return finish(
+            new Error(
+              "The destination host changed during terminal preparation.",
+            ),
+          );
+        const current = leaseSnapshot(lease);
+        if (
+          !current.panes.some(
+            (pane) =>
+              pane.pane_id === source.pane_id &&
+              pane.terminal_id === source.terminal_id &&
+              pane.tab_id === source.tab_id &&
+              pane.workspace_id === source.workspace_id,
+          )
+        )
+          return finish(
+            new Error("The source terminal moved or closed before creation."),
+          );
+        const attachment = current.terminalAttachments[source.terminal_id];
+        if (!attachment?.ready) return;
+        const reason =
+          endpointMethodReason(
+            "browser-local",
+            attachment.advertisement,
+            "pane.focus",
+          ) ??
+          endpointMethodReason(
+            "browser-local",
+            attachment.advertisement,
+            method,
+          );
+        if (!reason) attachmentAttempt = attachment.attempt;
+        finish(reason ? new Error(reason) : undefined);
+      }
+      unsubscribe = store.subscribe(check);
+      check();
+    });
+    assertQualifiedLeaseCurrent(target, lease);
+    return {
+      browserLocal: true,
+      source: nativeSource,
+      release,
+      attachmentAttempt,
+    };
+  } catch (error) {
+    release();
+    throw error;
+  }
+}
+
+function assertCreationSourceCurrent(
+  target: QualifiedRuntimeTarget,
+  lease: StoreConnectionLease,
+  prepared: Awaited<ReturnType<typeof prepareQualifiedCreation>>,
+) {
+  assertQualifiedLeaseCurrent(target, lease);
+  if (!prepared.source) return;
+  const source = prepared.source;
+  const snapshot = leaseSnapshot(lease);
+  const attachment = snapshot.terminalAttachments[source.terminal_id];
+  if (
+    !attachment?.ready ||
+    attachment.attempt !== prepared.attachmentAttempt ||
+    !snapshot.panes.some(
+      (pane) =>
+        pane.pane_id === source.pane_id &&
+        pane.tab_id === source.tab_id &&
+        pane.workspace_id === source.workspace_id &&
+        pane.terminal_id === source.terminal_id,
+    )
+  )
+    throw new Error(
+      "The prepared source changed before dispatch; nothing was created.",
+    );
 }
 
 function navigateBrowser(
@@ -2602,7 +2824,88 @@ function adoptBrowserTarget(lease: StoreConnectionLease, result: unknown) {
   });
 }
 
+let terminalAttachmentAttempt = 0;
 export const store = {
+  beginTerminalAttachment(client: ConnectionClient, terminalId: string) {
+    const attempt = ++terminalAttachmentAttempt;
+    if (!client.isCurrent()) return attempt;
+    const lease = {
+      connectionId: client.connectionId,
+      generation: client.serverRuntimeGeneration ?? client.generation,
+      client,
+    };
+    setForConnection(lease, {
+      terminalAttachments: {
+        ...leaseSnapshot(lease).terminalAttachments,
+        [terminalId]: { attempt, ready: false },
+      },
+      endpointAvailability: {
+        ...leaseSnapshot(lease).endpointAvailability,
+        [terminalId]: null,
+      },
+    });
+    return attempt;
+  },
+  completeTerminalAttachment(
+    client: ConnectionClient,
+    terminalId: string,
+    attempt: number,
+    advertisement: unknown,
+  ) {
+    const lease = {
+      connectionId: client.connectionId,
+      generation: client.serverRuntimeGeneration ?? client.generation,
+      client,
+    };
+    const snapshot = leaseSnapshot(lease);
+    if (
+      !client.isCurrent() ||
+      snapshot.terminalAttachments[terminalId]?.attempt !== attempt
+    )
+      return;
+    setForConnection(lease, {
+      terminalAttachments: {
+        ...snapshot.terminalAttachments,
+        [terminalId]: {
+          attempt,
+          ready: true,
+          advertisement: parseEndpointAdvertisement(advertisement),
+        },
+      },
+      endpointAvailability: {
+        ...snapshot.endpointAvailability,
+        [terminalId]: parseEndpointAdvertisement(advertisement),
+      },
+    });
+  },
+  revokeTerminalAttachment(
+    client: ConnectionClient,
+    terminalId: string,
+    attempt?: number,
+  ) {
+    const lease = {
+      connectionId: client.connectionId,
+      generation: client.serverRuntimeGeneration ?? client.generation,
+      client,
+    };
+    const snapshot = leaseSnapshot(lease);
+    if (
+      !client.isCurrent() ||
+      (attempt !== undefined &&
+        snapshot.terminalAttachments[terminalId]?.attempt !== attempt)
+    )
+      return false;
+    const attachments = { ...snapshot.terminalAttachments };
+    delete attachments[terminalId];
+    setForConnection(lease, {
+      terminalAttachments: attachments,
+      endpointAvailability: {
+        ...snapshot.endpointAvailability,
+        [terminalId]: null,
+      },
+    });
+    return true;
+  },
   setTerminalEndpoint(
     client: ConnectionClient,
     terminalId: string,
@@ -2923,21 +3226,71 @@ export const store = {
   },
 
   createTab(workspaceId: string, options: { numberedLabel?: boolean } = {}) {
-    const navigation = state.browserNavigation;
-    return action(
-      async (lease) => {
-        const reason = endpointCreationReason(state, "tab.create", workspaceId);
-        if (reason) throw new Error(reason);
-        const result: unknown = await lease.client.call("tab.create", {
-          workspace_id: workspaceId,
-          focus: state.navigationMode !== "browser-local",
-          ...(state.navigationMode === "browser-local"
-            ? {
-                browser_source: browserCreationSource(workspaceId),
-              }
-            : {}),
+    const lease = captureConnectionLease();
+    const owner = {
+      connectionId: state.activeConnectionId,
+      runtimeGeneration:
+        state.connections.find(
+          (connection) => connection.id === state.activeConnectionId,
+        )?.generation ?? -1,
+    };
+    return store
+      .createQualifiedTab(owner, workspaceId, options)
+      .catch((error) => {
+        setForConnection(lease, {
+          notice: {
+            kind: "error",
+            message: creationFailureMessage(error, "Tab"),
+            detail: String(error),
+          },
         });
-        if (browserSelectionIsCurrent(navigation))
+        return undefined;
+      });
+  },
+
+  createQualifiedTab(
+    target: QualifiedRuntimeTarget,
+    workspaceId: string,
+    options: { numberedLabel?: boolean; sourcePaneId?: string } = {},
+  ) {
+    const navigation = connectionSnapshot(
+      state,
+      target.connectionId,
+    ).browserNavigation;
+    return coordinateCreation(
+      target,
+      "tab",
+      workspaceId,
+      async (dispatching) => {
+        assertQualifiedLeaseCurrent(target);
+        const lease = captureConnectionLease(target.connectionId);
+        assertQualifiedLeaseCurrent(target, lease);
+        const prepared = await prepareQualifiedCreation(
+          target,
+          lease,
+          "tab.create",
+          workspaceId,
+          options.sourcePaneId,
+        );
+        let result: unknown;
+        try {
+          assertCreationSourceCurrent(target, lease, prepared);
+          dispatching();
+          result = await lease.client.call("tab.create", {
+            workspace_id: workspaceId,
+            focus: !prepared.browserLocal,
+            ...(prepared.browserLocal
+              ? {
+                  browser_source: prepared.source,
+                }
+              : {}),
+          });
+        } finally {
+          prepared.release();
+        }
+        if (!qualifiedLeaseIsCurrent(target, lease)) return result;
+        scheduleRefresh(lease);
+        if (browserSelectionIsCurrent(navigation, lease))
           adoptBrowserTarget(lease, result);
         if (!options.numberedLabel) return result;
 
@@ -2949,70 +3302,17 @@ export const store = {
             label: rename.label,
           });
         } catch (error) {
-          // The tab already exists, so keep the successful create visible while
-          // surfacing the non-fatal naming failure to the user.
           setForConnection(lease, {
             notice: {
               kind: "error",
               message: "Tab created, but naming failed",
-              detail: (error as Error).message,
+              detail: String(error),
             },
           });
         }
         return result;
       },
-      {
-        failureNotice: (error) => ({
-          kind: "error",
-          message: "Tab creation failed",
-          detail: error.message,
-        }),
-      },
     );
-  },
-
-  createQualifiedTab(
-    target: QualifiedRuntimeTarget,
-    workspaceId: string,
-    options: { numberedLabel?: boolean } = {},
-  ) {
-    const navigation = connectionSnapshot(
-      state,
-      target.connectionId,
-    ).browserNavigation;
-    return qualifiedAction(target, async (lease) => {
-      const reason = endpointCreationReason(
-        leaseSnapshot(lease),
-        "tab.create",
-        workspaceId,
-      );
-      if (reason) throw new Error(reason);
-      const result: unknown = await lease.client.call("tab.create", {
-        workspace_id: workspaceId,
-        focus: leaseSnapshot(lease).navigationMode !== "browser-local",
-        ...(leaseSnapshot(lease).navigationMode === "browser-local"
-          ? {
-              browser_source: browserCreationSource(
-                workspaceId,
-                leaseSnapshot(lease),
-              ),
-            }
-          : {}),
-      });
-      assertQualifiedLeaseCurrent(target, lease);
-      if (browserSelectionIsCurrent(navigation, lease)) {
-        adoptBrowserTarget(lease, result);
-      }
-      if (!options.numberedLabel) return result;
-
-      const rename = numberedCreatedTabRename(result);
-      if (!rename) return result;
-      await lease.client.call("tab.rename", {
-        tab_id: rename.tabId,
-        label: rename.label,
-      });
-      return result;
-    });
   },
 
   closeTab(tabId: string) {
@@ -3207,71 +3507,75 @@ export const store = {
   },
 
   createWorkspace(label?: string, cwd?: string) {
-    const navigation = state.browserNavigation;
-    return action(
-      async (lease) => {
-        const reason = endpointCreationReason(state, "workspace.create");
-        if (reason) throw new Error(reason);
-        const result = await lease.client.call("workspace.create", {
-          label,
-          cwd,
-          focus: state.navigationMode !== "browser-local",
-          ...(state.navigationMode === "browser-local"
-            ? {
-                browser_source: browserCreationSource(
-                  state.browserNavigation.workspaceId,
-                ),
-              }
-            : {}),
-        });
-        if (browserSelectionIsCurrent(navigation))
-          adoptBrowserTarget(lease, result);
-        return result;
-      },
-      {
-        failureNotice: (error) => ({
+    const lease = captureConnectionLease();
+    const owner = {
+      connectionId: state.activeConnectionId,
+      runtimeGeneration:
+        state.connections.find(
+          (connection) => connection.id === state.activeConnectionId,
+        )?.generation ?? -1,
+    };
+    return store.createQualifiedWorkspace(owner, label, cwd).catch((error) => {
+      setForConnection(lease, {
+        notice: {
           kind: "error",
-          message: "Workspace creation failed",
-          detail: error.message,
-        }),
-      },
-    );
+          message: creationFailureMessage(error, "Workspace"),
+          detail: String(error),
+        },
+      });
+      return undefined;
+    });
   },
 
   createQualifiedWorkspace(
     target: QualifiedRuntimeTarget,
     label?: string,
     cwd?: string,
+    options: { sourceWorkspaceId?: string } = {},
   ) {
     const navigation = connectionSnapshot(
       state,
       target.connectionId,
     ).browserNavigation;
-    return qualifiedAction(target, async (lease) => {
-      const reason = endpointCreationReason(
-        leaseSnapshot(lease),
-        "workspace.create",
-      );
-      if (reason) throw new Error(reason);
-      const result = await lease.client.call("workspace.create", {
-        label,
-        cwd,
-        focus: leaseSnapshot(lease).navigationMode !== "browser-local",
-        ...(leaseSnapshot(lease).navigationMode === "browser-local"
-          ? {
-              browser_source: browserCreationSource(
-                leaseSnapshot(lease).browserNavigation.workspaceId,
-                leaseSnapshot(lease),
-              ),
-            }
-          : {}),
-      });
-      assertQualifiedLeaseCurrent(target, lease);
-      if (browserSelectionIsCurrent(navigation, lease)) {
-        adoptBrowserTarget(lease, result);
-      }
-      return result;
-    });
+    return coordinateCreation(
+      target,
+      "workspace",
+      JSON.stringify([options.sourceWorkspaceId, label, cwd]),
+      async (dispatching) => {
+        assertQualifiedLeaseCurrent(target);
+        const lease = captureConnectionLease(target.connectionId);
+        assertQualifiedLeaseCurrent(target, lease);
+        const prepared = await prepareQualifiedCreation(
+          target,
+          lease,
+          "workspace.create",
+          options.sourceWorkspaceId,
+        );
+        let result: unknown;
+        try {
+          assertCreationSourceCurrent(target, lease, prepared);
+          dispatching();
+          result = await lease.client.call("workspace.create", {
+            label,
+            cwd,
+            focus: !prepared.browserLocal,
+            ...(prepared.browserLocal
+              ? {
+                  browser_source: prepared.source,
+                }
+              : {}),
+          });
+        } finally {
+          prepared.release();
+        }
+        if (qualifiedLeaseIsCurrent(target, lease)) {
+          scheduleRefresh(lease);
+          if (browserSelectionIsCurrent(navigation, lease))
+            adoptBrowserTarget(lease, result);
+        }
+        return result;
+      },
+    );
   },
 
   renameWorkspace(workspaceId: string, label: string) {
@@ -4457,6 +4761,9 @@ export function operationalStore(context: OperationalContext) {
     notify: store.notify,
     clearNotice: store.clearNotice,
     setTerminalEndpoint: store.setTerminalEndpoint,
+    beginTerminalAttachment: store.beginTerminalAttachment,
+    completeTerminalAttachment: store.completeTerminalAttachment,
+    revokeTerminalAttachment: store.revokeTerminalAttachment,
     refresh: () => refreshNow(lease),
     terminalScrollReason: (terminalId: string, mouseReporting = false) =>
       mouseReporting

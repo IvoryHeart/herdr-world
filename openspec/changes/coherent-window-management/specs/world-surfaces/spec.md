@@ -69,7 +69,7 @@ Terminal fitting SHALL use its visible content box and preserve qualified owners
 
 The native World shell SHALL offer Desk, Spaces, Office, Tree and Graph once each and SHALL keep
 rendered view, browser history and canonical paths `/desk`, `/spaces`, `/office`, `/tree` and `/graph`
-consistent. The World root and unknown paths SHALL resolve to Desk.
+consistent. The World root and unknown paths SHALL resolve to Office.
 The view selector SHALL occupy the existing Roamgate-derived top bar between the World version and
 Hosts filter; a muted aggregate health indicator with the bounded space/agent/stale summary
 in its accessible label and tooltip SHALL remain in that top bar. The shell SHALL provide one shared view-control slot there: Office, Tree and
@@ -83,8 +83,8 @@ desktop. Inspector-created review drafts SHALL remain visible and editable throu
 workspace-qualified annotation panel in every view. Selecting a workspace or pane through either
 the navigator or the focused tab strip SHALL resolve through the same qualified World selection
 path and open or focus the matching Inspector only after exact focus succeeds.
-Desk SHALL be the primary default surface after a valid managed profile is selected. Office, Tree
-and Graph SHALL remain spatial views of the same topology, and Spaces SHALL remain the first-class
+Office SHALL be the primary default surface after a valid managed profile is selected. Desk, Tree
+and Graph SHALL remain views of the same topology, and Spaces SHALL remain the first-class
 operational workspace and profile-management surface rather than being removed or embedded into
 another view.
 The common shell SHALL expose Manage connections separately from its Hosts filter using the
@@ -132,6 +132,18 @@ SHALL NOT reserve a persistent toolbar or mobile/Zen shortcut strip for those in
 - **WHEN** a user opens the World root with a valid restored or default managed profile
 - **THEN** World opens Desk as the primary surface and keeps Office, Tree, Graph and Spaces
   available through the same navigation and shell
+
+#### Scenario: Open the default view
+
+- **WHEN** a user loads the World root, an unknown route or an invalid view value
+- **THEN** Office appears within the common shell and connection onboarding remains
+  available if no admitted runtime exists
+
+#### Scenario: Open an explicit view route
+
+- **WHEN** a user loads `/desk`, `/spaces`, `/office`, `/tree` or `/graph`
+- **THEN** the requested view appears and subsequent browser history preserves that
+  explicit selection
 
 ### Requirement: Shared entity detail drawer
 

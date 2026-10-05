@@ -50,6 +50,7 @@ import {
 } from "./AnnotationComposerPopover";
 import "@xterm/xterm/css/xterm.css";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
+import { useCreationSources } from "../creationRequests";
 import { directoryPreviewName } from "../filesystemPaths";
 import { mobileTerminalShortcutExecution } from "../mobileTerminalShortcutAction";
 import {
@@ -360,6 +361,13 @@ export function TerminalView({
     s.terminalAttachEpoch,
   ]);
   const connectionScopeKey = terminalConnectionKey(terminalIdentity);
+  const creationSources = useCreationSources();
+  const creationDemand = creationSources.find(
+    (source) =>
+      source.connectionId === terminalIdentity.connectionId &&
+      source.runtimeGeneration === terminalIdentity.generation &&
+      source.pane_id === paneId,
+  );
   const terminalFileResolutionCache = useMemo(
     () =>
       new TerminalFileResolutionCache(
@@ -453,6 +461,30 @@ export function TerminalView({
   const attachedRef = useRef<string | null>(null);
   const attachingRef = useRef<string | null>(null);
   const desiredTerminalRef = useRef<string | null>(null);
+  const ownedAttachmentRef = useRef<{
+    terminalId: string;
+    attempt: number;
+  } | null>(null);
+  const detachOwnedTerminal = useCallback(
+    (terminalId: string, sendRemote = true) => {
+      const owned = ownedAttachmentRef.current;
+      if (!owned || owned.terminalId !== terminalId) return;
+      ownedAttachmentRef.current = null;
+      if (
+        !store.revokeTerminalAttachment(
+          connectionClient,
+          terminalId,
+          owned.attempt,
+        )
+      )
+        return;
+      if (sendRemote && connectionClient.isCurrent())
+        void connectionClient
+          .call("terminal.detach", { terminal_id: terminalId })
+          .catch(() => null);
+    },
+    [store, connectionClient],
+  );
   const renderedTerminalRef = useRef<string | null>(null);
   const attachEvictionsRef = useRef<number[]>([]);
   const resizeSyncRef = useRef<TerminalResizeSync | null>(null);
@@ -1274,7 +1306,7 @@ export function TerminalView({
       linkReadyRef.current = false;
       setFileLinkMenu(null);
       cancelRepaint();
-      store.setTerminalEndpoint(connectionClient, closed.terminal_id, null);
+      detachOwnedTerminal(closed.terminal_id, false);
       // Herdr closes the direct attach when another client takes the
       // terminal over (or its stream dies). Re-attach, but bound takeover
       // wars between two clients so they cannot evict each other forever.
@@ -1314,11 +1346,7 @@ export function TerminalView({
         linkReadyRef.current = false;
         setFileLinkMenu(null);
         const terminalId = attachedRef.current ?? desiredTerminalRef.current;
-        if (sendRemoteDetach && terminalId && connectionClient.isCurrent()) {
-          void connectionClient
-            .call("terminal.detach", { terminal_id: terminalId })
-            .catch(() => null);
-        }
+        if (terminalId) detachOwnedTerminal(terminalId, sendRemoteDetach);
       },
     );
 
@@ -2761,9 +2789,7 @@ export function TerminalView({
         !disposedByConnectionLease &&
         connectionClient.isCurrent()
       ) {
-        void connectionClient
-          .call("terminal.detach", { terminal_id: terminalId })
-          .catch(() => null);
+        detachOwnedTerminal(terminalId);
       }
       term.dispose();
       termRef.current = null;
@@ -2775,6 +2801,7 @@ export function TerminalView({
       renderedTerminalRef.current = null;
     };
   }, [
+    detachOwnedTerminal,
     closeTerminalInput,
     store,
     connectionClient,
@@ -2836,9 +2863,7 @@ export function TerminalView({
         !!id && id !== terminalId && ids.indexOf(id) === index,
     );
     for (const staleTerminalId of staleTerminalIds) {
-      void connectionClient
-        .call("terminal.detach", { terminal_id: staleTerminalId })
-        .catch(() => null);
+      detachOwnedTerminal(staleTerminalId);
     }
     if (staleTerminalIds.length > 0) {
       attachedRef.current = null;
@@ -2871,7 +2896,11 @@ export function TerminalView({
       renderedTerminalRef.current = terminalId;
     }
     resizeSyncRef.current?.markAttached({ cols, rows });
-    store.setTerminalEndpoint(connectionClient, terminalId, null);
+    const ownershipAttempt = store.beginTerminalAttachment(
+      connectionClient,
+      terminalId,
+    );
+    ownedAttachmentRef.current = { terminalId, attempt: ownershipAttempt };
     const attachStartedAt = performance.now();
     connectionClient
       .call("terminal.attach", {
@@ -2894,9 +2923,10 @@ export function TerminalView({
           )
             return;
           if (desiredTerminalRef.current === terminalId)
-            store.setTerminalEndpoint(
+            store.completeTerminalAttachment(
               connectionClient,
               terminalId,
+              ownershipAttempt,
               result?.endpoint,
             );
           if (attachingRef.current === terminalId) attachingRef.current = null;
@@ -2930,9 +2960,7 @@ export function TerminalView({
               attachTimeoutCountRef.current += 1;
               attachedRef.current = null;
               attachingRef.current = null;
-              void connectionClient
-                .call("terminal.detach", { terminal_id: terminalId })
-                .catch(() => null);
+              detachOwnedTerminal(terminalId);
               if (attachTimeoutCountRef.current > 2) {
                 setTerminalLoading(false);
                 // Repeated attaches produced no frames right after a
@@ -2970,6 +2998,7 @@ export function TerminalView({
           attachWatchdogRef.current?.cancel(attachAttempt);
           if (attachingRef.current === terminalId) attachingRef.current = null;
           if (desiredTerminalRef.current === terminalId) {
+            detachOwnedTerminal(terminalId);
             attachedRef.current = null;
             setTerminalLoading(false);
             setTerminalAttachError(e instanceof Error ? e.message : String(e));
@@ -2978,6 +3007,7 @@ export function TerminalView({
         },
       );
   }, [
+    detachOwnedTerminal,
     container,
     store,
     fitVisibleTerminal,
@@ -2987,6 +3017,7 @@ export function TerminalView({
     s.status,
     s.terminalAttachEpoch,
     attachRetry,
+    creationDemand,
     connectionClient,
     termInstance,
   ]);

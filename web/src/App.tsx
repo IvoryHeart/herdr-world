@@ -1,3 +1,4 @@
+import { useCreationSources } from "./creationRequests";
 import { useReviewAnnotationDraft } from "./useReviewAnnotationDraft";
 import { bridge } from "./api";
 import {
@@ -95,8 +96,6 @@ import { MobileTabSheet } from "./components/MobileTabSheet";
 import { requestClosePane, requestCloseTab, TabBar } from "./components/TabBar";
 import type { WindowArrangementControl } from "./components/TabBar";
 import { WindowArrangementMenu } from "./components/WindowArrangementMenu";
-import { TabTerminalPaneLayout } from "./TabTerminalPaneLayout";
-import { useVisibleTabLayoutState } from "./visibleTabLayout";
 import type { TerminalWorkspaceFileRequest } from "./components/TerminalView";
 import { WorkspaceTree } from "./components/WorkspaceTree";
 import { isIosDevice } from "./downloadFile";
@@ -162,7 +161,6 @@ import {
   subscribeTerminalComposerDraft,
   terminalComposerDraftKey,
 } from "./terminalComposer";
-import { terminalMountKey } from "./terminalConnection";
 import type { FileExplorerEntry, GitDiffEntry, Pane } from "./types";
 import {
   connectionClientScopeKey,
@@ -202,7 +200,10 @@ import "./styles/layout/topbar.css";
 import "./styles/layout/sidebar.css";
 import "./styles/layout/toast.css";
 import "./styles/layout/mobile-nav.css";
-import type { WorldTerminalPresentation } from "./world/worldTerminalPresentation";
+import {
+  worldInspectorWindowId,
+  type WorldTerminalPresentation,
+} from "./world/worldTerminalPresentation";
 
 const WorkspaceInspectorHost = lazyWithReload("workspace-inspector", () =>
   import("./components/WorkspaceInspectorHost").then((module) => ({
@@ -801,68 +802,6 @@ export function focusExplicitSpacesTab(
 
 export type SpacesTabWindow = { tabId: string; portal: Element | null };
 
-function SpacesTabTerminal({
-  tabId,
-  workspaceId,
-  panes,
-  selectedPaneId,
-  connectionId,
-  connectionGeneration,
-  terminalTheme,
-  terminalFontScale,
-  mobileShortcuts,
-  mobileSideShortcuts,
-  composerOpen,
-  onComposerOpenChange,
-  agentHistoryOpen,
-  onAgentHistoryOpenChange,
-  onOpenWorkspaceFile,
-  onFocusTabWindow,
-}: {
-  tabId: string;
-  workspaceId: string;
-  panes: readonly Pane[];
-  selectedPaneId: string | null;
-  connectionId: string;
-  connectionGeneration: number;
-  terminalTheme: ITheme;
-  terminalFontScale: number;
-  mobileShortcuts: MobileTerminalShortcutRows;
-  mobileSideShortcuts: MobileTerminalSideShortcuts;
-  composerOpen: boolean;
-  onComposerOpenChange(open: boolean): void;
-  agentHistoryOpen: boolean;
-  onAgentHistoryOpenChange(open: boolean): void;
-  onOpenWorkspaceFile(request: TerminalWorkspaceFileRequest): void;
-  onFocusTabWindow?: (tabId: string, paneId: string | null) => void;
-}) {
-  const operations = useOperationalStore();
-  const { layout, error } = useVisibleTabLayoutState(workspaceId, tabId);
-  return (
-    <TabTerminalPaneLayout
-      layout={layout}
-      unavailableMessage={error ?? undefined}
-      panes={panes}
-      selectedPaneId={selectedPaneId}
-      onFocusPane={(paneId) => {
-        onFocusTabWindow?.(tabId, paneId);
-        void operations.focusPane(paneId);
-      }}
-      connectionId={connectionId}
-      connectionGeneration={connectionGeneration}
-      terminalTheme={terminalTheme}
-      terminalFontScale={terminalFontScale}
-      mobileShortcuts={mobileShortcuts}
-      mobileSideShortcuts={mobileSideShortcuts}
-      composerOpen={composerOpen}
-      onComposerOpenChange={onComposerOpenChange}
-      agentHistoryOpen={agentHistoryOpen}
-      onAgentHistoryOpenChange={onAgentHistoryOpenChange}
-      onOpenWorkspaceFile={onOpenWorkspaceFile}
-    />
-  );
-}
-
 export type WorkspaceSurfaceSelection = {
   signal?: AbortSignal;
   agentSessionId?: string;
@@ -937,6 +876,7 @@ export default function App({
   inspectorContext?: WorkspaceInspectorContext | null;
 } = {}) {
   const operations = useOperationalStore();
+  const creationSources = useCreationSources();
   const hasWorkspaceSurface =
     workspaceSurface !== null && workspaceSurfaceVisible;
   const focusExplicitTab = useCallback(
@@ -1358,7 +1298,9 @@ export default function App({
           Boolean(presentation.portal),
       )
     : undefined;
-  const worldPresentationsForView =
+  const [spacesTerminalPortal, setSpacesTerminalPortal] =
+    useState<HTMLDivElement | null>(null);
+  const baseWorldPresentationsForView =
     terminalPresentation === "spaces"
       ? []
       : browserCreationPresentation && !matchingPresentedCreationOwner
@@ -1376,10 +1318,145 @@ export default function App({
             browserCreationPresentation,
           ]
         : worldTerminalPresentations;
-  const presentedTerminalPane =
-    terminalPresentation === "inspector" ? inspectorTerminalPane : undefined;
-  const presentedTerminalPortal =
-    terminalPresentation === "inspector" ? inspectorTerminalPortal : null;
+  const spacesPresentations: WorldTerminalPresentation[] = [];
+  if (
+    terminalPresentation === "spaces" &&
+    focusedWorkspace &&
+    s.serverRuntimeGeneration !== null
+  ) {
+    const destinations = visibleSpacesTabWindows.length
+      ? visibleSpacesTabWindows.map((window) => ({
+          tabId: window.tabId,
+          portal: window.portal,
+        }))
+      : !spacesWindowsSuspended && activeSpacesTabId
+        ? [{ tabId: activeSpacesTabId, portal: spacesTerminalPortal }]
+        : [];
+    for (const destination of destinations) {
+      const tabPanes = s.panes.filter(
+        (pane) =>
+          pane.workspace_id === focusedWorkspace.workspace_id &&
+          pane.tab_id === destination.tabId,
+      );
+      const pane =
+        tabPanes.find((pane) => pane.pane_id === s.selectedPaneId) ??
+        tabPanes.find(
+          (pane) =>
+            pane.pane_id === s.browserNavigation.paneIds[destination.tabId],
+        ) ??
+        tabPanes[0];
+      if (!pane) continue;
+      spacesPresentations.push({
+        nodeId: JSON.stringify([s.activeConnectionId, "pane", pane.pane_id]),
+        connectionId: s.activeConnectionId,
+        runtimeGeneration: s.serverRuntimeGeneration,
+        workspaceId: focusedWorkspace.workspace_id,
+        tabId: destination.tabId,
+        paneId: pane.pane_id,
+        terminalId: pane.terminal_id,
+        label: "Terminal",
+        hostLabel: s.activeConnectionId,
+        spaceLabel: focusedWorkspace.label ?? "Workspace",
+        portal: destination.portal,
+        endpointReadiness: true,
+        presentationKind: "spaces",
+        onFocusPane: (paneId) => {
+          onFocusSpacesTabWindow?.(destination.tabId, paneId);
+          void operations.focusPane(paneId);
+        },
+      });
+    }
+  }
+  if (
+    terminalPresentation === "inspector" &&
+    inspectorTerminalPane &&
+    inspectorWorkspace &&
+    s.serverRuntimeGeneration !== null
+  ) {
+    spacesPresentations.push({
+      nodeId: JSON.stringify([
+        s.activeConnectionId,
+        "pane",
+        inspectorTerminalPane.pane_id,
+      ]),
+      connectionId: s.activeConnectionId,
+      runtimeGeneration: s.serverRuntimeGeneration,
+      workspaceId: inspectorWorkspace.workspace_id,
+      tabId: inspectorTerminalPane.tab_id,
+      paneId: inspectorTerminalPane.pane_id,
+      terminalId: inspectorTerminalPane.terminal_id,
+      label: "Terminal",
+      hostLabel: s.activeConnectionId,
+      spaceLabel: inspectorWorkspace.label ?? "Workspace",
+      portal: inspectorTerminalPortal,
+      endpointReadiness: true,
+      presentationKind: "spaces",
+      onFocusPane: (paneId) => {
+        void operations.focusPane(paneId);
+      },
+    });
+  }
+  const initialPresentations = [...baseWorldPresentationsForView];
+  for (const presentation of spacesPresentations) {
+    const existing = initialPresentations.findIndex(
+      (item) =>
+        worldInspectorWindowId(item) === worldInspectorWindowId(presentation),
+    );
+    if (existing >= 0) initialPresentations[existing] = presentation;
+    else initialPresentations.push(presentation);
+  }
+  const worldPresentationsForView = creationSources.reduce<
+    WorldTerminalPresentation[]
+  >((presentations, source) => {
+    const existing = presentations.findIndex(
+      (presentation) =>
+        presentation.connectionId === source.connectionId &&
+        presentation.runtimeGeneration === source.runtimeGeneration &&
+        presentation.workspaceId === source.workspace_id &&
+        presentation.tabId === source.tab_id,
+    );
+    if (existing >= 0) {
+      const presentation = presentations[existing]!;
+      const session = connectionSnapshot(store.get(), source.connectionId);
+      const selectedStillExists = session.panes.some(
+        (pane) =>
+          pane.pane_id === presentation.paneId &&
+          pane.terminal_id === presentation.terminalId &&
+          pane.tab_id === source.tab_id &&
+          pane.workspace_id === source.workspace_id,
+      );
+      presentations[existing] = {
+        ...presentation,
+        endpointReadiness: true,
+        retainedPanes: [
+          ...(presentation.retainedPanes ?? []),
+          { paneId: source.pane_id, terminalId: source.terminal_id },
+        ],
+        ...(selectedStillExists
+          ? {}
+          : { paneId: source.pane_id, terminalId: source.terminal_id }),
+      };
+      return presentations;
+    }
+    presentations.push({
+      nodeId: JSON.stringify([source.connectionId, "pane", source.pane_id]),
+      connectionId: source.connectionId,
+      runtimeGeneration: source.runtimeGeneration,
+      workspaceId: source.workspace_id,
+      tabId: source.tab_id,
+      paneId: source.pane_id,
+      terminalId: source.terminal_id,
+      label: "Terminal",
+      hostLabel: source.connectionId,
+      spaceLabel: source.workspace_id,
+      portal: null,
+      endpointReadiness: true,
+      retainedPanes: [
+        { paneId: source.pane_id, terminalId: source.terminal_id },
+      ],
+    });
+    return presentations;
+  }, initialPresentations);
   const inspectorResourceStateKey = inspectorState
     ? resourceStateKey(inspectorState.scope)
     : null;
@@ -4273,23 +4350,9 @@ export default function App({
                 !spacesWindowsSuspended &&
                 focusedWorkspace &&
                 activeSpacesTabId ? (
-                  <SpacesTabTerminal
-                    tabId={activeSpacesTabId}
-                    workspaceId={focusedWorkspace.workspace_id}
-                    panes={s.panes}
-                    selectedPaneId={s.selectedPaneId}
-                    connectionId={s.activeConnectionId}
-                    connectionGeneration={s.connectionGeneration}
-                    terminalTheme={terminalTheme}
-                    terminalFontScale={terminalFontScale}
-                    mobileShortcuts={mobileTerminalShortcuts}
-                    mobileSideShortcuts={mobileTerminalSideShortcuts}
-                    composerOpen={terminalComposerOpen}
-                    onComposerOpenChange={setTerminalComposerOpen}
-                    agentHistoryOpen={agentHistoryOpen}
-                    onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
-                    onOpenWorkspaceFile={handleTerminalWorkspaceFile}
-                    onFocusTabWindow={onFocusSpacesTabWindow}
+                  <div
+                    className="spaces-terminal-portal"
+                    ref={setSpacesTerminalPortal}
                   />
                 ) : null}
               </div>
@@ -4399,61 +4462,7 @@ export default function App({
       >
         {inspectorSlot}
       </WorkspaceInspectorPortal>
-      {!hasWorkspaceSurface &&
-      terminalPresentation === "spaces" &&
-      focusedWorkspace
-        ? visibleSpacesTabWindows.map((window) =>
-            createPortal(
-              <SpacesTabTerminal
-                key={window.tabId}
-                tabId={window.tabId}
-                workspaceId={focusedWorkspace.workspace_id}
-                panes={s.panes}
-                selectedPaneId={s.selectedPaneId}
-                connectionId={s.activeConnectionId}
-                connectionGeneration={s.connectionGeneration}
-                terminalTheme={terminalTheme}
-                terminalFontScale={terminalFontScale}
-                mobileShortcuts={mobileTerminalShortcuts}
-                mobileSideShortcuts={mobileTerminalSideShortcuts}
-                composerOpen={terminalComposerOpen}
-                onComposerOpenChange={setTerminalComposerOpen}
-                agentHistoryOpen={agentHistoryOpen}
-                onAgentHistoryOpenChange={setAgentHistoryInspectorOpen}
-                onOpenWorkspaceFile={handleTerminalWorkspaceFile}
-                onFocusTabWindow={onFocusSpacesTabWindow}
-              />,
-              window.portal!,
-              window.tabId,
-            ),
-          )
-        : null}
-      {terminalPresentation === "inspector" &&
-      presentedTerminalPortal &&
-      presentedTerminalPane
-        ? createPortal(
-            <TerminalView
-              key={terminalMountKey(
-                {
-                  connectionId: s.activeConnectionId,
-                  generation: s.connectionGeneration,
-                },
-                presentedTerminalPane.pane_id,
-                presentedTerminalPane.terminal_id,
-              )}
-              paneId={presentedTerminalPane.pane_id}
-              terminalTheme={terminalTheme}
-              terminalFontScale={terminalFontScale}
-              mobileShortcuts={mobileTerminalShortcuts}
-              mobileSideShortcuts={mobileTerminalSideShortcuts}
-              composerOpen={terminalComposerOpen}
-              onComposerOpenChange={setTerminalComposerOpen}
-              onOpenWorkspaceFile={handleTerminalWorkspaceFile}
-            />,
-            presentedTerminalPortal,
-          )
-        : null}
-      {worldPresentationsForView.length ? (
+      {
         <Suspense fallback={null}>
           <WorldTerminalPortalList
             presentations={worldPresentationsForView}
@@ -4465,9 +4474,16 @@ export default function App({
             terminalFontScale={terminalFontScale}
             mobileShortcuts={mobileTerminalShortcuts}
             mobileSideShortcuts={mobileTerminalSideShortcuts}
+            spacesControls={{
+              composerOpen: terminalComposerOpen,
+              onComposerOpenChange: setTerminalComposerOpen,
+              agentHistoryOpen,
+              onAgentHistoryOpenChange: setAgentHistoryInspectorOpen,
+              onOpenWorkspaceFile: handleTerminalWorkspaceFile,
+            }}
           />
         </Suspense>
-      ) : null}
+      }
     </div>
   );
 }
