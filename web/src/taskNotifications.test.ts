@@ -54,12 +54,104 @@ async function withBrowser(
 
 function registration() {
   return {
-    active: { scriptURL: origin + "/task-notifications-sw.js" },
+    active: {
+      scriptURL: origin + "/task-notifications-sw.js?v=2",
+      state: "activated" as ServiceWorkerState,
+    },
     showNotification: mock(async () => {}),
   };
 }
 
 describe("task notification transport", () => {
+  test.each(["succeeded", "failed", "waiting"] as const)(
+    "Ranger %s respects preferences and avoids duplicate system delivery with push",
+    async (status) => {
+      const rangerTarget = {
+        type: "ranger_task",
+        taskId: "11111111-1111-4111-8111-111111111111",
+        runId: "22222222-2222-4222-8222-222222222222",
+      };
+      const active = registration();
+      await withBrowser(
+        {
+          navigator: { serviceWorker: { getRegistration: async () => active } },
+        },
+        async () => {
+          for (const transport of ["local", "push"] as const) {
+            for (const enabled of [true, false]) {
+              active.showNotification.mockClear();
+              const kind = status === "succeeded" ? "completed" : "blocked";
+              __storeTesting.replaceState({
+                ...store.get(),
+                notice: null,
+                connections: [],
+                activeConnectionId: "another-host",
+                taskNotificationsEnabled: true,
+                taskNotificationBusy: false,
+                taskNotificationTransport: transport,
+                taskNotificationPreferences: {
+                  completed: true,
+                  blocked: true,
+                  [kind]: enabled,
+                },
+              });
+              __storeTesting.notifyRangerTask({
+                task_id: rangerTarget.taskId,
+                run_id: rangerTarget.runId,
+                status,
+                title: "Ranger update",
+                body: "Check the scheduled task.",
+              });
+              for (let index = 0; index < 8; index++) await Promise.resolve();
+              if (enabled) {
+                expect(store.get().notice).toMatchObject({
+                  kind:
+                    status === "failed"
+                      ? "error"
+                      : status === "succeeded"
+                        ? "success"
+                        : "info",
+                  actionLabel: "Open Ranger task",
+                  actionRangerTaskId: rangerTarget.taskId,
+                  actionRangerRunId: rangerTarget.runId,
+                });
+              } else expect(store.get().notice).toBeNull();
+              if (enabled && transport === "local") {
+                expect(active.showNotification).toHaveBeenCalledWith(
+                  "Ranger update",
+                  {
+                    body: "Check the scheduled task.",
+                    tag: JSON.stringify([
+                      "roamgate-ranger-task",
+                      rangerTarget.taskId,
+                      rangerTarget.runId,
+                    ]),
+                    data: {
+                      type: TASK_NOTIFICATION_ACTIVATE_EVENT,
+                      target: rangerTarget,
+                    },
+                  },
+                );
+              } else expect(active.showNotification).not.toHaveBeenCalled();
+            }
+          }
+          __storeTesting.replaceState({
+            ...store.get(),
+            notice: null,
+            taskNotificationsEnabled: false,
+          });
+          __storeTesting.notifyRangerTask({
+            task_id: rangerTarget.taskId,
+            run_id: rangerTarget.runId,
+            status,
+            title: "Ranger update",
+            body: "",
+          });
+          expect(store.get().notice).toBeNull();
+        },
+      );
+    },
+  );
   test("uses an active worker when the mobile page constructor throws", async () => {
     const active = registration();
     const register = mock();
@@ -106,7 +198,7 @@ describe("task notification transport", () => {
       await Promise.resolve();
       await Promise.resolve();
       expect(active.showNotification).not.toHaveBeenCalled();
-      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js", {
+      expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=2", {
         updateViaCache: "none",
       });
       pending.active = active.active;
@@ -115,6 +207,114 @@ describe("task notification transport", () => {
       expect(active.showNotification).not.toHaveBeenCalled();
     });
   });
+
+  test("upgrades the legacy worker before delivery even when ready already resolves", async () => {
+    const replacement = Object.assign(new EventTarget(), {
+      scriptURL: origin + "/task-notifications-sw.js?v=2",
+      state: "installing" as ServiceWorkerState,
+    });
+    const active = {
+      ...registration(),
+      active: {
+        scriptURL: origin + "/task-notifications-sw.js",
+        state: "activated" as ServiceWorkerState,
+      },
+      installing: replacement as typeof replacement | null,
+    };
+    const registered = Promise.withResolvers<void>();
+    const register = mock(async () => {
+      registered.resolve();
+      return active;
+    });
+    const addListener = mock(replacement.addEventListener.bind(replacement));
+    replacement.addEventListener = addListener;
+    await withBrowser(
+      {
+        navigator: {
+          serviceWorker: {
+            getRegistration: async () => active,
+            register,
+            ready: Promise.resolve(active),
+          },
+        },
+      },
+      async () => {
+        const showing = showTaskNotification(
+          "Ranger update",
+          {},
+          target,
+          () => true,
+        );
+        await registered.promise;
+        await Promise.resolve();
+        expect(register).toHaveBeenCalledWith("/task-notifications-sw.js?v=2", {
+          updateViaCache: "none",
+        });
+        for (const state of ["installed", "activating"] as const) {
+          replacement.state = state;
+          replacement.dispatchEvent(new Event("statechange"));
+          await Promise.resolve();
+          expect(active.showNotification).not.toHaveBeenCalled();
+        }
+        replacement.state = "activated";
+        active.active = replacement;
+        active.installing = null;
+        replacement.dispatchEvent(new Event("statechange"));
+        await showing;
+        expect(active.showNotification).toHaveBeenCalledTimes(1);
+        expect(
+          (addListener.mock.calls[0]?.[2] as AddEventListenerOptions)?.signal
+            ?.aborted,
+        ).toBe(true);
+        await prepareTaskNotifications();
+        expect(register).toHaveBeenCalledTimes(1);
+      },
+    );
+  });
+
+  test.each(["redundant", "timeout"])(
+    "rejects a replacement that becomes %s and removes its listener",
+    async (failure) => {
+      jest.useFakeTimers();
+      try {
+        const worker = Object.assign(new EventTarget(), {
+          state: "installing" as ServiceWorkerState,
+        });
+        const addListener = mock(worker.addEventListener.bind(worker));
+        worker.addEventListener = addListener;
+        const active = { ...registration(), installing: worker };
+        await withBrowser(
+          {
+            navigator: {
+              serviceWorker: { getRegistration: async () => active },
+            },
+          },
+          async () => {
+            const preparing = prepareTaskNotifications().catch(
+              (error) => error,
+            );
+            await Promise.resolve();
+            if (failure === "redundant") {
+              worker.state = "redundant";
+              worker.dispatchEvent(new Event("statechange"));
+            } else jest.advanceTimersByTime(10_000);
+            expect((await preparing).message).toContain(
+              failure === "redundant"
+                ? "could not activate"
+                : "did not become ready",
+            );
+            expect(
+              (addListener.mock.calls[0]?.[2] as AddEventListenerOptions)
+                ?.signal?.aborted,
+            ).toBe(true);
+            expect(active.showNotification).not.toHaveBeenCalled();
+          },
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    },
+  );
 
   test("keeps the page notification fallback and its click handler", async () => {
     const notification = { close() {}, onclick: null };
@@ -326,41 +526,63 @@ describe("task notification transport", () => {
     );
   });
 
-  test("validates worker messages, consumes launch fragments and removes listeners", async () => {
-    const serviceWorker = new EventTarget();
-    const activate = mock();
-    const replaceState = mock();
-    const location = new URL(
-      origin + "/#roamgate-task=" + encodeURIComponent(JSON.stringify(target)),
-    );
-    await withBrowser(
-      {
-        navigator: { serviceWorker },
-        window: { location, history: { replaceState, state: { scroll: 10 } } },
-      },
-      async () => {
-        const stop = listenForTaskNotificationActivation(activate);
-        expect(activate).toHaveBeenCalledWith(target);
-        expect(replaceState).toHaveBeenCalledWith({ scroll: 10 }, "", "/");
-        activate.mockClear();
-        const message = (messageOrigin: string, value: unknown) =>
-          new MessageEvent("message", {
-            origin: messageOrigin,
-            data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target: value },
-          });
-        serviceWorker.dispatchEvent(message("https://other.example", target));
-        serviceWorker.dispatchEvent(
-          message(origin, { ...target, runtimeGeneration: -1 }),
-        );
-        expect(activate).not.toHaveBeenCalled();
-        serviceWorker.dispatchEvent(message(origin, target));
-        expect(activate).toHaveBeenCalledTimes(1);
-        stop();
-        serviceWorker.dispatchEvent(message(origin, target));
-        expect(activate).toHaveBeenCalledTimes(1);
-      },
-    );
-  });
+  test.each([
+    target,
+    {
+      type: "ranger_task",
+      taskId: "11111111-1111-4111-8111-111111111111",
+      runId: "22222222-2222-4222-8222-222222222222",
+    },
+  ])(
+    "validates worker messages, consumes launch fragments and removes listeners for %j",
+    async (activationTarget) => {
+      const serviceWorker = new EventTarget();
+      const activate = mock();
+      const replaceState = mock();
+      const location = new URL(
+        origin +
+          "/#roamgate-task=" +
+          encodeURIComponent(JSON.stringify(activationTarget)),
+      );
+      await withBrowser(
+        {
+          navigator: { serviceWorker },
+          window: {
+            location,
+            history: { replaceState, state: { scroll: 10 } },
+          },
+        },
+        async () => {
+          const stop = listenForTaskNotificationActivation(activate);
+          expect(activate).toHaveBeenCalledWith(activationTarget);
+          expect(replaceState).toHaveBeenCalledWith({ scroll: 10 }, "", "/");
+          activate.mockClear();
+          const message = (messageOrigin: string, value: unknown) =>
+            new MessageEvent("message", {
+              origin: messageOrigin,
+              data: { type: TASK_NOTIFICATION_ACTIVATE_EVENT, target: value },
+            });
+          serviceWorker.dispatchEvent(message("https://other.example", target));
+          serviceWorker.dispatchEvent(
+            message(origin, { ...target, runtimeGeneration: -1 }),
+          );
+          serviceWorker.dispatchEvent(
+            message(origin, {
+              type: "ranger_task",
+              taskId: "../invalid",
+              runId: "also-invalid",
+            }),
+          );
+          expect(activate).not.toHaveBeenCalled();
+          serviceWorker.dispatchEvent(message(origin, activationTarget));
+          expect(activate).toHaveBeenCalledTimes(1);
+          stop();
+          serviceWorker.dispatchEvent(message(origin, activationTarget));
+          expect(activate).toHaveBeenCalledTimes(1);
+        },
+      );
+    },
+  );
 });
 
 describe("notification service worker clicks", () => {
@@ -532,5 +754,84 @@ describe("notification service worker clicks", () => {
     listeners.notificationclick(event);
     await pending;
     expect(openWindow).toHaveBeenCalledWith(origin + "/");
+  });
+
+  test("Ranger push and clicks retain valid task run targets and discard malformed ones", async () => {
+    const listeners: Record<string, (event: any) => void> = {};
+    const ranger = {
+      type: "ranger_task",
+      taskId: "e68b82c6-0d6b-4083-b6b3-c3a7de983f94",
+      runId: "9023a84e-e705-4c34-bcce-77c951e2de56",
+    };
+    let data: Record<string, unknown> | undefined;
+    const showNotification = mock(
+      async (_title: string, options: NotificationOptions) => {
+        data = options.data;
+      },
+    );
+    const postMessage = mock();
+    const focus = mock(async () => {});
+    let windows: any[] = [];
+    const openWindow = mock(async () => {});
+    runInNewContext(
+      await readFile(
+        new URL("../public/task-notifications-sw.js", import.meta.url),
+        "utf8",
+      ),
+      {
+        URL,
+        self: {
+          location: { origin },
+          addEventListener: (name: string, handler: (event: any) => void) => {
+            listeners[name] = handler;
+          },
+          registration: { showNotification },
+          clients: { matchAll: async () => windows, openWindow },
+        },
+      },
+    );
+    let pending: Promise<void> | undefined;
+    const waitUntil = (value: Promise<void>) => {
+      pending = value;
+    };
+    listeners.push({
+      data: {
+        json: () => ({ title: "Ranger task failed", target: ranger }),
+      },
+      waitUntil,
+    });
+    await pending;
+    expect(data).toEqual({
+      type: TASK_NOTIFICATION_ACTIVATE_EVENT,
+      target: ranger,
+    });
+    const click = (targetData: unknown) => {
+      listeners.notificationclick({
+        notification: { close: mock(), data: targetData },
+        waitUntil,
+      });
+      return pending;
+    };
+    await click(data);
+    expect(openWindow).toHaveBeenLastCalledWith(
+      origin + "/#roamgate-task=" + encodeURIComponent(JSON.stringify(ranger)),
+    );
+    windows = [{ url: origin + "/", focus, postMessage }];
+    await click(data);
+    expect(postMessage).toHaveBeenCalledWith(data);
+    for (const target of [
+      { ...ranger, taskId: "../escape" },
+      { ...ranger, runId: null },
+      { ...ranger, runId: "" },
+    ]) {
+      listeners.push({ data: { json: () => ({ target }) }, waitUntil });
+      await pending;
+      expect(data?.target).toBeNull();
+      windows = [];
+      // Validate click data independently of push parsing.
+      await click({ type: TASK_NOTIFICATION_ACTIVATE_EVENT, target });
+      expect(openWindow).toHaveBeenLastCalledWith(origin + "/");
+    }
+    expect(postMessage).toHaveBeenCalledTimes(1);
   });
 });
