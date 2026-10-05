@@ -32,8 +32,9 @@ The test wrapper runs files in parallel using up to eight available CPUs.
 Three isolated browser suites also run concurrently. Set `HERDR_TEST_PARALLEL`
 to choose a default worker count and `HERDR_TEST_MAX_CONCURRENCY` to cap concurrent
 cases, or pass Bun's `--parallel=N` flag to override the worker count for one run.
-GitHub Actions uses two workers and one concurrent case to keep browser tests
-reliable on its hosted runner.
+GitHub Actions runs one test file at a time, while each isolated browser suite can
+run two cases concurrently. This avoids overlapping browser test files on the hosted
+runner while retaining the in-suite speedup.
 
 `bun run check` validates dependency notices, formatting, lint, all types/tests,
 production frontend/server builds and OpenSpec contracts. Generated output belongs in
