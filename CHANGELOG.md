@@ -26,6 +26,9 @@ are optional because the merged PR history records their source.
   Selecting a tab opens its terminal Inspector in every visual view, including
   before any Inspector is selected and when its panes need loading.
 
+- Default update checks read the release version from GitHub API metadata. The
+  manifest remains part of the verified update installation.
+
 ## [0.2.1] - 2026-10-04
 
 ### Breaking Changes
