@@ -51,6 +51,9 @@ jobs:
               run: bun run check:docs
             - name: Run full repository check
               if: steps.scope.outputs.mode != 'docs' && steps.scope.outputs.mode != 'reuse'
+              env:
+                  HERDR_TEST_PARALLEL: "2"
+                  HERDR_TEST_MAX_CONCURRENCY: "1"
               run: bun run check
 
     launchd:

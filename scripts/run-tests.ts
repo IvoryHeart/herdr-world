@@ -9,9 +9,16 @@ const configuredParallelism = process.env.HERDR_TEST_PARALLEL;
 const parallelism = configuredParallelism
   ? Number(configuredParallelism)
   : Math.min(availableParallelism(), 8);
+const configuredMaxConcurrency = process.env.HERDR_TEST_MAX_CONCURRENCY;
+const maxConcurrency = configuredMaxConcurrency
+  ? Number(configuredMaxConcurrency)
+  : 2;
 
 if (!Number.isSafeInteger(parallelism) || parallelism < 1) {
   throw new Error("HERDR_TEST_PARALLEL must be a positive integer");
+}
+if (!Number.isSafeInteger(maxConcurrency) || maxConcurrency < 1) {
+  throw new Error("HERDR_TEST_MAX_CONCURRENCY must be a positive integer");
 }
 
 // Bun runs files sequentially unless --parallel is set. Respect an explicit CLI
@@ -20,7 +27,7 @@ const testArgs = args.some((arg) => /^--parallel(?:=|$)/.test(arg))
   ? args
   : [`--parallel=${parallelism}`, ...args];
 if (!testArgs.some((arg) => /^--max-concurrency(?:=|$)/.test(arg)))
-  testArgs.push("--max-concurrency=2");
+  testArgs.push(`--max-concurrency=${maxConcurrency}`);
 console.info(
   `[test-runner] ${testArgs.filter((arg) => arg.startsWith("--")).join(" ")}`,
 );

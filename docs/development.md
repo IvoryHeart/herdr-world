@@ -29,9 +29,11 @@ bun run check                 # complete PR candidate
 ```
 
 The test wrapper runs files in parallel using up to eight available CPUs.
-Three isolated browser suites also run up to two cases concurrently. Set
-`HERDR_TEST_PARALLEL` to choose a default worker count, or pass Bun's
-`--parallel=N` flag to override it for one run.
+Three isolated browser suites also run concurrently. Set `HERDR_TEST_PARALLEL`
+to choose a default worker count and `HERDR_TEST_MAX_CONCURRENCY` to cap concurrent
+cases, or pass Bun's `--parallel=N` flag to override the worker count for one run.
+GitHub Actions uses two workers and one concurrent case to keep browser tests
+reliable on its hosted runner.
 
 `bun run check` validates dependency notices, formatting, lint, all types/tests,
 production frontend/server builds and OpenSpec contracts. Generated output belongs in
