@@ -620,7 +620,7 @@ export function createUpdateHandlers({
     return {
       version,
       platform: updateTarget.platform,
-      baseUrl: updateBaseUrl(),
+      baseUrl: `https://github.com/IvoryHeart/herdr-world/releases/download/${tag}`,
     };
   }
 

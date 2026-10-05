@@ -298,7 +298,7 @@ describe("update helpers", () => {
       can_auto_update: true,
       platform: "darwin-arm64",
       source_url:
-        "https://github.com/IvoryHeart/herdr-world/releases/latest/download/herdr-world-darwin-arm64.tar.xz",
+        "https://github.com/IvoryHeart/herdr-world/releases/download/v0.2.17/herdr-world-darwin-arm64.tar.xz",
     });
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain(
@@ -715,7 +715,7 @@ describe("update helpers", () => {
       can_auto_update: true,
       platform: "linux-x64",
       source_url:
-        "https://github.com/IvoryHeart/herdr-world/releases/latest/download/herdr-world-linux-x64.tar.xz",
+        "https://github.com/IvoryHeart/herdr-world/releases/download/v0.2.17/herdr-world-linux-x64.tar.xz",
     });
     expect(commands[0]).toContain("/releases/latest");
     expect(commands[0]).not.toContain(".update.json");
@@ -1071,8 +1071,14 @@ describe("update helpers", () => {
     expect(commands[1].join(" ")).toContain(
       "herdr-world-darwin-arm64.update.json",
     );
+    expect(commands[1].join(" ")).toContain(
+      "/releases/download/v0.2.17/herdr-world-darwin-arm64.update.json",
+    );
     const installCommand = commands[2][2];
-    expect(installCommand).toContain("herdr-world-darwin-arm64.tar.xz");
+    expect(installCommand).toContain(
+      "/releases/download/v0.2.17/herdr-world-darwin-arm64.tar.xz",
+    );
+    expect(installCommand).not.toContain("/latest/download/");
     expect(installCommand).not.toContain(".sha256");
     expect(installCommand).toContain(`expected_sha256='${updateSha256}'`);
     expect(installCommand).toContain('shasum -a 256 "$archive"');
