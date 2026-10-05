@@ -232,6 +232,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
               entry,
               geometry,
               stage: windowStage,
+              workArea,
               zIndex,
               active: windowActive,
             }) => {
@@ -250,6 +251,7 @@ export function useSpacesTabWindowArrangement(active: boolean): {
                       : undefined
                   }
                   stage={windowStage}
+                  workArea={workArea}
                   active={windowActive}
                   compact={false}
                   zIndex={zIndex}

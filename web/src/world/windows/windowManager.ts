@@ -526,12 +526,14 @@ export function reduceWindowManager(
       action.id,
       true,
     );
+  const movementCanvas = windowCanvas(state, size);
   const canvas =
     action.type === "place" &&
-    !entry.maximized &&
     !state.focusMode &&
-    usesWindowCanvas(entry)
-      ? windowCanvas(state, size)
+    (usesWindowCanvas(entry) ||
+      movementCanvas.width > size.width ||
+      movementCanvas.height > size.height)
+      ? movementCanvas
       : undefined;
   const rect = fitWindow(
     action.type === "place" ? action.rect : entry.floating,

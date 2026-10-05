@@ -6,10 +6,10 @@ import { WindowSurface } from "./WindowSurface";
 import { WindowControls } from "./WindowControls";
 import { WindowSwitcher } from "./WindowSwitcher";
 import { useWindowManager } from "./useWindowManager";
-import { windowGeometry, type Size } from "./windowManager";
+import { snapGeometry, windowGeometry, type Size } from "./windowManager";
 import { RESIZE_EDGES, resizeWindow } from "./windowInteraction";
 
-const inputs = ["A", "B"].map((id, index) => ({
+const initialInputs = ["A", "B"].map((id, index) => ({
   id,
   label: id,
   initialGeometry: { left: 40 + index * 400, top: 40, width: 360, height: 260 },
@@ -18,13 +18,15 @@ let harness: ReturnType<typeof useWindowManager> & {
   size: Size;
   setSize(size: Size): void;
   setCompact(value: boolean): void;
+  setInputs(value: typeof initialInputs): void;
 };
 let terminalActivations = 0;
 function Fixture() {
   const [size, setSize] = useState({ width: 1000, height: 600 });
   const [compact, setCompact] = useState(false);
+  const [inputs, setInputs] = useState(initialInputs);
   const manager = useWindowManager(inputs, size);
-  harness = { ...manager, size, setSize, setCompact };
+  harness = { ...manager, size, setSize, setCompact, setInputs };
   const { state, dispatch } = manager;
   return (
     <>
@@ -47,13 +49,14 @@ function Fixture() {
           onLayer={() => {}}
           bounds={size}
         >
-          {({ entry, geometry, stage, zIndex, active }) => (
+          {({ entry, geometry, stage, workArea, zIndex, active }) => (
             <WindowFrame
               key={entry.id}
               id={entry.id}
               label={entry.id}
               geometry={geometry}
               stage={stage}
+              workArea={workArea}
               zIndex={zIndex}
               active={active}
               compact={compact}
@@ -113,6 +116,19 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 40));
 const frame = (id = "A") =>
   document.querySelector<HTMLElement>(`[data-window-id="${id}"]`)!;
 const geometry = (id = "A") => windowGeometry(harness.state, id, harness.size)!;
+const cssGeometry = (element: HTMLElement) => ({
+  left: Number.parseFloat(element.style.left),
+  top: Number.parseFloat(element.style.top),
+  width: Number.parseFloat(element.style.width),
+  height: Number.parseFloat(element.style.height),
+});
+const sameGeometry = (
+  a: ReturnType<typeof cssGeometry>,
+  b: ReturnType<typeof cssGeometry>,
+) =>
+  (["left", "top", "width", "height"] as const).every(
+    (key) => Math.abs(a[key] - b[key]) < 0.01,
+  );
 const pointer = (target: EventTarget, type: string, x: number, y: number) =>
   flushSync(() =>
     target.dispatchEvent(
@@ -269,6 +285,130 @@ async function run() {
     terminalActivations === 0,
     "presentation controls activated terminal input",
   );
+  flushSync(() => {
+    harness.setSize({ width: 1000, height: 600 });
+    harness.setInputs(
+      Array.from({ length: 8 }, (_, index) => ({
+        ...initialInputs[0]!,
+        id: String.fromCharCode(65 + index),
+        label: String.fromCharCode(65 + index),
+      })),
+    );
+  });
+  await settle();
+  // A scrolled canvas remains the movement boundary, while every snap and
+  // maximize destination occupies the visible viewport before and after release.
+  for (const preset of ["columns", "rows"] as const) {
+    for (const target of [
+      "left",
+      "right",
+      "top-left",
+      "top-right",
+      "bottom-left",
+      "bottom-right",
+      "bottom",
+      "maximize",
+    ] as const) {
+      flushSync(() => harness.dispatch({ type: "arrange", preset }));
+      await settle();
+      const surface = document.querySelector<HTMLElement>(
+        ".world-window-layer",
+      )!;
+      surface.scrollLeft = surface.scrollWidth;
+      surface.scrollTop = surface.scrollHeight;
+      await settle();
+      check(
+        preset === "columns" ? surface.scrollLeft > 0 : surface.scrollTop > 0,
+        `${preset}: fixture did not scroll`,
+      );
+      const visible = surface.getBoundingClientRect();
+      const title = frame("H").querySelector<HTMLElement>(
+        "[data-window-drag-handle]",
+      )!;
+      const start = title.getBoundingClientRect();
+      pointer(title, "pointerdown", start.x + 30, start.y + 15);
+      pointer(
+        window,
+        "pointermove",
+        visible.left + harness.size.width / 2,
+        visible.top + harness.size.height / 2,
+      );
+      check(
+        !document.querySelector(".world-window-snap-preview"),
+        `${preset}: center of visible work area triggered a snap`,
+      );
+      const x =
+        visible.left +
+        (target.includes("left")
+          ? 2
+          : target.includes("right")
+            ? harness.size.width - 2
+            : harness.size.width / 2);
+      const y =
+        visible.top +
+        (target.includes("top") || target === "maximize"
+          ? 2
+          : target.includes("bottom")
+            ? harness.size.height - 2
+            : harness.size.height / 2);
+      pointer(window, "pointermove", x, y);
+      await settle();
+      const preview = document.querySelector<HTMLElement>(
+        ".world-window-snap-preview",
+      );
+      check(
+        Boolean(preview),
+        `${preset}/${target}: no snap preview at viewport edge`,
+      );
+      const expected =
+        target === "maximize"
+          ? { left: 0, top: 0, ...harness.size }
+          : snapGeometry(target, harness.size);
+      expected.left += surface.scrollLeft;
+      expected.top += surface.scrollTop;
+      if (preview)
+        check(
+          sameGeometry(cssGeometry(preview), expected),
+          `${preset}/${target}: preview ${JSON.stringify(cssGeometry(preview))} did not match work area ${JSON.stringify(expected)}`,
+        );
+      pointer(window, "pointerup", x, y);
+      await settle();
+      check(
+        sameGeometry(cssGeometry(frame("H")), expected),
+        `${preset}/${target}: release disagreed with preview`,
+      );
+      const entry = harness.state.windows.H!;
+      check(
+        target === "maximize"
+          ? entry.maximized
+          : entry.placement.kind === "snap" &&
+              entry.placement.target === target,
+        `${preset}/${target}: release did not commit the target`,
+      );
+      if (target === "right" || target === "maximize") {
+        const handle = frame("H").querySelector<HTMLElement>(
+          "[data-window-drag-handle]",
+        )!;
+        const bounds = handle.getBoundingClientRect();
+        const startX = bounds.x + bounds.width / 2,
+          startY = bounds.y + 15;
+        pointer(handle, "pointerdown", startX, startY);
+        pointer(window, "pointermove", startX - 60, startY + 80);
+        await settle();
+        const moved = cssGeometry(frame("H"));
+        check(
+          !document.querySelector(".world-window-snap-preview"),
+          `${preset}/${target}: detaching did not leave the snap target`,
+        );
+        pointer(window, "pointerup", startX - 60, startY + 80);
+        await settle();
+        check(
+          sameGeometry(cssGeometry(frame("H")), moved),
+          `${preset}/${target}: detaching lost canvas coordinates`,
+        );
+      }
+    }
+  }
   root.unmount();
 }
 void run()

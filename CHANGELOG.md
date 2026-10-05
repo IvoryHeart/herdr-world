@@ -17,6 +17,8 @@ are optional because the merged PR history records their source.
   switching and arrangement controls are always reachable from the top bar.
   Resizing a scrolled tile preserves its canvas position, and Open all restores
   dismissed or minimized windows even when Grid cannot fit the work area.
+  Snap and maximize previews match the visible work area in scrolled layouts,
+  while dragging and resizing retain the full canvas bounds.
 - Mobile keeps the ellipsis menu floating, uses the second-row Tabs menu for tab
   actions and window restoration with Arrange beside it, removes the duplicate list
   icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop

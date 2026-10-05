@@ -26,6 +26,7 @@ export function WindowFrame({
   geometry,
   restoreGeometry,
   stage,
+  workArea,
   active,
   compact,
   zIndex,
@@ -44,6 +45,7 @@ export function WindowFrame({
   geometry: Rect;
   restoreGeometry?: Rect;
   stage: Size;
+  workArea: Rect;
   active: boolean;
   compact: boolean;
   zIndex: number;
@@ -64,6 +66,7 @@ export function WindowFrame({
     geometry,
     restoreGeometry,
     stage,
+    workArea,
     compact,
     onRaise,
     onPlace,
@@ -77,6 +80,7 @@ export function WindowFrame({
     geometry,
     restoreGeometry,
     stage,
+    workArea,
     compact,
     onRaise,
     onPlace,
@@ -191,9 +195,11 @@ export function WindowFrame({
         const layer = element.offsetParent?.getBoundingClientRect();
         gesture.target = layer
           ? snapAtPointer(
-              (event.clientX - layer.left) / gesture.scale,
-              (event.clientY - layer.top) / gesture.scale,
-              current.stage,
+              (event.clientX - layer.left) / gesture.scale -
+                current.workArea.left,
+              (event.clientY - layer.top) / gesture.scale -
+                current.workArea.top,
+              current.workArea,
             )
           : null;
         setPreview(gesture.target);
@@ -299,16 +305,21 @@ export function WindowFrame({
   }, [displayed.left, displayed.top, displayed.width, displayed.height]);
   const previewRect =
     preview === "maximize"
-      ? { left: 0, top: 0, ...stage }
+      ? { left: 0, top: 0, width: workArea.width, height: workArea.height }
       : preview
-        ? snapGeometry(preview, stage)
+        ? snapGeometry(preview, workArea)
         : null;
   return (
     <>
       {previewRect && (
         <div
           className="world-window-snap-preview"
-          style={{ ...previewRect, zIndex: zIndex + 1 }}
+          style={{
+            ...previewRect,
+            left: previewRect.left + workArea.left,
+            top: previewRect.top + workArea.top,
+            zIndex: zIndex + 1,
+          }}
           aria-hidden="true"
         />
       )}

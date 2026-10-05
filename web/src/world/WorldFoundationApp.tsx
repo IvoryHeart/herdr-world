@@ -2684,7 +2684,14 @@ function WorldControlPlane({
             compact={compactArrangement}
             onLayer={setWindowLayer}
           >
-            {({ entry, geometry, stage, zIndex, active: windowActive }) => {
+            {({
+              entry,
+              geometry,
+              stage,
+              workArea,
+              zIndex,
+              active: windowActive,
+            }) => {
               const conversation = inspectorConversations.find(
                 (candidate) => worldInspectorWindowId(candidate) === entry.id,
               );
@@ -2703,6 +2710,7 @@ function WorldControlPlane({
                       : undefined
                   }
                   stage={stage}
+                  workArea={workArea}
                   zIndex={zIndex}
                   active={windowActive}
                   compact={compactArrangement}

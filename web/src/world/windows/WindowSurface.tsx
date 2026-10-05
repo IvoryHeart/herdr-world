@@ -10,7 +10,6 @@ import {
   windowCanvas,
   windowDividers,
   windowGeometry,
-  usesWindowCanvas,
   type ManagedWindow,
   type Size,
   type WindowCommand,
@@ -38,6 +37,7 @@ export function WindowSurface({
     entry: ManagedWindow;
     geometry: Rect;
     stage: Size;
+    workArea: Rect;
     zIndex: number;
     active: boolean;
   }): ReactNode;
@@ -56,6 +56,15 @@ export function WindowSurface({
   useEffect(() => {
     const { state, stage, compact } = latest.current;
     if (!ref.current || !state.activeId) return;
+    const entry = state.windows[state.activeId];
+    // Snapped and maximized windows already occupy the visible work area.
+    if (
+      compact ||
+      state.focusMode ||
+      entry?.maximized ||
+      entry?.placement.kind === "snap"
+    )
+      return;
     const geometry = windowGeometry(state, state.activeId, stage, compact);
     if (!geometry) return;
     const host = ref.current;
@@ -92,29 +101,32 @@ export function WindowSurface({
         {visible.map((id) => {
           const entry = state.windows[id]!;
           const geometry = windowGeometry(state, id, stage, compact)!;
+          const inWorkArea =
+            entry.maximized ||
+            entry.placement.kind === "snap" ||
+            compact ||
+            state.focusMode;
           if (
             overflow &&
-            !entry.maximized &&
+            !inWorkArea &&
             (geometry.left + geometry.width < scroll.left - stage.width ||
               geometry.left > scroll.left + stage.width * 2 ||
               geometry.top + geometry.height < scroll.top - stage.height ||
               geometry.top > scroll.top + stage.height * 2)
           )
             return null;
-          const displayed =
-            entry.maximized || compact || state.focusMode
-              ? { ...geometry, left: scroll.left, top: scroll.top }
-              : geometry;
+          const displayed = inWorkArea
+            ? {
+                ...geometry,
+                left: scroll.left + geometry.left,
+                top: scroll.top + geometry.top,
+              }
+            : geometry;
           return children({
             entry,
             geometry: displayed,
-            stage:
-              usesWindowCanvas(entry) &&
-              !entry.maximized &&
-              !state.focusMode &&
-              !compact
-                ? canvas
-                : stage,
+            stage: canvas,
+            workArea: { ...stage, left: scroll.left, top: scroll.top },
             zIndex: 2 + state.stack.indexOf(id),
             active: id === state.activeId,
           });
