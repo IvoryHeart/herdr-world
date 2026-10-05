@@ -32,6 +32,13 @@ export interface UpdateManifest {
   sha256: string;
 }
 
+interface LatestUpdateSource {
+  version: string;
+  platform: string;
+  baseUrl: string;
+  manifest?: UpdateManifest;
+}
+
 interface UpdateRuntime {
   platform: string;
   arch: string;
@@ -248,14 +255,11 @@ export function createUpdateHandlers({
     updateBaseUrlError = error as Error;
   }
   let updateInstallInProgress = false;
-  let latestManifestCache: {
+  let latestUpdateSourceCache: {
     expiresAt: number;
-    value: { manifest: UpdateManifest; baseUrl: string };
+    value: LatestUpdateSource;
   } | null = null;
-  let latestManifestRequest: Promise<{
-    manifest: UpdateManifest;
-    baseUrl: string;
-  }> | null = null;
+  let latestUpdateSourceRequest: Promise<LatestUpdateSource> | null = null;
 
   function updateBaseUrl(): string {
     if (updateBaseUrlError) throw updateBaseUrlError;
@@ -508,17 +512,14 @@ export function createUpdateHandlers({
     return `https://github.com/IvoryHeart/herdr-world/releases/download/${tag}`;
   }
 
-  async function loadLatestUpdateManifest(): Promise<{
-    manifest: UpdateManifest;
-    baseUrl: string;
-  }> {
+  async function downloadUpdateManifest(
+    baseUrl: string,
+  ): Promise<UpdateManifest> {
     if (!updateTarget) {
       throw new Error(
         `no update package is available for ${runtime.platform}-${runtime.arch}`,
       );
     }
-    const baseUrl = await resolveReleaseBaseUrl();
-
     const manifestResult = await runProcessWithCodeTimeout(
       [
         "curl",
@@ -534,38 +535,138 @@ export function createUpdateHandlers({
     if (manifestResult.code !== 0) {
       throw processFailure(manifestResult, "update manifest download");
     }
+    return validateUpdateManifest(parseUpdateManifest(manifestResult.stdout));
+  }
+
+  async function loadLatestUpdateSource(): Promise<LatestUpdateSource> {
+    if (configuredUpdateBaseUrl?.trim()) {
+      const baseUrl = updateBaseUrl();
+      const manifest = await downloadUpdateManifest(baseUrl);
+      return {
+        version: manifest.version,
+        platform: manifest.platform,
+        baseUrl,
+        manifest,
+      };
+    }
+
+    if (candidateCore) {
+      const baseUrl = await resolveReleaseBaseUrl();
+      const tag = baseUrl.slice(baseUrl.lastIndexOf("/") + 1);
+      if (!tag.startsWith("v") || !parsedVersion(tag.slice(1))) {
+        throw new Error("invalid update release tag");
+      }
+      return {
+        version: tag.slice(1),
+        platform: updateTarget!.platform,
+        baseUrl,
+      };
+    }
+
+    if (!updateTarget) {
+      throw new Error(
+        `no update package is available for ${runtime.platform}-${runtime.arch}`,
+      );
+    }
+    const result = await runProcessWithCodeTimeout(
+      [
+        "curl",
+        "--proto",
+        "=https",
+        "--proto-redir",
+        "=https",
+        "-fsSL",
+        "--max-filesize",
+        String(RELEASE_INDEX_MAX_BYTES),
+        "-H",
+        "Accept: application/vnd.github+json",
+        `${RELEASE_INDEX_URL}/latest`,
+      ],
+      UPDATE_CHECK_TIMEOUT_MS,
+    );
+    if (result.code !== 0) {
+      throw processFailure(result, "latest release metadata request");
+    }
+
+    let release: unknown;
+    try {
+      release = JSON.parse(result.stdout);
+    } catch {
+      throw new Error("invalid latest release response");
+    }
+    if (!release || typeof release !== "object" || Array.isArray(release)) {
+      throw new Error("invalid latest release response");
+    }
+    const entry = release as Record<string, unknown>;
+    const tag = entry.tag_name;
+    const version =
+      typeof tag === "string" && tag.startsWith("v") ? tag.slice(1) : "";
+    if (
+      entry.draft !== false ||
+      entry.prerelease !== false ||
+      !parsedVersion(version)
+    ) {
+      throw new Error("invalid latest release response");
+    }
+    const assets = Array.isArray(entry.assets)
+      ? entry.assets.map((asset: { name?: unknown }) => asset?.name)
+      : [];
+    if (
+      !assets.includes(updateTarget.manifestName) ||
+      !assets.includes(updateTarget.archiveName)
+    ) {
+      throw new Error("latest release does not include this platform");
+    }
     return {
-      manifest: validateUpdateManifest(
-        parseUpdateManifest(manifestResult.stdout),
-      ),
-      baseUrl,
+      version,
+      platform: updateTarget.platform,
+      baseUrl: `https://github.com/IvoryHeart/herdr-world/releases/download/${tag}`,
     };
   }
 
-  async function readLatestUpdateManifest(
+  async function readLatestUpdateSource(
     forceRefresh = false,
-  ): Promise<{ manifest: UpdateManifest; baseUrl: string }> {
+  ): Promise<LatestUpdateSource> {
     if (
       !forceRefresh &&
-      latestManifestCache &&
-      latestManifestCache.expiresAt > Date.now()
+      latestUpdateSourceCache &&
+      latestUpdateSourceCache.expiresAt > Date.now()
     ) {
-      return latestManifestCache.value;
+      return latestUpdateSourceCache.value;
     }
-    if (latestManifestRequest) return latestManifestRequest;
+    if (latestUpdateSourceRequest) return latestUpdateSourceRequest;
 
-    const request = loadLatestUpdateManifest();
-    latestManifestRequest = request;
+    const request = loadLatestUpdateSource();
+    latestUpdateSourceRequest = request;
     try {
       const value = await request;
-      latestManifestCache = {
+      latestUpdateSourceCache = {
         expiresAt: Date.now() + UPDATE_CHECK_CACHE_MS,
         value,
       };
       return value;
     } finally {
-      if (latestManifestRequest === request) latestManifestRequest = null;
+      if (latestUpdateSourceRequest === request)
+        latestUpdateSourceRequest = null;
     }
+  }
+
+  async function manifestForUpdateSource(
+    source: LatestUpdateSource,
+  ): Promise<UpdateManifest> {
+    if (source.manifest) return source.manifest;
+    const manifest = await downloadUpdateManifest(source.baseUrl);
+    if (manifest.version !== source.version) {
+      throw new Error(
+        "update manifest version does not match release metadata",
+      );
+    }
+    if (manifest.platform !== source.platform) {
+      throw new Error(
+        "update manifest platform does not match release metadata",
+      );
+    }
+    return manifest;
   }
 
   async function updateInfoPayload(): Promise<Record<string, unknown>> {
@@ -601,15 +702,14 @@ export function createUpdateHandlers({
         ...sourceDetails(),
       };
     }
-    const latestSource = await readLatestUpdateManifest();
-    const latest = latestSource.manifest;
+    const latestSource = await readLatestUpdateSource();
     return {
       current_version: appVersion,
-      latest_version: latest.version,
-      update_available: compareVersion(latest.version, appVersion) > 0,
+      latest_version: latestSource.version,
+      update_available: compareVersion(latestSource.version, appVersion) > 0,
       can_auto_update: capability.canAutoUpdate,
       reason: capability.reason,
-      platform: latest.platform,
+      platform: latestSource.platform,
       ...sourceDetails(latestSource.baseUrl),
     };
   }
@@ -679,17 +779,17 @@ export function createUpdateHandlers({
     updateInstallInProgress = true;
     let waitingForManagedRestart = false;
     try {
-      const latestSource = await readLatestUpdateManifest(true);
-      const latest = latestSource.manifest;
-      if (compareVersion(latest.version, appVersion) <= 0) {
+      const latestSource = await readLatestUpdateSource(true);
+      if (compareVersion(latestSource.version, appVersion) <= 0) {
         return updateJson({
           ok: true,
           installed: false,
           current_version: appVersion,
-          latest_version: latest.version,
+          latest_version: latestSource.version,
           message: "Already up to date.",
         });
       }
+      const latest = await manifestForUpdateSource(latestSource);
 
       const command = `
 set -eu
