@@ -39,6 +39,7 @@ export function readFloatingTerminalGeometry(
   fallback: FloatingTerminalGeometry,
   viewport: FloatingTerminalSize,
   legacyId?: string,
+  fit = clampFloatingTerminalGeometry,
 ) {
   try {
     const saved = parseSaved(storage.getItem(FLOATING_TERMINAL_GEOMETRY_KEY));
@@ -50,9 +51,9 @@ export function readFloatingTerminalGeometry(
       writeFloatingTerminalGeometry(storage, id, legacy);
     }
     const geometry = stable ?? legacy;
-    return clampFloatingTerminalGeometry(geometry ?? fallback, viewport);
+    return fit(geometry ?? fallback, viewport);
   } catch {
-    return clampFloatingTerminalGeometry(fallback, viewport);
+    return fit(fallback, viewport);
   }
 }
 

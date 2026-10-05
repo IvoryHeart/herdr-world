@@ -135,8 +135,17 @@ for the current workload; physics already runs off the main thread.
 | Task | Open these owners | Focused evidence |
 | --- | --- | --- |
 | Selected entity, resource context or handoff | `worldInspectorContext`, `worldNodeForWorkspaceSurfaceSelection` and `dispatchWorldInspectorRequest` in [WorldFoundationApp.tsx](WorldFoundationApp.tsx); [WorldInspectorConversation.tsx](WorldInspectorConversation.tsx) presents the selected conversation; [inspectorTerminalHandoff.ts](inspectorTerminalHandoff.ts) fences terminal file links and exact pane input focus; [worldTerminalPresentation.ts](worldTerminalPresentation.ts) reconciles Inspector identity. | [Shell tests](WorldFoundationApp.test.ts), [handoff tests](WorldTerminalHandoff.test.ts), [handoff admission tests](inspectorTerminalHandoff.test.ts) |
-| Docking, floating geometry or arrangements | `WorldFoundationApp` and its Inspector state in [WorldFoundationApp.tsx](WorldFoundationApp.tsx); [WorldFloatingTerminal.tsx](WorldFloatingTerminal.tsx), [terminalWindowArrangement.ts](terminalWindowArrangement.ts) and [terminalWindowArrangementState.ts](terminalWindowArrangementState.ts). In [world.css](world.css), search `.world-inspector-*`, `.world-floating-*` and `.world-intent-*`. | [Floating tests](WorldFloatingTerminal.test.ts), [arrangement tests](terminalWindowArrangement.test.ts), [arrangement-state tests](terminalWindowArrangementState.test.ts) |
+| Window placement, snapping, minimize or arrangements | [windowManager.ts](windows/windowManager.ts) owns presentation state; [WindowFrame.tsx](windows/WindowFrame.tsx) and [WindowSurface.tsx](windows/WindowSurface.tsx) share interactions and measured work areas. [WorldFoundationApp.tsx](WorldFoundationApp.tsx) adapts qualified Inspectors; [useSpacesTabWindowArrangement.tsx](useSpacesTabWindowArrangement.tsx) adapts native Spaces tabs. | [Model tests](windows/windowManager.test.ts), [frame browser tests](windows/WindowFrame.test.ts), [handoff tests](WorldTerminalHandoff.test.ts) |
 | Files, Changes or history inside the Inspector | [WorkspaceInspectorHost.tsx](../components/WorkspaceInspectorHost.tsx) owns resource panes; [WorkspaceInspectorPortal.tsx](../components/WorkspaceInspectorPortal.tsx) keeps them mounted across view changes; [workspaceResource.ts](../workspaceResource.ts) qualifies resource context. | [Portal tests](../components/WorkspaceInspectorPortal.test.ts), [resource tests](../workspaceResource.test.ts) |
+
+World window behavior stays in `windows/`; [WorldLayout.css](windows/WorldLayout.css)
+coordinates the outer shell with the Roamgate-derived App. Mobile retains floating
+controls and hides the tab strip. The inherited keyboard viewport adapter, native
+pane layouts and terminal transport remain the compatibility boundary.
+
+To capture the synthetic desktop and 390 px mobile fixture, set
+`WORLD_WINDOW_CAPTURE_DIR=/tmp/world-window-captures` when running
+`bun run test web/src/world/WorldTerminalHandoff.test.ts`.
 
 ## Terminal presentation
 
@@ -144,7 +153,7 @@ for the current workload; physics already runs off the main thread.
 | --- | --- | --- |
 | Focused Spaces tab, split panes or browser-local selection | `App`, `SpacesTabTerminal` and `terminalPresentationTarget` in [App.tsx](../App.tsx); [TabTerminalPaneLayout.tsx](../TabTerminalPaneLayout.tsx), [visibleTabLayout.ts](../visibleTabLayout.ts) and [browserNavigation.ts](../browserNavigation.ts). | [Layout tests](../visibleTabLayout.test.ts), [navigation tests](../browserNavigation.test.ts) |
 | Attach, render, resize or input | [TerminalView.tsx](../components/TerminalView.tsx), [terminalConnection.ts](../terminalConnection.ts) and [terminalEndpointPresentation.ts](../terminalEndpointPresentation.ts). Terminal widget styles live in [TerminalView.css](../components/TerminalView.css). | [Connection tests](../terminalConnection.test.ts), [presentation tests](../terminalEndpointPresentation.test.ts) |
-| Spaces window or Inspector terminal ownership | [SpacesTabWindow.tsx](SpacesTabWindow.tsx), [WorldTerminalPortalList.tsx](WorldTerminalPortalList.tsx) and [worldTerminalPresentation.ts](worldTerminalPresentation.ts). In [world.css](world.css), search `.world-terminal-*` and `.world-floating-*`. | [Spaces window tests](SpacesTabWindow.test.ts), [handoff tests](WorldTerminalHandoff.test.ts) |
+| Spaces window or Inspector terminal ownership | [useSpacesTabWindowArrangement.tsx](useSpacesTabWindowArrangement.tsx), [WorldTerminalPortalList.tsx](WorldTerminalPortalList.tsx) and [worldTerminalPresentation.ts](worldTerminalPresentation.ts). The shared frame owns presentation only. | [Spaces adapter tests](useSpacesTabWindowArrangement.browser.test.ts), [handoff tests](WorldTerminalHandoff.test.ts) |
 
 ## Large-file entry points
 

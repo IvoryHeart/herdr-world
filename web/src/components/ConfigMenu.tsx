@@ -326,7 +326,7 @@ export function ConfigMenu({
                     }
                   >
                     <option value="floating">Floating</option>
-                    <option value="docked">Docked</option>
+                    <option value="docked">Snap right</option>
                   </select>
                 </label>
                 <label className="config-preference-row">

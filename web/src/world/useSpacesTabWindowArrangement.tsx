@@ -3,6 +3,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -11,61 +12,29 @@ import type {
   WindowArrangementCommand,
   WindowArrangementControl,
 } from "../components/WindowArrangementMenu";
-import { requestCloseTab } from "../components/TabBar";
 import { useLayoutPreferences } from "../layoutPreferences";
 import { shallowEqual, useOperationalStore, useStoreSelector } from "../store";
-import { type FloatingTerminalGeometry } from "./floatingTerminalGeometry";
-import { SpacesTabWindow } from "./SpacesTabWindow";
-import {
-  terminalArrangementContentWidth,
-  terminalArrangementScrollLeftForWindow,
-  terminalArrangementWindowVisible,
-  terminalGridContentHeight,
-  terminalGridScrollTopForWindow,
-  terminalWindowArrangementReason,
-  type TerminalWindowArrangementPreset,
-  type TerminalWindowArrangementWindow,
-} from "./terminalWindowArrangement";
-import {
-  applyTerminalWindowArrangement,
-  createTerminalWindowArrangementState,
-  restoreTerminalWindowArrangement,
-  retainTerminalWindowArrangementWindows,
-  terminalWindowArrangementForLease,
-  updateTerminalWindowArrangementGeometry,
-} from "./terminalWindowArrangementState";
 import {
   availableSpacesWindowStage,
-  clampSpacesTabWindowGeometry,
-  orderedSpacesTabs,
   spacesTabWindowContext,
-  spacesTabWindowEntries,
-  SPACES_WINDOW_MIN_HEIGHT,
-  SPACES_WINDOW_MIN_WIDTH,
 } from "./spacesTabWindowArrangementModel";
+import { terminalWindowArrangementReason } from "./terminalWindowArrangement";
+import { useWindowManager } from "./windows/useWindowManager";
+import { visibleWindowIds } from "./windows/windowManager";
+import { WindowSurface } from "./windows/WindowSurface";
+import { WindowFrame } from "./windows/WindowFrame";
+import { WindowControls } from "./windows/WindowControls";
 
-type SpacesPresentation = "native-single" | "floating";
-type ScopedGeometry = Record<string, Record<string, FloatingTerminalGeometry>>;
-type ScopedOrder = Record<string, string[]>;
-type LeaseScoped<T> = { leaseKey: string; scopes: T };
+const ignoreLayer = () => {};
 
-const PRESETS: readonly TerminalWindowArrangementPreset[] = [
-  "single",
-  "cascade",
-  "columns",
-  "rows",
-  "grid",
-];
-const EMPTY_GEOMETRY: Readonly<Record<string, FloatingTerminalGeometry>> = {};
-const EMPTY_ORDER: readonly string[] = [];
-
-/** Adapts the shared geometry and snapshot rules to existing tabs in Spaces. */
+/** World presentation adapter. Roamgate's native tab and pane ownership stay in App. */
 export function useSpacesTabWindowArrangement(active: boolean): {
   arrangementControl: WindowArrangementControl;
   spacesTabWindows: { tabId: string; portal: Element | null }[];
   renderWindows: ReactNode;
   onFocusSpacesTabWindow: (tabId: string, paneId: string | null) => void;
   suspended: boolean;
+  presentedTabId: string | null;
   resumeTab: (tabId: string) => void;
   onSpacesWindowLayerReady: (element: HTMLDivElement | null) => void;
 } {
@@ -81,43 +50,28 @@ export function useSpacesTabWindowArrangement(active: boolean): {
   );
   const { mobile } = useLayoutPreferences();
   const context = useMemo(() => spacesTabWindowContext(snapshot), [snapshot]);
-  const leaseKey =
-    snapshot.activeConnectionId && snapshot.serverRuntimeGeneration !== null
-      ? JSON.stringify([
-          snapshot.activeConnectionId,
-          snapshot.serverRuntimeGeneration,
-        ])
-      : "";
-  const [arrangements, setArrangements] = useState(() =>
-    createTerminalWindowArrangementState<SpacesPresentation>(leaseKey),
-  );
-  const [free, setFree] = useState<LeaseScoped<ScopedGeometry>>(() => ({
-    leaseKey,
-    scopes: {},
-  }));
-  const [raised, setRaised] = useState<LeaseScoped<ScopedOrder>>(() => ({
-    leaseKey,
-    scopes: {},
-  }));
-  const [suspendedScopes, setSuspendedScopes] = useState<LeaseScoped<string[]>>(
-    () => ({
-      leaseKey,
-      scopes: [],
-    }),
-  );
+  const scopeKey = context
+    ? JSON.stringify([context.leaseKey, context.scopeKey])
+    : "unavailable";
+  const [layer, setLayer] = useState<HTMLDivElement | null>(null);
+  const [stage, setStage] = useState({ width: 0, height: 0 });
   const [portals, setPortals] = useState<Record<string, HTMLDivElement | null>>(
     {},
   );
-  const [layer, setLayer] = useState<HTMLDivElement | null>(null);
-  const [stage, setStage] = useState({ width: 0, height: 0 });
-  const [gridScrollTop, setGridScrollTop] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
+  const inputs = useMemo(
+    () =>
+      context?.tabs.map((tab) => ({
+        id: tab.tab_id,
+        label: tab.label || `Tab ${tab.number}`,
+      })) ?? [],
+    [context],
+  );
+  const { state, dispatch } = useWindowManager(inputs, stage, scopeKey, true);
   const onSpacesWindowLayerReady = useCallback(
     (element: HTMLDivElement | null) =>
       setLayer((current) => (current === element ? current : element)),
     [],
   );
-
   useLayoutEffect(() => {
     if (!active || !layer) return;
     const stageHost = layer.closest<HTMLElement>(".workspace-stage");
@@ -183,516 +137,206 @@ export function useSpacesTabWindowArrangement(active: boolean): {
     };
   }, [active, layer]);
 
-  useEffect(() => {
-    setArrangements((current) =>
-      terminalWindowArrangementForLease(current, leaseKey),
-    );
-    setFree((current) =>
-      current.leaseKey === leaseKey ? current : { leaseKey, scopes: {} },
-    );
-    setRaised((current) =>
-      current.leaseKey === leaseKey ? current : { leaseKey, scopes: {} },
-    );
-    setSuspendedScopes((current) =>
-      current.leaseKey === leaseKey ? current : { leaseKey, scopes: [] },
-    );
-    setPortals({});
-  }, [leaseKey]);
-
-  useEffect(() => {
-    const openByScope = new Map<string, string[]>();
-    for (const tab of snapshot.tabs) {
-      const key = `spaces:${tab.workspace_id}`;
-      const ids = openByScope.get(key) ?? [];
-      ids.push(tab.tab_id);
-      openByScope.set(key, ids);
-    }
-    setArrangements((current) => {
-      if (current.leaseKey !== leaseKey) return current;
-      let next = current;
-      for (const key of Object.keys(current.scopes)) {
-        if (!key.startsWith("spaces:")) continue;
-        next = retainTerminalWindowArrangementWindows(next, {
-          leaseKey,
-          scopeKey: key,
-          openIds: openByScope.get(key) ?? [],
-        });
-      }
-      return next;
-    });
-    setFree((current) => {
-      if (current.leaseKey !== leaseKey) return current;
-      let changed = false;
-      const scopes: ScopedGeometry = {};
-      for (const [key, scoped] of Object.entries(current.scopes)) {
-        const open = new Set(openByScope.get(key) ?? []);
-        scopes[key] = Object.fromEntries(
-          Object.entries(scoped).filter(([id]) => open.has(id)),
-        );
-        if (Object.keys(scopes[key]!).length !== Object.keys(scoped).length) {
-          changed = true;
-        }
-      }
-      return changed ? { ...current, scopes } : current;
-    });
-    setRaised((current) => {
-      if (current.leaseKey !== leaseKey) return current;
-      let changed = false;
-      const scopes: ScopedOrder = {};
-      for (const [key, scoped] of Object.entries(current.scopes)) {
-        const open = new Set(openByScope.get(key) ?? []);
-        scopes[key] = scoped.filter((id) => open.has(id));
-        if (scopes[key]!.length !== scoped.length) changed = true;
-      }
-      return changed ? { ...current, scopes } : current;
-    });
-  }, [leaseKey, snapshot.tabs]);
-
-  const currentArrangements =
-    arrangements.leaseKey === leaseKey
-      ? arrangements
-      : createTerminalWindowArrangementState<SpacesPresentation>(leaseKey);
-  const scope = context
-    ? (currentArrangements.scopes[context.scopeKey] ?? null)
-    : null;
-  const suspended = Boolean(
-    context &&
-      suspendedScopes.leaseKey === leaseKey &&
-      suspendedScopes.scopes.includes(context.scopeKey),
-  );
-  const currentFree =
-    free.leaseKey === leaseKey && context
-      ? (free.scopes[context.scopeKey] ?? EMPTY_GEOMETRY)
-      : EMPTY_GEOMETRY;
-  const currentRaised =
-    raised.leaseKey === leaseKey && context
-      ? (raised.scopes[context.scopeKey] ?? EMPTY_ORDER)
-      : EMPTY_ORDER;
-  const orderedTabs = context
-    ? orderedSpacesTabs(context.tabs, currentRaised, context.activeTabId)
-    : [];
-  const stageRect = { left: 0, top: 0, ...stage };
-  const windowInputs: TerminalWindowArrangementWindow[] = orderedTabs.map(
-    (tab) => ({
-      id: tab.tab_id,
-      minWidth: SPACES_WINDOW_MIN_WIDTH,
-      minHeight: SPACES_WINDOW_MIN_HEIGHT,
-      geometry:
-        scope?.placements.find(({ id }) => id === tab.tab_id)?.geometry ??
-        currentFree[tab.tab_id],
-      titleHeight: 32,
-    }),
-  );
-  const entries = useMemo(
-    () =>
-      active && context && layer && !suspended
-        ? spacesTabWindowEntries({
-            scope,
-            tabs: context.tabs,
-            activeTabId: context.activeTabId,
-            raisedIds: currentRaised,
-            freeGeometry: currentFree,
-            stage,
-            compact: mobile,
-          })
-        : [],
-    [
-      active,
-      context,
-      layer,
-      scope,
-      currentRaised,
-      currentFree,
-      stage,
-      mobile,
-      suspended,
-    ],
-  );
-  const scrollX = scope?.preset === "columns" && !mobile;
-  const scrollY =
-    (scope?.preset === "grid" ||
-      scope?.preset === "rows" ||
-      scope?.preset === "cascade") &&
-    !mobile;
-  const scrollActive = scrollX || scrollY;
-  const placements = entries.map(({ tab, geometry }) => ({
-    id: tab.tab_id,
-    geometry,
-  }));
-  const contentWidth = scrollX
-    ? terminalArrangementContentWidth(placements, stage.width)
-    : stage.width;
-  const contentHeight = scrollY
-    ? terminalGridContentHeight(placements, stage.height)
-    : stage.height;
-  const contentStage = { width: contentWidth, height: contentHeight };
-  const viewportEntries = scrollActive
-    ? entries.filter(({ geometry }) =>
-        terminalArrangementWindowVisible(
-          geometry,
-          scrollLeft,
-          gridScrollTop,
-          stage.width,
-          stage.height,
-        ),
-      )
-    : entries;
-
-  useEffect(() => {
-    if (!layer) return;
-    const horizontal = scrollX && contentWidth > stage.width;
-    const vertical = scrollY && contentHeight > stage.height;
-    layer.classList.toggle("is-horizontal-scroll", horizontal);
-    layer.classList.toggle("is-vertical-scroll", vertical);
-    if (!horizontal && !vertical) {
-      layer.scrollTop = 0;
-      layer.scrollLeft = 0;
-      setGridScrollTop(0);
-      setScrollLeft(0);
-      return;
-    }
-    const onScroll = () => {
-      setGridScrollTop(layer.scrollTop);
-      setScrollLeft(layer.scrollLeft);
-    };
-    layer.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      layer.removeEventListener("scroll", onScroll);
-      layer.classList.remove("is-horizontal-scroll", "is-vertical-scroll");
-    };
-  }, [
-    layer,
-    scrollX,
-    scrollY,
-    contentWidth,
-    contentHeight,
-    stage.width,
-    stage.height,
-  ]);
-
-  useEffect(() => {
-    if (!scrollActive || !layer || !context) return;
-    const activeEntry = entries.find(
-      ({ tab }) => tab.tab_id === context.activeTabId,
-    );
-    if (!activeEntry) return;
-    if (scrollY) {
-      const next = terminalGridScrollTopForWindow(
-        activeEntry.geometry,
-        layer.scrollTop,
-        stage.height,
-        contentHeight,
-      );
-      if (next !== layer.scrollTop) layer.scrollTop = next;
-    }
-    if (scrollX) {
-      const next = terminalArrangementScrollLeftForWindow(
-        activeEntry.geometry,
-        layer.scrollLeft,
-        stage.width,
-        contentWidth,
-      );
-      if (next !== layer.scrollLeft) layer.scrollLeft = next;
-    }
-  }, [
-    scrollActive,
-    scrollX,
-    scrollY,
-    layer,
-    context,
-    entries,
-    stage.height,
-    contentHeight,
-    contentWidth,
-    stage.width,
-  ]);
-
-  useEffect(() => {
-    if (!context || entries.length === 0) return;
-    const arranged = new Set(scope?.placements.map(({ id }) => id) ?? []);
-    const missing = entries.filter(
-      ({ tab }) => !arranged.has(tab.tab_id) && !currentFree[tab.tab_id],
-    );
-    if (missing.length === 0) return;
-    setFree((current) => {
-      if (current.leaseKey !== context.leaseKey) return current;
-      const scoped = current.scopes[context.scopeKey] ?? {};
-      return {
-        ...current,
-        scopes: {
-          ...current.scopes,
-          [context.scopeKey]: {
-            ...scoped,
-            ...Object.fromEntries(
-              missing.map(({ tab, geometry }) => [tab.tab_id, geometry]),
-            ),
-          },
-        },
-      };
-    });
-  }, [context, entries, scope?.placements, currentFree]);
-
-  const raiseSpacesTabWindow = (tabId: string) => {
+  const visible = visibleWindowIds(state, mobile);
+  const suspended = state.order.length > 0 && visible.length === 0;
+  // Compact presentation and native Single use the original pane layout host.
+  const native =
+    mobile || state.focusMode || stage.width < 236 || stage.height < 176;
+  const activate = (tabId: string, paneId: string | null) => {
     if (!active || !context?.tabs.some((tab) => tab.tab_id === tabId)) return;
-    setRaised((current) => {
-      const safe =
-        current.leaseKey === context.leaseKey
-          ? current
-          : { leaseKey: context.leaseKey, scopes: {} };
-      const order = safe.scopes[context.scopeKey] ?? [];
-      if (order[order.length - 1] === tabId) return safe;
-      return {
-        ...safe,
-        scopes: {
-          ...safe.scopes,
-          [context.scopeKey]: [...order.filter((id) => id !== tabId), tabId],
-        },
-      };
-    });
+    dispatch({ type: "focus", id: tabId });
+    if (paneId === null && context.activeTabId !== tabId)
+      void store.focusTab(tabId).catch(() => undefined);
   };
-  const onFocusSpacesTabWindow = (tabId: string, paneId: string | null) => {
-    if (!active || !context?.tabs.some((tab) => tab.tab_id === tabId)) return;
-    raiseSpacesTabWindow(tabId);
-    // App's pane callback already calls focusPane. Chrome focus has no pane.
-    if (paneId === null && context.activeTabId !== tabId) {
-      void store.focusTab(tabId);
-    }
-  };
-
+  const previousTab = useRef("");
+  useEffect(() => {
+    if (!active || !context || !state.windows[context.activeTabId]) return;
+    const key = JSON.stringify([scopeKey, context.activeTabId]);
+    if (previousTab.current === key) return;
+    previousTab.current = key;
+    // Returning to a suspended scope must not implicitly reopen it.
+    if (!suspended) dispatch({ type: "focus", id: context.activeTabId });
+  }, [active, scopeKey, context, suspended, dispatch, state.windows]);
   const resumeTab = (tabId: string) => {
     if (!context?.tabs.some((tab) => tab.tab_id === tabId)) return;
-    if (!suspended) return;
-    setSuspendedScopes((current) => ({
-      leaseKey: context.leaseKey,
-      scopes: current.scopes.filter((key) => key !== context.scopeKey),
-    }));
-    setArrangements((current) => ({
-      ...current,
-      scopes: {
-        ...current.scopes,
-        [context.scopeKey]: {
-          preset: "single",
-          restorePreset: null,
-          baselines: {},
-          placements: [],
-        },
-      },
-    }));
+    dispatch({ type: "focus", id: tabId });
+    if (suspended) dispatch({ type: "arrange", preset: "single" });
   };
-
   const onSelect = (command: WindowArrangementCommand) => {
-    if (!active || !context || !layer || stage.width <= 0 || stage.height <= 0)
-      return;
-    if (command === "open-all") return;
+    if (!active || !context || !layer || !stage.width || !stage.height) return;
     if (command === "close-all") {
-      setSuspendedScopes((current) => ({
-        leaseKey: context.leaseKey,
-        scopes: [
-          ...new Set([
-            ...(current.leaseKey === context.leaseKey ? current.scopes : []),
-            context.scopeKey,
-          ]),
-        ],
-      }));
-      setArrangements((current) => ({
-        ...current,
-        scopes: {
-          ...current.scopes,
-          [context.scopeKey]: {
-            preset: "single",
-            restorePreset: null,
-            baselines: {},
-            placements: [],
-          },
-        },
-      }));
+      dispatch({ type: "dismiss-all" });
       return;
     }
     if (command === "restore") {
-      setArrangements(
-        (current) =>
-          restoreTerminalWindowArrangement(current, {
-            leaseKey: context.leaseKey,
-            scopeKey: context.scopeKey,
-            openIds: context.tabs.map((tab) => tab.tab_id),
-          }).state,
-      );
+      dispatch({ type: "restore-layout" });
+      return;
+    }
+    if (command === "open-all") {
+      dispatch({ type: "arrange", preset: "grid", includeMinimized: true });
       return;
     }
     if (mobile && command !== "single") return;
-    const windows = windowInputs.map((window) => ({
-      ...window,
-      minWidth:
-        command === "single"
-          ? Math.min(window.minWidth, stage.width)
-          : window.minWidth,
-      minHeight:
-        command === "single"
-          ? Math.min(window.minHeight, stage.height)
-          : window.minHeight,
-      presentation: (currentFree[window.id]
-        ? "floating"
-        : "native-single") as SpacesPresentation,
-    }));
-    if (
-      terminalWindowArrangementReason(
-        command,
-        stageRect,
-        windows,
-        context.activeTabId,
-      )
-    )
-      return;
-    setSuspendedScopes((current) => ({
-      leaseKey: context.leaseKey,
-      scopes: current.scopes.filter((key) => key !== context.scopeKey),
-    }));
-    setArrangements(
-      (current) =>
-        applyTerminalWindowArrangement(current, {
-          leaseKey: context.leaseKey,
-          scopeKey: context.scopeKey,
-          preset: command,
-          stage: stageRect,
-          windows,
-          activeId: context.activeTabId,
-          initialPreset: "single",
-        }).state,
-    );
+    dispatch({ type: "arrange", preset: command });
   };
-
   const disabledReasons: WindowArrangementControl["disabledReasons"] = {};
-  for (const preset of PRESETS) {
-    if (!active || !context) {
-      disabledReasons[preset] = "Choose a focused workspace with an open tab.";
-    } else if (!layer || stage.width <= 0 || stage.height <= 0) {
-      disabledReasons[preset] = "The terminal stage is not ready.";
-    } else if (mobile && preset !== "single") {
-      disabledReasons[preset] = "Available in desktop layout.";
-    } else {
-      const windows =
-        preset === "single"
-          ? windowInputs.map((window) => ({
-              ...window,
-              minWidth: Math.min(window.minWidth, stage.width),
-              minHeight: Math.min(window.minHeight, stage.height),
-            }))
-          : windowInputs;
-      const reason = terminalWindowArrangementReason(
-        preset,
-        stageRect,
-        windows,
-        context.activeTabId,
-      );
-      if (reason) disabledReasons[preset] = reason;
-    }
+  for (const preset of [
+    "single",
+    "cascade",
+    "columns",
+    "rows",
+    "grid",
+  ] as const) {
+    const reason =
+      mobile && preset !== "single"
+        ? "Available in desktop layout."
+        : terminalWindowArrangementReason(
+            preset,
+            { left: 0, top: 0, ...stage },
+            inputs
+              .filter((input) => !state.windows[input.id]?.minimized)
+              .map((input) => ({
+                ...input,
+                minWidth: mobile ? Math.min(320, stage.width) : 320,
+                minHeight: mobile ? Math.min(180, stage.height) : 180,
+              })),
+            state.activeId,
+          );
+    if (reason) disabledReasons[preset] = reason;
   }
-  if (!scope || Object.keys(scope.baselines).length === 0) {
-    disabledReasons.restore = "No saved window positions.";
-  }
-  if (!context || suspended) {
-    disabledReasons["close-all"] = "No terminal windows are presented.";
-  }
-  disabledReasons["open-all"] = "Available in Office, Tree, and Graph views.";
-
-  const onGeometryChange = (
-    tabId: string,
-    geometry: FloatingTerminalGeometry,
-  ) => {
-    if (!context) return;
-    const bounded = clampSpacesTabWindowGeometry(
-      geometry,
-      scrollActive ? contentStage : stage,
-    );
-    if (scope?.placements.some(({ id }) => id === tabId)) {
-      setArrangements((current) =>
-        updateTerminalWindowArrangementGeometry(current, {
-          leaseKey: context.leaseKey,
-          scopeKey: context.scopeKey,
-          id: tabId,
-          geometry: bounded,
-        }),
-      );
-    } else {
-      setFree((current) => {
-        if (current.leaseKey !== context.leaseKey) return current;
-        return {
-          ...current,
-          scopes: {
-            ...current.scopes,
-            [context.scopeKey]: {
-              ...current.scopes[context.scopeKey],
-              [tabId]: bounded,
-            },
-          },
-        };
-      });
-    }
-  };
-  const portalKey = (tabId: string) =>
-    JSON.stringify([leaseKey, context?.scopeKey, tabId]);
-  const spacesTabWindows = viewportEntries.map(({ tab }) => ({
-    tabId: tab.tab_id,
-    portal: portals[portalKey(tab.tab_id)] ?? null,
-  }));
+  if (!state.baseline)
+    disabledReasons.restore = "No arranged positions to restore.";
+  if (suspended || !state.order.length)
+    disabledReasons["close-all"] = "No windows are presented.";
+  const keyFor = (id: string) => JSON.stringify([scopeKey, id]);
+  const spacesTabWindows =
+    native || !active || suspended
+      ? []
+      : visible.map((tabId) => ({
+          tabId,
+          portal: portals[keyFor(tabId)] ?? null,
+        }));
   const renderWindows =
-    active && layer && context
+    active && layer && context && !native && !suspended
       ? createPortal(
-          <div
-            className={scrollActive ? "spaces-grid-content" : undefined}
-            style={
-              scrollActive
-                ? { width: contentWidth, height: contentHeight }
-                : undefined
-            }
+          <WindowSurface
+            state={state}
+            dispatch={dispatch}
+            stage={stage}
+            compact={false}
+            onLayer={ignoreLayer}
+            bounds={stage}
+            className="world-spaces-window-surface"
           >
-            {viewportEntries.map(({ tab, geometry, zIndex }) => (
-              <SpacesTabWindow
-                key={tab.tab_id}
-                tabId={tab.tab_id}
-                label={tab.label}
-                active={tab.tab_id === context.activeTabId}
-                geometry={geometry}
-                stage={scrollActive ? contentStage : stage}
-                zIndex={zIndex}
-                onRaise={() => raiseSpacesTabWindow(tab.tab_id)}
-                onFocus={() => onFocusSpacesTabWindow(tab.tab_id, null)}
-                onClose={() =>
-                  requestCloseTab(tab.tab_id, {
-                    connectionId: snapshot.activeConnectionId,
-                    runtimeGeneration: snapshot.serverRuntimeGeneration ?? -1,
-                  })
-                }
-                onGeometryChange={(next) => onGeometryChange(tab.tab_id, next)}
-                onPortalChange={(element) => {
-                  const key = portalKey(tab.tab_id);
-                  setPortals((current) => {
-                    if (current[key] === element) return current;
-                    if (element) return { ...current, [key]: element };
-                    const next = { ...current };
-                    delete next[key];
-                    return next;
-                  });
-                }}
-              />
-            ))}
-          </div>,
+            {({
+              entry,
+              geometry,
+              stage: windowStage,
+              workArea,
+              zIndex,
+              active: windowActive,
+            }) => {
+              const tab = context.tabs.find((tab) => tab.tab_id === entry.id);
+              if (!tab) return null;
+              const label = tab.label || `Tab ${tab.number}`;
+              return (
+                <WindowFrame
+                  key={entry.id}
+                  id={entry.id}
+                  label={`${label} terminal window`}
+                  geometry={geometry}
+                  restoreGeometry={
+                    entry.maximized || entry.placement.kind !== "floating"
+                      ? entry.floating
+                      : undefined
+                  }
+                  stage={windowStage}
+                  workArea={workArea}
+                  active={windowActive}
+                  compact={false}
+                  zIndex={zIndex}
+                  className="spaces-tab-window"
+                  onRaise={() => dispatch({ type: "raise", id: entry.id })}
+                  onPlace={(rect) =>
+                    dispatch({ type: "place", id: entry.id, rect })
+                  }
+                  onSnap={(target) =>
+                    dispatch({ type: "snap", id: entry.id, target })
+                  }
+                  onMaximize={() =>
+                    dispatch({ type: "maximize", id: entry.id })
+                  }
+                  onPortalChange={(portal) => {
+                    const key = keyFor(entry.id);
+                    setPortals((previous) =>
+                      previous[key] === portal
+                        ? previous
+                        : { ...previous, [key]: portal },
+                    );
+                  }}
+                >
+                  <header className="world-window-header">
+                    <button
+                      type="button"
+                      data-window-drag-handle
+                      className="world-window-title spaces-tab-window-move"
+                      aria-label={`Move ${label} window`}
+                      onClick={() => activate(entry.id, null)}
+                    >
+                      {label}
+                    </button>
+                    <WindowControls
+                      label={`${label} window`}
+                      controls={{
+                        maximized: entry.maximized,
+                        compact: false,
+                        onMinimize: () =>
+                          dispatch({ type: "minimize", id: entry.id }),
+                        onMaximize: () =>
+                          dispatch({ type: "maximize", id: entry.id }),
+                        onClose: () =>
+                          dispatch({ type: "dismiss", id: entry.id }),
+                        onSnap: (target) =>
+                          dispatch({ type: "snap", id: entry.id, target }),
+                        onFloat: () =>
+                          dispatch({ type: "float", id: entry.id }),
+                      }}
+                    />
+                  </header>
+                </WindowFrame>
+              );
+            }}
+          </WindowSurface>,
           layer,
-          context.scopeKey,
+          scopeKey,
         )
       : null;
-
   return {
     arrangementControl: {
-      activePreset: mobile ? "single" : (scope?.preset ?? "single"),
+      activePreset: native ? "single" : (state.layout?.preset ?? null),
       disabledReasons,
       onSelect,
+      windows: inputs
+        .filter((input) => !state.windows[input.id]?.dismissed)
+        .map((input) => ({
+          id: input.id,
+          tab: {
+            connectionId: snapshot.activeConnectionId,
+            runtimeGeneration: snapshot.serverRuntimeGeneration ?? -1,
+            tabId: input.id,
+          },
+          label: input.label,
+          active: input.id === state.activeId,
+          minimized: state.windows[input.id]?.minimized ?? false,
+          onSelect: () => activate(input.id, null),
+        })),
     },
     spacesTabWindows,
     renderWindows,
-    onFocusSpacesTabWindow,
-    onSpacesWindowLayerReady,
+    onFocusSpacesTabWindow: activate,
     suspended,
+    presentedTabId: state.activeId,
     resumeTab,
+    onSpacesWindowLayerReady,
   };
 }

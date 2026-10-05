@@ -12,7 +12,7 @@ const chrome =
     : Bun.which("google-chrome") || Bun.which("chromium"));
 
 test.skipIf(!chrome)(
-  "the one-tab mobile sheet resumes Spaces before focusing its tab",
+  "mobile Tabs restores qualified windows and keeps native tab actions",
   async () => {
     const dir = await mkdtemp(join(tmpdir(), "mobile-tab-sheet-test-"));
     const assets = new Map<string, Blob>();
@@ -93,7 +93,20 @@ test.skipIf(!chrome)(
       ]);
       expect(observed).toEqual({
         button: true,
-        events: ["resume:one", "focus:one", "close", "show"],
+        events: [
+          "restore:alpha",
+          "resume:one",
+          "focus:one",
+          "close",
+          "show",
+          "restore:beta",
+          "close",
+          "show",
+        ],
+        rows: 2,
+        minimized: true,
+        hasClose: true,
+        hasNew: true,
       });
     } finally {
       browser?.kill();

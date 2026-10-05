@@ -1,3 +1,4 @@
+import type { WindowSwitcherEntry } from "../world/windows/WindowSwitcher";
 import { Plus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -15,17 +16,18 @@ import { requestCloseTab, tabName } from "./TabBar";
 import "./MobileTabSheet.css";
 
 /**
- * Bottom-sheet tab switcher for narrow layouts. The tab strip hides itself on
- * mobile when a workspace has a single tab, so this sheet is the touch
- * affordance for creating, switching, and closing tabs there.
+ * The shared mobile tab list keeps native creation/closure controls and restores
+ * managed windows, including retained windows from other workspaces or hosts.
  */
 export function MobileTabSheet({
   open,
   onClose,
   onShowSession,
   onSelectTab,
+  windows = [],
 }: {
   open: boolean;
+  windows?: readonly WindowSwitcherEntry[];
   onClose: () => void;
   onShowSession: () => void;
   onSelectTab?: (tabId: string) => void | Promise<unknown>;
@@ -34,6 +36,8 @@ export function MobileTabSheet({
   const s = useStoreSelector(
     (state) => ({
       panes: state.panes,
+      connectionId: state.activeConnectionId,
+      runtimeGeneration: state.serverRuntimeGeneration,
       tabs: state.tabs,
       workspaces: state.workspaces,
     }),
@@ -74,6 +78,17 @@ export function MobileTabSheet({
         .sort((a, b) => a.number - b.number)
     : [];
 
+  const windowForTab = (tabId: string) =>
+    windows.find(
+      (entry) =>
+        entry.tab?.tabId === tabId &&
+        entry.tab.connectionId === s.connectionId &&
+        entry.tab.runtimeGeneration === s.runtimeGeneration,
+    );
+  const otherWindows = windows.filter(
+    (entry) => !tabs.some((tab) => windowForTab(tab.tab_id)?.id === entry.id),
+  );
+
   useEffect(() => {
     if (!open) return;
     const cancelFocus = focusDialogElement(sheetRef.current);
@@ -97,7 +112,7 @@ export function MobileTabSheet({
     };
   }, [open]);
 
-  if (!open || !focusedWs) return null;
+  if (!open || (!focusedWs && !windows.length)) return null;
 
   return createPortal(
     <div
@@ -110,6 +125,7 @@ export function MobileTabSheet({
         role="dialog"
         aria-modal="true"
         aria-label="Tabs"
+        data-window-count={windows.length}
         aria-busy={transitionPending}
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
@@ -125,25 +141,27 @@ export function MobileTabSheet({
         <div className="mobile-tab-sheet-list" role="list">
           {tabs.map((t) => {
             const name = tabName(t);
+            const windowEntry = windowForTab(t.tab_id);
             const agentSummary = summarizeTabAgents(s.panes, t.tab_id);
             return (
               <div
                 key={t.tab_id}
                 role="listitem"
-                className={`mobile-tab-sheet-row ${t.focused ? "is-active" : ""}`}
+                className={`mobile-tab-sheet-row ${(windowEntry?.active ?? t.focused) ? "is-active" : ""}`}
               >
                 <button
                   type="button"
                   className="mobile-tab-sheet-focus"
                   disabled={transitionPending}
                   onClick={() =>
-                    void runTabTransition(() =>
-                      Promise.resolve(
+                    void runTabTransition(() => {
+                      windowEntry?.onSelect();
+                      return Promise.resolve(
                         onSelectTab
                           ? onSelectTab(t.tab_id)
                           : store.focusTab(t.tab_id),
-                      ),
-                    )
+                      );
+                    })
                   }
                 >
                   {agentSummary ? (
@@ -163,6 +181,7 @@ export function MobileTabSheet({
                     </span>
                   ) : null}
                   <span className="mobile-tab-sheet-name">{name}</span>
+                  {windowEntry?.minimized ? <small>Minimized</small> : null}
                 </button>
                 <button
                   type="button"
@@ -183,19 +202,47 @@ export function MobileTabSheet({
               </div>
             );
           })}
+          {otherWindows.length ? (
+            <div className="mobile-tab-sheet-section">Other open windows</div>
+          ) : null}
+          {otherWindows.map((entry) => (
+            <div
+              key={entry.id}
+              role="listitem"
+              className={`mobile-tab-sheet-row ${entry.active ? "is-active" : ""}`}
+            >
+              <button
+                type="button"
+                className="mobile-tab-sheet-focus"
+                disabled={transitionPending}
+                onClick={() => {
+                  entry.onSelect();
+                  onClose();
+                  onShowSession();
+                }}
+              >
+                <span className="mobile-tab-sheet-name">{entry.label}</span>
+                {entry.minimized ? <small>Minimized</small> : null}
+              </button>
+            </div>
+          ))}
         </div>
-        <button
-          type="button"
-          className="mobile-tab-sheet-new"
-          title={createReason ?? undefined}
-          disabled={transitionPending || !!createReason}
-          onClick={() =>
-            void runTabTransition(() => store.createTab(focusedWs.workspace_id))
-          }
-        >
-          <Plus size={15} />
-          <span>{createReason ?? "New Tab"}</span>
-        </button>
+        {focusedWs ? (
+          <button
+            type="button"
+            className="mobile-tab-sheet-new"
+            title={createReason ?? undefined}
+            disabled={transitionPending || !!createReason}
+            onClick={() =>
+              void runTabTransition(() =>
+                store.createTab(focusedWs.workspace_id),
+              )
+            }
+          >
+            <Plus size={15} />
+            <span>{createReason ?? "New Tab"}</span>
+          </button>
+        ) : null}
       </div>
     </div>,
     document.body,

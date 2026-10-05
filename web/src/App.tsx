@@ -135,6 +135,7 @@ import {
   useOperationalStore,
   isTaskNotificationTarget,
   OperationalContext,
+  operationalStore,
   type Notice,
   noticeAutoDismissDelay,
   shallowEqual,
@@ -897,6 +898,7 @@ export default function App({
   arrangementControl,
   onFocusSpacesTabWindow,
   spacesWindowsSuspended = false,
+  presentedSpacesTabId,
   onSelectSpacesTab,
   onSpacesWindowLayerReady,
   onInspectorVisibilityChange,
@@ -926,6 +928,7 @@ export default function App({
   arrangementControl?: WindowArrangementControl;
   onFocusSpacesTabWindow?: (tabId: string, paneId: string | null) => void;
   spacesWindowsSuspended?: boolean;
+  presentedSpacesTabId?: string | null;
   onSelectSpacesTab?: (tabId: string) => void;
   onSpacesWindowLayerReady?: (element: HTMLDivElement | null) => void;
   onInspectorVisibilityChange?: (open: boolean) => void;
@@ -938,26 +941,37 @@ export default function App({
     workspaceSurface !== null && workspaceSurfaceVisible;
   const focusExplicitTab = useCallback(
     async (tabId: string) => {
-      if (
-        hasWorkspaceSurface &&
-        workspaceSurfaceContext &&
-        onWorkspaceSurfaceSelect
-      ) {
-        const snapshot = store.getConnection(
-          workspaceSurfaceContext.connectionId,
-        );
+      if (hasWorkspaceSurface && onWorkspaceSurfaceSelect) {
+        // The tab list uses the visual selection's owner when present and the
+        // focused connection otherwise, including before any Inspector opens.
+        const tabOperations = workspaceSurfaceContext
+          ? operationalStore(workspaceSurfaceContext)
+          : operations;
+        const snapshot = tabOperations.get();
+        if (snapshot.serverRuntimeGeneration === null) return false;
+        const owner = workspaceSurfaceContext ?? {
+          connectionId: snapshot.activeConnectionId,
+          runtimeGeneration: snapshot.serverRuntimeGeneration,
+        };
         const tab = snapshot.tabs.find(
           (candidate) => candidate.tab_id === tabId,
         );
-        if (!tab) return false;
-        const pane =
-          snapshot.panes.find(
-            (candidate) => candidate.tab_id === tabId && candidate.focused,
-          ) ?? snapshot.panes.find((candidate) => candidate.tab_id === tabId);
+        if (!tab || !(await tabOperations.focusTab(tabId))) return false;
+        // Native tab focus restores its selected pane and loads unobserved
+        // panes before the visual surface admits the terminal window.
+        const focused = tabOperations.get();
+        const pane = focused.panes.find(
+          (candidate) =>
+            candidate.tab_id === tabId &&
+            candidate.workspace_id === tab.workspace_id &&
+            candidate.pane_id === focused.selectedPaneId,
+        );
+        if (!pane) return false;
         return onWorkspaceSurfaceSelect({
-          ...workspaceSurfaceContext,
+          ...owner,
           workspaceId: tab.workspace_id,
-          ...(pane ? { paneId: pane.pane_id } : {}),
+          paneId: pane.pane_id,
+          view: "terminal",
         });
       }
       return focusExplicitSpacesTab(tabId, onSelectSpacesTab, (id) =>
@@ -1142,6 +1156,14 @@ export default function App({
   const resourceRuntimeKeyRef = useRef(resourceUiKey);
   const focusedWorkspace = s.workspaces.find((w) => w.focused);
   const activeSpacesTabId =
+    (presentedSpacesTabId &&
+    s.tabs.some(
+      (tab) =>
+        tab.tab_id === presentedSpacesTabId &&
+        tab.workspace_id === focusedWorkspace?.workspace_id,
+    )
+      ? presentedSpacesTabId
+      : null) ??
     focusedWorkspace?.active_tab_id ??
     s.tabs.find(
       (tab) =>
@@ -3656,6 +3678,9 @@ export default function App({
         )}
       </div>
       <div className="topbar-actions">
+        {!mobile && arrangementControl ? (
+          <WindowArrangementMenu control={arrangementControl} />
+        ) : null}
         <div className="topbar-command-group">
           <CommandCombobox
             key={`${resourceUiKey}:commands`}
@@ -3740,9 +3765,6 @@ export default function App({
         aria-label="Workspace view switcher"
         aria-hidden={mobileControlsCollapsed}
       >
-        {mobile && !mobileControlsCollapsed && arrangementControl ? (
-          <WindowArrangementMenu control={arrangementControl} />
-        ) : null}
         <button
           type="button"
           className={
@@ -3864,6 +3886,7 @@ export default function App({
         <MobileTabSheet
           key={`${hasWorkspaceSurface && workspaceSurfaceContext ? JSON.stringify(workspaceSurfaceContext) : resourceUiKey}:mobile-tabs`}
           open={mobile && mobileTabSheetOpen}
+          windows={arrangementControl?.windows}
           onClose={() => setMobileTabSheetOpen(false)}
           onShowSession={activateTerminalSurface}
           onSelectTab={focusExplicitTab}
@@ -3905,7 +3928,7 @@ export default function App({
             aria-label="Show tabs"
             aria-pressed={mobileTabSheetOpen}
             tabIndex={mobileControlsCollapsed ? -1 : 0}
-            disabled={!tabWorkspace}
+            disabled={!tabWorkspace && !arrangementControl?.windows?.length}
             onPointerDown={blurActiveInput}
             onClick={() => setMobileTabSheetOpen((open) => !open)}
           >
@@ -3917,6 +3940,12 @@ export default function App({
             ) : null}
             <span className="mobile-nav-label">Tabs</span>
           </button>
+          {mobile && !mobileControlsCollapsed && arrangementControl ? (
+            <WindowArrangementMenu
+              control={arrangementControl}
+              showWindowSwitcher={false}
+            />
+          ) : null}
           {activeTerminalComposerDraftKey ? (
             <button
               type="button"
@@ -4186,7 +4215,6 @@ export default function App({
               onSelectTab={
                 operationalShortcutsEnabled ? onSelectSpacesTab : undefined
               }
-              arrangementControl={arrangementControl}
             />
           </OperationalContext.Provider>
           <div

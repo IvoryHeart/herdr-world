@@ -17,7 +17,7 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   - **Agents** lists every agent in the host filter, those you recently opened from the
     Desk first, then each workspace by recent activity. **Reviewed** lists the
     stops you marked, newest first, with **Reopen**; marking offers **Undo**.
-  - On wide screens, opening a card docks that agent's Inspector (terminal,
+  - On wide screens, opening a card snaps that agent's Inspector to the right (terminal,
     files, changes, history) beside the Desk as a reading pane and folds the lanes
     into one queue. `J`/`K` preview the next agent there, `Enter` moves into its
     terminal and `Esc` closes the pane. Phones open the Inspector full screen.
@@ -41,15 +41,21 @@ A Web/PWA client for a running [Herdr](https://herdr.dev) server.
   Tree and Graph distribute their 128-space bound across hosts fairly and retain
   16 leaves per space, with priority for selected, focused, watched and attention
   targets. Counts distinguish observations, rendering omissions and unavailable coverage.
-- Use **Arrange windows** on the shared tab bar to show the active terminal alone,
+- Use **Arrange windows** in the shared shell to show the active terminal alone,
   cascade open windows, fit them in columns or rows, tile them in a grid, or
   restore their previous positions. Spaces arranges the focused workspace's
-  existing tabs; Office, Tree, and Graph arrange their open Inspectors, including
-  a docked or inline Inspector. The desktop layout button sits at the tab bar's
-  right edge; mobile puts it in the ellipsis-expanded controls. The same
+  existing tabs; visual views arrange their open, non-minimized Inspectors. The desktop controls sit in the top bar; mobile puts it in the ellipsis-expanded controls. The same
   placements are in **Actions** and can be given custom keyboard shortcuts;
   none are assigned by default. Layout
   choices that cannot fit explain why.
+- Inspectors and arranged Spaces windows share snap, minimize, maximize/restore,
+  close and all eight resize handles. Opening or focusing a window preserves other
+  placements; snapping into an occupied region overlaps without rearranging it.
+  Tiled windows share resizable dividers. **Open windows** restores minimized windows.
+  Window close dismisses presentation; native tab closure remains separate.
+- Mobile shows one active window and preserves desktop positions. Its ellipsis,
+  Tabs controls remain floating; Tabs and Arrange sit together in the second row. Tabs also restores minimized
+  windows and retains native tab actions. The duplicate list icon and tab strip are hidden. The outer shell coordinates terminal sizing with the keyboard viewport.
 - A Spaces tab window shows that tab's Herdr split panes. An Inspector in a visual
   view also shows the selected tab's split panes in one window; selecting a sibling
   pane keeps the same Inspector and updates its pane-specific resources. When the
