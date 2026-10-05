@@ -2174,9 +2174,7 @@ function WorldControlPlane({
     }
   };
 
-  const creationFocus = useRef(
-    new Map<number, { intent: number; active: boolean }>(),
-  );
+  const creationFocus = useRef(new Map<number, { intent: number }>());
   const creationAdmissions = useRef(new Set<AbortController>());
   const creationOpener = useRef(openTerminalById);
   creationOpener.current = openTerminalById;
@@ -2185,14 +2183,14 @@ function WorldControlPlane({
     if (event.phase === "started") {
       creationFocus.current.set(event.id, {
         intent: intentRequestRef.current,
-        active,
       });
       return;
     }
     if (event.phase === "dispatching") return;
     const captured = creationFocus.current.get(event.id);
     creationFocus.current.delete(event.id);
-    if (event.phase !== "created" || !captured?.active) return;
+    // Presentation follows the current view; ownership and intent stay captured.
+    if (event.phase !== "created" || !captured || !active) return;
     const identity = createdTerminalIdentity(event.result);
     const paneId = identity?.paneId;
     const title = event.kind === "tab" ? "Tab" : "Workspace";

@@ -57,6 +57,8 @@ export type WorldTerminalPresentation = Pick<
   terminalId: string;
   portal: Element | null;
   endpointReadiness?: boolean;
+  /** Source terminals stay attached independently of the visible split pane. */
+  retainedPanes?: readonly { paneId: string; terminalId: string }[];
   presentationKind?: "spaces";
   onFocusPane?: (paneId: string) => void;
 };

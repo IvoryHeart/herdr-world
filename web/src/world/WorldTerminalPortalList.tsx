@@ -136,15 +136,28 @@ function WorldInspectorTabTerminal({
   const [agentHistoryOpen, setAgentHistoryOpen] = useState(false);
   const spaces =
     presentation.presentationKind === "spaces" ? spacesControls : undefined;
+  const tabPanes = panes.filter(
+    (pane) =>
+      pane.workspace_id === presentation.workspaceId &&
+      pane.tab_id === presentation.tabId,
+  );
+  const retainedPaneIds = new Set(
+    tabPanes
+      .filter((pane) =>
+        presentation.retainedPanes?.some(
+          (retained) =>
+            retained.paneId === pane.pane_id &&
+            retained.terminalId === pane.terminal_id,
+        ),
+      )
+      .map((pane) => pane.pane_id),
+  );
   return (
     <TabTerminalPaneLayout
       layout={layout}
       unavailableMessage={error ?? undefined}
-      panes={panes.filter(
-        (pane) =>
-          pane.workspace_id === presentation.workspaceId &&
-          pane.tab_id === presentation.tabId,
-      )}
+      panes={tabPanes}
+      retainedPaneIds={retainedPaneIds}
       selectedPaneId={presentation.paneId}
       connectionId={presentation.connectionId}
       connectionGeneration={connectionGeneration}

@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { bridge, type ConnectionClient, type TerminalPush } from "../api";
 import { __storeTesting, emptyServerSessionState, store } from "../store";
+import { creationSources } from "../creationRequests";
 import { initializeLayoutPreferences } from "../layoutPreferences";
 import { initializeShortcutPreferences } from "../shortcutPreferences";
 import type { Pane, Tab, Workspace } from "../types";
@@ -29,7 +30,7 @@ async function until(condition: () => unknown, message: string) {
     await settle();
   }
   throw new Error(
-    `Timed out: ${message}; notice=${JSON.stringify(store.get().notice)}; body=${document.body.innerText.slice(0, 1400)}; panes=${JSON.stringify([...document.querySelectorAll("[data-pane-id]")].map((e) => [e.getAttribute("data-pane-id"), e.getBoundingClientRect().height, e.closest(".world-terminal-parking") !== null]))}; labels=${JSON.stringify([...document.querySelectorAll(".world-new-seat-canvas-action")].map((e) => e.getAttribute("aria-label")))}`,
+    `Timed out: ${message}; navigation=${JSON.stringify(store.get().browserNavigation)}; selected=${store.get().selectedPaneId}; notice=${JSON.stringify(store.get().notice)}; body=${document.body.innerText.slice(0, 1400)}; panes=${JSON.stringify([...document.querySelectorAll("[data-pane-id]")].map((e) => [e.getAttribute("data-pane-id"), e.getBoundingClientRect().height, e.closest(".world-terminal-parking") !== null]))}; labels=${JSON.stringify([...document.querySelectorAll(".world-new-seat-canvas-action")].map((e) => e.getAttribute("aria-label")))}`,
   );
 }
 const methods = ["pane.focus", "tab.create", "workspace.create"];
@@ -55,6 +56,9 @@ const terminalListeners = new Set<(push: TerminalPush) => void>();
 let revision = 1;
 let created = 0;
 let heldMutation: Promise<void> | null = null;
+let heldAttachment: { terminalId: string; promise: Promise<void> } | null =
+  null;
+let zoomedTabId: string | null = null;
 let lastCreated: Pane | null = null;
 function addTab(host: string, workspaceId: string, id: string) {
   const r = runtime.get(host)!;
@@ -211,7 +215,7 @@ for (const host of hosts) {
           layout: {
             workspace_id: pane.workspace_id,
             tab_id: pane.tab_id,
-            zoomed: false,
+            zoomed: pane.tab_id === zoomedTabId,
             area: { x: 0, y: 0, width: 100, height: 30 },
             focused_pane_id: pane.pane_id,
             panes: r.panes
@@ -239,6 +243,7 @@ for (const host of hosts) {
             full: true,
             bytes: btoa(`${id}\r\n`),
           });
+        if (heldAttachment?.terminalId === id) await heldAttachment.promise;
         return { endpoint: { methods, capabilities: [] } };
       }
       if (method === "terminal.detach") {
@@ -273,6 +278,8 @@ for (const host of hosts) {
             "Tab creation crossed workspace source",
           );
         if (heldMutation) await heldMutation;
+        if (!r.attached.has(source.terminal_id))
+          throw new Error("Creation source detached while the RPC was pending");
         const id = `new-${++created}`;
         const result =
           method === "workspace.create"
@@ -304,10 +311,12 @@ function visiblePane(paneId: string) {
     ),
   ].find(
     (element) =>
+      element.tagName !== "BUTTON" &&
       !element.closest(".world-terminal-parking") &&
       element.getBoundingClientRect().height > 0,
   );
 }
+
 async function createdInspector(count: number) {
   await until(
     () => created === count && lastCreated && visiblePane(lastCreated.pane_id),
@@ -618,6 +627,182 @@ async function run() {
         call.method === "tab.create" || call.method === "workspace.create",
     ).length === created,
     "Creation dispatch/result counts differ",
+  );
+  // Completion follows the current view in both directions, for both operations.
+  for (const [from, to] of [
+    ["spaces", "office"],
+    ["office", "spaces"],
+  ] as const) {
+    for (const kind of ["tab", "workspace"] as const) {
+      view(from);
+      await settle();
+      await store.focusWorkspace("a");
+      const gate = Promise.withResolvers<void>();
+      heldMutation = gate.promise;
+      const before = created;
+      const method = `${kind}.create`;
+      const beforeCalls = calls.filter((call) => call.method === method).length;
+      const pending =
+        kind === "tab"
+          ? store.createTab("a")
+          : store.createWorkspace("View handoff");
+      await until(
+        () =>
+          calls.filter((call) => call.method === method).length > beforeCalls,
+        `${from} ${kind} pending dispatch`,
+      );
+      view(to);
+      await settle();
+      const inspectorsBeforeCompletion = document.querySelectorAll(
+        ".world-managed-window",
+      ).length;
+      heldMutation = null;
+      gate.resolve();
+      await pending;
+      await store.refresh();
+      await worldRuntimeStore.refresh();
+      await createdInspector(before + 1);
+      check(
+        location.pathname === `/${to}`,
+        `${from}-to-${to} ${kind} completion changed the view`,
+      );
+      if (to === "spaces")
+        check(
+          document.querySelectorAll(".world-managed-window").length ===
+            inspectorsBeforeCompletion,
+          "Spaces completion opened a hidden visual Inspector",
+        );
+    }
+  }
+
+  view("spaces");
+  await settle();
+  const first = alpha.panes.find((pane) => pane.pane_id === "a-1-pane")!;
+  const sibling = {
+    ...first,
+    pane_id: "a-sibling-pane",
+    terminal_id: "a-sibling-terminal",
+  };
+  alpha.panes.push(sibling);
+  await store.refresh();
+  await store.focusPane(first.pane_id);
+  await until(
+    () => alpha.attached.has(first.terminal_id),
+    "split source pane attached",
+  );
+  // Start with the source hidden: its new attachment must wait for the ACK,
+  // independently of the selected mobile/zoomed pane.
+  await store.focusPane(sibling.pane_id);
+  zoomedTabId = first.tab_id;
+  await store.refresh();
+  await until(
+    () =>
+      !alpha.attached.has(first.terminal_id) && visiblePane(sibling.pane_id),
+    "zoomed sibling visible before source preparation",
+  );
+  const attachmentGate = Promise.withResolvers<void>();
+  heldAttachment = {
+    terminalId: first.terminal_id,
+    promise: attachmentGate.promise,
+  };
+  const retainGate = Promise.withResolvers<void>();
+  heldMutation = retainGate.promise;
+  const beforeRetainCalls = calls.filter(
+    (call) => call.method === "tab.create",
+  ).length;
+  const retained = store.createQualifiedTab(
+    { connectionId: "alpha", runtimeGeneration: 7 },
+    "a",
+    { sourcePaneId: first.pane_id },
+  );
+  await until(
+    () =>
+      alpha.attached.has(first.terminal_id) &&
+      store.get().terminalAttachments[first.terminal_id]?.ready === false,
+    "demanded source awaiting attachment ACK",
+  );
+  const sourceAttaches = calls.filter(
+    (call) =>
+      call.method === "terminal.attach" &&
+      call.params.terminal_id === first.terminal_id,
+  ).length;
+  zoomedTabId = null;
+  await store.refresh();
+  await store.focusPane(first.pane_id);
+  await until(() => visiblePane(first.pane_id), "preparing source visible");
+  await store.focusPane(sibling.pane_id);
+  await until(
+    () =>
+      visiblePane(sibling.pane_id) && alpha.attached.has(sibling.terminal_id),
+    "preparation switched to split sibling",
+  );
+  check(
+    alpha.attached.has(first.terminal_id),
+    "Pane selection detached the source before its attachment ACK",
+  );
+  check(
+    calls.filter((call) => call.method === "tab.create").length ===
+      beforeRetainCalls,
+    "Creation dispatched before its source attachment ACK",
+  );
+  heldAttachment = null;
+  attachmentGate.resolve();
+  await until(
+    () =>
+      calls.filter((call) => call.method === "tab.create").length >
+      beforeRetainCalls,
+    "split pending dispatch",
+  );
+  check(
+    alpha.attached.has(first.terminal_id),
+    "Changing split pane detached the pending creation source",
+  );
+  if (width === 390)
+    check(
+      !visiblePane(first.pane_id),
+      "Retained source displaced the visible mobile split pane",
+    );
+  zoomedTabId = first.tab_id;
+  await store.refresh();
+  await settle();
+  check(
+    alpha.attached.has(first.terminal_id),
+    "Zooming the sibling detached the pending creation source",
+  );
+  check(
+    !visiblePane(first.pane_id) && visiblePane(sibling.pane_id),
+    "Zoom did not retain the source independently of visibility",
+  );
+  check(
+    calls.filter(
+      (call) =>
+        call.method === "terminal.attach" &&
+        call.params.terminal_id === first.terminal_id,
+    ).length === sourceAttaches,
+    "Retained source was remounted during preparation, pane selection or zoom",
+  );
+  heldMutation = null;
+  retainGate.resolve();
+  await retained;
+  check(
+    Boolean(visiblePane(sibling.pane_id)),
+    "Creation overrode the newer split-pane selection",
+  );
+  check(
+    calls.filter((call) => call.method === "tab.create").length ===
+      beforeRetainCalls + 1,
+    "Prepared source did not dispatch exactly once",
+  );
+  check(
+    creationSources().length === 0,
+    "Creation did not release its retained source demand",
+  );
+  check(
+    calls.filter(
+      (call) =>
+        call.method === "tab.create" || call.method === "workspace.create",
+    ).length === created,
+    "Handoff creation dispatch/result counts differ",
   );
   root.unmount();
   await settle();

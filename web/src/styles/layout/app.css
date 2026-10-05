@@ -143,6 +143,20 @@
   min-width: 0;
 }
 
+.pane-layout-cell-single {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane-layout-cell-single > .terminal-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 .workspace-stage.is-inspector-expanded .workspace-terminal-surface {
   position: absolute;
   inset: 0;

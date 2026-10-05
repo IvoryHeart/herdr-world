@@ -1428,6 +1428,10 @@ export default function App({
       presentations[existing] = {
         ...presentation,
         endpointReadiness: true,
+        retainedPanes: [
+          ...(presentation.retainedPanes ?? []),
+          { paneId: source.pane_id, terminalId: source.terminal_id },
+        ],
         ...(selectedStillExists
           ? {}
           : { paneId: source.pane_id, terminalId: source.terminal_id }),
@@ -1447,6 +1451,9 @@ export default function App({
       spaceLabel: source.workspace_id,
       portal: null,
       endpointReadiness: true,
+      retainedPanes: [
+        { paneId: source.pane_id, terminalId: source.terminal_id },
+      ],
     });
     return presentations;
   }, initialPresentations);

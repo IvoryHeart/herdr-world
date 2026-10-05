@@ -14,6 +14,8 @@ are optional because the merged PR history records their source.
   Desk, Tree and Graph share New workspace and New tab actions and open created
   terminals without switching views. Rooms retain eight displayed desks while
   allowing additional tabs. Spaces reuses the same terminal owners and creation path.
+  Pending creation retains its source through pane selection and zoom changes,
+  and completion follows the current Spaces or visual view.
 
 ### Changed
 
