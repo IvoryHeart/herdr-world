@@ -7,6 +7,25 @@ are optional because the merged PR history records their source.
 
 ## [Unreleased]
 
+### Changed
+
+- Inspectors and arranged Spaces windows now share stable snapping, all-edge resizing,
+  minimize/window switching, maximize/restore and tile dividers. Opening or focusing
+  another window preserves existing placements. Tree uses the same window surface,
+  and the Office Docked preference becomes Snap right. Closing a Spaces window
+  dismisses its presentation while leaving the Herdr tab running. Desktop window
+  switching and arrangement controls are always reachable from the top bar.
+  Resizing a scrolled tile preserves its canvas position, and Open all restores
+  dismissed or minimized windows even when Grid cannot fit the work area.
+- Mobile keeps the ellipsis menu floating, uses the second-row Tabs menu for tab
+  actions and window restoration with Arrange beside it, removes the duplicate list
+  icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop
+  placements survive compact views. Roamgate terminal and pane ownership remain intact.
+  Selecting a tab opens its terminal Inspector in every visual view, including
+  before any Inspector is selected and when its panes need loading.
+
+## [0.2.1] - 2026-10-04
+
 ### Breaking Changes
 
 - Hosts now filters an aggregate Desk, Office, Tree and Graph view instead of selecting
@@ -36,21 +55,6 @@ are optional because the merged PR history records their source.
   logs and preserved exit codes, plus repo-local Herdr Workflows operating guidance.
 
 ### Changed
-
-- Inspectors and arranged Spaces windows now share stable snapping, all-edge resizing,
-  minimize/window switching, maximize/restore and tile dividers. Opening or focusing
-  another window preserves existing placements. Tree uses the same window surface,
-  and the Office Docked preference becomes Snap right. Closing a Spaces window
-  dismisses its presentation while leaving the Herdr tab running. Desktop window
-  switching and arrangement controls are always reachable from the top bar.
-  Resizing a scrolled tile preserves its canvas position, and Open all restores
-  dismissed or minimized windows even when Grid cannot fit the work area.
-- Mobile keeps the ellipsis menu floating, uses the second-row Tabs menu for tab
-  actions and window restoration with Arrange beside it, removes the duplicate list
-  icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop
-  placements survive compact views. Roamgate terminal and pane ownership remain intact.
-  Selecting a tab opens its terminal Inspector in every visual view, including
-  before any Inspector is selected and when its panes need loading.
 
 - Office reuses unchanged rooms and cached static artwork, prepares graphics in
   bounded tasks, and retains semantic controls and keyboard focus across topology
