@@ -1113,7 +1113,21 @@ async function operationalScenario(unmount: () => void) {
       "Watch counts omitted the unavailable host explanation",
     );
     watchAdmissionOld = true;
+    const observedRevision = worldRuntimeStore.get().revision;
     await worldRuntimeStore.refresh();
+    await waitFor(
+      () =>
+        worldRuntimeStore.get().revision > observedRevision &&
+        worldRuntimeStore
+          .get()
+          .connections.some(
+            (connection) =>
+              connection.snapshot?.watchAdmission?.revision ===
+              watches.length - 1,
+          ),
+      "The queued refresh did not observe the older watch admission revision",
+      10_000,
+    );
     document.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
     );
