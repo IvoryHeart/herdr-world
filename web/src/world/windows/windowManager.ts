@@ -21,7 +21,7 @@ export type WindowInput = {
   initialSnap?: SnapTarget;
 };
 type Placement =
-  | { kind: "floating"; rect: Rect }
+  | { kind: "floating"; rect: Rect; canvas?: Size }
   | { kind: "snap"; target: SnapTarget }
   | { kind: "tile"; rect: Rect }
   | { kind: "cascade"; rect: Rect };
@@ -200,6 +200,15 @@ export function snapGeometry(target: SnapTarget, size: Size): Rect {
     height: vertical ? halfHeight : size.height,
   };
 }
+export function usesWindowCanvas(entry: ManagedWindow): boolean {
+  return (
+    entry.placement.kind === "tile" ||
+    entry.placement.kind === "cascade" ||
+    (entry.placement.kind === "floating" &&
+      entry.placement.canvas !== undefined)
+  );
+}
+
 export function windowCanvas(state: WindowManagerState, size: Size): Size {
   const arranged = state.order
     .map((id) => state.windows[id]!)
@@ -208,30 +217,53 @@ export function windowCanvas(state: WindowManagerState, size: Size): Size {
         !entry.dismissed &&
         (entry.placement.kind === "tile" || entry.placement.kind === "cascade"),
     );
-  if (!state.layout || !arranged.length) return size;
   const minimum =
-    state.layout.preset === "cascade"
-      ? state.layout.minimum
-      : arranged.reduce(
-          (result, entry) => {
-            if (entry.placement.kind !== "tile") return result;
-            return {
-              width: Math.max(
-                result.width,
-                WINDOW_MINIMUM.width / entry.placement.rect.width,
-              ),
-              height: Math.max(
-                result.height,
-                WINDOW_MINIMUM.height / entry.placement.rect.height,
-              ),
-            };
-          },
-          { width: 0, height: 0 },
-        );
-  return {
+    !state.layout || !arranged.length
+      ? { width: 0, height: 0 }
+      : state.layout.preset === "cascade"
+        ? state.layout.minimum
+        : arranged.reduce(
+            (result, entry) => {
+              if (entry.placement.kind !== "tile") return result;
+              return {
+                width: Math.max(
+                  result.width,
+                  WINDOW_MINIMUM.width / entry.placement.rect.width,
+                ),
+                height: Math.max(
+                  result.height,
+                  WINDOW_MINIMUM.height / entry.placement.rect.height,
+                ),
+              };
+            },
+            { width: 0, height: 0 },
+          );
+  const canvas = {
     width: Math.max(size.width, minimum.width),
     height: Math.max(size.height, minimum.height),
   };
+  // A manually resized tile keeps canvas coordinates after becoming floating,
+  // including when the last remaining tile is moved or dismissed.
+  for (const entry of Object.values(state.windows)) {
+    if (
+      entry.dismissed ||
+      entry.placement.kind !== "floating" ||
+      !entry.placement.canvas
+    )
+      continue;
+    const rect = entry.placement.rect;
+    canvas.width = Math.max(
+      canvas.width,
+      entry.placement.canvas.width,
+      rect.left + rect.width,
+    );
+    canvas.height = Math.max(
+      canvas.height,
+      entry.placement.canvas.height,
+      rect.top + rect.height,
+    );
+  }
+  return canvas;
 }
 export function windowGeometry(
   state: WindowManagerState,
@@ -245,10 +277,10 @@ export function windowGeometry(
     return { left: 0, top: 0, ...size };
   if (entry.placement.kind === "snap")
     return snapGeometry(entry.placement.target, size);
-  if (entry.placement.kind === "floating")
+  if (entry.placement.kind === "floating" && !entry.placement.canvas)
     return fitWindow(entry.placement.rect, size);
   const canvas = windowCanvas(state, size);
-  if (entry.placement.kind === "cascade")
+  if (entry.placement.kind === "cascade" || entry.placement.kind === "floating")
     return fitWindow(entry.placement.rect, canvas);
   const rect = entry.placement.rect;
   return {
@@ -367,7 +399,15 @@ export function reduceWindowManager(
       })),
       activeId,
     );
-    if (!result.available) return state;
+    if (!result.available) {
+      if (!action.includeMinimized) return state;
+      // Open all is also a visibility action. A single tab or a compact work
+      // area may not support Grid, but every requested window must reopen.
+      const windows = { ...state.windows };
+      for (const id of ids)
+        windows[id] = { ...windows[id]!, minimized: false, dismissed: false };
+      return focus({ ...state, windows }, activeId, true);
+    }
     const windows = { ...state.windows };
     const participants = structuredClone(
       Object.fromEntries(ids.map((id) => [id, windows[id]!])),
@@ -486,14 +526,21 @@ export function reduceWindowManager(
       action.id,
       true,
     );
+  const canvas =
+    action.type === "place" &&
+    !entry.maximized &&
+    !state.focusMode &&
+    usesWindowCanvas(entry)
+      ? windowCanvas(state, size)
+      : undefined;
   const rect = fitWindow(
     action.type === "place" ? action.rect : entry.floating,
-    size,
+    canvas ?? size,
   );
   return focus(
     {
       ...update(state, action.id, {
-        placement: { kind: "floating", rect },
+        placement: { kind: "floating", rect, ...(canvas ? { canvas } : {}) },
         floating: rect,
         maximized: false,
       }),

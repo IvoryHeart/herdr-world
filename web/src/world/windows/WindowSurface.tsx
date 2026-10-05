@@ -10,6 +10,7 @@ import {
   windowCanvas,
   windowDividers,
   windowGeometry,
+  usesWindowCanvas,
   type ManagedWindow,
   type Size,
   type WindowCommand,
@@ -108,9 +109,10 @@ export function WindowSurface({
             entry,
             geometry: displayed,
             stage:
-              (entry.placement.kind === "tile" ||
-                entry.placement.kind === "cascade") &&
-              !entry.maximized
+              usesWindowCanvas(entry) &&
+              !entry.maximized &&
+              !state.focusMode &&
+              !compact
                 ? canvas
                 : stage,
             zIndex: 2 + state.stack.indexOf(id),
