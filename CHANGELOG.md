@@ -49,6 +49,8 @@ are optional because the merged PR history records their source.
   actions and window restoration with Arrange beside it, removes the duplicate list
   icon and tab strip, and measures World shell height once for terminal and keyboard sizing. Desktop
   placements survive compact views. Roamgate terminal and pane ownership remain intact.
+  Selecting a tab opens its terminal Inspector in every visual view, including
+  before any Inspector is selected and when its panes need loading.
 
 - Office reuses unchanged rooms and cached static artwork, prepares graphics in
   bounded tasks, and retains semantic controls and keyboard focus across topology

@@ -135,6 +135,7 @@ import {
   useOperationalStore,
   isTaskNotificationTarget,
   OperationalContext,
+  operationalStore,
   type Notice,
   noticeAutoDismissDelay,
   shallowEqual,
@@ -940,26 +941,37 @@ export default function App({
     workspaceSurface !== null && workspaceSurfaceVisible;
   const focusExplicitTab = useCallback(
     async (tabId: string) => {
-      if (
-        hasWorkspaceSurface &&
-        workspaceSurfaceContext &&
-        onWorkspaceSurfaceSelect
-      ) {
-        const snapshot = store.getConnection(
-          workspaceSurfaceContext.connectionId,
-        );
+      if (hasWorkspaceSurface && onWorkspaceSurfaceSelect) {
+        // The tab list uses the visual selection's owner when present and the
+        // focused connection otherwise, including before any Inspector opens.
+        const tabOperations = workspaceSurfaceContext
+          ? operationalStore(workspaceSurfaceContext)
+          : operations;
+        const snapshot = tabOperations.get();
+        if (snapshot.serverRuntimeGeneration === null) return false;
+        const owner = workspaceSurfaceContext ?? {
+          connectionId: snapshot.activeConnectionId,
+          runtimeGeneration: snapshot.serverRuntimeGeneration,
+        };
         const tab = snapshot.tabs.find(
           (candidate) => candidate.tab_id === tabId,
         );
-        if (!tab) return false;
-        const pane =
-          snapshot.panes.find(
-            (candidate) => candidate.tab_id === tabId && candidate.focused,
-          ) ?? snapshot.panes.find((candidate) => candidate.tab_id === tabId);
+        if (!tab || !(await tabOperations.focusTab(tabId))) return false;
+        // Native tab focus restores its selected pane and loads unobserved
+        // panes before the visual surface admits the terminal window.
+        const focused = tabOperations.get();
+        const pane = focused.panes.find(
+          (candidate) =>
+            candidate.tab_id === tabId &&
+            candidate.workspace_id === tab.workspace_id &&
+            candidate.pane_id === focused.selectedPaneId,
+        );
+        if (!pane) return false;
         return onWorkspaceSurfaceSelect({
-          ...workspaceSurfaceContext,
+          ...owner,
           workspaceId: tab.workspace_id,
-          ...(pane ? { paneId: pane.pane_id } : {}),
+          paneId: pane.pane_id,
+          view: "terminal",
         });
       }
       return focusExplicitSpacesTab(tabId, onSelectSpacesTab, (id) =>
