@@ -272,7 +272,7 @@ function waitFor(condition: () => boolean, message: string, timeoutMs = 3000) {
       observer.disconnect();
       reject(
         new Error(
-          `${message}; ${document.body.textContent?.slice(-1000)}; ${JSON.stringify(worldRuntimeStore.get())}`,
+          `${message}; notice=${JSON.stringify(store.get().notice)}; error=${store.get().error}; recentDispatches=${JSON.stringify(dispatches.slice(-3))}; ${document.body.textContent?.slice(-500)}`,
         ),
       );
     }, timeoutMs);

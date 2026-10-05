@@ -2105,6 +2105,24 @@ describe("connection-partitioned store state", () => {
 });
 
 describe("stabilizeRefreshPatch", () => {
+  test("establishes hydration once after first observation or reconnect even with identical topology", () => {
+    const snapshot = { ...partitionState(), lastRefresh: 0 };
+    const observation = {
+      workspaces: structuredClone(snapshot.workspaces),
+      tabs: structuredClone(snapshot.tabs),
+      panes: structuredClone(snapshot.panes),
+      layout: structuredClone(snapshot.layout),
+      error: snapshot.error,
+      lastRefresh: 123,
+    };
+    const patch = stabilizeRefreshPatch(snapshot, observation);
+    expect(patch?.lastRefresh).toBe(123);
+    expect(patch?.workspaces).toBe(snapshot.workspaces);
+    expect(
+      stabilizeRefreshPatch({ ...snapshot, ...patch }, observation),
+    ).toBeNull();
+  });
+
   test("returns null when a refresh reproduces the current state", () => {
     const snapshot = partitionState();
     expect(

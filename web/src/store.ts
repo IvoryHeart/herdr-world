@@ -1420,7 +1420,9 @@ export function stabilizeRefreshPatch(
     changed = true;
   };
   for (const key of REFRESH_SCALAR_KEYS) adoptScalar(key);
-  if (!changed) return null;
+  // A first/reconnect observation establishes hydration even when cached
+  // topology is identical. Subsequent unchanged observations stay silent.
+  if (!changed && snapshot.lastRefresh) return null;
   patch.lastRefresh = next.lastRefresh ?? Date.now();
   return patch;
 }
