@@ -70,6 +70,11 @@ function render(
   );
 }
 const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+async function waitFor(predicate: () => boolean, message: string) {
+  const deadline = Date.now() + 5_000;
+  while (!predicate() && Date.now() < deadline) await settle();
+  if (!predicate()) throw new Error(`Timed out waiting for ${message}`);
+}
 const primary = () =>
   document.querySelector<HTMLButtonElement>(".herdr-setup-primary")!;
 function click(button: HTMLButtonElement) {
@@ -82,7 +87,14 @@ function check(value: unknown, message: string) {
 
 async function run() {
   render();
-  await settle();
+  await waitFor(
+    () =>
+      document.querySelector("h2")?.textContent ===
+        "Your workspace starts here" &&
+      document.body.textContent?.includes("Verified 0.9.0") === true &&
+      document.querySelector(".herdr-setup-primary") !== null,
+    "the initial Herdr status fetch and setup card render",
+  );
   check(
     document.querySelector("h2")?.textContent === "Your workspace starts here",
     "missing: onboarding title",
