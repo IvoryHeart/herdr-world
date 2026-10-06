@@ -3979,6 +3979,12 @@ async function run() {
       narrowedVisualStage.getBoundingClientRect().height >= 650,
     "visual stage before default Cascade",
   );
+  await until(
+    () =>
+      visualWindowBounds().length === 3 &&
+      visualWindowBounds().every((bounds) => bounds.width > 300),
+    "Columns expanded with the visual stage",
+  );
   await arrangeWindows("Cascade");
   await until(
     () =>
